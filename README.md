@@ -1,29 +1,25 @@
-# NeoTube
+# RoForge
 
-NeoTube is a premium, high-fidelity desktop application for downloading and managing YouTube media. Built with a focus on modern aesthetics, fluid animations, and a seamless user experience, NeoTube combines a powerful Rust backend with a stunning glassmorphic React frontend.
+RoForge is meant to make youtube easier, and last even when you go offline. If you have a playlist you want to watch, or just a single video, grab the link of the video from RoForges in-app browser and just drop it into the text box and hit download. It will automatically send your video to the path you have selected in settings. 
 
-## 🌟 Features
+## Features
 
-- **Premium Design System:** Soft geometry, glassmorphism, and layered depth powered by Tailwind CSS.
-- **Fluid Animations:** Every interaction, page transition, and micro-interaction is animated using Framer Motion.
-- **Robust Downloading Engine:** Seamless integration with `yt-dlp` for high-quality video and audio extraction.
-- **Local Media Gallery:** A dynamic, YouTube-style gallery to manage and explore your downloaded content natively.
-- **Custom Media Player:** A sleek, borderless video player with flat, modern controls, scrubbing, and speed adjustments.
-- **MiniPlayer:** Seamlessly pop out videos into a persistent mini-player.
-- **Customizable Settings:** Change download directories, format preferences, and global accent colors.
+- **Downloading engine (WIP):** integration with `yt-dlp` for video and audio extraction.
+- **Local Media Gallery:** A place in-app to watch all of the videos you have from youtube; both pre-existing and downloaded in the app. 
+- **MiniPlayer:** A spotify-like mini player for playing your videos or just listening to them. 
 
-## 🛠 Tech Stack
+## Tech Stack
 
 - **Frontend:** React, TypeScript, Vite
 - **Styling & Animation:** Tailwind CSS, Framer Motion, Lucide Icons
 - **Backend & Native Windowing:** Tauri (Rust)
 - **Downloading:** `yt-dlp`, FFmpeg
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-Ensure you have the following installed on your system:
+You will need to have the following software on your system:
 - [Node.js](https://nodejs.org/) (v16+)
 - [Rust](https://www.rust-lang.org/tools/install)
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (must be accessible in your system PATH or bundled)
@@ -55,14 +51,6 @@ npm run tauri build
 ```
 The compiled installer and executable will be available in the `src-tauri/target/release/bundle` directory.
 
-## 🔮 Roadmap
+## Roadmap
 
-Check out the [miniplayer_plan.md](./miniplayer_plan.md) for our upcoming Quality of Life features, which include:
-- Hover-to-Peek scrubber thumbnails.
-- Double-Tap to seek functionality.
-- Global Media Hotkeys and Smart Transparency.
-- Persistent volume and playback state memory.
-
-## 📝 License
-
-This project is licensed under the MIT License.
+All plans go into [miniplayer_plan.md](./miniplayer_plan.md) - if youd like to add onto them, request features, or simply recommend a fix feel free to ask. 
