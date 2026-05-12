@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from "motion/react";
+import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
-import { enable, disable, isEnabled } from '@tauri-apps/plugin-autostart';
 
 interface SettingItemProps {
   icon: React.ElementType;
@@ -62,7 +61,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange })
                   setIsOpen(false);
                 }}
                 className={`px-4 py-3 text-[10px] font-black tracking-widest cursor-pointer transition-colors border-t border-white/[0.03] ${
-                  value === opt ? 'bg-amber-500 text-[#1D1613]' : 'text-stone-400 hover:bg-white/5'
+                  value === opt ? 'bg-[color:var(--accent)] text-[#1D1613]' : 'text-stone-400 hover:bg-white/5'
                 }`}
               >
                 {opt.toUpperCase()}
@@ -88,7 +87,7 @@ const ToggleSlot: React.FC<{ active: boolean; onClick?: () => void }> = ({ activ
       animate={{ x: active ? 26 : 2 }}
       transition={{ type: "spring", stiffness: 600, damping: 35 }}
       className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-colors duration-300 ${
-        active ? 'bg-amber-500' : 'bg-stone-700'
+        active ? 'bg-[color:var(--accent)]' : 'bg-stone-700'
       }`}
     />
   </div>
@@ -104,7 +103,7 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, title, descriptio
     <div className="flex items-center gap-5">
       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${
         active 
-        ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
+        ? 'bg-[color-mix(in_srgb,var(--accent),transparent_92%)] text-[color:var(--accent)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)]' 
         : 'bg-[#1D1613] text-stone-500 border border-white/[0.05] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]'
       }`}>
         <Icon className="w-5 h-5" />
@@ -128,59 +127,15 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, title, descriptio
 export const SettingsView: React.FC<{ 
   activeTab: string, 
   outputDir: string,
+  saveToInternal: boolean,
+  settings: any,
+  updateSetting: (key: string, value: any) => void,
+  onSetSaveToInternal: (val: boolean) => void,
   onOutputDirChange: (dir: string) => void,
   onNotify: (msg: string) => void
-}> = ({ activeTab, outputDir, onOutputDirChange, onNotify }) => {
+}> = ({ activeTab, outputDir, saveToInternal, settings, updateSetting, onSetSaveToInternal, onOutputDirChange, onNotify }) => {
 
-  const [settings, setSettings] = useState(() => {
-    const saved = localStorage.getItem('ruforge-settings');
-    if (saved) return JSON.parse(saved);
-    return {
-      launchAtStartup: true,
-      minimizeToTray: true,
-      preferredQuality: '1080p (HD)',
-      accentColor: '#f59e0b',
-      gridDensity: 'Default',
-      hardwareAcceleration: true
-    };
-  });
-
-  useEffect(() => {
-    // Sync with backend on mount
-    invoke('update_tray_config', { minimize: settings.minimizeToTray });
-    
-    const syncAutostart = async () => {
-      try {
-        const enabled = await isEnabled();
-        if (enabled !== settings.launchAtStartup) {
-          if (settings.launchAtStartup) await enable();
-          else await disable();
-        }
-      } catch (e) {
-        console.error('Autostart sync failed:', e);
-      }
-    };
-    syncAutostart();
-  }, []);
-
-  const updateSetting = async (key: string, value: any) => {
-    const newSettings = { ...settings, [key]: value };
-    setSettings(newSettings);
-    localStorage.setItem('ruforge-settings', JSON.stringify(newSettings));
-
-    if (key === 'minimizeToTray') {
-      await invoke('update_tray_config', { minimize: value });
-    }
-
-    if (key === 'launchAtStartup') {
-      try {
-        if (value) await enable();
-        else await disable();
-      } catch (e) {
-        console.error('Failed to update autostart:', e);
-      }
-    }
-  };
+  const accentInputRef = useRef<HTMLInputElement>(null);
 
   const handlePickDirectory = async () => {
     const selected = await open({ directory: true, multiple: false });
@@ -191,9 +146,8 @@ export const SettingsView: React.FC<{
 
   const handleClearCache = async () => {
     try {
-      // Assuming you have a clear_cache command or similar, or just fake it for now
-      // await invoke('clear_cache');
-      onNotify("Cache cleared successfully.");
+      const n = await invoke<number>("clear_ruforge_cache");
+      onNotify(`Cleared ${n} cached file(s).`);
     } catch (e) {
       console.error(e);
       onNotify("Failed to clear cache.");
@@ -208,7 +162,7 @@ export const SettingsView: React.FC<{
       className="p-10 max-w-3xl h-full pb-32 pt-20"
     >
       <div className="mb-8">
-        <h1 className="text-3xl font-black tracking-tight text-amber-50">Settings</h1>
+        <h1 className="text-3xl font-black tracking-tight text-stone-50">Settings</h1>
         <p className="text-stone-500 mt-1 text-sm font-medium">System configuration and preferences.</p>
       </div>
 
@@ -223,6 +177,23 @@ export const SettingsView: React.FC<{
         >
           {activeTab === 'general' && (
             <div className="space-y-3">
+              <SettingItem 
+                icon={Database}
+                title="Storage Limit"
+                description="Maximum space RuForge can use for internal media."
+                active={true}
+                control={
+                  <CustomSelect 
+                    value={`${settings.storageLimitGB}GB`}
+                    options={['10GB', '25GB', '50GB', '100GB', '250GB']}
+                    onChange={(val) => {
+                      const num = parseInt(val.replace('GB', ''));
+                      updateSetting('storageLimitGB', num);
+                      localStorage.setItem('ruforge-storage-limit', num.toString());
+                    }}
+                  />
+                }
+              />
               <SettingItem 
                 icon={Monitor}
                 title="Launch at Startup"
@@ -252,6 +223,32 @@ export const SettingsView: React.FC<{
 
           {activeTab === 'downloads' && (
             <div className="space-y-3">
+              <SettingItem 
+                icon={Database}
+                title="Storage Target"
+                description={saveToInternal ? "Saving to RuForge Internal Vault." : "Saving to Custom Download Path."}
+                active={true}
+                control={
+                  <div className="flex p-1 bg-[#1D1613] rounded-xl border border-white/5">
+                    <button 
+                      onClick={() => onSetSaveToInternal(true)}
+                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${
+                        saveToInternal ? 'bg-[color:var(--accent)] text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
+                      }`}
+                    >
+                      INTERNAL
+                    </button>
+                    <button 
+                      onClick={() => onSetSaveToInternal(false)}
+                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${
+                        !saveToInternal ? 'bg-[color:var(--accent)] text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
+                      }`}
+                    >
+                      CUSTOM
+                    </button>
+                  </div>
+                }
+              />
               <SettingItem 
                 icon={Download}
                 title="Preferred Quality"
@@ -290,11 +287,29 @@ export const SettingsView: React.FC<{
                 description="Primary color for buttons and highlights."
                 active={true}
                 control={
-                  <div className="p-1.5 bg-[#1D1613] rounded-2xl shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] border border-white/5">
-                    <div 
-                      className="w-10 h-10 rounded-xl border-2 border-white/10 shadow-lg cursor-pointer active:scale-90 transition-transform" 
-                      style={{ backgroundColor: settings.accentColor }}
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={accentInputRef}
+                      type="color"
+                      className="sr-only"
+                      aria-label="Pick accent color"
+                      value={
+                        typeof settings.accentColor === "string" && settings.accentColor.startsWith("#")
+                          ? settings.accentColor
+                          : "#f59e0b"
+                      }
+                      onChange={(e) => updateSetting("accentColor", e.target.value)}
                     />
+                    <button
+                      type="button"
+                      onClick={() => accentInputRef.current?.click()}
+                      className="p-1.5 bg-[#1D1613] rounded-2xl shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] border border-white/5"
+                    >
+                      <div
+                        className="w-10 h-10 rounded-xl border-2 border-white/10 shadow-lg cursor-pointer active:scale-90 transition-transform"
+                        style={{ backgroundColor: settings.accentColor }}
+                      />
+                    </button>
                   </div>
                 }
               />
@@ -311,7 +326,7 @@ export const SettingsView: React.FC<{
                         onClick={() => updateSetting('gridDensity', t)}
                         className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all duration-400 ${
                           settings.gridDensity === t 
-                          ? 'bg-amber-500 text-[#1D1613] shadow-[0_4px_10px_rgba(245,158,11,0.3)]' 
+                          ? 'bg-[color:var(--accent)] text-[#1D1613] shadow-[0_4px_10px_var(--accent-glow)]' 
                           : 'text-stone-600 hover:text-stone-400'
                         }`}
                       >
@@ -327,9 +342,51 @@ export const SettingsView: React.FC<{
           {activeTab === 'advanced' && (
             <div className="space-y-3">
               <SettingItem 
+                icon={Music}
+                title="Auto-advance local audio"
+                description="When an mp3/m4a/flac track ends, plays the next one in alphabetical path order — same folder listing for the fullscreen player’s directory scan and the Mini Player strip."
+                active={settings.audioAutoAdvanceFolder !== false}
+                control={
+                  <ToggleSlot 
+                    active={settings.audioAutoAdvanceFolder !== false} 
+                    onClick={() =>
+                      updateSetting(
+                        'audioAutoAdvanceFolder',
+                        !(settings.audioAutoAdvanceFolder !== false),
+                      )
+                    }
+                  />
+                }
+              />
+              <SettingItem 
+                icon={Music}
+                title="Prefetch next audio"
+                description="Preloads the queued track in Chromium/WebView to reduce dead air. True gapless decode is not achievable with standalone HTML audio tags."
+                active={settings.audioPrefetchNext !== false}
+                control={
+                  <ToggleSlot 
+                    active={settings.audioPrefetchNext !== false} 
+                    onClick={() =>
+                      updateSetting('audioPrefetchNext', !(settings.audioPrefetchNext !== false))
+                    }
+                  />
+                }
+              />
+              <SettingItem 
+                icon={Shield}
+                title="ReplayGain / loudness normalization"
+                description="Skipped in WebView2: chaining MediaElement + Web Audio for stable LUFS normalization is brittle across formats/OS mixers — revisit with native output or ffmpeg filters."
+                active={false}
+                control={
+                  <span className="text-[9px] font-black uppercase tracking-widest text-stone-600 px-3">
+                    Not shipped
+                  </span>
+                }
+              />
+              <SettingItem 
                 icon={Shield}
                 title="Hardware Acceleration"
-                description="Use the GPU for video decoding and UI rendering."
+                description="Lets WebView2 use GPU for page rendering and video playback. Turn off only for graphics glitches — this is not audio quality. Changing this restarts RuForge (Windows)."
                 active={settings.hardwareAcceleration}
                 control={
                   <ToggleSlot 

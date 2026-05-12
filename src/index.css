@@ -14,8 +14,9 @@
   --surface: rgba(43, 30, 25, 0.7);
   --surface-elevated: rgba(56, 39, 32, 0.85);
   --border: rgba(212, 163, 115, 0.1);
-  --accent: #d4a373;
-  --accent-glow: rgba(212, 163, 115, 0.25);
+  /* Synced from RuForge settings (see `accentCss.ts`); defaults match in-app amber */
+  --accent: #f59e0b;
+  --accent-glow: rgba(245, 158, 11, 0.28);
   --text: #fafaf9;
   --text-muted: #a8a29e;
   

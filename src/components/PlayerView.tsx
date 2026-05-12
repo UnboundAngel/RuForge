@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
+import { Icon } from "@iconify/react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
+import { openPath } from "@tauri-apps/plugin-opener";
 import {
   Play,
   Pause,
-  RotateCcw,
-  RotateCw,
   Volume2,
   Volume1,
   VolumeX,
@@ -14,21 +14,89 @@ import {
   Minimize2,
   ArrowLeft,
   Repeat,
-  Gauge,
-  Monitor,
+  ExternalLink,
+  Music,
+  Speaker,
+  SkipBack,
+  SkipForward,
 } from "lucide-react";
-import { MediaFile } from "../types";
+import { MediaFile, type FfprobeHint } from "../types";
+import { ScrubberHoverThumb } from "../scrubSpritePreview";
+import {
+  readResumeSeconds,
+  writePlaybackPos,
+  clearPlaybackPos,
+  END_EPSILON_SEC,
+} from "../playbackStorage";
+import {
+  readAudioAutoAdvanceFolder,
+  readAudioPrefetchNext,
+} from "../audioPlaybackPrefs";
+import { isAudioOnlyPath } from "../mediaKind";
+
+const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: string }) => {
+  const speedToAngle: Record<number, number> = {
+    0.25: -90, 0.5: -60, 0.75: -30, 1: 0, 1.25: 30, 1.5: 60, 1.75: 90, 2: 120
+  };
+  const angle = speedToAngle[speed] || 0;
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" className={className}>
+      <path fill="currentColor" opacity="0.4" d="m20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1a10 10 0 0 0-.27-10.44z"/>
+      <path 
+        fill="currentColor" 
+        d="M10.59 15.41a2 2 0 0 0 2.83 0l5.66-8.49l-8.49 5.66a2 2 0 0 0 0 2.83"
+        style={{ 
+          transform: `rotate(${-45 + angle}deg)`,
+          transformOrigin: '12px 14px',
+          transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        }}
+      />
+    </svg>
+  );
+};
+
+const Tooltip = ({ text, children, side = "bottom" }: { text: string; children: React.ReactNode; side?: "bottom" | "top" }) => {
+  const [isHovered, setIsHovered] = useState(false);
+  return (
+    <div className="relative flex flex-col items-center" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+      {children}
+      <AnimatePresence>
+        {isHovered && (
+          <motion.div
+            initial={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className={`absolute ${side === "bottom" ? "bottom-full mb-3" : "top-full mt-3"} px-3 py-1.5 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-xl text-[10px] font-black tracking-widest text-white uppercase whitespace-nowrap z-[100] shadow-2xl shadow-black pointer-events-none right-0`}
+          >
+            {text}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 interface PlayerViewProps {
   file: MediaFile;
+  /** Alphabetically sorted mp3/m4a/flac in the same folder as `file`; used only when `file` is audio-only. */
+  folderAudioPlaylist?: MediaFile[];
+  onPlayFolderAudioNeighbor?: (file: MediaFile) => void;
   onBack: () => void;
   onMiniPlayerToggle: () => void;
 }
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+export const PlayerView = ({
+  file,
+  folderAudioPlaylist = [],
+  onPlayFolderAudioNeighbor,
+  onBack,
+  onMiniPlayerToggle,
+}: PlayerViewProps) => {
+  const audioOnly = isAudioOnlyPath(file.path);
+  const mediaRef = useRef<HTMLMediaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrubberRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
@@ -49,16 +117,50 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
   const [isHoveringScrubber, setIsHoveringScrubber] = useState(false);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubberThumbs, setScrubberThumbs] = useState<string[]>([]);
+  const [isPressing, setIsPressing] = useState<"left" | "right" | null>(null);
+  const [previousSpeed, setPreviousSpeed] = useState(1);
+  const pressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blockClickRef = useRef(false);
+  const lastPlaybackPersistRef = useRef(0);
+  const progressRafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (file) {
-      invoke<string[]>("extract_frames", { videoPath: file.path })
-        .then(setScrubberThumbs)
-        .catch(console.error);
-    } else {
+    if (!file || audioOnly) {
       setScrubberThumbs([]);
+      return;
     }
-  }, [file]);
+    invoke<string[]>("extract_frames", { videoPath: file.path })
+      .then((paths) =>
+        setScrubberThumbs(
+          paths.filter((p) => {
+            const f = p.replace(/^.*[/\\]/, "");
+            return f.startsWith("sprite_") && f.endsWith(".jpg");
+          }),
+        ),
+      )
+      .catch(console.error);
+  }, [file, audioOnly]);
+
+  /** Warm ffprobe disk cache; results are not shown in the player UI. */
+  useEffect(() => {
+    void invoke<FfprobeHint>("probe_local_media_ffprobe", {
+      mediaPath: file.path,
+      forceRefresh: false,
+    }).catch(() => {});
+  }, [file.path]);
+
+  useEffect(() => {
+    lastPlaybackPersistRef.current = 0;
+  }, [file.path]);
+
+  useEffect(() => {
+    return () => {
+      if (progressRafRef.current != null) {
+        cancelAnimationFrame(progressRafRef.current);
+        progressRafRef.current = null;
+      }
+    };
+  }, []);
 
   const [isVolumeDragging, setIsVolumeDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -67,32 +169,26 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [clickFlash, setClickFlash] = useState<"play" | "pause" | null>(null);
 
-  // Restore saved playback position
+  // Sync volume/mute to <video> / <audio>
   useEffect(() => {
-    if (videoRef.current) {
-      const savedPos = localStorage.getItem("miniplayer-pos");
-      if (savedPos) videoRef.current.currentTime = parseFloat(savedPos);
-      videoRef.current.volume = volume;
-    }
-  }, [file]);
-
-  // Sync volume/mute to video
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.volume = volume;
-      videoRef.current.muted = isMuted;
+    if (mediaRef.current) {
+      mediaRef.current.volume = volume;
+      mediaRef.current.muted = isMuted;
       localStorage.setItem("miniplayer-volume", volume.toString());
     }
   }, [volume, isMuted]);
 
   // Sync loop
   useEffect(() => {
-    if (videoRef.current) videoRef.current.loop = isLooping;
+    if (mediaRef.current) mediaRef.current.loop = isLooping;
   }, [isLooping]);
 
-  // Sync playback speed
+  // Sync playback speed (preservesPitch reduces time-stretch artifacts when rate ≠ 1)
   useEffect(() => {
-    if (videoRef.current) videoRef.current.playbackRate = playbackSpeed;
+    if (mediaRef.current) {
+      mediaRef.current.preservesPitch = true;
+      mediaRef.current.playbackRate = playbackSpeed;
+    }
   }, [playbackSpeed]);
 
   // Fullscreen change listener
@@ -145,23 +241,51 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
   }, [volume, isPaused]);
 
   const togglePlay = useCallback(() => {
-    const vid = videoRef.current;
-    if (!vid) return;
-    if (vid.paused) {
-      vid.play();
+    if (blockClickRef.current) {
+      blockClickRef.current = false;
+      return;
+    }
+    const media = mediaRef.current;
+    if (!media) return;
+    if (media.paused) {
+      media.play();
       setIsPaused(false);
       setClickFlash("play");
     } else {
-      vid.pause();
+      media.pause();
       setIsPaused(true);
       setClickFlash("pause");
-      localStorage.setItem("miniplayer-pos", vid.currentTime.toString());
+      writePlaybackPos(file.path, media.currentTime);
     }
     setTimeout(() => setClickFlash(null), 500);
-  }, []);
+  }, [file.path]);
+
+  const handlePlaybackEnded = useCallback(() => {
+    if (isLooping) return;
+    clearPlaybackPos(file.path);
+    const idx = folderAudioPlaylist.findIndex((f) => f.path === file.path);
+    const neighbor =
+      idx >= 0 && idx < folderAudioPlaylist.length - 1 ? folderAudioPlaylist[idx + 1] : null;
+    if (
+      readAudioAutoAdvanceFolder() &&
+      audioOnly &&
+      neighbor &&
+      onPlayFolderAudioNeighbor
+    ) {
+      onPlayFolderAudioNeighbor(neighbor);
+      return;
+    }
+    setIsPaused(true);
+  }, [
+    isLooping,
+    file.path,
+    audioOnly,
+    folderAudioPlaylist,
+    onPlayFolderAudioNeighbor,
+  ]);
 
   const skip = (seconds: number) => {
-    if (videoRef.current) videoRef.current.currentTime += seconds;
+    if (mediaRef.current) mediaRef.current.currentTime += seconds;
   };
 
   const changeVolume = (v: number) => {
@@ -178,11 +302,40 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
     }
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left;
+    const side = x > rect.width / 2 ? "right" : "left";
+    
+    pressTimeout.current = setTimeout(() => {
+      setIsPressing(side);
+      setPreviousSpeed(playbackSpeed);
+      setPlaybackSpeed(side === "right" ? 2 : 0.5);
+    }, 500);
+  };
+
+  const handleMouseUp = () => {
+    if (pressTimeout.current) {
+      clearTimeout(pressTimeout.current);
+      pressTimeout.current = null;
+    }
+    if (isPressing) {
+      setPlaybackSpeed(previousSpeed);
+      setIsPressing(null);
+      blockClickRef.current = true;
+      // Safety reset in case click event doesn't fire for some reason
+      setTimeout(() => { blockClickRef.current = false; }, 50);
+    }
+  };
+
   const handlePopOut = async () => {
     try {
-      if (videoRef.current) {
-        localStorage.setItem("miniplayer-pos", videoRef.current.currentTime.toString());
-        localStorage.setItem("miniplayer-volume", videoRef.current.volume.toString());
+      if (mediaRef.current) {
+        writePlaybackPos(file.path, mediaRef.current.currentTime);
+        localStorage.setItem("miniplayer-volume", mediaRef.current.volume.toString());
       }
       await invoke("open_mini_player");
       setTimeout(() => emit("play-media", file), 500);
@@ -193,21 +346,36 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
   };
 
   const handleTimeUpdate = () => {
-    const vid = videoRef.current;
-    if (!vid || !isFinite(vid.duration)) return;
-    setCurrentTime(vid.currentTime);
-    setProgress((vid.currentTime / vid.duration) * 100);
-    if (vid.buffered.length > 0) {
-      setBuffered((vid.buffered.end(vid.buffered.length - 1) / vid.duration) * 100);
-    }
+    if (progressRafRef.current != null) return;
+    progressRafRef.current = requestAnimationFrame(() => {
+      progressRafRef.current = null;
+      const vid = mediaRef.current;
+      if (!vid || !isFinite(vid.duration)) return;
+      setCurrentTime(vid.currentTime);
+      setProgress((vid.currentTime / vid.duration) * 100);
+      if (vid.buffered.length > 0) {
+        setBuffered((vid.buffered.end(vid.buffered.length - 1) / vid.duration) * 100);
+      }
+      const now = Date.now();
+      if (now - lastPlaybackPersistRef.current > 4000 && vid.duration > 0) {
+        lastPlaybackPersistRef.current = now;
+        if (vid.currentTime > 0.5 && vid.currentTime < vid.duration - END_EPSILON_SEC) {
+          writePlaybackPos(file.path, vid.currentTime);
+        }
+      }
+    });
   };
 
   const handleLoadedMetadata = () => {
-    const vid = videoRef.current;
+    const vid = mediaRef.current;
     if (!vid) return;
     setDuration(vid.duration);
     vid.volume = volume;
+    vid.muted = isMuted;
+    vid.preservesPitch = true;
     vid.playbackRate = playbackSpeed;
+    const resume = readResumeSeconds(file.path, vid.duration);
+    vid.currentTime = resume;
   };
 
   // Scrubber drag
@@ -218,8 +386,8 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
   };
 
   const applyScrub = (pos: number) => {
-    if (videoRef.current && isFinite(videoRef.current.duration)) {
-      videoRef.current.currentTime = pos * videoRef.current.duration;
+    if (mediaRef.current && isFinite(mediaRef.current.duration)) {
+      mediaRef.current.currentTime = pos * mediaRef.current.duration;
     }
   };
 
@@ -281,7 +449,26 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
   };
 
   const VolumeIcon = isMuted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
-  const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+  const isProbablyWindows =
+    typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
+  const coverArtSrc = file.ruforgePosterPath ?? file.thumbnailPath;
+
+  const playlistIdx = folderAudioPlaylist.findIndex((f) => f.path === file.path);
+  const prevInFolder =
+    audioOnly && playlistIdx > 0 ? folderAudioPlaylist[playlistIdx - 1] : null;
+  const nextInFolder =
+    audioOnly && playlistIdx >= 0 && playlistIdx < folderAudioPlaylist.length - 1
+      ? folderAudioPlaylist[playlistIdx + 1]
+      : null;
+  const prefetchNextEnabled = audioOnly && readAudioPrefetchNext() && nextInFolder !== null;
+
+  const openInExternalPlayer = () => {
+    void openPath(file.path).catch(console.error);
+  };
+
+  const openWindowsSoundSettings = useCallback(() => {
+    void invoke("open_windows_sound_settings").catch(console.error);
+  }, []);
 
   return (
     <motion.div
@@ -294,23 +481,124 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
       className="absolute inset-0 bg-black flex flex-col select-none overflow-hidden z-50"
       style={{ cursor: showControls ? "default" : "none" }}
     >
-      {/* Video */}
-      <video
-        ref={videoRef}
-        src={convertFileSrc(file.path)}
-        className="w-full h-full object-contain"
-        autoPlay
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-        onPause={() => setIsPaused(true)}
-        onPlay={() => setIsPaused(false)}
-        onEnded={() => { if (!isLooping) setIsPaused(true); }}
-        onClick={togglePlay}
-        onDoubleClick={toggleFullscreen}
-        onWheel={(e) => {
-          changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
-        }}
-      />
+      {/* Local <video> or <audio> (Chromium stack); audio skips video decode path */}
+      <div className="absolute inset-0">
+        {audioOnly ? (
+          <>
+            <audio
+              ref={mediaRef}
+              src={convertFileSrc(file.path)}
+              className="absolute w-px h-px opacity-0 pointer-events-none"
+              preload="metadata"
+              autoPlay
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onPause={() => setIsPaused(true)}
+              onPlay={() => setIsPaused(false)}
+              onEnded={() => {
+                if (!isLooping) handlePlaybackEnded();
+              }}
+            />
+            {prefetchNextEnabled && nextInFolder && (
+              <audio
+                preload="auto"
+                src={convertFileSrc(nextInFolder.path)}
+                className="absolute w-px h-px opacity-0 pointer-events-none"
+                aria-hidden
+              />
+            )}
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-10 bg-gradient-to-b from-stone-950 via-black to-black"
+              onClick={togglePlay}
+              onDoubleClick={toggleFullscreen}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onWheel={(e) => {
+                changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
+              }}
+            >
+              <div className="flex flex-col items-center gap-4 max-w-lg w-full pointer-events-none">
+                {coverArtSrc ? (
+                  <img
+                    src={convertFileSrc(coverArtSrc)}
+                    alt=""
+                    className="max-h-[min(55vh,520px)] max-w-[min(90vw,520px)] rounded-2xl shadow-2xl border border-white/10 object-contain"
+                  />
+                ) : (
+                  <Music className="w-28 h-28 text-amber-500/30" strokeWidth={1} aria-hidden />
+                )}
+                <p className="text-center text-[11px] font-medium text-stone-600 max-w-sm leading-relaxed">
+                  In-app playback uses WebView audio (same engine family as Chromium). Opens the same file in your default app if you prefer another decoder.
+                </p>
+              </div>
+              {isProbablyWindows && (
+                <button
+                  type="button"
+                  className="pointer-events-auto z-10 shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-[10px] font-black tracking-[0.12em] text-stone-300 uppercase hover:bg-white/10 hover:text-white transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openWindowsSoundSettings();
+                  }}
+                  title="Open Windows Settings → Sound (output device, exclusive mode app controls, enhancements)"
+                >
+                  <Speaker className="w-3.5 h-3.5" strokeWidth={2} aria-hidden />
+                  Sound settings…
+                </button>
+              )}
+            </div>
+          </>
+        ) : (
+          <video
+            ref={mediaRef as React.RefObject<HTMLVideoElement>}
+            src={convertFileSrc(file.path)}
+            className="absolute inset-0 w-full h-full object-contain"
+            autoPlay
+            playsInline
+            preload="metadata"
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            onPause={() => setIsPaused(true)}
+            onPlay={() => setIsPaused(false)}
+            onEnded={() => {
+              if (!isLooping) handlePlaybackEnded();
+            }}
+            onClick={togglePlay}
+            onDoubleClick={toggleFullscreen}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={(e) => {
+              changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
+            }}
+          />
+        )}
+      </div>
+
+      {/* Speed Indicator (YouTube style hold) */}
+      <AnimatePresence>
+        {isPressing && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: -20, x: "-50%" }}
+            className="absolute top-24 left-1/2 z-[100] px-6 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-3"
+          >
+            <div className="flex gap-0.5">
+              {[...Array(2)].map((_, i) => (
+                <Icon 
+                  key={i}
+                  icon={isPressing === "right" ? "tabler:player-play-filled" : "tabler:player-play-filled"} 
+                  className={`w-4 h-4 text-[#271C18] ${isPressing === "left" ? "rotate-180" : ""}`}
+                />
+              ))}
+            </div>
+            <span className="text-sm font-black tracking-widest text-white uppercase">
+              {isPressing === "right" ? "2.0x Faster" : "0.5x Slower"}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Click flash feedback */}
       <AnimatePresence>
@@ -351,13 +639,12 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
                 <h2 className="text-lg font-black tracking-tight text-white leading-tight truncate max-w-xl">
                   {file.name}
                 </h2>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-[10px] font-black tracking-widest text-amber-500 uppercase px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-md">
-                    LOCAL
-                  </span>
-                  <span className="text-[10px] font-black tracking-widest text-stone-500 uppercase">
-                    {fileSizeMB} MB
-                  </span>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                  {audioOnly && (
+                    <span className="text-[10px] font-black tracking-widest text-sky-400 uppercase px-2 py-0.5 bg-sky-400/10 border border-sky-400/20 rounded-md">
+                      AUDIO
+                    </span>
+                  )}
                   {playbackSpeed !== 1 && (
                     <span className="text-[10px] font-black tracking-widest text-sky-400 uppercase px-2 py-0.5 bg-sky-400/10 border border-sky-400/20 rounded-md">
                       {playbackSpeed}×
@@ -367,13 +654,17 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
               </div>
             </div>
 
-            <button
-              onClick={handlePopOut}
-              title="Launch MiniPlayer"
-              className="w-11 h-11 flex items-center justify-center rounded-xl bg-white/5 border border-white/10 backdrop-blur-xl hover:bg-white/15 transition-all active:scale-90 text-stone-400 hover:text-amber-400"
-            >
-              <Monitor className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <Tooltip text="Open in Browser" side="top">
+                <button
+                  type="button"
+                  onClick={openInExternalPlayer}
+                  className="p-2.5 rounded-xl text-stone-400 hover:text-white transition-all active:scale-90"
+                >
+                  <ExternalLink className="w-5 h-5" />
+                </button>
+              </Tooltip>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -403,37 +694,38 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
             >
               <div className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15`}>
                 <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
-                <div className="absolute top-0 left-0 h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full shadow-[0_0_10px_rgba(251,191,36,0.4)]" style={{ width: `${progress}%` }} />
+                <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${progress}%` }} />
                 {isHoveringScrubber && (
                   <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${scrubberHoverPos}%` }} />
                 )}
                 <div
-                  className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full border-2 border-amber-500 shadow-lg transition-opacity ${isHoveringScrubber || isScrubbing ? "opacity-100" : "opacity-0"}`}
+                  className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg transition-opacity ${isHoveringScrubber || isScrubbing ? "opacity-100" : "opacity-0"}`}
                   style={{ left: `${progress}%` }}
                 />
-                {isHoveringScrubber && isFinite(duration) && (
+                {isHoveringScrubber && isFinite(duration) && duration > 0 && (
                   <AnimatePresence>
                     {scrubberThumbs.length > 0 ? (
                       <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.8 }}
+                        initial={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
+                        animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
+                        exit={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
                         className="absolute bottom-full mb-8 z-[100] pointer-events-none"
-                        style={{ left: `${scrubberHoverPos}%`, transform: 'translateX(-50%)' }}
+                        style={{ left: `${scrubberHoverPos}%` }}
                       >
                         <div className="relative p-2 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                          <img 
-                            src={convertFileSrc(scrubberThumbs[Math.min(Math.floor((scrubberHoverPos/100) * scrubberThumbs.length), scrubberThumbs.length - 1)])} 
-                            className="w-48 h-27 object-cover rounded-xl"
-                            alt="preview"
+                          <ScrubberHoverThumb
+                            hoverTimeSec={(scrubberHoverPos / 100) * duration}
+                            duration={duration}
+                            spritePaths={scrubberThumbs}
+                            displayWidth={192}
                           />
                           <div className="absolute bottom-3 left-3 right-3 flex justify-center">
-                             <span className="text-xs font-black text-amber-500 bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
+                             <span className="text-xs font-black text-[#271C18] bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
                                {formatTime((scrubberHoverPos / 100) * duration)}
                              </span>
                           </div>
                         </div>
-                        <div className="w-px h-6 bg-amber-500/50 mx-auto mt-2" />
+                        <div className="w-px h-6 bg-[#271C18]/50 mx-auto mt-2" />
                       </motion.div>
                     ) : (
                       <div
@@ -452,40 +744,74 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
             <div className="flex items-center justify-between mt-3 px-2">
               {/* Left */}
               <div className="flex items-center gap-4">
-                <button
-                  onClick={togglePlay}
-                  className="w-10 h-10 flex items-center justify-center text-stone-200 hover:text-amber-400 active:scale-90 transition-all"
-                >
-                  {isPaused
-                    ? <Play className="w-8 h-8 fill-current ml-0.5" />
-                    : <Pause className="w-8 h-8 fill-current" />
-                  }
-                </button>
+                <Tooltip text={isPaused ? "Play" : "Pause"}>
+                  <button
+                    onClick={togglePlay}
+                    className="w-10 h-10 flex items-center justify-center text-stone-200 hover:text-white active:scale-90 transition-all"
+                  >
+                    {isPaused
+                      ? <Play className="w-8 h-8 fill-current ml-0.5" />
+                      : <Pause className="w-8 h-8 fill-current" />
+                    }
+                  </button>
+                </Tooltip>
 
-                <button onClick={() => skip(-15)} title="Back 15s (←)" className="p-2 text-stone-400 hover:text-amber-400 transition-colors active:scale-90">
-                  <RotateCcw className="w-5 h-5" />
-                </button>
-                <button onClick={() => skip(15)} title="Forward 15s (→)" className="p-2 text-stone-400 hover:text-amber-400 transition-colors active:scale-90">
-                  <RotateCw className="w-5 h-5" />
-                </button>
+                <Tooltip text="Rewind 15 Seconds">
+                  <button onClick={() => skip(-15)} className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white">
+                    <Icon icon="tabler:rewind-backward-15" width={22} />
+                  </button>
+                </Tooltip>
+                <Tooltip text="Jump 15 Seconds">
+                  <button onClick={() => skip(15)} className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white">
+                    <Icon icon="tabler:rewind-forward-15" width={22} />
+                  </button>
+                </Tooltip>
+                {audioOnly && prevInFolder && onPlayFolderAudioNeighbor && (
+                  <Tooltip text="Previous audio in this folder">
+                    <button
+                      type="button"
+                      onClick={() => onPlayFolderAudioNeighbor(prevInFolder)}
+                      className="p-2 text-stone-400 hover:text-emerald-400 transition-colors active:scale-90"
+                    >
+                      <SkipBack className="w-[18px] h-[18px]" aria-hidden />
+                    </button>
+                  </Tooltip>
+                )}
+                {audioOnly && nextInFolder && onPlayFolderAudioNeighbor && (
+                  <Tooltip text="Next audio in this folder">
+                    <button
+                      type="button"
+                      onClick={() => onPlayFolderAudioNeighbor(nextInFolder)}
+                      className="p-2 text-stone-400 hover:text-emerald-400 transition-colors active:scale-90"
+                    >
+                      <SkipForward className="w-[18px] h-[18px]" aria-hidden />
+                    </button>
+                  </Tooltip>
+                )}
 
                 {/* Volume */}
                 <div className="flex items-center gap-3 group/vol ml-2">
-                  <button
-                    onClick={() => setIsMuted((m) => !m)}
-                    title="Mute (M)"
-                    className="p-2 text-stone-400 hover:text-amber-400 transition-colors"
-                  >
-                    <VolumeIcon className="w-5 h-5" />
-                  </button>
+                  <Tooltip
+                  text={
+                    (isMuted ? "Unmute" : "Mute") +
+                    (audioOnly ? " · WASAPI exclusive mode is configured in Windows sound settings." : "")
+                  }
+                >
+                    <button
+                      onClick={() => setIsMuted((m) => !m)}
+                      className="p-2 text-stone-400 hover:text-white transition-colors"
+                    >
+                      <VolumeIcon className="w-5 h-5" />
+                    </button>
+                  </Tooltip>
                   <div
                     ref={volumeRef}
                     className={`relative rounded-full cursor-pointer transition-all ${isVolumeDragging ? "cursor-grabbing" : ""} w-0 opacity-0 group-hover/vol:w-24 group-hover/vol:opacity-100 h-1.5 bg-white/15`}
                     onMouseDown={handleVolumeMouseDown}
                   >
-                    <div className="absolute top-0 left-0 h-full bg-amber-500 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.5)]" style={{ width: `${isMuted ? 0 : volume * 100}%` }} />
+                    <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_8px_rgba(39,28,24,0.5)]" style={{ width: `${isMuted ? 0 : volume * 100}%` }} />
                     <div
-                      className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full shadow border border-amber-500 transition-opacity ${isVolumeDragging ? "opacity-100" : "opacity-0 group-hover/vol:opacity-100"}`}
+                      className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full shadow border border-[#271C18] transition-opacity ${isVolumeDragging ? "opacity-100" : "opacity-0 group-hover/vol:opacity-100"}`}
                       style={{ left: `${isMuted ? 0 : volume * 100}%` }}
                     />
                   </div>
@@ -501,23 +827,26 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
 
               {/* Right */}
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsLooping((l) => !l)}
-                  title="Loop (L)"
-                  className={`p-2.5 rounded-xl transition-all ${isLooping ? "text-amber-500 bg-amber-500/10 border border-amber-500/20" : "text-stone-500 hover:text-white"}`}
-                >
-                  <Repeat className="w-4 h-4" />
-                </button>
+                <Tooltip text="Toggle Loop Playback">
+                  <button
+                    onClick={() => setIsLooping((l) => !l)}
+                    className={`p-2.5 rounded-xl transition-all ${isLooping ? "text-[#271C18] bg-[#271C18]/10 border border-[#271C18]/20" : "text-stone-500 hover:text-white"}`}
+                  >
+                    <Repeat className="w-4 h-4" />
+                  </button>
+                </Tooltip>
 
                 {/* Speed */}
                 <div className="relative">
-                  <button
-                    onClick={() => setShowSpeedMenu((s) => !s)}
-                    className={`p-2.5 rounded-xl transition-all flex items-center gap-1.5 ${showSpeedMenu ? "text-amber-500 bg-amber-500/10 border border-amber-500/20" : "text-stone-500 hover:text-white"}`}
-                  >
-                    <Gauge className="w-4 h-4" />
-                    <span className="text-[10px] font-black tracking-wider">{playbackSpeed}×</span>
-                  </button>
+                  <Tooltip text="Playback Speed">
+                    <button
+                      onClick={() => setShowSpeedMenu((s) => !s)}
+                      className={`p-2.5 rounded-xl transition-all flex items-center gap-1.5 ${showSpeedMenu ? "text-[#271C18] bg-[#271C18]/10 border border-[#271C18]/20" : "text-stone-500 hover:text-white"}`}
+                    >
+                      <SpeedIcon speed={playbackSpeed} className="w-4 h-4" />
+                      <span className="text-[10px] font-black tracking-wider">{playbackSpeed}×</span>
+                    </button>
+                  </Tooltip>
                   <AnimatePresence>
                     {showSpeedMenu && (
                       <motion.div
@@ -532,7 +861,7 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
                             key={speed}
                             onClick={() => { setPlaybackSpeed(speed); setShowSpeedMenu(false); }}
                             className={`w-full px-4 py-2.5 text-left text-[11px] font-black tracking-widest transition-colors ${
-                              playbackSpeed === speed ? "bg-amber-500 text-stone-950" : "text-stone-400 hover:bg-white/5 hover:text-white"
+                              playbackSpeed === speed ? "bg-[#271C18] text-white" : "text-stone-400 hover:bg-white/5 hover:text-white"
                             }`}
                           >
                             {speed}×
@@ -543,12 +872,16 @@ export const PlayerView = ({ file, onBack, onMiniPlayerToggle }: PlayerViewProps
                   </AnimatePresence>
                 </div>
 
-                <button onClick={handlePopOut} title="Mini Player" className="p-2.5 rounded-xl text-stone-500 hover:text-white transition-all">
-                  <Minimize2 className="w-4 h-4" />
-                </button>
-                <button onClick={toggleFullscreen} title="Fullscreen (F)" className="p-2.5 rounded-xl text-stone-500 hover:text-white transition-all">
-                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                </button>
+                <Tooltip text="Launch Mini Player">
+                  <button onClick={handlePopOut} className="p-2.5 rounded-xl text-stone-500 hover:text-white transition-all">
+                    <Icon icon="material-symbols:tab-unselected-sharp" className="w-5 h-5" />
+                  </button>
+                </Tooltip>
+                <Tooltip text="Toggle Fullscreen">
+                  <button onClick={toggleFullscreen} className="p-2.5 rounded-xl text-stone-500 hover:text-white transition-all">
+                    {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                  </button>
+                </Tooltip>
               </div>
             </div>
           </motion.div>

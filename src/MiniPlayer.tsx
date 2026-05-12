@@ -1,13 +1,41 @@
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Icon } from "@iconify/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { listen, emit } from "@tauri-apps/api/event";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import logo from "./assets/neotubeIcon.png";
-import { XCircle, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Volume1, Pin } from "lucide-react";
+import {
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  Volume1,
+  Pin,
+  Video,
+  ExternalLink,
+  Music,
+  Speaker,
+} from "lucide-react";
 import { MediaFile } from "./types";
+import { flattenGalleryScanToMediaFiles } from "./galleryScan";
+import { ScrubberHoverThumb } from "./scrubSpritePreview";
+import {
+  readResumeSeconds,
+  writePlaybackPos,
+  clearPlaybackPos,
+  END_EPSILON_SEC,
+} from "./playbackStorage";
+import { ensurePostersForFiles, filesMissingPoster } from "./posterBackfill";
+import { isAudioOnlyPath } from "./mediaKind";
+import {
+  readAudioAutoAdvanceFolder,
+  readAudioPrefetchNext,
+} from "./audioPlaybackPrefs";
+import { syncRuforgeAccentCss } from "./accentCss";
 
 const Waveform = ({ isPaused }: { isPaused: boolean }) => {
   return (
@@ -25,7 +53,7 @@ const Waveform = ({ isPaused }: { isPaused: boolean }) => {
             ease: "easeInOut",
             delay: i * 0.08,
           }}
-          className="w-[2px] bg-amber-500/80 rounded-full"
+          className="w-[2px] bg-[color:var(--accent)] opacity-80 rounded-full"
         />
       ))}
     </div>
@@ -33,9 +61,18 @@ const Waveform = ({ isPaused }: { isPaused: boolean }) => {
 };
 
 export default function MiniPlayer() {
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ruforge-settings");
+      const parsed = raw ? JSON.parse(raw) : null;
+      const hex = typeof parsed?.accentColor === "string" ? parsed.accentColor : "#f59e0b";
+      syncRuforgeAccentCss(hex);
+    } catch {
+      syncRuforgeAccentCss("#f59e0b");
+    }
+  }, []);
+
   const [playingFile, setPlayingFile] = useState<MediaFile | null>(null);
-  const [library, setLibrary] = useState<MediaFile[]>([]);
-  const [isGalleryHovered, setIsGalleryHovered] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -47,13 +84,20 @@ export default function MiniPlayer() {
   const cursorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (playingFile) {
-      invoke<string[]>("extract_frames", { videoPath: playingFile.path })
-        .then(setScrubberThumbs)
-        .catch(console.error);
-    } else {
+    if (!playingFile || isAudioOnlyPath(playingFile.path)) {
       setScrubberThumbs([]);
+      return;
     }
+    invoke<string[]>("extract_frames", { videoPath: playingFile.path })
+      .then((paths) =>
+        setScrubberThumbs(
+          paths.filter((p) => {
+            const f = p.replace(/^.*[/\\]/, "");
+            return f.startsWith("sprite_") && f.endsWith(".jpg");
+          }),
+        ),
+      )
+      .catch(console.error);
   }, [playingFile]);
 
   const [winSize, setWinSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -100,6 +144,8 @@ export default function MiniPlayer() {
   }, [playingFile, isPaused]); // Added isPaused to ensure togglePlay is fresh
 
   const [isPinned, setIsPinned] = useState(() => localStorage.getItem("miniplayer-pinned") === "true");
+  const [library, setLibrary] = useState<MediaFile[]>([]);
+  const [isGalleryHovered, setIsGalleryHovered] = useState(false);
   const [isFocused, setIsFocused] = useState(true);
   const [volumeLabel, setVolumeLabel] = useState(() => {
     const saved = localStorage.getItem("miniplayer-volume");
@@ -107,10 +153,10 @@ export default function MiniPlayer() {
   });
   const [isMuted, setIsMuted] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRef = useRef<HTMLMediaElement>(null);
   const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const lastAppliedVolume = useRef<number | null>(null);
+  const lastPlaybackPersistRef = useRef(0);
+  const progressRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -118,45 +164,63 @@ export default function MiniPlayer() {
   }, [isPinned]);
 
   useEffect(() => {
-    const savedPos = localStorage.getItem("miniplayer-pos");
-    if (savedPos && videoRef.current && playingFile) {
-      videoRef.current.currentTime = parseFloat(savedPos);
-    }
-  }, [playingFile]);
-
-  useEffect(() => {
-    if (videoRef.current) {
+    if (mediaRef.current) {
       const targetVol = volumeLabel / 100;
-      videoRef.current.volume = targetVol;
-      lastAppliedVolume.current = targetVol;
+      mediaRef.current.volume = targetVol;
     }
   }, [playingFile, volumeLabel]);
 
+  useEffect(() => {
+    return () => {
+      if (progressRafRef.current != null) {
+        cancelAnimationFrame(progressRafRef.current);
+        progressRafRef.current = null;
+      }
+    };
+  }, []);
+
   const savePlaybackPos = () => {
-    if (videoRef.current) {
-      localStorage.setItem("miniplayer-pos", videoRef.current.currentTime.toString());
+    if (mediaRef.current && playingFile) {
+      const t = mediaRef.current.currentTime;
+      const d = mediaRef.current.duration;
+      if (Number.isFinite(d) && d > 0 && t > 0.5 && t < d - END_EPSILON_SEC) {
+        writePlaybackPos(playingFile.path, t);
+      }
     }
   };
 
   useEffect(() => {
-    const interval = setInterval(savePlaybackPos, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    lastPlaybackPersistRef.current = 0;
+    if (mediaRef.current) {
+      mediaRef.current.preservesPitch = true;
+    }
+  }, [playingFile?.path]);
 
   const [outputDir] = useState(() => {
     return localStorage.getItem("ruforge-output-dir") || "C:\\Downloads";
   });
 
   useEffect(() => {
-    const loadLibrary = async () => {
+    const run = async () => {
       try {
-        const data = await invoke<MediaFile[]>("scan_gallery", { dir: outputDir });
+        const raw = await invoke("scan_gallery", { dir: outputDir });
+        const data = flattenGalleryScanToMediaFiles(raw);
         setLibrary(data);
+        if (filesMissingPoster(data).length === 0) return;
+        void (async () => {
+          await ensurePostersForFiles(data);
+          try {
+            const raw2 = await invoke("scan_gallery", { dir: outputDir });
+            setLibrary(flattenGalleryScanToMediaFiles(raw2));
+          } catch (e) {
+            console.error(e);
+          }
+        })();
       } catch (e) {
         console.error(e);
       }
     };
-    loadLibrary();
+    run();
   }, [outputDir]);
 
   useEffect(() => {
@@ -201,62 +265,27 @@ export default function MiniPlayer() {
     };
   }, []);
 
-  useEffect(() => {
-    const notifyPlay = async () => {
-      if (playingFile) {
-        let permissionGranted = await isPermissionGranted();
-        if (!permissionGranted) {
-          const permission = await requestPermission();
-          permissionGranted = permission === 'granted';
-        }
-        if (permissionGranted) {
-          sendNotification({ title: 'RuForge Playing', body: playingFile.name });
-        }
-      }
-    };
-    notifyPlay();
-  }, [playingFile]);
-
-  const volumeRampRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const adjustVolume = (delta: number) => {
-    if (!videoRef.current) return;
-    if (volumeRampRef.current) clearInterval(volumeRampRef.current);
-    
-    const start = videoRef.current.volume;
+    if (!mediaRef.current) return;
+
+    const start = mediaRef.current.volume;
     const target = Math.max(0, Math.min(1, start + delta));
-    const distance = target - start;
-    if (Math.abs(distance) < 0.001) return;
+    if (Math.abs(target - start) < 0.001) return;
 
-    const duration = 100; // ms
-    const steps = 10;
-    const stepTime = duration / steps;
-    let currentStep = 0;
-
-    volumeRampRef.current = setInterval(() => {
-      currentStep++;
-      if (videoRef.current) {
-        videoRef.current.volume = Math.max(0, Math.min(1, start + (distance * (currentStep / steps))));
-      }
-      if (currentStep >= steps) {
-        clearInterval(volumeRampRef.current!);
-        volumeRampRef.current = null;
-      }
-    }, stepTime);
-
+    mediaRef.current.volume = target;
     setVolumeLabel(Math.round(target * 100));
     localStorage.setItem("miniplayer-volume", target.toString());
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    if (!videoRef.current) return;
+    if (!mediaRef.current) return;
     
     // Request window focus on interaction. The onFocusChanged listener will handle the opacity.
     getCurrentWindow().setFocus();
 
     // Unmute on scroll if muted
-    if (videoRef.current.muted) {
-      videoRef.current.muted = false;
+    if (mediaRef.current.muted) {
+      mediaRef.current.muted = false;
       setIsMuted(false);
     }
 
@@ -269,11 +298,23 @@ export default function MiniPlayer() {
   };
 
   const handleTimeUpdate = () => {
-    if (!videoRef.current) return;
-    const { currentTime, duration } = videoRef.current;
-    setCurrentTime(currentTime);
-    setDuration(duration);
-    setProgress((currentTime / duration) * 100);
+    if (progressRafRef.current != null) return;
+    progressRafRef.current = requestAnimationFrame(() => {
+      progressRafRef.current = null;
+      const v = mediaRef.current;
+      if (!v || !isFinite(v.duration)) return;
+      const { currentTime, duration } = v;
+      setCurrentTime(currentTime);
+      setDuration(duration);
+      setProgress((currentTime / duration) * 100);
+      const now = Date.now();
+      if (playingFile && now - lastPlaybackPersistRef.current > 4000 && duration > 0) {
+        lastPlaybackPersistRef.current = now;
+        if (currentTime > 0.5 && currentTime < duration - END_EPSILON_SEC) {
+          writePlaybackPos(playingFile.path, currentTime);
+        }
+      }
+    });
   };
 
   const formatTime = (seconds: number) => {
@@ -284,11 +325,11 @@ export default function MiniPlayer() {
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!videoRef.current) return;
+    if (!mediaRef.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percent = x / rect.width;
-    videoRef.current.currentTime = percent * videoRef.current.duration;
+    mediaRef.current.currentTime = percent * mediaRef.current.duration;
   };
 
   const handleMouseMoveScrubber = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -304,27 +345,56 @@ export default function MiniPlayer() {
   }, [isPaused]);
 
   const togglePlay = () => {
-    if (!videoRef.current) return;
-    if (videoRef.current.paused) {
-      videoRef.current.play();
+    if (!mediaRef.current) return;
+    if (mediaRef.current.paused) {
+      mediaRef.current.play();
       setIsPaused(false);
     } else {
-      videoRef.current.pause();
+      mediaRef.current.pause();
       setIsPaused(true);
       savePlaybackPos();
     }
   };
 
   const seek = (seconds: number) => {
-    if (!videoRef.current) return;
-    videoRef.current.currentTime += seconds;
+    if (!mediaRef.current) return;
+    mediaRef.current.currentTime += seconds;
   };
 
   const showGallery = !isSmallMode && (!playingFile || isPaused || isGalleryHovered);
 
+  const playingAudioOnly = Boolean(playingFile && isAudioOnlyPath(playingFile.path));
+  const coverArtSrc = playingFile?.ruforgePosterPath ?? playingFile?.thumbnailPath;
+  const isProbablyWindows =
+    typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
+
+  const openWindowsSoundSettings = () => {
+    invoke("open_windows_sound_settings").catch(console.error);
+  };
+
+  const audioPlaylistMini = useMemo(
+    () =>
+      library
+        .filter((f) => isAudioOnlyPath(f.path))
+        .sort((a, b) =>
+          a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }),
+        ),
+    [library],
+  );
+
+  const playlistIdxMini =
+    playingFile && playingAudioOnly
+      ? audioPlaylistMini.findIndex((p) => p.path === playingFile.path)
+      : -1;
+  const nextMini =
+    playingFile && playlistIdxMini >= 0 && playlistIdxMini < audioPlaylistMini.length - 1
+      ? audioPlaylistMini[playlistIdxMini + 1]
+      : null;
+  const prefetchMini = Boolean(playingAudioOnly && readAudioPrefetchNext() && nextMini);
+
   return (
     <div 
-      className={`h-screen w-screen bg-black overflow-hidden border border-amber-900/40 rounded-[32px] select-none relative group/mini shadow-2xl transition-opacity duration-700 ${isFocused ? 'opacity-100' : 'opacity-75'} ${!isCursorVisible && !isPaused ? 'cursor-none' : 'cursor-default'}`}
+      className={`h-screen w-screen bg-[#121212] overflow-hidden border border-white/5 rounded-3xl select-none relative group/mini shadow-2xl transition-opacity duration-700 ${isFocused ? 'opacity-100' : 'opacity-75'} ${!isCursorVisible && !isPaused ? 'cursor-none' : 'cursor-default'}`}
       onWheel={handleWheel}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={() => setIsHovering(false)}
@@ -345,16 +415,16 @@ export default function MiniPlayer() {
             exit={{ opacity: 0, y: 10, x: 10 }}
             className={`absolute bottom-0 right-0 z-[80] bg-black/80 backdrop-blur-2xl border-t border-l border-white/10 rounded-tl-2xl ${isMini ? 'p-2 space-x-2' : isNarrow ? 'p-3 space-x-3' : 'p-4 space-x-3'} flex items-center pointer-events-none shadow-2xl`}
           >
-            <div className="text-amber-500">
+            <div className="text-[color:var(--accent)]">
               {isMuted ? <VolumeX size={isMini ? 12 : 16} /> : volumeLabel > 50 ? <Volume2 size={isMini ? 12 : 16} /> : <Volume1 size={isMini ? 12 : 16} />}
             </div>
             <div className="flex flex-col">
-              <span className={`${isMini ? 'text-[9px]' : 'text-xs'} font-black text-amber-500 leading-none`}>{isMuted ? "MUTED" : `${volumeLabel}%`}</span>
+              <span className={`${isMini ? 'text-[9px]' : 'text-xs'} font-black text-[color:var(--accent)] leading-none`}>{isMuted ? "MUTED" : `${volumeLabel}%`}</span>
             </div>
             {!isMuted && (
               <div className={`${isMini ? 'w-[2px] h-3' : 'w-1 h-6'} bg-stone-900/50 rounded-full relative overflow-hidden ml-1`}>
                   <motion.div 
-                    className="absolute bottom-0 left-0 right-0 bg-amber-500 rounded-full"
+                    className="absolute bottom-0 left-0 right-0 bg-[color:var(--accent)] rounded-full"
                     initial={{ height: 0 }}
                     animate={{ height: `${volumeLabel}%` }}
                   />
@@ -364,51 +434,74 @@ export default function MiniPlayer() {
         )}
       </AnimatePresence>
 
-      <div 
-        className="absolute top-0 left-0 right-0 h-10 z-[60] cursor-move" 
-        onPointerDown={() => getCurrentWindow().startDragging()}
-      />
+      {/* Top Controls Strip */}
+      <div className="absolute top-0 left-0 right-0 h-12 z-[100] flex items-center justify-between px-3 pointer-events-none group-hover/mini:opacity-100 opacity-0 transition-opacity duration-300">
+        <button className="p-1.5 text-stone-400 hover:text-white pointer-events-auto transition-colors">
+          <Icon icon="tabler:adjustments-horizontal" width="18" height="18" />
+        </button>
+        
+        <div 
+          className="flex-1 h-full cursor-move flex items-center justify-center pointer-events-auto"
+          onPointerDown={(e) => {
+              e.stopPropagation();
+              getCurrentWindow().startDragging();
+          }}
+        >
+          <div className="grid grid-cols-2 gap-0.5 opacity-40">
+            {[...Array(8)].map((_, i) => <div key={i} className="w-0.5 h-0.5 bg-white rounded-full" />)}
+          </div>
+        </div>
 
-      <div className="absolute top-0 left-0 right-0 h-14 z-[70] opacity-0 group-hover/mini:opacity-100 transition-opacity duration-300 pointer-events-none">
-         <div className="relative z-10 flex items-center justify-end px-4 h-full">
-            <button 
-              onClick={async () => {
-                if (playingFile && videoRef.current) {
-                  localStorage.setItem("miniplayer-pos", videoRef.current.currentTime.toString());
-                  localStorage.setItem("miniplayer-volume", videoRef.current.volume.toString());
-                  emit("send-to-main", playingFile);
-                  getCurrentWindow().close();
-                }
-              }}
-              className="text-stone-500 hover:text-amber-500 transition-all cursor-pointer pointer-events-auto p-1.5 hover:bg-white/5 rounded-full"
-              title="Send to Main"
-            >
-              <Icon icon="tabler:arrow-forward-up" width="18" height="18" />
-            </button>
-            <button 
-              onClick={async () => {
-                const newPinned = !isPinned;
-                setIsPinned(newPinned);
-                localStorage.setItem("miniplayer-pinned", newPinned.toString());
-                const win = getCurrentWindow();
-                await win.setAlwaysOnTop(newPinned);
-              }}
-              className={`text-stone-500 hover:text-amber-500 transition-all cursor-pointer pointer-events-auto p-1.5 hover:bg-white/5 rounded-full ${isPinned ? 'text-amber-500' : ''}`}
-              title={isPinned ? "Unpin" : "Pin"}
-            >
-              <Pin size={14} strokeWidth={2.5} className={isPinned ? 'fill-current' : ''} />
-            </button>
-            <button 
-              onPointerDown={(e) => {
+        <div className="flex items-center space-x-1 pointer-events-auto">
+          {playingFile && (
+            <button
+              type="button"
+              title="Open in default media app (same file on disk)"
+              onClick={(e) => {
                 e.stopPropagation();
-                getCurrentWindow().close();
-              }} 
-              className="text-stone-500 hover:text-amber-500 transition-all cursor-pointer pointer-events-auto p-1.5 hover:bg-white/5 rounded-full"
-              title="Close"
+                void openPath(playingFile.path).catch(console.error);
+              }}
+              className="p-1.5 text-stone-400 hover:text-[color:var(--accent)] transition-colors"
             >
-              <XCircle size={14} strokeWidth={2.5} />
+              <ExternalLink size={16} strokeWidth={2.5} />
             </button>
-         </div>
+          )}
+          {playingFile && playingAudioOnly && isProbablyWindows && (
+            <button
+              type="button"
+              title="Open Windows Sound settings"
+              onClick={(e) => {
+                e.stopPropagation();
+                openWindowsSoundSettings();
+              }}
+              className="p-1.5 text-stone-400 hover:text-[color:var(--accent)] transition-colors"
+            >
+              <Speaker size={16} strokeWidth={2.5} aria-hidden />
+            </button>
+          )}
+          <button 
+            onClick={async () => {
+              const newPinned = !isPinned;
+              setIsPinned(newPinned);
+              localStorage.setItem("miniplayer-pinned", newPinned.toString());
+              await getCurrentWindow().setAlwaysOnTop(newPinned);
+            }}
+            className={`p-1.5 transition-colors ${isPinned ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
+            title={isPinned ? "Unpin" : "Pin"}
+          >
+            <Pin size={16} strokeWidth={2.5} className={isPinned ? 'fill-current' : ''} />
+          </button>
+
+          <button 
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              getCurrentWindow().close();
+            }} 
+            className="p-1.5 text-stone-400 hover:text-white transition-colors"
+          >
+            <Icon icon="tabler:x" width={18} height={18} />
+          </button>
+        </div>
       </div>
 
       <motion.div 
@@ -418,56 +511,172 @@ export default function MiniPlayer() {
       >
          {playingFile ? (
             <>
-              <video 
-                key={playingFile.path}
-                ref={videoRef}
-                autoPlay 
-                className={`${isSmallMode ? 'w-24 h-24 absolute left-6 rounded-2xl object-cover shadow-2xl border border-white/5' : 'w-full h-full object-contain'} cursor-pointer pointer-events-auto transition-all duration-500 z-20`}
-                src={convertFileSrc(playingFile.path)}
-                onPause={() => setIsPaused(true)}
-                onPlay={() => {
-                  setIsPaused(false);
-                  setIsGalleryHovered(false);
-                  if (videoRef.current) videoRef.current.volume = volumeLabel / 100;
-                }}
-                onLoadedData={(e) => {
-                  e.currentTarget.volume = volumeLabel / 100;
-                }}
-                onTimeUpdate={handleTimeUpdate}
-                onClick={togglePlay}
-                onAuxClick={(e) => {
-                  if (e.button === 1 && videoRef.current) {
-                    getCurrentWindow().setFocus();
-                    const nextMuted = !videoRef.current.muted;
-                    videoRef.current.muted = nextMuted;
-                    setIsMuted(nextMuted);
-                    setShowVolume(true);
-                    if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-                    volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
-                  }
-                }}
-              />
-              
+              {playingAudioOnly ? (
+                <>
+                  <audio
+                    key={playingFile.path}
+                    ref={mediaRef}
+                    className="absolute w-px h-px opacity-0 pointer-events-none"
+                    preload="metadata"
+                    autoPlay
+                    src={convertFileSrc(playingFile.path)}
+                    onPause={() => setIsPaused(true)}
+                    onPlay={() => {
+                      setIsPaused(false);
+                      setIsGalleryHovered(false);
+                      if (mediaRef.current) mediaRef.current.volume = volumeLabel / 100;
+                    }}
+                    onLoadedData={(e) => {
+                      e.currentTarget.volume = volumeLabel / 100;
+                    }}
+                    onLoadedMetadata={(e) => {
+                      const v = e.currentTarget;
+                      v.volume = volumeLabel / 100;
+                      v.preservesPitch = true;
+                      const t = readResumeSeconds(playingFile.path, v.duration);
+                      v.currentTime = t;
+                    }}
+                    onEnded={() => {
+                      if (playingFile) clearPlaybackPos(playingFile.path);
+                      const advance = readAudioAutoAdvanceFolder();
+                      if (advance && nextMini && playingFile) {
+                        setPlayingFile(nextMini);
+                        return;
+                      }
+                      setIsPaused(true);
+                    }}
+                    onTimeUpdate={handleTimeUpdate}
+                  />
+                  {prefetchMini && nextMini && (
+                    <audio
+                      preload="auto"
+                      src={convertFileSrc(nextMini.path)}
+                      className="absolute w-px h-px opacity-0 pointer-events-none"
+                      aria-hidden
+                    />
+                  )}
+                </>
+              ) : (
+                <video
+                  key={playingFile.path}
+                  ref={mediaRef as React.RefObject<HTMLVideoElement>}
+                  autoPlay
+                  playsInline
+                  preload="metadata"
+                  className={`${isSmallMode ? "w-24 h-24 absolute left-6 rounded-2xl object-cover shadow-2xl border border-white/5" : "w-full h-full object-contain"} cursor-pointer pointer-events-auto transition-all duration-500 z-20`}
+                  src={convertFileSrc(playingFile.path)}
+                  onPause={() => setIsPaused(true)}
+                  onPlay={() => {
+                    setIsPaused(false);
+                    setIsGalleryHovered(false);
+                    if (mediaRef.current) mediaRef.current.volume = volumeLabel / 100;
+                  }}
+                  onLoadedData={(e) => {
+                    e.currentTarget.volume = volumeLabel / 100;
+                  }}
+                  onLoadedMetadata={(e) => {
+                    const v = e.currentTarget;
+                    v.volume = volumeLabel / 100;
+                    v.preservesPitch = true;
+                    const t = readResumeSeconds(playingFile.path, v.duration);
+                    v.currentTime = t;
+                  }}
+                  onEnded={() => {
+                    clearPlaybackPos(playingFile.path);
+                    setIsPaused(true);
+                  }}
+                  onTimeUpdate={handleTimeUpdate}
+                  onClick={togglePlay}
+                  onAuxClick={(e) => {
+                    if (e.button === 1 && mediaRef.current) {
+                      getCurrentWindow().setFocus();
+                      const nextMuted = !mediaRef.current.muted;
+                      mediaRef.current.muted = nextMuted;
+                      setIsMuted(nextMuted);
+                      setShowVolume(true);
+                      if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+                      volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+                    }
+                  }}
+                />
+              )}
+
+              {playingAudioOnly && isSmallMode && (
+                <button
+                  type="button"
+                  className="w-24 h-24 absolute left-6 rounded-2xl shadow-2xl border border-white/5 z-20 overflow-hidden flex items-center justify-center bg-stone-900 cursor-pointer pointer-events-auto transition-all duration-500"
+                  onClick={togglePlay}
+                  onAuxClick={(e) => {
+                    if (e.button === 1 && mediaRef.current) {
+                      getCurrentWindow().setFocus();
+                      const nextMuted = !mediaRef.current.muted;
+                      mediaRef.current.muted = nextMuted;
+                      setIsMuted(nextMuted);
+                      setShowVolume(true);
+                      if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+                      volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+                    }
+                  }}
+                >
+                  {coverArtSrc ? (
+                    <img src={convertFileSrc(coverArtSrc)} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Music className="w-10 h-10 text-[color:var(--accent)] opacity-40" strokeWidth={1.25} aria-hidden />
+                  )}
+                </button>
+              )}
+
+              {playingAudioOnly && !isSmallMode && (
+                <button
+                  type="button"
+                  className="absolute inset-0 z-20 flex cursor-pointer pointer-events-auto items-center justify-center bg-gradient-to-b from-stone-950 to-black p-8"
+                  onClick={togglePlay}
+                  onAuxClick={(e) => {
+                    if (e.button === 1 && mediaRef.current) {
+                      getCurrentWindow().setFocus();
+                      const nextMuted = !mediaRef.current.muted;
+                      mediaRef.current.muted = nextMuted;
+                      setIsMuted(nextMuted);
+                      setShowVolume(true);
+                      if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+                      volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+                    }
+                  }}
+                >
+                  {coverArtSrc ? (
+                    <img
+                      src={convertFileSrc(coverArtSrc)}
+                      alt=""
+                      className="max-h-[min(50vh,420px)] max-w-[min(88vw,420px)] rounded-2xl border border-white/10 object-contain shadow-2xl"
+                    />
+                  ) : (
+                    <Music className="w-24 h-24 text-[color:var(--accent)] opacity-35" strokeWidth={1} aria-hidden />
+                  )}
+                </button>
+              )}
+
               {isSmallMode && (
                 <div className="absolute inset-0 pl-36 pr-8 flex flex-col justify-center pointer-events-none">
                    <div className="flex items-center justify-between mb-2">
                       <div className="min-w-0 flex-1 mr-4">
-                        <p className="text-[11px] font-black text-amber-500 truncate uppercase tracking-widest">{playingFile.name}</p>
-                        <p className="text-[9px] font-bold text-stone-500 uppercase tracking-tighter">System Audio Active</p>
+                        <p className="text-[11px] font-black text-[color:var(--accent)] truncate uppercase tracking-widest">{playingFile.name}</p>
+                        <p className="text-[9px] font-bold text-stone-500 uppercase tracking-tighter">
+                          {playingAudioOnly ? "Audio · in-app WebView" : "System Audio Active"}
+                        </p>
                       </div>
                       <Waveform isPaused={isPaused} />
                    </div>
                    <div className="w-full h-1 bg-stone-800 rounded-full overflow-hidden mb-4 pointer-events-auto cursor-pointer" onClick={handleSeek}>
                       <motion.div 
-                         className="h-full bg-amber-500"
+                         className="h-full bg-[color:var(--accent)]"
                          initial={{ width: 0 }}
                          animate={{ width: `${progress}%` }}
                       />
                    </div>
                    <div className="flex items-center space-x-8 text-stone-400 pointer-events-auto">
-                      <button onClick={() => seek(-10)} className="hover:text-amber-500 transition"><SkipBack size={18} /></button>
-                      <button onClick={togglePlay} className="text-amber-500 hover:scale-110 transition">{isPaused ? <Play size={24} fill="currentColor" /> : <Pause size={24} fill="currentColor" />}</button>
-                      <button onClick={() => seek(10)} className="hover:text-amber-500 transition"><SkipForward size={18} /></button>
+                      <button onClick={() => seek(-10)} className="hover:text-[color:var(--accent)] transition"><SkipBack size={18} /></button>
+                      <button onClick={togglePlay} className="text-[color:var(--accent)] hover:scale-110 transition">{isPaused ? <Play size={24} fill="currentColor" /> : <Pause size={24} fill="currentColor" />}</button>
+                      <button onClick={() => seek(10)} className="hover:text-[color:var(--accent)] transition"><SkipForward size={18} /></button>
                    </div>
                 </div>
               )}
@@ -494,27 +703,28 @@ export default function MiniPlayer() {
                   onMouseLeave={() => setHoverProgress(null)}
                 >
                   <AnimatePresence>
-                    {hoverProgress !== null && scrubberThumbs.length > 0 && (
+                    {hoverProgress !== null && scrubberThumbs.length > 0 && isFinite(duration) && duration > 0 && (
                       <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.8 }}
+                        initial={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
+                        animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
+                        exit={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
                         className="absolute bottom-full mb-4 z-[100] pointer-events-none"
-                        style={{ left: `${hoverProgress * 100}%`, transform: 'translateX(-50%)' }}
+                        style={{ left: `${hoverProgress * 100}%` }}
                       >
                         <div className="relative p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                          <img 
-                            src={convertFileSrc(scrubberThumbs[Math.min(Math.floor(hoverProgress * scrubberThumbs.length), scrubberThumbs.length - 1)])} 
-                            className="w-32 h-18 object-cover rounded-xl"
-                            alt="preview"
+                          <ScrubberHoverThumb
+                            hoverTimeSec={hoverProgress * duration}
+                            duration={duration}
+                            spritePaths={scrubberThumbs}
+                            displayWidth={128}
                           />
                           <div className="absolute bottom-2 left-2 right-2 flex justify-center">
-                             <span className="text-[9px] font-black text-amber-500 bg-black/40 px-2 py-0.5 rounded-full backdrop-blur-sm">
+                             <span className="text-[9px] font-black text-[color:var(--accent)] bg-black/40 px-2 py-0.5 rounded-full backdrop-blur-sm">
                                {formatTime(hoverProgress * duration)}
                              </span>
                           </div>
                         </div>
-                        <div className="w-px h-4 bg-amber-500/50 mx-auto mt-1" />
+                        <div className="w-px h-4 bg-[color:var(--accent)] opacity-50 mx-auto mt-1" />
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -540,9 +750,9 @@ export default function MiniPlayer() {
                 
                 <div className="flex items-center justify-between">
                   <div className={`flex items-center ${isMini ? 'space-x-3' : 'space-x-4'}`}>
-                    <button onClick={() => seek(-15)} className="text-stone-400 hover:text-amber-400 transition"><Icon icon="tabler:rewind-backward-15" width={isMini ? 16 : 22} /></button>
-                    <button onClick={togglePlay} className="text-amber-500 hover:text-amber-400 transition">{isPaused ? <Play size={isMini ? 16 : 20} fill="currentColor" /> : <Pause size={isMini ? 16 : 20} fill="currentColor" />}</button>
-                    <button onClick={() => seek(15)} className="text-stone-400 hover:text-amber-400 transition"><Icon icon="tabler:rewind-forward-15" width={isMini ? 16 : 22} /></button>
+                    <button onClick={() => seek(-15)} className="text-stone-400 transition" onMouseEnter={(e) => e.currentTarget.style.color = '#fbbf24'} onMouseLeave={(e) => e.currentTarget.style.color = ''}><Icon icon="tabler:rewind-backward-15" width={isMini ? 16 : 22} /></button>
+                    <button onClick={togglePlay} className="text-[color:var(--accent)] transition" onMouseEnter={(e) => e.currentTarget.style.color = '#fbbf24'} onMouseLeave={(e) => e.currentTarget.style.color = ''}>{isPaused ? <Play size={isMini ? 16 : 20} fill="currentColor" /> : <Pause size={isMini ? 16 : 20} fill="currentColor" />}</button>
+                    <button onClick={() => seek(15)} className="text-stone-400 transition" onMouseEnter={(e) => e.currentTarget.style.color = '#fbbf24'} onMouseLeave={(e) => e.currentTarget.style.color = ''}><Icon icon="tabler:rewind-forward-15" width={isMini ? 16 : 22} /></button>
                   </div>
                   <div className={`${isMini ? 'text-[8px]' : 'text-[10px]'} font-bold text-stone-500 tracking-wider`}>
                     -{formatTime(duration - currentTime)}
@@ -557,7 +767,7 @@ export default function MiniPlayer() {
                           exit={{ opacity: 0 }}
                           className={`flex items-center ${isMini ? 'space-x-1' : 'space-x-2'}`}
                         >
-                           {isMuted ? <VolumeX size={isMini ? 12 : 16} className="text-amber-500/50" /> : <Volume2 size={isMini ? 12 : 16} />}
+                           {isMuted ? <VolumeX size={isMini ? 12 : 16} className="text-[color:var(--accent)] opacity-50" /> : <Volume2 size={isMini ? 12 : 16} />}
                            <span className={`${isMini ? 'text-[8px]' : 'text-[10px]'} font-bold`}>{isMuted ? "MUTED" : `${volumeLabel}%`}</span>
                         </motion.div>
                       )}
@@ -594,19 +804,28 @@ export default function MiniPlayer() {
            className="w-full h-28 glass-elevated border-t border-white/5 flex flex-col overflow-hidden shadow-2xl pointer-events-auto relative z-10"
         >
            <div className="h-28 overflow-x-auto overflow-y-hidden scrollbar-none px-4 py-4 flex items-center space-x-3 pointer-events-auto">
-            {library.map((file) => (
+            {library.map((file) => {
+              const stillPoster = file.thumbnailPath ?? file.ruforgePosterPath;
+              return (
               <button 
                 key={file.path}
                 onClick={() => setPlayingFile(file)}
-                className={`flex-shrink-0 w-32 h-full rounded-xl overflow-hidden relative group border-2 transition-all ${playingFile?.path === file.path ? 'border-amber-500 shadow-lg shadow-amber-900/20' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                className={`flex-shrink-0 w-32 h-full rounded-xl overflow-hidden relative group border-2 transition-all ${playingFile?.path === file.path ? 'border-[color:var(--accent)] shadow-lg shadow-black/30' : 'border-transparent opacity-60 hover:opacity-100'}`}
               >
-                <video src={`${convertFileSrc(file.path)}#t=0.1`} preload="metadata" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                {stillPoster ? (
+                  <img src={convertFileSrc(stillPoster)} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-stone-900 pointer-events-none">
+                    <Video className="w-8 h-8 text-stone-700" strokeWidth={1.25} aria-hidden />
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
-                <p className="absolute bottom-1 left-2 right-2 text-[7px] font-black text-amber-50 truncate uppercase tracking-tighter">
+                <p className="absolute bottom-1 left-2 right-2 text-[7px] font-black text-stone-100 truncate uppercase tracking-tighter">
                   {file.name}
                 </p>
               </button>
-            ))}
+            );
+            })}
             {library.length === 0 && (
               <p className="text-[8px] text-stone-600 font-bold uppercase tracking-widest w-full text-center">Library Empty</p>
             )}

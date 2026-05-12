@@ -2912,6 +2912,7 @@ name = "ruforge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "dirs 6.0.0",
  "serde",
  "serde_json",
  "tauri",
