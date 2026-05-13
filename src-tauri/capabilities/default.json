@@ -41,11 +41,33 @@
     "dialog:default",
     "fs:default",
     "notification:default",
+    "updater:allow-check",
+    "updater:allow-download-and-install",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
     "store:default",
     "process:allow-restart",
+    {
+      "identifier": "shell:allow-spawn",
+      "scope": {
+        "allow": [
+          { "args": true, "sidecar": "binaries/yt-dlp" },
+          { "args": true, "sidecar": "binaries/ffmpeg" },
+          { "args": true, "sidecar": "binaries/ffprobe" }
+        ]
+      }
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "scope": {
+        "allow": [
+          { "args": true, "sidecar": "binaries/yt-dlp" },
+          { "args": true, "sidecar": "binaries/ffmpeg" },
+          { "args": true, "sidecar": "binaries/ffprobe" }
+        ]
+      }
+    },
     "core:webview:default",
     "core:webview:allow-create-webview",
     "core:webview:allow-webview-show",
