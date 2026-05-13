@@ -43,7 +43,16 @@
       "icons/icon.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "displayStep": false,
+      "installerIcon": "icons/icon.ico",
+      "installerSidebarImage": "installer-assets/sidebar.bmp",
+      "installerHeaderImage": "installer-assets/header.bmp"
+    }
   },
   "plugins": {
     "updater": {
