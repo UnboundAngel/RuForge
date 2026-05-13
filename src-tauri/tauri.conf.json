@@ -47,8 +47,6 @@
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
-        "headerImage": "installer-assets/header.bmp",
-        "sidebarImage": "installer-assets/sidebar.bmp",
         "installMode": "currentUser",
         "compression": "lzma",
         "displayLanguageSelector": false,
