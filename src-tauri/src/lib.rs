@@ -167,8 +167,8 @@ async fn run_ffprobe_json(app: &AppHandle, media_path: &str) -> Result<serde_jso
         .shell()
         .sidecar("binaries/ffprobe")
         .map_err(|e| e.to_string())?
-        .create_no_window(true)
-        .create_no_window(true)
+        
+        
         .args([
             "-v",
             "quiet",
@@ -612,7 +612,7 @@ async fn yt_dlp_single_json_simulate(
         .shell()
         .sidecar("binaries/yt-dlp")
         .map_err(|e| e.to_string())?
-        .create_no_window(true)
+        
         .args(args)
         .output()
         .await
@@ -802,7 +802,7 @@ async fn download_video(
         .shell()
         .sidecar("binaries/yt-dlp")
         .map_err(|e| e.to_string())?
-        .create_no_window(true)
+        
         .args(args)
         .spawn()
         .map_err(|e| format!("Failed to start download sidecar: {}", e))?;
@@ -883,7 +883,7 @@ async fn download_video(
                         let _ = push_ytdlp_download_cookie_args(&app_handle_inner, &mut get_name_args, &dl_opts_for_name);
                         get_name_args.push(video_url);
 
-                        if let Ok(output) = app_handle_inner.shell().sidecar("yt-dlp").unwrap().create_no_window(true).args(get_name_args).output().await {
+                        if let Ok(output) = app_handle_inner.shell().sidecar("yt-dlp").unwrap().args(get_name_args).output().await {
                             for raw in output.stdout.split(|&b| b == b'\n') {
                                 let path_str = match std::str::from_utf8(raw) {
                                     Ok(s) => s.trim(),
@@ -1577,7 +1577,7 @@ async fn write_poster_jpeg(app: &AppHandle, video_path: &str, dest: &std::path::
         .shell()
         .sidecar("ffmpeg")
         .map_err(|e| e.to_string())?
-        .create_no_window(true)
+        
         .args([
             "-hide_banner",
             "-loglevel",
@@ -1634,7 +1634,7 @@ async fn extract_frames(app: AppHandle, video_path: String) -> Result<Vec<String
             .shell()
             .sidecar("ffmpeg")
             .map_err(|e| e.to_string())?
-            .create_no_window(true)
+            
             .args([
                 "-hide_banner",
                 "-loglevel",
