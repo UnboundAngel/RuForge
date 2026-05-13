@@ -12,8 +12,12 @@ export function syncRuforgeAccentCss(hex: string): void {
   const root = document.documentElement;
   root.style.setProperty("--accent", safe);
   const rgb = hexToRgb(safe);
-  const glow = rgb
-    ? `rgba(${rgb.r},${rgb.g},${rgb.b},0.28)`
-    : "rgba(245, 158, 11, 0.28)";
-  root.style.setProperty("--accent-glow", glow);
+  
+  if (rgb) {
+    root.style.setProperty("--accent-rgb", `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+    root.style.setProperty("--accent-glow", `rgba(${rgb.r},${rgb.g},${rgb.b},0.28)`);
+  } else {
+    root.style.setProperty("--accent-rgb", "245, 158, 11");
+    root.style.setProperty("--accent-glow", "rgba(245, 158, 11, 0.28)");
+  }
 }

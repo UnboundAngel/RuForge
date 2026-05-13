@@ -165,8 +165,10 @@ fn optional_bitrate_kbps(raw: Option<&serde_json::Value>) -> Option<u32> {
 async fn run_ffprobe_json(app: &AppHandle, media_path: &str) -> Result<serde_json::Value, String> {
     let output = app
         .shell()
-        .sidecar("ffprobe")
+        .sidecar("binaries/ffprobe")
         .map_err(|e| e.to_string())?
+        .create_no_window(true)
+        .create_no_window(true)
         .args([
             "-v",
             "quiet",
@@ -608,8 +610,9 @@ async fn yt_dlp_single_json_simulate(
     
     let output = app
         .shell()
-        .sidecar("yt-dlp")
+        .sidecar("binaries/yt-dlp")
         .map_err(|e| e.to_string())?
+        .create_no_window(true)
         .args(args)
         .output()
         .await
@@ -797,120 +800,114 @@ async fn download_video(
 
     let (mut rx, _child) = app
         .shell()
-        .sidecar("yt-dlp")
+        .sidecar("binaries/yt-dlp")
         .map_err(|e| e.to_string())?
+        .create_no_window(true)
         .args(args)
         .spawn()
         .map_err(|e| format!("Failed to start download sidecar: {}", e))?;
 
-    let app_handle = app.clone();
-    let progress_extras = std::sync::Arc::new(tokio::sync::Mutex::new(
-        PlaylistDownloadProgressExtras::default(),
-    ));
-    let progress_clone = progress_extras.clone();
-    let error_log = std::sync::Arc::new(tokio::sync::Mutex::new(String::new()));
-    let error_log_clone = error_log.clone();
+    let mut progress_extras = PlaylistDownloadProgressExtras::default();
+    let mut error_log = String::new();
 
-    tokio::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            use tauri_plugin_shell::process::CommandEvent;
-            match event {
-                CommandEvent::Stdout(line_bytes) => {
-                    let line = String::from_utf8_lossy(&line_bytes).to_string();
-                    if line.contains("[download]") {
-                        if let Some((idx, total, tit)) = parse_ytdlp_playlist_download_line(&line) {
-                            let mut lk = progress_clone.lock().await;
-                            lk.current_index = Some(idx);
-                            lk.total_items = Some(total);
-                            if tit.is_some() {
-                                lk.current_item_title = tit;
-                            }
-                        }
-                    }
-
-                    if line.contains("[download]") && line.contains('%') {
-                        let parts: Vec<&str> = line.split_whitespace().collect();
-                        if parts.len() >= 2 {
-                            let percent_str = parts[1].trim_end_matches('%');
-                            if let Ok(percentage) = percent_str.parse::<f32>() {
-                                let mut speed = "";
-                                let mut eta = "";
-
-                                for (i, part) in parts.iter().enumerate() {
-                                    if part.contains("/s") || part.contains("B/s") {
-                                        speed = part;
-                                    }
-                                    if part.contains(':') && i > 4 {
-                                        eta = part;
-                                    }
-                                }
-
-                                let extras = progress_clone.lock().await.clone();
-                                let _ = app_handle.emit(
-                                    "download-progress",
-                                    ProgressPayload {
-                                        percentage,
-                                        speed: speed.to_string(),
-                                        eta: eta.to_string(),
-                                        status: "downloading".to_string(),
-                                        current_index: extras.current_index,
-                                        total_items: extras.total_items,
-                                        current_item_title: extras.current_item_title.clone(),
-                                    },
-                                );
-                            }
+    while let Some(event) = rx.recv().await {
+        use tauri_plugin_shell::process::CommandEvent;
+        match event {
+            CommandEvent::Stdout(line_bytes) => {
+                let line = String::from_utf8_lossy(&line_bytes).to_string();
+                if line.contains("[download]") {
+                    if let Some((idx, total, tit)) = parse_ytdlp_playlist_download_line(&line) {
+                        progress_extras.current_index = Some(idx);
+                        progress_extras.total_items = Some(total);
+                        if tit.is_some() {
+                            progress_extras.current_item_title = tit;
                         }
                     }
                 }
-                CommandEvent::Stderr(line_bytes) => {
-                    let mut log = error_log_clone.lock().await;
-                    log.push_str(&String::from_utf8_lossy(&line_bytes));
-                    log.push('\n');
-                }
-                CommandEvent::Terminated(payload) => {
-                    if payload.code == Some(0) {
-                        let app_handle_inner = app_handle.clone();
-                        let video_url = url.clone();
-                        let dl_opts_for_name = options.clone();
-                        let filename_for_probe = filename_template_eff.clone();
 
-                        tokio::spawn(async move {
-                            let mut get_name_args = vec![
-                                "-P".to_string(),
-                                dl_opts_for_name.output_dir.clone(),
-                                "-o".to_string(),
-                                filename_for_probe,
-                                "--windows-filenames".to_string(),
-                                "--trim-filenames".to_string(),
-                                "200".to_string(),
-                                "--get-filename".to_string(),
-                            ];
-                            let _ = push_ytdlp_download_cookie_args(&app_handle_inner, &mut get_name_args, &dl_opts_for_name);
-                            get_name_args.push(video_url);
+                if line.contains("[download]") && line.contains('%') {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 2 {
+                        let percent_str = parts[1].trim_end_matches('%');
+                        if let Ok(percentage) = percent_str.parse::<f32>() {
+                            let mut speed = "";
+                            let mut eta = "";
 
-                            if let Ok(output) = app_handle_inner.shell().sidecar("yt-dlp").unwrap().args(get_name_args).output().await {
-                                for raw in output.stdout.split(|&b| b == b'\n') {
-                                    let path_str = match std::str::from_utf8(raw) {
-                                        Ok(s) => s.trim(),
-                                        Err(_) => continue,
-                                    };
-                                    if path_str.is_empty() {
-                                        continue;
-                                    }
-                                    if std::path::Path::new(path_str).is_file() {
-                                        let _ = extract_frames(app_handle_inner.clone(), path_str.to_string()).await;
-                                    }
+                            for (i, part) in parts.iter().enumerate() {
+                                if part.contains("/s") || part.contains("B/s") {
+                                    speed = part;
+                                }
+                                if part.contains(':') && i > 4 {
+                                    eta = part;
                                 }
                             }
-                        });
+
+                            let _ = app.emit(
+                                "download-progress",
+                                ProgressPayload {
+                                    percentage,
+                                    speed: speed.to_string(),
+                                    eta: eta.to_string(),
+                                    status: "downloading".to_string(),
+                                    current_index: progress_extras.current_index,
+                                    total_items: progress_extras.total_items,
+                                    current_item_title: progress_extras.current_item_title.clone(),
+                                },
+                            );
+                        }
                     }
                 }
-                _ => {}
             }
-        }
-    });
+            CommandEvent::Stderr(line_bytes) => {
+                error_log.push_str(&String::from_utf8_lossy(&line_bytes));
+                error_log.push('\n');
+            }
+            CommandEvent::Terminated(payload) => {
+                if payload.code == Some(0) {
+                    let app_handle_inner = app.clone();
+                    let video_url = url.clone();
+                    let dl_opts_for_name = options.clone();
+                    let filename_for_probe = filename_template_eff.clone();
 
-    Ok("Download started via sidecar".to_string())
+                    tokio::spawn(async move {
+                        let mut get_name_args = vec![
+                            "-P".to_string(),
+                            dl_opts_for_name.output_dir.clone(),
+                            "-o".to_string(),
+                            filename_for_probe,
+                            "--windows-filenames".to_string(),
+                            "--trim-filenames".to_string(),
+                            "200".to_string(),
+                            "--get-filename".to_string(),
+                        ];
+                        let _ = push_ytdlp_download_cookie_args(&app_handle_inner, &mut get_name_args, &dl_opts_for_name);
+                        get_name_args.push(video_url);
+
+                        if let Ok(output) = app_handle_inner.shell().sidecar("yt-dlp").unwrap().create_no_window(true).args(get_name_args).output().await {
+                            for raw in output.stdout.split(|&b| b == b'\n') {
+                                let path_str = match std::str::from_utf8(raw) {
+                                    Ok(s) => s.trim(),
+                                    Err(_) => continue,
+                                };
+                                if path_str.is_empty() {
+                                    continue;
+                                }
+                                if std::path::Path::new(path_str).is_file() {
+                                    let _ = extract_frames(app_handle_inner.clone(), path_str.to_string()).await;
+                                }
+                            }
+                        }
+                    });
+                    return Ok("Download finished".to_string());
+                } else {
+                    return Err(format!("Download failed (code {:?}): {}", payload.code, error_log));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Err("Download process ended unexpectedly".to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1580,6 +1577,7 @@ async fn write_poster_jpeg(app: &AppHandle, video_path: &str, dest: &std::path::
         .shell()
         .sidecar("ffmpeg")
         .map_err(|e| e.to_string())?
+        .create_no_window(true)
         .args([
             "-hide_banner",
             "-loglevel",
@@ -1636,6 +1634,7 @@ async fn extract_frames(app: AppHandle, video_path: String) -> Result<Vec<String
             .shell()
             .sidecar("ffmpeg")
             .map_err(|e| e.to_string())?
+            .create_no_window(true)
             .args([
                 "-hide_banner",
                 "-loglevel",
@@ -1730,7 +1729,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let handle = app.handle().clone();
-            tokio::spawn(async move {
+            tauri::async_runtime::spawn(async move {
                 if let Ok(updater) = handle.updater() {
                    if let Ok(Some(update)) = updater.check().await {
                         println!("Update found: {}", update.version);
@@ -1754,8 +1753,7 @@ pub fn run() {
 
             let menu = Menu::with_items(app, &[&show_i, &troubleshooting_m, &quit_i])?;
 
-            let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+            let mut tray_builder = TrayIconBuilder::new()
                 .menu(&menu)
                 .on_menu_event(|app: &AppHandle, event: MenuEvent| {
                     match event.id.as_ref() {
@@ -1793,8 +1791,13 @@ pub fn run() {
                             let _ = window.set_focus();
                         }
                     }
-                })
-                .build(app)?;
+                });
+
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+
+            let _tray = tray_builder.build(app)?;
 
             Ok(())
         })

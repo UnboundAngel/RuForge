@@ -44,9 +44,16 @@ const WindowControls = ({ onMiniPlayerToggle }: { onMiniPlayerToggle: () => void
       setIsMaximized(await appWindow.isMaximized());
     };
     updateMaximized();
-    const unlisten = appWindow.onResized(updateMaximized);
+    
+    let unlistenFn: (() => void) | null = null;
+    appWindow.onResized(updateMaximized).then(f => {
+      unlistenFn = f;
+    });
+
     return () => {
-      unlisten.then((f) => f());
+      if (typeof unlistenFn === 'function') {
+        unlistenFn();
+      }
     };
   }, [appWindow]);
 
@@ -617,11 +624,35 @@ function App() {
 
   const handlePopOut = async () => {
     try {
+      const fileToHandoff = playingFile;
+      const wasInPlayer = activeTab === "player" && fileToHandoff;
+
       await invoke("open_mini_player");
-      if (activeTab === "player" && playingFile) {
-        setTimeout(async () => {
-          emit("play-in-mini", playingFile);
-        }, 500);
+      
+      if (wasInPlayer) {
+        // Try immediate emit for existing window
+        emit("play-in-mini", fileToHandoff);
+        
+        // Setup handshake for newly created window
+        let unlistenFn: (() => void) | null = null;
+        listen("mini-player-ready", (event) => {
+          emit("play-in-mini", fileToHandoff);
+          if (unlistenFn) {
+            unlistenFn();
+            unlistenFn = null;
+          }
+        }).then(f => {
+          unlistenFn = f;
+        });
+        
+        // Cleanup listener after timeout if it never fired
+        setTimeout(() => {
+          if (unlistenFn) {
+            unlistenFn();
+            unlistenFn = null;
+          }
+        }, 5000);
+
         setPlayingFile(null);
         setActiveTab("media");
       }
@@ -673,7 +704,7 @@ function App() {
       <WindowControls onMiniPlayerToggle={handlePopOut} />
 
       {/* Global Drag Region - Top strip except controls area */}
-      <div className="fixed top-0 left-0 right-32 h-10 z-[50]" data-tauri-drag-region />
+      <div className="fixed top-0 left-0 right-[200px] h-10 z-[50]" data-tauri-drag-region />
 
       {/* ── Sidebar ─────────────────────────────────────── */}
       <div className={`${isSidebarExpanded ? 'w-[240px]' : 'w-[80px]'} flex-shrink-0 relative z-20 flex flex-col bg-transparent overflow-hidden transition-[width] duration-500 ease-[0.23,1,0.32,1]`}>

@@ -89,19 +89,125 @@ const Tooltip = ({ text, children, side = "bottom", disabled = false }: { text: 
   );
 };
 
+async function extractProminentColor(src: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    // Do NOT set crossOrigin for local asset:// or https://asset.localhost protocol
+    // as it can often trigger CORS blocks on local resources that don't send headers.
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 32;
+        canvas.height = 32;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return resolve(null);
+        
+        ctx.drawImage(img, 0, 0, 32, 32);
+        const imageData = ctx.getImageData(0, 0, 32, 32).data;
+        
+        let bestColor = null;
+        let maxScore = -1;
+
+        for (let i = 0; i < imageData.length; i += 4) {
+          const r = imageData[i];
+          const g = imageData[i+1];
+          const b = imageData[i+2];
+          const a = imageData[i+3];
+
+          if (a < 200) continue; 
+
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          
+          // Luma (perceived brightness)
+          const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          // Saturation
+          const sat = max === 0 ? 0 : (max - min) / max;
+
+          // We want colors that are vivid but not too dark or too white.
+          // Score based on saturation and a "sweet spot" for luminance.
+          const lumWeight = 1 - Math.abs(lum - 0.5) * 2; // Peak score at 0.5 lum
+          const score = sat * lumWeight;
+
+          if (score > maxScore && lum > 0.15 && lum < 0.85) {
+            maxScore = score;
+            bestColor = { r, g, b };
+          }
+        }
+
+        if (!bestColor) {
+          // Fallback: If no "vibrant" color found, try to get a brightened average
+          let tr = 0, tg = 0, tb = 0, tc = 0;
+          for (let i = 0; i < imageData.length; i += 4) {
+            if (imageData[i+3] < 200) continue;
+            tr += imageData[i];
+            tg += imageData[i+1];
+            tb += imageData[i+2];
+            tc++;
+          }
+          if (tc > 0) {
+            bestColor = { r: tr/tc, g: tg/tc, b: tb/tc };
+          }
+        }
+
+        if (!bestColor) return resolve(null);
+
+        let { r, g, b } = bestColor;
+        const finalLum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        
+        // Always ensure visibility on black background (boost if too dark)
+        if (finalLum < 0.4) {
+          const boost = 0.4 / finalLum;
+          r = Math.min(255, r * boost);
+          g = Math.min(255, g * boost);
+          b = Math.min(255, b * boost);
+        }
+
+        const toHex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
+        resolve(`#${toHex(r)}${toHex(g)}${toHex(b)}`);
+      } catch (e) {
+        // This is usually a SecurityError if the canvas is tainted
+        console.error("Dynamic color extraction failed (SecurityError/Tainted Canvas)", e);
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
 export default function MiniPlayer() {
+  const [defaultAccent, setDefaultAccent] = useState("#f59e0b");
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("ruforge-settings");
       const parsed = raw ? JSON.parse(raw) : null;
       const hex = typeof parsed?.accentColor === "string" ? parsed.accentColor : "#f59e0b";
+      setDefaultAccent(hex);
       syncRuforgeAccentCss(hex);
     } catch {
       syncRuforgeAccentCss("#f59e0b");
     }
   }, []);
 
+  useEffect(() => {
+    emit("mini-player-ready");
+  }, []);
+
   const [playingFile, setPlayingFile] = useState<MediaFile | null>(null);
+  const coverArtSrc = playingFile?.ruforgePosterPath ?? playingFile?.thumbnailPath;
+
+  useEffect(() => {
+    if (!coverArtSrc) {
+      syncRuforgeAccentCss(defaultAccent);
+      return;
+    }
+    const src = convertFileSrc(coverArtSrc);
+    extractProminentColor(src).then((color) => {
+      syncRuforgeAccentCss(color || defaultAccent);
+    });
+  }, [coverArtSrc, defaultAccent]);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -474,7 +580,6 @@ export default function MiniPlayer() {
   const showGallery = isMediaSelectorOpen;
 
   const playingAudioOnly = Boolean(playingFile && isAudioOnlyPath(playingFile.path));
-  const coverArtSrc = playingFile?.ruforgePosterPath ?? playingFile?.thumbnailPath;
   const isProbablyWindows =
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
 
@@ -804,21 +909,21 @@ export default function MiniPlayer() {
                    <div className="w-full h-1.5 bg-white/15 rounded-full relative mb-4 pointer-events-auto cursor-pointer" onClick={handleSeek}>
                       <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
                       <div 
-                         className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_8px_rgba(39,28,24,0.4)]"
+                         className="absolute top-0 left-0 h-full bg-[color:var(--accent)] rounded-full shadow-[0_0_8px_rgba(var(--accent-rgb),0.4)]"
                          style={{ width: `${progress}%` }}
                       />
                    </div>
-                   <div className={`flex items-center justify-center ${winSize.width < 380 ? 'space-x-4' : 'space-x-8'} text-stone-400 pointer-events-auto transition-all`}>
-                      <button onClick={() => seek(-15)} className="hover:text-[color:var(--accent)] transition-all active:scale-90">
+                   <div className={`flex items-center justify-center ${winSize.width < 380 ? 'space-x-4' : 'space-x-8'} text-[color:var(--accent)] pointer-events-auto transition-all`}>
+                      <button onClick={() => seek(-15)} className="opacity-60 hover:opacity-100 transition-all active:scale-90">
                         <Icon icon="tabler:rewind-backward-15" width={winSize.width < 380 ? 18 : 22} />
                       </button>
-                      <button onClick={togglePlay} className="text-[color:var(--accent)] hover:scale-110 active:scale-90 transition-all">{isPaused ? <Play size={winSize.width < 380 ? 20 : 24} fill="currentColor" /> : <Pause size={winSize.width < 380 ? 20 : 24} fill="currentColor" />}</button>
-                      <button onClick={() => seek(15)} className="hover:text-[color:var(--accent)] transition-all active:scale-90">
+                      <button onClick={togglePlay} className="hover:scale-110 active:scale-90 transition-all">{isPaused ? <Play size={winSize.width < 380 ? 20 : 24} fill="currentColor" /> : <Pause size={winSize.width < 380 ? 20 : 24} fill="currentColor" />}</button>
+                      <button onClick={() => seek(15)} className="opacity-60 hover:opacity-100 transition-all active:scale-90">
                         <Icon icon="tabler:rewind-forward-15" width={winSize.width < 380 ? 18 : 22} />
                       </button>
                       <button 
                         onClick={() => setIsLooping(!isLooping)} 
-                        className={`transition-all p-1 rounded-lg active:scale-90 ${isLooping ? 'text-[color:var(--accent)] bg-[color:var(--accent)]/10' : 'text-stone-400 hover:text-white'}`}
+                        className={`transition-all p-1 rounded-lg active:scale-90 ${isLooping ? 'bg-[color:var(--accent)]/20' : 'opacity-40 hover:opacity-100'}`}
                         title={isLooping ? "Disable Loop" : "Enable Loop"}
                       >
                         <AnimatePresence mode="wait" initial={false}>
