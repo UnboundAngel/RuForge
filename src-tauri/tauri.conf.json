@@ -30,6 +30,11 @@
     "active": true,
     "targets": "all",
     "resources": ["extensions/ublock/**/*"],
+    "externalBin": [
+      "binaries/yt-dlp",
+      "binaries/ffmpeg",
+      "binaries/ffprobe"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
@@ -39,5 +44,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://raw.githubusercontent.com/UnboundAngel/RuForge/main/updater.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ5RkUzMjdCMTY4N0JDOEYKUldTUHZJY1dlekwrU1dlL0pPd0paNDdqaHVieE9hUm14ei80VTh0Z3luTnMycUtNejJGbVBmZHYK"
+    }
   }
 }
