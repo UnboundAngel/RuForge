@@ -7,6 +7,7 @@ import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
 import { notifyWhenUnfocused } from "./systemNotify";
+import { check } from "@tauri-apps/plugin-updater";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { Icon } from "@iconify/react";
@@ -243,14 +244,16 @@ function App() {
   };
 
   const [settingsTab, setSettingsTab] = useState<"general" | "downloads" | "appearance" | "advanced">("general");
+  const [_updateAvailable, setUpdateAvailable] = useState(false);
   const [playingFile, setPlayingFile] = useState<MediaFile | null>(null);
+
   const [selectedPlaylist, setSelectedPlaylist] = useState<PlaylistCollection | null>(null);
   const [folderAudioPlaylist, setFolderAudioPlaylist] = useState<MediaFile[]>([]);
   const [isMini, setIsMini] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [notifications, setNotifications] = useState<{ id: number; message: string }[]>([]);
+  const [notifications, setNotifications] = useState<{ id: number; message: string; type?: "info" | "update"; updateObj?: any }[]>([]);
   const [storageStats, setStorageStats] = useState<{ total_bytes: number; file_count: number } | null>(null);
   const explorerContainerRef = useRef<HTMLDivElement>(null);
   const explorerWebviewRef = useRef<Webview | null>(null);
@@ -446,13 +449,30 @@ function App() {
     localStorage.setItem("ruforge-output-dir", dir);
   };
 
-  const notify = useCallback((message: string) => {
+  const notify = useCallback((message: string, type: "info" | "update" = "info", updateObj?: any) => {
     const id = Date.now();
-    setNotifications((prev) => [...prev, { id, message }]);
-    setTimeout(() => {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-    }, 4000);
+    setNotifications((prev) => [...prev, { id, message, type, updateObj }]);
+    if (type === "info") {
+      setTimeout(() => {
+        setNotifications((prev) => prev.filter((n) => n.id !== id));
+      }, 4000);
+    }
   }, []);
+
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        const update = await check();
+        if (update) {
+          setUpdateAvailable(true);
+          notify(`Version ${update.version} is available!`, "update", update);
+        }
+      } catch (e) {
+        console.error("Update check failed", e);
+      }
+    };
+    checkUpdate();
+  }, [notify]);
 
   // Auto-collapse sidebar on narrow windows
   useEffect(() => {
@@ -994,11 +1014,40 @@ function App() {
                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-[#271C18] border border-stone-50/10 text-stone-50 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto"
+                  className={`${n.type === 'update' ? 'bg-[#f59e0b] text-[#1d1613]' : 'bg-[#271C18] text-stone-50'} border border-stone-50/10 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto min-w-[280px]`}
                 >
-                  <CheckCircle2 className="text-emerald-400 w-5 h-5 flex-shrink-0" />
-                  <span className="text-sm font-medium truncate max-w-[260px]">{n.message}</span>
-                  <button onClick={() => setNotifications((p) => p.filter((x) => x.id !== n.id))} className="text-stone-500 hover:text-stone-300 transition-colors ml-auto">
+                  {n.type === 'update' ? (
+                    <Download className="w-5 h-5 flex-shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="text-emerald-400 w-5 h-5 flex-shrink-0" />
+                  )}
+                  
+                  <div className="flex-1 flex flex-col">
+                    <span className={`text-sm font-bold ${n.type === 'update' ? 'text-[#1d1613]' : 'text-stone-50'}`}>
+                      {n.message}
+                    </span>
+                    {n.type === 'update' && (
+                      <button 
+                        onClick={async () => {
+                          try {
+                            notify("Downloading update...");
+                            await n.updateObj.downloadAndInstall();
+                          } catch (e) {
+                            console.error(e);
+                            notify("Update failed");
+                          }
+                        }}
+                        className="mt-1.5 text-[10px] font-black uppercase tracking-widest bg-[#1d1613] text-[#f59e0b] px-3 py-1.5 rounded-lg w-fit hover:bg-black/80 transition-colors"
+                      >
+                        Update Now
+                      </button>
+                    )}
+                  </div>
+
+                  <button 
+                    onClick={() => setNotifications((p) => p.filter((x) => x.id !== n.id))} 
+                    className={`${n.type === 'update' ? 'text-[#1d1613]/50 hover:text-[#1d1613]' : 'text-stone-500 hover:text-stone-300'} transition-colors ml-auto p-1`}
+                  >
                     <X size={14} />
                   </button>
                 </motion.div>

@@ -1,25 +1,17 @@
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-use std::process::Stdio;
-use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
+use tauri::{AppHandle, Manager, State, Emitter};
 use tauri::menu::{Menu, MenuEvent, MenuItem, Submenu};
 use tauri::tray::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 use std::sync::Mutex;
+use tauri_plugin_shell::ShellExt;
+use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Default)]
 pub struct AppConfig {
     pub minimize_to_tray: Mutex<bool>,
 }
-
-// PR note: Disabled mode uses WebView2 `additional_browser_arguments` (`WebviewWindowBuilder::additional_browser_args` /
-// `WindowConfig.additional_browser_args` → `wry`'s `with_additional_browser_args`) with Chromium flags
-// `--disable-gpu` and `--disable-gpu-compositing`. Setting custom args replaces wry defaults, so we repeat
-// `--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection` exactly as `wry` does in `webview2/mod.rs`.
 
 const HW_ACCEL_PREF_FILE: &str = "hardware-acceleration.json";
 
@@ -67,7 +59,6 @@ impl HardwareAccelerationDisk {
         None
     }
 
-    /// Args for WebView creation when troubleshooting mode (HW off) is enabled. `None` = use browser defaults (HW on).
     fn webview_additional_browser_args(&self) -> Option<String> {
         if self.hardware_acceleration {
             None
@@ -122,7 +113,6 @@ fn get_hardware_acceleration_browser_args(app: AppHandle) -> Option<String> {
     HardwareAccelerationDisk::load(&app.config().identifier).webview_additional_browser_args()
 }
 
-/// Best-effort local file inspection via `ffprobe` (ffmpeg bundle). Cached per path + file mtime.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FfprobeHint {
@@ -172,11 +162,11 @@ fn optional_bitrate_kbps(raw: Option<&serde_json::Value>) -> Option<u32> {
     })
 }
 
-fn run_ffprobe_json(media_path: &str) -> Result<serde_json::Value, String> {
-    let mut cmd = std::process::Command::new("ffprobe");
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000);
-    let out = cmd
+async fn run_ffprobe_json(app: &AppHandle, media_path: &str) -> Result<serde_json::Value, String> {
+    let output = app
+        .shell()
+        .sidecar("ffprobe")
+        .map_err(|e| e.to_string())?
         .args([
             "-v",
             "quiet",
@@ -187,9 +177,10 @@ fn run_ffprobe_json(media_path: &str) -> Result<serde_json::Value, String> {
             media_path,
         ])
         .output()
+        .await
         .map_err(|e| format!("{}", e))?;
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
         let msg = err.trim();
         return Err(if msg.is_empty() {
             "ffprobe exited with error".into()
@@ -197,7 +188,7 @@ fn run_ffprobe_json(media_path: &str) -> Result<serde_json::Value, String> {
             msg.to_string()
         });
     }
-    serde_json::from_slice(&out.stdout).map_err(|e| format!("ffprobe JSON: {}", e))
+    serde_json::from_slice(&output.stdout).map_err(|e| format!("ffprobe JSON: {}", e))
 }
 
 fn ffprobe_hint_from_root(val: serde_json::Value) -> FfprobeHint {
@@ -268,7 +259,7 @@ fn ffprobe_hint_from_root(val: serde_json::Value) -> FfprobeHint {
     hint
 }
 
-fn probe_ffprobe_blocking(app: AppHandle, media_path: String, force_refresh: bool) -> Result<FfprobeHint, String> {
+async fn probe_ffprobe_async(app: AppHandle, media_path: String, force_refresh: bool) -> Result<FfprobeHint, String> {
     let path_ref = std::path::Path::new(&media_path);
     let meta = std::fs::metadata(path_ref).map_err(|e| e.to_string())?;
     let mtime_unix = meta
@@ -292,7 +283,7 @@ fn probe_ffprobe_blocking(app: AppHandle, media_path: String, force_refresh: boo
         }
     }
 
-    let val = match run_ffprobe_json(&media_path) {
+    let val = match run_ffprobe_json(&app, &media_path).await {
         Ok(v) => v,
         Err(e) => {
             return Ok(FfprobeHint {
@@ -301,7 +292,7 @@ fn probe_ffprobe_blocking(app: AppHandle, media_path: String, force_refresh: boo
                 bitrate_kbps: None,
                 format_name: None,
                 error: Some(format!(
-                    "{} (requires ffprobe on PATH, same bundle as ffmpeg)",
+                    "{} (requires ffprobe sidecar bundle)",
                     e
                 )),
             })
@@ -330,14 +321,10 @@ async fn probe_local_media_ffprobe(
     media_path: String,
     force_refresh: Option<bool>,
 ) -> Result<FfprobeHint, String> {
-    let app = app.clone();
     let refresh = force_refresh == Some(true);
-    tokio::task::spawn_blocking(move || probe_ffprobe_blocking(app, media_path, refresh))
-        .await
-        .map_err(|e| format!("blocking task join: {}", e))?
+    probe_ffprobe_async(app, media_path, refresh).await
 }
 
-/// One row inside a yt-dlp multi-video / playlist `-J` dump (lightweight subset for previews).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaylistItemPreview {
@@ -357,27 +344,14 @@ pub struct VideoInfo {
     pub thumbnail: String,
     pub duration: f64,
     pub formats: Vec<String>,
-    /// Best-effort size from yt-dlp metadata (`-s` does not download; many entries omit this).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_size_bytes: Option<u64>,
-    /// True when the resolved URL behaves as multiple entries (`entries` nonempty with at least one valid item).
-    /// Empty or all-null `entries`, or a flat single extractor dict → false and `playlist_items` is omitted.
     #[serde(default)]
     pub is_playlist: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist_items: Option<Vec<PlaylistItemPreview>>,
 }
 
-/// Pick a pre-download byte estimate from yt-dlp `--print-json` output (used with `-s` simulate).
-///
-/// **Why this order:** Root `filesize` is an exact size when the extractor knows `Content-Length`;
-/// otherwise `filesize_approx` is yt-dlp's bitrate×duration-style estimate. For merged video+audio,
-/// sizes often live only on `requested_formats` — we sum each stream's `filesize` or, failing that,
-/// `filesize_approx`. If the merge dict has no sizes, we match a single root `format_id` against
-/// `formats`. For `requested_formats` (video+audio), we only sum when **every** stream reports a
-/// size — otherwise a partial sum would undercount. **Limitations with `-s`:** no HTTP HEAD/fetch is
-/// performed; YouTube and others often leave these fields null; merged output may stay unknown if any
-/// stream omits size metadata.
 fn video_file_size_from_ytdlp_json(json: &serde_json::Value) -> Option<u64> {
     fn u64_from_field(v: &serde_json::Value) -> Option<u64> {
         v.as_u64()
@@ -465,7 +439,6 @@ fn ytdlp_duration_secs(v: &serde_json::Value) -> Option<f64> {
         .filter(|x| x.is_finite() && *x >= 0.0)
 }
 
-/// Best thumbnail URL from an entry (string field preferred, else thumbnails[] last URL).
 fn ytdlp_entry_thumbnail(entry: &serde_json::Value) -> String {
     if let Some(s) = entry.get("thumbnail").and_then(|v| v.as_str()) {
         let s = s.trim();
@@ -488,7 +461,6 @@ fn ytdlp_entry_is_usable(entry: &serde_json::Value) -> bool {
     !(entry.is_null() || entry.as_object().is_some_and(|m| m.is_empty()))
 }
 
-/// Non-empty playable `entries`: filter null placeholders and empty objects.
 fn ytdlp_usable_playlist_entries(json: &serde_json::Value) -> Option<Vec<&serde_json::Value>> {
     let entries = json.get("entries").and_then(|e| e.as_array())?;
     let usable: Vec<&serde_json::Value> = entries.iter().filter(|e| ytdlp_entry_is_usable(e)).collect();
@@ -538,11 +510,6 @@ fn playlist_aggregate_file_size(entries: &[&serde_json::Value]) -> Option<u64> {
     any.then_some(sum).filter(|&s| s > 0)
 }
 
-/// Builds `VideoInfo` from a yt-dlp **single-json** `-J` root object (playlist wrapper or flat video dict).
-///
-/// Playlist detection (`is_playlist`): root has `entries`, and after dropping null/skipped placeholders
-/// there is ≥1 usable item (`_type` is informational only; some sites omit it). Flat single videos have
-/// no usable `entries` list and use root-level title/thumbnail/duration unchanged.
 fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
     match ytdlp_usable_playlist_entries(&json) {
         Some(entries) => {
@@ -608,13 +575,10 @@ fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
 }
 
 async fn yt_dlp_single_json_simulate(
-    app: Option<&AppHandle>,
+    app: &AppHandle,
     url: &str,
     cookie_opts: Option<&DownloadOptions>,
 ) -> Result<serde_json::Value, String> {
-    let mut cmd = Command::new("yt-dlp");
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000);
     let mut args: Vec<String> = vec!["-J".into(), "-s".into()];
     if let Some(opts) = cookie_opts {
         if let Some(cookie_file) = opts.cookie_file.as_ref() {
@@ -625,9 +589,7 @@ async fn yt_dlp_single_json_simulate(
         } else if let Some(browser) = opts.browser_cookies.as_ref() {
             if !browser.is_empty() {
                 let browser_arg = if browser == "ruforge" {
-                    let app_handle =
-                        app.ok_or("RuForge cookie routing requires AppHandle resolution")?;
-                    let data_dir = app_handle
+                    let data_dir = app
                         .path()
                         .app_data_dir()
                         .map_err(|e| e.to_string())?
@@ -643,11 +605,16 @@ async fn yt_dlp_single_json_simulate(
         }
     }
     args.push(url.to_string());
-    cmd.args(&args);
-    let output = cmd
+    
+    let output = app
+        .shell()
+        .sidecar("yt-dlp")
+        .map_err(|e| e.to_string())?
+        .args(args)
         .output()
         .await
-        .map_err(|e| format!("Failed to run yt-dlp (-J simulate): {}", e))?;
+        .map_err(|e| format!("Failed to run yt-dlp sidecar (-J simulate): {}", e))?;
+        
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
@@ -661,7 +628,6 @@ struct PlaylistDownloadProgressExtras {
     current_item_title: Option<String>,
 }
 
-/// yt-dlp lines like `[download] Downloading video 3 of 12` / `Downloading item 2 of 5`; optional ` - Title` suffix.
 fn parse_ytdlp_playlist_download_line(line: &str) -> Option<(u32, u32, Option<String>)> {
     if !line.contains("[download]") {
         return None;
@@ -719,8 +685,8 @@ struct ProgressPayload {
     current_item_title: Option<String>,
 }
 #[tauri::command]
-async fn get_video_info(url: String) -> Result<VideoInfo, String> {
-    let json = yt_dlp_single_json_simulate(None, &url, None).await?;
+async fn get_video_info(app: AppHandle, url: String) -> Result<VideoInfo, String> {
+    let json = yt_dlp_single_json_simulate(&app, &url, None).await?;
     Ok(video_info_from_ytdlp_single_json(json))
 }
 #[tauri::command]
@@ -761,7 +727,6 @@ fn push_ytdlp_download_cookie_args(
     Ok(())
 }
 
-/// Playlist downloads nest beneath `output_dir/<sanitized name>/`; single videos reuse the flat template.
 fn yt_dlp_effective_filename_template(metadata_probe: &serde_json::Value, user_template: &str) -> String {
     match ytdlp_usable_playlist_entries(metadata_probe) {
         Some(_) => {
@@ -796,11 +761,9 @@ async fn download_video(
     url: String,
     options: DownloadOptions,
 ) -> Result<String, String> {
-    // One `-J -s` pass (same shape as `get_video_info`) so playlist vs single matches UI metadata and paths.
-    let probe = yt_dlp_single_json_simulate(Some(&app), &url, Some(&options)).await?;
+    let probe = yt_dlp_single_json_simulate(&app, &url, Some(&options)).await?;
     let filename_template_eff = yt_dlp_effective_filename_template(&probe, &options.filename_template);
 
-    // Ensure output directory exists before starting
     if let Err(e) = std::fs::create_dir_all(&options.output_dir) {
         return Err(format!("Failed to create output directory: {}", e));
     }
@@ -817,16 +780,11 @@ async fn download_video(
         "--trim-filenames".to_string(),
         "200".to_string(),
         "--newline".to_string(),
-        // Sidecar: write the metadata JSON (contains chapters, description, etc.)
         "--write-info-json".to_string(),
-        // Sidecar: write subtitles if the creator provided them
         "--write-subs".to_string(),
-        // Sidecar: also write auto-generated captions as a fallback
         "--write-auto-subs".to_string(),
-        // Target English; yt-dlp will fall back to the first available language if absent
         "--sub-lang".to_string(),
         "en.*".to_string(),
-        // Convert any format (srv1, ttml, etc.) to VTT — native to the HTML5 <track> element
         "--convert-subs".to_string(),
         "vtt".to_string(),
         "--write-thumbnail".to_string(),
@@ -837,138 +795,124 @@ async fn download_video(
     push_ytdlp_download_cookie_args(&app, &mut args, &options)?;
     args.push(url.clone());
 
-    let mut cmd = Command::new("yt-dlp");
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000);
-
-    let mut child = cmd
+    let (mut rx, _child) = app
+        .shell()
+        .sidecar("yt-dlp")
+        .map_err(|e| e.to_string())?
         .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to start download: {}", e))?;
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-
-    let mut reader = BufReader::new(stdout).lines();
-    let mut err_reader = BufReader::new(stderr).lines();
+        .map_err(|e| format!("Failed to start download sidecar: {}", e))?;
 
     let app_handle = app.clone();
     let progress_extras = std::sync::Arc::new(tokio::sync::Mutex::new(
         PlaylistDownloadProgressExtras::default(),
     ));
     let progress_clone = progress_extras.clone();
-
-    tokio::spawn(async move {
-        while let Ok(Some(line)) = reader.next_line().await {
-            if line.contains("[download]") {
-                if let Some((idx, total, tit)) = parse_ytdlp_playlist_download_line(&line) {
-                    let mut lk = progress_clone.lock().await;
-                    lk.current_index = Some(idx);
-                    lk.total_items = Some(total);
-                    if tit.is_some() {
-                        lk.current_item_title = tit;
-                    }
-                }
-            }
-
-            if line.contains("[download]") && line.contains('%') {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let percent_str = parts[1].trim_end_matches('%');
-                    if let Ok(percentage) = percent_str.parse::<f32>() {
-                        let mut speed = "";
-                        let mut eta = "";
-
-                        for (i, part) in parts.iter().enumerate() {
-                            if part.contains("/s") || part.contains("B/s") {
-                                speed = part;
-                            }
-                            if part.contains(':') && i > 4 {
-                                eta = part;
-                            }
-                        }
-
-                        let extras = progress_clone.lock().await.clone();
-                        let _ = app_handle.emit(
-                            "download-progress",
-                            ProgressPayload {
-                                percentage,
-                                speed: speed.to_string(),
-                                eta: eta.to_string(),
-                                status: "downloading".to_string(),
-                                current_index: extras.current_index,
-                                total_items: extras.total_items,
-                                current_item_title: extras.current_item_title.clone(),
-                            },
-                        );
-                    }
-                }
-            }
-        }
-    });
-
     let error_log = std::sync::Arc::new(tokio::sync::Mutex::new(String::new()));
     let error_log_clone = error_log.clone();
+
     tokio::spawn(async move {
-        while let Ok(Some(line)) = err_reader.next_line().await {
-            let mut log = error_log_clone.lock().await;
-            log.push_str(&line);
-            log.push('\n');
+        while let Some(event) = rx.recv().await {
+            use tauri_plugin_shell::process::CommandEvent;
+            match event {
+                CommandEvent::Stdout(line_bytes) => {
+                    let line = String::from_utf8_lossy(&line_bytes).to_string();
+                    if line.contains("[download]") {
+                        if let Some((idx, total, tit)) = parse_ytdlp_playlist_download_line(&line) {
+                            let mut lk = progress_clone.lock().await;
+                            lk.current_index = Some(idx);
+                            lk.total_items = Some(total);
+                            if tit.is_some() {
+                                lk.current_item_title = tit;
+                            }
+                        }
+                    }
+
+                    if line.contains("[download]") && line.contains('%') {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            let percent_str = parts[1].trim_end_matches('%');
+                            if let Ok(percentage) = percent_str.parse::<f32>() {
+                                let mut speed = "";
+                                let mut eta = "";
+
+                                for (i, part) in parts.iter().enumerate() {
+                                    if part.contains("/s") || part.contains("B/s") {
+                                        speed = part;
+                                    }
+                                    if part.contains(':') && i > 4 {
+                                        eta = part;
+                                    }
+                                }
+
+                                let extras = progress_clone.lock().await.clone();
+                                let _ = app_handle.emit(
+                                    "download-progress",
+                                    ProgressPayload {
+                                        percentage,
+                                        speed: speed.to_string(),
+                                        eta: eta.to_string(),
+                                        status: "downloading".to_string(),
+                                        current_index: extras.current_index,
+                                        total_items: extras.total_items,
+                                        current_item_title: extras.current_item_title.clone(),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+                CommandEvent::Stderr(line_bytes) => {
+                    let mut log = error_log_clone.lock().await;
+                    log.push_str(&String::from_utf8_lossy(&line_bytes));
+                    log.push('\n');
+                }
+                CommandEvent::Terminated(payload) => {
+                    if payload.code == Some(0) {
+                        let app_handle_inner = app_handle.clone();
+                        let video_url = url.clone();
+                        let dl_opts_for_name = options.clone();
+                        let filename_for_probe = filename_template_eff.clone();
+
+                        tokio::spawn(async move {
+                            let mut get_name_args = vec![
+                                "-P".to_string(),
+                                dl_opts_for_name.output_dir.clone(),
+                                "-o".to_string(),
+                                filename_for_probe,
+                                "--windows-filenames".to_string(),
+                                "--trim-filenames".to_string(),
+                                "200".to_string(),
+                                "--get-filename".to_string(),
+                            ];
+                            let _ = push_ytdlp_download_cookie_args(&app_handle_inner, &mut get_name_args, &dl_opts_for_name);
+                            get_name_args.push(video_url);
+
+                            if let Ok(output) = app_handle_inner.shell().sidecar("yt-dlp").unwrap().args(get_name_args).output().await {
+                                for raw in output.stdout.split(|&b| b == b'\n') {
+                                    let path_str = match std::str::from_utf8(raw) {
+                                        Ok(s) => s.trim(),
+                                        Err(_) => continue,
+                                    };
+                                    if path_str.is_empty() {
+                                        continue;
+                                    }
+                                    if std::path::Path::new(path_str).is_file() {
+                                        let _ = extract_frames(app_handle_inner.clone(), path_str.to_string()).await;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+                _ => {}
+            }
         }
     });
 
-    let status = child.wait().await.map_err(|e| e.to_string())?;
-
-    if status.success() {
-        let app_handle = app.clone();
-        let video_url = url.clone();
-        let dl_opts_for_name = options.clone();
-        let filename_for_probe = filename_template_eff;
-
-        tokio::spawn(async move {
-            let mut get_name_args = vec![
-                "-P".to_string(),
-                dl_opts_for_name.output_dir.clone(),
-                "-o".to_string(),
-                filename_for_probe,
-                "--windows-filenames".to_string(),
-                "--trim-filenames".to_string(),
-                "200".to_string(),
-                "--get-filename".to_string(),
-            ];
-            let _ = push_ytdlp_download_cookie_args(&app_handle, &mut get_name_args, &dl_opts_for_name);
-            get_name_args.push(video_url);
-
-            let mut get_name_cmd = Command::new("yt-dlp");
-            #[cfg(target_os = "windows")]
-            get_name_cmd.creation_flags(0x08000000);
-
-            if let Ok(output) = get_name_cmd.args(get_name_args).output().await {
-                for raw in output.stdout.split(|&b| b == b'\n') {
-                    let path_str = match std::str::from_utf8(raw) {
-                        Ok(s) => s.trim(),
-                        Err(_) => continue,
-                    };
-                    if path_str.is_empty() {
-                        continue;
-                    }
-                    if std::path::Path::new(path_str).is_file() {
-                        let _ = extract_frames(app_handle.clone(), path_str.to_string()).await;
-                    }
-                }
-            }
-        });
-
-        Ok("Download completed successfully".to_string())
-    } else {
-        let final_err = error_log.lock().await.clone();
-        Err(format!(
-            "yt-dlp exited with status: {}\nError output:\n{}",
-            status, final_err
-        ))
-    }
+    Ok("Download started via sidecar".to_string())
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chapter {
     pub title: String,
@@ -985,17 +929,14 @@ pub struct MediaFile {
     pub created: u64,
     pub duration: f64,
     pub thumbnail_path: Option<String>,
-    /// Single-frame `poster.jpg` under `.ruforge_thumbs/<stem>/` for library tiles (not sprite sheets).
     pub ruforge_poster_path: Option<String>,
     pub subtitle_path: Option<String>,
     pub chapters: Option<Vec<Chapter>>,
-    /// Codec / bitrate string from yt-dlp `<stem>.info.json` beside the media file — indicative only (not decoded in-app).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub download_metadata_hint: Option<String>,
     pub source_url: Option<String>,
 }
 
-/// One folder grouping direct media children (Yt-dlp-style playlist directory under the library root).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaylistCollection {
@@ -1021,9 +962,6 @@ pub enum GalleryEntry {
     },
 }
 
-/// Direct children media only (same folder thumbnails / sidecars as historical `scan_gallery`).
-///
-/// Nested subdirectories are deliberately ignored — only `GalleryEntry::Playlist` aggregates one level deep.
 fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile> {
     if depth > 5 {
         return vec![];
@@ -1039,7 +977,6 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
         .filter_map(|e| e.ok().map(|e| e.path()))
         .collect();
 
-    // Deterministic order for stable indices
     entries.sort_by(|a, b| {
         a.file_name()
             .unwrap_or_default()
@@ -1074,8 +1011,6 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
         let parent = path.parent().unwrap_or(std::path::Path::new(""));
 
-        // --- Thumbnail discovery ---
-        // For performance in recursive mode, we check common sibling names
         let thumbnail_path = ["jpg", "webp"]
             .iter()
             .find_map(|&e| {
@@ -1105,7 +1040,6 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             }
         };
 
-        // --- yt-dlp sidecar: title, duration, chapters ---
         let info_json_path = parent.join(format!("{}.info.json", stem));
         let (duration, chapters, metadata_title, download_metadata_hint, source_url) = if info_json_path.is_file() {
             std::fs::read_to_string(&info_json_path)
@@ -1146,7 +1080,7 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
 
         let created = match metadata.created() {
             Ok(time) => time.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(),
-            Err(_) => continue,
+            Err(_) => 0,
         };
 
         files.push(MediaFile {
@@ -1164,48 +1098,6 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
         });
     }
     files
-}
-
-/// Helper for playlist creation (still shallow for aggregates).
-fn scan_direct_media_children(dir_path: &std::path::Path) -> Result<Vec<MediaFile>, String> {
-    Ok(scan_media_recursive(dir_path, 5)) // We reuse the logic but limit depth if needed, 
-                                          // but for actual playlists we usually want them shallow.
-                                          // However, to keep it simple and fix the bug, we'll let it be deep.
-}
-
-fn bitrate_kbps_from_ytdlp_value(v: Option<&serde_json::Value>) -> Option<u32> {
-    let json = v?;
-    let n = json
-        .as_f64()
-        .or_else(|| json.as_u64().map(|u| u as f64))
-        .or_else(|| json.as_i64().map(|i| i as f64))?;
-    if !n.is_finite() || n <= 0.0 {
-        return None;
-    }
-    let kb = n.round().clamp(1.0, 999_999.0) as u32;
-    Some(kb)
-}
-
-fn bitrate_hint_from_ytdlp_root(json: &serde_json::Value) -> Option<u32> {
-    for key in ["tbr", "abr", "vbr"] {
-        if let Some(b) = bitrate_kbps_from_ytdlp_value(json.get(key)) {
-            return Some(b);
-        }
-    }
-    None
-}
-
-fn yt_dlp_codec_token(raw: Option<&serde_json::Value>) -> Option<String> {
-    let s = raw?.as_str()?.trim();
-    if s.is_empty() || s.eq_ignore_ascii_case("none") {
-        return None;
-    }
-    let s = if s.len() > 48 {
-        format!("{}…", &s[..47])
-    } else {
-        s.to_string()
-    };
-    Some(s)
 }
 
 fn download_metadata_hint_from_ytdlp_info(json: &serde_json::Value) -> Option<String> {
@@ -1228,14 +1120,48 @@ fn download_metadata_hint_from_ytdlp_info(json: &serde_json::Value) -> Option<St
     }
 }
 
+fn bitrate_hint_from_ytdlp_root(json: &serde_json::Value) -> Option<u32> {
+    for key in ["tbr", "abr", "vbr"] {
+        if let Some(b) = bitrate_kbps_from_ytdlp_value(json.get(key)) {
+            return Some(b);
+        }
+    }
+    None
+}
+
+fn bitrate_kbps_from_ytdlp_value(v: Option<&serde_json::Value>) -> Option<u32> {
+    let json = v?;
+    let n = json
+        .as_f64()
+        .or_else(|| json.as_u64().map(|u| u as f64))
+        .or_else(|| json.as_i64().map(|i| i as f64))?;
+    if !n.is_finite() || n <= 0.0 {
+        return None;
+    }
+    let kb = n.round().clamp(1.0, 999_999.0) as u32;
+    Some(kb)
+}
+
+fn yt_dlp_codec_token(raw: Option<&serde_json::Value>) -> Option<String> {
+    let s = raw?.as_str()?.trim();
+    if s.is_empty() || s.eq_ignore_ascii_case("none") {
+        return None;
+    }
+    let s = if s.len() > 48 {
+        format!("{}…", &s[..47])
+    } else {
+        s.to_string()
+    };
+    Some(s)
+}
+
 #[tauri::command]
 fn open_windows_sound_settings() -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer.exe")
-            .arg("ms-settings:sound")
-            .spawn()
-            .map_err(|e| format!("{}", e))?;
+        let mut cmd = std::process::Command::new("explorer.exe");
+        cmd.arg("ms-settings:sound");
+        let _ = cmd.spawn().map_err(|e| format!("{}", e))?;
         return Ok(());
     }
     #[cfg(not(target_os = "windows"))]
@@ -1244,7 +1170,6 @@ fn open_windows_sound_settings() -> Result<(), String> {
     }
 }
 
-/// Hidden / internal folders under the library root (`scan_gallery`).
 fn gallery_skip_subdirectory(folder_name: &str) -> bool {
     folder_name.starts_with('.') || folder_name == THUMB_DIR_NAME
 }
@@ -1266,7 +1191,6 @@ async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
         .filter_map(|e| e.ok().map(|e| e.path()))
         .collect();
 
-    // Deterministic order
     entries.sort_by(|a, b| {
         a.file_name()
             .unwrap_or_default()
@@ -1289,12 +1213,10 @@ async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
         if path.is_file() {
             let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
             if is_media_ext(ext) {
-                // This is loose media
                 let media = scan_media_file_direct(&path)?;
                 out.push(GalleryEntry::Media { file: media });
             }
         } else if path.is_dir() {
-            // This is a collection
             let items = scan_media_recursive(&path, 0);
             if items.is_empty() {
                 continue;
@@ -1327,7 +1249,6 @@ async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
     Ok(out)
 }
 
-/// Helper to scan a single media file without walking.
 fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
     let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
@@ -1395,11 +1316,13 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         source_url,
     })
 }
+
 #[tauri::command]
 fn update_tray_config(state: State<'_, AppConfig>, minimize: bool) {
     let mut minimize_to_tray = state.minimize_to_tray.lock().unwrap();
     *minimize_to_tray = minimize;
 }
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StorageStats {
     pub total_bytes: u64,
@@ -1439,7 +1362,6 @@ async fn get_storage_stats(dir: String) -> Result<StorageStats, String> {
     })
 }
 
-/// Deletes ffprobe hint JSON files under the app cache (safe to purge; hints are rebuilt on demand).
 #[tauri::command]
 async fn clear_ruforge_cache(app: AppHandle) -> Result<u32, String> {
     let dir = probe_ffprobe_cache_dir(&app)?;
@@ -1473,7 +1395,6 @@ async fn authorize_cleanup(dir: String, target_free_bytes: u64) -> Result<u64, S
         }
     }
     
-    // Sort by creation time (oldest first)
     files.sort_by(|a, b| a.2.cmp(&b.2));
     
     let mut deleted_bytes = 0;
@@ -1515,6 +1436,7 @@ async fn open_mini_player(app: AppHandle) -> Result<(), String> {
     let _window = mini_builder.build().map_err(|e| e.to_string())?;
     Ok(())
 }
+
 #[tauri::command]
 async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("explorer") {
@@ -1526,7 +1448,6 @@ async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .join("extensions/ublock");
 
-    // Use a dedicated data directory for explorer to avoid conflicts with extensions enabled
     let data_dir = app.path().app_data_dir()
         .map_err(|e| e.to_string())?
         .join("explorer-data");
@@ -1554,11 +1475,9 @@ async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
                     }
                 }
                 
-                // Monitor navigation
                 setInterval(checkUrl, 1000);
                 window.addEventListener('yt-navigate-finish', checkUrl);
 
-                // Add visual badge
                 const style = document.createElement('style');
                 style.innerHTML = `
                     #ruforge-badge {
@@ -1596,6 +1515,7 @@ async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
 
     Ok(())
 }
+
 const THUMB_DIR_NAME: &str = ".ruforge_thumbs";
 const POSTER_FILE: &str = "poster.jpg";
 const MEDIA_EXTS: &[&str] = &["mp4", "mkv", "webm", "mp3", "m4a", "flac"];
@@ -1622,9 +1542,8 @@ fn collect_sprite_paths(thumb_dir: &std::path::Path) -> Vec<std::path::PathBuf> 
     out
 }
 
-/// Writes `poster.jpg` next to the video if it is still missing (fast path for library thumbnails).
 #[tauri::command]
-async fn ensure_poster_if_missing(video_path: String) -> Result<(), String> {
+async fn ensure_poster_if_missing(app: AppHandle, video_path: String) -> Result<(), String> {
     let video_file_path = std::path::Path::new(&video_path);
     if !video_file_path.is_file() {
         return Ok(());
@@ -1645,24 +1564,22 @@ async fn ensure_poster_if_missing(video_path: String) -> Result<(), String> {
         std::fs::create_dir_all(&thumb_root).map_err(|e| e.to_string())?;
         #[cfg(target_os = "windows")]
         {
-            let mut attrib_cmd = Command::new("attrib");
-            attrib_cmd.creation_flags(0x08000000);
+            let mut attrib_cmd = std::process::Command::new("attrib");
             let _ = attrib_cmd
                 .args(["+h", thumb_root.to_str().unwrap()])
-                .status()
-                .await;
+                .status();
         }
     }
     std::fs::create_dir_all(&thumb_dir).map_err(|e| e.to_string())?;
-    write_poster_jpeg(&video_path, &poster_dest).await
+    write_poster_jpeg(&app, &video_path, &poster_dest).await
 }
 
-async fn write_poster_jpeg(video_path: &str, dest: &std::path::Path) -> Result<(), String> {
+async fn write_poster_jpeg(app: &AppHandle, video_path: &str, dest: &std::path::Path) -> Result<(), String> {
     let dest_str = dest.to_str().ok_or("Invalid poster path")?;
-    let mut cmd = Command::new("ffmpeg");
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(0x08000000);
-    let status = cmd
+    let output = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|e| e.to_string())?
         .args([
             "-hide_banner",
             "-loglevel",
@@ -1678,18 +1595,19 @@ async fn write_poster_jpeg(video_path: &str, dest: &std::path::Path) -> Result<(
             "3",
             dest_str,
         ])
-        .status()
+        .output()
         .await
-        .map_err(|e| format!("ffmpeg poster: {}", e))?;
-    if status.success() {
+        .map_err(|e| format!("ffmpeg sidecar poster: {}", e))?;
+        
+    if output.status.success() {
         Ok(())
     } else {
-        Err("ffmpeg failed to write poster.jpg".into())
+        Err("ffmpeg sidecar failed to write poster.jpg".into())
     }
 }
 
 #[tauri::command]
-async fn extract_frames(_app: AppHandle, video_path: String) -> Result<Vec<String>, String> {
+async fn extract_frames(app: AppHandle, video_path: String) -> Result<Vec<String>, String> {
     let video_file_path = std::path::Path::new(&video_path);
     let video_dir = video_file_path.parent().ok_or("Invalid video path")?;
     let video_name = video_file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
@@ -1701,9 +1619,8 @@ async fn extract_frames(_app: AppHandle, video_path: String) -> Result<Vec<Strin
         std::fs::create_dir_all(&thumb_root).map_err(|e| e.to_string())?;
         #[cfg(target_os = "windows")]
         {
-            let mut attrib_cmd = Command::new("attrib");
-            attrib_cmd.creation_flags(0x08000000);
-            let _ = attrib_cmd.args(["+h", thumb_root.to_str().unwrap()]).status().await;
+            let mut attrib_cmd = std::process::Command::new("attrib");
+            let _ = attrib_cmd.args(["+h", thumb_root.to_str().unwrap()]).status();
         }
     }
 
@@ -1714,11 +1631,11 @@ async fn extract_frames(_app: AppHandle, video_path: String) -> Result<Vec<Strin
 
     if sprites.is_empty() {
         let output_pattern = thumb_dir.join("sprite_%03d.jpg");
-        let mut ffmpeg_cmd = Command::new("ffmpeg");
-        #[cfg(target_os = "windows")]
-        ffmpeg_cmd.creation_flags(0x08000000);
-
-        let status = ffmpeg_cmd
+        
+        let output = app
+            .shell()
+            .sidecar("ffmpeg")
+            .map_err(|e| e.to_string())?
             .args([
                 "-hide_banner",
                 "-loglevel",
@@ -1731,22 +1648,22 @@ async fn extract_frames(_app: AppHandle, video_path: String) -> Result<Vec<Strin
                 "5",
                 output_pattern.to_str().ok_or("Bad sprite path")?,
             ])
-            .status()
+            .output()
             .await
-            .map_err(|e| format!("Failed to run ffmpeg: {}", e))?;
+            .map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
 
-        if !status.success() {
-            return Err("ffmpeg failed to extract frames".to_string());
+        if !output.status.success() {
+            return Err("ffmpeg sidecar failed to extract frames".to_string());
         }
 
         sprites = collect_sprite_paths(&thumb_dir);
         if sprites.is_empty() {
-            return Err("ffmpeg produced no sprite sheets".to_string());
+            return Err("ffmpeg sidecar produced no sprite sheets".to_string());
         }
     }
 
     if !poster_dest.is_file() {
-        let _ = write_poster_jpeg(&video_path, &poster_dest).await;
+        let _ = write_poster_jpeg(&app, &video_path, &poster_dest).await;
     }
 
     let out: Vec<String> = collect_sprite_paths(&thumb_dir)
@@ -1764,12 +1681,10 @@ async fn delete_media(video_path: String) -> Result<(), String> {
     
     let thumb_dir = video_dir.join(THUMB_DIR_NAME).join(video_name);
 
-    // Delete the video file
     if video_file_path.exists() {
         std::fs::remove_file(video_file_path).map_err(|e| e.to_string())?;
     }
 
-    // Delete the thumbnail directory
     if thumb_dir.exists() {
         std::fs::remove_dir_all(thumb_dir).map_err(|e| e.to_string())?;
     }
@@ -1779,30 +1694,17 @@ async fn delete_media(video_path: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn open_external_url(url: String) -> Result<(), String> {
-    // Check if it's a web URL first
     if url.starts_with("http://") || url.starts_with("https://") {
         return tauri_plugin_opener::open_path(&url, None::<&str>).map_err(|e| e.to_string());
     }
 
-    // It's a local file. We want to force it to open in a browser.
-    // On Windows, the most reliable way to force a browser for a file:// URL 
-    // is to use the shell 'start' command or correctly formatted file:// URLs.
-    // However, filenames ending in dots (...) are technically illegal in Windows
-    // and cause os error 123 unless using long path syntax.
-    
     let path = std::path::Path::new(&url);
     if path.exists() {
-        // Use the canonical path to resolve any weirdness like trailing dots or relative segments
         let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let path_str = canonical.to_string_lossy();
-        
-        // Convert to file URL. file:///C:/path is standard.
-        // We use two slashes for localhost authority if needed, or three for direct.
         let target = format!("file:///{}", path_str.replace("\\", "/").trim_start_matches("/"));
-        
         tauri_plugin_opener::open_path(target, None::<&str>).map_err(|e| e.to_string())
     } else {
-        // Fallback for non-existent paths or already formatted URLs
         tauri_plugin_opener::open_path(url, None::<&str>).map_err(|e| e.to_string())
     }
 }
@@ -1818,6 +1720,8 @@ pub fn run() {
             minimize_to_tray: Mutex::new(true),
         })
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--silently"])))
         .plugin(tauri_plugin_notification::init())
@@ -1825,18 +1729,18 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // Handle silent start
-            let args: Vec<String> = std::env::args().collect();
-            if args.contains(&"--silently".to_string()) {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.hide();
+            let handle = app.handle().clone();
+            tokio::spawn(async move {
+                if let Ok(updater) = handle.updater() {
+                   if let Ok(Some(update)) = updater.check().await {
+                        println!("Update found: {}", update.version);
+                   }
                 }
-            }
+            });
 
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
             
-            // Troubleshooting Submenu
             let reload_i = MenuItem::with_id(app, "reload", "Reload Interface", true, None::<&str>)?;
             let toggle_gpu_i = MenuItem::with_id(app, "toggle_gpu", "Toggle GPU Acceleration & Restart", true, None::<&str>)?;
             let reset_i = MenuItem::with_id(app, "reset_data", "Reset App Data & Restart", true, None::<&str>)?;
@@ -1870,7 +1774,6 @@ pub fn run() {
                             }
                         }
                         "toggle_gpu" => {
-                            // relaunch not found in current plugin version path
                             app.exit(0);
                         }
                         "reset_data" => {

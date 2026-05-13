@@ -4,6 +4,8 @@ RuForge is a powerful, elegant media management and downloading tool designed to
 
 ## Features
 
+- **Zero-Dependency Engine:** Bundles official `yt-dlp` and `FFmpeg` binaries as sidecars. No terminal setup required.
+- **Auto-Updater:** Built-in update system that notifies you when a new version is available.
 - **High-Performance Downloader:** Integrated with `yt-dlp` for high-quality video and audio extraction.
 - **Local Media Gallery:** A beautiful, organized gallery to manage and watch your local media collection.
 - **Dynamic MiniPlayer:** A Spotify-inspired, always-on-top mini player for seamless multi-tasking while watching or listening.
@@ -14,24 +16,20 @@ RuForge is a powerful, elegant media management and downloading tool designed to
 - **Frontend:** React, TypeScript, Vite
 - **Styling & Animation:** Tailwind CSS, Framer Motion, Lucide Icons
 - **Backend & Native Windowing:** Tauri v2 (Rust)
-- **Media Engine:** `yt-dlp`, FFmpeg
+- **Media Engine (Bundled):** `yt-dlp`, FFmpeg
 
 ## Getting Started
 
-### Prerequisites
-
-You will need the following installed:
-- [Node.js](https://nodejs.org/) (v18+)
-- [Rust](https://www.rust-lang.org/tools/install)
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (must be in your system PATH)
-- [FFmpeg](https://ffmpeg.org/) (required for media merging)
-
 ### Installation
+
+Just download the latest **RuForge Setup (.exe)** from the [Releases](https://github.com/UnboundAngel/RuForge/releases) page and run the installer. No additional software is required.
+
+### Building from Source
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/UnboundAngel/neotube.git
-   cd neotube
+   git clone https://github.com/UnboundAngel/RuForge.git
+   cd RuForge
    ```
 
 2. **Install dependencies:**
@@ -46,13 +44,13 @@ You will need the following installed:
 
 ### Building for Production
 
-To generate a standalone `.exe` and installer for Windows:
+To generate the standalone `.exe` and installer:
 ```bash
 npm run tauri build
 ```
 The builds will be located in:
 - **Standalone EXE:** `src-tauri/target/release/ruforge.exe`
-- **Installers:** `src-tauri/target/release/bundle/nsis/` and `src-tauri/target/release/bundle/msi/`
+- **Installers:** `src-tauri/target/release/bundle/nsis/` (Setup) and `src-tauri/target/release/bundle/msi/` (MSI)
 
 ## Roadmap
 
