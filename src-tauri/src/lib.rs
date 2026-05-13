@@ -7,6 +7,7 @@ use tauri::tray::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 use std::sync::Mutex;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_updater::UpdaterExt;
+use log;
 
 #[derive(Default)]
 pub struct AppConfig {
@@ -165,7 +166,7 @@ fn optional_bitrate_kbps(raw: Option<&serde_json::Value>) -> Option<u32> {
 async fn run_ffprobe_json(app: &AppHandle, media_path: &str) -> Result<serde_json::Value, String> {
     let output = app
         .shell()
-        .sidecar("binaries/ffprobe")
+        .sidecar("ffprobe")
         .map_err(|e| e.to_string())?
         
         
@@ -610,7 +611,7 @@ async fn yt_dlp_single_json_simulate(
     
     let output = app
         .shell()
-        .sidecar("binaries/yt-dlp")
+        .sidecar("yt-dlp")
         .map_err(|e| e.to_string())?
         
         .args(args)
@@ -619,7 +620,9 @@ async fn yt_dlp_single_json_simulate(
         .map_err(|e| format!("Failed to run yt-dlp sidecar (-J simulate): {}", e))?;
         
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        let err_msg = String::from_utf8_lossy(&output.stderr).to_string();
+        log::error!("[RuForge] yt-dlp failed: {}", err_msg);
+        return Err(err_msg);
     }
     serde_json::from_slice(&output.stdout).map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))
 }
@@ -800,7 +803,7 @@ async fn download_video(
 
     let (mut rx, _child) = app
         .shell()
-        .sidecar("binaries/yt-dlp")
+        .sidecar("yt-dlp")
         .map_err(|e| e.to_string())?
         
         .args(args)
@@ -1727,6 +1730,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_log::Builder::new().build())
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

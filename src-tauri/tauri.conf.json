@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "RuForge",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "com.attic.ruforge",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -29,6 +29,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "resources": ["extensions/ublock/**/*"],
     "externalBin": [
       "binaries/yt-dlp",
@@ -60,7 +61,7 @@
       "endpoints": [
         "https://raw.githubusercontent.com/UnboundAngel/RuForge/main/updater.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ5RkUzMjdCMTY4N0JDOEYKUldTUHZJY1dlekwrU1dlL0pPd0paNDdqaHVieE9hUm14ei80VTh0Z3luTnMycUtNejJGbVBmZHYK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2ODA3MjYzQ0RFRjUwMTIKUldRU1VPL05ZM0tBWmhBSFpNcEQvQXBKMVhOYXZuNXU2U2hBUFhSMjlCSXJneUVUMDZOY0JDNWoK"
     }
   }
 }

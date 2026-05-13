@@ -1,0 +1,11 @@
+{
+  "version": "0.1.1",
+  "notes": "Fixes download functionality in production builds.",
+  "pub_date": "2026-05-13T14:45:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWnF5QzV0TjNTNUJhWUtmNnZNUFlWVFZoek43dkx1UmZtMDJpZi9WMEJyQXYwZTBLanVGSURkd2JHWHJNNjYycEZlcUt0TnYwaDA4bkFYNjc4T1dIQndNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc4Njk2OTkyCWZpbGU6UnVGb3JnZV8wLjEuMV94NjQtc2V0dXAuZXhlCnNCc2cxcmpkR1UzbEp5dDRoMkFWWFo4UXZJOE00YmZmaWhFcHQ2ck9xRGlqcllTUnJkSkZRUFR2RkhSdFZ6VE8rcTZDRjZKMEJ1ZzZzU0NFQzNVRENRPT0K",
+      "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.1.1/RuForge_0.1.1_x64-setup.exe"
+    }
+  }
+}
