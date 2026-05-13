@@ -91,6 +91,7 @@ export const DownloaderView = ({
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState<ProgressPayload | null>(null);
   const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
+  const [metadataError, setMetadataError] = useState<string | null>(null);
 
   const handleBrowserChange = async (val: string) => {
     updateSetting("browserContext", val);
@@ -156,14 +157,23 @@ export const DownloaderView = ({
   // Fetch video info when URL changes
   useEffect(() => {
     let active = true;
+    setMetadataError(null); // Reset error when URL changes
+
     if (url.startsWith("http")) {
       const fetchInfo = async () => {
         setLoading(true);
         try {
           const info = await invoke<VideoInfo>("get_video_info", { url });
-          if (active) setVideoInfo(info);
-        } catch (e) {
-          if (active) setVideoInfo(null);
+          if (active) {
+            setVideoInfo(info);
+            setMetadataError(null);
+          }
+        } catch (e: any) {
+          console.error(`[RuForge] get_video_info failed: ${e}`);
+          if (active) {
+            setVideoInfo(null);
+            setMetadataError(e.toString());
+          }
         } finally {
           if (active) setLoading(false);
         }
@@ -293,6 +303,17 @@ export const DownloaderView = ({
                     )}
                     <div className={`h-[2px] rounded-full transition-all duration-700 bg-[color:var(--accent)] opacity-30 ${isFocused ? 'w-48' : 'w-0'}`} />
                   </div>
+                  {metadataError && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="absolute left-0 right-0 top-full pt-6 text-center"
+                    >
+                      <span className="text-red-400 text-[10px] font-black uppercase tracking-[0.2em] bg-red-400/5 px-4 py-2 rounded-full border border-red-400/10 inline-block max-w-lg truncate">
+                        {metadataError}
+                      </span>
+                    </motion.div>
+                  )}
                 </div>
                 
                 {/* Dynamic Massive Typography */}
