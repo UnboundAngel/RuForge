@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
-import { getAllWindows } from "@tauri-apps/api/window";
 import { PlaySquare, History, Loader2, Play, HardDrive, Clock, Video, Volume2, VolumeX, Layers } from "lucide-react";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
@@ -194,14 +192,7 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
                     onMouseEnter={() => setHoveredFile(file.path)}
                     onMouseLeave={() => setHoveredFile(null)}
                     onClick={async () => {
-                      const windows = await getAllWindows();
-                      const miniOpen = windows.some(w => w.label === "mini");
-                      
-                      if (miniOpen) {
-                        emit("play-media", file);
-                      } else {
-                        onPlay(file);
-                      }
+                      onPlay(file);
                     }}
                   >
                     <div className="aspect-video bg-black/60 relative flex items-center justify-center overflow-hidden">

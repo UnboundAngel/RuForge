@@ -1,56 +1,59 @@
-# RoForge
+# RuForge
 
-RoForge is meant to make youtube easier, and last even when you go offline. If you have a playlist you want to watch, or just a single video, grab the link of the video from RoForges in-app browser and just drop it into the text box and hit download. It will automatically send your video to the path you have selected in settings. 
+RuForge is a powerful, elegant media management and downloading tool designed to make YouTube content easier to access and enjoy offline. Whether you have a full playlist or just a single video, simply drop the link into RuForge, and it will handle the rest.
 
 ## Features
 
-- **Downloading engine (WIP):** integration with `yt-dlp` for video and audio extraction.
-- **Local Media Gallery:** A place in-app to watch all of the videos you have from youtube; both pre-existing and downloaded in the app. 
-- **MiniPlayer:** A spotify-like mini player for playing your videos or just listening to them. 
+- **High-Performance Downloader:** Integrated with `yt-dlp` for high-quality video and audio extraction.
+- **Local Media Gallery:** A beautiful, organized gallery to manage and watch your local media collection.
+- **Dynamic MiniPlayer:** A Spotify-inspired, always-on-top mini player for seamless multi-tasking while watching or listening.
+- **Customizable UI:** Full control over accent colors, grid density, and playback preferences.
 
 ## Tech Stack
 
 - **Frontend:** React, TypeScript, Vite
 - **Styling & Animation:** Tailwind CSS, Framer Motion, Lucide Icons
-- **Backend & Native Windowing:** Tauri (Rust)
-- **Downloading:** `yt-dlp`, FFmpeg
+- **Backend & Native Windowing:** Tauri v2 (Rust)
+- **Media Engine:** `yt-dlp`, FFmpeg
 
 ## Getting Started
 
 ### Prerequisites
 
-You will need to have the following software on your system:
-- [Node.js](https://nodejs.org/) (v16+)
+You will need the following installed:
+- [Node.js](https://nodejs.org/) (v18+)
 - [Rust](https://www.rust-lang.org/tools/install)
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (must be accessible in your system PATH or bundled)
-- [FFmpeg](https://ffmpeg.org/) (required for media merging and processing)
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (must be in your system PATH)
+- [FFmpeg](https://ffmpeg.org/) (required for media merging)
 
 ### Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/neotube.git
+   git clone https://github.com/UnboundAngel/neotube.git
    cd neotube
    ```
 
-2. **Install frontend dependencies:**
+2. **Install dependencies:**
    ```bash
    npm install
    ```
 
-3. **Run the development server:**
+3. **Run in development:**
    ```bash
    npm run tauri dev
    ```
 
 ### Building for Production
 
-To build the standalone executable for your operating system:
+To generate a standalone `.exe` and installer for Windows:
 ```bash
 npm run tauri build
 ```
-The compiled installer and executable will be available in the `src-tauri/target/release/bundle` directory.
+The builds will be located in:
+- **Standalone EXE:** `src-tauri/target/release/ruforge.exe`
+- **Installers:** `src-tauri/target/release/bundle/nsis/` and `src-tauri/target/release/bundle/msi/`
 
 ## Roadmap
 
-All plans go into [miniplayer_plan.md](./miniplayer_plan.md) - if youd like to add onto them, request features, or simply recommend a fix feel free to ask. 
+Feature plans and bug tracking are maintained in [miniplayer_plan.md](./miniplayer_plan.md).

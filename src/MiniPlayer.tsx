@@ -2,15 +2,12 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Icon } from "@iconify/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { openPath } from "@tauri-apps/plugin-opener";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import logo from "./assets/neotubeIcon.png";
 import {
   Play,
   Pause,
-  SkipBack,
-  SkipForward,
   Volume2,
   VolumeX,
   Volume1,
@@ -19,9 +16,9 @@ import {
   ExternalLink,
   Music,
   Speaker,
+  Layers,
 } from "lucide-react";
-import { MediaFile } from "./types";
-import { flattenGalleryScanToMediaFiles } from "./galleryScan";
+import { MediaFile, GalleryEntry, PlaylistCollection } from "./types";
 import { ScrubberHoverThumb } from "./scrubSpritePreview";
 import {
   readResumeSeconds,
@@ -38,24 +35,56 @@ import {
 import { syncRuforgeAccentCss } from "./accentCss";
 
 const Waveform = ({ isPaused }: { isPaused: boolean }) => {
+  const bars = 14;
+  const barKeyframes = useMemo(() => {
+    return [...Array(bars)].map((_, i) => {
+      const maxAmplitude = i < 4 ? 14 : i < 10 ? 11 : 8;
+      return [...Array(6)].map(() => Math.floor(Math.random() * maxAmplitude + 3));
+    });
+  }, []);
+
   return (
-    <div className="flex items-end space-x-[3px] h-4">
-      {[...Array(12)].map((_, i) => (
+    <div className="flex items-end space-x-[2.5px] h-4">
+      {barKeyframes.map((keyframes, i) => (
         <motion.div
           key={i}
           animate={{
-            height: isPaused ? 4 : [8, 16, 10, 20, 6][i % 5],
+            height: isPaused ? 2 : keyframes,
+            opacity: isPaused ? 0.4 : 0.8
           }}
           transition={{
-            duration: 0.5,
+            duration: i < 4 ? 0.8 + Math.random() * 0.4 : 0.4 + Math.random() * 0.3,
             repeat: Infinity,
-            repeatType: "reverse",
+            repeatType: "mirror",
             ease: "easeInOut",
-            delay: i * 0.08,
+            delay: i * 0.03,
           }}
-          className="w-[2px] bg-[color:var(--accent)] opacity-80 rounded-full"
+          className="w-[2px] bg-[color:var(--accent)] rounded-full"
         />
       ))}
+    </div>
+  );
+};
+
+const Tooltip = ({ text, children, side = "bottom", disabled = false }: { text: string; children: React.ReactNode; side?: "bottom" | "top"; disabled?: boolean }) => {
+  const [isHovered, setIsHovered] = useState(false);
+  if (disabled) return <>{children}</>;
+  return (
+    <div className="relative flex flex-col items-center" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+      {children}
+      <AnimatePresence>
+        {isHovered && (
+          <motion.div
+            initial={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className={`absolute ${side === "bottom" ? "bottom-full mb-3" : "top-full mt-3"} px-2 py-1 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-lg text-[8px] font-black tracking-[0.2em] text-white uppercase whitespace-nowrap z-[100] shadow-2xl shadow-black pointer-events-none`}
+          >
+            {text}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -77,6 +106,7 @@ export default function MiniPlayer() {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [buffered, setBuffered] = useState(0);
   const [scrubberThumbs, setScrubberThumbs] = useState<string[]>([]);
   const [hoverProgress, setHoverProgress] = useState<number | null>(null);
   const [isCursorVisible, setIsCursorVisible] = useState(true);
@@ -144,9 +174,16 @@ export default function MiniPlayer() {
   }, [playingFile, isPaused]); // Added isPaused to ensure togglePlay is fresh
 
   const [isPinned, setIsPinned] = useState(() => localStorage.getItem("miniplayer-pinned") === "true");
-  const [library, setLibrary] = useState<MediaFile[]>([]);
+  const [library, setLibrary] = useState<GalleryEntry[]>([]);
   const [isGalleryHovered, setIsGalleryHovered] = useState(false);
   const [isFocused, setIsFocused] = useState(true);
+  const [isLooping, setIsLooping] = useState(() => localStorage.getItem("miniplayer-loop") === "true");
+  const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("miniplayer-loop", isLooping.toString());
+  }, [isLooping]);
+
   const [volumeLabel, setVolumeLabel] = useState(() => {
     const saved = localStorage.getItem("miniplayer-volume");
     return saved ? Math.round(parseFloat(saved) * 100) : 100;
@@ -200,18 +237,78 @@ export default function MiniPlayer() {
     return localStorage.getItem("ruforge-output-dir") || "C:\\Downloads";
   });
 
+  const groupEntriesByDate = (entries: GalleryEntry[]) => {
+    const sorted = [...entries].sort((a, b) => {
+      const timeA = a.kind === 'media' ? a.created : (a.items[0]?.created || 0);
+      const timeB = b.kind === 'media' ? b.created : (b.items[0]?.created || 0);
+      return timeB - timeA;
+    });
+
+    const groups: { [key: string]: GalleryEntry[] } = {};
+
+    sorted.forEach(entry => {
+      const timestamp = entry.kind === 'media' ? entry.created : (entry.items[0]?.created || 0);
+      const date = new Date(timestamp * 1000);
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      let dateLabel = "";
+      if (date.toDateString() === today.toDateString()) {
+        dateLabel = "Today";
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        dateLabel = "Yesterday";
+      } else {
+        dateLabel = date.toLocaleDateString(undefined, { 
+          weekday: 'long', 
+          month: 'long', 
+          day: 'numeric',
+          year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+        });
+      }
+
+      if (!groups[dateLabel]) groups[dateLabel] = [];
+      groups[dateLabel].push(entry);
+    });
+
+    return groups;
+  };
+
   useEffect(() => {
     const run = async () => {
       try {
-        const raw = await invoke("scan_gallery", { dir: outputDir });
-        const data = flattenGalleryScanToMediaFiles(raw);
+        const ruforgeInternalDir = "C:\\RuForge\\Media";
+        const dirs = [ruforgeInternalDir, outputDir].filter(d => d && d.trim() !== "");
+        
+        const scans = await Promise.all(
+          dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d }))
+        );
+        
+        const combined = scans.flat();
+        const uniqueMap = new Map<string, GalleryEntry>();
+        for (const entry of combined) {
+          uniqueMap.set(entry.path, entry);
+        }
+        
+        const data = Array.from(uniqueMap.values());
         setLibrary(data);
-        if (filesMissingPoster(data).length === 0) return;
+
+        const mediaFiles = data.flatMap(e => e.kind === 'media' ? [e] : e.items);
+        const missing = filesMissingPoster(mediaFiles);
+        if (missing.length === 0) return;
+        
         void (async () => {
-          await ensurePostersForFiles(data);
+          await ensurePostersForFiles(missing);
           try {
-            const raw2 = await invoke("scan_gallery", { dir: outputDir });
-            setLibrary(flattenGalleryScanToMediaFiles(raw2));
+            const scans2 = await Promise.all(
+              dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d }))
+            );
+            const combined2 = scans2.flat();
+            const uniqueMap2 = new Map<string, GalleryEntry>();
+            for (const entry of combined2) {
+              uniqueMap2.set(entry.path, entry);
+            }
+            setLibrary(Array.from(uniqueMap2.values()));
           } catch (e) {
             console.error(e);
           }
@@ -250,17 +347,27 @@ export default function MiniPlayer() {
   };
 
   useEffect(() => {
-    const unlisten = listen<MediaFile>("play-media", (event) => {
-      setPlayingFile(event.payload);
-      import("@tauri-apps/api/event").then(({ emit }) => emit("stop-playback"));
+    const unlisten = listen<MediaFile>("play-media", (_event) => {
+      // If someone else (main app) starts playing, the MiniPlayer should just STOP
+      setPlayingFile(null);
     });
 
-    const unlistenStop = listen("stop-playback", () => {
-      setPlayingFile(null);
+    const unlistenMiniHandoff = listen<MediaFile>("play-in-mini", (event) => {
+      setPlayingFile(event.payload);
+      incrementViewCount(event.payload);
+      emit("stop-playback", "mini-player");
+      getCurrentWindow().setFocus().catch(console.error);
+    });
+
+    const unlistenStop = listen<string>("stop-playback", (event) => {
+      if (event.payload !== "mini-player") {
+        setPlayingFile(null);
+      }
     });
 
     return () => { 
       unlisten.then(f => f()); 
+      unlistenMiniHandoff.then(f => f());
       unlistenStop.then(f => f());
     };
   }, []);
@@ -307,6 +414,9 @@ export default function MiniPlayer() {
       setCurrentTime(currentTime);
       setDuration(duration);
       setProgress((currentTime / duration) * 100);
+      if (v.buffered.length > 0) {
+        setBuffered((v.buffered.end(v.buffered.length - 1) / duration) * 100);
+      }
       const now = Date.now();
       if (playingFile && now - lastPlaybackPersistRef.current > 4000 && duration > 0) {
         lastPlaybackPersistRef.current = now;
@@ -361,7 +471,7 @@ export default function MiniPlayer() {
     mediaRef.current.currentTime += seconds;
   };
 
-  const showGallery = !isSmallMode && (!playingFile || isPaused || isGalleryHovered);
+  const showGallery = isMediaSelectorOpen;
 
   const playingAudioOnly = Boolean(playingFile && isAudioOnlyPath(playingFile.path));
   const coverArtSrc = playingFile?.ruforgePosterPath ?? playingFile?.thumbnailPath;
@@ -375,6 +485,7 @@ export default function MiniPlayer() {
   const audioPlaylistMini = useMemo(
     () =>
       library
+        .flatMap(e => e.kind === 'media' ? [e] : e.items)
         .filter((f) => isAudioOnlyPath(f.path))
         .sort((a, b) =>
           a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }),
@@ -392,20 +503,25 @@ export default function MiniPlayer() {
       : null;
   const prefetchMini = Boolean(playingAudioOnly && readAudioPrefetchNext() && nextMini);
 
+  const incrementViewCount = (file: MediaFile) => {
+    const saved = localStorage.getItem(`views-${file.path}`);
+    const current = saved ? parseInt(saved) : 0;
+    localStorage.setItem(`views-${file.path}`, (current + 1).toString());
+  };
+
+  const handleSelectMedia = (file: MediaFile) => {
+    setPlayingFile(file);
+    incrementViewCount(file);
+    setIsMediaSelectorOpen(false);
+  };
+
   return (
     <div 
-      className={`h-screen w-screen bg-[#121212] overflow-hidden border border-white/5 rounded-3xl select-none relative group/mini shadow-2xl transition-opacity duration-700 ${isFocused ? 'opacity-100' : 'opacity-75'} ${!isCursorVisible && !isPaused ? 'cursor-none' : 'cursor-default'}`}
+      className={`h-screen w-screen bg-[#121212] overflow-hidden border border-white/5 rounded-3xl select-none relative group/mini shadow-2xl ${!isCursorVisible && !isPaused ? 'cursor-none' : ''}`}
       onWheel={handleWheel}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={() => setIsHovering(false)}
     >
-      <style>{`
-        @keyframes slideSquiggle {
-          from { transform: translateX(0); }
-          to { transform: translateX(-40px); }
-        }
-      `}</style>
-
       {/* Dynamic Volume/Mute Overlay (Mini Flush Bottom Right) */}
       <AnimatePresence>
         {showVolume && (
@@ -436,71 +552,83 @@ export default function MiniPlayer() {
 
       {/* Top Controls Strip */}
       <div className="absolute top-0 left-0 right-0 h-12 z-[100] flex items-center justify-between px-3 pointer-events-none group-hover/mini:opacity-100 opacity-0 transition-opacity duration-300">
-        <button className="p-1.5 text-stone-400 hover:text-white pointer-events-auto transition-colors">
-          <Icon icon="tabler:adjustments-horizontal" width="18" height="18" />
-        </button>
+        <Tooltip text="Toggle Media Selector" side="top" disabled={isSmallMode}>
+          <button 
+            onClick={() => setIsMediaSelectorOpen(!isMediaSelectorOpen)}
+            className={`p-1.5 pointer-events-auto transition-colors ${isMediaSelectorOpen ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
+          >
+            <Icon icon="tabler:library" width={18} height={18} />
+          </button>
+        </Tooltip>
         
         <div 
-          className="flex-1 h-full cursor-move flex items-center justify-center pointer-events-auto"
+          className="flex-1 h-full cursor-move pointer-events-auto relative"
           onPointerDown={(e) => {
               e.stopPropagation();
               getCurrentWindow().startDragging();
           }}
-        >
-          <div className="grid grid-cols-2 gap-0.5 opacity-40">
-            {[...Array(8)].map((_, i) => <div key={i} className="w-0.5 h-0.5 bg-white rounded-full" />)}
-          </div>
+        />
+
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid grid-rows-2 grid-flow-col gap-1 opacity-20 pointer-events-none">
+          {[...Array(8)].map((_, i) => <div key={i} className="w-0.5 h-0.5 bg-white rounded-full" />)}
         </div>
 
         <div className="flex items-center space-x-1 pointer-events-auto">
           {playingFile && (
-            <button
-              type="button"
-              title="Open in default media app (same file on disk)"
-              onClick={(e) => {
-                e.stopPropagation();
-                void openPath(playingFile.path).catch(console.error);
-              }}
-              className="p-1.5 text-stone-400 hover:text-[color:var(--accent)] transition-colors"
-            >
-              <ExternalLink size={16} strokeWidth={2.5} />
-            </button>
+            <Tooltip text="Back to App" side="top" disabled={isSmallMode}>
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const { emit } = await import("@tauri-apps/api/event");
+                  await emit("send-to-main", playingFile);
+                  getCurrentWindow().close();
+                }}
+                className="p-1.5 text-stone-400 hover:text-[color:var(--accent)] transition-colors"
+              >
+                <ExternalLink size={16} strokeWidth={2.5} />
+              </button>
+            </Tooltip>
           )}
           {playingFile && playingAudioOnly && isProbablyWindows && (
-            <button
-              type="button"
-              title="Open Windows Sound settings"
-              onClick={(e) => {
-                e.stopPropagation();
-                openWindowsSoundSettings();
-              }}
-              className="p-1.5 text-stone-400 hover:text-[color:var(--accent)] transition-colors"
-            >
-              <Speaker size={16} strokeWidth={2.5} aria-hidden />
-            </button>
+            <Tooltip text="Windows Sound Settings" side="top" disabled={isSmallMode}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openWindowsSoundSettings();
+                }}
+                className="p-1.5 text-stone-400 hover:text-[color:var(--accent)] transition-colors"
+              >
+                <Speaker size={16} strokeWidth={2.5} aria-hidden />
+              </button>
+            </Tooltip>
           )}
-          <button 
-            onClick={async () => {
-              const newPinned = !isPinned;
-              setIsPinned(newPinned);
-              localStorage.setItem("miniplayer-pinned", newPinned.toString());
-              await getCurrentWindow().setAlwaysOnTop(newPinned);
-            }}
-            className={`p-1.5 transition-colors ${isPinned ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
-            title={isPinned ? "Unpin" : "Pin"}
-          >
-            <Pin size={16} strokeWidth={2.5} className={isPinned ? 'fill-current' : ''} />
-          </button>
+          <Tooltip text={isPinned ? "Unpin Window" : "Pin Window"} side="top" disabled={isSmallMode}>
+            <button 
+              onClick={async () => {
+                const newPinned = !isPinned;
+                setIsPinned(newPinned);
+                localStorage.setItem("miniplayer-pinned", newPinned.toString());
+                await getCurrentWindow().setAlwaysOnTop(newPinned);
+              }}
+              className={`p-1.5 transition-colors ${isPinned ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
+            >
+              <Pin size={16} strokeWidth={2.5} className={isPinned ? 'fill-current' : ''} />
+            </button>
+          </Tooltip>
 
-          <button 
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              getCurrentWindow().close();
-            }} 
-            className="p-1.5 text-stone-400 hover:text-white transition-colors"
-          >
-            <Icon icon="tabler:x" width={18} height={18} />
-          </button>
+          <Tooltip text="Close Player" side="top" disabled={isSmallMode}>
+            <button 
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                getCurrentWindow().close();
+              }} 
+              className="p-1.5 text-stone-400 hover:text-white transition-colors"
+            >
+              <Icon icon="tabler:x" width={18} height={18} />
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -537,10 +665,15 @@ export default function MiniPlayer() {
                       v.currentTime = t;
                     }}
                     onEnded={() => {
+                      if (isLooping && mediaRef.current) {
+                        mediaRef.current.currentTime = 0;
+                        mediaRef.current.play();
+                        return;
+                      }
                       if (playingFile) clearPlaybackPos(playingFile.path);
                       const advance = readAudioAutoAdvanceFolder();
                       if (advance && nextMini && playingFile) {
-                        setPlayingFile(nextMini);
+                        handleSelectMedia(nextMini);
                         return;
                       }
                       setIsPaused(true);
@@ -582,6 +715,11 @@ export default function MiniPlayer() {
                     v.currentTime = t;
                   }}
                   onEnded={() => {
+                    if (isLooping && mediaRef.current) {
+                      mediaRef.current.currentTime = 0;
+                      mediaRef.current.play();
+                      return;
+                    }
                     clearPlaybackPos(playingFile.path);
                     setIsPaused(true);
                   }}
@@ -660,23 +798,41 @@ export default function MiniPlayer() {
                    <div className="flex items-center justify-between mb-2">
                       <div className="min-w-0 flex-1 mr-4">
                         <p className="text-[11px] font-black text-[color:var(--accent)] truncate uppercase tracking-widest">{playingFile.name}</p>
-                        <p className="text-[9px] font-bold text-stone-500 uppercase tracking-tighter">
-                          {playingAudioOnly ? "Audio · in-app WebView" : "System Audio Active"}
-                        </p>
                       </div>
                       <Waveform isPaused={isPaused} />
                    </div>
-                   <div className="w-full h-1 bg-stone-800 rounded-full overflow-hidden mb-4 pointer-events-auto cursor-pointer" onClick={handleSeek}>
-                      <motion.div 
-                         className="h-full bg-[color:var(--accent)]"
-                         initial={{ width: 0 }}
-                         animate={{ width: `${progress}%` }}
+                   <div className="w-full h-1.5 bg-white/15 rounded-full relative mb-4 pointer-events-auto cursor-pointer" onClick={handleSeek}>
+                      <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
+                      <div 
+                         className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_8px_rgba(39,28,24,0.4)]"
+                         style={{ width: `${progress}%` }}
                       />
                    </div>
-                   <div className="flex items-center space-x-8 text-stone-400 pointer-events-auto">
-                      <button onClick={() => seek(-10)} className="hover:text-[color:var(--accent)] transition"><SkipBack size={18} /></button>
-                      <button onClick={togglePlay} className="text-[color:var(--accent)] hover:scale-110 transition">{isPaused ? <Play size={24} fill="currentColor" /> : <Pause size={24} fill="currentColor" />}</button>
-                      <button onClick={() => seek(10)} className="hover:text-[color:var(--accent)] transition"><SkipForward size={18} /></button>
+                   <div className={`flex items-center justify-center ${winSize.width < 380 ? 'space-x-4' : 'space-x-8'} text-stone-400 pointer-events-auto transition-all`}>
+                      <button onClick={() => seek(-15)} className="hover:text-[color:var(--accent)] transition-all active:scale-90">
+                        <Icon icon="tabler:rewind-backward-15" width={winSize.width < 380 ? 18 : 22} />
+                      </button>
+                      <button onClick={togglePlay} className="text-[color:var(--accent)] hover:scale-110 active:scale-90 transition-all">{isPaused ? <Play size={winSize.width < 380 ? 20 : 24} fill="currentColor" /> : <Pause size={winSize.width < 380 ? 20 : 24} fill="currentColor" />}</button>
+                      <button onClick={() => seek(15)} className="hover:text-[color:var(--accent)] transition-all active:scale-90">
+                        <Icon icon="tabler:rewind-forward-15" width={winSize.width < 380 ? 18 : 22} />
+                      </button>
+                      <button 
+                        onClick={() => setIsLooping(!isLooping)} 
+                        className={`transition-all p-1 rounded-lg active:scale-90 ${isLooping ? 'text-[color:var(--accent)] bg-[color:var(--accent)]/10' : 'text-stone-400 hover:text-white'}`}
+                        title={isLooping ? "Disable Loop" : "Enable Loop"}
+                      >
+                        <AnimatePresence mode="wait" initial={false}>
+                          <motion.div
+                            key={isLooping ? "looping-small" : "not-looping-small"}
+                            initial={{ opacity: 0, rotate: -20, scale: 0.8 }}
+                            animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                            exit={{ opacity: 0, rotate: 20, scale: 0.8 }}
+                            transition={{ duration: 0.15 }}
+                          >
+                            <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={winSize.width < 380 ? 16 : 20} />
+                          </motion.div>
+                        </AnimatePresence>
+                      </button>
                    </div>
                 </div>
               )}
@@ -729,33 +885,58 @@ export default function MiniPlayer() {
                     )}
                   </AnimatePresence>
 
-                  <div className={`w-full relative ${isMini ? 'h-[2px]' : 'h-1'} group-hover:h-2 transition-all duration-300`}>
-                    <div className="absolute inset-0 bg-stone-800/80 rounded-full overflow-hidden" />
-                    <div 
-                      className="absolute top-0 bottom-0 left-0 transition-all duration-100 flex items-center justify-end overflow-hidden"
-                      style={{ width: `${progress}%` }}
-                    >
-                      <svg className="absolute left-0 h-full w-[2000px] pointer-events-none" preserveAspectRatio="none" style={{
-                        animation: !isPaused ? 'slideSquiggle 1s linear infinite' : 'none'
-                      }}>
-                         {!isPaused ? (
-                           <path d="M0,2 Q5,0 10,2 T20,2 T30,2 T40,2 T50,2 T60,2 T70,2 T80,2 T90,2 T100,2 T110,2 T120,2 T130,2 T140,2 T150,2 T160,2 T170,2 T180,2 T190,2 T200,2 T210,2 T220,2 T230,2 T240,2 T250,2 T260,2 T270,2 T280,2 T290,2 T300,2 T310,2 T320,2 T330,2 T340,2 T350,2 T360,2 T370,2 T380,2 T390,2 T400,2 T410,2 T420,2 T430,2 T440,2 T450,2 T460,2 T470,2 T480,2 T490,2 T500,2 T510,2 T520,2 T530,2 T540,2 T550,2 T560,2 T570,2 T580,2 T590,2 T600,2 T610,2 T620,2 T630,2 T640,2 T650,2 T660,2 T670,2 T680,2 T690,2 T700,2 T710,2 T720,2 T730,2 T740,2 T750,2 T760,2 T770,2 T780,2 T790,2 T800,2 T810,2 T820,2 T830,2 T840,2 T850,2 T860,2 T870,2 T880,2 T890,2 T900,2 T910,2 T920,2 T930,2 T940,2 T950,2 T960,2 T970,2 T980,2 T990,2 T1000,2 T1010,2 T1020,2 T1030,2 T1040,2 T1050,2 T1060,2 T1070,2 T1080,2 T1090,2 T1100,2 T1110,2 T1120,2 T1130,2 T1140,2 T1150,2 T1160,2 T1170,2 T1180,2 T1190,2 T1200,2 T1210,2 T1220,2 T1230,2 T1240,2 T1250,2 T1260,2 T1270,2 T1280,2 T1290,2 T1300,2 T1310,2 T1320,2 T1330,2 T1340,2 T1350,2 T1360,2 T1370,2 T1380,2 T1390,2 T1400,2 T1410,2 T1420,2 T1430,2 T1440,2 T1450,2 T1460,2 T1470,2 T1480,2 T1490,2 T1500,2 T1510,2 T1520,2 T1530,2 T1540,2 T1550,2 T1560,2 T1570,2 T1580,2 T1590,2 T1600,2 T1610,2 T1620,2 T1630,2 T1640,2 T1650,2 T1660,2 T1670,2 T1680,2 T1690,2 T1700,2 T1710,2 T1720,2 T1730,2 T1740,2 T1750,2 T1760,2 T1770,2 T1780,2 T1790,2 T1800,2 T1810,2 T1820,2 T1830,2 T1840,2 T1850,2 T1860,2 T1870,2 T1880,2 T1890,2 T1900,2 T1910,2 T1920,2 T1930,2 T1940,2 T1950,2 T1960,2 T1970,2 T1980,2 T1990,2 T2000,2" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                         ) : (
-                           <line x1="0" y1="2" x2="2000" y2="2" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
-                         )}
-                      </svg>
-                    </div>
+                  <div className={`w-full rounded-full relative transition-all duration-300 ${isMini ? (hoverProgress !== null ? 'h-3' : 'h-1.5') : (hoverProgress !== null ? 'h-4' : 'h-2')} bg-white/15`}>
+                    <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
+                    <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${progress}%` }} />
+                    {hoverProgress !== null && (
+                      <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${hoverProgress * 100}%` }} />
+                    )}
+                    <div
+                      className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 ${isMini ? 'w-3 h-3' : 'w-4 h-4'} bg-white rounded-full border-2 border-[#271C18] shadow-lg transition-opacity ${hoverProgress !== null ? "opacity-100" : "opacity-0"}`}
+                      style={{ left: `${progress}%` }}
+                    />
                   </div>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <div className={`flex items-center ${isMini ? 'space-x-3' : 'space-x-4'}`}>
-                    <button onClick={() => seek(-15)} className="text-stone-400 transition" onMouseEnter={(e) => e.currentTarget.style.color = '#fbbf24'} onMouseLeave={(e) => e.currentTarget.style.color = ''}><Icon icon="tabler:rewind-backward-15" width={isMini ? 16 : 22} /></button>
-                    <button onClick={togglePlay} className="text-[color:var(--accent)] transition" onMouseEnter={(e) => e.currentTarget.style.color = '#fbbf24'} onMouseLeave={(e) => e.currentTarget.style.color = ''}>{isPaused ? <Play size={isMini ? 16 : 20} fill="currentColor" /> : <Pause size={isMini ? 16 : 20} fill="currentColor" />}</button>
-                    <button onClick={() => seek(15)} className="text-stone-400 transition" onMouseEnter={(e) => e.currentTarget.style.color = '#fbbf24'} onMouseLeave={(e) => e.currentTarget.style.color = ''}><Icon icon="tabler:rewind-forward-15" width={isMini ? 16 : 22} /></button>
+                    <Tooltip text="Rewind 15s" disabled={isSmallMode}>
+                      <button onClick={() => seek(-15)} className="text-stone-400 transition" onMouseEnter={(e) => e.currentTarget.style.color = '#fbbf24'} onMouseLeave={(e) => e.currentTarget.style.color = ''}><Icon icon="tabler:rewind-backward-15" width={isMini ? 16 : 22} /></button>
+                    </Tooltip>
+                    
+                    <Tooltip text={isPaused ? "Play" : "Pause"} disabled={isSmallMode}>
+                      <button onClick={togglePlay} className="text-[color:var(--accent)] transition" onMouseEnter={(e) => e.currentTarget.style.color = '#fbbf24'} onMouseLeave={(e) => e.currentTarget.style.color = ''}>{isPaused ? <Play size={isMini ? 16 : 20} fill="currentColor" /> : <Pause size={isMini ? 16 : 20} fill="currentColor" />}</button>
+                    </Tooltip>
+
+                    <Tooltip text="Forward 15s" disabled={isSmallMode}>
+                      <button onClick={() => seek(15)} className="text-stone-400 transition" onMouseEnter={(e) => e.currentTarget.style.color = '#fbbf24'} onMouseLeave={(e) => e.currentTarget.style.color = ''}><Icon icon="tabler:rewind-forward-15" width={isMini ? 16 : 22} /></button>
+                    </Tooltip>
+
+                    <Tooltip text={isLooping ? "Disable Loop" : "Enable Loop"} disabled={isSmallMode}>
+                      <button 
+                        onClick={() => {
+                          const nextLoop = !isLooping;
+                          setIsLooping(nextLoop);
+                          if (mediaRef.current) mediaRef.current.loop = nextLoop;
+                        }} 
+                        className={`transition-all p-1 rounded-lg ${isLooping ? 'text-[color:var(--accent)] bg-[color:var(--accent)]/10' : 'text-stone-400 hover:text-white'}`}
+                      >
+                        <AnimatePresence mode="wait" initial={false}>
+                          <motion.div
+                            key={isLooping ? "looping" : "not-looping"}
+                            initial={{ opacity: 0, rotate: -20, scale: 0.8 }}
+                            animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                            exit={{ opacity: 0, rotate: 20, scale: 0.8 }}
+                            transition={{ duration: 0.15 }}
+                          >
+                            <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={isMini ? 16 : 20} />
+                          </motion.div>
+                        </AnimatePresence>
+                      </button>
+                    </Tooltip>
                   </div>
                   <div className={`${isMini ? 'text-[8px]' : 'text-[10px]'} font-bold text-stone-500 tracking-wider`}>
-                    -{formatTime(duration - currentTime)}
+                    {formatTime(Math.max(0, duration - currentTime))}
                   </div>
                   <div className={`flex items-center ${isMini ? 'space-x-1.5' : 'space-x-2'} text-stone-500`}>
                     <AnimatePresence mode="wait">
@@ -777,9 +958,114 @@ export default function MiniPlayer() {
               </motion.div>
             </>
           ) : (           
-            <div className="flex flex-col items-center space-y-4 opacity-20 w-full h-full justify-center pointer-events-auto">
-              <img src={logo} className="w-16 h-16 rounded-2xl grayscale pointer-events-none" alt="" />
-              <p className="text-[9px] text-stone-500 font-black uppercase tracking-[0.3em] pointer-events-none">Waiting for Content</p>
+            <div className="w-full h-full overflow-y-auto pt-16 pb-12 px-6 scrollbar-none pointer-events-auto bg-stone-950/50">
+              <div className="mb-4">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-8 h-8 rounded-xl bg-[color:var(--accent)]/10 flex items-center justify-center border border-[color:var(--accent)]/20 shadow-[0_0_20px_rgba(var(--accent-rgb),0.1)]">
+                    <Video className="text-[color:var(--accent)]" size={16} />
+                  </div>
+                  <h2 className="text-[11px] font-black text-white uppercase tracking-[0.3em]">Video Library</h2>
+                </div>
+                
+                {library.length > 0 ? (
+                  <div className="space-y-8">
+                    {Object.entries(groupEntriesByDate(library)).map(([date, entries]) => (
+                      <div key={date} className="space-y-4">
+                        <h3 className="text-[9px] font-black text-stone-500 uppercase tracking-[0.2em] px-1 border-l-2 border-[color:var(--accent)]/30 ml-1 pl-2">{date}</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                          {entries.map((entry) => {
+                            if (entry.kind === 'playlist') {
+                              const playlist = entry as PlaylistCollection;
+                              const mainThumbnail = playlist.stackThumbnailPath || (playlist.items[0]?.thumbnailPath || playlist.items[0]?.ruforgePosterPath);
+                              return (
+                                <motion.button 
+                                  key={playlist.path}
+                                  initial={{ opacity: 0, y: 20 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  whileHover={{ y: -4, scale: 1.02 }}
+                                  onClick={() => handleSelectMedia(playlist.items[0])}
+                                  className="flex flex-col text-left group relative"
+                                >
+                                  <div className="aspect-video w-full rounded-2xl overflow-hidden relative border border-white/5 bg-stone-900/50 mb-2 shadow-xl group-hover:border-[color:var(--accent)]/30 transition-all duration-300">
+                                    <div className="absolute inset-0 bg-stone-800 rounded-2xl rotate-[-2deg] scale-[0.98] opacity-40 translate-y-[-4px]" />
+                                    <div className="absolute inset-0 bg-stone-800 rounded-2xl rotate-[2deg] scale-[0.98] opacity-60 translate-y-[-2px]" />
+                                    <div className="absolute inset-0 rounded-2xl overflow-hidden bg-black z-10 border border-white/10">
+                                      {mainThumbnail ? (
+                                        <img src={convertFileSrc(mainThumbnail)} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60" />
+                                      ) : (
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                           <Layers className="w-8 h-8 text-stone-700 opacity-20" strokeWidth={1} />
+                                        </div>
+                                      )}
+                                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                                      <div className="absolute top-2 left-2 px-2 py-0.5 bg-[color:var(--accent)] rounded-full flex items-center gap-1 shadow-2xl z-20">
+                                        <Layers size={8} className="text-black" />
+                                        <span className="text-[7px] font-black text-black uppercase tracking-widest">{playlist.itemCount}</span>
+                                      </div>
+                                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-30">
+                                        <div className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-300">
+                                          <Play size={18} fill="currentColor" />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <p className="text-[9px] font-black text-stone-400 truncate uppercase tracking-widest px-1 group-hover:text-white transition-colors">
+                                    {playlist.title}
+                                  </p>
+                                </motion.button>
+                              );
+                            }
+
+                            const file = entry as MediaFile;
+                            const stillPoster = file.thumbnailPath ?? file.ruforgePosterPath;
+                            return (
+                              <motion.button 
+                                key={file.path}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                whileHover={{ y: -4, scale: 1.02 }}
+                                onClick={() => handleSelectMedia(file)}
+                                className="flex flex-col text-left group relative"
+                              >
+                                <div className="aspect-video w-full rounded-2xl overflow-hidden relative border border-white/5 bg-stone-900/50 mb-2 shadow-xl group-hover:border-[color:var(--accent)]/30 transition-all duration-300">
+                                  {stillPoster ? (
+                                    <img src={convertFileSrc(stillPoster)} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                  ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                      <Video className="w-8 h-8 text-stone-700 opacity-20" strokeWidth={1} />
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-black/40 group-hover:bg-black/10 transition-colors duration-300" />
+                                  
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    <div className="w-10 h-10 rounded-full bg-[color:var(--accent)] text-black flex items-center justify-center shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-300">
+                                      <Play size={18} fill="currentColor" />
+                                    </div>
+                                  </div>
+
+                                  {isAudioOnlyPath(file.path) && (
+                                    <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-lg border border-white/5">
+                                      <Music size={10} className="text-[color:var(--accent)]" />
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="text-[9px] font-black text-stone-400 truncate uppercase tracking-widest px-1 group-hover:text-white transition-colors">
+                                  {file.name}
+                                </p>
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20 opacity-20">
+                    <img src={logo} className="w-16 h-16 rounded-2xl grayscale mb-4" alt="" />
+                    <p className="text-[9px] text-stone-500 font-black uppercase tracking-[0.3em]">No Media Found</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
       </motion.div>
@@ -804,27 +1090,51 @@ export default function MiniPlayer() {
            className="w-full h-28 glass-elevated border-t border-white/5 flex flex-col overflow-hidden shadow-2xl pointer-events-auto relative z-10"
         >
            <div className="h-28 overflow-x-auto overflow-y-hidden scrollbar-none px-4 py-4 flex items-center space-x-3 pointer-events-auto">
-            {library.map((file) => {
-              const stillPoster = file.thumbnailPath ?? file.ruforgePosterPath;
+            {[...library].sort((a, b) => {
+              const timeA = a.kind === 'media' ? a.created : (a.items[0]?.created || 0);
+              const timeB = b.kind === 'media' ? b.created : (b.items[0]?.created || 0);
+              return timeB - timeA;
+            }).map((entry) => {
+              const isPlaylist = entry.kind === 'playlist';
+              const file = isPlaylist ? (entry as PlaylistCollection).items[0] : (entry as MediaFile);
+              const title = isPlaylist ? (entry as PlaylistCollection).title : file.name;
+              const stillPoster = isPlaylist 
+                ? ((entry as PlaylistCollection).stackThumbnailPath || file?.thumbnailPath || file?.ruforgePosterPath)
+                : (file.thumbnailPath ?? file.ruforgePosterPath);
+              
               return (
-              <button 
-                key={file.path}
-                onClick={() => setPlayingFile(file)}
-                className={`flex-shrink-0 w-32 h-full rounded-xl overflow-hidden relative group border-2 transition-all ${playingFile?.path === file.path ? 'border-[color:var(--accent)] shadow-lg shadow-black/30' : 'border-transparent opacity-60 hover:opacity-100'}`}
-              >
-                {stillPoster ? (
-                  <img src={convertFileSrc(stillPoster)} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center bg-stone-900 pointer-events-none">
-                    <Video className="w-8 h-8 text-stone-700" strokeWidth={1.25} aria-hidden />
+                <button 
+                  key={entry.path}
+                  onClick={() => handleSelectMedia(file)}
+                  className={`flex-shrink-0 w-32 h-full rounded-xl overflow-hidden relative group border-2 transition-all ${playingFile?.path === file?.path ? 'border-[color:var(--accent)] shadow-lg shadow-black/30' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                >
+                  {isPlaylist && (
+                    <>
+                      <div className="absolute inset-0 bg-stone-800 rounded-xl rotate-[-2deg] scale-[0.98] opacity-40 translate-y-[-2px]" />
+                      <div className="absolute inset-0 bg-stone-800 rounded-xl rotate-[2deg] scale-[0.98] opacity-60 translate-y-[-1px]" />
+                    </>
+                  )}
+                  <div className="absolute inset-0 rounded-xl overflow-hidden bg-black z-10">
+                    {stillPoster ? (
+                      <img src={convertFileSrc(stillPoster)} alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-stone-900 pointer-events-none">
+                        {isPlaylist ? <Layers size={14} className="text-stone-700" /> : <Video className="w-8 h-8 text-stone-700" strokeWidth={1.25} aria-hidden />}
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
+                    {isPlaylist && (
+                      <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-[color:var(--accent)] rounded-full flex items-center gap-0.5 shadow-2xl z-20">
+                        <Layers size={6} className="text-black" />
+                        <span className="text-[6px] font-black text-black uppercase tracking-widest">{(entry as PlaylistCollection).itemCount}</span>
+                      </div>
+                    )}
+                    <p className="absolute bottom-1 left-2 right-2 text-[7px] font-black text-stone-100 truncate uppercase tracking-tighter">
+                      {title}
+                    </p>
                   </div>
-                )}
-                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
-                <p className="absolute bottom-1 left-2 right-2 text-[7px] font-black text-stone-100 truncate uppercase tracking-tighter">
-                  {file.name}
-                </p>
-              </button>
-            );
+                </button>
+              );
             })}
             {library.length === 0 && (
               <p className="text-[8px] text-stone-600 font-bold uppercase tracking-widest w-full text-center">Library Empty</p>
@@ -832,6 +1142,30 @@ export default function MiniPlayer() {
          </div>
       </motion.div>
       </div>
+
+      {/* Resize Handle (Spotify Style) */}
+      <AnimatePresence>
+        {isFocused && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.4 }}
+            exit={{ opacity: 0 }}
+            whileHover={{ opacity: 1 }}
+            className="absolute bottom-1 right-1 w-6 h-6 cursor-nwse-resize z-[150] flex items-center justify-center p-1"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              // In Tauri v2, the method is startResizeDragging and directions are PascalCase
+              // @ts-ignore
+              getCurrentWindow().startResizeDragging("SouthEast").catch(console.error);
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-stone-400">
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.8" />
+              <line x1="12" y1="8" x2="8" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+            </svg>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

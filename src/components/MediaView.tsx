@@ -2,8 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play } from "lucide-react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
-import { getAllWindows } from "@tauri-apps/api/window";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
 
@@ -50,7 +48,7 @@ const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 space-y-1 bg-gradient-to-t from-black to-transparent z-10">
-          <h3 className="text-[13px] font-bold text-stone-100 leading-[1.3] truncate">{playlist.title}</h3>
+          <h3 className="text-[13px] font-bold text-stone-100 leading-[1.3] truncate">{playlist.title.replace(/_/g, " ")}</h3>
           <p className="text-[9px] font-black text-[color:var(--accent)] opacity-60 uppercase tracking-[0.2em]">Collection</p>
         </div>
       </div>
@@ -103,14 +101,7 @@ const VideoCard = ({
     const newViews = views + 1;
     setViews(newViews);
     localStorage.setItem(`views-${file.path}`, newViews.toString());
-
-    const windows = await getAllWindows();
-    const miniOpen = windows.some(w => w.label === "mini");
-    if (miniOpen) {
-      emit("play-media", file);
-    } else {
-      onPlay(file);
-    }
+    onPlay(file);
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -188,7 +179,7 @@ const VideoCard = ({
       <div className="flex gap-3 px-1 transition-transform duration-300 group-hover:translate-y-0.5">
         <div className="flex-1 min-w-0">
           <h3 className="text-[13px] font-bold text-stone-100 leading-[1.3] line-clamp-2 group-hover:text-[color:var(--accent)] transition-colors duration-300 mb-1">
-            {file.name.replace(/\.[^/.]+$/, "")}
+            {file.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "")}
           </h3>
           
           <div className="flex flex-col text-[11px] text-stone-500 font-semibold space-y-0.5">
@@ -253,7 +244,7 @@ export const MediaView = ({
     if (showLoading) setLoading(true);
     let backfillList: MediaFile[] | null = null;
     try {
-      const dirs = saveToInternal ? [internalDir] : [outputDir];
+      const dirs = [internalDir, outputDir].filter(d => d && d.trim() !== "");
       const scans = await Promise.all(
         dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d })),
       );
