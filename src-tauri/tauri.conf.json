@@ -46,13 +46,13 @@
     ],
     "windows": {
       "nsis": {
-        "oneClick": true,
-        "perMachine": false,
-        "allowElevation": false,
-        "displayStep": false,
         "installerIcon": "icons/icon.ico",
-        "installerSidebarImage": "installer-assets/sidebar.bmp",
-        "installerHeaderImage": "installer-assets/header.bmp"
+        "headerImage": "installer-assets/header.bmp",
+        "sidebarImage": "installer-assets/sidebar.bmp",
+        "installMode": "currentUser",
+        "compression": "lzma",
+        "displayLanguageSelector": false,
+        "languages": ["English"]
       }
     }
   },
