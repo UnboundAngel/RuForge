@@ -635,7 +635,7 @@ function App() {
         
         // Setup handshake for newly created window
         let unlistenFn: (() => void) | null = null;
-        listen("mini-player-ready", (event) => {
+        listen("mini-player-ready", (_event) => {
           emit("play-in-mini", fileToHandoff);
           if (unlistenFn) {
             unlistenFn();
