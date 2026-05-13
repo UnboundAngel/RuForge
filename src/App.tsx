@@ -511,13 +511,15 @@ function App() {
     const unlisten = listen<MediaFile>("play-media", (event) => {
       const file = event.payload;
       setPlayingFile(file);
-      emit("stop-playback");
+      emit("stop-playback", "main-app");
       notify(`Now playing: ${file.name}`);
       setActiveTab("player");
     });
 
-    const unlistenStop = listen("stop-playback", () => {
-      setPlayingFile(null);
+    const unlistenStop = listen<string>("stop-playback", (event) => {
+      if (event.payload !== "main-app") {
+        setPlayingFile(null);
+      }
     });
 
     const unlistenManualDownload = listen<string>("manual-download-trigger", () => {
@@ -547,19 +549,29 @@ function App() {
   useEffect(() => {
     let cancel = false;
     (async () => {
-      if (!playingFile?.path || !isAudioOnlyPath(playingFile.path)) {
+      if (!playingFile?.path) {
         setFolderAudioPlaylist([]);
         return;
       }
+
+      // If the current file is already part of the existing playlist,
+      // don't overwrite it (this preserves manually queued playlists/shuffles)
+      const isAlreadyQueued = folderAudioPlaylist.some(f => f.path === playingFile.path);
+      if (isAlreadyQueued) return;
+
       try {
         const dir = await dirname(playingFile.path);
         const scannedRaw = await invoke("scan_gallery", { dir });
         if (cancel) return;
         const scanned = flattenGalleryScanToMediaFiles(scannedRaw);
-        const aud = scanned
-          .filter((f) => isAudioOnlyPath(f.path))
+        
+        // Populate neighbor queue from the same folder, matching the current media type (audio or video)
+        const isAudio = isAudioOnlyPath(playingFile.path);
+        const neighbors = scanned
+          .filter((f) => isAudioOnlyPath(f.path) === isAudio)
           .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }));
-        setFolderAudioPlaylist(aud);
+        
+        setFolderAudioPlaylist(neighbors);
       } catch (e) {
         console.error(e);
         if (!cancel) setFolderAudioPlaylist([]);
@@ -568,19 +580,30 @@ function App() {
     return () => {
       cancel = true;
     };
-  }, [playingFile?.path]);
+  }, [playingFile?.path]); // Depend on path to trigger on song change, but we check isAlreadyQueued inside
 
   const handlePlayFolderNeighbor = useCallback((f: MediaFile) => {
     setPlayingFile(f);
   }, []);
 
+  const [lastExplorerUrl, setLastExplorerUrl] = useState("https://www.youtube.com");
+
+  useEffect(() => {
+    const unlisten = listen<string>("explorer-url", (event) => {
+      setLastExplorerUrl(event.payload);
+    });
+    return () => { unlisten.then(f => f()); };
+  }, []);
+
   const handlePopOut = async () => {
     try {
       await invoke("open_mini_player");
-      if (playingFile) {
+      if (activeTab === "player" && playingFile) {
         setTimeout(async () => {
-          emit("play-media", playingFile);
+          emit("play-in-mini", playingFile);
         }, 500);
+        setPlayingFile(null);
+        setActiveTab("media");
       }
     } catch (e) {
       console.error(e);
@@ -590,7 +613,28 @@ function App() {
   const handlePlayFile = (file: MediaFile) => {
     setPlayingFile(file);
     setActiveTab("player");
-    notify(`Now playing: ${file.name}`);
+    emit("stop-playback", "main-app");
+    // Only notify if we weren't already playing it
+    if (playingFile?.path !== file.path) {
+      notify(`Now playing: ${file.name}`);
+    }
+  };
+
+  const handlePlayPlaylist = (files: MediaFile[], shuffle = false) => {
+    if (files.length === 0) return;
+    
+    let queue = [...files];
+    if (shuffle) {
+      for (let i = queue.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [queue[i], queue[j]] = [queue[j], queue[i]];
+      }
+    }
+
+    setFolderAudioPlaylist(queue);
+    setPlayingFile(queue[0]);
+    setActiveTab("player");
+    notify(shuffle ? `Shuffling ${files.length} items` : `Playing ${files.length} items`);
   };
 
   if (isMini) return <MiniPlayer />;
@@ -754,6 +798,42 @@ function App() {
           )}
         </AnimatePresence>
 
+        {/* Explorer bulge */}
+        {activeTab === "explorer" && (
+          <div className="absolute right-6 top-0 z-20 flex h-[80px] pointer-events-none">
+            <div
+              className="relative flex h-[80px] bg-[#271C18] rounded-b-[28px] px-6 items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+              style={{ clipPath: "inset(40px -100px -100px -100px)" }}
+            >
+              <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
+              </div>
+              <div className="absolute right-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
+              </div>
+
+              <div className="flex items-center gap-5 h-[34px] flex-shrink-0">
+                <button
+                  onClick={async () => {
+                    if (explorerWebviewRef.current) {
+                      try {
+                        await invoke("open_external_url", { url: lastExplorerUrl });
+                      } catch (e) {
+                        console.error(e);
+                      }
+                    }
+                  }}
+                  className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex items-center gap-2 px-2"
+                  title="Open current page in default browser"
+                >
+                  <Globe size={16} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Open in Browser</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Gallery search/settings tab bulge */}
         {activeTab === "media" && (
           <div className="absolute right-6 top-0 z-20 flex h-[80px] pointer-events-none">
@@ -863,6 +943,7 @@ function App() {
                     playlist={selectedPlaylist}
                     onBack={() => setSelectedPlaylist(null)}
                     onPlay={handlePlayFile}
+                    onPlayPlaylist={handlePlayPlaylist}
                   />
                 ) : (
                   <MediaView 

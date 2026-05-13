@@ -2,7 +2,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Icon } from "@iconify/react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+// @ts-ignore
 import { emit } from "@tauri-apps/api/event";
+// @ts-ignore
 import { openPath } from "@tauri-apps/plugin-opener";
 import {
   Play,
@@ -13,12 +15,13 @@ import {
   Maximize2,
   Minimize2,
   ArrowLeft,
-  Repeat,
-  ExternalLink,
   Music,
   Speaker,
   SkipBack,
   SkipForward,
+  X,
+  Video,
+  Layers,
 } from "lucide-react";
 import { MediaFile, type FfprobeHint } from "../types";
 import { ScrubberHoverThumb } from "../scrubSpritePreview";
@@ -113,6 +116,7 @@ export const PlayerView = ({
   const [isMuted, setIsMuted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [showVolume, setShowVolume] = useState(false);
   const [scrubberHoverPos, setScrubberHoverPos] = useState(0);
   const [isHoveringScrubber, setIsHoveringScrubber] = useState(false);
   const [isScrubbing, setIsScrubbing] = useState(false);
@@ -120,9 +124,47 @@ export const PlayerView = ({
   const [isPressing, setIsPressing] = useState<"left" | "right" | null>(null);
   const [previousSpeed, setPreviousSpeed] = useState(1);
   const pressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blockClickRef = useRef(false);
   const lastPlaybackPersistRef = useRef(0);
   const progressRafRef = useRef<number | null>(null);
+
+  const ambientCanvasRef = useRef<HTMLCanvasElement>(null);
+  const ambientRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (audioOnly) return;
+    const updateAmbient = () => {
+      // Throttle to ~10fps for that slow YouTube "breathing" feel
+      setTimeout(() => {
+        ambientRafRef.current = requestAnimationFrame(updateAmbient);
+      }, 100);
+
+      const video = mediaRef.current as HTMLVideoElement | null;
+      const canvas = ambientCanvasRef.current;
+      if (!video || !canvas || video.paused || video.ended || video.readyState < 2) return;
+      
+      const ctx = canvas.getContext("2d", { alpha: false });
+      if (!ctx || video.videoWidth === 0) return;
+      
+      const targetWidth = 16;
+      const targetHeight = Math.max(1, Math.floor(targetWidth * (video.videoHeight / video.videoWidth)));
+      
+      // Initialize canvas size (clears canvas when changed)
+      if (canvas.width !== targetWidth) canvas.width = targetWidth;
+      if (canvas.height !== targetHeight) canvas.height = targetHeight;
+      
+      // Temporal smoothing: Draw new frame with low opacity over previous one
+      // Since we don't clear the canvas, this creates a slow morph/crossfade
+      ctx.globalAlpha = 0.2;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1.0;
+    };
+    ambientRafRef.current = requestAnimationFrame(updateAmbient);
+    return () => {
+      if (ambientRafRef.current !== null) cancelAnimationFrame(ambientRafRef.current);
+    };
+  }, [audioOnly]);
 
   useEffect(() => {
     if (!file || audioOnly) {
@@ -164,9 +206,15 @@ export const PlayerView = ({
 
   const [isVolumeDragging, setIsVolumeDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isLooping, setIsLooping] = useState(false);
+  const [isLooping, setIsLooping] = useState(() => localStorage.getItem("miniplayer-loop") === "true");
+
+  useEffect(() => {
+    localStorage.setItem("miniplayer-loop", isLooping.toString());
+  }, [isLooping]);
+
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [showPlaylist, setShowPlaylist] = useState(false);
   const [clickFlash, setClickFlash] = useState<"play" | "pause" | null>(null);
 
   // Sync volume/mute to <video> / <audio>
@@ -225,7 +273,13 @@ export const PlayerView = ({
           changeVolume(Math.max(0, volume - 0.1));
           break;
         case "KeyM":
-          setIsMuted((m) => !m);
+          setIsMuted((m) => {
+            const next = !m;
+            setShowVolume(true);
+            if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+            volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+            return next;
+          });
           break;
         case "KeyF":
           toggleFullscreen();
@@ -268,7 +322,6 @@ export const PlayerView = ({
       idx >= 0 && idx < folderAudioPlaylist.length - 1 ? folderAudioPlaylist[idx + 1] : null;
     if (
       readAudioAutoAdvanceFolder() &&
-      audioOnly &&
       neighbor &&
       onPlayFolderAudioNeighbor
     ) {
@@ -291,6 +344,10 @@ export const PlayerView = ({
   const changeVolume = (v: number) => {
     setVolume(v);
     if (v > 0 && isMuted) setIsMuted(false);
+
+    setShowVolume(true);
+    if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+    volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
   };
 
   const toggleFullscreen = () => {
@@ -331,18 +388,12 @@ export const PlayerView = ({
     }
   };
 
-  const handlePopOut = async () => {
-    try {
-      if (mediaRef.current) {
-        writePlaybackPos(file.path, mediaRef.current.currentTime);
-        localStorage.setItem("miniplayer-volume", mediaRef.current.volume.toString());
-      }
-      await invoke("open_mini_player");
-      setTimeout(() => emit("play-media", file), 500);
-      onMiniPlayerToggle();
-    } catch (e) {
-      console.error(e);
+  const handlePopOut = () => {
+    if (mediaRef.current) {
+      writePlaybackPos(file.path, mediaRef.current.currentTime);
+      localStorage.setItem("miniplayer-volume", mediaRef.current.volume.toString());
     }
+    onMiniPlayerToggle();
   };
 
   const handleTimeUpdate = () => {
@@ -455,16 +506,12 @@ export const PlayerView = ({
 
   const playlistIdx = folderAudioPlaylist.findIndex((f) => f.path === file.path);
   const prevInFolder =
-    audioOnly && playlistIdx > 0 ? folderAudioPlaylist[playlistIdx - 1] : null;
+    playlistIdx > 0 ? folderAudioPlaylist[playlistIdx - 1] : null;
   const nextInFolder =
-    audioOnly && playlistIdx >= 0 && playlistIdx < folderAudioPlaylist.length - 1
+    playlistIdx >= 0 && playlistIdx < folderAudioPlaylist.length - 1
       ? folderAudioPlaylist[playlistIdx + 1]
       : null;
   const prefetchNextEnabled = audioOnly && readAudioPrefetchNext() && nextInFolder !== null;
-
-  const openInExternalPlayer = () => {
-    void openPath(file.path).catch(console.error);
-  };
 
   const openWindowsSoundSettings = useCallback(() => {
     void invoke("open_windows_sound_settings").catch(console.error);
@@ -481,6 +528,72 @@ export const PlayerView = ({
       className="absolute inset-0 bg-black flex flex-col select-none overflow-hidden z-50"
       style={{ cursor: showControls ? "default" : "none" }}
     >
+      {/* Next Up Drawer */}
+      <AnimatePresence>
+        {showPlaylist && (
+          <motion.div
+            initial={{ x: "110%", opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "110%", opacity: 0 }}
+            transition={{ type: "spring", damping: 28, stiffness: 200 }}
+            className="absolute top-8 bottom-8 right-0 w-80 bg-stone-950/80 backdrop-blur-3xl rounded-l-[32px] z-[60] flex flex-col shadow-[0_32px_64px_-12px_rgba(0,0,0,0.8)] pointer-events-auto border border-white/5"
+          >
+            <div className="p-7 flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-stone-400 ml-2">Next Up</h3>
+              <button 
+                onClick={() => setShowPlaylist(false)}
+                className="p-2 text-stone-500 hover:text-white transition-colors hover:bg-white/5 rounded-full"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto scrollbar-none px-4 pb-8 space-y-2">
+              {folderAudioPlaylist.map((item) => {
+                const isActive = item.path === file.path;
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => {
+                      if (onPlayFolderAudioNeighbor) onPlayFolderAudioNeighbor(item);
+                    }}
+                    className={`w-full flex flex-col gap-3 p-3 rounded-[24px] transition-all group ${isActive ? 'bg-[color:var(--accent)]/10 ring-1 ring-[color:var(--accent)]/20' : 'hover:bg-white/5'}`}
+                  >
+                    <div className="w-full aspect-video rounded-[18px] bg-stone-900 overflow-hidden flex-shrink-0 relative border border-white/5 shadow-xl">
+                      {(item.thumbnailPath || item.ruforgePosterPath) ? (
+                        <img src={convertFileSrc(item.thumbnailPath || item.ruforgePosterPath!)} className="w-full h-full object-cover" alt="" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          {isAudioOnlyPath(item.path) ? <Music size={24} className="text-stone-700" /> : <Video size={24} className="text-stone-700" />}
+                        </div>
+                      )}
+                      <div className={`absolute inset-0 bg-black/20 transition-opacity ${isActive ? 'opacity-0' : 'group-hover:opacity-0'}`} />
+                      
+                      {item.duration > 0 && (
+                        <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded-md border border-white/10">
+                          <p className="text-[10px] font-black text-white leading-none">
+                            {formatTime(item.duration)}
+                          </p>
+                        </div>
+                      )}
+
+                      {isActive && (
+                        <div className="absolute inset-0 bg-[color:var(--accent)]/40 flex items-center justify-center backdrop-blur-[2px]">
+                           <Play size={28} className="text-[#1D1613] fill-current" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-2 pb-1 text-left">
+                      <p className={`text-[13px] font-bold leading-snug line-clamp-2 ${isActive ? 'text-[color:var(--accent)]' : 'text-stone-100 group-hover:text-white'}`}>
+                        {item.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "")}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Local <video> or <audio> (Chromium stack); audio skips video decode path */}
       <div className="absolute inset-0">
         {audioOnly ? (
@@ -529,7 +642,10 @@ export const PlayerView = ({
                   <Music className="w-28 h-28 text-amber-500/30" strokeWidth={1} aria-hidden />
                 )}
                 <p className="text-center text-[11px] font-medium text-stone-600 max-w-sm leading-relaxed">
-                  In-app playback uses WebView audio (same engine family as Chromium). Opens the same file in your default app if you prefer another decoder.
+                  {file.sourceUrl 
+                    ? "In-app playback uses WebView audio (Chromium engine). Click 'Open in Browser' at the top to watch the original source in your native browser."
+                    : "In-app playback uses WebView audio (Chromium engine). Opens the same file in your default browser/player if you prefer another decoder."
+                  }
                 </p>
               </div>
               {isProbablyWindows && (
@@ -549,29 +665,36 @@ export const PlayerView = ({
             </div>
           </>
         ) : (
-          <video
-            ref={mediaRef as React.RefObject<HTMLVideoElement>}
-            src={convertFileSrc(file.path)}
-            className="absolute inset-0 w-full h-full object-contain"
-            autoPlay
-            playsInline
-            preload="metadata"
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onPause={() => setIsPaused(true)}
-            onPlay={() => setIsPaused(false)}
-            onEnded={() => {
-              if (!isLooping) handlePlaybackEnded();
-            }}
-            onClick={togglePlay}
-            onDoubleClick={toggleFullscreen}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onWheel={(e) => {
-              changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
-            }}
-          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <canvas
+              ref={ambientCanvasRef}
+              className="absolute inset-[-15%] w-[130%] h-[130%] z-0 blur-[100px] opacity-50 pointer-events-none transition-opacity duration-700"
+              aria-hidden
+            />
+            <video
+              ref={mediaRef as React.RefObject<HTMLVideoElement>}
+              src={convertFileSrc(file.path)}
+              className="relative w-full h-full object-contain z-10"
+              autoPlay
+              playsInline
+              preload="metadata"
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onPause={() => setIsPaused(true)}
+              onPlay={() => setIsPaused(false)}
+              onEnded={() => {
+                if (!isLooping) handlePlaybackEnded();
+              }}
+              onClick={togglePlay}
+              onDoubleClick={toggleFullscreen}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onWheel={(e) => {
+                changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
+              }}
+            />
+          </div>
         )}
       </div>
 
@@ -618,6 +741,34 @@ export const PlayerView = ({
         )}
       </AnimatePresence>
 
+      {/* Dynamic Volume/Mute Overlay */}
+      <AnimatePresence>
+        {showVolume && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10, x: 10 }}
+            animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, y: 10, x: 10 }}
+            className="absolute bottom-6 right-6 z-[80] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 flex items-center gap-3 pointer-events-none shadow-2xl"
+          >
+            <div className="text-white">
+              {isMuted ? <VolumeX size={20} /> : volume > 0.5 ? <Volume2 size={20} /> : <Volume1 size={20} />}
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[11px] font-black text-white leading-none uppercase tracking-widest">{isMuted ? "Muted" : `${Math.round(volume * 100)}%`}</span>
+            </div>
+            {!isMuted && (
+              <div className="w-1.5 h-8 bg-white/10 rounded-full relative overflow-hidden ml-1">
+                  <motion.div 
+                    className="absolute bottom-0 left-0 right-0 bg-white rounded-full"
+                    initial={{ height: 0 }}
+                    animate={{ height: `${volume * 100}%` }}
+                  />
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Chrome */}
       <AnimatePresence>
         {showControls && (
@@ -631,13 +782,13 @@ export const PlayerView = ({
             <div className="flex items-center gap-5">
               <button
                 onClick={onBack}
-                className="w-11 h-11 flex items-center justify-center rounded-full bg-white/5 border border-white/10 backdrop-blur-xl hover:bg-white/15 transition-all active:scale-90"
+                className="w-11 h-11 flex items-center justify-center text-stone-400 hover:text-white transition-all active:scale-90"
               >
-                <ArrowLeft className="w-5 h-5 text-white" />
+                <ArrowLeft className="w-6 h-6" />
               </button>
               <div>
                 <h2 className="text-lg font-black tracking-tight text-white leading-tight truncate max-w-xl">
-                  {file.name}
+                  {file.name.replace(/_/g, " ")}
                 </h2>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                   {audioOnly && (
@@ -655,15 +806,6 @@ export const PlayerView = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <Tooltip text="Open in Browser" side="top">
-                <button
-                  type="button"
-                  onClick={openInExternalPlayer}
-                  className="p-2.5 rounded-xl text-stone-400 hover:text-white transition-all active:scale-90"
-                >
-                  <ExternalLink className="w-5 h-5" />
-                </button>
-              </Tooltip>
             </div>
           </motion.div>
         )}
@@ -766,8 +908,8 @@ export const PlayerView = ({
                     <Icon icon="tabler:rewind-forward-15" width={22} />
                   </button>
                 </Tooltip>
-                {audioOnly && prevInFolder && onPlayFolderAudioNeighbor && (
-                  <Tooltip text="Previous audio in this folder">
+                {prevInFolder && onPlayFolderAudioNeighbor && (
+                  <Tooltip text="Previous in this folder">
                     <button
                       type="button"
                       onClick={() => onPlayFolderAudioNeighbor(prevInFolder)}
@@ -777,8 +919,8 @@ export const PlayerView = ({
                     </button>
                   </Tooltip>
                 )}
-                {audioOnly && nextInFolder && onPlayFolderAudioNeighbor && (
-                  <Tooltip text="Next audio in this folder">
+                {nextInFolder && onPlayFolderAudioNeighbor && (
+                  <Tooltip text="Next in this folder">
                     <button
                       type="button"
                       onClick={() => onPlayFolderAudioNeighbor(nextInFolder)}
@@ -830,9 +972,19 @@ export const PlayerView = ({
                 <Tooltip text="Toggle Loop Playback">
                   <button
                     onClick={() => setIsLooping((l) => !l)}
-                    className={`p-2.5 rounded-xl transition-all ${isLooping ? "text-[#271C18] bg-[#271C18]/10 border border-[#271C18]/20" : "text-stone-500 hover:text-white"}`}
+                    className={`p-2.5 rounded-xl transition-all outline-none border-none ${isLooping ? "text-[color:var(--accent)]" : "text-stone-500 hover:text-white"}`}
                   >
-                    <Repeat className="w-4 h-4" />
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.div
+                        key={isLooping ? "looping" : "not-looping"}
+                        initial={{ opacity: 0, rotate: -20, scale: 0.8 }}
+                        animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                        exit={{ opacity: 0, rotate: 20, scale: 0.8 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={16} height={16} />
+                      </motion.div>
+                    </AnimatePresence>
                   </button>
                 </Tooltip>
 
@@ -871,6 +1023,15 @@ export const PlayerView = ({
                     )}
                   </AnimatePresence>
                 </div>
+
+                <Tooltip text="Next Up Playlist">
+                  <button
+                    onClick={() => setShowPlaylist(!showPlaylist)}
+                    className={`p-2.5 rounded-xl transition-all ${showPlaylist ? "text-[#271C18] bg-[#271C18]/10 border border-[#271C18]/20" : "text-stone-500 hover:text-white"}`}
+                  >
+                    <Layers className="w-4 h-4" />
+                  </button>
+                </Tooltip>
 
                 <Tooltip text="Launch Mini Player">
                   <button onClick={handlePopOut} className="p-2.5 rounded-xl text-stone-500 hover:text-white transition-all">

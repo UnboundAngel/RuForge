@@ -438,15 +438,16 @@ fn sanitize_playlist_folder_name(raw: &str) -> String {
     let mut out: String = trimmed
         .chars()
         .map(|c| match c {
-            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
-            c if c.is_control() => '_',
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => ' ',
+            c if c.is_control() => ' ',
             c => c,
         })
         .collect();
     while out.ends_with('.') || out.ends_with(char::is_whitespace) {
+        if out.is_empty() { break; }
         out.pop();
     }
-    let out = out.trim_matches('_').trim();
+    let out = out.trim().to_string();
     if out.is_empty() {
         "playlist".to_string()
     } else {
@@ -799,6 +800,11 @@ async fn download_video(
     let probe = yt_dlp_single_json_simulate(Some(&app), &url, Some(&options)).await?;
     let filename_template_eff = yt_dlp_effective_filename_template(&probe, &options.filename_template);
 
+    // Ensure output directory exists before starting
+    if let Err(e) = std::fs::create_dir_all(&options.output_dir) {
+        return Err(format!("Failed to create output directory: {}", e));
+    }
+
     let mut args = vec![
         "-f".to_string(),
         options.format.clone(),
@@ -806,6 +812,10 @@ async fn download_video(
         options.output_dir.clone(),
         "-o".to_string(),
         filename_template_eff.clone(),
+        "--windows-filenames".to_string(),
+        "--no-restrict-filenames".to_string(),
+        "--trim-filenames".to_string(),
+        "200".to_string(),
         "--newline".to_string(),
         // Sidecar: write the metadata JSON (contains chapters, description, etc.)
         "--write-info-json".to_string(),
@@ -922,6 +932,9 @@ async fn download_video(
                 dl_opts_for_name.output_dir.clone(),
                 "-o".to_string(),
                 filename_for_probe,
+                "--windows-filenames".to_string(),
+                "--trim-filenames".to_string(),
+                "200".to_string(),
                 "--get-filename".to_string(),
             ];
             let _ = push_ytdlp_download_cookie_args(&app_handle, &mut get_name_args, &dl_opts_for_name);
@@ -979,6 +992,7 @@ pub struct MediaFile {
     /// Codec / bitrate string from yt-dlp `<stem>.info.json` beside the media file — indicative only (not decoded in-app).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub download_metadata_hint: Option<String>,
+    pub source_url: Option<String>,
 }
 
 /// One folder grouping direct media children (Yt-dlp-style playlist directory under the library root).
@@ -1010,12 +1024,23 @@ pub enum GalleryEntry {
 /// Direct children media only (same folder thumbnails / sidecars as historical `scan_gallery`).
 ///
 /// Nested subdirectories are deliberately ignored — only `GalleryEntry::Playlist` aggregates one level deep.
-fn scan_direct_media_children(dir_path: &std::path::Path) -> Result<Vec<MediaFile>, String> {
-    let mut sibling_paths: Vec<std::path::PathBuf> = std::fs::read_dir(dir_path)
-        .map_err(|e| e.to_string())?
+fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile> {
+    if depth > 5 {
+        return vec![];
+    }
+
+    let read_dir = match std::fs::read_dir(dir_path) {
+        Ok(rd) => rd,
+        Err(_) => return vec![],
+    };
+
+    let mut files = vec![];
+    let mut entries: Vec<std::path::PathBuf> = read_dir
         .filter_map(|e| e.ok().map(|e| e.path()))
         .collect();
-    sibling_paths.sort_by(|a, b| {
+
+    // Deterministic order for stable indices
+    entries.sort_by(|a, b| {
         a.file_name()
             .unwrap_or_default()
             .to_string_lossy()
@@ -1028,35 +1053,39 @@ fn scan_direct_media_children(dir_path: &std::path::Path) -> Result<Vec<MediaFil
             )
     });
 
-    let mut files = vec![];
-    for path in &sibling_paths {
-        if !path.is_file() {
+    for path in entries {
+        if path.is_dir() {
+            let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if !gallery_skip_subdirectory(fname) {
+                files.extend(scan_media_recursive(&path, depth + 1));
+            }
             continue;
         }
+
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
         if !is_media_ext(ext) {
             continue;
         }
 
-        let metadata = match std::fs::metadata(path) {
+        let metadata = match std::fs::metadata(&path) {
             Ok(m) => m,
             Err(_) => continue,
         };
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
         let parent = path.parent().unwrap_or(std::path::Path::new(""));
 
-        // --- Thumbnail discovery (in-memory scan; same folder as the video) ---
-        let thumbnail_path = sibling_paths
+        // --- Thumbnail discovery ---
+        // For performance in recursive mode, we check common sibling names
+        let thumbnail_path = ["jpg", "webp"]
             .iter()
-            .find(|p| {
-                let p_ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
-                (p_ext == "jpg" || p_ext == "webp")
-                    && p.file_name()
-                        .and_then(|s| s.to_str())
-                        .map(|n| n.starts_with(stem))
-                        .unwrap_or(false)
-            })
-            .map(|p| p.to_string_lossy().to_string());
+            .find_map(|&e| {
+                let p = parent.join(format!("{}.{}", stem, e));
+                if p.is_file() {
+                    Some(p.to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            });
 
         let ruforge_poster_path = {
             let p = parent.join(THUMB_DIR_NAME).join(stem).join(POSTER_FILE);
@@ -1067,20 +1096,18 @@ fn scan_direct_media_children(dir_path: &std::path::Path) -> Result<Vec<MediaFil
             }
         };
 
-        let subtitle_path = sibling_paths
-            .iter()
-            .find(|p| {
-                p.extension().and_then(|s| s.to_str()) == Some("vtt")
-                    && p.file_name()
-                        .and_then(|s| s.to_str())
-                        .map(|n| n.starts_with(stem))
-                        .unwrap_or(false)
-            })
-            .map(|p| p.to_string_lossy().to_string());
+        let subtitle_path = {
+            let p = parent.join(format!("{}.vtt", stem));
+            if p.is_file() {
+                Some(p.to_string_lossy().to_string())
+            } else {
+                None
+            }
+        };
 
         // --- yt-dlp sidecar: title, duration, chapters ---
         let info_json_path = parent.join(format!("{}.info.json", stem));
-        let (duration, chapters, metadata_title, download_metadata_hint) = if info_json_path.is_file() {
+        let (duration, chapters, metadata_title, download_metadata_hint, source_url) = if info_json_path.is_file() {
             std::fs::read_to_string(&info_json_path)
                 .ok()
                 .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
@@ -1107,11 +1134,12 @@ fn scan_direct_media_children(dir_path: &std::path::Path) -> Result<Vec<MediaFil
                         .filter(|s| !s.is_empty())
                         .map(String::from);
                     let download_metadata_hint = download_metadata_hint_from_ytdlp_info(&json);
-                    (duration, chapters, metadata_title, download_metadata_hint)
+                    let source_url = json["webpage_url"].as_str().map(String::from);
+                    (duration, chapters, metadata_title, download_metadata_hint, source_url)
                 })
-                .unwrap_or((0.0, None, None, None))
+                .unwrap_or((0.0, None, None, None, None))
         } else {
-            (0.0, None, None, None)
+            (0.0, None, None, None, None)
         };
 
         let display_name = metadata_title.unwrap_or_else(|| stem.to_string());
@@ -1132,9 +1160,17 @@ fn scan_direct_media_children(dir_path: &std::path::Path) -> Result<Vec<MediaFil
             subtitle_path,
             chapters,
             download_metadata_hint,
+            source_url,
         });
     }
-    Ok(files)
+    files
+}
+
+/// Helper for playlist creation (still shallow for aggregates).
+fn scan_direct_media_children(dir_path: &std::path::Path) -> Result<Vec<MediaFile>, String> {
+    Ok(scan_media_recursive(dir_path, 5)) // We reuse the logic but limit depth if needed, 
+                                          // but for actual playlists we usually want them shallow.
+                                          // However, to keep it simple and fix the bug, we'll let it be deep.
 }
 
 fn bitrate_kbps_from_ytdlp_value(v: Option<&serde_json::Value>) -> Option<u32> {
@@ -1216,12 +1252,22 @@ fn gallery_skip_subdirectory(folder_name: &str) -> bool {
 #[tauri::command]
 async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
     let dir_path = std::path::Path::new(&dir);
-    let mut children: Vec<std::path::PathBuf> = std::fs::read_dir(dir_path)
-        .map_err(|e| e.to_string())?
+    if !dir_path.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut out: Vec<GalleryEntry> = Vec::new();
+    let read_dir = match std::fs::read_dir(dir_path) {
+        Ok(rd) => rd,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    let mut entries: Vec<std::path::PathBuf> = read_dir
         .filter_map(|e| e.ok().map(|e| e.path()))
         .collect();
 
-    children.sort_by(|a, b| {
+    // Deterministic order
+    entries.sort_by(|a, b| {
         a.file_name()
             .unwrap_or_default()
             .to_string_lossy()
@@ -1234,53 +1280,120 @@ async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
             )
     });
 
-    let mut out: Vec<GalleryEntry> = Vec::new();
-
-    // Loose media: direct media files beside folders (still flat relative to `-P`).
-    let loose_media = scan_direct_media_children(dir_path)?;
-    for file in loose_media {
-        out.push(GalleryEntry::Media { file });
-    }
-
-    // One aggregate per immediate subfolder containing ≥1 direct media child; no duplicate loose rows.
-    for path in children.iter().filter(|p| p.is_dir()) {
-        let fname = match path.file_name().and_then(|n| n.to_str()) {
-            Some(s) => s,
-            None => continue,
-        };
+    for path in entries {
+        let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if gallery_skip_subdirectory(fname) {
             continue;
         }
 
-        let items = scan_direct_media_children(path)?;
-        if items.is_empty() {
-            continue;
-        }
+        if path.is_file() {
+            let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            if is_media_ext(ext) {
+                // This is loose media
+                let media = scan_media_file_direct(&path)?;
+                out.push(GalleryEntry::Media { file: media });
+            }
+        } else if path.is_dir() {
+            // This is a collection
+            let items = scan_media_recursive(&path, 0);
+            if items.is_empty() {
+                continue;
+            }
 
-        let combined_duration: f64 = items.iter().map(|m| m.duration).sum();
-        let folder_jpg = path.join("folder.jpg");
-        let stack_thumb = folder_jpg
-            .is_file()
-            .then(|| folder_jpg.to_string_lossy().to_string())
-            .or_else(|| {
-                items
-                    .iter()
-                    .find_map(|it| it.ruforge_poster_path.clone().or_else(|| it.thumbnail_path.clone()))
+            let combined_duration: f64 = items.iter().map(|m| m.duration).sum();
+            let folder_jpg = path.join("folder.jpg");
+            let stack_thumb = folder_jpg
+                .is_file()
+                .then(|| folder_jpg.to_string_lossy().to_string())
+                .or_else(|| {
+                    items
+                        .iter()
+                        .find_map(|it| it.ruforge_poster_path.clone().or_else(|| it.thumbnail_path.clone()))
+                });
+
+            out.push(GalleryEntry::Playlist {
+                playlist: PlaylistCollection {
+                    title: fname.to_string(),
+                    path: path.to_string_lossy().to_string(),
+                    item_count: items.len() as u32,
+                    combined_duration,
+                    stack_thumbnail_path: stack_thumb,
+                    items,
+                },
             });
-
-        out.push(GalleryEntry::Playlist {
-            playlist: PlaylistCollection {
-                title: fname.to_string(),
-                path: path.to_string_lossy().to_string(),
-                item_count: items.len() as u32,
-                combined_duration,
-                stack_thumbnail_path: stack_thumb,
-                items,
-            },
-        });
+        }
     }
 
     Ok(out)
+}
+
+/// Helper to scan a single media file without walking.
+fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
+    let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let parent = path.parent().unwrap_or(std::path::Path::new(""));
+
+    let thumbnail_path = ["jpg", "webp"]
+        .iter()
+        .find_map(|&e| {
+            let p = parent.join(format!("{}.{}", stem, e));
+            if p.is_file() { Some(p.to_string_lossy().to_string()) } else { None }
+        });
+
+    let ruforge_poster_path = {
+        let p = parent.join(THUMB_DIR_NAME).join(stem).join(POSTER_FILE);
+        if p.is_file() { Some(p.to_string_lossy().to_string()) } else { None }
+    };
+
+    let subtitle_path = {
+        let p = parent.join(format!("{}.vtt", stem));
+        if p.is_file() { Some(p.to_string_lossy().to_string()) } else { None }
+    };
+
+    let info_json_path = parent.join(format!("{}.info.json", stem));
+    let (duration, chapters, metadata_title, download_metadata_hint, source_url) = if info_json_path.is_file() {
+        std::fs::read_to_string(&info_json_path)
+            .ok()
+            .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+            .map(|json| {
+                let duration = json["duration"].as_f64()
+                    .or_else(|| json["duration"].as_u64().map(|u| u as f64))
+                    .unwrap_or(0.0);
+                let chapters = json["chapters"].as_array().map(|arr| {
+                    arr.iter().filter_map(|c| {
+                        Some(Chapter {
+                            title: c["title"].as_str().unwrap_or("Chapter").to_string(),
+                            start_time: c["start_time"].as_f64().unwrap_or(0.0),
+                            end_time: c["end_time"].as_f64().unwrap_or(0.0),
+                        })
+                    }).collect()
+                });
+                let metadata_title = json["title"].as_str().map(|s| s.trim().to_string());
+                let download_metadata_hint = download_metadata_hint_from_ytdlp_info(&json);
+                let source_url = json["webpage_url"].as_str().map(String::from);
+                (duration, chapters, metadata_title, download_metadata_hint, source_url)
+            })
+            .unwrap_or((0.0, None, None, None, None))
+    } else {
+        (0.0, None, None, None, None)
+    };
+
+    let display_name = metadata_title.unwrap_or_else(|| stem.to_string());
+    let created = metadata.created().map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs()).unwrap_or_default();
+
+    Ok(MediaFile {
+        name: display_name,
+        path: path.to_string_lossy().to_string(),
+        size: metadata.len(),
+        created,
+        duration,
+        thumbnail_path,
+        ruforge_poster_path,
+        subtitle_path,
+        chapters,
+        download_metadata_hint,
+        source_url,
+    })
 }
 #[tauri::command]
 fn update_tray_config(state: State<'_, AppConfig>, minimize: bool) {
@@ -1664,6 +1777,36 @@ async fn delete_media(video_path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn open_external_url(url: String) -> Result<(), String> {
+    // Check if it's a web URL first
+    if url.starts_with("http://") || url.starts_with("https://") {
+        return tauri_plugin_opener::open_path(&url, None::<&str>).map_err(|e| e.to_string());
+    }
+
+    // It's a local file. We want to force it to open in a browser.
+    // On Windows, the most reliable way to force a browser for a file:// URL 
+    // is to use the shell 'start' command or correctly formatted file:// URLs.
+    // However, filenames ending in dots (...) are technically illegal in Windows
+    // and cause os error 123 unless using long path syntax.
+    
+    let path = std::path::Path::new(&url);
+    if path.exists() {
+        // Use the canonical path to resolve any weirdness like trailing dots or relative segments
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let path_str = canonical.to_string_lossy();
+        
+        // Convert to file URL. file:///C:/path is standard.
+        // We use two slashes for localhost authority if needed, or three for direct.
+        let target = format!("file:///{}", path_str.replace("\\", "/").trim_start_matches("/"));
+        
+        tauri_plugin_opener::open_path(target, None::<&str>).map_err(|e| e.to_string())
+    } else {
+        // Fallback for non-existent paths or already formatted URLs
+        tauri_plugin_opener::open_path(url, None::<&str>).map_err(|e| e.to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -1781,7 +1924,8 @@ pub fn run() {
             set_hardware_acceleration_pref,
             get_hardware_acceleration_browser_args,
             open_windows_sound_settings,
-            probe_local_media_ffprobe
+            probe_local_media_ffprobe,
+            open_external_url
         ])
         .run(context)
         .expect("error while running tauri application");

@@ -37,10 +37,12 @@ const DownloadQueueItem = ({
 }) => {
   const isCompleted = currentIndex !== undefined && index < currentIndex;
   const isCurrent = currentIndex !== undefined && index === currentIndex;
+  const isPending = currentIndex !== undefined && index > currentIndex;
+  const opacityClass = isPending ? 'opacity-60' : 'opacity-100';
   const progress = isCompleted ? 100 : isCurrent ? percentage : 0;
 
   return (
-    <div className={`flex-shrink-0 relative w-64 aspect-video rounded-3xl overflow-hidden bg-stone-900 border border-white/5 shadow-2xl transition-all duration-500 ${isCurrent ? 'scale-105 ring-2 ring-[color-mix(in_srgb,var(--accent),transparent_50%)] z-10' : 'scale-100 opacity-60'}`}>
+    <div className={`flex-shrink-0 relative w-64 aspect-video rounded-3xl overflow-hidden bg-stone-900 border border-white/5 shadow-2xl transition-all duration-500 ${isCurrent ? 'scale-105 ring-2 ring-[color-mix(in_srgb,var(--accent),transparent_50%)] z-10' : `scale-100 ${opacityClass}`}`}>
         {/* Grayscale Base Layer */}
         <img 
           src={item.thumbnail} 

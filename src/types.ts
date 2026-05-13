@@ -9,6 +9,7 @@ export interface MediaFile {
   subtitlePath: string | null;
   chapters: Chapter[] | null;
   downloadMetadataHint: string | null;
+  sourceUrl: string | null;
 }
 
 export interface PlaylistCollection {

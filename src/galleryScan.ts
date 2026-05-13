@@ -18,8 +18,9 @@ export function mediaFileFromGalleryJson(o: Record<string, unknown>): MediaFile 
     thumbnailPath: null,
     ruforgePosterPath: null,
     subtitlePath: null,
-    chapters: null,
+    chapters: Array.isArray(o.chapters) ? (o.chapters as any) : null,
     downloadMetadataHint: null,
+    sourceUrl: typeof o.sourceUrl === "string" ? o.sourceUrl : null,
   };
 
   if (thumb != null && String(thumb) !== "") file.thumbnailPath = String(thumb);
