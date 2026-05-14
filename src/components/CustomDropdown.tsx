@@ -44,7 +44,7 @@ export const CustomDropdown = ({ value, onChange, options }: { value: string, on
                   type="button"
                   onClick={() => { onChange(opt.value); setIsOpen(false); }}
                   className={`w-full text-left px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b border-white/[0.02] last:border-0 ${
-                    value === opt.value ? 'text-amber-500' : 'text-stone-500 hover:text-stone-100 hover:bg-white/[0.02]'
+                    value === opt.value ? 'text-[color:var(--accent)]' : 'text-stone-500 hover:text-stone-100 hover:bg-white/[0.02]'
                   }`}
                 >
                   {opt.label}

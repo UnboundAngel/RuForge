@@ -3,24 +3,23 @@ import { motion, AnimatePresence } from "motion/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
 import { notifyWhenUnfocused } from "./systemNotify";
 import { check } from "@tauri-apps/plugin-updater";
-import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { Icon } from "@iconify/react";
 import logo from "./assets/neotubeIcon.png";
 import MiniPlayer from "./MiniPlayer";
 import { isAudioOnlyPath } from "./mediaKind";
 import { flattenGalleryScanToMediaFiles } from "./galleryScan";
 import { DownloaderView } from "./components/DownloaderView";
-import { PlayerView } from "./components/PlayerView";
+import { PlayerView, type PlayerViewHandle } from "./components/PlayerView";
 import { SettingsView } from "./components/SettingsView";
 import { MediaView } from "./components/MediaView";
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
-import { MediaFile, PlaylistCollection } from "./types";
+import { MediaFile } from "./types";
 import {
   Download,
   Settings,
@@ -33,7 +32,7 @@ import {
   Globe
 } from "lucide-react";
 
-type ActiveTab = "downloader" | "media" | "player" | "settings" | "explorer";
+import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
 
 const WindowControls = ({ onMiniPlayerToggle }: { onMiniPlayerToggle: () => void }) => {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -93,23 +92,17 @@ const WindowControls = ({ onMiniPlayerToggle }: { onMiniPlayerToggle: () => void
   );
 };
 
-const StorageWidget = ({
-  stats,
-  limitGB,
-  onAuthorizeCleanup,
-  variant,
-  isExpanded,
-}: {
-  stats: { total_bytes: number; file_count: number } | null;
-  limitGB: number;
-  onAuthorizeCleanup: () => void;
-  variant: "managed" | "folder";
-  isExpanded: boolean;
-}) => {
+const StorageWidget = () => {
+  const stats = useRuforgeStore((s) => s.storageStats);
+  const limitGB = useRuforgeStore((s) => s.settings.storageLimitGB);
+  const onAuthorizeCleanup = useRuforgeStore((s) => s.handleAuthorizeCleanup);
+  const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const isExpanded = useRuforgeStore((s) => s.isSidebarExpanded);
+
   if (!stats) return null;
 
   const usedGB = stats.total_bytes / (1024 * 1024 * 1024);
-  const isManaged = variant === "managed";
+  const isManaged = saveToInternal;
   const percentage = isManaged ? Math.min((usedGB / limitGB) * 100, 100) : Math.min(usedGB * 8, 100);
   const isFull = isManaged && usedGB >= limitGB;
   const isWarning = isManaged && usedGB >= limitGB * 0.8;
@@ -174,119 +167,64 @@ const StorageWidget = ({
 };
 
 function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("downloader");
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(() => {
-    return localStorage.getItem("ruforge-sidebar-expanded") !== "false";
-  });
-  const [saveToInternal, setSaveToInternal] = useState(() => {
-    return localStorage.getItem("ruforge-save-internal") !== "false";
-  });
-
-  const toggleSidebar = () => {
-    setIsSidebarExpanded(prev => {
-      const newState = !prev;
-      localStorage.setItem("ruforge-sidebar-expanded", newState.toString());
-      return newState;
-    });
-  };
-
-  const [settings, setSettings] = useState(() => {
-    const defaults = {
-      launchAtStartup: true,
-      minimizeToTray: true,
-      preferredQuality: '1080p (HD)',
-      accentColor: '#f59e0b',
-      gridDensity: 'Default',
-      hardwareAcceleration: true,
-      storageLimitGB: 50,
-      browserContext: 'chrome',
-      cookieFile: '',
-      audioAutoAdvanceFolder: true,
-      audioPrefetchNext: true,
-    };
-    try {
-      const saved = localStorage.getItem("ruforge-settings");
-      if (!saved) return defaults;
-      const parsed = JSON.parse(saved);
-      if (typeof parsed !== "object" || parsed === null) return defaults;
-      return { ...defaults, ...parsed };
-    } catch {
-      return defaults;
-    }
-  });
-
-  const updateSetting = useCallback(async (key: string, value: any) => {
-    setSettings((prev: any) => {
-      const newSettings = { ...prev, [key]: value };
-      localStorage.setItem('ruforge-settings', JSON.stringify(newSettings));
-      return newSettings;
-    });
-
-    if (key === 'minimizeToTray') {
-      await invoke('update_tray_config', { minimize: value });
-    }
-
-    if (key === 'launchAtStartup') {
-      try {
-        if (value) await enable();
-        else await disable();
-      } catch (e) {
-        console.error('Failed to update autostart:', e);
-      }
-    }
-
-    if (key === "hardwareAcceleration") {
-      try {
-        await invoke("set_hardware_acceleration_pref", { hardwareAcceleration: value });
-        await relaunch();
-      } catch (e) {
-        console.error("Failed to update hardware acceleration preference:", e);
-      }
-    }
-  }, []);
-
-  const handleSetSaveToInternal = (val: boolean) => {
-    setSaveToInternal(val);
-    localStorage.setItem("ruforge-save-internal", val.toString());
-  };
-
-  const [settingsTab, setSettingsTab] = useState<"general" | "downloads" | "appearance" | "advanced">("general");
-  const [_updateAvailable, setUpdateAvailable] = useState(false);
-  const [playingFile, setPlayingFile] = useState<MediaFile | null>(null);
-
-  const [selectedPlaylist, setSelectedPlaylist] = useState<PlaylistCollection | null>(null);
-  const [folderAudioPlaylist, setFolderAudioPlaylist] = useState<MediaFile[]>([]);
+  const activeTab = useRuforgeStore((s) => s.activeTab);
+  const setActiveTab = useRuforgeStore((s) => s.setActiveTab);
+  const isSidebarExpanded = useRuforgeStore((s) => s.isSidebarExpanded);
+  const toggleSidebar = useRuforgeStore((s) => s.toggleSidebar);
+  const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const settings = useRuforgeStore((s) => s.settings);
+  const settingsTab = useRuforgeStore((s) => s.settingsTab);
+  const setSettingsTab = useRuforgeStore((s) => s.setSettingsTab);
+  const galleryFilter = useRuforgeStore((s) => s.galleryFilter);
+  const setGalleryFilter = useRuforgeStore((s) => s.setGalleryFilter);
+  const playingFile = useRuforgeStore((s) => s.playingFile);
+  const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
+  const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
+  const selectedPlaylist = useRuforgeStore((s) => s.selectedPlaylist);
+  const setSelectedPlaylist = useRuforgeStore((s) => s.setSelectedPlaylist);
   const [isMini, setIsMini] = useState(false);
-  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const [searchValue, setSearchValue] = useState("");
+  const isSearchExpanded = useRuforgeStore((s) => s.isSearchExpanded);
+  const setIsSearchExpanded = useRuforgeStore((s) => s.setIsSearchExpanded);
+  const searchValue = useRuforgeStore((s) => s.searchValue);
+  const setSearchValue = useRuforgeStore((s) => s.setSearchValue);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [notifications, setNotifications] = useState<{ id: number; message: string; type?: "info" | "update"; updateObj?: any }[]>([]);
-  const [storageStats, setStorageStats] = useState<{ total_bytes: number; file_count: number } | null>(null);
+  const notifications = useRuforgeStore((s) => s.notifications);
+  const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
+  const notify = useRuforgeStore((s) => s.notify);
   const explorerContainerRef = useRef<HTMLDivElement>(null);
   const explorerWebviewRef = useRef<Webview | null>(null);
+  const playerViewRef = useRef<PlayerViewHandle>(null);
+  const refreshStorageStats = useRuforgeStore((s) => s.refreshStorageStats);
+  const outputDir = useRuforgeStore((s) => s.outputDir);
+  const storageStats = useRuforgeStore((s) => s.storageStats);
+  const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
+  const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
+  const setSidebarCollapsedByResize = useRuforgeStore((s) => s.setSidebarCollapsedByResize);
 
   useEffect(() => {
     invoke<boolean>("get_hardware_acceleration_pref")
       .then((hw) => {
-        setSettings((prev: any) => {
-          if (prev.hardwareAcceleration === hw) return prev;
-          const merged = { ...prev, hardwareAcceleration: hw };
-          localStorage.setItem("ruforge-settings", JSON.stringify(merged));
-          return merged;
-        });
+        useRuforgeStore.getState().mergeHardwareAccelerationFromBackend(hw);
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    syncRuforgeAccentCss(typeof settings.accentColor === "string" ? settings.accentColor : "#f59e0b");
+    syncRuforgeAccentCss(typeof settings.accentColor === "string" ? settings.accentColor : "#EDCF9B");
   }, [settings.accentColor]);
+
+  useEffect(() => {
+    void refreshStorageStats();
+  }, [refreshStorageStats, outputDir, saveToInternal]);
 
   const addLog = useCallback((msg: string) => {
     console.log("[Explorer Debug]", msg);
   }, []);
 
-  // Manage Embedded Explorer Webview
+  // Manage Embedded Explorer Webview.
+  // Deps: `activeTab`, `addLog` only — not `settings.accentColor`: this effect owns the 1s poll
+  // and show/position/hide webview; accent is baked in `tauri://created` only (same as before
+  // adding accent to deps would re-run the whole effect on every accent change).
   useEffect(() => {
     let active = true;
     let interval: number;
@@ -337,16 +275,20 @@ function App() {
               addLog("Webview successfully created!");
               explorerWebviewRef.current = webview;
               
+              const accent = typeof settings.accentColor === "string" ? settings.accentColor : "#EDCF9B";
+              const rgb = syncRuforgeAccentCss(accent, true); // Get RGB for rgba borders
+              const borderRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)` : 'rgba(237, 207, 155, 0.2)';
+              const glowRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : 'rgba(237, 207, 155, 0.3)';
+
               invoke("eval_in_webview", {
                 label: 'explorer-view',
                 script: `
                   (function() {
                     console.log('NeoTube Explorer Active');
-                    
-                    const style = document.createElement('style');
-                    style.innerHTML = '#neotube-dl-btn { position: fixed; top: 24px; right: 24px; z-index: 2147483647; background: rgba(29, 22, 19, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 999px; padding: 14px 28px; display: flex; align-items: center; gap: 18px; cursor: pointer; transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); box-shadow: 0 15px 45px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1); opacity: 0; transform: translateY(-20px) scale(0.9); pointer-events: none; user-select: none; font-family: system-ui, -apple-system, sans-serif; } #neotube-dl-btn.visible { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; } #neotube-dl-btn:hover { background: #f59e0b; border-color: #f59e0b; transform: translateY(-2px) scale(1.02); box-shadow: 0 20px 50px rgba(245, 158, 11, 0.3); } #neotube-dl-btn .text-group { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; } #neotube-dl-btn .main-text { color: #f59e0b; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; transition: color 0.3s; } #neotube-dl-btn .sub-text { color: rgba(255, 255, 255, 0.4); font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; transition: color 0.3s; } #neotube-dl-btn .icon { color: #f59e0b; width: 22px; height: 22px; transition: transform 0.3s, color 0.3s; } #neotube-dl-btn:hover .main-text { color: #1d1613; } #neotube-dl-btn:hover .sub-text { color: rgba(29, 22, 19, 0.6); } #neotube-dl-btn:hover .icon { color: #1d1613; transform: translateY(2px); }';
-                    document.head.appendChild(style);
 
+                    const style = document.createElement('style');
+                    style.innerHTML = '#neotube-dl-btn { position: fixed; top: 24px; right: 24px; z-index: 2147483647; background: rgba(29, 22, 19, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid ${borderRgba}; border-radius: 999px; padding: 14px 28px; display: flex; align-items: center; gap: 18px; cursor: pointer; transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); box-shadow: 0 15px 45px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1); opacity: 0; transform: translateY(-20px) scale(0.9); pointer-events: none; user-select: none; font-family: system-ui, -apple-system, sans-serif; } #neotube-dl-btn.visible { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; } #neotube-dl-btn:hover { background: ${accent}; border-color: ${accent}; transform: translateY(-2px) scale(1.02); box-shadow: 0 20px 50px ${glowRgba}; } #neotube-dl-btn .text-group { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; } #neotube-dl-btn .main-text { color: ${accent}; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; transition: color 0.3s; } #neotube-dl-btn .sub-text { color: rgba(255, 255, 255, 0.4); font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; transition: color 0.3s; } #neotube-dl-btn .icon { color: ${accent}; width: 22px; height: 22px; transition: transform 0.3s, color 0.3s; } #neotube-dl-btn:hover .main-text { color: #1d1613; } #neotube-dl-btn:hover .sub-text { color: rgba(29, 22, 19, 0.6); } #neotube-dl-btn:hover .icon { color: #1d1613; transform: translateY(2px); }';
+                    document.head.appendChild(style);
                     const btn = document.createElement('div');
                     btn.id = 'neotube-dl-btn';
                     btn.innerHTML = '<div class="text-group"><span class="main-text">Source Found</span><span class="sub-text">Direct Download</span></div><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
@@ -415,63 +357,11 @@ function App() {
     };
   }, [activeTab, addLog]);
 
-  const [outputDir, setOutputDirState] = useState(() => {
-    return localStorage.getItem("ruforge-output-dir") || "C:\\Downloads";
-  });
-
-  const ruforgeInternalDir = "C:\\RuForge\\Media";
-
-  const refreshStorageStats = useCallback(async () => {
-    try {
-      const dir = saveToInternal ? ruforgeInternalDir : outputDir;
-      const stats = await invoke<any>("get_storage_stats", { dir });
-      setStorageStats(stats);
-    } catch (e) {
-      console.error("Failed to get storage stats", e);
-    }
-  }, [saveToInternal, outputDir]);
-
-  useEffect(() => {
-    refreshStorageStats();
-  }, [refreshStorageStats]);
-
-  const handleAuthorizeCleanup = async () => {
-    if (!saveToInternal) return;
-    try {
-      const targetFree = 2 * 1024 * 1024 * 1024; // Free 2GB
-      const deleted = await invoke<number>("authorize_cleanup", { 
-        dir: ruforgeInternalDir, 
-        target_free_bytes: targetFree 
-      });
-      notify(`Freed ${(deleted / (1024 * 1024 * 1024)).toFixed(1)}GB.`);
-      refreshStorageStats();
-    } catch (e) {
-      console.error("Cleanup failed", e);
-      notify("Cleanup failed.");
-    }
-  };
-
-  const setOutputDir = (dir: string) => {
-    setOutputDirState(dir);
-    localStorage.setItem("ruforge-output-dir", dir);
-  };
-
-  const notify = useCallback((message: string, type: "info" | "update" = "info", updateObj?: any) => {
-    const id = Date.now();
-    setNotifications((prev) => [...prev, { id, message, type, updateObj }]);
-    if (type === "info") {
-      setTimeout(() => {
-        setNotifications((prev) => prev.filter((n) => n.id !== id));
-      }, 4000);
-    }
-  }, []);
-
   useEffect(() => {
     const checkUpdate = async () => {
       try {
         const update = await check();
         if (update) {
-          setUpdateAvailable(true);
           notify(`Version ${update.version} is available!`, "update", update);
         }
       } catch (e) {
@@ -485,33 +375,13 @@ function App() {
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 1100) {
-        setIsSidebarExpanded(false);
+        setSidebarCollapsedByResize();
       }
     };
     window.addEventListener("resize", handleResize);
     handleResize();
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  // Sync settings with backend on mount
-  useEffect(() => {
-    const syncSettings = async () => {
-      // Sync tray
-      await invoke('update_tray_config', { minimize: settings.minimizeToTray });
-      
-      // Sync autostart
-      try {
-        const enabled = await isEnabled();
-        if (enabled !== settings.launchAtStartup) {
-          if (settings.launchAtStartup) await enable();
-          else await disable();
-        }
-      } catch (e) {
-        console.error('Autostart sync failed:', e);
-      }
-    };
-    syncSettings();
-  }, []);
+  }, [setSidebarCollapsedByResize]);
 
   // Detect mini player window
   useEffect(() => {
@@ -537,20 +407,29 @@ function App() {
   useEffect(() => {
     const unlisten = listen<MediaFile>("play-media", (event) => {
       const file = event.payload;
-      setPlayingFile(file);
-      emit("stop-playback", "main-app");
-      notify(`Now playing: ${file.name}`);
-      setActiveTab("player");
+      const st = useRuforgeStore.getState();
+      st.setPlayingFile(file);
+      void emit("stop-playback", "main-app");
+      st.notify(`Now playing: ${file.name}`);
+      st.setActiveTab("player");
     });
 
     const unlistenStop = listen<string>("stop-playback", (event) => {
-      if (event.payload !== "main-app") {
-        setPlayingFile(null);
+      if (event.payload === "main-app") return;
+      // Mini claims playback: clear file and leave the player tab in one update so we never sit on
+      // `activeTab === "player"` with a null `playingFile` (Zustand can re-render PlayerView before React commits removal).
+      if (event.payload === "mini-player") {
+        useRuforgeStore.setState((s) => ({
+          playingFile: null,
+          activeTab: s.activeTab === "player" ? "media" : s.activeTab,
+        }));
+        return;
       }
+      useRuforgeStore.getState().stopPlayback();
     });
 
     const unlistenManualDownload = listen<string>("manual-download-trigger", () => {
-      setActiveTab("downloader");
+      useRuforgeStore.getState().setActiveTab("downloader");
     });
 
     return () => {
@@ -558,20 +437,26 @@ function App() {
       unlistenStop.then((f) => f());
       unlistenManualDownload.then((f) => f());
     };
-  }, [notify]);
+  }, []);
 
   // Send-to-main handoff from miniplayer
   useEffect(() => {
     const unlistenHandoff = listen<MediaFile>("send-to-main", async (event) => {
-      await getCurrentWindow().setFocus();
-      setPlayingFile(event.payload);
-      setActiveTab("player");
-      notify(`Now playing: ${event.payload.name}`);
+      const st = useRuforgeStore.getState();
+      st.setPlayingFile(event.payload);
+      st.setActiveTab("player");
+      st.notify(`Now playing: ${event.payload.name}`);
+      const focusMain = async () => {
+        const main = await WebviewWindow.getByLabel("main");
+        await main?.setFocus().catch(() => {});
+      };
+      await focusMain();
+      window.setTimeout(() => void focusMain(), 120);
     });
     return () => {
       unlistenHandoff.then((f) => f());
     };
-  }, [notify]);
+  }, []);
 
   useEffect(() => {
     let cancel = false;
@@ -609,84 +494,12 @@ function App() {
     };
   }, [playingFile?.path]); // Depend on path to trigger on song change, but we check isAlreadyQueued inside
 
-  const handlePlayFolderNeighbor = useCallback((f: MediaFile) => {
-    setPlayingFile(f);
-  }, []);
-
-  const [lastExplorerUrl, setLastExplorerUrl] = useState("https://www.youtube.com");
-
   useEffect(() => {
     const unlisten = listen<string>("explorer-url", (event) => {
       setLastExplorerUrl(event.payload);
     });
     return () => { unlisten.then(f => f()); };
   }, []);
-
-  const handlePopOut = async () => {
-    try {
-      const fileToHandoff = playingFile;
-      const wasInPlayer = activeTab === "player" && fileToHandoff;
-
-      await invoke("open_mini_player");
-      
-      if (wasInPlayer) {
-        // Try immediate emit for existing window
-        emit("play-in-mini", fileToHandoff);
-        
-        // Setup handshake for newly created window
-        let unlistenFn: (() => void) | null = null;
-        listen("mini-player-ready", (_event) => {
-          emit("play-in-mini", fileToHandoff);
-          if (unlistenFn) {
-            unlistenFn();
-            unlistenFn = null;
-          }
-        }).then(f => {
-          unlistenFn = f;
-        });
-        
-        // Cleanup listener after timeout if it never fired
-        setTimeout(() => {
-          if (unlistenFn) {
-            unlistenFn();
-            unlistenFn = null;
-          }
-        }, 5000);
-
-        setPlayingFile(null);
-        setActiveTab("media");
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handlePlayFile = (file: MediaFile) => {
-    setPlayingFile(file);
-    setActiveTab("player");
-    emit("stop-playback", "main-app");
-    // Only notify if we weren't already playing it
-    if (playingFile?.path !== file.path) {
-      notify(`Now playing: ${file.name}`);
-    }
-  };
-
-  const handlePlayPlaylist = (files: MediaFile[], shuffle = false) => {
-    if (files.length === 0) return;
-    
-    let queue = [...files];
-    if (shuffle) {
-      for (let i = queue.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [queue[i], queue[j]] = [queue[j], queue[i]];
-      }
-    }
-
-    setFolderAudioPlaylist(queue);
-    setPlayingFile(queue[0]);
-    setActiveTab("player");
-    notify(shuffle ? `Shuffling ${files.length} items` : `Playing ${files.length} items`);
-  };
 
   if (isMini) return <MiniPlayer />;
 
@@ -701,7 +514,15 @@ function App() {
     <div className="h-screen w-screen bg-[#271C18] text-stone-50 font-sans flex overflow-hidden select-none relative">
       
       {/* Window Controls */}
-      <WindowControls onMiniPlayerToggle={handlePopOut} />
+      <WindowControls
+        onMiniPlayerToggle={() =>
+          void useRuforgeStore.getState().handlePopOut(
+            useRuforgeStore.getState().activeTab === "player"
+              ? playerViewRef.current?.getCurrentTime() ?? 0
+              : undefined,
+          )
+        }
+      />
 
       {/* Global Drag Region - Top strip except controls area */}
       <div className="fixed top-0 left-0 right-[200px] h-10 z-[50]" data-tauri-drag-region />
@@ -766,13 +587,7 @@ function App() {
         </nav>
 
         {/* Storage Manager */}
-        <StorageWidget 
-          stats={storageStats} 
-          limitGB={settings.storageLimitGB} 
-          onAuthorizeCleanup={handleAuthorizeCleanup}
-          variant={saveToInternal ? "managed" : "folder"}
-          isExpanded={isSidebarExpanded}
-        />
+        <StorageWidget />
 
         {/* Sidebar Toggle at Bottom */}
         <div className="p-4 mt-auto">
@@ -807,10 +622,11 @@ function App() {
       {/* ── Right Column ────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 pt-[40px] relative z-10">
 
-        {/* Settings tab strip */}
-        <AnimatePresence>
-          {activeTab === "settings" && (
+        {/* Settings / Gallery tab strip */}
+        <AnimatePresence mode="wait">
+          {activeTab === "settings" ? (
             <motion.div
+              key="settings-tabs"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -846,7 +662,46 @@ function App() {
                 );
               })}
             </motion.div>
-          )}
+          ) : (activeTab === "media" && !selectedPlaylist) ? (
+            <motion.div
+              key="gallery-tabs"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="absolute left-6 top-0 z-20 flex items-start h-[80px] pointer-events-none"
+            >
+              {(['all', 'in-progress', 'watched'] as const).map((t) => {
+                const isActive = galleryFilter === t;
+                const label = t === 'all' ? 'All' : t === 'in-progress' ? 'In Progress' : 'Watched';
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setGalleryFilter(t)}
+                    className="relative flex h-[80px] px-6 items-end pb-2 justify-center cursor-pointer pointer-events-auto group/tab"
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="galleryTabShape"
+                        className="absolute inset-0 bg-[#271C18] rounded-b-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.5)] z-0"
+                        style={{ clipPath: "inset(40px -100px -100px -100px)" }}
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                      >
+                        <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
+                        </div>
+                        <div className="absolute right-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
+                        </div>
+                      </motion.div>
+                    )}
+                    <span className={`font-black text-[10px] uppercase tracking-[0.2em] transition-colors relative z-10 ${isActive ? "text-[color:var(--accent)]" : "text-stone-500 group-hover/tab:text-stone-300"}`}>
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
+            </motion.div>
+          ) : null}
         </AnimatePresence>
 
         {/* Explorer bulge */}
@@ -954,11 +809,7 @@ function App() {
               {activeTab === "downloader" && (
                 <DownloaderView
                   key="downloader"
-                  outputDir={outputDir}
-                  internalDir={ruforgeInternalDir}
-                  saveToInternal={saveToInternal}
-                  settings={settings}
-                  updateSetting={updateSetting}
+                  internalDir={RUFORGE_INTERNAL_DIR}
                   storageFull={saveToInternal && (storageStats ? (storageStats.total_bytes / (1024 * 1024 * 1024)) >= settings.storageLimitGB : false)}
                   onDownloadSuccess={() => {
                     notify("Complete");
@@ -966,7 +817,7 @@ function App() {
                       title: "RuForge",
                       body: "Download finished — your file is ready.",
                     });
-                    refreshStorageStats();
+                    void refreshStorageStats();
                     setActiveTab("media");
                   }}
                   onDownloadError={(err) => {
@@ -993,45 +844,23 @@ function App() {
                     key={`playlist-${selectedPlaylist.path}`}
                     playlist={selectedPlaylist}
                     onBack={() => setSelectedPlaylist(null)}
-                    onPlay={handlePlayFile}
-                    onPlayPlaylist={handlePlayPlaylist}
                   />
                 ) : (
                   <MediaView 
                     key="media" 
-                    outputDir={outputDir} 
-                    internalDir={ruforgeInternalDir}
-                    saveToInternal={saveToInternal}
-                    gridDensity={settings.gridDensity}
-                    searchQuery={searchValue}
-                    onPlay={handlePlayFile} 
                     onPlaylistClick={(p) => setSelectedPlaylist(p)}
-                    onNotify={notify} 
                   />
                 )
               )}
               {activeTab === "player" && playingFile && (
                 <PlayerView
+                  ref={playerViewRef}
                   key={`player-${playingFile.path}`}
-                  file={playingFile}
-                  folderAudioPlaylist={folderAudioPlaylist}
-                  onPlayFolderAudioNeighbor={handlePlayFolderNeighbor}
                   onBack={() => setActiveTab("media")}
-                  onMiniPlayerToggle={handlePopOut}
                 />
               )}
               {activeTab === "settings" && (
-                <SettingsView
-                  key="settings"
-                  activeTab={settingsTab}
-                  outputDir={outputDir}
-                  saveToInternal={saveToInternal}
-                  settings={settings}
-                  updateSetting={updateSetting}
-                  onSetSaveToInternal={handleSetSaveToInternal}
-                  onOutputDirChange={setOutputDir}
-                  onNotify={notify}
-                />
+                <SettingsView key="settings" />
               )}
             </AnimatePresence>
           </main>
@@ -1045,7 +874,7 @@ function App() {
                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className={`${n.type === 'update' ? 'bg-[#f59e0b] text-[#1d1613]' : 'bg-[#271C18] text-stone-50'} border border-stone-50/10 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto min-w-[280px]`}
+                  className={`${n.type === 'update' ? 'bg-[color:var(--accent)] text-[#1d1613]' : 'bg-[#271C18] text-stone-50'} border border-stone-50/10 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto min-w-[280px]`}
                 >
                   {n.type === 'update' ? (
                     <Download className="w-5 h-5 flex-shrink-0" />
@@ -1062,13 +891,13 @@ function App() {
                         onClick={async () => {
                           try {
                             notify("Downloading update...");
-                            await n.updateObj.downloadAndInstall();
+                            await n.updateObj?.downloadAndInstall();
                           } catch (e) {
                             console.error(e);
                             notify("Update failed");
                           }
                         }}
-                        className="mt-1.5 text-[10px] font-black uppercase tracking-widest bg-[#1d1613] text-[#f59e0b] px-3 py-1.5 rounded-lg w-fit hover:bg-black/80 transition-colors"
+                        className="mt-1.5 text-[10px] font-black uppercase tracking-widest bg-[#1d1613] text-[color:var(--accent)] px-3 py-1.5 rounded-lg w-fit hover:bg-black/80 transition-colors"
                       >
                         Update Now
                       </button>
@@ -1076,7 +905,7 @@ function App() {
                   </div>
 
                   <button 
-                    onClick={() => setNotifications((p) => p.filter((x) => x.id !== n.id))} 
+                    onClick={() => dismissNotification(n.id)} 
                     className={`${n.type === 'update' ? 'text-[#1d1613]/50 hover:text-[#1d1613]' : 'text-stone-500 hover:text-stone-300'} transition-colors ml-auto p-1`}
                   >
                     <X size={14} />

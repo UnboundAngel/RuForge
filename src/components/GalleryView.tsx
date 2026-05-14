@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { PlaySquare, History, Loader2, Play, HardDrive, Clock, Video, Volume2, VolumeX, Layers } from "lucide-react";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
+import { getPlaybackThumbnailBar } from "../playbackStorage";
 
 const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection, onClick: () => void }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -35,9 +36,9 @@ const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-          <div className="absolute top-4 left-4 px-3 py-1.5 bg-amber-500 rounded-full flex items-center gap-2 shadow-2xl z-20">
-            <Layers size={12} className="text-amber-950" />
-            <span className="text-[10px] font-black text-amber-950 uppercase tracking-widest">{playlist.itemCount} Items</span>
+          <div className="absolute top-4 left-4 px-3 py-1.5 bg-[color:var(--accent)] rounded-full flex items-center gap-2 shadow-2xl z-20">
+            <Layers size={12} className="text-[#1d1613]" />
+            <span className="text-[10px] font-black text-[#1d1613] uppercase tracking-widest">{playlist.itemCount} Videos</span>
           </div>
           <div className="absolute inset-0 flex items-center justify-center">
              <div className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 transition-all duration-500">
@@ -46,8 +47,7 @@ const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection
           </div>
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-8 space-y-2 bg-gradient-to-t from-black to-transparent z-10">
-          <h3 className="font-black truncate text-amber-50 leading-tight text-base tracking-tight">{playlist.title}</h3>
-          <p className="text-[10px] font-black text-amber-500/60 uppercase tracking-[0.2em]">Collection</p>
+          <h3 className="font-black truncate text-stone-50 leading-tight text-base tracking-tight">{playlist.title}</h3>
         </div>
       </div>
     </motion.div>
@@ -58,19 +58,25 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
   const [loading, setLoading] = useState(true);
   const [hoveredFile, setHoveredFile] = useState<string | null>(null);
   const [previewMuted, setPreviewMuted] = useState(true);
+  const posterBackfillEpochRef = useRef(0);
 
   const loadFiles = async () => {
+    const posterEpoch = ++posterBackfillEpochRef.current;
     setLoading(true);
     try {
       const data = await invoke<GalleryEntry[]>("scan_gallery", { dir: outputDir });
+      if (posterBackfillEpochRef.current !== posterEpoch) return;
       setEntries(data);
       
       const mediaFiles = data.flatMap(e => e.kind === 'media' ? [e as MediaFile] : (e as PlaylistCollection).items);
       if (filesMissingPoster(mediaFiles).length > 0) {
         void (async () => {
           await ensurePostersForFiles(mediaFiles);
+          if (posterBackfillEpochRef.current !== posterEpoch) return;
           try {
-            setEntries(await invoke<GalleryEntry[]>("scan_gallery", { dir: outputDir }));
+            const refreshed = await invoke<GalleryEntry[]>("scan_gallery", { dir: outputDir });
+            if (posterBackfillEpochRef.current !== posterEpoch) return;
+            setEntries(refreshed);
           } catch (e) { console.error(e); }
         })();
       }
@@ -142,12 +148,12 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
     >
       <div className="flex items-center justify-between">
         <header className="space-y-2">
-          <h1 className="text-4xl font-black tracking-tight text-amber-50">Library</h1>
+          <h1 className="text-4xl font-black tracking-tight text-stone-50">Library</h1>
           <p className="text-stone-400 font-medium">Your collection of offline media.</p>
         </header>
         <button 
           onClick={loadFiles}
-          className="p-4 glass hover:bg-white/5 rounded-2xl transition-all text-amber-200/50 hover:text-amber-400 border border-white/5 active:scale-95"
+          className="p-4 glass hover:bg-white/5 rounded-2xl transition-all text-[color:var(--accent)] opacity-50 hover:opacity-100 border border-white/5 active:scale-95"
         >
           <History size={20} />
         </button>
@@ -155,7 +161,7 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
       
       {loading ? (
         <div className="flex justify-center py-40">
-          <Loader2 className="animate-spin text-amber-600/20" size={60} />
+          <Loader2 className="animate-spin text-[color:var(--accent)] opacity-20" size={60} />
         </div>
       ) : entries.length === 0 ? (
         <div className="glass aspect-video rounded-[48px] flex flex-col items-center justify-center text-stone-600 space-y-8 border-dashed border-2 border-white/5">
@@ -167,12 +173,12 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
           {Object.entries(groupedEntries).map(([dateLabel, groupEntries]) => (
             <section key={dateLabel} className="space-y-8">
               <div className="flex items-center space-x-6">
-                <h2 className="text-xl font-black text-amber-200/80 tracking-widest uppercase flex items-center space-x-3">
-                  <span className="w-8 h-[2px] bg-amber-500/20 rounded-full" />
+                <h2 className="text-xl font-black text-[color:var(--accent)] opacity-80 tracking-widest uppercase flex items-center space-x-3">
+                  <span className="w-8 h-[2px] bg-[color:var(--accent)] opacity-20 rounded-full" />
                   <span>{dateLabel}</span>
                 </h2>
                 <div className="h-[1px] flex-1 bg-gradient-to-r from-white/5 to-transparent" />
-                <span className="text-[10px] font-black text-stone-500 uppercase tracking-widest">{groupEntries.length} {groupEntries.length === 1 ? 'item' : 'items'}</span>
+                <span className="text-[10px] font-black text-stone-500 uppercase tracking-widest">{groupEntries.length} {groupEntries.length === 1 ? 'video' : 'videos'}</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
@@ -188,7 +194,7 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
                       key={file.path}
                     whileHover={{ y: -8, scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="glass rounded-[40px] overflow-hidden group cursor-pointer transition-all shadow-2xl hover:shadow-amber-900/10"
+                    className="glass rounded-[40px] overflow-hidden group cursor-pointer transition-all shadow-2xl hover:shadow-black/10"
                     onMouseEnter={() => setHoveredFile(file.path)}
                     onMouseLeave={() => setHoveredFile(null)}
                     onClick={async () => {
@@ -240,23 +246,36 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
                         </div>
                       )}
 
+                      {(() => {
+                        const bar = getPlaybackThumbnailBar(file.path, file.duration);
+                        if (!bar.show) return null;
+                        return (
+                          <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20 z-30 overflow-hidden">
+                            <div
+                              className={`h-full bg-[color:var(--accent)] shadow-[0_0_12px_var(--accent)] ${bar.completed ? "opacity-90" : ""}`}
+                              style={{ width: `${bar.widthPct}%` }}
+                            />
+                          </div>
+                        );
+                      })()}
+
                       <div className="absolute inset-0 flex items-center justify-center">
-                         <div className="w-16 h-16 rounded-full bg-amber-500 text-amber-950 flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 transition-all duration-500">
+                         <div className="w-16 h-16 rounded-full bg-[color:var(--accent)] text-[#1d1613] flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 transition-all duration-500">
                             <Play size={24} fill="currentColor" />
                          </div>
                       </div>
                     </div>
                     <div className="p-8 space-y-5 bg-stone-900/10 relative z-10">
-                      <h3 className="font-black truncate text-amber-50 leading-tight text-sm tracking-tight">
+                      <h3 className="font-black truncate text-stone-50 leading-tight text-sm tracking-tight">
                         {file.name.replace(/\.[^/.]+$/, "")}
                       </h3>
                       <div className="flex items-center justify-between text-[10px] text-stone-500 font-black uppercase tracking-[0.2em]">
                         <div className="flex items-center space-x-2">
-                          <HardDrive size={12} className="text-amber-500/30" />
+                          <HardDrive size={12} className="text-[color:var(--accent)] opacity-30" />
                           <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Clock size={12} className="text-amber-500/30" />
+                          <Clock size={12} className="text-[color:var(--accent)] opacity-30" />
                           <span>{new Date(file.created * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                       </div>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
+import { useRuforgeStore } from '../store/ruforgeStore';
 
 interface SettingItemProps {
   icon: React.ElementType;
@@ -124,33 +125,32 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, title, descriptio
   </div>
 );
 
-export const SettingsView: React.FC<{ 
-  activeTab: string, 
-  outputDir: string,
-  saveToInternal: boolean,
-  settings: any,
-  updateSetting: (key: string, value: any) => void,
-  onSetSaveToInternal: (val: boolean) => void,
-  onOutputDirChange: (dir: string) => void,
-  onNotify: (msg: string) => void
-}> = ({ activeTab, outputDir, saveToInternal, settings, updateSetting, onSetSaveToInternal, onOutputDirChange, onNotify }) => {
+export const SettingsView: React.FC = () => {
+  const activeTab = useRuforgeStore((s) => s.settingsTab);
+  const outputDir = useRuforgeStore((s) => s.outputDir);
+  const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const settings = useRuforgeStore((s) => s.settings);
+  const updateSetting = useRuforgeStore((s) => s.updateSetting);
+  const handleSetSaveToInternal = useRuforgeStore((s) => s.handleSetSaveToInternal);
+  const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
+  const notify = useRuforgeStore((s) => s.notify);
 
   const accentInputRef = useRef<HTMLInputElement>(null);
 
   const handlePickDirectory = async () => {
     const selected = await open({ directory: true, multiple: false });
     if (selected && typeof selected === 'string') {
-      onOutputDirChange(selected);
+      setOutputDir(selected);
     }
   };
 
   const handleClearCache = async () => {
     try {
       const n = await invoke<number>("clear_ruforge_cache");
-      onNotify(`Cleared ${n} cached file(s).`);
+      notify(`Cleared ${n} cached file(s).`);
     } catch (e) {
       console.error(e);
-      onNotify("Failed to clear cache.");
+      notify("Failed to clear cache.");
     }
   };
 
@@ -188,8 +188,7 @@ export const SettingsView: React.FC<{
                     options={['10GB', '25GB', '50GB', '100GB', '250GB']}
                     onChange={(val) => {
                       const num = parseInt(val.replace('GB', ''));
-                      updateSetting('storageLimitGB', num);
-                      localStorage.setItem('ruforge-storage-limit', num.toString());
+                      void updateSetting('storageLimitGB', num);
                     }}
                   />
                 }
@@ -231,7 +230,7 @@ export const SettingsView: React.FC<{
                 control={
                   <div className="flex p-1 bg-[#1D1613] rounded-xl border border-white/5">
                     <button 
-                      onClick={() => onSetSaveToInternal(true)}
+                      onClick={() => handleSetSaveToInternal(true)}
                       className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${
                         saveToInternal ? 'bg-[color:var(--accent)] text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
                       }`}
@@ -239,7 +238,7 @@ export const SettingsView: React.FC<{
                       INTERNAL
                     </button>
                     <button 
-                      onClick={() => onSetSaveToInternal(false)}
+                      onClick={() => handleSetSaveToInternal(false)}
                       className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${
                         !saveToInternal ? 'bg-[color:var(--accent)] text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
                       }`}
@@ -296,7 +295,7 @@ export const SettingsView: React.FC<{
                       value={
                         typeof settings.accentColor === "string" && settings.accentColor.startsWith("#")
                           ? settings.accentColor
-                          : "#f59e0b"
+                          : "#EDCF9B"
                       }
                       onChange={(e) => updateSetting("accentColor", e.target.value)}
                     />
@@ -344,7 +343,7 @@ export const SettingsView: React.FC<{
               <SettingItem 
                 icon={Music}
                 title="Auto-advance local audio"
-                description="When an mp3/m4a/flac track ends, plays the next one in alphabetical path order — same folder listing for the fullscreen player’s directory scan and the Mini Player strip."
+                description="When an mp3/m4a/flac track ends, plays the next one in alphabetical path order, same folder listing for the fullscreen player’s directory scan and the Mini Player strip."
                 active={settings.audioAutoAdvanceFolder !== false}
                 control={
                   <ToggleSlot 
@@ -375,7 +374,7 @@ export const SettingsView: React.FC<{
               <SettingItem 
                 icon={Shield}
                 title="ReplayGain / loudness normalization"
-                description="Skipped in WebView2: chaining MediaElement + Web Audio for stable LUFS normalization is brittle across formats/OS mixers — revisit with native output or ffmpeg filters."
+                description="Skipped in WebView2: chaining MediaElement + Web Audio for stable LUFS normalization is brittle across formats/OS mixers: revisit with native output or ffmpeg filters."
                 active={false}
                 control={
                   <span className="text-[9px] font-black uppercase tracking-widest text-stone-600 px-3">
@@ -386,7 +385,7 @@ export const SettingsView: React.FC<{
               <SettingItem 
                 icon={Shield}
                 title="Hardware Acceleration"
-                description="Lets WebView2 use GPU for page rendering and video playback. Turn off only for graphics glitches — this is not audio quality. Changing this restarts RuForge (Windows)."
+                description="Lets WebView2 use GPU for page rendering and video playback. Turn off only for graphics glitches, this is not audio quality. Changing this restarts RuForge (Windows)."
                 active={settings.hardwareAcceleration}
                 control={
                   <ToggleSlot 
