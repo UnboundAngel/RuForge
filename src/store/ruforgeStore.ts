@@ -36,7 +36,7 @@ export { RUFORGE_INTERNAL_DIR } from "./types";
 export type RuforgeNotification = {
   id: number;
   message: string;
-  type?: "info" | "update";
+  type?: "info" | "update" | "error" | "progress";
   updateObj?: { downloadAndInstall: () => Promise<void> };
 };
 
@@ -111,7 +111,7 @@ export interface RuforgeStore {
   setSearchValue: (v: string) => void;
   setLastExplorerUrl: (url: string) => void;
 
-  notify: (message: string, type?: "info" | "update", updateObj?: RuforgeNotification["updateObj"]) => void;
+  notify: (message: string, type?: RuforgeNotification["type"], updateObj?: RuforgeNotification["updateObj"]) => number;
   dismissNotification: (id: number) => void;
 
   setDownloaderUrl: (url: string) => void;
@@ -378,13 +378,18 @@ export const useRuforgeStore = create<RuforgeStore>()(
       setLastExplorerUrl: (url) => set({ lastExplorerUrl: url }),
 
       notify: (message, type = "info", updateObj) => {
-        const id = Date.now();
+        const id = Date.now() + Math.floor(Math.random() * 1000);
         set((s) => ({ notifications: [...s.notifications, { id, message, type, updateObj }] }));
         if (type === "info") {
           setTimeout(() => {
             get().dismissNotification(id);
           }, 4000);
+        } else if (type === "error") {
+          setTimeout(() => {
+            get().dismissNotification(id);
+          }, 10000);
         }
+        return id;
       },
 
       dismissNotification: (id) => {
