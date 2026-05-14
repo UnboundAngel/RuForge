@@ -1,11 +1,11 @@
 {
-  "version": "0.1.1",
-  "notes": "Fixes download functionality in production builds.",
-  "pub_date": "2026-05-13T14:45:00Z",
+  "version": "0.1.2",
+  "notes": "RuForge 0.1.2 — signed Windows updater (NSIS).",
+  "pub_date": "2026-05-14T20:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWnF5QzV0TjNTNUJhWUtmNnZNUFlWVFZoek43dkx1UmZtMDJpZi9WMEJyQXYwZTBLanVGSURkd2JHWHJNNjYycEZlcUt0TnYwaDA4bkFYNjc4T1dIQndNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc4Njk2OTkyCWZpbGU6UnVGb3JnZV8wLjEuMV94NjQtc2V0dXAuZXhlCnNCc2cxcmpkR1UzbEp5dDRoMkFWWFo4UXZJOE00YmZmaWhFcHQ2ck9xRGlqcllTUnJkSkZRUFR2RkhSdFZ6VE8rcTZDRjZKMEJ1ZzZzU0NFQzNVRENRPT0K",
-      "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.1.1/RuForge_0.1.1_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWnJKY2RlbXljV0NmcGZzYTMxb2p2YWxPaWwwbHZIK05jM3hCOFFOSXFDNjVaR3cwM3ZLeXRpWjA2M2tYeFBEZkpaK09JeTlSd29IY1hCcVR4ZHROb1FjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc4Nzg5MzQ1CWZpbGU6UnVGb3JnZV8wLjEuMl94NjQtc2V0dXAuZXhlCnBjaElGUDRiMEMvZE1NdjVickFtdkhVS2ZjbHJiZkpvZ25Cc3hIZE1OeEJqb3B1MHZKNGlUOSt5SGxxWE81WVloVHpLWUNCb1J0U0lIRTQyVDFPaUR3PT0K",
+      "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.1.2/RuForge_0.1.2_x64-setup.exe"
     }
   }
 }
