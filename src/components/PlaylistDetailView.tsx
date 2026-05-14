@@ -1,19 +1,19 @@
 import { motion } from "motion/react";
 import { Play, Shuffle, ArrowLeft, Clock, HardDrive, Layers, MoreVertical } from "lucide-react";
-import { PlaylistCollection, MediaFile } from "../types";
+import { PlaylistCollection } from "../types";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { getPlaybackThumbnailBar } from "../playbackStorage";
+import { useRuforgeStore } from "../store/ruforgeStore";
 
 export const PlaylistDetailView = ({ 
   playlist, 
   onBack, 
-  onPlay,
-  onPlayPlaylist
 }: { 
   playlist: PlaylistCollection, 
   onBack: () => void, 
-  onPlay: (file: MediaFile) => void,
-  onPlayPlaylist: (files: MediaFile[], shuffle?: boolean) => void
 }) => {
+  const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
+  const handlePlayPlaylist = useRuforgeStore((s) => s.handlePlayPlaylist);
   const mainThumbnail = playlist.stackThumbnailPath || (playlist.items[0]?.thumbnailPath || playlist.items[0]?.ruforgePosterPath);
 
   const formatDuration = (seconds: number) => {
@@ -58,7 +58,7 @@ export const PlaylistDetailView = ({
             <div className="space-y-8">
               <div 
                 className="relative aspect-video rounded-3xl overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] border border-white/10 group cursor-pointer"
-                onClick={() => onPlayPlaylist(playlist.items)}
+                onClick={() => handlePlayPlaylist(playlist.items)}
               >
                 {mainThumbnail ? (
                   <img src={convertFileSrc(mainThumbnail)} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
@@ -97,14 +97,14 @@ export const PlaylistDetailView = ({
 
               <div className="flex gap-3">
                 <button 
-                  onClick={() => onPlayPlaylist(playlist.items)}
+                  onClick={() => handlePlayPlaylist(playlist.items)}
                   className="flex-1 flex items-center justify-center gap-3 py-3.5 rounded-2xl bg-[color:var(--accent)] text-stone-950 hover:brightness-110 transition-all active:scale-95 shadow-xl shadow-[color:var(--accent)]/10"
                 >
                   <Play size={14} fill="currentColor" />
                   <span className="text-[10px] font-black uppercase tracking-[0.2em]">Play All</span>
                 </button>
                 <button 
-                  onClick={() => onPlayPlaylist(playlist.items, true)}
+                  onClick={() => handlePlayPlaylist(playlist.items, true)}
                   className="flex-1 flex items-center justify-center gap-3 py-3.5 rounded-2xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all active:scale-95"
                 >
                   <Shuffle size={14} />
@@ -124,7 +124,7 @@ export const PlaylistDetailView = ({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.03 }}
-              onClick={() => onPlay(item)}
+              onClick={() => void handlePlayFile(item)}
               className="group flex items-center gap-6 p-4 rounded-3xl hover:bg-white/5 transition-all cursor-pointer border border-transparent hover:border-white/5"
             >
               <div className="text-stone-700 font-mono text-[10px] w-6 text-center group-hover:text-[color:var(--accent)] transition-colors">
@@ -146,6 +146,19 @@ export const PlaylistDetailView = ({
                 <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/80 rounded-md text-[9px] font-bold text-white tracking-widest">
                   {formatDuration(item.duration)}
                 </div>
+
+                {(() => {
+                  const bar = getPlaybackThumbnailBar(item.path, item.duration);
+                  if (!bar.show) return null;
+                  return (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 z-10 overflow-hidden">
+                      <div
+                        className={`h-full bg-[color:var(--accent)] shadow-[0_0_8px_var(--accent)] ${bar.completed ? "opacity-90" : ""}`}
+                        style={{ width: `${bar.widthPct}%` }}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="flex-1 min-w-0">

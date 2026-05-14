@@ -9,14 +9,23 @@
   }
 }
 
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 15s linear infinite;
+}
+
 :root {
   --bg: #1c1512;
   --surface: rgba(43, 30, 25, 0.7);
   --surface-elevated: rgba(56, 39, 32, 0.85);
   --border: rgba(212, 163, 115, 0.1);
-  /* Synced from RuForge settings (see `accentCss.ts`); defaults match in-app amber */
-  --accent: #f59e0b;
-  --accent-glow: rgba(245, 158, 11, 0.28);
+  /* Synced from RuForge settings (see `accentCss.ts`); defaults to sand gold */
+  --accent: #EDCF9B;
+  --accent-glow: rgba(237, 207, 155, 0.28);
   --text: #fafaf9;
   --text-muted: #a8a29e;
   
@@ -125,3 +134,70 @@ body {
   background: var(--accent-glow);
   color: var(--text);
 }
+
+/* Custom subtitle overlay (PlayerView / MiniPlayer); native `<track>` stays `hidden`. */
+.subtitle-overlay-host {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 1rem;
+  padding-bottom: max(5.5rem, env(safe-area-inset-bottom, 0px));
+  transition: padding-bottom 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+  pointer-events: none;
+  z-index: 25;
+}
+
+.controls-hidden .subtitle-overlay-host {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 450px) {
+  .subtitle-overlay-host {
+    padding-bottom: max(4.5rem, env(safe-area-inset-bottom, 0px));
+  }
+  .controls-hidden .subtitle-overlay-host {
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.subtitle-overlay-drag-row {
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  width: max-content;
+  max-width: min(96vw, 100%);
+  padding: 0;
+}
+
+.subtitle-overlay-drag-row:active {
+  cursor: grabbing;
+}
+
+.subtitle-overlay-text {
+  display: block;
+  box-sizing: border-box;
+  max-width: min(96vw, 100%);
+  margin-inline: 0;
+  padding: 0.5rem 1.1rem;
+  text-align: center;
+  font-family: Inter, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(11px, 2.2vw + 0.45vmin, 22px);
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  overflow: visible;
+  text-shadow: none;
+  background: rgba(0, 0, 0, 0.82);
+  border-radius: 0.625rem;
+  pointer-events: none;
+}
+
+.subtitle-overlay-text:empty {
+  display: none;
+}
+

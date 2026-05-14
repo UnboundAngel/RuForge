@@ -1,9 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Icon } from "@iconify/react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-// @ts-ignore
-import { emit } from "@tauri-apps/api/event";
 // @ts-ignore
 import { openPath } from "@tauri-apps/plugin-opener";
 import {
@@ -23,19 +21,17 @@ import {
   Video,
   Layers,
 } from "lucide-react";
-import { MediaFile, type FfprobeHint } from "../types";
+import { type FfprobeHint, type MediaFile } from "../types";
 import { ScrubberHoverThumb } from "../scrubSpritePreview";
-import {
-  readResumeSeconds,
-  writePlaybackPos,
-  clearPlaybackPos,
-  END_EPSILON_SEC,
-} from "../playbackStorage";
+import { readResumeSeconds, writePlaybackPos } from "../playbackStorage";
 import {
   readAudioAutoAdvanceFolder,
   readAudioPrefetchNext,
 } from "../audioPlaybackPrefs";
 import { isAudioOnlyPath } from "../mediaKind";
+import { fetchSubtitleTracks, revokeSubtitleBlobSrcs, subtitleTracksWithBlobSrc, syncVideoTextTrackModes, type SubtitleTrack } from "../localVideoSubtitles";
+import { useRuforgeStore } from "../store/ruforgeStore";
+import { useSubtitleCueOverlay } from "../useSubtitleCueOverlay";
 
 const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: string }) => {
   const speedToAngle: Record<number, number> = {
@@ -58,10 +54,10 @@ const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: strin
   );
 };
 
-const Tooltip = ({ text, children, side = "bottom" }: { text: string; children: React.ReactNode; side?: "bottom" | "top" }) => {
+const Tooltip = ({ text, children, side = "bottom", className = "" }: { text: string; children: React.ReactNode; side?: "bottom" | "top"; className?: string }) => {
   const [isHovered, setIsHovered] = useState(false);
   return (
-    <div className="relative flex flex-col items-center" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div className={`relative flex flex-col items-center ${className}`} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       {children}
       <AnimatePresence>
         {isHovered && (
@@ -70,7 +66,7 @@ const Tooltip = ({ text, children, side = "bottom" }: { text: string; children: 
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className={`absolute ${side === "bottom" ? "bottom-full mb-3" : "top-full mt-3"} px-3 py-1.5 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-xl text-[10px] font-black tracking-widest text-white uppercase whitespace-nowrap z-[100] shadow-2xl shadow-black pointer-events-none right-0`}
+            className={`absolute ${side === "bottom" ? "bottom-full mb-3" : "top-full mt-3"} px-3 py-1.5 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-xl text-[10px] font-black tracking-widest text-white uppercase whitespace-nowrap z-[100] shadow-2xl shadow-black pointer-events-none left-1/2 -translate-x-1/2`}
           >
             {text}
           </motion.div>
@@ -81,25 +77,62 @@ const Tooltip = ({ text, children, side = "bottom" }: { text: string; children: 
 };
 
 interface PlayerViewProps {
-  file: MediaFile;
-  /** Alphabetically sorted mp3/m4a/flac in the same folder as `file`; used only when `file` is audio-only. */
-  folderAudioPlaylist?: MediaFile[];
-  onPlayFolderAudioNeighbor?: (file: MediaFile) => void;
+  onSubtitleToggle?: (enabled: boolean) => void;
   onBack: () => void;
-  onMiniPlayerToggle: () => void;
 }
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-export const PlayerView = ({
-  file,
-  folderAudioPlaylist = [],
-  onPlayFolderAudioNeighbor,
-  onBack,
-  onMiniPlayerToggle,
-}: PlayerViewProps) => {
+export type PlayerViewHandle = {
+  getCurrentTime: () => number;
+};
+
+const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file: MediaFile }>(function PlayerViewWithFile(
+  { file, onSubtitleToggle, onBack },
+  ref,
+) {
+  const galleryEntries = useRuforgeStore((s) => s.entries);
+  const audioLibrarySorted = useMemo(
+    () =>
+      galleryEntries
+        .flatMap((e) => (e.kind === "media" ? [e] : e.items))
+        .filter((f) => isAudioOnlyPath(f.path))
+        .sort((a, b) =>
+          a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }),
+        ),
+    [galleryEntries],
+  );
+
+  const videoLibrarySorted = useMemo(
+    () =>
+      galleryEntries
+        .flatMap((e) => (e.kind === "media" ? [e] : e.items))
+        .filter((f) => !isAudioOnlyPath(f.path))
+        .sort((a, b) =>
+          a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }),
+        ),
+    [galleryEntries],
+  );
+
+  const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
+  const volume = useRuforgeStore((s) => s.volume);
+  const isMuted = useRuforgeStore((s) => s.isMuted);
+  const isLooping = useRuforgeStore((s) => s.isLooping);
+  const setVolume = useRuforgeStore((s) => s.setVolume);
+  const setMuted = useRuforgeStore((s) => s.setMuted);
+  const setLooping = useRuforgeStore((s) => s.setLooping);
+  const setPlayingFile = useRuforgeStore((s) => s.setPlayingFile);
+  const handlePopOutFromStore = useRuforgeStore((s) => s.handlePopOut);
+
+  const subtitlePreferredLang = useRuforgeStore((s) =>
+    typeof s.settings.subtitlePreferredLang === "string" ? s.settings.subtitlePreferredLang : null,
+  );
+  const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const audioOnly = isAudioOnlyPath(file.path);
   const mediaRef = useRef<HTMLMediaElement>(null);
+  useImperativeHandle(ref, () => ({
+    getCurrentTime: () => mediaRef.current?.currentTime ?? 0,
+  }));
   const containerRef = useRef<HTMLDivElement>(null);
   const scrubberRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
@@ -109,28 +142,57 @@ export const PlayerView = ({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [buffered, setBuffered] = useState(0);
-  const [volume, setVolume] = useState(() => {
-    const saved = localStorage.getItem("miniplayer-volume");
-    return saved ? parseFloat(saved) : 0.8;
-  });
-  const [isMuted, setIsMuted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [showVolume, setShowVolume] = useState(false);
   const [scrubberHoverPos, setScrubberHoverPos] = useState(0);
   const [isHoveringScrubber, setIsHoveringScrubber] = useState(false);
   const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubDragPercent, setScrubDragPercent] = useState<number | null>(null);
   const [scrubberThumbs, setScrubberThumbs] = useState<string[]>([]);
   const [isPressing, setIsPressing] = useState<"left" | "right" | null>(null);
   const [previousSpeed, setPreviousSpeed] = useState(1);
   const pressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blockClickRef = useRef(false);
+  const wasPlayingBeforeScrubRef = useRef(false);
   const lastPlaybackPersistRef = useRef(0);
   const progressRafRef = useRef<number | null>(null);
 
+  const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([]);
+  const subtitleBlobTracksRef = useRef<SubtitleTrack[]>([]);
+  const [selectedSubtitleLang, setSelectedSubtitleLang] = useState("");
+  const [isSubtitlesEnabled, setIsSubtitlesEnabled] = useState(false);
+  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
+
   const ambientCanvasRef = useRef<HTMLCanvasElement>(null);
   const ambientRafRef = useRef<number | null>(null);
+  const subtitleOverlayTextRef = useRef<HTMLDivElement>(null);
+  const subtitleDragRowRef = useRef<HTMLDivElement>(null);
+  const [mediaBlendOpacity, setMediaBlendOpacity] = useState(1);
+  const prevVideoPathRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (audioOnly) {
+      prevVideoPathRef.current = file.path;
+      setMediaBlendOpacity(1);
+      return;
+    }
+    const p = file.path;
+    if (prevVideoPathRef.current === null) {
+      prevVideoPathRef.current = p;
+      setMediaBlendOpacity(1);
+      return;
+    }
+    if (prevVideoPathRef.current === p) {
+      setMediaBlendOpacity(1);
+      return;
+    }
+    prevVideoPathRef.current = p;
+    setMediaBlendOpacity(0);
+    const id = window.setTimeout(() => setMediaBlendOpacity(1), 70);
+    return () => clearTimeout(id);
+  }, [file.path, audioOnly]);
 
   useEffect(() => {
     if (audioOnly) return;
@@ -191,6 +253,76 @@ export const PlayerView = ({
     }).catch(() => {});
   }, [file.path]);
 
+  const subtitlePreferredLangRef = useRef(subtitlePreferredLang);
+  subtitlePreferredLangRef.current = subtitlePreferredLang;
+
+  useEffect(() => {
+    setShowSubtitleMenu(false);
+    if (audioOnly) {
+      revokeSubtitleBlobSrcs(subtitleBlobTracksRef.current);
+      subtitleBlobTracksRef.current = [];
+      setSubtitleTracks([]);
+      setIsSubtitlesEnabled(false);
+      setSelectedSubtitleLang("");
+      return;
+    }
+    revokeSubtitleBlobSrcs(subtitleBlobTracksRef.current);
+    subtitleBlobTracksRef.current = [];
+    let cancelled = false;
+    fetchSubtitleTracks(file.path)
+      .then((raw) => subtitleTracksWithBlobSrc(raw))
+      .then((tracks) => {
+        if (cancelled) {
+          revokeSubtitleBlobSrcs(tracks);
+          return;
+        }
+        subtitleBlobTracksRef.current = tracks;
+        setSubtitleTracks(tracks);
+        const pref = subtitlePreferredLangRef.current?.trim() || null;
+        const found = pref ? tracks.find((t) => t.lang === pref) : undefined;
+        if (pref && found) {
+          setSelectedSubtitleLang(found.lang);
+          setIsSubtitlesEnabled(true);
+        } else {
+          setIsSubtitlesEnabled(false);
+          setSelectedSubtitleLang(tracks[0]?.lang ?? "");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSubtitleTracks([]);
+          setIsSubtitlesEnabled(false);
+          setSelectedSubtitleLang("");
+        }
+      });
+    return () => {
+      cancelled = true;
+      revokeSubtitleBlobSrcs(subtitleBlobTracksRef.current);
+      subtitleBlobTracksRef.current = [];
+    };
+  }, [file.path, audioOnly]);
+
+  useEffect(() => {
+    if (audioOnly) return;
+    const v = mediaRef.current as HTMLVideoElement | null;
+    if (!v) return;
+    const apply = () => syncVideoTextTrackModes(v, isSubtitlesEnabled, selectedSubtitleLang);
+    apply();
+    const id = requestAnimationFrame(apply);
+    return () => cancelAnimationFrame(id);
+  }, [audioOnly, file.path, isSubtitlesEnabled, selectedSubtitleLang, subtitleTracks]);
+
+  useSubtitleCueOverlay({
+    videoRef: mediaRef as React.RefObject<HTMLVideoElement | null>,
+    textElRef: subtitleOverlayTextRef,
+    dragRowRef: subtitleDragRowRef,
+    inactive: audioOnly,
+    captionsEnabled: isSubtitlesEnabled,
+    selectedLang: selectedSubtitleLang,
+    filePath: file.path,
+    subtitleTracks,
+  });
+
   useEffect(() => {
     lastPlaybackPersistRef.current = 0;
   }, [file.path]);
@@ -206,30 +338,22 @@ export const PlayerView = ({
 
   const [isVolumeDragging, setIsVolumeDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isLooping, setIsLooping] = useState(() => localStorage.getItem("miniplayer-loop") === "true");
-
-  useEffect(() => {
-    localStorage.setItem("miniplayer-loop", isLooping.toString());
-  }, [isLooping]);
 
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [clickFlash, setClickFlash] = useState<"play" | "pause" | null>(null);
+  const [skipFlash, setSkipFlash] = useState<{ side: "left" | "right"; amount: number } | null>(null);
+  const skipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync volume/mute to <video> / <audio>
+  // Sync volume/mute/loop from store to <video> / <audio> (store actions persist flat LS for MiniPlayer)
   useEffect(() => {
     if (mediaRef.current) {
       mediaRef.current.volume = volume;
       mediaRef.current.muted = isMuted;
-      localStorage.setItem("miniplayer-volume", volume.toString());
+      mediaRef.current.loop = isLooping;
     }
-  }, [volume, isMuted]);
-
-  // Sync loop
-  useEffect(() => {
-    if (mediaRef.current) mediaRef.current.loop = isLooping;
-  }, [isLooping]);
+  }, [volume, isMuted, isLooping]);
 
   // Sync playback speed (preservesPitch reduces time-stretch artifacts when rate ≠ 1)
   useEffect(() => {
@@ -272,21 +396,22 @@ export const PlayerView = ({
           e.preventDefault();
           changeVolume(Math.max(0, volume - 0.1));
           break;
-        case "KeyM":
-          setIsMuted((m) => {
-            const next = !m;
-            setShowVolume(true);
-            if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-            volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
-            return next;
-          });
+        case "KeyM": {
+          const next = !useRuforgeStore.getState().isMuted;
+          setMuted(next);
+          setShowVolume(true);
+          if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+          volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
           break;
+        }
         case "KeyF":
           toggleFullscreen();
           break;
-        case "KeyL":
-          setIsLooping((l) => !l);
+        case "KeyL": {
+          const l = useRuforgeStore.getState().isLooping;
+          setLooping(!l);
           break;
+        }
       }
     };
     window.addEventListener("keydown", onKey);
@@ -309,23 +434,33 @@ export const PlayerView = ({
       media.pause();
       setIsPaused(true);
       setClickFlash("pause");
-      writePlaybackPos(file.path, media.currentTime);
+      writePlaybackPos(file.path, media.currentTime, media.duration);
     }
     setTimeout(() => setClickFlash(null), 500);
   }, [file.path]);
 
   const handlePlaybackEnded = useCallback(() => {
     if (isLooping) return;
-    clearPlaybackPos(file.path);
+    const m = mediaRef.current;
+    if (m && isFinite(m.duration) && m.duration > 0) {
+      writePlaybackPos(file.path, m.duration, m.duration);
+    }
+    if (!readAudioAutoAdvanceFolder()) {
+      setIsPaused(true);
+      return;
+    }
     const idx = folderAudioPlaylist.findIndex((f) => f.path === file.path);
-    const neighbor =
+    const folderNeighbor =
       idx >= 0 && idx < folderAudioPlaylist.length - 1 ? folderAudioPlaylist[idx + 1] : null;
-    if (
-      readAudioAutoAdvanceFolder() &&
-      neighbor &&
-      onPlayFolderAudioNeighbor
-    ) {
-      onPlayFolderAudioNeighbor(neighbor);
+    if (folderNeighbor) {
+      setPlayingFile(folderNeighbor);
+      return;
+    }
+    const libList = audioOnly ? audioLibrarySorted : videoLibrarySorted;
+    const li = libList.findIndex((f) => f.path === file.path);
+    const libNext = li >= 0 && li < libList.length - 1 ? libList[li + 1] : null;
+    if (libNext) {
+      setPlayingFile(libNext);
       return;
     }
     setIsPaused(true);
@@ -334,17 +469,35 @@ export const PlayerView = ({
     file.path,
     audioOnly,
     folderAudioPlaylist,
-    onPlayFolderAudioNeighbor,
+    audioLibrarySorted,
+    videoLibrarySorted,
+    setPlayingFile,
   ]);
 
   const skip = (seconds: number) => {
-    if (mediaRef.current) mediaRef.current.currentTime += seconds;
+    if (mediaRef.current) {
+      mediaRef.current.currentTime += seconds;
+      setSkipFlash({ side: seconds > 0 ? "right" : "left", amount: Math.abs(seconds) });
+      if (skipTimeoutRef.current) clearTimeout(skipTimeoutRef.current);
+      skipTimeoutRef.current = setTimeout(() => setSkipFlash(null), 600);
+    }
   };
 
   const changeVolume = (v: number) => {
     setVolume(v);
-    if (v > 0 && isMuted) setIsMuted(false);
+    if (v > 0 && isMuted) setMuted(false);
 
+    setShowVolume(true);
+    if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+    volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+  };
+
+  const handleAuxClickMute = (e: React.MouseEvent) => {
+    if (e.button !== 1 || !mediaRef.current) return;
+    e.preventDefault();
+    const nextMuted = !mediaRef.current.muted;
+    mediaRef.current.muted = nextMuted;
+    setMuted(nextMuted);
     setShowVolume(true);
     if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
     volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
@@ -390,10 +543,11 @@ export const PlayerView = ({
 
   const handlePopOut = () => {
     if (mediaRef.current) {
-      writePlaybackPos(file.path, mediaRef.current.currentTime);
-      localStorage.setItem("miniplayer-volume", mediaRef.current.volume.toString());
+      writePlaybackPos(file.path, mediaRef.current.currentTime, mediaRef.current.duration);
+      setVolume(mediaRef.current.volume);
+      setMuted(mediaRef.current.muted);
     }
-    onMiniPlayerToggle();
+    void handlePopOutFromStore(mediaRef.current?.currentTime ?? 0);
   };
 
   const handleTimeUpdate = () => {
@@ -410,8 +564,8 @@ export const PlayerView = ({
       const now = Date.now();
       if (now - lastPlaybackPersistRef.current > 4000 && vid.duration > 0) {
         lastPlaybackPersistRef.current = now;
-        if (vid.currentTime > 0.5 && vid.currentTime < vid.duration - END_EPSILON_SEC) {
-          writePlaybackPos(file.path, vid.currentTime);
+        if (vid.currentTime > 0.5) {
+          writePlaybackPos(file.path, vid.currentTime, vid.duration);
         }
       }
     });
@@ -444,14 +598,37 @@ export const PlayerView = ({
 
   const handleScrubMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
+    const vid = mediaRef.current;
+    if (!vid || !isFinite(vid.duration)) return;
+
+    wasPlayingBeforeScrubRef.current = !vid.paused;
+    if (wasPlayingBeforeScrubRef.current) {
+      vid.pause();
+    }
+
     setIsScrubbing(true);
-    applyScrub(getScrubPosition(e));
-    const onMove = (ev: MouseEvent) => applyScrub(getScrubPosition(ev));
-    const onUp = () => {
+    setScrubDragPercent(getScrubPosition(e) * 100);
+
+    const onMove = (ev: MouseEvent) => {
+      setScrubDragPercent(getScrubPosition(ev) * 100);
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      applyScrub(getScrubPosition(ev));
+      const v2 = mediaRef.current;
+      if (v2 && isFinite(v2.duration) && v2.duration > 0) {
+        writePlaybackPos(file.path, v2.currentTime, v2.duration);
+      }
+      setScrubDragPercent(null);
       setIsScrubbing(false);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+
+      if (wasPlayingBeforeScrubRef.current && mediaRef.current) {
+        void mediaRef.current.play().catch(() => {});
+      }
     };
+
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
@@ -500,6 +677,7 @@ export const PlayerView = ({
   };
 
   const VolumeIcon = isMuted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+  const playedBarPercent = scrubDragPercent !== null ? scrubDragPercent : progress;
   const isProbablyWindows =
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
   const coverArtSrc = file.ruforgePosterPath ?? file.thumbnailPath;
@@ -525,7 +703,7 @@ export const PlayerView = ({
       exit={{ opacity: 0 }}
       onMouseMove={resetControlsTimer}
       onMouseLeave={() => { if (!isPaused) setShowControls(false); }}
-      className="absolute inset-0 bg-black flex flex-col select-none overflow-hidden z-50"
+      className={`absolute inset-0 bg-black flex flex-col select-none overflow-hidden z-50 ${!showControls ? 'controls-hidden' : ''}`}
       style={{ cursor: showControls ? "default" : "none" }}
     >
       {/* Next Up Drawer */}
@@ -553,9 +731,7 @@ export const PlayerView = ({
                 return (
                   <button
                     key={item.path}
-                    onClick={() => {
-                      if (onPlayFolderAudioNeighbor) onPlayFolderAudioNeighbor(item);
-                    }}
+                    onClick={() => setPlayingFile(item)}
                     className={`w-full flex flex-col gap-3 p-3 rounded-[24px] transition-all group ${isActive ? 'bg-[color:var(--accent)]/10 ring-1 ring-[color:var(--accent)]/20' : 'hover:bg-white/5'}`}
                   >
                     <div className="w-full aspect-video rounded-[18px] bg-stone-900 overflow-hidden flex-shrink-0 relative border border-white/5 shadow-xl">
@@ -627,7 +803,10 @@ export const PlayerView = ({
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
+              onAuxClick={handleAuxClickMute}
               onWheel={(e) => {
+                if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+                if (e.deltaY === 0) return;
                 changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
               }}
             >
@@ -639,7 +818,7 @@ export const PlayerView = ({
                     className="max-h-[min(55vh,520px)] max-w-[min(90vw,520px)] rounded-2xl shadow-2xl border border-white/10 object-contain"
                   />
                 ) : (
-                  <Music className="w-28 h-28 text-amber-500/30" strokeWidth={1} aria-hidden />
+                  <Music className="w-28 h-28 text-[color:var(--accent)] opacity-30" strokeWidth={1} aria-hidden />
                 )}
                 <p className="text-center text-[11px] font-medium text-stone-600 max-w-sm leading-relaxed">
                   {file.sourceUrl 
@@ -671,29 +850,50 @@ export const PlayerView = ({
               className="absolute inset-[-15%] w-[130%] h-[130%] z-0 blur-[100px] opacity-50 pointer-events-none transition-opacity duration-700"
               aria-hidden
             />
-            <video
-              ref={mediaRef as React.RefObject<HTMLVideoElement>}
-              src={convertFileSrc(file.path)}
-              className="relative w-full h-full object-contain z-10"
-              autoPlay
-              playsInline
-              preload="metadata"
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
-              onPause={() => setIsPaused(true)}
-              onPlay={() => setIsPaused(false)}
-              onEnded={() => {
-                if (!isLooping) handlePlaybackEnded();
-              }}
-              onClick={togglePlay}
-              onDoubleClick={toggleFullscreen}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              onWheel={(e) => {
-                changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
-              }}
-            />
+            <div
+              className="relative z-10 flex h-full w-full min-h-0 items-center justify-center transition-opacity duration-200"
+              style={{ opacity: mediaBlendOpacity }}
+            >
+              <video
+                ref={mediaRef as React.RefObject<HTMLVideoElement>}
+                src={convertFileSrc(file.path)}
+                className="relative h-full w-full object-contain"
+                autoPlay
+                playsInline
+                preload="metadata"
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onPause={() => setIsPaused(true)}
+                onPlay={() => setIsPaused(false)}
+                onEnded={() => {
+                  if (!isLooping) handlePlaybackEnded();
+                }}
+                onClick={togglePlay}
+                onDoubleClick={toggleFullscreen}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onAuxClick={handleAuxClickMute}
+                onWheel={(e) => {
+                  if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+                  if (e.deltaY === 0) return;
+                  changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
+                }}
+              >
+                {subtitleTracks.map((t, i) => (
+                  <track key={`${file.path}:${t.lang}:${i}`} kind="subtitles" src={t.src} srcLang={t.lang} label={t.label} />
+                ))}
+              </video>
+              <div className="subtitle-overlay-host">
+                <div
+                  ref={subtitleDragRowRef}
+                  title="Drag vertically to move subtitles"
+                  className={`subtitle-overlay-drag-row ${isSubtitlesEnabled ? "" : "pointer-events-none"}`}
+                >
+                  <div ref={subtitleOverlayTextRef} className="subtitle-overlay-text" aria-live="off" />
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -705,7 +905,7 @@ export const PlayerView = ({
             initial={{ opacity: 0, y: -20, x: "-50%" }}
             animate={{ opacity: 1, y: 0, x: "-50%" }}
             exit={{ opacity: 0, y: -20, x: "-50%" }}
-            className="absolute top-24 left-1/2 z-[100] px-6 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-3"
+            className="absolute top-24 left-1/2 z-[100] px-6 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-3 pointer-events-none"
           >
             <div className="flex gap-0.5">
               {[...Array(2)].map((_, i) => (
@@ -728,15 +928,34 @@ export const PlayerView = ({
         {clickFlash && (
           <motion.div
             key={clickFlash}
-            initial={{ opacity: 0.8, scale: 0.6 }}
-            animate={{ opacity: 0, scale: 1.4 }}
-            transition={{ duration: 0.45, ease: "easeOut" }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full bg-black/30 backdrop-blur-xl border border-white/10 flex items-center justify-center pointer-events-none"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1.2 }}
+            exit={{ opacity: 0, scale: 1.5 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] pointer-events-none"
           >
             {clickFlash === "play"
-              ? <Play className="w-10 h-10 text-white fill-white ml-1" />
-              : <Pause className="w-10 h-10 text-white fill-white" />
+              ? <Play className="w-[clamp(3.5rem,10vw,6rem)] h-[clamp(3.5rem,10vw,6rem)] text-white fill-white opacity-40" />
+              : <Pause className="w-[clamp(3.5rem,10vw,6rem)] h-[clamp(3.5rem,10vw,6rem)] text-white fill-white opacity-40" />
             }
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Skip feedback overlay */}
+      <AnimatePresence mode="popLayout">
+        {skipFlash && (
+          <motion.div
+            key={skipFlash.side}
+            initial={{ opacity: 0, x: skipFlash.side === "left" ? -20 : 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: skipFlash.side === "left" ? -40 : 40 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className={`absolute top-1/2 ${skipFlash.side === "left" ? "left-[15%]" : "right-[15%]"} -translate-y-1/2 z-[100] pointer-events-none`}
+          >
+            <span className="text-[clamp(1.25rem,4vw,2.5rem)] font-black tracking-[0.2em] text-white opacity-40 uppercase whitespace-nowrap">
+              {skipFlash.side === "left" ? "−" : "+"}{skipFlash.amount}s
+            </span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -777,9 +996,9 @@ export const PlayerView = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.2 }}
-            className="absolute top-0 left-0 right-0 px-8 pt-6 pb-20 flex items-start justify-between z-50 bg-gradient-to-b from-black/85 via-black/30 to-transparent pointer-events-auto"
+            className="absolute top-0 left-0 right-0 px-8 pt-6 pb-20 flex items-start justify-between z-50 bg-gradient-to-b from-black/85 via-black/30 to-transparent pointer-events-none"
           >
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-5 pointer-events-auto">
               <button
                 onClick={onBack}
                 className="w-11 h-11 flex items-center justify-center text-stone-400 hover:text-white transition-all active:scale-90"
@@ -805,7 +1024,7 @@ export const PlayerView = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pointer-events-auto">
             </div>
           </motion.div>
         )}
@@ -819,12 +1038,12 @@ export const PlayerView = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="absolute bottom-0 left-0 right-0 px-8 pb-8 pt-24 z-50 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-auto"
+            className="absolute bottom-0 left-0 right-0 px-8 pb-8 pt-24 z-50 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none"
           >
             {/* Scrubber */}
             <div
               ref={scrubberRef}
-              className={`w-full relative cursor-pointer group/scrubber py-3 -my-3 ${isScrubbing ? "cursor-grabbing" : ""}`}
+              className={`w-full relative cursor-pointer group/scrubber py-3 -my-3 pointer-events-auto ${isScrubbing ? "cursor-grabbing" : ""}`}
               onMouseDown={handleScrubMouseDown}
               onMouseMove={(e) => {
                 const rect = scrubberRef.current?.getBoundingClientRect();
@@ -836,13 +1055,13 @@ export const PlayerView = ({
             >
               <div className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15`}>
                 <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
-                <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${progress}%` }} />
+                <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${playedBarPercent}%` }} />
                 {isHoveringScrubber && (
                   <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${scrubberHoverPos}%` }} />
                 )}
                 <div
                   className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg transition-opacity ${isHoveringScrubber || isScrubbing ? "opacity-100" : "opacity-0"}`}
-                  style={{ left: `${progress}%` }}
+                  style={{ left: `${playedBarPercent}%` }}
                 />
                 {isHoveringScrubber && isFinite(duration) && duration > 0 && (
                   <AnimatePresence>
@@ -883,9 +1102,9 @@ export const PlayerView = ({
             </div>
 
             {/* Controls Bar */}
-            <div className="flex items-center justify-between mt-3 px-2">
+            <div className="flex items-center justify-between mt-3 px-2 pointer-events-auto">
               {/* Left */}
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5 sm:gap-4">
                 <Tooltip text={isPaused ? "Play" : "Pause"}>
                   <button
                     onClick={togglePlay}
@@ -898,33 +1117,33 @@ export const PlayerView = ({
                   </button>
                 </Tooltip>
 
-                <Tooltip text="Rewind 15 Seconds">
+                <Tooltip text="Rewind 15 Seconds" className="hidden sm:flex">
                   <button onClick={() => skip(-15)} className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white">
                     <Icon icon="tabler:rewind-backward-15" width={22} />
                   </button>
                 </Tooltip>
-                <Tooltip text="Jump 15 Seconds">
+                <Tooltip text="Jump 15 Seconds" className="hidden sm:flex">
                   <button onClick={() => skip(15)} className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white">
                     <Icon icon="tabler:rewind-forward-15" width={22} />
                   </button>
                 </Tooltip>
-                {prevInFolder && onPlayFolderAudioNeighbor && (
-                  <Tooltip text="Previous in this folder">
+                {prevInFolder && (
+                  <Tooltip text="Previous in this folder" className="hidden md:flex">
                     <button
                       type="button"
-                      onClick={() => onPlayFolderAudioNeighbor(prevInFolder)}
-                      className="p-2 text-stone-400 hover:text-emerald-400 transition-colors active:scale-90"
+                      onClick={() => setPlayingFile(prevInFolder)}
+                      className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white"
                     >
                       <SkipBack className="w-[18px] h-[18px]" aria-hidden />
                     </button>
                   </Tooltip>
                 )}
-                {nextInFolder && onPlayFolderAudioNeighbor && (
-                  <Tooltip text="Next in this folder">
+                {nextInFolder && (
+                  <Tooltip text="Next in this folder" className="hidden md:flex">
                     <button
                       type="button"
-                      onClick={() => onPlayFolderAudioNeighbor(nextInFolder)}
-                      className="p-2 text-stone-400 hover:text-emerald-400 transition-colors active:scale-90"
+                      onClick={() => setPlayingFile(nextInFolder)}
+                      className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white"
                     >
                       <SkipForward className="w-[18px] h-[18px]" aria-hidden />
                     </button>
@@ -932,7 +1151,7 @@ export const PlayerView = ({
                 )}
 
                 {/* Volume */}
-                <div className="flex items-center gap-3 group/vol ml-2">
+                <div className="flex items-center gap-1.5 sm:gap-3 group/vol ml-0.5 sm:ml-2">
                   <Tooltip
                   text={
                     (isMuted ? "Unmute" : "Mute") +
@@ -940,7 +1159,7 @@ export const PlayerView = ({
                   }
                 >
                     <button
-                      onClick={() => setIsMuted((m) => !m)}
+                      onClick={() => setMuted(!isMuted)}
                       className="p-2 text-stone-400 hover:text-white transition-colors"
                     >
                       <VolumeIcon className="w-5 h-5" />
@@ -960,7 +1179,7 @@ export const PlayerView = ({
                 </div>
 
                 {/* Time */}
-                <div className="text-xs font-medium text-stone-400 font-mono tracking-wider ml-4 flex items-center gap-2">
+                <div className="hidden min-[500px]:flex text-xs font-medium text-stone-400 font-mono tracking-wider ml-4 items-center gap-2">
                   <span className="text-stone-200">{formatTime(currentTime)}</span>
                   <span>/</span>
                   <span>{isFinite(duration) ? formatTime(duration) : "0:00"}</span>
@@ -968,10 +1187,10 @@ export const PlayerView = ({
               </div>
 
               {/* Right */}
-              <div className="flex items-center gap-2">
-                <Tooltip text="Toggle Loop Playback">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <Tooltip text="Toggle Loop Playback" className="hidden md:flex">
                   <button
-                    onClick={() => setIsLooping((l) => !l)}
+                    onClick={() => setLooping(!isLooping)}
                     className={`p-2.5 rounded-xl transition-all outline-none border-none ${isLooping ? "text-[color:var(--accent)]" : "text-stone-500 hover:text-white"}`}
                   >
                     <AnimatePresence mode="wait" initial={false}>
@@ -989,7 +1208,7 @@ export const PlayerView = ({
                 </Tooltip>
 
                 {/* Speed */}
-                <div className="relative">
+                <div className="relative hidden xs:block min-[400px]:block">
                   <Tooltip text="Playback Speed">
                     <button
                       onClick={() => setShowSpeedMenu((s) => !s)}
@@ -1024,7 +1243,7 @@ export const PlayerView = ({
                   </AnimatePresence>
                 </div>
 
-                <Tooltip text="Next Up Playlist">
+                <Tooltip text="Next Up Playlist" className="hidden sm:flex">
                   <button
                     onClick={() => setShowPlaylist(!showPlaylist)}
                     className={`p-2.5 rounded-xl transition-all ${showPlaylist ? "text-[#271C18] bg-[#271C18]/10 border border-[#271C18]/20" : "text-stone-500 hover:text-white"}`}
@@ -1033,11 +1252,85 @@ export const PlayerView = ({
                   </button>
                 </Tooltip>
 
-                <Tooltip text="Launch Mini Player">
+                <Tooltip text="Launch Mini Player" className="hidden sm:flex">
                   <button onClick={handlePopOut} className="p-2.5 rounded-xl text-stone-500 hover:text-white transition-all">
                     <Icon icon="material-symbols:tab-unselected-sharp" className="w-5 h-5" />
                   </button>
                 </Tooltip>
+
+                {/* Subtitles Toggle */}
+                {!audioOnly && subtitleTracks.length > 0 && (
+                  <div className="relative block">
+                    <Tooltip text="Subtitles">
+                      <button
+                        onClick={() => {
+                          if (subtitleTracks.length > 1) {
+                            setShowSubtitleMenu(!showSubtitleMenu);
+                          } else {
+                            const only = subtitleTracks[0];
+                            if (isSubtitlesEnabled) {
+                              setIsSubtitlesEnabled(false);
+                              onSubtitleToggle?.(false);
+                            } else {
+                              setSelectedSubtitleLang(only.lang);
+                              setIsSubtitlesEnabled(true);
+                              void updateSetting("subtitlePreferredLang", only.lang);
+                              onSubtitleToggle?.(true);
+                            }
+                          }
+                        }}
+                        className={`p-2.5 rounded-xl transition-all ${isSubtitlesEnabled ? "text-[color:var(--accent)]" : "text-stone-500 hover:text-white"}`}
+                      >
+                        <Icon 
+                          icon={isSubtitlesEnabled ? "streamline-ultimate:subtitles-bold" : "streamline-ultimate:subtitles"} 
+                          className="w-4 h-4" 
+                        />
+                      </button>
+                    </Tooltip>
+                    
+                    <AnimatePresence>
+                      {showSubtitleMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute bottom-full mb-3 right-0 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[140px] z-[110] p-1.5"
+                        >
+                          <button
+                            onClick={() => {
+                              setIsSubtitlesEnabled(false);
+                              onSubtitleToggle?.(false);
+                              setShowSubtitleMenu(false);
+                            }}
+                            className={`w-full px-3 py-2 text-left text-[10px] font-black tracking-widest transition-colors rounded-xl flex items-center justify-between ${!isSubtitlesEnabled ? "bg-[color:var(--accent)] text-[#1d1613]" : "text-stone-400 hover:bg-white/5 hover:text-white"}`}
+                          >
+                            <span>OFF</span>
+                            {!isSubtitlesEnabled && <Icon icon="tabler:check" width={12} />}
+                          </button>
+                          <div className="h-px bg-white/5 my-1 mx-2" />
+                          {subtitleTracks.map((track) => (
+                            <button
+                              key={track.lang + track.src}
+                              onClick={() => {
+                                setSelectedSubtitleLang(track.lang);
+                                setIsSubtitlesEnabled(true);
+                                void updateSetting("subtitlePreferredLang", track.lang);
+                                onSubtitleToggle?.(true);
+                                setShowSubtitleMenu(false);
+                              }}
+                              className={`w-full px-3 py-2 text-left text-[10px] font-black tracking-widest transition-colors rounded-xl flex items-center justify-between ${isSubtitlesEnabled && selectedSubtitleLang === track.lang ? "bg-[color:var(--accent)] text-[#1d1613]" : "text-stone-400 hover:bg-white/5 hover:text-white"}`}
+                            >
+                              <span className="truncate mr-2">{track.label.toUpperCase()}</span>
+                              {isSubtitlesEnabled && selectedSubtitleLang === track.lang && <Icon icon="tabler:check" width={12} />}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+
                 <Tooltip text="Toggle Fullscreen">
                   <button onClick={toggleFullscreen} className="p-2.5 rounded-xl text-stone-500 hover:text-white transition-all">
                     {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -1050,4 +1343,14 @@ export const PlayerView = ({
       </AnimatePresence>
     </motion.div>
   );
-};
+});
+
+/**
+ * Store-driven shell: `playingFile` can go null (e.g. mini emits `stop-playback` before React drops this
+ * subtree). Outer only subscribes to `playingFile`; all heavy hooks live in {@link PlayerViewWithFile}.
+ */
+export const PlayerView = forwardRef<PlayerViewHandle, PlayerViewProps>(function PlayerView(props, ref) {
+  const file = useRuforgeStore((s) => s.playingFile);
+  if (!file) return null;
+  return <PlayerViewWithFile ref={ref} file={file} {...props} />;
+});

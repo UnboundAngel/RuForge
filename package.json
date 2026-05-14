@@ -1,7 +1,7 @@
 {
   "name": "ruforge",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -25,7 +25,8 @@
     "lucide-react": "^0.475.0",
     "motion": "^12.38.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@iconify-json/tabler": "^1.2.35",
