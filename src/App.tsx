@@ -29,7 +29,9 @@ import {
   Youtube,
   Database,
   Trash2,
-  Globe
+  Globe,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
@@ -866,52 +868,82 @@ function App() {
           </main>
 
           {/* Toast Notifications */}
-          <div className="absolute bottom-6 right-6 flex flex-col gap-3 z-50 pointer-events-none">
+          <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-50 pointer-events-none max-w-[min(100vw-2rem,22rem)]">
             <AnimatePresence>
-              {notifications.map((n) => (
+              {notifications.map((n) => {
+                const t = n.type ?? "info";
+                const shell =
+                  t === "update"
+                    ? "bg-[#EDD79C] text-[#1d1613] border border-[#1d1613]/12"
+                    : t === "error"
+                      ? "bg-[#2c1818] text-stone-100 border border-red-900/35"
+                      : t === "progress"
+                        ? "bg-[#271C18] text-stone-50 border border-stone-50/10"
+                        : "bg-[#271C18] text-stone-50 border border-stone-50/10";
+                const closeBtn =
+                  t === "update"
+                    ? "text-[#1d1613]/55 hover:text-[#1d1613]"
+                    : t === "error"
+                      ? "text-red-200/70 hover:text-red-100"
+                      : "text-stone-500 hover:text-stone-300";
+                return (
                 <motion.div
                   key={n.id}
                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className={`${n.type === 'update' ? 'bg-[color:var(--accent)] text-[#1d1613]' : 'bg-[#271C18] text-stone-50'} border border-stone-50/10 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto min-w-[280px]`}
+                  className={`${shell} px-3 py-2 rounded-xl shadow-lg flex items-start gap-2.5 pointer-events-auto min-w-0 w-full`}
                 >
-                  {n.type === 'update' ? (
-                    <Download className="w-5 h-5 flex-shrink-0" />
+                  {t === "update" ? (
+                    <Download className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
+                  ) : t === "error" ? (
+                    <AlertCircle className="text-red-400 w-4 h-4 flex-shrink-0 mt-0.5" />
+                  ) : t === "progress" ? (
+                    <Loader2 className="text-[color:var(--accent)] w-4 h-4 flex-shrink-0 mt-0.5 animate-spin" />
                   ) : (
-                    <CheckCircle2 className="text-emerald-400 w-5 h-5 flex-shrink-0" />
+                    <CheckCircle2 className="text-emerald-400 w-4 h-4 flex-shrink-0 mt-0.5" />
                   )}
-                  
-                  <div className="flex-1 flex flex-col">
-                    <span className={`text-sm font-bold ${n.type === 'update' ? 'text-[#1d1613]' : 'text-stone-50'}`}>
+
+                  <div className="flex-1 flex flex-col min-w-0">
+                    <span className={`text-xs font-semibold leading-snug ${t === "update" ? "text-[#1d1613]" : ""}`}>
                       {n.message}
                     </span>
-                    {n.type === 'update' && (
-                      <button 
+                    {t === "update" && (
+                      <button
+                        type="button"
                         onClick={async () => {
+                          const updateId = n.id;
+                          dismissNotification(updateId);
+                          const progressId = notify("Downloading update…", "progress");
                           try {
-                            notify("Downloading update...");
                             await n.updateObj?.downloadAndInstall();
                           } catch (e) {
                             console.error(e);
-                            notify("Update failed");
+                            dismissNotification(progressId);
+                            notify(
+                              "Update failed. Check your connection, or install the latest build from GitHub Releases.",
+                              "error",
+                            );
                           }
                         }}
-                        className="mt-1.5 text-[10px] font-black uppercase tracking-widest bg-[#1d1613] text-[color:var(--accent)] px-3 py-1.5 rounded-lg w-fit hover:bg-black/80 transition-colors"
+                        className="mt-1.5 text-[10px] font-bold uppercase tracking-wide bg-[#1d1613] text-[#EDD79C] px-2.5 py-1 rounded-md w-fit hover:bg-black/85 transition-colors"
                       >
                         Update Now
                       </button>
                     )}
                   </div>
 
-                  <button 
-                    onClick={() => dismissNotification(n.id)} 
-                    className={`${n.type === 'update' ? 'text-[#1d1613]/50 hover:text-[#1d1613]' : 'text-stone-500 hover:text-stone-300'} transition-colors ml-auto p-1`}
+                  <button
+                    type="button"
+                    onClick={() => dismissNotification(n.id)}
+                    className={`${closeBtn} transition-colors flex-shrink-0 p-0.5 rounded`}
+                    aria-label="Dismiss"
                   >
                     <X size={14} />
                   </button>
                 </motion.div>
-              ))}
+                );
+              })}
             </AnimatePresence>
           </div>
         </div>

@@ -70,6 +70,7 @@ A past mismatch was **`Cargo.toml` behind the JS/Tauri app version** — fix on 
 - **Runtime:** `src/App.tsx` calls `check()` on startup; update toasts use `downloadAndInstall()` from the returned `Update` object.
 - **Why “no update” is often correct:** `check()` returns **`null` unless the version in `updater.json` is greater than the running app’s version.** If `updater.json` on `main` still says the same version as the installed build, users will see nothing — that is expected, not a broken wire.
 - **Shipping a new version users can receive:** bump app version, build **signed** artifacts, publish GitHub Release assets, then update **`updater.json`** on `main` with new `version`, `pub_date`, per-platform `url`, and **`signature`** (from the `.sig` files next to each installer — see below). Mismatch between signing key and embedded `pubkey` breaks installs.
+- **GitHub `url` vs tag:** the path segment after `releases/download/` must match the **exact** release tag (including a leading `v` if you use `v0.1.2`). A typo or wrong tag yields **404** and “update failed” in the app.
 
 ### Signed Windows build (this machine’s layout)
 
