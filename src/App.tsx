@@ -1,5 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import {
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  useMotionValueEvent,
+  useTransform,
+} from "motion/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
@@ -7,6 +13,9 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
+import { buildExplorerInjectScript } from "./explorerInjectScript";
+import { canonicalYouTubeWatchUrl, extractYouTubeVideoId } from "./youtubeUrl";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { notifyWhenUnfocused } from "./systemNotify";
 import { check, Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -226,6 +235,18 @@ function App() {
   const searchValue = useRuforgeStore((s) => s.searchValue);
   const setSearchValue = useRuforgeStore((s) => s.setSearchValue);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const mainContentRef = useRef<HTMLElement>(null);
+  /** 0 = bulge tabs flush on panel; 1 = tucked into the 40px title band (scrollable settings only). */
+  const settingsTabMorph = useMotionValue(0);
+  const settingsTabMorphY = useTransform(settingsTabMorph, [0, 1], [0, -40]);
+  const settingsTabMorphScale = useTransform(settingsTabMorph, [0, 1], [1, 0.94]);
+  const settingsTabShapeOpacity = useTransform(settingsTabMorph, [0, 0.35, 0.55], [1, 1, 0]);
+  const [settingsMorphAmount, setSettingsMorphAmount] = useState(0);
+  const [settingsScrollable, setSettingsScrollable] = useState(false);
+  const settingsTabsDocked = settingsMorphAmount > 0.55;
+  const settingsTabShapeLayout = settingsMorphAmount < 0.02;
+  useMotionValueEvent(settingsTabMorph, "change", setSettingsMorphAmount);
+  const settingsTabDockLeft = isSidebarExpanded ? 264 : 104;
   const notifications = useRuforgeStore((s) => s.notifications);
   const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const notify = useRuforgeStore((s) => s.notify);
@@ -242,7 +263,7 @@ function App() {
   const updateRef = useRef<Update | null>(null);
   const [updaterPhase, setUpdaterPhase] = useState<UpdaterPhase>("idle");
   const [updaterVersion, setUpdaterVersion] = useState<string | null>(null);
-  const [updaterNotes, setUpdaterNotes] = useState("");
+  const [, setUpdaterNotes] = useState("");
   const [updaterDownloaded, setUpdaterDownloaded] = useState(0);
   const [updaterContentLength, setUpdaterContentLength] = useState<number | undefined>(undefined);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
@@ -253,7 +274,7 @@ function App() {
     setUpdaterDownloaded(0);
     setUpdaterContentLength(undefined);
     setUpdaterPhase("downloading");
-    setPendingPostInstall(buildPostInstallPayload(u.version, u.body ?? ""));
+    setPendingPostInstall(buildPostInstallPayload(u.version, u.body ?? "")); 
     try {
       await u.downloadAndInstall((event: DownloadEvent) => {
         if (event.event === "Started") {
@@ -275,10 +296,14 @@ function App() {
     }
   }, [notify]);
 
+  const availableUpdatePayload = useMemo(() => {
+    if (!updateRef.current) return null;
+    return buildPostInstallPayload(updateRef.current.version, updateRef.current.body ?? "");
+  }, [updaterVersion]); // updaterVersion changes when updateRef is set
+
   useEffect(() => {
     invoke<boolean>("get_hardware_acceleration_pref")
-      .then((hw) => {
-        useRuforgeStore.getState().mergeHardwareAccelerationFromBackend(hw);
+      .then((hw) => {        useRuforgeStore.getState().mergeHardwareAccelerationFromBackend(hw);
       })
       .catch(() => {});
   }, []);
@@ -355,41 +380,12 @@ function App() {
               const glowRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : 'rgba(237, 207, 155, 0.3)';
 
               invoke("eval_in_webview", {
-                label: 'explorer-view',
-                script: `
-                  (function() {
-                    console.log('NeoTube Explorer Active');
-
-                    const style = document.createElement('style');
-                    style.innerHTML = '#neotube-dl-btn { position: fixed; top: 24px; right: 24px; z-index: 2147483647; background: rgba(29, 22, 19, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid ${borderRgba}; border-radius: 999px; padding: 14px 28px; display: flex; align-items: center; gap: 18px; cursor: pointer; transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); box-shadow: 0 15px 45px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1); opacity: 0; transform: translateY(-20px) scale(0.9); pointer-events: none; user-select: none; font-family: system-ui, -apple-system, sans-serif; } #neotube-dl-btn.visible { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; } #neotube-dl-btn:hover { background: ${accent}; border-color: ${accent}; transform: translateY(-2px) scale(1.02); box-shadow: 0 20px 50px ${glowRgba}; } #neotube-dl-btn .text-group { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; } #neotube-dl-btn .main-text { color: ${accent}; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.2em; transition: color 0.3s; } #neotube-dl-btn .sub-text { color: rgba(255, 255, 255, 0.4); font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em; transition: color 0.3s; } #neotube-dl-btn .icon { color: ${accent}; width: 22px; height: 22px; transition: transform 0.3s, color 0.3s; } #neotube-dl-btn:hover .main-text { color: #1d1613; } #neotube-dl-btn:hover .sub-text { color: rgba(29, 22, 19, 0.6); } #neotube-dl-btn:hover .icon { color: #1d1613; transform: translateY(2px); }';
-                    document.head.appendChild(style);
-                    const btn = document.createElement('div');
-                    btn.id = 'neotube-dl-btn';
-                    btn.innerHTML = '<div class="text-group"><span class="main-text">Source Found</span><span class="sub-text">Direct Download</span></div><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
-                    document.body.appendChild(btn);
-
-                    btn.onclick = () => {
-                       window.__TAURI__.event.emit('manual-download-trigger', window.location.href);
-                       btn.classList.remove('visible');
-                    };
-
-                    let lastUrl = window.location.href;
-                    function checkUrl(force = false) {
-                      const currentUrl = window.location.href;
-                      if (currentUrl !== lastUrl || force) {
-                        lastUrl = currentUrl;
-                        if (currentUrl.includes("watch?v=")) {
-                          btn.classList.add("visible");
-                        } else {
-                          btn.classList.remove("visible");
-                        }
-                      }
-                    }
-                    setInterval(checkUrl, 1000);
-                    window.addEventListener('yt-navigate-finish', () => checkUrl());
-                    checkUrl(true);
-                  })();
-                `
+                label: "explorer-view",
+                script: buildExplorerInjectScript({
+                  accent,
+                  borderRgba,
+                  glowRgba,
+                }),
               });
             });
             
@@ -523,6 +519,46 @@ function App() {
       useRuforgeStore.getState().setActiveTab("downloader");
     });
 
+    const unlistenExplorerSend = listen<string>(
+      "explorer-send-to-downloader",
+      (event) => {
+        const watchUrl =
+          canonicalYouTubeWatchUrl(event.payload) ?? event.payload.trim();
+        if (!watchUrl) return;
+        const st = useRuforgeStore.getState();
+        st.setDownloaderUrl(watchUrl);
+        st.setActiveTab("downloader");
+      },
+    );
+
+    const unlistenExplorerCopyLink = listen<string>(
+      "explorer-copy-watch-url",
+      (event) => {
+        const watchUrl =
+          canonicalYouTubeWatchUrl(event.payload) ?? event.payload.trim();
+        if (!watchUrl) return;
+        void writeText(watchUrl)
+          .then(() => {
+            useRuforgeStore.getState().notify("Link copied to clipboard");
+          })
+          .catch((e) => console.error("explorer copy link failed", e));
+      },
+    );
+
+    const unlistenExplorerCopyId = listen<string>(
+      "explorer-copy-video-id",
+      (event) => {
+        const id =
+          extractYouTubeVideoId(event.payload) ?? event.payload.trim();
+        if (!id) return;
+        void writeText(id)
+          .then(() => {
+            useRuforgeStore.getState().notify("Video ID copied");
+          })
+          .catch((e) => console.error("explorer copy id failed", e));
+      },
+    );
+
     const unlistenDebugUpdater = listen("debug-cycle-updater", () => {
       setUpdaterPhase((current) => {
         if (current === "idle") {
@@ -552,6 +588,9 @@ function App() {
       unlisten.then((f) => f());
       unlistenStop.then((f) => f());
       unlistenManualDownload.then((f) => f());
+      unlistenExplorerSend.then((f) => f());
+      unlistenExplorerCopyLink.then((f) => f());
+      unlistenExplorerCopyId.then((f) => f());
       unlistenDebugUpdater.then((f) => f());
     };
   }, []);
@@ -618,6 +657,55 @@ function App() {
     return () => { unlisten.then(f => f()); };
   }, []);
 
+  useEffect(() => {
+    if (activeTab !== "settings" || postInstall) {
+      settingsTabMorph.set(0);
+      setSettingsMorphAmount(0);
+      setSettingsScrollable(false);
+      return;
+    }
+
+    const morphPx = 72;
+    let el = mainContentRef.current;
+    let detach: (() => void) | undefined;
+
+    const bind = () => {
+      detach?.();
+      el = mainContentRef.current;
+      if (!el) return;
+
+      const apply = () => {
+        const scrollable = el!.scrollHeight > el!.clientHeight + 2;
+        setSettingsScrollable(scrollable);
+        if (!scrollable) {
+          settingsTabMorph.set(0);
+          return;
+        }
+        settingsTabMorph.set(Math.min(1, el!.scrollTop / morphPx));
+      };
+
+      apply();
+      el.addEventListener("scroll", apply, { passive: true });
+      const ro = new ResizeObserver(apply);
+      ro.observe(el);
+      detach = () => {
+        el!.removeEventListener("scroll", apply);
+        ro.disconnect();
+      };
+    };
+
+    bind();
+    const raf = requestAnimationFrame(bind);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      detach?.();
+      settingsTabMorph.set(0);
+      setSettingsMorphAmount(0);
+      setSettingsScrollable(false);
+    };
+  }, [activeTab, postInstall, settingsTab, settingsTabMorph]);
+
   if (isMini) return <MiniPlayer />;
 
   const navItems = [
@@ -647,7 +735,7 @@ function App() {
       <div className="fixed top-0 left-0 right-[200px] h-10 z-[50]" data-tauri-drag-region />
 
       {/* ── Sidebar ─────────────────────────────────────── */}
-      <div className={`${isSidebarExpanded ? 'w-[240px]' : 'w-[80px]'} flex-shrink-0 relative z-20 flex flex-col bg-transparent overflow-hidden transition-[width] duration-500 ease-[0.23,1,0.32,1]`}>
+      <div className={`${isSidebarExpanded ? 'w-[240px]' : 'w-[80px]'} flex-shrink-0 relative z-20 flex flex-col bg-transparent overflow-hidden transition-[width,opacity,filter] duration-500 ease-[0.23,1,0.32,1] ${postInstall ? 'opacity-30 grayscale-[50%] pointer-events-none' : ''}`}>
         {/* Logo container */}
         <div
           className="h-[72px] flex min-w-0 flex-shrink-0 items-center px-5 cursor-default"
@@ -746,28 +834,59 @@ function App() {
 
         {/* Settings / Gallery tab strip */}
         <AnimatePresence mode="wait">
-          {activeTab === "settings" ? (
+          {(activeTab === "settings" && !postInstall) ? (
             <motion.div
               key="settings-tabs"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="absolute left-6 top-0 z-20 flex items-start h-[80px] pointer-events-none"
+              className={
+                settingsTabsDocked
+                  ? "pointer-events-auto fixed top-0 z-[60] flex h-10 items-center"
+                  : "pointer-events-none absolute left-6 top-0 z-20 flex h-[80px] items-start"
+              }
+              style={settingsTabsDocked ? { left: settingsTabDockLeft } : undefined}
             >
+              <motion.div
+                className={
+                  settingsTabsDocked
+                    ? "flex h-10 items-center"
+                    : "flex h-[80px] origin-top-left items-start"
+                }
+                style={
+                  !settingsTabsDocked && settingsScrollable
+                    ? { y: settingsTabMorphY, scale: settingsTabMorphScale }
+                    : undefined
+                }
+              >
               {(["general", "downloads", "appearance", "advanced"] as const).map((tab) => {
                 const isActive = settingsTab === tab;
                 return (
                   <button
                     key={tab}
+                    type="button"
                     onClick={() => setSettingsTab(tab)}
-                    className="relative flex h-[80px] px-6 items-end pb-2 justify-center cursor-pointer pointer-events-auto"
+                    className={`relative flex cursor-pointer justify-center pointer-events-auto transition-[height,padding] duration-200 ${
+                      settingsTabsDocked
+                        ? "h-10 items-center px-4"
+                        : "h-[80px] items-end px-6 pb-2"
+                    }`}
                   >
                     {isActive && (
                       <motion.div
-                        layoutId="settingsTabShape"
-                        className="absolute inset-0 bg-[#271C18] rounded-b-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.5)] z-0"
-                        style={{ clipPath: "inset(40px -100px -100px -100px)" }}
-                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                        layoutId={settingsTabShapeLayout ? "settingsTabShape" : undefined}
+                        layout={settingsTabShapeLayout}
+                        className={`pointer-events-none absolute inset-0 z-0 bg-[#271C18] rounded-b-[24px] ${
+                          settingsTabsDocked ? "" : "shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+                        }`}
+                        style={{
+                          clipPath: "inset(40px -100px -100px -100px)",
+                          opacity: settingsTabShapeOpacity,
+                        }}
+                        transition={{
+                          layout: { type: "spring", bounce: 0.2, duration: 0.6 },
+                          opacity: { duration: 0.15 },
+                        }}
                       >
                         <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
                           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
@@ -777,14 +896,21 @@ function App() {
                         </div>
                       </motion.div>
                     )}
-                    <span className={`font-medium text-[11px] uppercase tracking-[0.05em] transition-colors relative z-10 ${isActive ? "text-[color:var(--accent)]" : "text-stone-400 hover:text-stone-50"}`}>
+                    <span
+                      className={`relative z-10 font-medium text-[11px] uppercase tracking-[0.05em] transition-colors ${
+                        isActive
+                          ? "text-[color:var(--accent)]"
+                          : "text-stone-400 hover:text-stone-50"
+                      }`}
+                    >
                       {tab}
                     </span>
                   </button>
                 );
               })}
+              </motion.div>
             </motion.div>
-          ) : (activeTab === "media" && !selectedPlaylist) ? (
+          ) : (activeTab === "media" && !selectedPlaylist && !postInstall) ? (
             <motion.div
               key="gallery-tabs"
               initial={{ opacity: 0, x: -20 }}
@@ -827,7 +953,7 @@ function App() {
         </AnimatePresence>
 
         {/* Explorer bulge */}
-        {activeTab === "explorer" && (
+        {(activeTab === "explorer" && !postInstall) && (
           <div className="absolute right-6 top-0 z-20 flex h-[80px] pointer-events-none">
             <div
               className="relative flex h-[80px] bg-[#271C18] rounded-b-[28px] px-6 items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
@@ -863,7 +989,7 @@ function App() {
         )}
 
         {/* Gallery search/settings tab bulge */}
-        {activeTab === "media" && (
+        {(activeTab === "media" && !postInstall) && (
           <div className="absolute right-6 top-0 z-20 flex h-[80px] pointer-events-none">
             <div
               className="relative flex h-[80px] bg-[#271C18] rounded-b-[28px] px-6 items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
@@ -929,8 +1055,11 @@ function App() {
           <UpdaterMainOverlays
             phase={updaterPhase}
             version={updaterVersion}
-            notes={updaterNotes}
+            notes={availableUpdatePayload?.notes ?? ""}
+            additions={availableUpdatePayload?.additions}
+            fixes={availableUpdatePayload?.fixes}
             onInstallRestart={() => void handleInstallRestart()}
+            onDismiss={() => setUpdaterPhase("idle")}
           />
           {postInstall && (
             <UpdaterPostInstallStack
@@ -942,7 +1071,7 @@ function App() {
               onOpenChangelog={() => void openUrl(RELEASES_PAGE)}
             />
           )}
-          <main className="absolute inset-0 overflow-y-auto">
+          <main ref={mainContentRef} className="absolute inset-0 overflow-y-auto">
             <AnimatePresence mode="wait">
               {activeTab === "downloader" && (
                 <DownloaderView

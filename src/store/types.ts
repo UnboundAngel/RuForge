@@ -8,6 +8,35 @@ export const RUFORGE_INTERNAL_DIR = "C:\\RuForge\\Media";
 
 export const DEFAULT_OUTPUT_DIR = "C:\\Downloads";
 
+/** yt-dlp `--sub-langs` presets; label is Settings UI only. */
+export const DOWNLOAD_SUBTITLE_LANG_PRESETS: ReadonlyArray<{ label: string; ytdlp: string }> = [
+  { label: "English", ytdlp: "en.*" },
+  { label: "Spanish", ytdlp: "es.*" },
+  { label: "French", ytdlp: "fr.*" },
+  { label: "German", ytdlp: "de.*" },
+  { label: "Portuguese", ytdlp: "pt.*" },
+  { label: "Japanese", ytdlp: "ja.*" },
+  { label: "Korean", ytdlp: "ko.*" },
+  { label: "Chinese", ytdlp: "zh.*" },
+  { label: "English + Spanish", ytdlp: "en.*,es.*" },
+  { label: "English + Spanish + French", ytdlp: "en.*,es.*,fr.*" },
+] as const;
+
+export function downloadSubtitleLangLabel(ytdlp: string): string {
+  const hit = DOWNLOAD_SUBTITLE_LANG_PRESETS.find((p) => p.ytdlp === ytdlp);
+  return hit?.label ?? DOWNLOAD_SUBTITLE_LANG_PRESETS[0].label;
+}
+
+/** Value passed to yt-dlp `--sub-langs` from persisted settings. */
+export function effectiveDownloadSubLangs(settings: {
+  downloadSubtitles: boolean;
+  downloadSubtitleLangs: string;
+}): string {
+  if (!settings.downloadSubtitles) return "";
+  const langs = settings.downloadSubtitleLangs?.trim();
+  return langs || "en.*";
+}
+
 export interface RuforgeSettings {
   launchAtStartup: boolean;
   minimizeToTray: boolean;
@@ -21,6 +50,12 @@ export interface RuforgeSettings {
   audioAutoAdvanceFolder: boolean;
   audioPrefetchNext: boolean;
   subtitlePreferredLang: string | null;
+  /** When false, yt-dlp skips subtitle sidecars. */
+  downloadSubtitles: boolean;
+  /** yt-dlp `--sub-langs` for downloads (playback pick is `subtitlePreferredLang`). */
+  downloadSubtitleLangs: string;
+  /** When true, duplicate YouTube URLs are skipped without prompting. */
+  skipDuplicatesAutomatically: boolean;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -36,6 +71,9 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   audioAutoAdvanceFolder: true,
   audioPrefetchNext: true,
   subtitlePreferredLang: null,
+  downloadSubtitles: true,
+  downloadSubtitleLangs: "en.*",
+  skipDuplicatesAutomatically: false,
 };
 
 export function loadMergedSettings(): RuforgeSettings {

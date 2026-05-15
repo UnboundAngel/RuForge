@@ -313,7 +313,11 @@
       .node-project iconify-icon { font-size: 32px; }
 
       .node-label {
-        margin-top: 10px;
+        position: absolute;
+        left: 50%;
+        top: calc(100% + 10px);
+        transform: translateX(-50%);
+        margin-top: 0;
         font-size: 11px;
         font-weight: 800;
         text-transform: uppercase;
@@ -330,6 +334,44 @@
       
       .graph-node:hover .node-label { color: #fff; }
 
+      .graph-node .node-hit {
+        position: relative;
+      }
+
+      /* Manifest file fan-out rows (derived from multi-path fileEdits) */
+      .node-file-ref .node-circle {
+        width: 40px;
+        height: 40px;
+        border-width: 2px;
+      }
+      .node-file-ref iconify-icon { font-size: 20px; }
+      .node-file-ref .node-label {
+        top: calc(100% + 6px);
+        max-width: 10rem;
+        white-space: normal;
+        line-height: 1.25;
+        font-size: 9px;
+        font-weight: 700;
+        word-break: break-word;
+      }
+
+      .graph-node.task-has-files .node-circle {
+        box-shadow: 0 0 0 1px rgba(237, 215, 156, 0.25);
+      }
+      .graph-node.task-files-expanded .node-circle {
+        box-shadow: 0 0 0 2px rgba(237, 215, 156, 0.45);
+      }
+      .node-file-ref-created .node-circle {
+        border-color: #22c55e !important;
+        box-shadow: 0 0 14px rgba(34, 197, 94, 0.25);
+      }
+      .node-file-ref-created iconify-icon { color: #86efac !important; }
+
+      .node-file-ref-modified .node-circle {
+        border-color: rgba(237, 215, 156, 0.45) !important;
+      }
+      .node-file-ref-modified iconify-icon { color: #c4b59a !important; }
+
       /* Detail Panel */
       #detail-panel {
         position: fixed;
@@ -338,24 +380,35 @@
         background: var(--rf-glass);
         backdrop-filter: blur(24px);
         border-left: 1px solid var(--rf-border);
-        padding: 2.5rem;
+        padding: 0;
         transform: translateX(calc(100% + 50px));
         transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
         z-index: 200;
         display: flex;
         flex-direction: column;
         box-shadow: -20px 0 50px rgba(0,0,0,0.5);
+        overflow: hidden;
       }
 
       #detail-panel.open { transform: translateX(0); }
 
+      #detail-panel-inner {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 2.5rem;
+        padding-top: calc(2.5rem + 12px);
+      }
+
       .close-panel {
         position: absolute;
-        top: 1.5rem; right: 1.5rem;
+        top: 1.25rem; right: 1.25rem;
         background: transparent;
         color: var(--rf-muted);
         padding: 0.5rem;
         min-width: 0;
+        z-index: 210;
       }
 
       .node-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
@@ -470,21 +523,23 @@
     </div>
 
     <div id="detail-panel">
-      <button class="close-panel" onclick="closePanel()">✕</button>
-      <div class="node-header">
-        <iconify-icon id="panel-icon" icon=""></iconify-icon>
-        <div class="node-info">
-          <h2 id="panel-title">Node Title</h2>
-          <span class="node-type" id="panel-type">Type</span>
+      <button type="button" class="close-panel" onclick="closePanel()">✕</button>
+      <div id="detail-panel-inner">
+        <div class="node-header">
+          <iconify-icon id="panel-icon" icon=""></iconify-icon>
+          <div class="node-info">
+            <h2 id="panel-title">Node Title</h2>
+            <span class="node-type" id="panel-type">Type</span>
+          </div>
         </div>
-      </div>
-      <div class="detail-section" id="section-details">
-        <h3>Details</h3>
-        <ul class="detail-list" id="panel-details"></ul>
-      </div>
-      <div class="detail-section" id="section-files">
-        <h3>Files Adjusted</h3>
-        <div class="file-list" id="panel-files"></div>
+        <div class="detail-section" id="section-details">
+          <h3>Details</h3>
+          <ul class="detail-list" id="panel-details"></ul>
+        </div>
+        <div class="detail-section" id="section-files">
+          <h3>Files Adjusted</h3>
+          <div class="file-list" id="panel-files"></div>
+        </div>
       </div>
     </div>
 
@@ -581,11 +636,8 @@
           const detailParts = [...coerceStringArray(n.details), ...coerceStringArray(n.description), ...coerceStringArray(n.summary)];
 
           const { paths, reasonsByPath, fileActions } = collectFilesAndReasons(n);
-          const fileDetailLines = [...reasonsByPath.entries()]
-            .filter(([, r]) => r)
-            .map(([p, r]) => `${p}: ${r}`);
 
-          const details = [...new Set([...detailParts, ...fileDetailLines])];
+          const details = [...new Set(detailParts)];
           const files = [...new Set(paths)];
 
           const icon = n.icon ? String(n.icon) : undefined;
@@ -649,6 +701,10 @@
       let startY;
       let selectedNodeId = null;
       let activeVersions = [];
+      /** Parent task/fix domIds that currently show synthetic file-ref children (click to toggle). */
+      const expandedFileParents = new Set();
+      let pendingOpenDomId = null;
+      let lastGraphCenter = { x: 2500, y: 2600 };
 
       /** Load version manifest; single source of truth is the JSON file (no duplicate nodes in HTML). */
       async function loadManifestDocument(relativePath) {
@@ -741,6 +797,9 @@
               });
             }
             syncPillActiveStates();
+            expandedFileParents.clear();
+            selectedNodeId = null;
+            closePanel();
             renderGraph();
           });
           versionPills.appendChild(pill);
@@ -836,11 +895,11 @@
         return laidOut;
       }
 
-      function bezierPath(from, to, mode) {
-        const x1 = from.x;
-        const y1 = from.y;
-        const x2 = to.x;
-        const y2 = to.y;
+      function bezierPath(from, to, mode, extras) {
+        const x1 = extras?.x1 ?? from.x;
+        const y1 = extras?.y1 ?? from.y;
+        const x2 = extras?.x2 ?? to.x;
+        const y2 = extras?.y2 ?? to.y;
         const dx = x2 - x1;
         const dy = y2 - y1;
         const pull = Math.min(520, Math.max(96, Math.abs(dy) * 0.42));
@@ -851,12 +910,45 @@
         }
 
         if (mode === 'fan') {
-          const bias = Math.max(-240, Math.min(240, dx * 0.15));
-          return `M ${x1} ${y1} C ${x1 + bias} ${y1 + pull}, ${x2 - bias} ${y2 - pull}, ${x2} ${y2}`;
+          const midY = (y1 + y2) / 2;
+          const bias = Math.max(-200, Math.min(200, dx * 0.1));
+          return `M ${x1} ${y1} C ${x1 + bias} ${midY}, ${x2 - bias} ${midY}, ${x2} ${y2}`;
+        }
+
+        if (mode === 'fork') {
+          const midY = y1 + (y2 - y1) * 0.52;
+          return `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
         }
 
         const k = 0.42;
         return `M ${x1} ${y1} C ${x1 + dx * k} ${y1 + pull * 0.25}, ${x2 - dx * k} ${y2 - pull * 0.25}, ${x2} ${y2}`;
+      }
+
+      /** Shift nodes into +xy quadrant; resize SVG so strokes are not clipped at 4000×6000. */
+      function applyBBoxShift(nodes, pad = 520) {
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        nodes.forEach((n) => {
+          if (typeof n.x !== 'number' || typeof n.y !== 'number' || Number.isNaN(n.x) || Number.isNaN(n.y)) return;
+          minX = Math.min(minX, n.x);
+          maxX = Math.max(maxX, n.x);
+          minY = Math.min(minY, n.y);
+          maxY = Math.max(maxY, n.y);
+        });
+        if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+          return { width: 4000, height: 6000, sx: 0, sy: 0 };
+        }
+        const sx = pad - minX;
+        const sy = pad - minY;
+        nodes.forEach((n) => {
+          if (typeof n.x === 'number' && Number.isFinite(n.x)) n.x += sx;
+          if (typeof n.y === 'number' && Number.isFinite(n.y)) n.y += sy;
+        });
+        const width = Math.ceil(maxX - minX + pad * 2);
+        const height = Math.ceil(maxY - minY + pad * 2);
+        return { width, height, sx, sy };
       }
 
       function renderGraph() {
@@ -875,21 +967,39 @@
 
         const activeVers = data.versions.filter((v) => activeVersions.includes(v.id));
         activeVers.forEach((version) => {
+          const tasks = (version.resolvedNodes || []).map((node) => ({ ...node }));
+          tasks.forEach((t) => {
+            t.domId = `${version.id}-${t.id}`;
+          });
+          const versionHasExpandedFanout = tasks.some(
+            (node) => (node.files || []).length >= 2 && expandedFileParents.has(node.domId),
+          );
+          const vnodeY = currentY + (versionHasExpandedFanout ? 560 : 400);
+          const fileRowY = currentY + 288;
+          const FILE_FORK_OUT = 36;
+          const FILE_FORK_IN = 20;
+          const MIN_FILE_CENTER_GAP = 360;
+
           const vNode = {
             id: `vnode-${version.id}`,
             type: 'version',
             label: version.id,
             icon: 'material-symbols:history-rounded',
             x: centerX,
-            y: currentY + 400,
+            y: vnodeY,
             details: [version.label],
             status: version.status,
           };
           activeNodes.push(vNode);
 
-          const tasks = (version.resolvedNodes || []).map((node) => ({ ...node }));
           const count = tasks.length;
-          const spread = count <= 1 ? 0 : Math.max(1400, (count - 1) * 250);
+          const spread = count <= 1 ? 0 : Math.max(1600, (count - 1) * 280);
+
+          function ellipRepoPath(p, max) {
+            const s = String(p || '');
+            if (s.length <= max) return s;
+            return `\u2026${s.slice(-(max - 1))}`;
+          }
 
           tasks.forEach((node, tIdx) => {
             const denom = Math.max(1, count - 1);
@@ -905,6 +1015,57 @@
             }
 
             activeEdges.push({ from: node, to: vNode, color: 'rgba(237, 215, 156, 0.42)', mode: 'fan' });
+
+            const paths = node.files || [];
+            const showFiles = paths.length >= 2 && expandedFileParents.has(node.domId);
+            if (showFiles) {
+              const fc = paths.length;
+              const fspread = fc <= 1 ? 0 : Math.max((fc - 1) * MIN_FILE_CENTER_GAP, 560);
+
+              paths.forEach((fp, fi) => {
+                const fdenom = Math.max(1, fc - 1);
+                const foff = fc <= 1 ? 0 : (fi / fdenom - 0.5) * fspread;
+                const reasons = node._fileReasons instanceof Map ? node._fileReasons : new Map();
+                const acts = node._fileActions instanceof Map ? node._fileActions : new Map();
+                const rawReason =
+                  typeof reasons.get === 'function' && fp ? reasons.get(fp) || '' : '';
+                const trimmed = typeof rawReason === 'string' ? rawReason.trim() : '';
+                const created = acts.get(fp) === 'created';
+                const variant = created ? 'created' : 'modified';
+                const fNode = {
+                  id: `${node.domId}-filenode-${fi}`,
+                  domId: `${node.domId}-f${fi}`,
+                  type: 'file-ref',
+                  fileVariant: variant,
+                  label: ellipRepoPath(fp, GRAPH_LABEL_MAX_CHARS),
+                  fullPath: fp,
+                  icon: variant === 'created' ? 'mdi:file-plus-outline' : 'mdi:file-document-edit-outline',
+                  details: [
+                    trimmed ||
+                      (variant === 'created'
+                        ? 'New file introduced in this manifest entry.'
+                        : 'Existing file touched in this manifest entry.'),
+                  ],
+                  role: variant === 'created' ? 'New file' : 'Modified file',
+                  x: node.x + foff,
+                  y: fileRowY,
+                };
+                activeNodes.push(fNode);
+                activeEdges.push({
+                  from: node,
+                  to: fNode,
+                  color: 'rgba(237,215,156,0.28)',
+                  width: 2.5,
+                  mode: 'fork',
+                  extras: {
+                    x1: node.x,
+                    y1: node.y + FILE_FORK_OUT,
+                    x2: fNode.x,
+                    y2: fNode.y - FILE_FORK_IN,
+                  },
+                });
+              });
+            }
           });
 
           if (lastVersionNode) {
@@ -915,7 +1076,7 @@
           }
 
           lastVersionNode = vNode;
-          currentY += 800;
+          currentY += versionHasExpandedFanout ? 940 : 800;
         });
 
         projectNode.x = centerX;
@@ -928,10 +1089,29 @@
         }
 
         const allNodes = [...baseNodes, ...activeNodes];
+        const bb = applyBBoxShift(allNodes, 520);
+        const shiftedCenterX = 2000 + bb.sx;
+        lastGraphCenter.x = shiftedCenterX;
+        lastGraphCenter.y = projectNode.y;
+
+        graphLayer.style.width = `${Math.max(bb.width, 3600)}px`;
+        graphLayer.style.height = `${Math.max(bb.height, 5200)}px`;
+        edgesContainer.setAttribute('width', String(Math.max(bb.width, 3600)));
+        edgesContainer.setAttribute('height', String(Math.max(bb.height, 5200)));
+        edgesContainer.setAttribute('viewBox', `0 0 ${Math.max(bb.width, 3600)} ${Math.max(bb.height, 5200)}`);
+
         allNodes.forEach((node) => {
           const el = document.createElement('div');
           const domId = node.domId || node.id;
-          el.className = `graph-node node-${node.type} ${node.status ? `status-${node.status}` : ''}`;
+          const variantClass =
+            node.type === 'file-ref' ? `node-file-ref node-file-ref-${node.fileVariant}` : '';
+          const multiFileParent =
+            (node.type === 'task' || node.type === 'fix') && (node.files || []).length >= 2;
+          const multifileExpanded = multiFileParent && expandedFileParents.has(domId);
+          el.className =
+            `graph-node node-${node.type} ${node.status ? `status-${node.status}` : ''} ${variantClass}`.trim() +
+            (multiFileParent ? ' task-has-files' : '') +
+            (multifileExpanded ? ' task-files-expanded' : '');
           el.style.left = `${node.x}px`;
           el.style.top = `${node.y}px`;
           const icon =
@@ -943,13 +1123,26 @@
           const lab = document.createElement('div');
           lab.className = 'node-label';
           lab.textContent = truncateLabelDisplay(node.label, GRAPH_LABEL_MAX_CHARS);
-          if (String(node.label || '').length > GRAPH_LABEL_MAX_CHARS) lab.title = node.label;
+          const lblFull =
+            node.type === 'file-ref' && node.fullPath
+              ? String(node.fullPath)
+              : String(node.label || '');
+          if (lblFull.length > GRAPH_LABEL_MAX_CHARS) lab.title = lblFull;
           el.appendChild(hit);
           el.appendChild(lab);
           hit.addEventListener('mouseenter', () => highlightEdges(domId, true));
           hit.addEventListener('mouseleave', () => resetEdges());
           hit.addEventListener('click', (e) => {
             e.stopPropagation();
+            const paths = node.files || [];
+            const multi = (node.type === 'task' || node.type === 'fix') && paths.length >= 2;
+            if (multi) {
+              if (expandedFileParents.has(domId)) expandedFileParents.delete(domId);
+              else expandedFileParents.add(domId);
+              pendingOpenDomId = domId;
+              renderGraph();
+              return;
+            }
             selectedNodeId = domId;
             highlightEdges(domId, false);
             openPanel(node);
@@ -973,10 +1166,10 @@
           const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
           let d;
           if (from.id === 'user' && to.id === 'ruforge') {
-            const curveX = centerX + (activeVers.length ? 420 : 220);
+            const curveX = shiftedCenterX + (activeVers.length ? 420 : 220);
             d = `M ${from.x} ${from.y} C ${curveX} ${from.y + 220}, ${curveX} ${to.y - 220}, ${to.x} ${to.y}`;
           } else {
-            d = bezierPath(from, to, edge.mode || 'default');
+            d = bezierPath(from, to, edge.mode || 'default', edge.extras || null);
           }
           path.setAttribute('d', d);
           path.setAttribute('stroke', edge.color || 'rgba(237, 215, 156, 0.15)');
@@ -987,6 +1180,16 @@
           path.classList.add('edge-path');
           edgesContainer.appendChild(path);
         });
+
+        if (pendingOpenDomId) {
+          const np = allNodes.find((n) => (n.domId || n.id) === pendingOpenDomId);
+          if (np) {
+            selectedNodeId = pendingOpenDomId;
+            openPanel(np);
+            highlightEdges(pendingOpenDomId, false);
+          }
+          pendingOpenDomId = null;
+        }
       }
 
       function highlightEdges(domId, isHover) {
@@ -1018,14 +1221,34 @@
       function openPanel(node) {
         const fullTitle = String(node.label || '');
         const pt = document.getElementById('panel-title');
-        pt.textContent = truncateLabelDisplay(fullTitle, PANEL_TITLE_MAX_CHARS);
-        if (fullTitle.length > PANEL_TITLE_MAX_CHARS) pt.setAttribute('title', fullTitle);
-        else pt.removeAttribute('title');
+        pt.textContent = truncateLabelDisplay(
+          node.type === 'file-ref' && node.fullPath ? node.fullPath : fullTitle,
+          PANEL_TITLE_MAX_CHARS,
+        );
+        if (
+          (node.type === 'file-ref' && String(node.fullPath || '').length > PANEL_TITLE_MAX_CHARS) ||
+          (!node.fullPath && fullTitle.length > PANEL_TITLE_MAX_CHARS)
+        ) {
+          pt.setAttribute('title', node.fullPath || fullTitle);
+        } else pt.removeAttribute('title');
         document.getElementById('panel-type').textContent = node.role || node.type;
         document.getElementById('panel-icon').setAttribute('icon', node.icon || 'mdi:tools');
         const dList = document.getElementById('panel-details');
         dList.innerHTML = '';
-        (node.details || []).forEach((d) => {
+        const domForExp = node.domId || node.id;
+        const pathList = node.files || [];
+        const isMultiManifest =
+          (node.type === 'task' || node.type === 'fix') && pathList.length >= 2;
+        const detailLines = [...(node.details || [])];
+        if (isMultiManifest) {
+          const expanded = domForExp && expandedFileParents.has(domForExp);
+          detailLines.unshift(
+            expanded
+              ? 'File row is shown under this task on the graph. Click the task again to hide it.'
+              : 'This entry touches multiple paths. Click this task on the graph to show file nodes (green = new file).',
+          );
+        }
+        detailLines.forEach((d) => {
           const li = document.createElement('li');
           li.textContent = d;
           dList.appendChild(li);
@@ -1050,8 +1273,9 @@
           if (why) s.title = why;
           fList.appendChild(s);
         });
-        document.getElementById('section-details').style.display = node.details?.length ? 'block' : 'none';
-        document.getElementById('section-files').style.display = node.files?.length ? 'block' : 'none';
+        document.getElementById('section-details').style.display = detailLines.length ? 'block' : 'none';
+        document.getElementById('section-files').style.display =
+          node.type === 'file-ref' ? 'none' : node.files?.length ? 'block' : 'none';
         document.getElementById('detail-panel').classList.add('open');
       }
 
@@ -1107,18 +1331,20 @@
       viewport.addEventListener('click', (e) => {
         if (e.target.closest('.node-hit')) return;
         selectedNodeId = null;
+        expandedFileParents.clear();
         closePanel();
         resetEdges();
+        renderGraph();
       });
 
-      hydrateVersionsFromManifests().then((d) => {
-        data = d;
-        initVersionPills();
-        renderGraph();
-        panX = window.innerWidth / 2 - 2000;
-        panY = window.innerHeight / 2 - 400;
-        updateTransform();
-      });
+        hydrateVersionsFromManifests().then((d) => {
+          data = d;
+          initVersionPills();
+          renderGraph();
+          panX = window.innerWidth / 2 - lastGraphCenter.x;
+          panY = window.innerHeight / 2 - lastGraphCenter.y;
+          updateTransform();
+        });
     </script>
   </body>
 </html>

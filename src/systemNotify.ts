@@ -8,8 +8,8 @@ import {
 const DEFAULT_TITLE = "RuForge";
 
 /**
- * Windows toasts only show the real app name/icon when the app is installed (not from `npm run tauri dev`,
- * where the parent process is often PowerShell). Title/body here still show correctly inside the toast.
+ * Windows toasts use the process AppUserModelID for the header (see `set_windows_notification_app_id` in
+ * src-tauri). Installed builds also need a Start Menu shortcut with the same ID for the display name/icon.
  */
 export async function notifyWhenUnfocused(options: {
   body: string;

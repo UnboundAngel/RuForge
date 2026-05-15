@@ -2,7 +2,9 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+use crate::download_job_manager::{kill_ytdlp_tree, DownloadJobManager};
 use tauri_plugin_shell::ShellExt;
 
 use crate::commands::media::extract_frames;
@@ -407,10 +409,15 @@ pub struct DownloadOptions {
     pub filename_template: String,
     pub browser_cookies: Option<String>,
     pub cookie_file: Option<String>,
+    /// yt-dlp `--sub-langs` (e.g. `en.*`). Empty skips subtitle download flags.
+    #[serde(default)]
+    pub sub_langs: String,
 }
 
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ProgressPayload {
+    job_id: String,
     percentage: f32,
     speed: String,
     eta: String,
@@ -421,6 +428,15 @@ struct ProgressPayload {
     total_items: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     current_item_title: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadJobFinishedPayload {
+    job_id: String,
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 #[tauri::command]
@@ -487,8 +503,104 @@ fn yt_dlp_effective_filename_template(metadata_probe: &serde_json::Value, user_t
     }
 }
 
+fn build_ytdlp_download_args(
+    app: &AppHandle,
+    url: &str,
+    options: &DownloadOptions,
+    filename_template_eff: &str,
+    resume: bool,
+) -> Result<Vec<String>, String> {
+    let mut args = vec![
+        "-f".to_string(),
+        options.format.clone(),
+        "-P".to_string(),
+        options.output_dir.clone(),
+        "-o".to_string(),
+        filename_template_eff.to_string(),
+        "--windows-filenames".to_string(),
+        "--no-restrict-filenames".to_string(),
+        "--trim-filenames".to_string(),
+        "200".to_string(),
+        "--newline".to_string(),
+        "--write-info-json".to_string(),
+        "--write-thumbnail".to_string(),
+        "--convert-thumbnails".to_string(),
+        "jpg".to_string(),
+    ];
+
+    if resume {
+        args.push("--continue".to_string());
+    }
+
+    let sub_langs = options.sub_langs.trim();
+    log::info!("[RuForge] download sub_langs={:?} resume={}", sub_langs, resume);
+    if !sub_langs.is_empty() {
+        args.push("--write-subs".to_string());
+        args.push("--write-auto-subs".to_string());
+        args.push("--sub-langs".to_string());
+        args.push(sub_langs.to_string());
+        args.push("--convert-subs".to_string());
+        args.push("vtt".to_string());
+    }
+
+    push_ytdlp_download_cookie_args(app, &mut args, options)?;
+    args.push(url.to_string());
+    Ok(args)
+}
+
+fn spawn_post_download_frame_extract(
+    app: AppHandle,
+    video_url: String,
+    options: DownloadOptions,
+    filename_template_eff: String,
+) {
+    tokio::spawn(async move {
+        let mut get_name_args = vec![
+            "-P".to_string(),
+            options.output_dir.clone(),
+            "-o".to_string(),
+            filename_template_eff,
+            "--windows-filenames".to_string(),
+            "--trim-filenames".to_string(),
+            "200".to_string(),
+            "--get-filename".to_string(),
+        ];
+        let _ = push_ytdlp_download_cookie_args(&app, &mut get_name_args, &options);
+        get_name_args.push(video_url);
+
+        let Ok(sidecar) = app.shell().sidecar("yt-dlp") else {
+            return;
+        };
+        if let Ok(output) = sidecar.args(get_name_args).output().await {
+            for raw in output.stdout.split(|&b| b == b'\n') {
+                let path_str = match std::str::from_utf8(raw) {
+                    Ok(s) => s.trim(),
+                    Err(_) => continue,
+                };
+                if path_str.is_empty() {
+                    continue;
+                }
+                if std::path::Path::new(path_str).is_file() {
+                    let _ = extract_frames(app.clone(), path_str.to_string()).await;
+                }
+            }
+        }
+    });
+}
+
 #[tauri::command]
-pub async fn download_video(app: AppHandle, url: String, options: DownloadOptions) -> Result<String, String> {
+pub async fn start_download_job(
+    app: AppHandle,
+    manager: State<'_, DownloadJobManager>,
+    job_id: String,
+    url: String,
+    options: DownloadOptions,
+    resume: bool,
+) -> Result<(), String> {
+    if manager.active.lock().unwrap().contains_key(&job_id) {
+        return Err(format!("Job {} is already running", job_id));
+    }
+
     let probe = yt_dlp_single_json_simulate(&app, &url, Some(&options)).await?;
     let filename_template_eff = yt_dlp_effective_filename_template(&probe, &options.filename_template);
 
@@ -496,40 +608,9 @@ pub async fn download_video(app: AppHandle, url: String, options: DownloadOption
         return Err(format!("Failed to create output directory: {}", e));
     }
 
-    let mut args = vec![
-        "-f".to_string(),
-        options.format.clone(),
-        "-P".to_string(),
-        options.output_dir.clone(),
-        "-o".to_string(),
-        filename_template_eff.clone(),
-        "--windows-filenames".to_string(),
-        "--no-restrict-filenames".to_string(),
-        "--trim-filenames".to_string(),
-        "200".to_string(),
-        "--newline".to_string(),
-        "--write-info-json".to_string(),
-        // YouTube ASR WebVTT is a rolling two-line format (overlapping cues + inline <time><c> tags).
-        // yt-dlp has no documented flag to emit deduplicated line-by-line ASR; `--convert-subs` only
-        // changes container format (see README / yt-dlp#1734). The UI normalizes on load instead.
-        "--write-subs".to_string(),
-        "--write-auto-subs".to_string(),
-        "--sub-langs".to_string(),
-        "en.*".to_string(),
-        "--convert-subs".to_string(),
-        "vtt".to_string(),
-        "--write-thumbnail".to_string(),
-        "--convert-thumbnails".to_string(),
-        "jpg".to_string(),
-    ];
+    let args = build_ytdlp_download_args(&app, &url, &options, &filename_template_eff, resume)?;
 
-    push_ytdlp_download_cookie_args(&app, &mut args, &options)?;
-    args.push(url.clone());
-
-    let download_started_at = SystemTime::now();
-    let diag_root = post_download_diag_listing_root(Path::new(&options.output_dir), &filename_template_eff);
-
-    let (mut rx, _child) = app
+    let (mut rx, child) = app
         .shell()
         .sidecar("yt-dlp")
         .map_err(|e| e.to_string())?
@@ -537,118 +618,147 @@ pub async fn download_video(app: AppHandle, url: String, options: DownloadOption
         .spawn()
         .map_err(|e| format!("Failed to start download sidecar: {}", e))?;
 
-    let mut progress_extras = PlaylistDownloadProgressExtras::default();
-    let mut error_log = String::new();
+    manager.insert_active(job_id.clone(), child);
 
-    while let Some(event) = rx.recv().await {
+    let manager_bg = manager.inner().clone();
+    tauri::async_runtime::spawn(async move {
         use tauri_plugin_shell::process::CommandEvent;
-        match event {
-            CommandEvent::Stdout(line_bytes) => {
-                let line = String::from_utf8_lossy(&line_bytes).to_string();
-                if line.contains("[download]") {
-                    if let Some((idx, total, tit)) = parse_ytdlp_playlist_download_line(&line) {
-                        progress_extras.current_index = Some(idx);
-                        progress_extras.total_items = Some(total);
-                        if tit.is_some() {
-                            progress_extras.current_item_title = tit;
-                        }
-                    }
-                }
 
-                if line.contains("[download]") && line.contains('%') {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 2 {
-                        let percent_str = parts[1].trim_end_matches('%');
-                        if let Ok(percentage) = percent_str.parse::<f32>() {
-                            let mut speed = "";
-                            let mut eta = "";
+        let download_started_at = SystemTime::now();
+        let diag_root = post_download_diag_listing_root(
+            Path::new(&options.output_dir),
+            &filename_template_eff,
+        );
+        let mut progress_extras = PlaylistDownloadProgressExtras::default();
+        let mut error_log = String::new();
 
-                            for (i, part) in parts.iter().enumerate() {
-                                if part.contains("/s") || part.contains("B/s") {
-                                    speed = part;
-                                }
-                                if part.contains(':') && i > 4 {
-                                    eta = part;
-                                }
-                            }
-
-                            let _ = app.emit(
-                                "download-progress",
-                                ProgressPayload {
-                                    percentage,
-                                    speed: speed.to_string(),
-                                    eta: eta.to_string(),
-                                    status: "downloading".to_string(),
-                                    current_index: progress_extras.current_index,
-                                    total_items: progress_extras.total_items,
-                                    current_item_title: progress_extras.current_item_title.clone(),
-                                },
-                            );
-                        }
-                    }
-                }
-            }
-            CommandEvent::Stderr(line_bytes) => {
-                error_log.push_str(&String::from_utf8_lossy(&line_bytes));
-                error_log.push('\n');
-            }
-            CommandEvent::Terminated(payload) => {
-                if payload.code == Some(0) {
-                    log_post_download_files_written(&diag_root, download_started_at);
-
-                    let app_handle_inner = app.clone();
-                    let video_url = url.clone();
-                    let dl_opts_for_name = options.clone();
-                    let filename_for_probe = filename_template_eff.clone();
-
-                    tokio::spawn(async move {
-                        let mut get_name_args = vec![
-                            "-P".to_string(),
-                            dl_opts_for_name.output_dir.clone(),
-                            "-o".to_string(),
-                            filename_for_probe,
-                            "--windows-filenames".to_string(),
-                            "--trim-filenames".to_string(),
-                            "200".to_string(),
-                            "--get-filename".to_string(),
-                        ];
-                        let _ = push_ytdlp_download_cookie_args(
-                            &app_handle_inner,
-                            &mut get_name_args,
-                            &dl_opts_for_name,
-                        );
-                        get_name_args.push(video_url);
-
-                        if let Ok(output) = app_handle_inner
-                            .shell()
-                            .sidecar("yt-dlp")
-                            .unwrap()
-                            .args(get_name_args)
-                            .output()
-                            .await
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line_bytes) => {
+                    let line = String::from_utf8_lossy(&line_bytes).to_string();
+                    if line.contains("[download]") {
+                        if let Some((idx, total, tit)) =
+                            parse_ytdlp_playlist_download_line(&line)
                         {
-                            for raw in output.stdout.split(|&b| b == b'\n') {
-                                let path_str = match std::str::from_utf8(raw) {
-                                    Ok(s) => s.trim(),
-                                    Err(_) => continue,
-                                };
-                                if path_str.is_empty() {
-                                    continue;
-                                }
-                                if std::path::Path::new(path_str).is_file() {
-                                    let _ = extract_frames(app_handle_inner.clone(), path_str.to_string()).await;
-                                }
+                            progress_extras.current_index = Some(idx);
+                            progress_extras.total_items = Some(total);
+                            if tit.is_some() {
+                                progress_extras.current_item_title = tit;
                             }
                         }
-                    });
-                    return Ok("Download finished".to_string());
-                } else {
-                    return Err(format!("Download failed (code {:?}): {}", payload.code, error_log));
-                }
-            }
-            _ => {}
-        }
-    }
+                    }
 
-    Err("Download process ended unexpectedly".to_string())
+                    if line.contains("[download]") && line.contains('%') {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            let percent_str = parts[1].trim_end_matches('%');
+                            if let Ok(percentage) = percent_str.parse::<f32>() {
+                                let mut speed = "";
+                                let mut eta = "";
+
+                                for (i, part) in parts.iter().enumerate() {
+                                    if part.contains("/s") || part.contains("B/s") {
+                                        speed = part;
+                                    }
+                                    if part.contains(':') && i > 4 {
+                                        eta = part;
+                                    }
+                                }
+
+                                let _ = app.emit(
+                                    "download-progress",
+                                    ProgressPayload {
+                                        job_id: job_id.clone(),
+                                        percentage,
+                                        speed: speed.to_string(),
+                                        eta: eta.to_string(),
+                                        status: "downloading".to_string(),
+                                        current_index: progress_extras.current_index,
+                                        total_items: progress_extras.total_items,
+                                        current_item_title: progress_extras
+                                            .current_item_title
+                                            .clone(),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+                CommandEvent::Stderr(line_bytes) => {
+                    error_log.push_str(&String::from_utf8_lossy(&line_bytes));
+                    error_log.push('\n');
+                }
+                CommandEvent::Terminated(payload) => {
+                    manager_bg.remove_active(&job_id);
+
+                    if manager_bg.take_paused(&job_id) {
+                        let _ = app.emit("download-job-paused", job_id.clone());
+                        return;
+                    }
+
+                    if payload.code == Some(0) {
+                        log_post_download_files_written(&diag_root, download_started_at);
+                        spawn_post_download_frame_extract(
+                            app.clone(),
+                            url.clone(),
+                            options.clone(),
+                            filename_template_eff.clone(),
+                        );
+                        let _ = app.emit(
+                            "download-job-finished",
+                            DownloadJobFinishedPayload {
+                                job_id: job_id.clone(),
+                                success: true,
+                                error: None,
+                            },
+                        );
+                        return;
+                    }
+
+                    let err =
+                        format!("Download failed (code {:?}): {}", payload.code, error_log);
+                    log::error!("[RuForge] job {} failed: {}", job_id, err);
+                    let _ = app.emit(
+                        "download-job-finished",
+                        DownloadJobFinishedPayload {
+                            job_id: job_id.clone(),
+                            success: false,
+                            error: Some(err),
+                        },
+                    );
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        manager_bg.remove_active(&job_id);
+        if !manager_bg.take_paused(&job_id) {
+            let err = "Download process ended unexpectedly".to_string();
+            log::error!("[RuForge] job {}: {}", job_id, err);
+            let _ = app.emit(
+                "download-job-finished",
+                DownloadJobFinishedPayload {
+                    job_id,
+                    success: false,
+                    error: Some(err),
+                },
+            );
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn pause_download_job(
+    manager: State<'_, DownloadJobManager>,
+    job_id: String,
+) -> Result<(), String> {
+    manager.mark_paused(&job_id);
+    if let Some(child) = manager.remove_active(&job_id) {
+        kill_ytdlp_tree(child);
+        return Ok(());
+    }
+    Ok(())
 }

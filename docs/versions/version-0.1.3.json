@@ -211,6 +211,423 @@
           "reason": "Ledger t12."
         }
       ]
+    },
+    {
+      "id": "t13",
+      "type": "task",
+      "label": "Settings tab strip scroll-morph into title bar",
+      "agent": "chad",
+      "details": [
+        "When settings content scrolls (short viewports), the General/Downloads/Appearance/Advanced strip moves into the 40px title band; scroll back to top restores flush bulge tabs.",
+        "Docked header mode drops bulge shape and shadows — active tab is accent color only.",
+        "Fixed morph regressions: no full-width brown veil, no per-button brown halos, bulge no longer ghosts under labels, tabs stay clickable via fixed z-[60] above the drag region."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/App.tsx",
+          "reason": "mainContentRef + settingsTabMorph scroll listener; lifted/docked states (useMotionValueEvent); split enter-animation vs scroll transform layers; settingsTabShapeOpacity fade; fixed header positioning for clicks."
+        }
+      ]
+    },
+    {
+      "id": "t14",
+      "type": "task",
+      "label": "Graph Layout Optimization",
+      "agent": "jim",
+      "details": ["Tightened shared tools layout in versioner.html to reduce canvas footprint."],
+      "fileEdits": [
+        {
+          "path": "docs/versioner.html",
+          "reason": "Reduced spreadX/spreadY for shared tool nodes."
+        }
+      ]
+    },
+    {
+      "id": "t15",
+      "type": "task",
+      "label": "Updater UI Foundation",
+      "agent": "chad",
+      "details": [
+        "Initial implementation of in-app updater layers and post-install celebration.",
+        "Integrated markdown-to-jsx for release notes rendering."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/UpdaterLayers.tsx",
+          "reason": "Created initial UpdaterLayers (overlays, full-window, status indicator).",
+          "action": "created"
+        },
+        {
+          "path": "src/updatePostInstall.ts",
+          "reason": "Created post-install payload and persistence logic.",
+          "action": "created"
+        },
+        {
+          "path": "src/App.tsx",
+          "reason": "Wired Tauri updater plugin events and state."
+        },
+        {
+          "path": "package.json",
+          "reason": "Bumped version to 0.1.2; added markdown-to-jsx."
+        }
+      ]
+    },
+    {
+      "id": "t16",
+      "type": "task",
+      "label": "Updater 'Final Form' UI Overhaul",
+      "agent": "jim",
+      "details": [
+        "Transformed post-install screen into a centered, high-fidelity immersive modal.",
+        "Implemented color-coded category hierarchy (Emerald Additions, Red Fixes) with soft gradients.",
+        "Added support for contributor handles via sleek metadata pills.",
+        "Integrated sidebar dimming (opacity + grayscale) during update celebration.",
+        "Refined button layout: standardized Close pill and hover-reveal ghost button for Full Changelog.",
+        "Optimized animations for high-performance (hardware-accelerated transforms)."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/UpdaterLayers.tsx",
+          "reason": "Complete redesign of ChangelogLayout and UpdaterPostInstallStack; optimized Framer Motion transitions."
+        },
+        {
+          "path": "src/App.tsx",
+          "reason": "Implemented sidebar dimming; hid navigation bulges during modal active state."
+        },
+        {
+          "path": "src/updatePostInstall.ts",
+          "reason": "Updated schema to support rich ChangeItem objects (text + handle)."
+        }
+      ]
+    },
+    {
+      "id": "t17",
+      "type": "task",
+      "label": "Download subtitle languages (Settings → yt-dlp)",
+      "agent": "chad",
+      "details": [
+        "Settings → Downloads: Download Subtitles toggle + language picker; effectiveDownloadSubLangs → sub_langs on download_video.",
+        "Downloader shows selected language before download; player lists only on-disk VTT sidecars with lang tags in labels."
+      ],
+      "files": [
+        "src/store/types.ts",
+        "src/components/SettingsView.tsx",
+        "src/components/DownloaderView.tsx",
+        "src-tauri/src/commands/downloader.rs"
+      ]
+    },
+    {
+      "id": "t18",
+      "type": "task",
+      "label": "Duplicate YouTube URL guard",
+      "agent": "chad",
+      "details": [
+        "Match library sourceUrl by normalized video id before download.",
+        "First Download click shows inline already-downloaded warning; second opens Replace / Create new / Cancel modal.",
+        "Settings Skip Duplicates uses ToggleSlot (no dialog checkbox)."
+      ],
+      "files": [
+        "src/youtubeUrl.ts",
+        "src/duplicateDownload.ts",
+        "src/components/DuplicateDownloadDialog.tsx",
+        "src/components/DownloaderView.tsx"
+      ]
+    },
+    {
+      "id": "t19",
+      "type": "task",
+      "label": "Downloader Duplicate UI Refinement",
+      "agent": "chad",
+      "details": [
+        "Reimagined 'Already in your library' banner with RuForge brown/cream glassmorphism.",
+        "Complete overhaul of Duplicate confirmation dialog: renamed 'Conflict Detected' to 'Item in Library'.",
+        "Implemented signature RuForge fading dividers (strong-to-transparent) in dialog header.",
+        "Resolved typography competition by moving 'Already Downloaded' to a distinct accent badge.",
+        "Shifted dialog to React Portal (z-999) to ensure proper overlay and blur of the sidebar.",
+        "Subtilized button glows across downloader and dialog to remove visual blurriness.",
+        "Refined spacing, hierarchy, and icon alignment for a premium, non-technical aesthetic."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "Redesigned duplicate banner; subtilized Download button glow; refined caption typography."
+        },
+        {
+          "path": "src/components/DuplicateDownloadDialog.tsx",
+          "reason": "Redesigned dialog with Portal, horizontal header, fading divider, accent badges, and reduced button sizes."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t19 ledger for UI refinement phase."
+        }
+      ]
+    },
+    {
+      "id": "t20",
+      "type": "task",
+      "label": "Final UX Polish: Video Match Dialog",
+      "agent": "chad",
+      "details": [
+        "Renamed header to 'Video in Library' for platform consistency.",
+        "Removed redundant filename metadata to declutter the interface.",
+        "Established clear button hierarchy: 'Replace' as primary pill, 'Create New' and 'Cancel' as subtle text links.",
+        "Integrated 'Already Downloaded' status as a clean inline indicator below the title.",
+        "Standardized padding and spacing to resolve visual conflicts and crowding."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/DuplicateDownloadDialog.tsx",
+          "reason": "Applied final UX refinements: renamed labels, removed redundancy, and overhauled button hierarchy."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t20 ledger."
+        }
+      ]
+    },
+    {
+      "id": "t21",
+      "type": "task",
+      "label": "Clipboard YouTube on focus",
+      "agent": "chad",
+      "details": [
+        "On downloader URL focus, read system clipboard via tauri-plugin-clipboard-manager.",
+        "Empty field: auto-fill canonical watch URL and show dismissible pasted-from-clipboard hint.",
+        "Non-empty field: non-blocking Use it? affordance; stale reads cancelled via generation counter.",
+        "Reuse youtubeUrl helpers for detection, normalization, and same-URL no-op."
+      ],
+      "files": [
+        "src/youtubeUrl.ts",
+        "src/downloaderClipboardYoutube.ts",
+        "src/components/DownloaderView.tsx",
+        "package.json",
+        "src-tauri/Cargo.toml",
+        "src-tauri/src/lib.rs",
+        "src-tauri/capabilities/default.json"
+      ],
+      "fileEdits": [
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t21 ledger for clipboard-on-focus downloader UX."
+        }
+      ]
+    },
+    {
+      "id": "t22",
+      "type": "task",
+      "label": "Clipboard on focus review pass",
+      "agent": "chad",
+      "details": [
+        "Moved pasted-from-clipboard hint above URL input so accent underline stays flush below input.",
+        "Tightened duplicate replace modal: Replace download? title, removed redundant Already Downloaded line.",
+        "Documented current-clipboard-only limitation (no Win+V history API); extractYouTubeUrlFromText trims and scans shared text."
+      ],
+      "files": [
+        "src/components/DownloaderView.tsx",
+        "src/components/DuplicateDownloadDialog.tsx",
+        "src/downloaderClipboardYoutube.ts"
+      ],
+      "fileEdits": [
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t22 ledger for clipboard review fixes."
+        }
+      ]
+    },
+    {
+      "id": "t24",
+      "type": "task",
+      "label": "Explorer watch-page context menu",
+      "agent": "chad",
+      "details": [
+        "Custom RuForge-themed right-click menu on YouTube watch pages in the embedded Explorer webview (video player area only).",
+        "Download video emits manual-download-trigger with canonical watch URL; Send to downloader fills the URL field and switches tab without auto-start.",
+        "Copy link and Copy video ID use host clipboard write via tauri-plugin-clipboard-manager.",
+        "Menu dismisses on outside click, Escape, scroll, and yt-navigate-finish; floating pill visibility uses shorts/embed/live URL detection."
+      ],
+      "files": [
+        "src/explorerInjectScript.ts",
+        "src/App.tsx",
+        "src-tauri/capabilities/default.json"
+      ],
+      "fileEdits": [
+        {
+          "path": "src/explorerInjectScript.ts",
+          "reason": "Injected Explorer bootstrap: floating download pill, watch URL helpers, custom context menu UI and Tauri event bridge."
+        },
+        {
+          "path": "src/App.tsx",
+          "reason": "Wire buildExplorerInjectScript on webview create; listen for explorer-send-to-downloader, explorer-copy-watch-url, explorer-copy-video-id."
+        },
+        {
+          "path": "src-tauri/capabilities/default.json",
+          "reason": "Allow clipboard-manager write-text for Explorer copy actions from main window."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t24 ledger for Explorer context menu."
+        }
+      ]
+    },
+    {
+      "id": "t25",
+      "type": "task",
+      "label": "Immersive URL Transitions (Downloader)",
+      "agent": "chad",
+      "details": [
+        "Dynamic browser context bar: immediately hides upon URL entry to prioritize content.",
+        "URL Bubble Transition: Input morphs into a top-left sleek black bubble with silver outline upon metadata fetch.",
+        "Hover-Expand Interaction: Bubble smoothly expands to reveal full URL using hardware-accelerated transforms.",
+        "Clipboard Integration: Dedicated icon with one-click copy-to-clipboard functionality.",
+        "AnimatePresence Orchestration: Unified entry/exit choreography for centered input and top-left display states."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "Implemented T25 transitions: conditional bar visibility, top-left URL bubble, and hover expansion logic."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t25 ledger."
+        }
+      ]
+    },
+    {
+      "id": "t26",
+      "type": "fix",
+      "label": "Download progress + toast identity",
+      "agent": "chad",
+      "details": [
+        "Emit download-progress with camelCase jobId so the frontend store accepts live yt-dlp stdout updates.",
+        "Normalize progress payloads defensively; refresh library silently before switching to media after completion.",
+        "Set Windows AppUserModelID from tauri identifier so unfocused toasts show RuForge instead of PowerShell."
+      ],
+      "files": [
+        "src-tauri/src/commands/downloader.rs",
+        "src-tauri/src/lib.rs",
+        "src-tauri/Cargo.toml",
+        "src/types.ts",
+        "src/components/DownloaderView.tsx",
+        "src/store/ruforgeStore.ts",
+        "src/systemNotify.ts"
+      ],
+      "fileEdits": [
+        {
+          "path": "src-tauri/src/commands/downloader.rs",
+          "reason": "serde rename_all camelCase on ProgressPayload so jobId matches TypeScript."
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "reason": "SetCurrentProcessExplicitAppUserModelID at startup for Windows toast header."
+        },
+        {
+          "path": "src-tauri/Cargo.toml",
+          "reason": "windows-sys Win32_UI_Shell for explicit AppUserModelID."
+        },
+        {
+          "path": "src/types.ts",
+          "reason": "normalizeProgressPayload helper for event payloads."
+        },
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "Wire normalized progress; await silent gallery refresh before onDownloadSuccess."
+        },
+        {
+          "path": "src/store/ruforgeStore.ts",
+          "reason": "invalidateEntries silent option skips galleryLoading skeleton."
+        },
+        {
+          "path": "src/systemNotify.ts",
+          "reason": "Document AUMID behavior vs PowerShell dev parent."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t26 ledger."
+        }
+      ]
+    },
+    {
+      "id": "t28",
+      "type": "task",
+      "label": "Downloader queue + URL clip UI",
+      "agent": "chad",
+      "details": [
+        "Align download queue panel and rows with library duplicate card brown/cream styling.",
+        "Ghost Trash2 and bottom-right up/down reorder; muted status labels.",
+        "Pin URL clip pill top-left of downloader content: collapsed paperclip, expand on hover/click."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "RF_DOWNLOADER_PANEL shared styling; queue row/panel refresh; hoisted url-clip-anchor pill."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t28 ledger."
+        }
+      ]
+    },
+    {
+      "id": "t29",
+      "type": "fix",
+      "label": "URL clip pill polish",
+      "agent": "chad",
+      "details": [
+        "CSS max-width hover instead of Framer width animation to reduce hover lag.",
+        "Compact UrlInputPacer under pill; click copies via Tauri clipboard with Check icon feedback."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "group/clip CSS expand; compact hoverGroup pacer; writeText + copied state."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t29 ledger."
+        }
+      ]
+    },
+    {
+      "id": "t30",
+      "type": "task",
+      "label": "DownloaderView module split",
+      "agent": "chad",
+      "details": [
+        "Split monolithic DownloaderView into focused modules for smaller agent context and fewer failed edits.",
+        "useDownloaderView: Zustand wiring, Tauri event listeners, metadata fetch, duplicate + clipboard flows.",
+        "downloader/*: job queue panel + rows, URL pacer, playlist thumb strip, format helpers, shared constants.",
+        "DownloaderView.tsx: presentation shell only; public import path unchanged."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "Trimmed to layout/JSX; delegates logic to useDownloaderView and downloader/*."
+        },
+        {
+          "path": "src/components/downloader/useDownloaderView.ts",
+          "reason": "Hook: store selectors, effects, download/duplicate/clipboard handlers.",
+          "action": "created"
+        },
+        {
+          "path": "src/components/downloader/DownloadJobQueuePanel.tsx",
+          "reason": "DownloadJobQueuePanel, DownloadJobRow, UrlInputPacer, DownloadQueueItem.",
+          "action": "created"
+        },
+        {
+          "path": "src/components/downloader/downloaderFormat.ts",
+          "reason": "formatApproxFileSize, formatDuration.",
+          "action": "created"
+        },
+        {
+          "path": "src/components/downloader/downloaderConstants.ts",
+          "reason": "URL_PACER_EASE, RF_DOWNLOADER_PANEL, DOWNLOAD_JOB_STATUS_LABEL, BROWSER_OPTIONS.",
+          "action": "created"
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t30 ledger for DownloaderView module split."
+        }
+      ]
     }
   ],
   "edges": []

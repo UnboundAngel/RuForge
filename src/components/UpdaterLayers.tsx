@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { Loader2, AlertTriangle, ExternalLink, X } from "lucide-react";
+import { Loader2, AlertTriangle, ExternalLink } from "lucide-react";
 import { emit } from "@tauri-apps/api/event";
 import Markdown from "markdown-to-jsx";
+import { ChangeItem } from "../updatePostInstall";
 
 /** Shared styles for updater JSON / Tauri `notes` strings (headings, lists, links, code). */
 const UPDATER_NOTES_MARKDOWN_OPTIONS = {
@@ -92,8 +93,112 @@ type MainOverlaysProps = {
   phase: UpdaterPhase;
   version: string | null;
   notes: string;
+  additions?: ChangeItem[];
+  fixes?: ChangeItem[];
   onInstallRestart: () => void;
+  onDismiss?: () => void;
 };
+
+function ChangelogLayout({
+  version,
+  notes,
+  additions = [],
+  fixes = [],
+  title = "What's New",
+  scope = "RuForge Core",
+  footer,
+}: {
+  version: string;
+  notes?: string;
+  additions?: ChangeItem[];
+  fixes?: ChangeItem[];
+  title?: string;
+  scope?: string;
+  footer: React.ReactNode;
+}) {
+  const notesTrim = notes?.trim() || "";
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-[20px] font-black text-stone-100 tracking-tight">{title}</h2>
+        <span className="text-[10px] font-black text-stone-500 tabular-nums tracking-widest uppercase">
+          Build {version}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-4 mb-8">
+        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-stone-500/10 to-transparent" />
+        <span className="text-[9px] font-black uppercase tracking-[0.4em] text-stone-600 whitespace-nowrap">{scope}</span>
+        <div className="h-px flex-1 bg-gradient-to-l from-transparent via-stone-500/10 to-transparent" />
+      </div>
+
+      <div className="flex-1 overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hover:scrollbar-thumb-white/20 transition-all space-y-10">
+        {notesTrim && (
+          <div className="px-1">
+            <UpdaterReleaseNotesMarkdown markdown={notesTrim} className="text-[12px] leading-relaxed text-stone-400" />
+          </div>
+        )}
+
+        {additions.length > 0 && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Icon icon={RUFORGE_ICONIFY_CHANGELOG_ADDITIONS} className="text-emerald-500 w-4 h-4 opacity-80" />
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-500/90">Additions</h3>
+              <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/20 to-transparent" />
+              <span className="text-[9px] font-black text-stone-600 tabular-nums">{additions.length}</span>
+            </div>
+            <ul className="space-y-3.5 pl-1">
+              {additions.map((item, i) => (
+                <li key={i} className="flex items-start justify-between gap-6 group">
+                  <div className="flex gap-4">
+                    <span className="text-emerald-500/30 mt-1 font-bold select-none text-[10px]">+</span>
+                    <span className="text-[11.5px] leading-relaxed text-stone-300 group-hover:text-stone-100 transition-colors">{item.text}</span>
+                  </div>
+                  {item.handle && (
+                    <span className="shrink-0 mt-1 text-[8.5px] font-black text-stone-600 uppercase tracking-widest group-hover:text-stone-400 transition-colors">
+                      {item.handle}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {fixes.length > 0 && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Icon icon={RUFORGE_ICONIFY_CHANGELOG_FIXES} className="text-red-500 w-4 h-4 opacity-80" />
+              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-red-500/90">Fixes</h3>
+              <div className="h-px flex-1 bg-gradient-to-r from-red-500/20 to-transparent" />
+              <span className="text-[9px] font-black text-stone-600 tabular-nums">{fixes.length}</span>
+            </div>
+            <ul className="space-y-3.5 pl-1">
+              {fixes.map((item, i) => (
+                <li key={i} className="flex items-start justify-between gap-6 group">
+                  <div className="flex gap-4">
+                    <span className="text-red-500/30 mt-1 font-bold select-none text-[10px]">•</span>
+                    <span className="text-[11.5px] leading-relaxed text-stone-300 group-hover:text-stone-100 transition-colors">{item.text}</span>
+                  </div>
+                  {item.handle && (
+                    <span className="shrink-0 mt-1 text-[8.5px] font-black text-stone-600 uppercase tracking-widest group-hover:text-stone-400 transition-colors">
+                      {item.handle}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
+
+      <div className="mt-8">
+        {footer}
+      </div>
+    </div>
+  );
+}
 
 /** “Update available” card only (main pane). Download/install uses {@link UpdaterFullWindowUpdate} at app root. */
 export function UpdaterMainOverlays({ phase, version, notes, onInstallRestart }: MainOverlaysProps) {
@@ -104,7 +209,7 @@ export function UpdaterMainOverlays({ phase, version, notes, onInstallRestart }:
           initial={{ opacity: 0, x: 20, y: 0 }}
           animate={{ opacity: 1, x: 0, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
-          className="pointer-events-auto absolute top-6 right-6 z-[60] w-[min(100%-3rem,19rem)] rounded-[20px] border border-white/10 bg-[#271C18]/95 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+          className="pointer-events-auto absolute top-6 right-6 z-[60] w-[min(calc(100vw-3rem),19rem)] rounded-[20px] border border-white/10 bg-[#271C18]/95 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl"
         >
           <div className="flex flex-col gap-3">
             <div>
@@ -317,8 +422,8 @@ export function UpdaterFullWindowUpdate({ phase, downloaded, contentLength }: Fu
 type PostInstallProps = {
   version: string;
   notes: string;
-  additions?: string[];
-  fixes?: string[];
+  additions?: ChangeItem[];
+  fixes?: ChangeItem[];
   onDismiss: () => void;
   onOpenChangelog: () => void;
 };
@@ -331,151 +436,63 @@ export function UpdaterPostInstallStack({
   onDismiss,
   onOpenChangelog,
 }: PostInstallProps) {
-  const addList = additions?.filter(Boolean) ?? [];
-  const fixList = fixes?.filter(Boolean) ?? [];
-  const hasStructured = addList.length > 0 || fixList.length > 0;
-  const notesTrim = notes.trim();
-
   return (
     <AnimatePresence>
-      <div className="pointer-events-auto absolute top-6 right-6 z-[70] flex w-[min(100%-3rem,26rem)] flex-col gap-3">
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-8">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onDismiss}
+          className="absolute inset-0 bg-[#12100e]/80 backdrop-blur-md"
+        />
         <motion.div 
-          initial={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative rounded-[20px] border border-[color:var(--accent)]/20 bg-[#271C18]/95 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+          exit={{ opacity: 0, scale: 0.95, y: 8 }}
+          className="relative w-full max-w-2xl max-h-[85vh] rounded-[32px] border border-white/10 bg-[#271C18] p-8 shadow-[0_32px_64px_rgba(0,0,0,0.6)] flex flex-col"
         >
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="absolute right-3 top-3 rounded-full p-1 text-stone-500 transition hover:bg-white/10 hover:text-stone-200"
-            aria-label="Dismiss update summary"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <div className="pr-6">
-            <p className="text-[14px] font-black text-stone-100 uppercase tracking-widest">Update Complete</p>
-            <p className="mt-1 text-[11px] font-bold text-[color:var(--accent)] uppercase tracking-wider">Welcome to {version}</p>
-          </div>
-        </motion.div>
+          <ChangelogLayout
+            version={version}
+            notes={notes}
+            additions={additions}
+            fixes={fixes}
+            title="What's New"
+            scope="Release Notes"
+            footer={
+              <div className="flex items-center justify-between">
+                <motion.button
+                  whileHover="hover"
+                  initial="initial"
+                  type="button"
+                  onClick={onOpenChangelog}
+                  className="group relative flex h-[42px] items-center overflow-hidden rounded-full border border-white/10 bg-white/5 px-[13px] text-stone-400 transition-colors duration-200 hover:bg-white/10 hover:text-stone-100"
+                >
+                  <ExternalLink className="h-4 w-4 shrink-0 relative z-10" />
+                  <motion.span 
+                    variants={{
+                      initial: { width: 0, opacity: 0, marginLeft: 0 },
+                      hover: { width: "auto", opacity: 1, marginLeft: 10 }
+                    }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="whitespace-nowrap text-[10px] font-black uppercase tracking-widest overflow-hidden"
+                  >
+                    Full Changelog
+                  </motion.span>
+                </motion.button>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="rounded-[24px] border border-white/10 bg-[#271C18]/95 p-5 shadow-[0_20px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[12px] font-black text-stone-100 uppercase tracking-widest">What&apos;s New</p>
-            <div className="flex shrink-0 items-center gap-1.5" aria-hidden>
-              <Icon
-                icon={RUFORGE_ICONIFY_CHANGELOG_ADDITIONS}
-                width={20}
-                height={20}
-                className="text-[color:var(--accent)] opacity-90"
-              />
-              <Icon icon={RUFORGE_ICONIFY_CHANGELOG_FIXES} width={20} height={20} className="text-stone-400" />
-            </div>
-          </div>
-
-          <div className="scrollbar-none mt-3 max-h-48 overflow-y-auto text-[11px] leading-relaxed text-stone-400">
-            {!hasStructured && !notesTrim && (
-              <p className="text-stone-500 italic">No release notes provided for this build.</p>
-            )}
-
-            {!hasStructured && notesTrim && (
-              <>
-                <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-stone-600">This build</p>
-                <UpdaterReleaseNotesMarkdown markdown={notesTrim} className="text-stone-400" />
-              </>
-            )}
-
-            {hasStructured && (
-              <div className="space-y-4">
-                {notesTrim && (
-                  <UpdaterReleaseNotesMarkdown markdown={notesTrim} className="mb-3 text-stone-500 last:mb-0" />
-                )}
-                {addList.length > 0 && (
-                  <section aria-labelledby="postinstall-additions-heading">
-                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-white/5 pb-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Icon
-                          icon={RUFORGE_ICONIFY_CHANGELOG_ADDITIONS}
-                          width={18}
-                          height={18}
-                          className="shrink-0 text-[color:var(--accent)]"
-                          aria-hidden
-                        />
-                        <h3 id="postinstall-additions-heading" className="text-[10px] font-black uppercase tracking-widest text-stone-200">
-                          Additions
-                        </h3>
-                      </div>
-                      <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-bold tabular-nums text-stone-500">
-                        {addList.length}
-                      </span>
-                    </div>
-                    <ul className="list-none space-y-2 pl-0.5">
-                      {addList.map((line, i) => (
-                        <li key={`a-${i}`} className="flex gap-2 text-stone-300">
-                          <span className="select-none text-[color:var(--accent)]">+</span>
-                          <span className="min-w-0">{line}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-                {fixList.length > 0 && (
-                  <section aria-labelledby="postinstall-fixes-heading">
-                    <div className="mb-2 flex items-center justify-between gap-2 border-b border-white/5 pb-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Icon
-                          icon={RUFORGE_ICONIFY_CHANGELOG_FIXES}
-                          width={18}
-                          height={18}
-                          className="shrink-0 text-stone-400"
-                          aria-hidden
-                        />
-                        <h3 id="postinstall-fixes-heading" className="text-[10px] font-black uppercase tracking-widest text-stone-200">
-                          Fixes
-                        </h3>
-                      </div>
-                      <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-bold tabular-nums text-stone-500">
-                        {fixList.length}
-                      </span>
-                    </div>
-                    <ul className="list-none space-y-2 pl-0.5">
-                      {fixList.map((line, i) => (
-                        <li key={`f-${i}`} className="flex gap-2 text-stone-300">
-                          <span className="select-none text-stone-500">&#8226;</span>
-                          <span className="min-w-0">{line}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  onClick={onDismiss}
+                  className="px-10 py-3 rounded-full bg-[color:var(--accent)] text-[11px] font-black uppercase tracking-widest text-[#1D1613] transition-transform duration-200"
+                >
+                  Close
+                </motion.button>
               </div>
-            )}
-          </div>
-          <div className="mt-5 flex items-center justify-end gap-3">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              type="button"
-              onClick={onOpenChangelog}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-stone-300 transition hover:bg-white/10 hover:text-stone-100"
-            >
-              <ExternalLink className="h-3 w-3" aria-hidden />
-              Full Changelog
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05, filter: "brightness(1.08)" }}
-              whileTap={{ scale: 0.95 }}
-              type="button"
-              onClick={onDismiss}
-              className="rounded-xl bg-[color:var(--accent)] px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[#1D1613] transition"
-            >
-              Close
-            </motion.button>
-          </div>
+            }
+          />
         </motion.div>
       </div>
     </AnimatePresence>
