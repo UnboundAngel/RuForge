@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>RuForge — interactive changelog graph</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <style>
+      :root {
+        --rf-bg: #12100e;
+        --rf-panel: #1a1714;
+        --rf-accent: #EDD79C;
+        --rf-text: #e7e5e4;
+        --rf-muted: #a8a29e;
+        --rf-border: rgba(237, 215, 156, 0.2);
+        --rf-glass: rgba(26, 23, 20, 0.95);
+        --cursor-silver-border: #cbd5e1;
+        --cursor-silver-bg: linear-gradient(135deg, #f8fafc, #cbd5e1);
+        --gemini-blue: #4285f4;
+        --tool-subtle: #44403c;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+        background: var(--rf-bg);
+        color: var(--rf-text);
+        overflow: hidden;
+        height: 100vh;
+      }
+
+      header {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        padding: 1.5rem 2rem;
+        background: transparent;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 100;
+        pointer-events: none;
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 900;
+        letter-spacing: -0.01em;
+        text-transform: uppercase;
+        color: #fff;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        pointer-events: auto;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        max-width: min(960px, 92vw);
+      }
+
+      .manifest-banner {
+        flex: 1 1 220px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #eab308;
+        border: 1px solid rgba(234, 179, 8, 0.45);
+        background: rgba(234, 179, 8, 0.08);
+        padding: 0.45rem 0.75rem;
+        border-radius: 10px;
+        line-height: 1.35;
+      }
+
+      select {
+        background: var(--rf-panel);
+        color: #fff;
+        border: 1px solid var(--rf-border);
+        padding: 0.6rem 1.5rem;
+        border-radius: 99px;
+        font-size: 0.75rem;
+        font-weight: 900;
+        outline: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23EDD79C' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem center;
+        padding-right: 2.5rem;
+      }
+
+      select:hover {
+        border-color: var(--rf-accent);
+        box-shadow: 0 0 20px rgba(237, 215, 156, 0.2);
+        transform: translateY(-1px);
+      }
+
+      option {
+        background: #1D1613;
+        color: #fff;
+        padding: 10px;
+      }
+
+      button {
+        background: var(--rf-accent);
+        color: #12100e;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        border-radius: 99px;
+        font-size: 0.75rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+        transition: all 0.2s ease-out;
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        filter: brightness(1.1);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+      }
+
+      /* Toggle Pills */
+      .version-pills {
+        display: flex;
+        gap: 0.5rem;
+        pointer-events: auto;
+      }
+
+      .version-pill {
+        background: var(--rf-panel);
+        color: var(--rf-muted);
+        border: 1px solid var(--rf-border);
+        padding: 0.6rem 1.2rem;
+        border-radius: 99px;
+        font-size: 0.75rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+        transition: all 0.2s ease-out;
+      }
+
+      .version-pill.active {
+        background: var(--rf-accent);
+        color: #12100e;
+        border-color: var(--rf-accent);
+        box-shadow: 0 0 15px rgba(237, 215, 156, 0.3);
+      }
+
+      .version-pill:hover {
+        border-color: var(--rf-accent);
+        transform: translateY(-1px);
+      }
+
+      /* Viewport and Graph Layer */
+      #viewport {
+        position: absolute;
+        inset: 0;
+        cursor: grab;
+        overflow: hidden;
+      }
+      #viewport:active {
+        cursor: grabbing;
+      }
+
+      .bg-dots {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image: radial-gradient(rgba(237, 215, 156, 0.05) 1px, transparent 1px);
+        background-size: var(--bg-size, 20px) var(--bg-size, 20px);
+        background-position: var(--bg-x, 0px) var(--bg-y, 0px);
+        z-index: -2;
+      }
+
+      .bg-dots-interactive {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image: radial-gradient(rgba(237, 215, 156, 0.5) 1.5px, transparent 1.5px);
+        background-size: var(--bg-size, 20px) var(--bg-size, 20px);
+        background-position: var(--bg-x, 0px) var(--bg-y, 0px);
+        mask-image: radial-gradient(circle 200px at var(--mouse-x, -200px) var(--mouse-y, -200px), black 0%, transparent 100%);
+        -webkit-mask-image: radial-gradient(circle 200px at var(--mouse-x, -200px) var(--mouse-y, -200px), black 0%, transparent 100%);
+        z-index: -1;
+      }
+
+      #graph-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform-origin: 0 0;
+        width: 4000px;
+        height: 6000px;
+        pointer-events: none; /* Let drag pass through */
+      }
+
+      #edges-container {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        pointer-events: none;
+      }
+
+      #nodes-container {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+      }
+
+      .graph-node {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        pointer-events: none;
+        cursor: default;
+      }
+
+      .node-hit {
+        pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        cursor: pointer;
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      .graph-node:hover .node-hit {
+        transform: scale(1.1);
+      }
+
+      .node-circle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #1D1613;
+        border: 2px solid rgba(237, 215, 156, 0.3);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        transition: all 0.2s;
+      }
+
+      .graph-node:hover .node-circle {
+        border-color: var(--rf-accent);
+        box-shadow: 0 0 20px rgba(237, 215, 156, 0.3);
+      }
+
+      .graph-node iconify-icon {
+        color: var(--rf-accent);
+      }
+
+      /* Specific Node Styles */
+      .node-user .node-circle { width: 90px; height: 90px; }
+      .node-user iconify-icon { font-size: 45px; }
+
+      .node-agent .node-circle { width: 70px; height: 70px; }
+      .node-agent iconify-icon { font-size: 35px; }
+
+      /* Tool Border Styles */
+      .node-tool-chad .node-circle { 
+        border: 2px solid var(--cursor-silver-border);
+        background: var(--cursor-silver-bg);
+        width: 45px; height: 45px;
+        box-shadow: inset 0 1px 3px rgba(255,255,255,0.8), 0 4px 10px rgba(0,0,0,0.3);
+      }
+      .node-tool-chad iconify-icon { font-size: 22px; color: #1D1613; }
+
+      .node-tool-jim .node-circle { 
+        border: 2px solid transparent;
+        background: linear-gradient(#1D1613, #1D1613) padding-box,
+                    linear-gradient(to right, #4285f4, #34a853, #fbbc05, #ea4335) border-box;
+        width: 45px; height: 45px;
+      }
+      .node-tool-jim iconify-icon { font-size: 22px; color: #fff; }
+
+      .node-tool-shared .node-circle { 
+        border: 2px solid var(--tool-subtle);
+        width: 45px; height: 45px;
+      }
+      .node-tool-shared iconify-icon { font-size: 22px; color: var(--tool-subtle); }
+
+      .node-terminal .node-circle { width: 50px; height: 50px; border-color: var(--tool-subtle); }
+      .node-terminal iconify-icon { font-size: 25px; color: var(--tool-subtle); }
+
+      .node-task .node-circle, .node-fix .node-circle { width: 60px; height: 60px; }
+      .node-task iconify-icon, .node-fix iconify-icon { font-size: 30px; color: #a8a29e; }
+
+      /* Task/Fix Border Colors */
+      .node-fix .node-circle { border: 2px solid #ef4444 !important; } /* Red */
+      .node-task .node-circle { border: 2px solid #1e3a8a !important; } /* Dark Blue */
+      
+      .node-version .node-circle { width: 65px; height: 65px; }
+      .node-version iconify-icon { font-size: 32px; }
+
+      /* Version Status Colors */
+      .node-version.status-finished .node-circle { border-color: #22c55e !important; }
+      .node-version.status-finished iconify-icon { color: #22c55e !important; }
+      .node-version.status-wip .node-circle { border-color: #eab308 !important; }
+      .node-version.status-wip iconify-icon { color: #eab308 !important; }
+
+      .node-project .node-circle { width: 65px; height: 65px; }
+      .node-project iconify-icon { font-size: 32px; }
+
+      .node-label {
+        margin-top: 10px;
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--rf-muted);
+        text-align: center;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        transition: color 0.2s;
+        white-space: nowrap;
+        pointer-events: none;
+        max-width: 11rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      
+      .graph-node:hover .node-label { color: #fff; }
+
+      /* Detail Panel */
+      #detail-panel {
+        position: fixed;
+        right: 0; top: 0; bottom: 0;
+        width: 380px;
+        background: var(--rf-glass);
+        backdrop-filter: blur(24px);
+        border-left: 1px solid var(--rf-border);
+        padding: 2.5rem;
+        transform: translateX(calc(100% + 50px));
+        transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+        z-index: 200;
+        display: flex;
+        flex-direction: column;
+        box-shadow: -20px 0 50px rgba(0,0,0,0.5);
+      }
+
+      #detail-panel.open { transform: translateX(0); }
+
+      .close-panel {
+        position: absolute;
+        top: 1.5rem; right: 1.5rem;
+        background: transparent;
+        color: var(--rf-muted);
+        padding: 0.5rem;
+        min-width: 0;
+      }
+
+      .node-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+      .node-header iconify-icon { font-size: 2.5rem; }
+      .node-info h2 { margin: 0; font-size: 1.5rem; font-weight: 800; color: #fff; max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.2; word-break: break-word; }
+      .node-info .node-type { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--rf-accent); opacity: 0.8; }
+
+      .detail-section { margin-bottom: 2rem; }
+      .detail-section h3 { font-size: 0.8rem; font-weight: 800; text-transform: uppercase; color: var(--rf-muted); margin-bottom: 1rem; border-bottom: 1px solid var(--rf-border); padding-bottom: 0.5rem; }
+      .detail-list { margin: 0; padding: 0; list-style: none; }
+      .detail-list li { font-size: 0.9rem; padding: 0.6rem 0; border-bottom: 1px solid rgba(255,255,255,0.03); line-height: 1.5; }
+
+      .file-list { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+      .file-tag { font-size: 0.7rem; font-family: monospace; background: rgba(0,0,0,0.3); color: var(--rf-accent); padding: 0.2rem 0.5rem; border-radius: 4px; border: 1px solid rgba(237, 215, 156, 0.1); display: inline-flex; align-items: center; gap: 0.35rem; max-width: 100%; }
+      .file-tag.type-fix { border-color: #ef4444; color: #ef4444; }
+      .file-tag.type-task { border-color: #1e3a8a; color: #3b82f6; }
+      .file-tag.file-created { border-color: #22c55e; color: #86efac; }
+      .file-tag.file-created iconify-icon { color: #86efac; font-size: 1rem; flex-shrink: 0; }
+
+      /* Export Modal */
+      #export-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 500; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+      #export-modal.open { display: flex; }
+      .modal-content { background: var(--rf-panel); width: 600px; max-width: 90vw; border-radius: 20px; border: 1px solid var(--rf-border); padding: 2.5rem; position: relative; }
+      textarea { width: 100%; height: 300px; background: #0f0d0b; border: 1px solid var(--rf-border); border-radius: 12px; color: var(--rf-text); padding: 1rem; font-family: monospace; font-size: 0.85rem; margin: 1.5rem 0; resize: none; }
+    </style>
+  </head>
+  <body>
+    <script type="application/json" id="changelog-data">
+    {
+      "base": {
+        "nodes": [
+          { "id": "user", "type": "user", "label": "The User", "icon": "material-symbols:account-circle-full", "details": ["Project owner and director — sets priorities and accepts release scope."] },
+          { "id": "claude", "type": "agent", "label": "Claude", "icon": "material-icon-theme:claude", "role": "Architect", "details": ["Long-horizon reasoning, specs, and structured plans before implementation."] },
+          { "id": "jim", "type": "agent", "label": "Jim", "icon": "vscode-icons:file-type-gemini", "role": "Frontend", "details": ["Visual polish: layout, typography, color, and motion — not business logic."] },
+          { "id": "chad", "type": "agent", "label": "Chad", "icon": "material-icon-theme:folder-cursor-open-light", "role": "Logic & Dev", "details": ["Implementation: TypeScript, React, Zustand, Tauri wiring, and bug fixes."] },
+
+          { "id": "t-rag", "type": "tool-chad", "label": "Codebase RAG", "icon": "fluent:brain-circuit-48-regular", "details": ["Retrieval-augmented context: pull semantically relevant snippets from an indexed codebase."] },
+          { "id": "t-ctx-c", "type": "tool-chad", "label": "@codebase", "icon": "material-symbols:database-search-outline-rounded", "details": ["Ground work in the live repo tree, symbols, and file relationships."] },
+          { "id": "t-ctx-d", "type": "tool-chad", "label": "@docs", "icon": "material-symbols:book-ribbon-outline-rounded", "details": ["Inject internal markdown / handbook context so answers match project conventions."] },
+          { "id": "t-browser", "type": "tool-chad", "label": "Browser", "icon": "material-symbols:open-in-new", "details": ["Drive a real browser session for repros, auth flows, and visual verification."] },
+          { "id": "t-auto", "type": "tool-chad", "label": "Automations", "icon": "material-symbols:auto-mode-rounded", "details": ["Scripted or recurring actions (hooks, batch steps) against the workspace."] },
+          { "id": "t-parallel", "type": "tool-chad", "label": "Parallel", "icon": "solar:branching-paths-up-broken", "details": ["Fan out subtasks or tool calls concurrently, then merge structured results."] },
+          { "id": "t-delete", "type": "tool-chad", "label": "Delete File", "icon": "carbon:document-subtract", "details": ["Remove files with explicit paths — use when the task is intentional deletion."] },
+
+          { "id": "t-replace-s", "type": "tool-jim", "label": "Surgical Replace", "icon": "streamline-ultimate:coding-apps-website-data-conversion-documents-1", "details": ["Minimal, scoped text edits — ideal for UI copy and safe string swaps."] },
+          { "id": "t-glob", "type": "tool-jim", "label": "Glob Find", "icon": "material-symbols:folder-zip-outline", "details": ["Expand glob patterns to concrete paths before reads or refactors."] },
+          { "id": "t-read-m", "type": "tool-jim", "label": "Read Many", "icon": "solar:layers-minimalistic-broken", "details": ["Batch-read many small files in one shot to build cross-file context."] },
+          { "id": "t-memory", "type": "tool-jim", "label": "Save Memory", "icon": "material-symbols:save-as-outline-rounded", "details": ["Persist stable preferences or facts for future sessions (user-visible memory)."] },
+
+          { "id": "t-read", "type": "tool-shared", "label": "Read File", "icon": "mdi:file-eye-outline", "details": ["Open a single file read-only to inspect source, config, or logs."] },
+          { "id": "t-write", "type": "tool-shared", "label": "Write File", "icon": "material-symbols:edit-document-outline-rounded", "details": ["Create or overwrite a full file from generated or pasted content."] },
+          { "id": "t-edit", "type": "tool-shared", "label": "Edit / Replace", "icon": "solar:document-add-outline", "details": ["Apply search/replace patches — same glyph as “new file” chips in manifest file lists."] },
+          { "id": "t-ls", "type": "tool-shared", "label": "List Dir", "icon": "mdi:folder-eye-outline", "details": ["Enumerate a directory to choose the next file to open or edit."] },
+          { "id": "t-search", "type": "tool-shared", "label": "File Search", "icon": "garden:document-search-stroke-12", "details": ["Fuzzy / filename discovery across the tree when the exact path is unknown."] },
+          { "id": "t-grep", "type": "tool-shared", "label": "Grep Search", "icon": "lucide:scan-search", "details": ["Regex search inside file contents with line-anchored hits."] },
+          { "id": "t-exec", "type": "tool-shared", "label": "Run Terminal", "icon": "solar:programming-linear", "details": ["Execute shell commands and capture stdout/stderr for builds, tests, or git."] },
+          { "id": "t-fetch", "type": "tool-shared", "label": "Web Fetch", "icon": "material-symbols:globe", "details": ["HTTP GET a URL and return body text for citation or parsing."] },
+          { "id": "t-gsearch", "type": "tool-shared", "label": "Google Search", "icon": "mdi:search-web", "details": ["Web search summaries when docs or upstream references are needed."] },
+          { "id": "t-mcp", "type": "tool-shared", "label": "MCP Servers", "icon": "hugeicons:mcp-server", "details": ["Call tools exposed by configured Model Context Protocol servers."] },
+          { "id": "t-sandbox", "type": "tool-shared", "label": "Sandbox", "icon": "eos-icons:sandbox", "details": ["Constrain filesystem and network side effects for safer automation runs."] },
+
+          { "id": "ruforge", "type": "project", "label": "RuForge", "icon": "fluent:window-apps-24-filled", "details": ["RuForge app target: Tauri shell + React — downloader-first, player and library as support surfaces."] }
+        ],
+        "edges": [
+          { "from": "user", "to": "claude" }, { "from": "user", "to": "chad" }, { "from": "user", "to": "jim" },
+          { "from": "chad", "to": "t-rag" }, { "from": "chad", "to": "t-ctx-c" }, { "from": "chad", "to": "t-ctx-d" },
+          { "from": "chad", "to": "t-browser" }, { "from": "chad", "to": "t-auto" }, { "from": "chad", "to": "t-parallel" }, { "from": "chad", "to": "t-delete" },
+          { "from": "jim", "to": "t-replace-s" }, { "from": "jim", "to": "t-glob" }, { "from": "jim", "to": "t-read-m" }, { "from": "jim", "to": "t-memory" },
+          { "from": "chad", "to": "t-read" }, { "from": "chad", "to": "t-write" }, { "from": "chad", "to": "t-edit" }, { "from": "chad", "to": "t-ls" }, { "from": "chad", "to": "t-search" }, { "from": "chad", "to": "t-grep" }, { "from": "chad", "to": "t-exec" }, { "from": "chad", "to": "t-fetch" }, { "from": "chad", "to": "t-gsearch" }, { "from": "chad", "to": "t-mcp" }, { "from": "chad", "to": "t-sandbox" },
+          { "from": "jim", "to": "t-read" }, { "from": "jim", "to": "t-write" }, { "from": "jim", "to": "t-edit" }, { "from": "jim", "to": "t-ls" }, { "from": "jim", "to": "t-search" }, { "from": "jim", "to": "t-grep" }, { "from": "jim", "to": "t-exec" }, { "from": "jim", "to": "t-fetch" }, { "from": "jim", "to": "t-gsearch" }, { "from": "jim", "to": "t-mcp" }, { "from": "jim", "to": "t-sandbox" }
+        ]
+      },
+      "versions": [
+        {
+          "id": "v0.1.3",
+          "label": "v0.1.3 — Timeline Refactor & Matrix Refinement (WIP, not finished)",
+          "status": "wip",
+          "manifest": "versions/version-0.1.3.json"
+        },
+        {
+          "id": "v0.1.2",
+          "label": "v0.1.2 — Agent Matrix & Toolsets",
+          "status": "finished",
+          "manifest": "versions/version-0.1.2.json"
+        },
+        {
+          "id": "v0.1.1",
+          "label": "v0.1.1 — Infrastructure Genesis",
+          "status": "finished",
+          "manifest": "versions/version-0.1.1.json"
+        }
+      ]
+    }
+    </script>
+
+    <header>
+      <h1>RuForge Dependency Graph</h1>
+      <div class="controls">
+        <div id="manifest-banner" class="manifest-banner" hidden></div>
+        <div id="version-pills" class="version-pills"></div>
+        <button id="export-btn" type="button">Export Release Notes</button>
+      </div>
+    </header>
+
+    <div id="viewport">
+      <div class="bg-dots"></div>
+      <div class="bg-dots-interactive"></div>
+      <div id="graph-layer">
+        <svg id="edges-container" width="4000" height="6000" viewBox="0 0 4000 6000" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg>
+        <div id="nodes-container"></div>
+      </div>
+    </div>
+
+    <div id="detail-panel">
+      <button class="close-panel" onclick="closePanel()">✕</button>
+      <div class="node-header">
+        <iconify-icon id="panel-icon" icon=""></iconify-icon>
+        <div class="node-info">
+          <h2 id="panel-title">Node Title</h2>
+          <span class="node-type" id="panel-type">Type</span>
+        </div>
+      </div>
+      <div class="detail-section" id="section-details">
+        <h3>Details</h3>
+        <ul class="detail-list" id="panel-details"></ul>
+      </div>
+      <div class="detail-section" id="section-files">
+        <h3>Files Adjusted</h3>
+        <div class="file-list" id="panel-files"></div>
+      </div>
+    </div>
+
+    <div id="export-modal">
+      <div class="modal-content">
+        <h2>Export Version Notes</h2>
+        <p class="node-type">Formatted for LLM ingestion</p>
+        <textarea id="export-text" readonly></textarea>
+        <div style="display:flex; gap:1rem;">
+          <button id="copy-btn">Copy to Clipboard</button>
+          <button onclick="document.getElementById('export-modal').classList.remove('open')" style="background:transparent; color:var(--rf-muted); border:1px solid var(--rf-border);">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /**
+       * RuForge version graph — per-version data lives ONLY in docs/versions/version-x.y.z.json.
+       * changelog-data.versions[] lists id, label, status, manifest (registry). The loader pulls
+       * JSON via fetch (HTTP) or dynamic import (helps some file:// cases).
+       */
+      const VersionGraphFormat = (() => {
+        const coerceStringArray = (value) => {
+          if (value == null) return [];
+          if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+          const s = String(value).trim();
+          return s ? [s] : [];
+        };
+
+        const normalizeGraphType = (raw) => {
+          const t = String(raw || 'task').toLowerCase();
+          if (t === 'fix' || t === 'bugfix' || t === 'bug') return 'fix';
+          if (t === 'addition' || t === 'feature' || t === 'task') return 'task';
+          return 'task';
+        };
+
+        const normalizeVersionStatus = (raw) => {
+          const s = String(raw || 'finished').toLowerCase();
+          if (s === 'wip' || s === 'in_progress' || s === 'in-progress' || s === 'draft' || s === 'progress') return 'wip';
+          return 'finished';
+        };
+
+        const collectFilesAndReasons = (node) => {
+          const paths = [];
+          const reasonsByPath = new Map();
+          const fileActions = new Map();
+
+          const setAction = (p, action) => {
+            if (!p) return;
+            const a = action === 'created' ? 'created' : 'modified';
+            if (fileActions.get(p) === 'created') return;
+            fileActions.set(p, a);
+          };
+
+          const pushPath = (p, reason, action) => {
+            if (!p) return;
+            paths.push(p);
+            if (reason && !reasonsByPath.has(p)) reasonsByPath.set(p, reason);
+            setAction(p, action);
+          };
+
+          coerceStringArray(node.files).forEach((p) => pushPath(p, '', 'modified'));
+          const edits = node.fileEdits || node.edits || node.changedFiles;
+          if (Array.isArray(edits)) {
+            edits.forEach((entry) => {
+              if (typeof entry === 'string') {
+                pushPath(entry.trim(), '', 'modified');
+                return;
+              }
+              if (entry && typeof entry === 'object') {
+                const p = (entry.path || entry.file || entry.src || '').trim();
+                const reason = (entry.reason || entry.why || entry.rationale || entry.note || '').trim();
+                const raw = String(entry.action || entry.kind || entry.change || '').toLowerCase();
+                const created = ['create', 'created', 'new', 'add', 'added'].includes(raw);
+                pushPath(p, reason, created ? 'created' : 'modified');
+              }
+            });
+          }
+
+          return { paths, reasonsByPath, fileActions };
+        };
+
+        const normalizeGraphNode = (raw, versionId) => {
+          const n = raw && typeof raw === 'object' ? raw : {};
+          const id = String(n.id || n.key || n.slug || '').trim() || `anon-${versionId}-${Math.random().toString(36).slice(2, 9)}`;
+          const type = normalizeGraphType(n.type || n.category || n.kind);
+          const label = String(n.label || n.title || n.name || id).trim() || id;
+          const agentRaw = n.agent ?? n.contributor ?? n.by ?? n.author ?? n.owner;
+          const agent = String(agentRaw || 'chad')
+            .trim()
+            .toLowerCase()
+            .replace(/^@/, '');
+
+          const detailParts = [...coerceStringArray(n.details), ...coerceStringArray(n.description), ...coerceStringArray(n.summary)];
+
+          const { paths, reasonsByPath, fileActions } = collectFilesAndReasons(n);
+          const fileDetailLines = [...reasonsByPath.entries()]
+            .filter(([, r]) => r)
+            .map(([p, r]) => `${p}: ${r}`);
+
+          const details = [...new Set([...detailParts, ...fileDetailLines])];
+          const files = [...new Set(paths)];
+
+          const icon = n.icon ? String(n.icon) : undefined;
+
+          return {
+            id,
+            type,
+            label,
+            agent,
+            details,
+            files,
+            icon,
+            _fileReasons: reasonsByPath,
+            _fileActions: fileActions,
+          };
+        };
+
+        const normalizeVersionEntry = (v) => ({
+          id: String(v.id || '').trim(),
+          label: String(v.label || v.id || '').trim(),
+          status: normalizeVersionStatus(v.status),
+          manifest: v.manifest ? String(v.manifest) : '',
+        });
+
+        return {
+          coerceStringArray,
+          normalizeGraphNode,
+          normalizeVersionStatus,
+          normalizeVersionEntry,
+        };
+      })();
+
+      const rawChangelog = JSON.parse(document.getElementById('changelog-data').textContent);
+      const viewport = document.getElementById('viewport');
+      const graphLayer = document.getElementById('graph-layer');
+      const edgesContainer = document.getElementById('edges-container');
+      const nodesContainer = document.getElementById('nodes-container');
+      const versionPills = document.getElementById('version-pills');
+      const manifestBanner = document.getElementById('manifest-banner');
+
+      const GRAPH_LABEL_MAX_CHARS = 34;
+      const PANEL_TITLE_MAX_CHARS = 96;
+      const FILE_CREATED_ICON = 'solar:document-add-outline';
+
+      function truncateLabelDisplay(str, max) {
+        const s = String(str ?? '');
+        if (s.length <= max) return s;
+        return `${s.slice(0, Math.max(0, max - 1))}\u2026`;
+      }
+
+      function safeIconAttr(icon) {
+        return String(icon || '').replace(/"/g, '');
+      }
+
+      let data = { base: rawChangelog.base, versions: [] };
+      let panX = 0;
+      let panY = 0;
+      let scale = 1;
+      let isDragging = false;
+      let startX;
+      let startY;
+      let selectedNodeId = null;
+      let activeVersions = [];
+
+      /** Load version manifest; single source of truth is the JSON file (no duplicate nodes in HTML). */
+      async function loadManifestDocument(relativePath) {
+        if (!relativePath) return { data: { nodes: [], edges: [] }, source: 'failed' };
+        const url = new URL(relativePath, window.location.href).href;
+
+        try {
+          const res = await fetch(url, { cache: 'no-store' });
+          if (res.ok) return { data: await res.json(), source: 'fetch' };
+        } catch (_) {
+          /* blocked or offline */
+        }
+
+        try {
+          const mod = await import(/* @vite-ignore */ /* webpackIgnore: true */ url, { with: { type: 'json' } });
+          const doc = mod.default ?? mod;
+          if (doc && typeof doc === 'object') return { data: doc, source: 'import' };
+        } catch (_) {
+          try {
+            const mod = await import(/* @vite-ignore */ url, { assert: { type: 'json' } });
+            const doc = mod.default ?? mod;
+            if (doc && typeof doc === 'object') return { data: doc, source: 'import' };
+          } catch (_) {}
+        }
+
+        return { data: { nodes: [], edges: [] }, source: 'failed' };
+      }
+
+      async function hydrateVersionsFromManifests() {
+        const versions = (rawChangelog.versions || []).map(VersionGraphFormat.normalizeVersionEntry);
+
+        const hydrated = [];
+        let anyLoadFailed = false;
+
+        for (const v of versions) {
+          const entry = { ...v, resolvedNodes: [], manifestOk: false, edges: [] };
+          let remote = { nodes: [], edges: [] };
+
+          if (v.manifest) {
+            const { data, source } = await loadManifestDocument(v.manifest);
+            remote = data && typeof data === 'object' ? data : { nodes: [], edges: [] };
+            if (source === 'failed') anyLoadFailed = true;
+            entry.manifestOk = source !== 'failed';
+          } else {
+            anyLoadFailed = true;
+          }
+
+          entry.resolvedNodes = (remote.nodes || []).map((n) => VersionGraphFormat.normalizeGraphNode(n, v.id));
+          entry.edges = Array.isArray(remote.edges) ? remote.edges : [];
+          hydrated.push(entry);
+        }
+
+        const hasManifestUrls = versions.some((v) => Boolean(v.manifest));
+        if (anyLoadFailed && hasManifestUrls) {
+          manifestBanner.hidden = false;
+          manifestBanner.textContent =
+            'Could not load one or more version JSON files. From repo root run: npx --yes serve docs — then open the served /versioner.html URL. Only docs/versions/version-*.json holds graph nodes (no copy in HTML).';
+        } else {
+          manifestBanner.hidden = true;
+        }
+
+        return { base: rawChangelog.base, versions: hydrated };
+      }
+
+      function syncPillActiveStates() {
+        [...versionPills.children].forEach((pill) => {
+          const id = pill.dataset.versionId;
+          pill.classList.toggle('active', activeVersions.includes(id));
+        });
+      }
+
+      function initVersionPills() {
+        versionPills.innerHTML = '';
+        activeVersions = data.versions.length ? [data.versions[0].id] : [];
+        data.versions.forEach((v) => {
+          const pill = document.createElement('div');
+          pill.className = `version-pill ${activeVersions.includes(v.id) ? 'active' : ''}`;
+          pill.textContent = v.id;
+          pill.dataset.versionId = v.id;
+          pill.addEventListener('click', () => {
+            if (activeVersions.includes(v.id)) {
+              if (activeVersions.length === 1) return;
+              activeVersions = activeVersions.filter((id) => id !== v.id);
+            } else {
+              activeVersions.push(v.id);
+              activeVersions.sort((a, b) => {
+                const idxA = data.versions.findIndex((ver) => ver.id === a);
+                const idxB = data.versions.findIndex((ver) => ver.id === b);
+                return idxA - idxB;
+              });
+            }
+            syncPillActiveStates();
+            renderGraph();
+          });
+          versionPills.appendChild(pill);
+        });
+      }
+
+      viewport.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.node-hit') || e.target.closest('#detail-panel') || e.target.closest('header')) return;
+        isDragging = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        const rect = viewport.getBoundingClientRect();
+        viewport.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`);
+        viewport.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`);
+        if (!isDragging) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        updateTransform();
+      });
+
+      window.addEventListener('mouseup', () => {
+        isDragging = false;
+      });
+
+      viewport.addEventListener(
+        'wheel',
+        (e) => {
+          e.preventDefault();
+          const delta = e.deltaY * -0.001;
+          const newScale = Math.min(Math.max(0.1, scale * Math.exp(delta)), 3);
+          const rect = viewport.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          panX = mouseX - (mouseX - panX) * (newScale / scale);
+          panY = mouseY - (mouseY - panY) * (newScale / scale);
+          scale = newScale;
+          updateTransform();
+        },
+        { passive: false },
+      );
+
+      function updateTransform() {
+        graphLayer.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+        viewport.style.setProperty('--bg-size', `${20 * scale}px`);
+        viewport.style.setProperty('--bg-x', `${panX}px`);
+        viewport.style.setProperty('--bg-y', `${panY}px`);
+      }
+
+      function layoutBaseNodes(baseNodes, centerX) {
+        const laidOut = baseNodes.map((n) => ({ ...n }));
+        laidOut.forEach((node) => {
+          if (node.type === 'user') {
+            node.x = centerX;
+            node.y = 50;
+          } else if (node.type === 'agent') {
+            if (node.id === 'claude') {
+              node.x = centerX;
+              node.y = 250;
+            } else {
+              node.x = node.id === 'chad' ? centerX - 850 : centerX + 850;
+              node.y = 800;
+            }
+          }
+        });
+
+        const chadTools = laidOut.filter((n) => n.type === 'tool-chad');
+        chadTools.forEach((n, i) => {
+          const a = Math.PI + 0.3 + i * 0.3;
+          n.x = centerX - 850 + Math.cos(a) * 320;
+          n.y = 800 + Math.sin(a) * 320;
+        });
+        const jimTools = laidOut.filter((n) => n.type === 'tool-jim');
+        jimTools.forEach((n, i) => {
+          const a = -0.3 - i * 0.3;
+          n.x = centerX + 850 + Math.cos(a) * 320;
+          n.y = 800 + Math.sin(a) * 320;
+        });
+        const sharedTools = laidOut.filter((n) => n.type === 'tool-shared');
+        const rows = 2;
+        const cols = Math.max(1, Math.ceil(sharedTools.length / rows));
+        sharedTools.forEach((n, i) => {
+          const r = Math.floor(i / cols);
+          const c = i % cols;
+          const spreadX = 800;
+          const spreadY = 90;
+          n.x = centerX - spreadX / 2 + c * (spreadX / Math.max(1, cols - 1));
+          n.y = 450 + r * spreadY;
+        });
+
+        return laidOut;
+      }
+
+      function bezierPath(from, to, mode) {
+        const x1 = from.x;
+        const y1 = from.y;
+        const x2 = to.x;
+        const y2 = to.y;
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const pull = Math.min(520, Math.max(96, Math.abs(dy) * 0.42));
+
+        if (mode === 'spine') {
+          const cx = (x1 + x2) / 2;
+          return `M ${x1} ${y1} C ${cx} ${y1 + pull * 0.15}, ${cx} ${y2 - pull * 0.15}, ${x2} ${y2}`;
+        }
+
+        if (mode === 'fan') {
+          const bias = Math.max(-240, Math.min(240, dx * 0.15));
+          return `M ${x1} ${y1} C ${x1 + bias} ${y1 + pull}, ${x2 - bias} ${y2 - pull}, ${x2} ${y2}`;
+        }
+
+        const k = 0.42;
+        return `M ${x1} ${y1} C ${x1 + dx * k} ${y1 + pull * 0.25}, ${x2 - dx * k} ${y2 - pull * 0.25}, ${x2} ${y2}`;
+      }
+
+      function renderGraph() {
+        const centerX = 2000;
+        const baseNodes = layoutBaseNodes(data.base.nodes, centerX);
+        const baseEdgesData = data.base.edges;
+
+        nodesContainer.innerHTML = '';
+        edgesContainer.innerHTML = '';
+
+        const projectNode = baseNodes.find((n) => n.id === 'ruforge');
+        let currentY = 1200;
+        const activeNodes = [];
+        const activeEdges = [];
+        let lastVersionNode = null;
+
+        const activeVers = data.versions.filter((v) => activeVersions.includes(v.id));
+        activeVers.forEach((version) => {
+          const vNode = {
+            id: `vnode-${version.id}`,
+            type: 'version',
+            label: version.id,
+            icon: 'material-symbols:history-rounded',
+            x: centerX,
+            y: currentY + 400,
+            details: [version.label],
+            status: version.status,
+          };
+          activeNodes.push(vNode);
+
+          const tasks = (version.resolvedNodes || []).map((node) => ({ ...node }));
+          const count = tasks.length;
+          const spread = count <= 1 ? 0 : Math.max(1400, (count - 1) * 250);
+
+          tasks.forEach((node, tIdx) => {
+            const denom = Math.max(1, count - 1);
+            const offset = count <= 1 ? 0 : (tIdx / denom - 0.5) * spread;
+            node.x = centerX + offset;
+            node.y = currentY + 150;
+            node.domId = `${version.id}-${node.id}`;
+            activeNodes.push(node);
+
+            const agentNode = baseNodes.find((n) => n.id === node.agent);
+            if (agentNode) {
+              activeEdges.push({ from: agentNode, to: node, color: 'rgba(237, 215, 156, 0.32)', mode: 'fan' });
+            }
+
+            activeEdges.push({ from: node, to: vNode, color: 'rgba(237, 215, 156, 0.42)', mode: 'fan' });
+          });
+
+          if (lastVersionNode) {
+            activeEdges.push({ from: lastVersionNode, to: vNode, color: 'var(--rf-accent)', width: 5, mode: 'spine' });
+          } else {
+            const user = baseNodes.find((n) => n.id === 'user');
+            activeEdges.push({ from: user, to: vNode, color: 'rgba(237, 215, 156, 0.22)', mode: 'spine' });
+          }
+
+          lastVersionNode = vNode;
+          currentY += 800;
+        });
+
+        projectNode.x = centerX;
+        projectNode.y = currentY + 200;
+        if (lastVersionNode) {
+          activeEdges.push({ from: lastVersionNode, to: projectNode, color: 'var(--rf-accent)', width: 6, mode: 'spine' });
+        } else {
+          const user = baseNodes.find((n) => n.id === 'user');
+          activeEdges.push({ from: user, to: projectNode, color: 'rgba(237, 215, 156, 0.12)', mode: 'spine' });
+        }
+
+        const allNodes = [...baseNodes, ...activeNodes];
+        allNodes.forEach((node) => {
+          const el = document.createElement('div');
+          const domId = node.domId || node.id;
+          el.className = `graph-node node-${node.type} ${node.status ? `status-${node.status}` : ''}`;
+          el.style.left = `${node.x}px`;
+          el.style.top = `${node.y}px`;
+          const icon =
+            node.icon ||
+            (node.type === 'task' ? 'material-symbols-light:edit-document' : 'fluent:wrench-settings-24-regular');
+          const hit = document.createElement('div');
+          hit.className = 'node-hit';
+          hit.innerHTML = `<div class="node-circle"><iconify-icon icon="${safeIconAttr(icon)}"></iconify-icon></div>`;
+          const lab = document.createElement('div');
+          lab.className = 'node-label';
+          lab.textContent = truncateLabelDisplay(node.label, GRAPH_LABEL_MAX_CHARS);
+          if (String(node.label || '').length > GRAPH_LABEL_MAX_CHARS) lab.title = node.label;
+          el.appendChild(hit);
+          el.appendChild(lab);
+          hit.addEventListener('mouseenter', () => highlightEdges(domId, true));
+          hit.addEventListener('mouseleave', () => resetEdges());
+          hit.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectedNodeId = domId;
+            highlightEdges(domId, false);
+            openPanel(node);
+          });
+          nodesContainer.appendChild(el);
+        });
+
+        const resolvedBaseEdges = baseEdgesData.map((edge) => ({
+          from: allNodes.find((n) => (n.domId || n.id) === edge.from),
+          to: allNodes.find((n) => (n.domId || n.id) === edge.to),
+          color: edge.color,
+          width: edge.width,
+          mode: 'default',
+        }));
+
+        [...resolvedBaseEdges, ...activeEdges].forEach((edge) => {
+          const from = edge.from;
+          const to = edge.to;
+          if (!from || !to) return;
+
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          let d;
+          if (from.id === 'user' && to.id === 'ruforge') {
+            const curveX = centerX + (activeVers.length ? 420 : 220);
+            d = `M ${from.x} ${from.y} C ${curveX} ${from.y + 220}, ${curveX} ${to.y - 220}, ${to.x} ${to.y}`;
+          } else {
+            d = bezierPath(from, to, edge.mode || 'default');
+          }
+          path.setAttribute('d', d);
+          path.setAttribute('stroke', edge.color || 'rgba(237, 215, 156, 0.15)');
+          path.setAttribute('stroke-width', edge.width || '3');
+          path.setAttribute('fill', 'none');
+          path.setAttribute('data-from', from.domId || from.id);
+          path.setAttribute('data-to', to.domId || to.id);
+          path.classList.add('edge-path');
+          edgesContainer.appendChild(path);
+        });
+      }
+
+      function highlightEdges(domId, isHover) {
+        const targetId = isHover ? domId : selectedNodeId;
+        document.querySelectorAll('.edge-path').forEach((path) => {
+          const from = path.getAttribute('data-from');
+          const to = path.getAttribute('data-to');
+          const hit = from === targetId || to === targetId || from === selectedNodeId || to === selectedNodeId;
+          const originalStroke = path.getAttribute('data-original-stroke') || path.getAttribute('stroke');
+          if (!path.hasAttribute('data-original-stroke')) path.setAttribute('data-original-stroke', originalStroke);
+
+          path.setAttribute('stroke', hit ? 'rgba(237, 215, 156, 0.85)' : originalStroke);
+          path.setAttribute('stroke-width', hit ? '5' : path.getAttribute('data-original-width') || path.getAttribute('stroke-width'));
+          if (!path.hasAttribute('data-original-width')) path.setAttribute('data-original-width', path.getAttribute('stroke-width'));
+        });
+      }
+
+      function resetEdges() {
+        if (!selectedNodeId) {
+          document.querySelectorAll('.edge-path').forEach((path) => {
+            path.setAttribute('stroke', path.getAttribute('data-original-stroke') || path.getAttribute('stroke'));
+            path.setAttribute('stroke-width', path.getAttribute('data-original-width') || path.getAttribute('stroke-width'));
+          });
+        } else {
+          highlightEdges(selectedNodeId, false);
+        }
+      }
+
+      function openPanel(node) {
+        const fullTitle = String(node.label || '');
+        const pt = document.getElementById('panel-title');
+        pt.textContent = truncateLabelDisplay(fullTitle, PANEL_TITLE_MAX_CHARS);
+        if (fullTitle.length > PANEL_TITLE_MAX_CHARS) pt.setAttribute('title', fullTitle);
+        else pt.removeAttribute('title');
+        document.getElementById('panel-type').textContent = node.role || node.type;
+        document.getElementById('panel-icon').setAttribute('icon', node.icon || 'mdi:tools');
+        const dList = document.getElementById('panel-details');
+        dList.innerHTML = '';
+        (node.details || []).forEach((d) => {
+          const li = document.createElement('li');
+          li.textContent = d;
+          dList.appendChild(li);
+        });
+        const fList = document.getElementById('panel-files');
+        fList.innerHTML = '';
+        const reasons = node._fileReasons instanceof Map ? node._fileReasons : null;
+        const actions = node._fileActions instanceof Map ? node._fileActions : null;
+        (node.files || []).forEach((f) => {
+          const s = document.createElement('span');
+          const isCreated = actions?.get(f) === 'created';
+          s.className = `file-tag type-${node.type}${isCreated ? ' file-created' : ''}`;
+          if (isCreated) {
+            const ic = document.createElement('iconify-icon');
+            ic.setAttribute('icon', FILE_CREATED_ICON);
+            s.appendChild(ic);
+          }
+          const t = document.createElement('span');
+          t.textContent = f;
+          s.appendChild(t);
+          const why = reasons?.get(f);
+          if (why) s.title = why;
+          fList.appendChild(s);
+        });
+        document.getElementById('section-details').style.display = node.details?.length ? 'block' : 'none';
+        document.getElementById('section-files').style.display = node.files?.length ? 'block' : 'none';
+        document.getElementById('detail-panel').classList.add('open');
+      }
+
+      function closePanel() {
+        document.getElementById('detail-panel').classList.remove('open');
+      }
+
+      function exportMarkdownForActiveVersions() {
+        const lines = [];
+        const activeVers = data.versions.filter((v) => activeVersions.includes(v.id));
+        activeVers.forEach((v) => {
+          lines.push(`## ${v.id} — ${v.label}`);
+          lines.push(`Status: ${v.status}`);
+          lines.push('');
+          const nodes = v.resolvedNodes || [];
+          if (!nodes.length) {
+            lines.push('_No graph nodes for this version._');
+            lines.push('');
+            return;
+          }
+          nodes.forEach((n) => {
+            lines.push(`- **${n.label}** (${n.type}) — _${n.agent}_`);
+            (n.details || []).forEach((d) => lines.push(`  - ${d}`));
+            (n.files || []).forEach((f) => {
+              const r = n._fileReasons instanceof Map ? n._fileReasons.get(f) : '';
+              const created = n._fileActions instanceof Map && n._fileActions.get(f) === 'created';
+              const tag = created ? ' _(created)_' : '';
+              lines.push(r ? `  - \`${f}\`${tag} — ${r}` : `  - \`${f}\`${tag}`);
+            });
+            lines.push('');
+          });
+        });
+        return lines.join('\n').trimEnd();
+      }
+
+      document.getElementById('export-btn').addEventListener('click', () => {
+        const body = exportMarkdownForActiveVersions();
+        const ta = document.getElementById('export-text');
+        ta.value = body || '_Nothing to export._';
+        document.getElementById('export-modal').classList.add('open');
+      });
+
+      document.getElementById('copy-btn').addEventListener('click', async () => {
+        const ta = document.getElementById('export-text');
+        try {
+          await navigator.clipboard.writeText(ta.value);
+        } catch {
+          ta.select();
+          document.execCommand('copy');
+        }
+      });
+
+      viewport.addEventListener('click', (e) => {
+        if (e.target.closest('.node-hit')) return;
+        selectedNodeId = null;
+        closePanel();
+        resetEdges();
+      });
+
+      hydrateVersionsFromManifests().then((d) => {
+        data = d;
+        initVersionPills();
+        renderGraph();
+        panX = window.innerWidth / 2 - 2000;
+        panY = window.innerHeight / 2 - 400;
+        updateTransform();
+      });
+    </script>
+  </body>
+</html>

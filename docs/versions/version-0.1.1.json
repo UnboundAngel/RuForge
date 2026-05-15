@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {
+      "id": "t-base",
+      "type": "task",
+      "label": "Zustand Migration",
+      "details": ["Centralized state management"],
+      "files": ["src/store/ruforgeStore.ts"],
+      "agent": "chad"
+    }
+  ],
+  "edges": []
+}

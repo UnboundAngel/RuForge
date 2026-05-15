@@ -1,0 +1,217 @@
+{
+  "nodes": [
+    {
+      "id": "t1",
+      "type": "task",
+      "label": "Settings UI Flattened",
+      "details": ["Removed card backgrounds"],
+      "files": ["src/components/SettingsView.tsx"],
+      "agent": "jim"
+    },
+    {
+      "id": "t2",
+      "type": "task",
+      "label": "Refined Motion",
+      "details": ["Smooth sliding layout animations"],
+      "files": ["src/components/SettingsView.tsx"],
+      "agent": "jim"
+    },
+    {
+      "id": "t3",
+      "type": "task",
+      "label": "Internal HTML Changelog",
+      "details": ["Created docs/changes.html"],
+      "files": ["docs/changes.html"],
+      "agent": "chad"
+    },
+    {
+      "id": "t4",
+      "type": "task",
+      "label": "Full-window Updater",
+      "details": ["Added download/install layers"],
+      "files": ["src/components/UpdaterLayers.tsx"],
+      "agent": "chad"
+    },
+    {
+      "id": "t5",
+      "type": "task",
+      "label": "Structured JSON Support",
+      "details": ["Backend schema support"],
+      "files": ["src/updatePostInstall.ts"],
+      "agent": "chad"
+    },
+    {
+      "id": "f1",
+      "type": "fix",
+      "label": "Main Content Restore",
+      "details": ["Fixed container nesting"],
+      "files": ["src/App.tsx"],
+      "agent": "chad"
+    },
+    {
+      "id": "t6",
+      "type": "task",
+      "label": "Continuous Timeline Graph",
+      "agent": "jim",
+      "details": [
+        "Continuous Timeline Architecture: Dynamic vertical stacking of versions.",
+        "Version Toggle System: Selectable pills to focus specific project milestones.",
+        "Status Color Coding: Green for Finished, Yellow for WIP.",
+        "Type Color Coding: Red borders for Fixes, Dark Blue for Tasks.",
+        "Surgical Data Model: Extracted base tool matrix to reduce JSON redundancy.",
+        "Aesthetic Path Routing: Smoothed Bezier curves with adaptive User-to-Project framing."
+      ],
+      "files": ["docs/versioner.html"]
+    },
+    {
+      "id": "t7",
+      "type": "task",
+      "label": "Version graph manifests + VersionGraphFormat (WIP — v0.1.3 not finished)",
+      "agent": "chad",
+      "details": [
+        "Release v0.1.3 is still in progress; this node is the strict ledger for the internal versioner pipeline only.",
+        "Rule: any file touched for this initiative gets a fileEdits row with a one-line why."
+      ],
+      "fileEdits": [
+        {
+          "path": "AGENTS.md",
+          "reason": "Added ## Version graph manifests (docs/versioner.html + docs/versions/); agent file-tracking workflow; changes.html-only canvas rules vs versioner; VersionGraphFormat / roles / file:// + serve note."
+        },
+        {
+          "path": "docs/versioner.html",
+          "reason": "Version graph shell: VersionGraphFormat, layout, export, pills, Bezier edges, banner; manifest loader (single-source in t10)."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Per-release manifest (this file): graph nodes + strict fileEdits ledger; updated each turn that touches the pipeline."
+        },
+        {
+          "path": "docs/versions/version-0.1.2.json",
+          "reason": "Stub manifest (empty nodes) wired from versioner changelog-data."
+        },
+        {
+          "path": "docs/versions/version-0.1.1.json",
+          "reason": "Stub manifest with Zustand migration sample node wired from versioner changelog-data."
+        }
+      ]
+    },
+    {
+      "id": "t8",
+      "type": "task",
+      "label": "Ledger follow-up: manifest JSON + v0.1.3 WIP gate (this turn)",
+      "agent": "chad",
+      "details": [
+        "User: keep work in docs/versions/*.json (not treating v0.1.3 as finished); log every file touched on this turn."
+      ],
+      "fileEdits": [
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t7 strict ledger; appended this t8 row for files touched only on this follow-up turn."
+        },
+        {
+          "path": "docs/versioner.html",
+          "reason": "Registry: v0.1.3 status wip + label (pre–single-source; graph nodes later loaded only from JSON)."
+        }
+      ]
+    },
+    {
+      "id": "t9",
+      "type": "task",
+      "label": "AGENTS.md — version graph playbook (why / when / where / WIP / features)",
+      "agent": "chad",
+      "details": [
+        "Documented exhaustive-but-bounded rules for manifest updates, new semver wiring, and tooling behavior so agents are not under-specified or over-constrained."
+      ],
+      "fileEdits": [
+        {
+          "path": "AGENTS.md",
+          "reason": "Replaced ## Version graph manifests with: why update almost every session; when to skip; where (table); new semver checklist; WIP vs finished; nodes field table; strict ledger pattern; VersionGraphFormat / fetch / export / roles."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t9 ledger row for this AGENTS + manifest sync turn."
+        },
+        {
+          "path": "docs/versioner.html",
+          "reason": "Registry + inline nodes through t9 (inline nodes removed in t10 single-source loader)."
+        }
+      ]
+    },
+    {
+      "id": "t10",
+      "type": "task",
+      "label": "Single-source loader: graph nodes only in docs/versions JSON",
+      "agent": "chad",
+      "details": [
+        "Removed duplicate nodes from changelog-data; versioner loads each manifest via fetch with JSON import() fallback. Agents edit version-*.json only for graph bodies."
+      ],
+      "fileEdits": [
+        {
+          "path": "docs/versioner.html",
+          "reason": "loadManifestDocument (fetch + import); slim versions registry (no nodes); hydrate reads manifests only; banner on load failure."
+        },
+        {
+          "path": "AGENTS.md",
+          "reason": "Where/registry docs: JSON-only nodes; HTML row lists manifest path + status/label; local preview via serve docs."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t10 ledger for this engine change."
+        }
+      ]
+    },
+    {
+      "id": "t11",
+      "type": "task",
+      "label": "Graph UX: label cap, hitbox, created files, tool blurbs",
+      "agent": "chad",
+      "details": [
+        "Truncated graph and panel titles; pointer hit only on node circle; green file-created chips; one-line description per base tool."
+      ],
+      "fileEdits": [
+        {
+          "path": "docs/versioner.html",
+          "reason": "GRAPH_LABEL_MAX_CHARS / PANEL_TITLE_MAX_CHARS; .node-hit pointer-events; file-created + solar:document-add-outline; export markdown _(created)_; base tool details[] in changelog-data."
+        },
+        {
+          "path": "AGENTS.md",
+          "reason": "Documented fileEdits action created aliases for green new-file chips."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t11 ledger."
+        }
+      ]
+    },
+    {
+      "id": "t12",
+      "type": "task",
+      "label": "Agent docs: manifest example + schema files",
+      "agent": "chad",
+      "details": [
+        "Split long AGENTS guidance into docs/versions/MANIFEST-EXAMPLE.md and MANIFEST-SCHEMA.md; AGENTS now points at both."
+      ],
+      "fileEdits": [
+        {
+          "path": "docs/versions/MANIFEST-EXAMPLE.md",
+          "reason": "Additive JSON examples for agents.",
+          "action": "created"
+        },
+        {
+          "path": "docs/versions/MANIFEST-SCHEMA.md",
+          "reason": "Full field / alias reference for manifests + registry.",
+          "action": "created"
+        },
+        {
+          "path": "AGENTS.md",
+          "reason": "Slim ## Version graph manifests; pointers to EXAMPLE + SCHEMA."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Ledger t12."
+        }
+      ]
+    }
+  ],
+  "edges": []
+}

@@ -24,6 +24,7 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "framer-motion": "^11.11.17",
     "lucide-react": "^0.475.0",
+    "markdown-to-jsx": "^9.8.0",
     "motion": "^12.38.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

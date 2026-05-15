@@ -8,7 +8,24 @@ import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
 import { notifyWhenUnfocused } from "./systemNotify";
-import { check } from "@tauri-apps/plugin-updater";
+import { check, Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+  UpdaterStatusIndicator,
+  UpdaterMainOverlays,
+  UpdaterFullWindowUpdate,
+  UpdaterPostInstallStack,
+  RELEASES_PAGE,
+  type UpdaterPhase,
+} from "./components/UpdaterLayers";
+import {
+  buildPostInstallPayload,
+  clearPendingPostInstall,
+  consumePendingPostInstall,
+  setPendingPostInstall,
+  teaserNotesFromUpdaterBody,
+  type PostInstallPayload,
+} from "./updatePostInstall";
 import { Icon } from "@iconify/react";
 import logo from "./assets/neotubeIcon.png";
 import MiniPlayer from "./MiniPlayer";
@@ -36,7 +53,15 @@ import {
 
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
 
-const WindowControls = ({ onMiniPlayerToggle }: { onMiniPlayerToggle: () => void }) => {
+const WindowControls = ({ 
+  onMiniPlayerToggle,
+  updaterPhase,
+  updaterVersion
+}: { 
+  onMiniPlayerToggle: () => void,
+  updaterPhase: UpdaterPhase,
+  updaterVersion: string | null
+}) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
 
@@ -60,6 +85,10 @@ const WindowControls = ({ onMiniPlayerToggle }: { onMiniPlayerToggle: () => void
 
   return (
     <div className="fixed top-0 right-0 z-[100] flex items-center h-10 pr-2 pointer-events-auto">
+      <div className="mr-3">
+        <UpdaterStatusIndicator phase={updaterPhase} version={updaterVersion} />
+      </div>
+
       <button
         onClick={onMiniPlayerToggle}
         className="w-10 h-10 flex items-center justify-center text-stone-500 hover:text-[color:var(--accent)] transition-colors"
@@ -168,6 +197,13 @@ const StorageWidget = () => {
   );
 };
 
+/** JSON string for `buildPostInstallPayload` — Settings debug updater cycle (structured What's New). */
+const MOCK_POST_INSTALL_JSON = JSON.stringify({
+  notes: "Structured release notes (debug). Plain `updater.json` notes still render as one block.",
+  additions: ["Polished UI & transitions", "Enhanced accent color integration"],
+  fixes: ["Subtitle ghosting in player", "MiniPlayer sizing on narrow layouts"],
+});
+
 function App() {
   const activeTab = useRuforgeStore((s) => s.activeTab);
   const setActiveTab = useRuforgeStore((s) => s.setActiveTab);
@@ -202,6 +238,42 @@ function App() {
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
   const setSidebarCollapsedByResize = useRuforgeStore((s) => s.setSidebarCollapsedByResize);
+
+  const updateRef = useRef<Update | null>(null);
+  const [updaterPhase, setUpdaterPhase] = useState<UpdaterPhase>("idle");
+  const [updaterVersion, setUpdaterVersion] = useState<string | null>(null);
+  const [updaterNotes, setUpdaterNotes] = useState("");
+  const [updaterDownloaded, setUpdaterDownloaded] = useState(0);
+  const [updaterContentLength, setUpdaterContentLength] = useState<number | undefined>(undefined);
+  const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
+
+  const handleInstallRestart = useCallback(async () => {
+    const u = updateRef.current;
+    if (!u) return;
+    setUpdaterDownloaded(0);
+    setUpdaterContentLength(undefined);
+    setUpdaterPhase("downloading");
+    setPendingPostInstall(buildPostInstallPayload(u.version, u.body ?? ""));
+    try {
+      await u.downloadAndInstall((event: DownloadEvent) => {
+        if (event.event === "Started") {
+          setUpdaterContentLength(event.data.contentLength);
+        } else if (event.event === "Progress") {
+          setUpdaterDownloaded((d) => d + event.data.chunkLength);
+        } else if (event.event === "Finished") {
+          setUpdaterPhase("installing");
+        }
+      });
+    } catch (e) {
+      console.error(e);
+      clearPendingPostInstall();
+      setUpdaterPhase("available");
+      notify(
+        "Update failed. Check your connection, or install the latest build from GitHub Releases.",
+        "error",
+      );
+    }
+  }, [notify]);
 
   useEffect(() => {
     invoke<boolean>("get_hardware_acceleration_pref")
@@ -360,18 +432,35 @@ function App() {
   }, [activeTab, addLog]);
 
   useEffect(() => {
-    const checkUpdate = async () => {
+    let cancelled = false;
+    (async () => {
       try {
-        const update = await check();
-        if (update) {
-          notify(`Version ${update.version} is available!`, "update", update);
+        const next = await check();
+        if (cancelled) {
+          void next?.close().catch(() => {});
+          return;
         }
+        if (!next) return;
+        if (updateRef.current) {
+          void updateRef.current.close().catch(() => {});
+        }
+        updateRef.current = next;
+        setUpdaterVersion(next.version);
+        setUpdaterNotes(teaserNotesFromUpdaterBody(next.body ?? ""));
+        setUpdaterPhase("available");
       } catch (e) {
         console.error("Update check failed", e);
       }
+    })();
+    return () => {
+      cancelled = true;
     };
-    checkUpdate();
-  }, [notify]);
+  }, []);
+
+  useEffect(() => {
+    const pending = consumePendingPostInstall();
+    if (pending) setPostInstall(pending);
+  }, []);
 
   // Auto-collapse sidebar on narrow windows
   useEffect(() => {
@@ -434,10 +523,36 @@ function App() {
       useRuforgeStore.getState().setActiveTab("downloader");
     });
 
+    const unlistenDebugUpdater = listen("debug-cycle-updater", () => {
+      setUpdaterPhase((current) => {
+        if (current === "idle") {
+          setUpdaterVersion("9.9.9-mock");
+          setUpdaterNotes("### Mock Release Notes\n- Polished UI & Transitions\n- Enhanced accent color integration\n- Fixed subtitle ghosting bug\n- Improved MiniPlayer sizing logic");
+          return "available";
+        }
+        if (current === "available") {
+          setUpdaterContentLength(1000);
+          setUpdaterDownloaded(450);
+          return "downloading";
+        }
+        if (current === "downloading") {
+          return "installing";
+        }
+        if (current === "installing") {
+          setPostInstall(
+            buildPostInstallPayload("9.9.9-mock", MOCK_POST_INSTALL_JSON),
+          );
+          return "idle";
+        }
+        return "idle";
+      });
+    });
+
     return () => {
       unlisten.then((f) => f());
       unlistenStop.then((f) => f());
       unlistenManualDownload.then((f) => f());
+      unlistenDebugUpdater.then((f) => f());
     };
   }, []);
 
@@ -524,6 +639,8 @@ function App() {
               : undefined,
           )
         }
+        updaterPhase={updaterPhase}
+        updaterVersion={updaterVersion}
       />
 
       {/* Global Drag Region - Top strip except controls area */}
@@ -531,9 +648,12 @@ function App() {
 
       {/* ── Sidebar ─────────────────────────────────────── */}
       <div className={`${isSidebarExpanded ? 'w-[240px]' : 'w-[80px]'} flex-shrink-0 relative z-20 flex flex-col bg-transparent overflow-hidden transition-[width] duration-500 ease-[0.23,1,0.32,1]`}>
-        {/* Logo */}
-        <div className="h-[72px] flex items-center px-5 flex-shrink-0 cursor-default" data-tauri-drag-region>
-          <div className="flex items-center gap-4 pointer-events-none">
+        {/* Logo container */}
+        <div
+          className="h-[72px] flex min-w-0 flex-shrink-0 items-center px-5 cursor-default"
+          data-tauri-drag-region
+        >
+          <div className="pointer-events-none flex shrink-0 items-center gap-3">
             <img src={logo} className="w-10 h-10 rounded-xl shadow-xl object-cover" alt="RuForge" />
           </div>
         </div>
@@ -806,6 +926,22 @@ function App() {
 
         {/* ── Main Content ─────────────────────────────── */}
         <div className="flex-1 relative bg-[#1D1613] rounded-tl-[32px] overflow-hidden shadow-[inset_6px_6px_24px_rgba(0,0,0,0.5)] z-0">
+          <UpdaterMainOverlays
+            phase={updaterPhase}
+            version={updaterVersion}
+            notes={updaterNotes}
+            onInstallRestart={() => void handleInstallRestart()}
+          />
+          {postInstall && (
+            <UpdaterPostInstallStack
+              version={postInstall.version}
+              notes={postInstall.notes}
+              additions={postInstall.additions}
+              fixes={postInstall.fixes}
+              onDismiss={() => setPostInstall(null)}
+              onOpenChangelog={() => void openUrl(RELEASES_PAGE)}
+            />
+          )}
           <main className="absolute inset-0 overflow-y-auto">
             <AnimatePresence mode="wait">
               {activeTab === "downloader" && (
@@ -873,19 +1009,15 @@ function App() {
               {notifications.map((n) => {
                 const t = n.type ?? "info";
                 const shell =
-                  t === "update"
-                    ? "bg-[#EDD79C] text-[#1d1613] border border-[#1d1613]/12"
-                    : t === "error"
-                      ? "bg-[#2c1818] text-stone-100 border border-red-900/35"
-                      : t === "progress"
-                        ? "bg-[#271C18] text-stone-50 border border-stone-50/10"
-                        : "bg-[#271C18] text-stone-50 border border-stone-50/10";
+                  t === "error"
+                    ? "bg-[#2c1818] text-stone-100 border border-red-900/35"
+                    : t === "progress"
+                      ? "bg-[#271C18] text-stone-50 border border-stone-50/10"
+                      : "bg-[#271C18] text-stone-50 border border-stone-50/10";
                 const closeBtn =
-                  t === "update"
-                    ? "text-[#1d1613]/55 hover:text-[#1d1613]"
-                    : t === "error"
-                      ? "text-red-200/70 hover:text-red-100"
-                      : "text-stone-500 hover:text-stone-300";
+                  t === "error"
+                    ? "text-red-200/70 hover:text-red-100"
+                    : "text-stone-500 hover:text-stone-300";
                 return (
                 <motion.div
                   key={n.id}
@@ -894,9 +1026,7 @@ function App() {
                   exit={{ opacity: 0, scale: 0.95 }}
                   className={`${shell} px-3 py-2 rounded-xl shadow-lg flex items-start gap-2.5 pointer-events-auto min-w-0 w-full`}
                 >
-                  {t === "update" ? (
-                    <Download className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
-                  ) : t === "error" ? (
+                  {t === "error" ? (
                     <AlertCircle className="text-red-400 w-4 h-4 flex-shrink-0 mt-0.5" />
                   ) : t === "progress" ? (
                     <Loader2 className="text-[color:var(--accent)] w-4 h-4 flex-shrink-0 mt-0.5 animate-spin" />
@@ -905,32 +1035,9 @@ function App() {
                   )}
 
                   <div className="flex-1 flex flex-col min-w-0">
-                    <span className={`text-xs font-semibold leading-snug ${t === "update" ? "text-[#1d1613]" : ""}`}>
+                    <span className="text-xs font-semibold leading-snug">
                       {n.message}
                     </span>
-                    {t === "update" && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const updateId = n.id;
-                          dismissNotification(updateId);
-                          const progressId = notify("Downloading update…", "progress");
-                          try {
-                            await n.updateObj?.downloadAndInstall();
-                          } catch (e) {
-                            console.error(e);
-                            dismissNotification(progressId);
-                            notify(
-                              "Update failed. Check your connection, or install the latest build from GitHub Releases.",
-                              "error",
-                            );
-                          }
-                        }}
-                        className="mt-1.5 text-[10px] font-bold uppercase tracking-wide bg-[#1d1613] text-[#EDD79C] px-2.5 py-1 rounded-md w-fit hover:bg-black/85 transition-colors"
-                      >
-                        Update Now
-                      </button>
-                    )}
                   </div>
 
                   <button
@@ -948,6 +1055,12 @@ function App() {
           </div>
         </div>
       </div>
+
+      <UpdaterFullWindowUpdate
+        phase={updaterPhase}
+        downloaded={updaterDownloaded}
+        contentLength={updaterContentLength}
+      />
     </div>
   );
 }
