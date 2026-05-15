@@ -48,6 +48,8 @@
     "autostart:allow-is-enabled",
     "store:default",
     "process:allow-restart",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
     {
       "identifier": "shell:allow-spawn",
       "scope": {

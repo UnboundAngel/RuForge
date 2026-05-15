@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from "motion/react";
-import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug } from 'lucide-react';
+import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug, Captions } from 'lucide-react';
+import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel } from '../store/types';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from "@tauri-apps/api/event";
@@ -280,6 +281,69 @@ export const SettingsView: React.FC = () => {
                     value={settings.preferredQuality}
                     options={['4K (2160p)', '1080p (HD)', '720p', 'Best Available']}
                     onChange={(val) => updateSetting('preferredQuality', val)}
+                  />
+                }
+              />
+              <FadingDivider />
+              <SettingItem
+                icon={Captions}
+                title="Download Subtitles"
+                description={
+                  settings.downloadSubtitles
+                    ? `yt-dlp fetches: ${downloadSubtitleLangLabel(settings.downloadSubtitleLangs ?? "en.*")}. Player shows only sidecar files on disk.`
+                    : "Subtitle sidecars are not downloaded with new videos."
+                }
+                active={settings.downloadSubtitles}
+                control={
+                  <ToggleSlot
+                    active={settings.downloadSubtitles}
+                    onClick={() =>
+                      updateSetting("downloadSubtitles", !settings.downloadSubtitles)
+                    }
+                  />
+                }
+              />
+              {settings.downloadSubtitles && (
+                <>
+                  <FadingDivider />
+                  <SettingItem
+                    icon={Captions}
+                    title="Subtitle Languages"
+                    description="Passed to yt-dlp --sub-langs for manual and auto captions."
+                    active={true}
+                    control={
+                      <CustomSelect
+                        value={downloadSubtitleLangLabel(
+                          settings.downloadSubtitleLangs ?? "en.*",
+                        )}
+                        options={DOWNLOAD_SUBTITLE_LANG_PRESETS.map((p) => p.label)}
+                        onChange={(label) => {
+                          const preset = DOWNLOAD_SUBTITLE_LANG_PRESETS.find(
+                            (p) => p.label === label,
+                          );
+                          if (preset)
+                            void updateSetting("downloadSubtitleLangs", preset.ytdlp);
+                        }}
+                      />
+                    }
+                  />
+                </>
+              )}
+              <FadingDivider />
+              <SettingItem
+                icon={Download}
+                title="Skip Duplicates"
+                description="Automatically skip downloads when the video is already in your library."
+                active={settings.skipDuplicatesAutomatically}
+                control={
+                  <ToggleSlot
+                    active={settings.skipDuplicatesAutomatically}
+                    onClick={() =>
+                      updateSetting(
+                        "skipDuplicatesAutomatically",
+                        !settings.skipDuplicatesAutomatically,
+                      )
+                    }
                   />
                 }
               />

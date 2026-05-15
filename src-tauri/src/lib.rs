@@ -1,5 +1,6 @@
 mod app_state;
 mod commands;
+mod download_job_manager;
 mod hardware_acceleration;
 mod tray;
 mod utils;
@@ -10,7 +11,8 @@ use tauri::Manager;
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::app_state::AppConfig;
-use crate::commands::downloader::{download_video, get_video_info};
+use crate::commands::downloader::{get_video_info, pause_download_job, start_download_job};
+use crate::download_job_manager::DownloadJobManager;
 use crate::commands::ffprobe::probe_local_media_ffprobe;
 use crate::commands::gallery::scan_gallery;
 use crate::commands::media::{
@@ -26,6 +28,21 @@ use crate::commands::system::open_external_url;
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
 use crate::tray::setup_tray;
 
+/// Windows toast header uses the parent process name in dev unless we set an explicit AppUserModelID.
+#[cfg(windows)]
+fn set_windows_notification_app_id(app_id: &str) {
+    use std::ffi::OsStr;
+    use std::os::windows::prelude::OsStrExt;
+
+    let wide: Vec<u16> = OsStr::new(app_id)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe {
+        windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID(wide.as_ptr());
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -36,6 +53,7 @@ pub fn run() {
         .manage(AppConfig {
             minimize_to_tray: Mutex::new(true),
         })
+        .manage(DownloadJobManager::default())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -45,8 +63,12 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_log::Builder::new().build())
         .setup(|app| {
+            #[cfg(windows)]
+            set_windows_notification_app_id(&app.config().identifier);
+
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Ok(updater) = handle.updater() {
@@ -73,7 +95,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_video_info,
-            download_video,
+            start_download_job,
+            pause_download_job,
             scan_gallery,
             open_mini_player,
             open_youtube_explorer,

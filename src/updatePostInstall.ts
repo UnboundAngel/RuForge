@@ -1,12 +1,17 @@
 const KEY = "ruforge.postInstallPayload.v1";
 
+export type ChangeItem = {
+  text: string;
+  handle?: string;
+};
+
 /** Written before `downloadAndInstall`; consumed on next launch for the post-update stack. */
 export type PostInstallPayload = {
   version: string;
   /** Freeform summary or intro; shown with structured lists when `additions` / `fixes` are set. */
   notes: string;
-  additions?: string[];
-  fixes?: string[];
+  additions?: ChangeItem[];
+  fixes?: ChangeItem[];
 };
 
 /**
@@ -27,6 +32,26 @@ export function teaserNotesFromUpdaterBody(body: string): string {
   return body;
 }
 
+function normalizeChangeItems(raw: unknown): ChangeItem[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items: ChangeItem[] = [];
+  for (const x of raw) {
+    if (typeof x === "string") {
+      items.push({ text: x });
+    } else if (x && typeof x === "object") {
+      const item = x as Record<string, unknown>;
+      const text = String(item.text || item.message || "");
+      if (text) {
+        items.push({
+          text,
+          handle: typeof item.handle === "string" ? item.handle : undefined,
+        });
+      }
+    }
+  }
+  return items.length > 0 ? items : undefined;
+}
+
 /** If `body` is JSON `{ notes?, additions?, fixes? }`, map it for the in-app changelog; else treat as plain `notes`. */
 export function buildPostInstallPayload(version: string, body: string): PostInstallPayload {
   const trimmed = body.trim();
@@ -34,12 +59,8 @@ export function buildPostInstallPayload(version: string, body: string): PostInst
     try {
       const o = JSON.parse(trimmed) as Record<string, unknown>;
       const notes = typeof o.notes === "string" ? o.notes : "";
-      const additions = Array.isArray(o.additions)
-        ? o.additions.filter((x): x is string => typeof x === "string")
-        : undefined;
-      const fixes = Array.isArray(o.fixes)
-        ? o.fixes.filter((x): x is string => typeof x === "string")
-        : undefined;
+      const additions = normalizeChangeItems(o.additions);
+      const fixes = normalizeChangeItems(o.fixes);
       const hasAdd = additions && additions.length > 0;
       const hasFix = fixes && fixes.length > 0;
       if (notes || hasAdd || hasFix) {
@@ -73,17 +94,11 @@ export function consumePendingPostInstall(): PostInstallPayload | null {
   try {
     const o = JSON.parse(raw) as Record<string, unknown>;
     if (typeof o.version !== "string") return null;
-    const additions = Array.isArray(o.additions)
-      ? o.additions.filter((x): x is string => typeof x === "string")
-      : undefined;
-    const fixes = Array.isArray(o.fixes)
-      ? o.fixes.filter((x): x is string => typeof x === "string")
-      : undefined;
     return {
       version: o.version,
       notes: typeof o.notes === "string" ? o.notes : "",
-      ...(additions && additions.length ? { additions } : {}),
-      ...(fixes && fixes.length ? { fixes } : {}),
+      additions: normalizeChangeItems(o.additions),
+      fixes: normalizeChangeItems(o.fixes),
     };
   } catch {
     return null;

@@ -45,6 +45,16 @@ Strings in `fileEdits` (instead of objects) are treated as `{ path: "<string>" }
 
 ---
 
+### A.4 Versioner canvas (derived nodes — **not authored in JSON**)
+
+**`docs/versioner.html`** may **synthesize extra graph nodes** for layout only:
+
+When a manifest row has **`files` + `fileEdits` combining to ≥2 unique paths**, the renderer **may** add one derived **file-ref** circle per path, linked from the parent by **fork** edges — **only while that parent task/fix is expanded on the canvas** (click the parent node to toggle; version change / background click clears expansions). **`action`/create** semantics ⇒ **green** ring in the diagram; updated files use a **muted** ring.
+
+These nodes **do not** exist in **`version-*.json`**; keep editing paths and reasons **`fileEdits`** as today. Export Markdown still emits the parent row's file lines only.
+
+---
+
 ## B. Registry row: `docs/versioner.html` → `changelog-data` → `versions[]`
 
 These entries **do not** contain graph `nodes`; they only **point** at the JSON file.

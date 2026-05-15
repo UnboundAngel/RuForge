@@ -24,6 +24,11 @@ import {
   createRuforgePersistStorage,
   type RuforgePersistedSubset,
 } from "./ruforgePersistStorage";
+import { loadPersistedDownloadJobs } from "../downloadQueue";
+import {
+  createDownloadQueueSlice,
+  type DownloadQueueSlice,
+} from "./downloadQueueSlice";
 
 export type {
   ActiveTab,
@@ -41,7 +46,7 @@ export type RuforgeNotification = {
 
 export type GalleryContextMenuState = { path: string; x: number; y: number } | null;
 
-export interface RuforgeStore {
+export interface RuforgeStore extends DownloadQueueSlice {
   settings: RuforgeSettings;
   outputDir: string;
   saveToInternal: boolean;
@@ -133,7 +138,7 @@ export interface RuforgeStore {
     skipPosterBackfill?: boolean;
     posterEpoch?: number;
   }) => Promise<void>;
-  invalidateEntries: () => Promise<void>;
+  invalidateEntries: (opts?: { silent?: boolean }) => Promise<void>;
   setGalleryActiveMenu: (menu: GalleryContextMenuState) => void;
   setGalleryExtractingPath: (path: string | null) => void;
 }
@@ -150,7 +155,10 @@ const playerInitLoop = readInitialPlayerLoopFromLs();
 
 export const useRuforgeStore = create<RuforgeStore>()(
   persist(
-    (set, get) => ({
+    (set, get, store) => ({
+      ...createDownloadQueueSlice(set, get, store),
+      downloadJobs: loadPersistedDownloadJobs(),
+
       settings: DEFAULT_SETTINGS,
       outputDir: pathsInit.outputDir,
       saveToInternal: pathsInit.saveToInternal,
@@ -463,8 +471,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
         }
       },
 
-      invalidateEntries: async () => {
-        set({ galleryLoading: true });
+      invalidateEntries: async (opts) => {
+        if (!opts?.silent) set({ galleryLoading: true });
         await get().fetchEntries({ manageLoadingStart: false, skipPosterBackfill: false });
       },
 

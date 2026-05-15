@@ -279,14 +279,22 @@ pub struct SubtitleTrack {
 
 fn subtitle_display_label(lang_tag: &str) -> String {
     let key = lang_tag.to_ascii_lowercase();
-    let label = match key.as_str() {
-        "und" => return "Default".to_string(),
+    if key == "und" {
+        return "Default".to_string();
+    }
+    if key == "en-orig" || key.starts_with("en-orig") {
+        return format!("English (original) · {lang_tag}");
+    }
+    if key == "live_chat" {
+        return format!("Live chat · {lang_tag}");
+    }
+
+    let base = key.split('-').next().unwrap_or(key.as_str());
+    let label = match base {
         "en" | "eng" => "English",
         "ja" | "jp" | "jpn" => "Japanese",
         "ko" | "kor" => "Korean",
         "zh" | "zho" | "cmn" => "Chinese",
-        "zh-cn" | "zh-hans" => "Chinese (Simplified)",
-        "zh-tw" | "zh-hant" => "Chinese (Traditional)",
         "es" | "spa" => "Spanish",
         "fr" | "fra" | "fre" => "French",
         "de" | "deu" | "ger" => "German",
@@ -307,11 +315,19 @@ fn subtitle_display_label(lang_tag: &str) -> String {
         "uk" | "ukr" => "Ukrainian",
         _ => "",
     };
-    if label.is_empty() {
-        lang_tag.to_uppercase()
-    } else {
+
+    let human = if label.is_empty() {
+        return lang_tag.to_string();
+    } else if key == base {
         label.to_string()
-    }
+    } else {
+        match key.as_str() {
+            "zh-cn" | "zh-hans" => "Chinese (Simplified)".to_string(),
+            "zh-tw" | "zh-hant" => "Chinese (Traditional)".to_string(),
+            _ => label.to_string(),
+        }
+    };
+    format!("{human} · {lang_tag}")
 }
 
 /// Discover sidecar WebVTT files next to the video: `{stem}.vtt`, `{stem}.{lang}.vtt`.

@@ -17,9 +17,7 @@ Concise context for agents working **inside this repo’s IDE workspace**. This 
 
 ## Planning & ideas (canonical doc)
 
-- **Living roadmap / ideas (outside this git repo):**  
-  `c:\Random things i dont want deleted\markdown files\RuForge.md`  
-  Open it from Explorer or paste the path in the editor. When work completes, **update that file** (or ask the maintainer to) so IDE agents and humans share one source of truth.
+- **Living roadmap / ideas (in-repo, canonical for agents):** `docs/RuForge.md` — update when shipped work lands. Optional mirror outside the repo: `c:\Random things i dont want deleted\markdown files\RuForge.md` (keep in sync by hand if you use both).
 - **In-repo machine plans:** `.cursor/plans/` (e.g. Zustand migration audit) — implementation detail, may lag; trust code + this `AGENTS.md` for “what shipped.”
 
 ## Who does what (this workspace vs elsewhere)
@@ -31,6 +29,15 @@ Concise context for agents working **inside this repo’s IDE workspace**. This 
 
 **Handoff rule:** If something needs Jim’s pass (pure UI polish), Chad should **not** pretend to be Jim. Instead, Chad ends with a **short, copy-paste prompt for you to run in Jim’s environment** (file paths, desired look, explicit “do not change logic or props contracts”). Chad implements or preserves the logic and prop surfaces Jim should style against.
 
+## Agent editing guardrails (mandatory)
+
+**Edit source in place — never “patch via script.”**
+
+- **Do not** create or run ad-hoc **Python**, **Node**, or **shell** scripts whose purpose is to search/replace or rewrite repo source (e.g. `scripts/_rebuild_*.py`, `scripts/_patch_*.py`, `scripts/_extracts/` scratch files). Use the IDE’s normal edit tools (`StrReplace` / `Write`) on the real file, in **small, reviewable hunks**, after reading the surrounding code.
+- **`scripts/`** is for **intentional maintainer tooling** only (e.g. `build-signed-windows.ps1`, `create-desktop-shortcut.ps1`). Do not add agent-generated patch scripts there.
+- **Do not** run `git checkout` / `git restore` on individual source files to “fix” a bad edit when the user may have **uncommitted work**. That can wipe hours of local changes. If the file is broken, repair it forward; ask the user before any git operation that discards working-tree content.
+- If a large replace fails, **narrow the context** or read more of the file — do not escalate to string-surgery scripts.
+
 ## Stack
 
 - **Frontend:** React 19, TypeScript, Vite, Tailwind v4, Zustand (`src/store/ruforgeStore.ts` + `ruforgePersistStorage.ts`).
@@ -41,6 +48,7 @@ Concise context for agents working **inside this repo’s IDE workspace**. This 
 
 - **Source of truth (main window):** `useRuforgeStore` holds nav, settings, paths, notifications, downloader fields, gallery list (`entries` + loading flags), player file/playlist/volume/loop, sidebar, search, explorer URL, etc. Persisted slice is settings + output paths (`ruforgePersistStorage.ts` — flat `localStorage` keys preserved for MiniPlayer and other readers).
 - **`App.tsx`:** Still uses **local React state** for window chrome / shell only, e.g. **`isMini`** (which webview label you’re in) and **`isMaximized`** for custom titlebar controls—intentional separation from Zustand.
+- **Downloader screen:** **`src/components/DownloaderView.tsx`** is the routed shell only; **`src/components/downloader/`** holds **`useDownloaderView`** (effects + handlers), job-queue UI (**`DownloadJobQueuePanel.tsx`**), and small **`downloaderConstants` / `downloaderFormat`** helpers. **`App.tsx`** imports **`DownloaderView`** from **`./components/DownloaderView`** only.
 - **Live gallery UI:** **`MediaView`** (used from `App.tsx`) is aligned with the store’s gallery slice. **`GalleryView.tsx`** exists but is **not** imported by `App.tsx`; treat it as legacy / candidate for delete or future wiring—not part of the shipped Zustand path.
 - **`MiniPlayer.tsx`:** Own webview → **duplicated playback UI state** (current file, progress, hover, etc.) synchronized via Tauri events + some `localStorage` keys; do not expect the main window store to appear here.
 - **Heavy local `useState` in `PlayerView`:** Normal for playback UI (scrubber, menus, transient controls); not a “migration gap” by itself.
@@ -77,7 +85,15 @@ A past mismatch was **`Cargo.toml` behind the JS/Tauri app version** — fix on 
 
 **Preview:** `npx --yes serve docs` from repo root, then open **`/versioner.html`**.
 
-**Roles:** **Chad** — manifests, registry, loader, **`VersionGraphFormat`**. **Jim** — CSS-only on **`versioner.html`**.
+**Roles:** **Chad** — manifests, registry, loader, **`VersionGraphFormat`**. **Jim** — CSS-only on **`versioner.html`** (avoid changing **`VersionGraphFormat`** wiring unless coordinated).
+
+**`versioner.html` UX (maintainer/bot notes):**
+
+- Nodes anchor edges to **circle centers** — labels hang below via CSS so Bézier endpoints stay accurate on wide task rows.
+- **Detail panel:** scroll body is **`#detail-panel-inner`** (fixed chrome + close button); extend scroll there, not the raw `#detail-panel`.
+- **`fileEdits` / multi-path tasks:** manifests still list **`fileEdits` in JSON only** — the canvas **renders synthetic file nodes** when a task/fix has **two or more unique paths**. **Green** ring = **`action` create** semantics (**`MANIFEST-SCHEMA.md`**); **muted cream/stone** = modified. Thin **fork** edges run from parent task/fix to each path; sidebar copy uses **`reason`** when present else a short default. **By default those file nodes are hidden** — **click the parent task/fix on the canvas** to toggle the row (click again to collapse). Changing version pills or clicking empty canvas clears expansions.
+
+- **Graph extent:** Layout is **normalized into a positive bbox** and the SVG **`viewBox`** / `#graph-layer` size follow that bbox so long manifest rows do not clip edge strokes at a fixed 4000×6000 canvas.
 
 ## Changelog source (`docs/changes.html`)
 
