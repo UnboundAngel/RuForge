@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { flushSync } from "react-dom";
 import {
   motion,
   AnimatePresence,
@@ -15,6 +16,8 @@ import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
 import { buildExplorerInjectScript } from "./explorerInjectScript";
 import { canonicalYouTubeWatchUrl, extractYouTubeVideoId } from "./youtubeUrl";
+import { useUrlDropIntake } from "./features/downloader/useUrlDropIntake";
+import { getYoutubeUrlDropHandler } from "./features/downloader/youtubeUrlDropRegistry";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { notifyWhenUnfocused } from "./systemNotify";
 import { check, Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
@@ -250,6 +253,38 @@ function App() {
   const notifications = useRuforgeStore((s) => s.notifications);
   const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const notify = useRuforgeStore((s) => s.notify);
+  const downloaderDuplicateDialogOpen = useRuforgeStore((s) => s.downloaderDuplicateDialogOpen);
+
+  const { bindRef: bindMainWindowUrlDrop, isDragOver: isMainUrlDropHover } = useUrlDropIntake({
+    duplicateModalOpen: downloaderDuplicateDialogOpen,
+    onDroppedYoutubeUrls: async (urls) => {
+      flushSync(() => {
+        setActiveTab("downloader");
+      });
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+      const h = getYoutubeUrlDropHandler();
+      if (!h) {
+        notify("Drop could not be handled. Open the Download tab and try again.");
+        return;
+      }
+      await h(urls);
+    },
+    toastNoSupportedUrl: () => notify("No supported URL in drop."),
+    toastModalBlocked: () => notify("Finish current dialog first."),
+  });
+
+  const assignMainScrollAndUrlDropRef = useCallback(
+    (node: HTMLElement | null) => {
+      mainContentRef.current = node;
+      bindMainWindowUrlDrop(node);
+    },
+    [bindMainWindowUrlDrop],
+  );
+
   const explorerContainerRef = useRef<HTMLDivElement>(null);
   const explorerWebviewRef = useRef<Webview | null>(null);
   const playerViewRef = useRef<PlayerViewHandle>(null);
@@ -1071,7 +1106,13 @@ function App() {
               onOpenChangelog={() => void openUrl(RELEASES_PAGE)}
             />
           )}
-          <main ref={mainContentRef} className="absolute inset-0 overflow-y-auto">
+          {isMainUrlDropHover ? (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-[25] rounded-tl-[32px] border-2 border-dashed border-[color:color-mix(in_srgb,var(--accent),transparent_55%)] bg-[color:color-mix(in_srgb,var(--accent),transparent_93%)]"
+            />
+          ) : null}
+          <main ref={assignMainScrollAndUrlDropRef} className="absolute inset-0 overflow-y-auto">
             <AnimatePresence mode="wait">
               {activeTab === "downloader" && (
                 <DownloaderView

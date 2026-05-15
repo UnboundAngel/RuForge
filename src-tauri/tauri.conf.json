@@ -12,12 +12,14 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "RuForge",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
         "minHeight": 580,
-        "decorations": false
+        "decorations": false,
+        "dragDropEnabled": false
       }
     ],
     "security": {

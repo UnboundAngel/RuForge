@@ -239,6 +239,14 @@ export default function MiniPlayer() {
     emit("mini-player-ready");
   }, []);
 
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    document.addEventListener("dragover", onDragOver, { passive: false });
+    return () => document.removeEventListener("dragover", onDragOver);
+  }, []);
+
   const [playingFile, setPlayingFile] = useState<MediaFile | null>(null);
   const coverArtSrc = playingFile?.ruforgePosterPath ?? playingFile?.thumbnailPath;
 
