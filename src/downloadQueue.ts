@@ -40,7 +40,7 @@ export type DownloadJobFinishedPayload = {
   error?: string;
 };
 
-export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 1;
+export { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from "./store/types";
 
 const SESSION_QUEUE_KEY = "ruforge-download-queue";
 

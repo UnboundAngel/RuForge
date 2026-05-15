@@ -5,3 +5,4 @@ pub mod media;
 pub mod player;
 pub mod settings;
 pub mod system;
+pub mod ytdlp_update;

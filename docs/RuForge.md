@@ -25,6 +25,9 @@
 - ✅ **Duplicate URL detection** — Before download, match gallery `sourceUrl` by normalized YouTube video id. **Already downloaded** banner shows when metadata loads (before clicking Download). **Download** opens modal: Cancel / Replace / Create new (`[%(id)s]` template). Settings **Skip Duplicates** uses ToggleSlot (no dialog checkbox).
 - ✅ **Clipboard on focus** — Focusing the paste-link field reads **current** OS clipboard (not Win+V history); auto-fills empty field or offers **Use it?** when field has text. Hint **above** input with enter animation. No settings toggle (by design).
 - ✅ **Explorer right-click menu** — On YouTube watch pages in embedded Explorer: themed menu on video area — Download video, Send to downloader, Copy link, Copy video ID. Injected via `src/explorerInjectScript.ts`; events in `App.tsx`. Recreate Explorer webview after update to pick up inject script.
+- ✅ **Download queue + pause / resume / retry** — Jobs in Zustand (`downloadQueueSlice`, persisted `ruforge-download-queue`), sidebar **Download queue** UI (`DownloadJobQueuePanel`), reorder/remove. Pause invokes Rust `pause_download_job`; resume respawns with yt-dlp **`--continue`** when `resumeOnStart`; failed jobs **Retry**. **`maxConcurrentDownloads`** is persisted in **`settings`** (default **1**) and mirrored in the queue slice; Settings → Downloads exposes presets + custom (hard cap **6**).
+- ✅ **URL bubble + queue-from-clipboard UX** — When metadata loads, the corner **URL bubble** stacks vertically: **current link chip → pinned queued URLs → Queue another → hint row** (fixed-height strip so “no clipboard link” / conflict copy fades without jumping the layout). **Paperclip** on active link rows (main + pins); **clipboard icon only** on **Queue another**, which stays **collapsed** (`max-w-9`) until hover expands the label. Link rows drop the hover wash background; copy vs clear tooltips fade on the right targets (`DownloaderView.tsx`: `MainDownloaderUrlChip`, `QuickEnqueuePinnedChip`; centered paste layout mirrors the same queue stack).
+- ✅ **yt-dlp update UX** — GitHub `releases/latest` with **12h TTL** cache (`app_data/ytdlp-update-cache.json`), **launch warm**, downloader banner (**Update yt-dlp** / **Later**), progress via `ytdlp-update-download-progress`; install to **`app_data/bin/`** after verify `--version`; all runs prefer userdata binary via [`ytdlp_binary.rs`](../src-tauri/src/ytdlp_binary.rs); commands `get_ytdlp_update_status`, `download_ytdlp_update`.
 - 🚧 **Downloader screen visuals (Jim, t25)** — polish pass on downloader layout/cards; logic unchanged.
 
 ### Session 2026-05-14 — Subtitles end to end
@@ -58,9 +61,9 @@ Nothing currently blocking.
 
 ### Downloader
 
-- **Download queue.** Multiple downloads spawn as independent sidecars with no queue. Need: queue array, sequential or concurrent (cap 1–2 default for rate limits), reorder, remove.
-- **Pause / resume / retry.** yt-dlp `--continue`; kill/respawn sidecar; store cookie opts per job for resume on restricted videos.
-- **yt-dlp auto-update.** Check GitHub on launch or show **visible** “update available” in downloader (not buried in settings); download binary to AppData; fallback to bundled.
+- ~~**Download queue.**~~ ✅ Shipped — persisted jobs, pump/start next, reorder/remove; concurrency capped in store (`maxConcurrentDownloads`, default **1**).
+- ~~**Pause / resume / retry.**~~ ✅ Shipped — pause kills sidecar path via backend; resume with **`--continue`**; per-job options retained for retry.
+- ~~**yt-dlp auto-update.**~~ ✅ Shipped — GitHub check (cached + warm on launch), downloader banner (`DownloaderView`); download to **`app_data/bin/`** with bundled sidecar fallback; `get_ytdlp_update_status` / `download_ytdlp_update` (`commands/ytdlp_update.rs`).
 - ~~**Duplicate detection by URL.**~~ ✅ Shipped (see 2026-05-15).
 - ~~**Subtitle language picker in downloader.**~~ ✅ Shipped — Settings → Downloads (separate from player `subtitlePreferredLang`).
 - **`get_video_info` paste preview without cookies.** Deprioritized — public metadata works without cookies; restricted videos may fail preview but download with internal browser. Reopen only if users complain.
@@ -91,6 +94,10 @@ Nothing currently blocking.
 ---
 
 ## 🟡 P2 — Polish
+
+### Downloader follow-ups
+
+- ~~**Max concurrent downloads (Settings).**~~ ✅ Settings → Downloads — presets (1 / 2 / 3) plus **Custom** (4–hard cap); default **1**; store slice syncs from **`settings`**.
 
 ### Media Player Quality-of-Life
 
@@ -165,10 +172,9 @@ Nothing currently blocking.
 
 **Highest leverage for the wedge (order is opinion):**
 
-1. **Download queue + pause/resume** — foundation for batch hoarding and reliability.
-2. **yt-dlp update surface** — visible in downloader when GitHub has a newer binary.
-3. **SQLite gallery index** — before libraries get large.
-4. **Drag-and-drop URL** onto app window — fast intake alongside Explorer + clipboard.
+1. **SQLite gallery index** — before libraries get large.
+2. **Drag-and-drop URL** onto app window — fast intake alongside Explorer + clipboard.
+3. **Optional:** expose **max concurrent downloads** in Settings (engine already supports >1; default remains conservative until UX decides).
 
 **Jim-sized (visuals only):** downloader screen t25; any duplicate/clipboard microcopy tweaks.
 

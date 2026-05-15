@@ -37,6 +37,20 @@ export function effectiveDownloadSubLangs(settings: {
   return langs || "en.*";
 }
 
+/** Hard ceiling for Settings + queue (`downloadQueueSlice` mirrors this from `settings`). */
+export const MAX_CONCURRENT_DOWNLOADS_CAP = 6;
+
+export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 1;
+
+/** Values beyond the three presets use Settings “Custom” (numeric stepper from 4 … cap). */
+export const CUSTOM_CONCURRENT_DOWNLOADS_MIN = 4;
+
+export function clampMaxConcurrentDownloads(n: unknown): number {
+  const x =
+    typeof n === "number" && Number.isFinite(n) ? Math.floor(n) : DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+  return Math.min(MAX_CONCURRENT_DOWNLOADS_CAP, Math.max(1, x));
+}
+
 export interface RuforgeSettings {
   launchAtStartup: boolean;
   minimizeToTray: boolean;
@@ -56,6 +70,8 @@ export interface RuforgeSettings {
   downloadSubtitleLangs: string;
   /** When true, duplicate YouTube URLs are skipped without prompting. */
   skipDuplicatesAutomatically: boolean;
+  /** Parallel yt-dlp jobs (`downloadQueueSlice.maxConcurrentDownloads` mirrors this). */
+  maxConcurrentDownloads: number;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -74,6 +90,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   downloadSubtitles: true,
   downloadSubtitleLangs: "en.*",
   skipDuplicatesAutomatically: false,
+  maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
 };
 
 export function loadMergedSettings(): RuforgeSettings {
@@ -82,7 +99,11 @@ export function loadMergedSettings(): RuforgeSettings {
     if (!saved) return DEFAULT_SETTINGS;
     const parsed: unknown = JSON.parse(saved);
     if (typeof parsed !== "object" || parsed === null) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...(parsed as Partial<RuforgeSettings>) };
+    const merged = { ...DEFAULT_SETTINGS, ...(parsed as Partial<RuforgeSettings>) };
+    return {
+      ...merged,
+      maxConcurrentDownloads: clampMaxConcurrentDownloads(merged.maxConcurrentDownloads),
+    };
   } catch {
     return DEFAULT_SETTINGS;
   }

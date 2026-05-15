@@ -21,7 +21,7 @@ export const DownloadQueueItem = ({
   currentIndex,
   percentage,
 }: {
-  item: { id: string; thumbnail: string };
+  item: { id?: string; thumbnail: string };
   index: number;
   currentIndex?: number;
   percentage: number;

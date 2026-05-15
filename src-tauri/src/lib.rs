@@ -4,6 +4,7 @@ mod download_job_manager;
 mod hardware_acceleration;
 mod tray;
 mod utils;
+mod ytdlp_binary;
 
 use std::sync::Mutex;
 
@@ -25,6 +26,9 @@ use crate::commands::settings::{
     set_hardware_acceleration_pref, update_tray_config,
 };
 use crate::commands::system::open_external_url;
+use crate::commands::ytdlp_update::{
+    download_ytdlp_update, get_ytdlp_update_status, warm_ytdlp_release_cache_spawn,
+};
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
 use crate::tray::setup_tray;
 
@@ -70,6 +74,7 @@ pub fn run() {
             set_windows_notification_app_id(&app.config().identifier);
 
             let handle = app.handle().clone();
+            warm_ytdlp_release_cache_spawn(handle.clone());
             tauri::async_runtime::spawn(async move {
                 if let Ok(updater) = handle.updater() {
                     if let Ok(Some(update)) = updater.check().await {
@@ -115,7 +120,9 @@ pub fn run() {
             probe_local_media_ffprobe,
             open_external_url,
             get_subtitle_tracks,
-            read_local_subtitle_vtt
+            read_local_subtitle_vtt,
+            get_ytdlp_update_status,
+            download_ytdlp_update
         ])
         .run(context)
         .expect("error while running tauri application");

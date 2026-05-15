@@ -10,9 +10,33 @@ import { effectiveDownloadSubLangs } from "../../store/types";
 import { readClipboardYouTubeUrl } from "../../downloaderClipboardYoutube";
 import { findLibraryDuplicate, type DuplicateMatch } from "../../duplicateDownload";
 import type { DuplicateDownloadChoice } from "../DuplicateDownloadDialog";
-import { youtubeUrlsMatch } from "../../youtubeUrl";
-import { ProgressPayload, VideoInfo, normalizeProgressPayload } from "../../types";
+import {
+  canonicalYouTubeWatchUrl,
+  normalizeYouTubeUrlForCompare,
+  playlistItemWatchUrl,
+  youtubeUrlsMatch,
+} from "../../youtubeUrl";
+import {
+  ProgressPayload,
+  VideoInfo,
+  type YtdlpUpdateDownloadProgressPayload,
+  type YtdlpUpdateStatusPayload,
+  normalizeProgressPayload,
+} from "../../types";
 import { URL_PACER_EASE } from "./downloaderConstants";
+
+function urlConflictsWithActiveDownloader(
+  targetUrl: string,
+  mainFieldUrl: string,
+  jobs: Array<{ url: string; status: string }>,
+): boolean {
+  if (youtubeUrlsMatch(mainFieldUrl.trim(), targetUrl)) return true;
+  return jobs.some(
+    (j) =>
+      (j.status === "queued" || j.status === "downloading" || j.status === "paused") &&
+      youtubeUrlsMatch(j.url, targetUrl),
+  );
+}
 
 export type DownloaderViewProps = {
   internalDir: string;
@@ -53,13 +77,30 @@ export function useDownloaderView({
   const invalidateEntries = useRuforgeStore((s) => s.invalidateEntries);
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
   const entries = useRuforgeStore((s) => s.entries);
+  const duplicateChoiceResolverRef = useRef<((choice: DuplicateDownloadChoice) => void) | null>(null);
   const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
   const [replaceDialogMatch, setReplaceDialogMatch] = useState<DuplicateMatch | null>(null);
+  const [quickEnqueueHint, setQuickEnqueueHint] = useState<
+    null | "empty" | "conflict" | "library_skip"
+  >(null);
+  const [pinnedQuickEnqueueUrls, setPinnedQuickEnqueueUrls] = useState<string[]>([]);
   const [clipboardPastedHint, setClipboardPastedHint] = useState(false);
   const [clipboardOfferUrl, setClipboardOfferUrl] = useState<string | null>(null);
   const clipboardReadGenRef = useRef(0);
   const [urlBubbleCopied, setUrlBubbleCopied] = useState(false);
   const urlBubbleCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [ytdlpUpdateDismissed, setYtdlpUpdateDismissed] = useState(false);
+  const [ytdlpUpdateStatus, setYtdlpUpdateStatus] = useState<YtdlpUpdateStatusPayload | null>(null);
+  const [ytdlpUpdateLoading, setYtdlpUpdateLoading] = useState(true);
+  const [ytdlpUpdating, setYtdlpUpdating] = useState(false);
+  const [ytdlpUpdatePercent, setYtdlpUpdatePercent] = useState<number | null>(null);
+  const [ytdlpUpdateInvokeError, setYtdlpUpdateInvokeError] = useState<string | null>(null);
+  const showYtdlpStrip = Boolean(
+    !ytdlpUpdateDismissed &&
+      !ytdlpUpdateLoading &&
+      ytdlpUpdateStatus &&
+      (ytdlpUpdateStatus.updateAvailable || ytdlpUpdating || Boolean(ytdlpUpdateInvokeError)),
+  );
   const showUrlBubble = Boolean(videoInfo && !metadataLoading && !downloading && url.startsWith("http"));
   const libraryDuplicate = useMemo(() => {
     if (!url.startsWith("http")) return null;
@@ -75,9 +116,56 @@ export function useDownloaderView({
   const urlChipLayoutTransition = { layout: { duration: 0.55, ease: URL_PACER_EASE } } as const;
 
   useEffect(() => {
+    const resolve = duplicateChoiceResolverRef.current;
+    if (resolve) {
+      duplicateChoiceResolverRef.current = null;
+      resolve("cancel");
+    }
     setReplaceDialogOpen(false);
     setReplaceDialogMatch(null);
   }, [url]);
+
+  useEffect(() => {
+    if (!quickEnqueueHint) return;
+    const t = setTimeout(() => setQuickEnqueueHint(null), 2600);
+    return () => clearTimeout(t);
+  }, [quickEnqueueHint]);
+
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    const run = async () => {
+      setYtdlpUpdateLoading(true);
+      try {
+        const status = await invoke<YtdlpUpdateStatusPayload>("get_ytdlp_update_status");
+        setYtdlpUpdateStatus(status);
+      } catch {
+        setYtdlpUpdateStatus(null);
+      } finally {
+        setYtdlpUpdateLoading(false);
+      }
+
+      unsub = await listen<YtdlpUpdateDownloadProgressPayload>(
+        "ytdlp-update-download-progress",
+        (event) => {
+          const payload = event.payload;
+          const phase = payload.phase;
+          const p = typeof payload.percent === "number" ? payload.percent : null;
+
+          if (phase === "downloading") setYtdlpUpdatePercent((prev) => p ?? prev);
+          if (phase === "verifying") setYtdlpUpdatePercent(null);
+          if (phase === "done") {
+            setYtdlpUpdating(false);
+            setYtdlpUpdatePercent(100);
+            setTimeout(() => setYtdlpUpdatePercent(null), 900);
+          }
+        },
+      );
+    };
+    void run();
+    return () => {
+      unsub?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!url.startsWith("http")) return;
@@ -100,18 +188,57 @@ export function useDownloaderView({
     }
   };
 
+  const dismissYtdlpUpdateBanner = useCallback(() => {
+    setYtdlpUpdateDismissed(true);
+  }, []);
+
+  const downloadYtdlpUpdateNow = useCallback(async () => {
+    setYtdlpUpdateInvokeError(null);
+    setYtdlpUpdating(true);
+    setYtdlpUpdatePercent(null);
+    try {
+      await invoke("download_ytdlp_update");
+      const status = await invoke<YtdlpUpdateStatusPayload>("get_ytdlp_update_status");
+      setYtdlpUpdateStatus(status);
+    } catch (e) {
+      const msg =
+        typeof e === "string"
+          ? e
+          : e instanceof Error && e.message
+            ? e.message
+            : "Could not download yt-dlp.";
+      setYtdlpUpdateInvokeError(msg);
+      setYtdlpUpdatePercent(null);
+    } finally {
+      setYtdlpUpdating(false);
+    }
+  }, []);
+
   const runDownload = useCallback(
-    async (targetUrl: string, choice: DuplicateDownloadChoice = "replace") => {
+    (
+      targetUrl: string,
+      choice: Exclude<DuplicateDownloadChoice, "cancel"> = "replace",
+      meta?: { title?: string },
+    ) => {
       const s = settingsRef.current;
       if (!targetUrl || (saveToInternal && storageFull)) return;
       const outputPath = saveToInternal ? internalDir : outputDir;
       const options = buildDownloadJobOptions(s, outputPath, choice);
-      enqueueDownload(targetUrl, options, {
-        title: useRuforgeStore.getState().videoInfo?.title,
-      });
+      const st = useRuforgeStore.getState();
+      const title =
+        meta?.title ?? (youtubeUrlsMatch(targetUrl, st.url) ? st.videoInfo?.title : undefined);
+      enqueueDownload(targetUrl, options, title ? { title } : undefined);
     },
     [saveToInternal, storageFull, outputDir, internalDir, enqueueDownload],
   );
+
+  const promptDuplicateChoice = useCallback((match: DuplicateMatch) => {
+    return new Promise<DuplicateDownloadChoice>((resolve) => {
+      duplicateChoiceResolverRef.current = resolve;
+      setReplaceDialogMatch(match);
+      setReplaceDialogOpen(true);
+    });
+  }, []);
 
   const resolveDuplicate = useCallback(
     async (targetUrl: string): Promise<DuplicateMatch | null> => {
@@ -127,26 +254,138 @@ export function useDownloaderView({
 
   const handleDownloadClick = useCallback(async () => {
     if (!url || (saveToInternal && storageFull)) return;
+
+    const vi = useRuforgeStore.getState().videoInfo;
+    const playlistItems = vi?.isPlaylist ? vi.playlistItems : undefined;
+
+    if (playlistItems && playlistItems.length > 0) {
+      const pairs: { url: string; title: string }[] = [];
+      const seen = new Set<string>();
+      for (const item of playlistItems) {
+        const u = playlistItemWatchUrl(item);
+        if (!u) continue;
+        const k = normalizeYouTubeUrlForCompare(u);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        pairs.push({ url: u, title: item.title });
+      }
+
+      if (pairs.length > 0) {
+        let batchChoice: Exclude<DuplicateDownloadChoice, "cancel"> | null = null;
+
+        for (const { url: videoUrl, title } of pairs) {
+          const duplicate = await resolveDuplicate(videoUrl);
+          if (!duplicate) {
+            runDownload(videoUrl, batchChoice ?? "replace", { title });
+            continue;
+          }
+          if (settingsRef.current.skipDuplicatesAutomatically) continue;
+
+          if (batchChoice === null) {
+            const choice = await promptDuplicateChoice(duplicate);
+            if (choice === "cancel") return;
+            batchChoice = choice;
+          }
+          runDownload(videoUrl, batchChoice, { title });
+        }
+        return;
+      }
+      /* No resolved watch URLs — fall through and enqueue the playlist URL once (yt-dlp). */
+    }
+
     const duplicate = libraryDuplicate ?? (await resolveDuplicate(url));
     if (!duplicate) {
-      void runDownload(url);
+      runDownload(url);
       return;
     }
     if (settingsRef.current.skipDuplicatesAutomatically) return;
-    setReplaceDialogMatch(duplicate);
-    setReplaceDialogOpen(true);
-  }, [url, libraryDuplicate, resolveDuplicate, runDownload, saveToInternal, storageFull]);
 
-  const handleDuplicateChoice = useCallback(
-    (choice: DuplicateDownloadChoice) => {
-      setReplaceDialogOpen(false);
-      const match = replaceDialogMatch;
-      setReplaceDialogMatch(null);
-      if (choice === "cancel" || !match) return;
-      void runDownload(url, choice);
-    },
-    [replaceDialogMatch, runDownload, url],
-  );
+    const choice = await promptDuplicateChoice(duplicate);
+    if (choice === "cancel") return;
+    runDownload(url, choice);
+  }, [
+    url,
+    libraryDuplicate,
+    resolveDuplicate,
+    runDownload,
+    saveToInternal,
+    storageFull,
+    promptDuplicateChoice,
+  ]);
+
+  const insertPinnedQuickEnqueueUrl = useCallback((targetUrl: string) => {
+    const canon = canonicalYouTubeWatchUrl(targetUrl) ?? targetUrl.trim();
+    setPinnedQuickEnqueueUrls((prev) => {
+      if (prev.some((x) => youtubeUrlsMatch(x, canon))) return prev;
+      return [canon, ...prev];
+    });
+  }, []);
+
+  const removePinnedQuickEnqueueUrl = useCallback((targetUrl: string) => {
+    setPinnedQuickEnqueueUrls((prev) => prev.filter((x) => !youtubeUrlsMatch(x, targetUrl)));
+  }, []);
+
+  const copyUrlToClipboard = useCallback(async (targetUrl: string) => {
+    try {
+      await writeText(targetUrl);
+    } catch {
+      try {
+        await navigator.clipboard.writeText(targetUrl);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, []);
+
+  const handleDuplicateChoice = useCallback((choice: DuplicateDownloadChoice) => {
+    const resolve = duplicateChoiceResolverRef.current;
+    duplicateChoiceResolverRef.current = null;
+    setReplaceDialogOpen(false);
+    setReplaceDialogMatch(null);
+    if (resolve) {
+      resolve(choice);
+    }
+  }, []);
+
+  const handleQuickEnqueueFromClipboard = useCallback(async () => {
+    if (saveToInternal && storageFull) return;
+
+    const clipUrl = await readClipboardYouTubeUrl();
+    if (!clipUrl) {
+      setQuickEnqueueHint("empty");
+      return;
+    }
+    const st = useRuforgeStore.getState();
+    if (urlConflictsWithActiveDownloader(clipUrl, st.url, st.downloadJobs)) {
+      setQuickEnqueueHint("conflict");
+      return;
+    }
+
+    const duplicate = await resolveDuplicate(clipUrl);
+    if (!duplicate) {
+      runDownload(clipUrl);
+      insertPinnedQuickEnqueueUrl(clipUrl);
+      setQuickEnqueueHint(null);
+      return;
+    }
+    if (settingsRef.current.skipDuplicatesAutomatically) {
+      setQuickEnqueueHint("library_skip");
+      return;
+    }
+
+    const choice = await promptDuplicateChoice(duplicate);
+    if (choice === "cancel") return;
+    runDownload(clipUrl, choice);
+    insertPinnedQuickEnqueueUrl(clipUrl);
+    setQuickEnqueueHint(null);
+  }, [
+    saveToInternal,
+    storageFull,
+    resolveDuplicate,
+    runDownload,
+    promptDuplicateChoice,
+    insertPinnedQuickEnqueueUrl,
+  ]);
 
   const requestDownload = useCallback(
     async (targetUrl: string) => {
@@ -221,12 +460,8 @@ export function useDownloaderView({
     urlBubbleCopyResetRef.current = setTimeout(() => {
       setUrlBubbleCopied(false);
       urlBubbleCopyResetRef.current = null;
-    }, 1800);
+    }, 2000);
   }, [url]);
-
-  const handleUrlClipMouseLeave = useCallback(() => {
-    clearUrlBubbleCopied();
-  }, [clearUrlBubbleCopied]);
 
   const handleClearUrl = useCallback(() => {
     clipboardReadGenRef.current += 1;
@@ -237,6 +472,8 @@ export function useDownloaderView({
     setClipboardPastedHint(false);
     setClipboardOfferUrl(null);
     clearUrlBubbleCopied();
+    setQuickEnqueueHint(null);
+    setPinnedQuickEnqueueUrls([]);
   }, [
     setDownloaderUrl,
     setVideoInfo,
@@ -358,8 +595,20 @@ export function useDownloaderView({
     handleUrlBlur,
     applyClipboardOffer,
     handleUrlClipCopy,
-    handleUrlClipMouseLeave,
     handleClearUrl,
     handleUrlChange,
+    quickEnqueueHint,
+    pinnedQuickEnqueueUrls,
+    removePinnedQuickEnqueueUrl,
+    copyUrlToClipboard,
+    handleQuickEnqueueFromClipboard,
+    showYtdlpStrip,
+    ytdlpUpdateStatus,
+    ytdlpUpdateLoading,
+    ytdlpUpdating,
+    ytdlpUpdatePercent,
+    ytdlpUpdateInvokeError,
+    dismissYtdlpUpdateBanner,
+    downloadYtdlpUpdateNow,
   };
 }
