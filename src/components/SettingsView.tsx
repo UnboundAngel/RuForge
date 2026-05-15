@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from "motion/react";
-import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music } from 'lucide-react';
+import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
+import { emit } from "@tauri-apps/api/event";
 import { useRuforgeStore } from '../store/ruforgeStore';
 
 interface SettingItemProps {
@@ -94,20 +95,24 @@ const ToggleSlot: React.FC<{ active: boolean; onClick?: () => void }> = ({ activ
   </div>
 );
 
+const FadingDivider = () => (
+  <div className="h-px w-full bg-gradient-to-r from-transparent via-[#EDD79C]/15 to-transparent my-1" />
+);
+
 const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, title, description, control, active, onClick }) => (
   <div 
     onClick={onClick}
-    className={`group flex items-center justify-between p-6 rounded-[24px] transition-all duration-300 bg-white/[0.01] hover:bg-white/[0.03] border border-white/[0.02] ${
+    className={`group flex items-center justify-between p-6 rounded-[24px] transition-all duration-300 bg-transparent hover:bg-white/[0.02] ${
       onClick ? 'cursor-pointer' : 'cursor-default'
     }`}
   >
     <div className="flex items-center gap-5">
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${
+      <div className={`w-12 h-12 flex items-center justify-center transition-all duration-300 ${
         active 
-        ? 'bg-[color-mix(in_srgb,var(--accent),transparent_92%)] text-[color:var(--accent)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)]' 
-        : 'bg-[#1D1613] text-stone-500 border border-white/[0.05] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]'
+        ? 'text-[color:var(--accent)]' 
+        : 'text-stone-500'
       }`}>
-        <Icon className="w-5 h-5" />
+        <Icon className="w-6 h-6" />
       </div>
       <div>
         <h4 className={`text-sm font-bold transition-colors duration-300 ${active ? 'text-stone-100' : 'text-stone-300'}`}>
@@ -176,7 +181,7 @@ export const SettingsView: React.FC = () => {
           className="space-y-4"
         >
           {activeTab === 'general' && (
-            <div className="space-y-3">
+            <div className="flex flex-col">
               <SettingItem 
                 icon={Database}
                 title="Storage Limit"
@@ -193,6 +198,7 @@ export const SettingsView: React.FC = () => {
                   />
                 }
               />
+              <FadingDivider />
               <SettingItem 
                 icon={Monitor}
                 title="Launch at Startup"
@@ -205,6 +211,7 @@ export const SettingsView: React.FC = () => {
                   />
                 }
               />
+              <FadingDivider />
               <SettingItem 
                 icon={Monitor}
                 title="System Tray"
@@ -221,33 +228,48 @@ export const SettingsView: React.FC = () => {
           )}
 
           {activeTab === 'downloads' && (
-            <div className="space-y-3">
+            <div className="flex flex-col">
               <SettingItem 
                 icon={Database}
                 title="Storage Target"
                 description={saveToInternal ? "Saving to RuForge Internal Vault." : "Saving to Custom Download Path."}
                 active={true}
                 control={
-                  <div className="flex p-1 bg-[#1D1613] rounded-xl border border-white/5">
+                  <div className="flex p-1 bg-[#1D1613] rounded-xl border border-white/5 relative">
                     <button 
                       onClick={() => handleSetSaveToInternal(true)}
-                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${
-                        saveToInternal ? 'bg-[color:var(--accent)] text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
+                      className={`relative px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-colors duration-300 z-10 ${
+                        saveToInternal ? 'text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
                       }`}
                     >
-                      INTERNAL
+                      {saveToInternal && (
+                        <motion.div
+                          layoutId="activeStorage"
+                          className="absolute inset-0 bg-[color:var(--accent)] rounded-lg z-0"
+                          transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                        />
+                      )}
+                      <span className="relative z-10">INTERNAL</span>
                     </button>
                     <button 
                       onClick={() => handleSetSaveToInternal(false)}
-                      className={`px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${
-                        !saveToInternal ? 'bg-[color:var(--accent)] text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
+                      className={`relative px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-colors duration-300 z-10 ${
+                        !saveToInternal ? 'text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
                       }`}
                     >
-                      CUSTOM
+                      {!saveToInternal && (
+                        <motion.div
+                          layoutId="activeStorage"
+                          className="absolute inset-0 bg-[color:var(--accent)] rounded-lg z-0"
+                          transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                        />
+                      )}
+                      <span className="relative z-10">CUSTOM</span>
                     </button>
                   </div>
                 }
               />
+              <FadingDivider />
               <SettingItem 
                 icon={Download}
                 title="Preferred Quality"
@@ -261,6 +283,7 @@ export const SettingsView: React.FC = () => {
                   />
                 }
               />
+              <FadingDivider />
               <SettingItem 
                 icon={FolderOpen}
                 title="Download Path"
@@ -279,7 +302,7 @@ export const SettingsView: React.FC = () => {
           )}
 
           {activeTab === 'appearance' && (
-            <div className="space-y-3">
+            <div className="flex flex-col">
               <SettingItem 
                 icon={Palette}
                 title="Accent Color"
@@ -312,6 +335,7 @@ export const SettingsView: React.FC = () => {
                   </div>
                 }
               />
+              <FadingDivider />
               <SettingItem 
                 icon={Palette}
                 title="Grid Density"
@@ -323,13 +347,18 @@ export const SettingsView: React.FC = () => {
                       <button 
                         key={t} 
                         onClick={() => updateSetting('gridDensity', t)}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all duration-400 ${
-                          settings.gridDensity === t 
-                          ? 'bg-[color:var(--accent)] text-[#1D1613] shadow-[0_4px_10px_var(--accent-glow)]' 
-                          : 'text-stone-600 hover:text-stone-400'
+                        className={`relative px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-colors duration-300 ${
+                          settings.gridDensity === t ? 'text-[#1D1613]' : 'text-stone-600 hover:text-stone-400'
                         }`}
                       >
-                        {t.toUpperCase()}
+                        {settings.gridDensity === t && (
+                          <motion.div
+                            layoutId="activeDensity"
+                            className="absolute inset-0 bg-[color:var(--accent)] rounded-xl z-0"
+                            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                          />
+                        )}
+                        <span className="relative z-10">{t.toUpperCase()}</span>
                       </button>
                     ))}
                   </div>
@@ -339,7 +368,7 @@ export const SettingsView: React.FC = () => {
           )}
 
           {activeTab === 'advanced' && (
-            <div className="space-y-3">
+            <div className="flex flex-col">
               <SettingItem 
                 icon={Music}
                 title="Auto-advance local audio"
@@ -357,6 +386,7 @@ export const SettingsView: React.FC = () => {
                   />
                 }
               />
+              <FadingDivider />
               <SettingItem 
                 icon={Music}
                 title="Prefetch next audio"
@@ -371,6 +401,7 @@ export const SettingsView: React.FC = () => {
                   />
                 }
               />
+              <FadingDivider />
               <SettingItem 
                 icon={Shield}
                 title="ReplayGain / loudness normalization"
@@ -382,6 +413,7 @@ export const SettingsView: React.FC = () => {
                   </span>
                 }
               />
+              <FadingDivider />
               <SettingItem 
                 icon={Shield}
                 title="Hardware Acceleration"
@@ -394,6 +426,22 @@ export const SettingsView: React.FC = () => {
                   />
                 }
               />
+              <FadingDivider />
+              <SettingItem 
+                icon={Bug}
+                title="Cycle Updater UI"
+                description="Developer Tool: Step through Available, Downloading, Installing, and Post-Install phases to verify UI polish."
+                active={true}
+                control={
+                  <button 
+                    onClick={() => void emit("debug-cycle-updater")}
+                    className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                  >
+                    CYCLE PHASES
+                  </button>
+                }
+              />
+              <FadingDivider />
               <SettingItem 
                 icon={Trash2}
                 title="Clear Cache"
