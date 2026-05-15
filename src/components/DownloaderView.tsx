@@ -536,7 +536,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       </span>
                     </motion.div>
                   )}
-                  {!d.downloading && d.url.startsWith("http") && (
+                  {!d.downloading && d.url.startsWith("http") && !d.metadataLoading && (
                     <div className="mt-6 flex w-full max-w-md flex-col items-stretch gap-2 px-2 mx-auto">
                       {d.pinnedQuickEnqueueUrls.length > 0 && (
                         <div className="flex w-full flex-col gap-1.5">

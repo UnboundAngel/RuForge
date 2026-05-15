@@ -66,6 +66,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
 
   /** Downloader slice (not persisted). */
   url: string;
+  /** True while Replace/Cancel duplicate dialog is open (`DuplicateDownloadDialog`). */
+  downloaderDuplicateDialogOpen: boolean;
   metadataLoading: boolean;
   downloading: boolean;
   progress: ProgressPayload | null;
@@ -120,6 +122,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   dismissNotification: (id: number) => void;
 
   setDownloaderUrl: (url: string) => void;
+  setDownloaderDuplicateDialogOpen: (v: boolean) => void;
   setDownloaderMetadataLoading: (v: boolean) => void;
   setDownloading: (v: boolean) => void;
   setDownloadProgress: (p: ProgressPayload | null) => void;
@@ -177,6 +180,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       notifications: [],
 
       url: "",
+      downloaderDuplicateDialogOpen: false,
       metadataLoading: false,
       downloading: false,
       progress: null,
@@ -422,6 +426,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       setDownloaderUrl: (url) => set({ url }),
+      setDownloaderDuplicateDialogOpen: (downloaderDuplicateDialogOpen) =>
+        set({ downloaderDuplicateDialogOpen }),
       setDownloaderMetadataLoading: (metadataLoading) => set({ metadataLoading }),
       setDownloading: (downloading) => set({ downloading }),
       setDownloadProgress: (progress) => set({ progress }),
@@ -431,6 +437,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       resetDownloader: () =>
         set({
           url: "",
+          downloaderDuplicateDialogOpen: false,
           metadataLoading: false,
           downloading: false,
           progress: null,

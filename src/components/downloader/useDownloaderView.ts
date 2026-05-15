@@ -24,19 +24,11 @@ import {
   normalizeProgressPayload,
 } from "../../types";
 import { URL_PACER_EASE } from "./downloaderConstants";
-
-function urlConflictsWithActiveDownloader(
-  targetUrl: string,
-  mainFieldUrl: string,
-  jobs: Array<{ url: string; status: string }>,
-): boolean {
-  if (youtubeUrlsMatch(mainFieldUrl.trim(), targetUrl)) return true;
-  return jobs.some(
-    (j) =>
-      (j.status === "queued" || j.status === "downloading" || j.status === "paused") &&
-      youtubeUrlsMatch(j.url, targetUrl),
-  );
-}
+import { urlConflictsWithActiveDownloader } from "./downloaderUrlConflict";
+import {
+  type YoutubeUrlDropHandler,
+  setYoutubeUrlDropHandler,
+} from "../../features/downloader/youtubeUrlDropRegistry";
 
 export type DownloaderViewProps = {
   internalDir: string;
@@ -61,6 +53,9 @@ export function useDownloaderView({
   const setDownloaderUrl = useRuforgeStore((s) => s.setDownloaderUrl);
   const metadataLoading = useRuforgeStore((s) => s.metadataLoading);
   const setDownloaderMetadataLoading = useRuforgeStore((s) => s.setDownloaderMetadataLoading);
+  const setDownloaderDuplicateDialogOpenInStore = useRuforgeStore(
+    (s) => s.setDownloaderDuplicateDialogOpen,
+  );
   const downloading = useRuforgeStore((s) => s.downloading);
   const progress = useRuforgeStore((s) => s.progress);
   const enqueueDownload = useRuforgeStore((s) => s.enqueueDownload);
@@ -347,6 +342,84 @@ export function useDownloaderView({
     }
   }, []);
 
+  /** App.tsx switches `activeTab` before invoking (main-webview intake). */
+  const handleDroppedYoutubeUrls = useCallback(
+    async (urls: readonly string[]) => {
+      if (urls.length === 0 || (saveToInternal && storageFull)) return;
+
+      const st = useRuforgeStore.getState();
+      const mainEmpty = !st.url.trim();
+
+      const enqueueViaQuickPath = async (videoUrl: string) => {
+        if (saveToInternal && storageFull) return;
+
+        const s2 = useRuforgeStore.getState();
+        if (urlConflictsWithActiveDownloader(videoUrl, s2.url, s2.downloadJobs)) {
+          setQuickEnqueueHint("conflict");
+          return;
+        }
+
+        const duplicate = await resolveDuplicate(videoUrl);
+        if (!duplicate) {
+          runDownload(videoUrl);
+          insertPinnedQuickEnqueueUrl(videoUrl);
+          return;
+        }
+        if (settingsRef.current.skipDuplicatesAutomatically) {
+          setQuickEnqueueHint("library_skip");
+          return;
+        }
+
+        const choice = await promptDuplicateChoice(duplicate);
+        if (choice === "cancel") return;
+
+        runDownload(videoUrl, choice);
+        insertPinnedQuickEnqueueUrl(videoUrl);
+      };
+
+      if (mainEmpty) {
+        const [first, ...rest] = urls as string[];
+        setDownloaderUrl(first);
+        for (const u of rest) {
+          await enqueueViaQuickPath(u);
+        }
+      } else {
+        for (const u of urls) {
+          await enqueueViaQuickPath(u);
+        }
+      }
+
+      pumpDownloadQueue();
+    },
+    [
+      saveToInternal,
+      storageFull,
+      setDownloaderUrl,
+      resolveDuplicate,
+      runDownload,
+      promptDuplicateChoice,
+      insertPinnedQuickEnqueueUrl,
+      pumpDownloadQueue,
+    ],
+  );
+
+  useEffect(() => {
+    const run: YoutubeUrlDropHandler = (urls) => {
+      void handleDroppedYoutubeUrls(urls);
+    };
+    setYoutubeUrlDropHandler(run);
+    return () => {
+      setYoutubeUrlDropHandler(null);
+    };
+  }, [handleDroppedYoutubeUrls]);
+
+  useEffect(() => {
+    setDownloaderDuplicateDialogOpenInStore(replaceDialogOpen);
+    return () => {
+      setDownloaderDuplicateDialogOpenInStore(false);
+    };
+  }, [replaceDialogOpen, setDownloaderDuplicateDialogOpenInStore]);
+
   const handleQuickEnqueueFromClipboard = useCallback(async () => {
     if (saveToInternal && storageFull) return;
 
@@ -543,8 +616,8 @@ export function useDownloaderView({
     let active = true;
     setMetadataError(null);
     if (url.startsWith("http")) {
+      setDownloaderMetadataLoading(true);
       const fetchInfo = async () => {
-        setDownloaderMetadataLoading(true);
         try {
           const info = await invoke<VideoInfo>("get_video_info", { url });
           if (active) {
@@ -565,6 +638,7 @@ export function useDownloaderView({
       return () => {
         active = false;
         clearTimeout(timeoutId);
+        setDownloaderMetadataLoading(false);
       };
     }
     setVideoInfo(null);
