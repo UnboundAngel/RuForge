@@ -1126,7 +1126,11 @@ function App() {
                       body: "Download finished — your file is ready.",
                     });
                     void refreshStorageStats();
-                    setActiveTab("media");
+                    const jobs = useRuforgeStore.getState().downloadJobs;
+                    const busy = jobs.some(
+                      (j) => j.status === "queued" || j.status === "downloading",
+                    );
+                    if (!busy) setActiveTab("media");
                   }}
                   onDownloadError={(err) => {
                     notify(`Failed: ${err.split('\n')[0]}`);

@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import {
   Clock,
   Pause,
@@ -11,9 +11,31 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import type { DownloadJob } from "../../downloadQueue";
+import { downloadJobMediaNeedsHydration, type DownloadJob } from "../../downloadQueue";
 import { useRuforgeStore } from "../../store/ruforgeStore";
 import { DOWNLOAD_JOB_STATUS_LABEL, RF_DOWNLOADER_PANEL } from "./downloaderConstants";
+import { formatApproxFileSize } from "./downloaderFormat";
+
+function formatQueueTransferText(job: DownloadJob): string | null {
+  if (job.status !== "downloading" || !job.progress) return null;
+  const p = job.progress;
+  const totalFromProgress = typeof p.totalBytes === "number" && p.totalBytes > 0 ? p.totalBytes : null;
+  const totalFromMeta =
+    typeof job.metadata?.fileSizeBytes === "number" && job.metadata.fileSizeBytes > 0
+      ? Math.round(job.metadata.fileSizeBytes)
+      : null;
+  const total = totalFromProgress ?? totalFromMeta;
+  let downloaded =
+    typeof p.downloadedBytes === "number" && p.downloadedBytes >= 0
+      ? Math.round(p.downloadedBytes)
+      : null;
+  if (downloaded == null && total != null && typeof p.percentage === "number") {
+    const pct = Math.min(100, Math.max(0, p.percentage));
+    downloaded = Math.round((pct / 100) * total);
+  }
+  if (total == null || downloaded == null) return null;
+  return `${formatApproxFileSize(downloaded)} / ${formatApproxFileSize(total)}`;
+}
 
 export const DownloadQueueItem = ({
   item,
@@ -105,10 +127,18 @@ const QueueIconButton = ({
   </button>
 );
 
+function queuePanelShouldShow(jobs: DownloadJob[]): boolean {
+  if (jobs.length === 0) return false;
+  return jobs.some((j) => j.status !== "completed" && j.status !== "failed");
+}
+
 const DownloadJobRow = ({
   job,
   index,
   total,
+  focusedJobId,
+  onFocusRow,
+  onConfirmPending,
   onPause,
   onResume,
   onRetry,
@@ -118,6 +148,9 @@ const DownloadJobRow = ({
   job: DownloadJob;
   index: number;
   total: number;
+  focusedJobId: string | null;
+  onFocusRow: (id: string) => void;
+  onConfirmPending: (jobId: string, approve: boolean) => void;
   onPause: (id: string) => void | Promise<void>;
   onResume: (id: string) => void | Promise<void>;
   onRetry: (id: string) => void;
@@ -125,8 +158,10 @@ const DownloadJobRow = ({
   onReorder: (from: number, to: number) => void;
 }) => {
   const pct = job.progress?.percentage;
+  const pendingApproval = job.status === "queued" && job.approval === "pending";
   const canReorder = job.status === "queued" || job.status === "paused";
   const canRemove = ["queued", "paused", "failed", "completed"].includes(job.status);
+  const isFocused = focusedJobId === job.id;
   const statusTone =
     job.status === "downloading"
       ? "text-[color:var(--accent)]/80"
@@ -145,21 +180,55 @@ const DownloadJobRow = ({
           : job.status === "failed"
             ? AlertCircle
             : Clock;
-  const displayTitle = (job.title ?? job.url).trim();
+  const metaTitle = job.metadata?.title?.trim();
+  const shortTitle = job.title?.trim();
+  const needsMeta = downloadJobMediaNeedsHydration(job.metadata);
+  /** Title/thumb can arrive separately; only show "Loading…" when nothing usable yet. */
+  const awaitingListMeta = needsMeta && !metaTitle && !shortTitle;
+  const displayTitle = metaTitle || shortTitle || (awaitingListMeta ? "Loading…" : "Video");
+  const transferLabel = formatQueueTransferText(job);
+  const thumbUrl = job.metadata?.thumbnail?.trim();
+  const statusLabel =
+    pendingApproval
+      ? `${DOWNLOAD_JOB_STATUS_LABEL[job.status]} · confirm`
+      : job.status === "queued" && job.approval === "manual"
+        ? `${DOWNLOAD_JOB_STATUS_LABEL[job.status]} · manual`
+        : job.status === "queued" && job.approval === "held"
+          ? `${DOWNLOAD_JOB_STATUS_LABEL[job.status]} · staged`
+          : DOWNLOAD_JOB_STATUS_LABEL[job.status];
   return (
     <motion.li
-      layout
-      initial={{ opacity: 0, y: 8 }}
+      role="button"
+      tabIndex={0}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.99 }}
-      className={`group relative rounded-xl border border-white/5 bg-[#1D1613]/50 px-3.5 py-2.5 pr-9 transition-colors hover:bg-[#271C18]/40 ${
+      onClick={() => onFocusRow(job.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onFocusRow(job.id);
+        }
+      }}
+      className={`group relative rounded-xl border border-white/5 bg-[#1D1613]/50 px-3.5 py-2.5 pr-9 text-left transition-colors hover:bg-[#271C18]/40 outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]/50 cursor-pointer ${
         job.status === "downloading" ? "border-[color-mix(in_srgb,var(--accent),transparent_88%)]" : ""
-      }`}
+      } ${isFocused ? "ring-2 ring-[color-mix(in_srgb,var(--accent),transparent_55%)]" : ""}`}
     >
       <motion.div className="flex items-start gap-2">
+        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-stone-950/80 ring-1 ring-white/5">
+          {thumbUrl ? (
+            <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center px-1 text-center text-[7px] font-black uppercase leading-tight tracking-tight text-[#EDD79C]/25">
+              {awaitingListMeta ? "…" : "—"}
+            </div>
+          )}
+        </div>
         <motion.div className="min-w-0 flex-1 space-y-1 pb-5">
           <motion.div className="flex items-baseline gap-2">
-            <p className="truncate text-[12px] font-semibold leading-snug text-[#EDD79C]/90" title={displayTitle}>
+            <p
+              className="truncate text-[12px] font-semibold leading-snug text-[#EDD79C]/90"
+              title={metaTitle || shortTitle || job.url}
+            >
               {displayTitle}
             </p>
             {job.status === "downloading" && typeof pct === "number" && (
@@ -175,10 +244,10 @@ const DownloadJobRow = ({
                 strokeWidth={2}
                 className={job.status === "downloading" ? "animate-spin opacity-70" : "opacity-60"}
               />
-              {DOWNLOAD_JOB_STATUS_LABEL[job.status]}
+              {statusLabel}
             </span>
-            {job.status === "downloading" && job.progress?.speed && (
-              <span className="text-[9px] tabular-nums text-[#EDD79C]/30">{job.progress.speed}</span>
+            {transferLabel != null && (
+              <span className="text-[9px] tabular-nums text-[#EDD79C]/30">{transferLabel}</span>
             )}
             {job.error && (
               <p className="max-w-[14rem] truncate text-[9px] text-[#EDD79C]/30" title={job.error}>
@@ -186,8 +255,39 @@ const DownloadJobRow = ({
               </p>
             )}
           </motion.div>
+          {pendingApproval && (
+            <div
+              className="flex flex-wrap items-center gap-2 pt-1"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              role="presentation"
+            >
+              <span className="text-[8px] font-bold uppercase tracking-wider text-[#EDD79C]/45">
+                Add to auto-queue?
+              </span>
+              <button
+                type="button"
+                onClick={() => onConfirmPending(job.id, true)}
+                className="rounded-md bg-[color:var(--accent)] px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-[#1D1613]"
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={() => onConfirmPending(job.id, false)}
+                className="rounded-md border border-white/15 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-[#EDD79C]/70"
+              >
+                No
+              </button>
+            </div>
+          )}
         </motion.div>
-        <motion.div className="flex shrink-0 items-center gap-0.5">
+        <motion.div
+          className="flex shrink-0 items-center gap-0.5"
+          onClick={(e) => e.stopPropagation()}
+          role="presentation"
+          onKeyDown={(e) => e.stopPropagation()}
+        >
           {job.status === "downloading" && (
             <QueueIconButton icon={Pause} onClick={() => void onPause(job.id)} tooltip="Pause" />
           )}
@@ -212,12 +312,17 @@ const DownloadJobRow = ({
           className="absolute bottom-1.5 right-1.5 flex flex-col overflow-hidden rounded-md border border-white/5 bg-[#1D1613]/80"
           role="group"
           aria-label="Reorder in queue"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         >
           <button
             type="button"
             disabled={index === 0}
             title="Move up"
-            onClick={() => onReorder(index, index - 1)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onReorder(index, index - 1);
+            }}
             className="px-1 py-0.5 text-[#EDD79C]/40 transition-colors hover:bg-white/5 hover:text-[#EDD79C]/75 disabled:pointer-events-none disabled:opacity-20"
           >
             <ChevronUp size={11} strokeWidth={2.5} />
@@ -227,7 +332,10 @@ const DownloadJobRow = ({
             type="button"
             disabled={index === total - 1}
             title="Move down"
-            onClick={() => onReorder(index, index + 1)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onReorder(index, index + 1);
+            }}
             className="px-1 py-0.5 text-[#EDD79C]/40 transition-colors hover:bg-white/5 hover:text-[#EDD79C]/75 disabled:pointer-events-none disabled:opacity-20"
           >
             <ChevronDown size={11} strokeWidth={2.5} />
@@ -235,7 +343,7 @@ const DownloadJobRow = ({
         </motion.div>
       )}
       {job.status === "downloading" && typeof pct === "number" && (
-        <div className="absolute bottom-0 left-3 right-3 h-px overflow-hidden rounded-full bg-white/5">
+        <div className="absolute bottom-0 left-3 right-3 h-[3px] overflow-hidden rounded-full bg-white/5">
           <motion.div
             className="h-full bg-[color-mix(in_srgb,var(--accent),transparent_35%)]"
             initial={{ width: 0 }}
@@ -249,13 +357,17 @@ const DownloadJobRow = ({
 };
 
 export const DownloadJobQueuePanel = () => {
-  const jobs = useRuforgeStore((s) => s.downloadJobs);
+  const jobsRaw = useRuforgeStore((s) => s.downloadJobs);
+  const jobs = [...jobsRaw].sort((a, b) => a.createdAt - b.createdAt);
+  const focusedJobId = useRuforgeStore((s) => s.focusedJobId);
+  const setDownloaderFocusedJobId = useRuforgeStore((s) => s.setDownloaderFocusedJobId);
+  const confirmPendingDownloadJob = useRuforgeStore((s) => s.confirmPendingDownloadJob);
   const pauseDownloadJob = useRuforgeStore((s) => s.pauseDownloadJob);
   const resumeDownloadJob = useRuforgeStore((s) => s.resumeDownloadJob);
   const retryDownloadJob = useRuforgeStore((s) => s.retryDownloadJob);
   const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
   const reorderDownloadJobs = useRuforgeStore((s) => s.reorderDownloadJobs);
-  if (jobs.length === 0) return null;
+  if (!queuePanelShouldShow(jobsRaw)) return null;
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -265,25 +377,26 @@ export const DownloadJobQueuePanel = () => {
       <motion.div className="mb-3 px-0.5 text-center">
         <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#EDD79C]">Download queue</p>
         <p className="mt-1 text-[9px] text-[#EDD79C]/40">
-          {jobs.length} {jobs.length === 1 ? "job" : "jobs"}
+          {jobsRaw.length} {jobsRaw.length === 1 ? "job" : "jobs"}
         </p>
       </motion.div>
       <ul className="space-y-2">
-        <AnimatePresence initial={false}>
-          {jobs.map((job, index) => (
-            <DownloadJobRow
-              key={job.id}
-              job={job}
-              index={index}
-              total={jobs.length}
-              onPause={pauseDownloadJob}
-              onResume={resumeDownloadJob}
-              onRetry={retryDownloadJob}
-              onRemove={removeDownloadJob}
-              onReorder={reorderDownloadJobs}
-            />
-          ))}
-        </AnimatePresence>
+        {jobs.map((job, index) => (
+          <DownloadJobRow
+            key={job.id}
+            job={job}
+            index={index}
+            total={jobs.length}
+            focusedJobId={focusedJobId}
+            onFocusRow={setDownloaderFocusedJobId}
+            onConfirmPending={confirmPendingDownloadJob}
+            onPause={pauseDownloadJob}
+            onResume={resumeDownloadJob}
+            onRetry={retryDownloadJob}
+            onRemove={removeDownloadJob}
+            onReorder={reorderDownloadJobs}
+          />
+        ))}
       </ul>
     </motion.div>
   );

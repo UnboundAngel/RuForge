@@ -444,6 +444,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
           videoInfo: null,
           metadataError: null,
           isFocused: false,
+          focusedJobId: null,
         }),
 
       fetchEntries: async (opts) => {
