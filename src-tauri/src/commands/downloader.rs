@@ -106,6 +106,24 @@ pub struct VideoInfo {
     pub is_playlist: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub playlist_items: Option<Vec<PlaylistItemPreview>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uploader: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+}
+
+fn ytdlp_uploader_channel(json: &serde_json::Value) -> (Option<String>, Option<String>) {
+    let pick_str =
+        |key: &str| {
+            json.get(key)
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        };
+    let uploader = pick_str("uploader").or_else(|| pick_str("artist"));
+    let channel = pick_str("channel").or_else(|| pick_str("playlist_channel"));
+    (uploader, channel)
 }
 
 fn video_file_size_from_ytdlp_json(json: &serde_json::Value) -> Option<u64> {
@@ -293,6 +311,8 @@ fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
 
             let duration: f64 = entries.iter().filter_map(|e| ytdlp_duration_secs(e)).sum();
 
+            let (uploader, channel) = ytdlp_uploader_channel(&json);
+
             VideoInfo {
                 title,
                 thumbnail,
@@ -301,20 +321,27 @@ fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
                 file_size_bytes: playlist_aggregate_file_size(&entries),
                 is_playlist: true,
                 playlist_items: Some(previews),
+                uploader,
+                channel,
             }
         }
-        None => VideoInfo {
-            title: json
-                .get("title")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Unknown")
-                .to_string(),
-            thumbnail: json["thumbnail"].as_str().unwrap_or("").to_string(),
-            duration: json["duration"].as_f64().unwrap_or(0.0),
-            formats: vec![],
-            file_size_bytes: video_file_size_from_ytdlp_json(&json),
-            is_playlist: false,
-            playlist_items: None,
+        None => {
+            let (uploader, channel) = ytdlp_uploader_channel(&json);
+            VideoInfo {
+                title: json
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown")
+                    .to_string(),
+                thumbnail: json["thumbnail"].as_str().unwrap_or("").to_string(),
+                duration: json["duration"].as_f64().unwrap_or(0.0),
+                formats: vec![],
+                file_size_bytes: video_file_size_from_ytdlp_json(&json),
+                is_playlist: false,
+                playlist_items: None,
+                uploader,
+                channel,
+            }
         },
     }
 }
@@ -399,6 +426,63 @@ fn parse_ytdlp_playlist_download_line(line: &str) -> Option<(u32, u32, Option<St
     Some((idx0, total, tail_title))
 }
 
+fn ytdlp_iec_unit_multiplier(unit: &str) -> Option<f64> {
+    match unit.to_uppercase().as_str() {
+        "" => Some(1.0),
+        "B" => Some(1.0),
+        "K" | "KB" | "KIB" => Some(1024.0),
+        "M" | "MB" | "MIB" => Some((1024_i64 * 1024) as f64),
+        "G" | "GB" | "GIB" => Some((1024_i64 * 1024 * 1024) as f64),
+        "T" | "TB" | "TIB" => Some((1024_i64 * 1024 * 1024 * 1024) as f64),
+        _ => None,
+    }
+}
+
+/// Parse a yt-dlp aggregate size token like `93.54MiB` or `1.2GiB` into whole bytes.
+fn parse_ytdlp_size_token_to_bytes(tok: &str) -> Option<u64> {
+    let mut t = tok.trim().trim_start_matches('~');
+    t = t.trim_end_matches(|c: char| c == ')' || c == ']' || c == ',');
+    if t.is_empty() {
+        return None;
+    }
+    let split_idx = t
+        .char_indices()
+        .find(|(_, c)| !c.is_ascii_digit() && *c != '.')
+        .map(|(i, _)| i)
+        .unwrap_or(t.len());
+    let (num_raw, unit_raw) = t.split_at(split_idx);
+    let num: f64 = num_raw.parse().ok()?;
+    if !num.is_finite() || num < 0.0 {
+        return None;
+    }
+    let unit_stripped = unit_raw.trim();
+    let mult = ytdlp_iec_unit_multiplier(unit_stripped)?;
+    let bytes_f = (num * mult).round();
+    if bytes_f <= 0.0 || bytes_f > u64::MAX as f64 {
+        return None;
+    }
+    Some(bytes_f as u64)
+}
+
+/// From a line like `[download]  45.6% of   93.54MiB at ...`
+fn parse_ytdlp_percent_of_total_bytes(line: &str, percentage: f32) -> Option<(u64, u64)> {
+    let needle = "% of ";
+    let pos = line.find(needle)?;
+    let rest = line[pos + needle.len()..].trim_start();
+    let tok = rest.split_whitespace().next()?;
+    let total = parse_ytdlp_size_token_to_bytes(tok)?;
+    let pct = f64::from(percentage);
+    if !pct.is_finite() {
+        return None;
+    }
+    let clamped = pct.clamp(0.0, 100.0);
+    let downloaded = ((clamped / 100.0) * total as f64).round();
+    if downloaded < 0.0 || downloaded > u64::MAX as f64 {
+        return None;
+    }
+    Some((downloaded as u64, total))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadOptions {
     pub format: String,
@@ -425,6 +509,10 @@ struct ProgressPayload {
     total_items: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     current_item_title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    downloaded_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    total_bytes: Option<u64>,
 }
 
 #[derive(Clone, Serialize)]
@@ -659,6 +747,12 @@ pub async fn start_download_job(
                                     }
                                 }
 
+                                let sizes = parse_ytdlp_percent_of_total_bytes(&line, percentage);
+                                let (downloaded_bytes, total_bytes) = match sizes {
+                                    Some((d, t)) => (Some(d), Some(t)),
+                                    None => (None, None),
+                                };
+
                                 let _ = app.emit(
                                     "download-progress",
                                     ProgressPayload {
@@ -672,6 +766,8 @@ pub async fn start_download_job(
                                         current_item_title: progress_extras
                                             .current_item_title
                                             .clone(),
+                                        downloaded_bytes,
+                                        total_bytes,
                                     },
                                 );
                             }

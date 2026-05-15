@@ -51,6 +51,8 @@ export interface VideoInfo {
   fileSizeBytes?: number | null;
   isPlaylist: boolean;
   playlistItems?: PlaylistItem[];
+  uploader?: string | null;
+  channel?: string | null;
 }
 
 export interface ProgressPayload {
@@ -62,6 +64,9 @@ export interface ProgressPayload {
   currentIndex?: number;
   totalItems?: number;
   currentItemTitle?: string;
+  /** Estimated whole-file bytes when parsed from yt-dlp stdout (IEC-ish units). */
+  downloadedBytes?: number;
+  totalBytes?: number;
 }
 
 export interface YtdlpUpdateStatusPayload {
@@ -82,10 +87,12 @@ export interface YtdlpUpdateDownloadProgressPayload {
 
 /** Normalize Tauri event payload (camelCase from Rust; tolerate legacy snake_case). */
 export function normalizeProgressPayload(
-  raw: ProgressPayload & { job_id?: string },
+  raw: ProgressPayload & { job_id?: string; downloaded_bytes?: number; total_bytes?: number },
 ): ProgressPayload | null {
   const jobId = raw.jobId ?? raw.job_id;
   if (!jobId) return null;
+  const dl = raw.downloadedBytes ?? raw.downloaded_bytes;
+  const ttl = raw.totalBytes ?? raw.total_bytes;
   return {
     jobId,
     percentage: raw.percentage ?? 0,
@@ -95,6 +102,8 @@ export function normalizeProgressPayload(
     currentIndex: raw.currentIndex,
     totalItems: raw.totalItems,
     currentItemTitle: raw.currentItemTitle,
+    ...(typeof dl === "number" && dl >= 0 ? { downloadedBytes: dl } : {}),
+    ...(typeof ttl === "number" && ttl > 0 ? { totalBytes: ttl } : {}),
   };
 }
 

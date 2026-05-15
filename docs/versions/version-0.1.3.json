@@ -737,6 +737,67 @@
           "reason": "Ledger t33 for downloader URL bubble / clip semantics doc sync."
         }
       ]
+    },
+    {
+      "id": "t34",
+      "type": "task",
+      "label": "Downloader queue: staged holds, refresh UX, local metadata cache",
+      "agent": "chad",
+      "details": [
+        "`held` approval + release on Download so pre-staged rows never auto-start; mid-queue adds stay `pending` until confirmed.",
+        "After reload: sweep hydrate for thin rows + hydrate on row focus; hide paste/browser chrome when browsing a non-hero queue row; top-left Queue another / pins when the bar is empty or queue-only (`showQueueAddToolbar`).",
+        "Download click resolves `effectiveUrl` from the bar or focused queued job so batch start works with an empty URL field.",
+        "Lightweight `localStorage` LRU (`ruforge-dl-jobmeta-v1`) restores list metadata without a redundant `get_video_info`; per-URL inflight dedupe; evict when the last queue row for that normalized URL is removed; persist queue slice after each hydrate apply.",
+        "Removed `pumpDownloadQueue` from zustand `onRehydrateStorage` so restored queues do not auto-start.",
+        "Tauri `downloader.rs` kept in sync with multi-job progress / job identity for the queue slice."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/downloadQueue.ts",
+          "reason": "`held` in DownloadJobApproval; restore maps legacy queued `auto`→`held`; session queue comments."
+        },
+        {
+          "path": "src/downloadQueueMetadataCache.ts",
+          "reason": "Peek/commit/evict + LRU cap + playlist trim for localStorage metadata cache.",
+          "action": "created"
+        },
+        {
+          "path": "src/store/downloadQueueSlice.ts",
+          "reason": "`releaseHeldDownloadJobs`, `queueHydrateOrphanMetadata`, cache-first hydrate + shared in-flight fetch, persist after snapshot apply, focus-trigger hydrate, cache eviction on `removeDownloadJob`."
+        },
+        {
+          "path": "src/store/ruforgeStore.ts",
+          "reason": "Removed rehydrate `pumpDownloadQueue` microtask."
+        },
+        {
+          "path": "src/components/downloader/useDownloaderView.ts",
+          "reason": "Queue-add toolbar + URL bubble focus guard; queue-browsing chrome flags; mount metadata sweep; `effectiveUrl` download path; clear row focus on clear URL."
+        },
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "Top-left chrome when bubble hidden; idle hero Loading… alignment; gate browser strip / center input on queue-browsing."
+        },
+        {
+          "path": "src/components/downloader/DownloadJobQueuePanel.tsx",
+          "reason": "Queued staged copy + row metadata presentation for held/pending flows."
+        },
+        {
+          "path": "src/App.tsx",
+          "reason": "Downloader shell wiring aligned with queue session behavior."
+        },
+        {
+          "path": "src/types.ts",
+          "reason": "Progress / payload typings aligned with downloader events."
+        },
+        {
+          "path": "src-tauri/src/commands/downloader.rs",
+          "reason": "Multi-job download command updates (progress identity, job lifecycle) for frontend queue."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Appended t34 ledger for downloader queue + cache + refresh UX session."
+        }
+      ]
     }
   ],
   "edges": []

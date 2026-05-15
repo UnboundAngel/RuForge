@@ -21,6 +21,7 @@ import {
   DownloadQueueItem,
   UrlInputPacer,
 } from "./downloader/DownloadJobQueuePanel";
+import { downloadJobMediaNeedsHydration } from "../downloadQueue";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
 import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
 
@@ -144,6 +145,7 @@ function QuickEnqueuePinnedChip({
   onRemove: () => void;
   copyUrl: (u: string) => Promise<void>;
 }) {
+  const [chipHovered, setChipHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyHovered, setCopyHovered] = useState(false);
   const [clearHovered, setClearHovered] = useState(false);
@@ -168,86 +170,131 @@ function QuickEnqueuePinnedChip({
 
   return (
     <div
-      className="pointer-events-auto relative flex w-full max-w-full items-center overflow-visible rounded-lg border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md"
+      className="pointer-events-auto w-full max-w-[min(380px,calc(100vw-2rem))] self-start"
+      onMouseEnter={() => setChipHovered(true)}
       onMouseLeave={() => {
+        setChipHovered(false);
         setCopyHovered(false);
         setClearHovered(false);
       }}
     >
-      <button
-        type="button"
-        onClick={() => void handleCopy()}
-        onMouseEnter={() => setCopyHovered(true)}
-        onMouseLeave={() => setCopyHovered(false)}
-        className="relative flex min-w-0 flex-1 items-center gap-0 overflow-hidden text-left"
-        aria-label="Copy link"
+      <div
+        className={`flex shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,width] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+          chipHovered ? "w-full max-w-[min(380px,calc(100vw-3rem))]" : "w-9 max-w-9"
+        }`}
       >
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          onMouseEnter={() => setCopyHovered(true)}
+          onMouseLeave={() => setCopyHovered(false)}
+          className="relative flex min-w-0 flex-1 items-center overflow-hidden text-left"
+          aria-label="Copy link"
+        >
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+            <span
+              className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
+                copyHovered ? "opacity-100" : "opacity-0"
+              }`}
+              role="tooltip"
+            >
+              Click to copy
+            </span>
+            <AnimatePresence mode="wait" initial={false}>
+              {copied ? (
+                <motion.span
+                  key="pin-ok"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={CLIP_ICON_TRANSITION}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
+                </motion.span>
+              ) : (
+                <motion.span
+                  key={`pin-cl-${url}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={CLIP_ICON_TRANSITION}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <Paperclip size={14} strokeWidth={2} />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </span>
+          <span
+            className={`min-w-0 flex-1 truncate whitespace-nowrap py-2 text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+              chipHovered ? "px-2 pr-1 opacity-100" : "opacity-0"
+            }`}
+          >
+            {url}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          onMouseEnter={() => setClearHovered(true)}
+          onMouseLeave={() => setClearHovered(false)}
+          className={`relative flex h-9 shrink-0 items-center justify-center overflow-hidden text-[#EDD79C]/40 transition-[opacity,width,padding,color] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#EDD79C] ${
+            chipHovered ? "pointer-events-auto w-8 opacity-100" : "pointer-events-none w-0 min-w-0 opacity-0"
+          }`}
+          aria-label="Remove from list"
+        >
           <span
             className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-              copyHovered ? "opacity-100" : "opacity-0"
+              clearHovered && chipHovered ? "opacity-100" : "opacity-0"
             }`}
             role="tooltip"
           >
-            Click to copy
+            Remove
           </span>
-          <AnimatePresence mode="wait" initial={false}>
-            {copied ? (
-              <motion.span
-                key="pin-ok"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={CLIP_ICON_TRANSITION}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
-              </motion.span>
-            ) : (
-              <motion.span
-                key="pin-cl"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={CLIP_ICON_TRANSITION}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                <Paperclip size={14} strokeWidth={2} />
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </span>
-        <span className="min-w-0 flex-1 truncate py-2 pr-2 text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90">
-          {url}
-        </span>
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        onMouseEnter={() => setClearHovered(true)}
-        onMouseLeave={() => setClearHovered(false)}
-        className="relative flex h-9 w-8 shrink-0 items-center justify-center text-[#EDD79C]/40 transition-colors hover:text-[#EDD79C]"
-        aria-label="Remove from list"
-      >
-        <span
-          className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-            clearHovered ? "opacity-100" : "opacity-0"
-          }`}
-          role="tooltip"
-        >
-          Remove
-        </span>
-        <X size={12} strokeWidth={2.5} />
-      </button>
+          <X size={12} strokeWidth={2.5} />
+        </button>
+      </div>
     </div>
   );
 }
 
 export const DownloaderView = (props: DownloaderViewProps) => {
   const d = useDownloaderView(props);
+
+  const idleHero =
+    !d.focusShowsBigProgress &&
+    (d.focusedJob && d.focusedJob.status !== "downloading"
+      ? (() => {
+          const m = d.focusedJob!.metadata;
+          const needs = downloadJobMediaNeedsHydration(m);
+          const rawTitle = (m?.title ?? d.focusedJob!.title ?? "").trim();
+          const title =
+            rawTitle ||
+            (needs ? "Loading…" : (d.focusedJob!.url || "Video").trim());
+          return {
+            title,
+            duration: m?.duration ?? 0,
+            fileSizeBytes: m?.fileSizeBytes ?? null,
+            isPlaylist: Boolean(m?.isPlaylist),
+            playlistItems: m?.playlistItems,
+          };
+        })()
+      : d.videoInfo && !d.metadataLoading
+        ? {
+            title: d.videoInfo.title,
+            duration: d.videoInfo.duration,
+            fileSizeBytes: d.videoInfo.fileSizeBytes,
+            isPlaylist: d.videoInfo.isPlaylist,
+            playlistItems: d.videoInfo.playlistItems,
+          }
+        : null);
+
+  const heroThumb = d.heroBackdropThumb.trim();
+
   return (
     <div className="h-full flex flex-col relative overflow-hidden">
       {d.replaceDialogOpen && d.replaceDialogMatch && (
@@ -258,24 +305,16 @@ export const DownloaderView = (props: DownloaderViewProps) => {
           onChoose={d.handleDuplicateChoice}
         />
       )}
-      <AnimatePresence>
-        {d.videoInfo && (
-          <motion.div
-            initial={{ opacity: 0, scale: 1.1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.1 }}
-            transition={{ duration: 1.2, ease: [0.23, 1, 0.32, 1] }}
-            className="absolute inset-0 z-0"
-          >
-            <img
-              src={d.videoInfo.thumbnail}
-              alt=""
-              className="w-full h-full object-cover opacity-40 blur-[12px] saturate-[1.1]"
-            />
-            <motion.div className="absolute inset-0 bg-gradient-to-b from-[#1D1613]/80 via-transparent to-[#1D1613]" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {heroThumb ? (
+        <div className="absolute inset-0 z-0">
+          <img
+            src={heroThumb}
+            alt=""
+            className="w-full h-full object-cover opacity-40 blur-[12px] saturate-[1.1]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#1D1613]/80 via-transparent to-[#1D1613]" />
+        </div>
+      ) : null}
       <div className="relative z-10 flex h-full flex-col p-4 sm:p-10 lg:p-16">
         <AnimatePresence>
           {d.showYtdlpStrip && (
@@ -339,7 +378,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
           )}
         </AnimatePresence>
         <AnimatePresence>
-          {!d.downloading && !d.url.startsWith("http") && (
+          {!d.anyDownloading && !d.url.startsWith("http") && !d.queueBrowsingHidesUrlChrome && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -389,21 +428,23 @@ export const DownloaderView = (props: DownloaderViewProps) => {
         <div className="flex-1 flex flex-col justify-center w-full min-h-0">
           <LayoutGroup id="downloader-url">
             <AnimatePresence mode="popLayout">
-              {d.showUrlBubble && (
+              {d.showTopLeftDownloaderChrome && (
                 <motion.div
-                  key="url-pill"
+                  key={d.showUrlBubble ? "url-pill" : "queue-add-tools"}
                   layoutId="downloader-url-chip"
                   transition={d.urlChipLayoutTransition}
                   className="pointer-events-none absolute left-4 top-4 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col items-stretch gap-2 sm:left-6 sm:top-6 lg:left-8 lg:top-8"
                 >
-                  <MainDownloaderUrlChip
-                    url={d.url}
-                    copied={d.urlBubbleCopied}
-                    onCopy={() => void d.handleUrlClipCopy()}
-                    onClear={d.handleClearUrl}
-                  />
+                  {d.url.startsWith("http") && (
+                    <MainDownloaderUrlChip
+                      url={d.url}
+                      copied={d.urlBubbleCopied}
+                      onCopy={() => void d.handleUrlClipCopy()}
+                      onClear={d.handleClearUrl}
+                    />
+                  )}
 
-                  {!d.downloading && d.url.startsWith("http") && d.pinnedQuickEnqueueUrls.length > 0 && (
+                  {!d.anyDownloading && d.showQueueAddToolbar && d.pinnedQuickEnqueueUrls.length > 0 && (
                     <div className="pointer-events-auto flex w-full flex-col gap-1.5">
                       {d.pinnedQuickEnqueueUrls.map((u) => (
                         <QuickEnqueuePinnedChip
@@ -416,7 +457,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                     </div>
                   )}
 
-                  {!d.downloading && d.url.startsWith("http") && (
+                  {!d.anyDownloading && d.showQueueAddToolbar && (
                     <button
                       type="button"
                       onClick={() => void d.handleQuickEnqueueFromClipboard()}
@@ -432,7 +473,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                     </button>
                   )}
 
-                  {!d.downloading && d.url.startsWith("http") && (
+                  {!d.anyDownloading && d.showQueueAddToolbar && (
                     <div className="pointer-events-none flex h-10 w-full shrink-0 items-start overflow-hidden px-0.5 pt-0.5">
                       <AnimatePresence mode="wait" initial={false}>
                         {d.quickEnqueueHint === "empty" && (
@@ -476,7 +517,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   )}
                 </motion.div>
               )}
-              {!d.showUrlBubble && !d.downloading && (
+              {!d.showUrlBubble && !d.anyDownloading && !d.queueBrowsingHidesUrlChrome && (
                 <motion.div
                   key="url-input"
                   layout
@@ -536,7 +577,10 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       </span>
                     </motion.div>
                   )}
-                  {!d.downloading && d.url.startsWith("http") && !d.metadataLoading && (
+                  {!d.anyDownloading &&
+                    d.showQueueAddToolbar &&
+                    d.url.startsWith("http") &&
+                    !d.metadataLoading && (
                     <div className="mt-6 flex w-full max-w-md flex-col items-stretch gap-2 px-2 mx-auto">
                       {d.pinnedQuickEnqueueUrls.length > 0 && (
                         <div className="flex w-full flex-col gap-1.5">
@@ -609,10 +653,10 @@ export const DownloaderView = (props: DownloaderViewProps) => {
               )}
             </AnimatePresence>
             <div className="w-full max-w-6xl mx-auto space-y-2 sm:space-y-8">
-              {!d.downloading ? (
+              {!d.focusShowsBigProgress ? (
                 <div className="space-y-4 sm:space-y-10">
                   <AnimatePresence mode="wait">
-                    {d.videoInfo && !d.metadataLoading ? (
+                    {idleHero ? (
                       <motion.div
                         key="video-details"
                         initial={{ opacity: 0, y: 30 }}
@@ -622,23 +666,23 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         className="text-center space-y-2 sm:space-y-6"
                       >
                         <h2 className="text-xl sm:text-4xl lg:text-6xl font-black text-white leading-[0.9] tracking-tighter line-clamp-2 px-4 max-h-[1.8em] overflow-hidden">
-                          {d.videoInfo.title}
+                          {idleHero.title}
                         </h2>
                         <div className="hidden min-[600px]:flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-8 gap-y-2 text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--accent)] opacity-60">
                           <div className="flex items-center gap-1.5">
                             <Clock size={12} className="opacity-50" />
-                            <span>{formatDuration(d.videoInfo.duration)}</span>
+                            <span>{formatDuration(idleHero.duration)}</span>
                           </div>
-                          {d.videoInfo.fileSizeBytes != null && d.videoInfo.fileSizeBytes > 0 && (
+                          {idleHero.fileSizeBytes != null && idleHero.fileSizeBytes > 0 && (
                             <div className="flex items-center gap-1.5">
                               <HardDrive size={12} className="opacity-50" />
-                              <span title="Approximate size">~{formatApproxFileSize(d.videoInfo.fileSizeBytes)}</span>
+                              <span title="Approximate size">~{formatApproxFileSize(idleHero.fileSizeBytes)}</span>
                             </div>
                           )}
-                          {d.videoInfo.isPlaylist && (
+                          {idleHero.isPlaylist && (
                             <div className="flex items-center gap-1.5">
                               <List size={12} className="opacity-50" />
-                              <span>{d.videoInfo.playlistItems?.length || 0} Videos</span>
+                              <span>{idleHero.playlistItems?.length || 0} Videos</span>
                             </div>
                           )}
                           <div className="flex items-center gap-1.5">
@@ -673,17 +717,20 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               </p>
                             </div>
                           )}
+                          {d.showPrimaryDownload && (
                           <button
+                            type="button"
                             onClick={d.handleDownloadClick}
                             className="mx-auto flex items-center gap-3 rounded-full bg-[color:var(--accent)] px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.4em] text-stone-950 shadow-xl transition-all duration-300 hover:scale-105 hover:bg-white sm:gap-4 sm:px-12 sm:py-4 sm:text-xs"
                           >
                             <Download size={14} />
                             Download
                           </button>
+                          )}
                         </motion.div>
-                        {d.videoInfo.isPlaylist && d.videoInfo.playlistItems && (
+                        {idleHero.isPlaylist && idleHero.playlistItems && (
                           <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto scrollbar-none space-y-1.5 hidden min-[750px]:block">
-                            {d.videoInfo.playlistItems.map((item, idx) => (
+                            {idleHero.playlistItems.map((item, idx) => (
                               <div
                                 key={`playlist-row-${idx}-${item.webpageUrl ?? item.title}`}
                                 className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors group"
@@ -748,14 +795,19 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           animate={{ opacity: 1, y: 0 }}
                           className="text-4xl lg:text-7xl font-black text-white uppercase tracking-tighter line-clamp-2 text-center leading-[0.9] drop-shadow-2xl"
                         >
-                          {d.progress?.currentItemTitle || d.videoInfo?.title}
+                          {d.progress?.currentItemTitle ||
+                            d.focusedJob?.metadata?.title ||
+                            d.focusedJob?.title ||
+                            d.focusedJob?.url}
                         </motion.h3>
                         <motion.p
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           className="text-[11px] font-black text-[color:var(--accent)] uppercase tracking-[1em] text-center ml-[1em] opacity-60"
                         >
-                          {d.videoInfo?.isPlaylist ? "Downloading Collection" : "Downloading Media"}
+                          {d.focusedJob?.metadata?.isPlaylist
+                            ? "Downloading Collection"
+                            : "Downloading Media"}
                         </motion.p>
                       </div>
                       <div className="flex gap-2 w-full max-w-2xl mx-auto h-1 px-12">
@@ -773,13 +825,14 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         ))}
                       </div>
                     </div>
-                    {d.videoInfo?.isPlaylist && d.videoInfo.playlistItems && (
+                    {d.focusedJob?.metadata?.isPlaylist &&
+                      d.focusedJob.metadata.playlistItems && (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="w-screen max-w-7xl flex gap-8 overflow-x-auto scrollbar-none px-20 py-10"
                       >
-                        {d.videoInfo.playlistItems.map((item, i) => (
+                        {d.focusedJob.metadata.playlistItems.map((item, i) => (
                           <DownloadQueueItem
                             key={`playlist-card-${i}-${item.webpageUrl ?? item.title}`}
                             item={item}
