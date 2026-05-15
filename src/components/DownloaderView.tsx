@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 import {
   Globe,
@@ -6,6 +7,7 @@ import {
   Info,
   HardDrive,
   List,
+  Clipboard,
   Paperclip,
   Check,
   X,
@@ -20,6 +22,229 @@ import {
   UrlInputPacer,
 } from "./downloader/DownloadJobQueuePanel";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
+import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
+
+const CLIP_ICON_TRANSITION = { duration: 0.32, ease: [0.23, 1, 0.32, 1] as const };
+
+function MainDownloaderUrlChip({
+  url,
+  copied,
+  onCopy,
+  onClear,
+}: {
+  url: string;
+  copied: boolean;
+  onCopy: () => void | Promise<void>;
+  onClear: () => void;
+}) {
+  const [chipHovered, setChipHovered] = useState(false);
+  const [copyHovered, setCopyHovered] = useState(false);
+  const [clearHovered, setClearHovered] = useState(false);
+
+  return (
+    <div
+      className="pointer-events-auto w-full max-w-[min(380px,calc(100vw-2rem))]"
+      onMouseEnter={() => setChipHovered(true)}
+      onMouseLeave={() => {
+        setChipHovered(false);
+        setCopyHovered(false);
+        setClearHovered(false);
+      }}
+    >
+      <div
+        className={`flex overflow-hidden rounded-lg border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+          chipHovered ? "max-w-[min(380px,calc(100vw-3rem))]" : "max-w-9"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => void onCopy()}
+          onMouseEnter={() => setCopyHovered(true)}
+          onMouseLeave={() => setCopyHovered(false)}
+          className="relative flex min-w-0 flex-1 items-center overflow-hidden text-left"
+          aria-label="Copy link"
+        >
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+            <span
+              className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
+                copyHovered ? "opacity-100" : "opacity-0"
+              }`}
+              role="tooltip"
+            >
+              Click to copy
+            </span>
+            <AnimatePresence mode="wait" initial={false}>
+              {copied ? (
+                <motion.span
+                  key="main-ok"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={CLIP_ICON_TRANSITION}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="main-cl"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={CLIP_ICON_TRANSITION}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <Paperclip size={14} strokeWidth={2} />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </span>
+          <span
+            className={`min-w-0 flex-1 truncate whitespace-nowrap py-2 text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+              chipHovered ? "px-2 opacity-100" : "opacity-0"
+            }`}
+          >
+            {url}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear();
+          }}
+          onMouseEnter={() => setClearHovered(true)}
+          onMouseLeave={() => setClearHovered(false)}
+          className={`relative flex h-9 shrink-0 items-center justify-center overflow-hidden text-[#EDD79C]/40 transition-[opacity,width,padding,color] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#EDD79C] ${
+            chipHovered ? "pointer-events-auto w-8 opacity-100" : "pointer-events-none w-0 min-w-0 opacity-0"
+          }`}
+          aria-label="Clear link"
+        >
+          <span
+            className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
+              clearHovered && chipHovered ? "opacity-100" : "opacity-0"
+            }`}
+            role="tooltip"
+          >
+            Clear link
+          </span>
+          <X size={12} strokeWidth={2.5} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QuickEnqueuePinnedChip({
+  url,
+  onRemove,
+  copyUrl,
+}: {
+  url: string;
+  onRemove: () => void;
+  copyUrl: (u: string) => Promise<void>;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [copyHovered, setCopyHovered] = useState(false);
+  const [clearHovered, setClearHovered] = useState(false);
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+    },
+    [],
+  );
+
+  const handleCopy = async () => {
+    await copyUrl(url);
+    setCopied(true);
+    if (copyResetRef.current) clearTimeout(copyResetRef.current);
+    copyResetRef.current = setTimeout(() => {
+      setCopied(false);
+      copyResetRef.current = null;
+    }, 2000);
+  };
+
+  return (
+    <div
+      className="pointer-events-auto relative flex w-full max-w-full items-center overflow-visible rounded-lg border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md"
+      onMouseLeave={() => {
+        setCopyHovered(false);
+        setClearHovered(false);
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => void handleCopy()}
+        onMouseEnter={() => setCopyHovered(true)}
+        onMouseLeave={() => setCopyHovered(false)}
+        className="relative flex min-w-0 flex-1 items-center gap-0 overflow-hidden text-left"
+        aria-label="Copy link"
+      >
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+          <span
+            className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
+              copyHovered ? "opacity-100" : "opacity-0"
+            }`}
+            role="tooltip"
+          >
+            Click to copy
+          </span>
+          <AnimatePresence mode="wait" initial={false}>
+            {copied ? (
+              <motion.span
+                key="pin-ok"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={CLIP_ICON_TRANSITION}
+                className="absolute inset-0 flex items-center justify-center"
+              >
+                <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
+              </motion.span>
+            ) : (
+              <motion.span
+                key="pin-cl"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={CLIP_ICON_TRANSITION}
+                className="absolute inset-0 flex items-center justify-center"
+              >
+                <Paperclip size={14} strokeWidth={2} />
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </span>
+        <span className="min-w-0 flex-1 truncate py-2 pr-2 text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90">
+          {url}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        onMouseEnter={() => setClearHovered(true)}
+        onMouseLeave={() => setClearHovered(false)}
+        className="relative flex h-9 w-8 shrink-0 items-center justify-center text-[#EDD79C]/40 transition-colors hover:text-[#EDD79C]"
+        aria-label="Remove from list"
+      >
+        <span
+          className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
+            clearHovered ? "opacity-100" : "opacity-0"
+          }`}
+          role="tooltip"
+        >
+          Remove
+        </span>
+        <X size={12} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
 
 export const DownloaderView = (props: DownloaderViewProps) => {
   const d = useDownloaderView(props);
@@ -28,7 +253,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
       {d.replaceDialogOpen && d.replaceDialogMatch && (
         <DuplicateDownloadDialog
           open
-          videoTitle={d.videoInfo?.title}
+          videoTitle={d.replaceDialogMatch.file.name ?? d.videoInfo?.title}
           match={d.replaceDialogMatch}
           onChoose={d.handleDuplicateChoice}
         />
@@ -51,7 +276,68 @@ export const DownloaderView = (props: DownloaderViewProps) => {
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="relative z-10 h-full flex flex-col p-4 sm:p-10 lg:p-16">
+      <div className="relative z-10 flex h-full flex-col p-4 sm:p-10 lg:p-16">
+        <AnimatePresence>
+          {d.showYtdlpStrip && (
+            <motion.div
+              key="ytdlp-update-strip"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+              role="region"
+              aria-label="yt-dlp update available"
+              className="mb-4 shrink-0 rounded-xl border border-[color-mix(in_srgb,var(--accent),transparent_72%)] bg-[#271C18]/92 px-4 py-3 text-[#EDD79C]/90 shadow-[0_8px_28px_rgba(0,0,0,0.35)] backdrop-blur-md sm:mb-6"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[color:var(--accent)]/90">
+                    yt-dlp update
+                  </p>
+                  <p className="text-xs font-semibold tracking-tight text-[#EDD79C]/85">
+                    {d.ytdlpUpdateStatus?.latestVersion != null &&
+                    d.ytdlpUpdateStatus.latestVersion !== ""
+                      ? `Release ${d.ytdlpUpdateStatus.latestVersion} is available — you're running ${d.ytdlpUpdateStatus.activeVersion}.`
+                      : `A newer yt-dlp release is available (current ${d.ytdlpUpdateStatus?.activeVersion ?? "unknown"}).`}
+                  </p>
+                  {d.ytdlpUpdateInvokeError != null ? (
+                    <p className="text-[11px] text-amber-300/95">{d.ytdlpUpdateInvokeError}</p>
+                  ) : d.ytdlpUpdateStatus?.checkError ? (
+                    <p className="text-[11px] text-stone-500/90">{d.ytdlpUpdateStatus.checkError}</p>
+                  ) : null}
+                  {typeof d.ytdlpUpdatePercent === "number" && (
+                    <div className="mt-2 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-[color:var(--accent)] transition-[width] duration-200"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, d.ytdlpUpdatePercent))}%`,
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={d.ytdlpUpdating}
+                    onClick={() => void d.downloadYtdlpUpdateNow()}
+                    className="rounded-lg bg-[color:var(--accent)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#1D1613] shadow-sm transition-opacity disabled:opacity-50"
+                  >
+                    {d.ytdlpUpdating ? "Updating…" : "Update yt-dlp"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={d.ytdlpUpdating}
+                    onClick={d.dismissYtdlpUpdateBanner}
+                    className="rounded-lg border border-white/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#EDD79C]/65 transition-colors hover:bg-white/5 hover:text-[#EDD79C]"
+                  >
+                    Later
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <AnimatePresence>
           {!d.downloading && !d.url.startsWith("http") && (
             <motion.div
@@ -106,45 +392,88 @@ export const DownloaderView = (props: DownloaderViewProps) => {
               {d.showUrlBubble && (
                 <motion.div
                   key="url-pill"
-                  layout
                   layoutId="downloader-url-chip"
                   transition={d.urlChipLayoutTransition}
-                  className="pointer-events-none absolute left-4 top-4 z-[60] sm:left-6 sm:top-6 lg:left-8 lg:top-8"
+                  className="pointer-events-none absolute left-4 top-4 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col items-stretch gap-2 sm:left-6 sm:top-6 lg:left-8 lg:top-8"
                 >
-                  <div className="group/clip pointer-events-auto" onMouseLeave={d.handleUrlClipMouseLeave}>
-                    <div className="inline-flex max-w-9 transition-[max-width] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover/clip:max-w-[min(360px,calc(100vw-3rem))]">
-                      <motion.div className="flex h-9 min-w-9 items-center overflow-hidden rounded-lg border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md">
-                        <button
-                          type="button"
-                          onClick={() => void d.handleUrlClipCopy()}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center transition-colors"
-                          title="Copy link"
-                          aria-label="Copy link"
-                        >
-                          {d.urlBubbleCopied ? (
-                            <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
-                          ) : (
-                            <Paperclip size={14} strokeWidth={2} />
-                          )}
-                        </button>
-                        <span className="min-w-0 flex-1 truncate whitespace-nowrap text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 opacity-0 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover/clip:px-2 group-hover/clip:opacity-100">
-                          {d.url}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            d.handleClearUrl();
-                          }}
-                          className="flex h-9 w-8 shrink-0 items-center justify-center text-[#EDD79C]/40 opacity-70 transition-[opacity,color] duration-300 hover:text-[#EDD79C] group-hover/clip:opacity-100"
-                          title="Clear link"
-                          aria-label="Clear link"
-                        >
-                          <X size={12} strokeWidth={2.5} />
-                        </button>
-                      </motion.div>
+                  <MainDownloaderUrlChip
+                    url={d.url}
+                    copied={d.urlBubbleCopied}
+                    onCopy={() => void d.handleUrlClipCopy()}
+                    onClear={d.handleClearUrl}
+                  />
+
+                  {!d.downloading && d.url.startsWith("http") && d.pinnedQuickEnqueueUrls.length > 0 && (
+                    <div className="pointer-events-auto flex w-full flex-col gap-1.5">
+                      {d.pinnedQuickEnqueueUrls.map((u) => (
+                        <QuickEnqueuePinnedChip
+                          key={normalizeYouTubeUrlForCompare(u)}
+                          url={u}
+                          onRemove={() => d.removePinnedQuickEnqueueUrl(u)}
+                          copyUrl={d.copyUrlToClipboard}
+                        />
+                      ))}
                     </div>
-                  </div>
+                  )}
+
+                  {!d.downloading && d.url.startsWith("http") && (
+                    <button
+                      type="button"
+                      onClick={() => void d.handleQuickEnqueueFromClipboard()}
+                      className="group/qe pointer-events-auto inline-flex h-9 max-w-9 shrink-0 items-center self-start overflow-hidden rounded-lg border border-dotted border-[#EDD79C]/50 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,border-color] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:max-w-[min(260px,calc(100vw-3rem))] hover:border-[#EDD79C]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
+                      aria-label="Queue another from clipboard"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center">
+                        <Clipboard size={14} strokeWidth={2} />
+                      </span>
+                      <span className="min-w-0 whitespace-nowrap py-2 pr-3 text-[8px] font-black uppercase tracking-[0.28em] text-[#EDD79C]/65 opacity-0 transition-opacity duration-300 group-hover/qe:opacity-100">
+                        Queue another
+                      </span>
+                    </button>
+                  )}
+
+                  {!d.downloading && d.url.startsWith("http") && (
+                    <div className="pointer-events-none flex h-10 w-full shrink-0 items-start overflow-hidden px-0.5 pt-0.5">
+                      <AnimatePresence mode="wait" initial={false}>
+                        {d.quickEnqueueHint === "empty" && (
+                          <motion.p
+                            key="qe-empty"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                            className="line-clamp-2 w-full text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                          >
+                            No YouTube link in clipboard
+                          </motion.p>
+                        )}
+                        {d.quickEnqueueHint === "conflict" && (
+                          <motion.p
+                            key="qe-conflict"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                            className="line-clamp-2 w-full text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                          >
+                            Same link as the bar or already queued / downloading
+                          </motion.p>
+                        )}
+                        {d.quickEnqueueHint === "library_skip" && (
+                          <motion.p
+                            key="qe-lib"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                            className="line-clamp-2 w-full text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                          >
+                            Already in library — skipped (turn off Skip duplicates to choose)
+                          </motion.p>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </motion.div>
               )}
               {!d.showUrlBubble && !d.downloading && (
@@ -206,6 +535,75 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         {d.metadataError}
                       </span>
                     </motion.div>
+                  )}
+                  {!d.downloading && d.url.startsWith("http") && (
+                    <div className="mt-6 flex w-full max-w-md flex-col items-stretch gap-2 px-2 mx-auto">
+                      {d.pinnedQuickEnqueueUrls.length > 0 && (
+                        <div className="flex w-full flex-col gap-1.5">
+                          {d.pinnedQuickEnqueueUrls.map((u) => (
+                            <QuickEnqueuePinnedChip
+                              key={normalizeYouTubeUrlForCompare(u)}
+                              url={u}
+                              onRemove={() => d.removePinnedQuickEnqueueUrl(u)}
+                              copyUrl={d.copyUrlToClipboard}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void d.handleQuickEnqueueFromClipboard()}
+                        className="group/qe pointer-events-auto mx-auto inline-flex h-9 max-w-9 shrink-0 items-center overflow-hidden rounded-lg border border-dotted border-[#EDD79C]/50 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[inset_0_2px_4px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,border-color] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:max-w-[min(280px,calc(100vw-3rem))] hover:border-[#EDD79C]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
+                        aria-label="Queue another from clipboard"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center">
+                          <Clipboard size={14} strokeWidth={2} />
+                        </span>
+                        <span className="min-w-0 whitespace-nowrap py-2 pr-4 text-[8px] font-black uppercase tracking-[0.28em] text-[#EDD79C]/65 opacity-0 transition-opacity duration-300 group-hover/qe:opacity-100">
+                          Queue another
+                        </span>
+                      </button>
+                      <div className="pointer-events-none flex h-10 w-full shrink-0 items-start justify-center overflow-hidden pt-0.5 text-center">
+                        <AnimatePresence mode="wait" initial={false}>
+                          {d.quickEnqueueHint === "empty" && (
+                            <motion.p
+                              key="qe-empty-c"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                              className="line-clamp-2 w-full px-2 text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                            >
+                              No YouTube link in clipboard
+                            </motion.p>
+                          )}
+                          {d.quickEnqueueHint === "conflict" && (
+                            <motion.p
+                              key="qe-conflict-c"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                              className="line-clamp-2 w-full px-2 text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                            >
+                              Same link as above or already queued / downloading
+                            </motion.p>
+                          )}
+                          {d.quickEnqueueHint === "library_skip" && (
+                            <motion.p
+                              key="qe-lib-c"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                              className="line-clamp-2 w-full px-2 text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                            >
+                              Already in library — skipped
+                            </motion.p>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
                   )}
                 </motion.div>
               )}
@@ -285,9 +683,9 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         </motion.div>
                         {d.videoInfo.isPlaylist && d.videoInfo.playlistItems && (
                           <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto scrollbar-none space-y-1.5 hidden min-[750px]:block">
-                            {d.videoInfo.playlistItems.map((item) => (
+                            {d.videoInfo.playlistItems.map((item, idx) => (
                               <div
-                                key={item.id}
+                                key={`playlist-row-${idx}-${item.webpageUrl ?? item.title}`}
                                 className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors group"
                               >
                                 <div className="w-24 aspect-video rounded-lg overflow-hidden bg-stone-900 flex-shrink-0">
@@ -383,7 +781,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       >
                         {d.videoInfo.playlistItems.map((item, i) => (
                           <DownloadQueueItem
-                            key={item.id}
+                            key={`playlist-card-${i}-${item.webpageUrl ?? item.title}`}
                             item={item}
                             index={i}
                             currentIndex={d.progress?.currentIndex}

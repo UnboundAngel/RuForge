@@ -38,7 +38,8 @@ export interface PlaylistItem {
   title: string;
   thumbnail: string;
   duration: number;
-  id: string;
+  /** yt-dlp entry id when present (often the watch id). */
+  id?: string;
   webpageUrl?: string;
 }
 
@@ -61,6 +62,22 @@ export interface ProgressPayload {
   currentIndex?: number;
   totalItems?: number;
   currentItemTitle?: string;
+}
+
+export interface YtdlpUpdateStatusPayload {
+  bundledVersion: string;
+  activeVersion: string;
+  activeSource: string;
+  latestVersion?: string | null;
+  updateAvailable: boolean;
+  lastChecked?: number | null;
+  checkError?: string | null;
+}
+
+/** Emitted during `download_ytdlp_update`; matches Rust camelCase serde. */
+export interface YtdlpUpdateDownloadProgressPayload {
+  phase: string;
+  percent?: number | null;
 }
 
 /** Normalize Tauri event payload (camelCase from Rust; tolerate legacy snake_case). */

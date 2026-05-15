@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::download_job_manager::{kill_ytdlp_tree, DownloadJobManager};
-use tauri_plugin_shell::ShellExt;
+use crate::ytdlp_binary::ytdlp_shell_command;
 
 use crate::commands::media::extract_frames;
 
@@ -351,14 +351,11 @@ async fn yt_dlp_single_json_simulate(
     }
     args.push(url.to_string());
 
-    let output = app
-        .shell()
-        .sidecar("yt-dlp")
-        .map_err(|e| e.to_string())?
+    let output = ytdlp_shell_command(app)?
         .args(args)
         .output()
         .await
-        .map_err(|e| format!("Failed to run yt-dlp sidecar (-J simulate): {}", e))?;
+        .map_err(|e| format!("Failed to run yt-dlp (-J simulate): {}", e))?;
 
     if !output.status.success() {
         let err_msg = String::from_utf8_lossy(&output.stderr).to_string();
@@ -568,10 +565,10 @@ fn spawn_post_download_frame_extract(
         let _ = push_ytdlp_download_cookie_args(&app, &mut get_name_args, &options);
         get_name_args.push(video_url);
 
-        let Ok(sidecar) = app.shell().sidecar("yt-dlp") else {
+        let Ok(cmd) = ytdlp_shell_command(&app) else {
             return;
         };
-        if let Ok(output) = sidecar.args(get_name_args).output().await {
+        if let Ok(output) = cmd.args(get_name_args).output().await {
             for raw in output.stdout.split(|&b| b == b'\n') {
                 let path_str = match std::str::from_utf8(raw) {
                     Ok(s) => s.trim(),
@@ -610,13 +607,10 @@ pub async fn start_download_job(
 
     let args = build_ytdlp_download_args(&app, &url, &options, &filename_template_eff, resume)?;
 
-    let (mut rx, child) = app
-        .shell()
-        .sidecar("yt-dlp")
-        .map_err(|e| e.to_string())?
+    let (mut rx, child) = ytdlp_shell_command(&app)?
         .args(args)
         .spawn()
-        .map_err(|e| format!("Failed to start download sidecar: {}", e))?;
+        .map_err(|e| format!("Failed to start yt-dlp download: {}", e))?;
 
     manager.insert_active(job_id.clone(), child);
 

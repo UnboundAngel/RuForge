@@ -12,6 +12,7 @@ import {
   LS_MINI_LOOP,
   LS_MINI_VOLUME,
   RUFORGE_INTERNAL_DIR,
+  clampMaxConcurrentDownloads,
   readInitialPathsFromLs,
   readInitialPlayerLoopFromLs,
   readInitialPlayerVolumeFromLs,
@@ -290,17 +291,32 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       updateSetting: async (key, value) => {
+        const resolvedValue =
+          key === "maxConcurrentDownloads"
+            ? clampMaxConcurrentDownloads(value)
+            : value;
+
         set((s) => ({
-          settings: { ...s.settings, [key]: value },
+          settings: {
+            ...s.settings,
+            [key]: resolvedValue as RuforgeSettings[typeof key],
+          },
+          ...(key === "maxConcurrentDownloads"
+            ? { maxConcurrentDownloads: resolvedValue as number }
+            : {}),
         }));
 
+        if (key === "maxConcurrentDownloads") {
+          get().pumpDownloadQueue();
+        }
+
         if (key === "minimizeToTray") {
-          await invoke("update_tray_config", { minimize: value });
+          await invoke("update_tray_config", { minimize: resolvedValue });
         }
 
         if (key === "launchAtStartup") {
           try {
-            if (value) await enable();
+            if (resolvedValue) await enable();
             else await disable();
           } catch (e) {
             console.error("Failed to update autostart:", e);
@@ -310,7 +326,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
         if (key === "hardwareAcceleration") {
           try {
             await invoke("set_hardware_acceleration_pref", {
-              hardwareAcceleration: value,
+              hardwareAcceleration: resolvedValue,
             });
             await relaunch();
           } catch (e) {
@@ -501,6 +517,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
       onRehydrateStorage: () => {
         return (state, error) => {
           if (error || !state) return;
+          const mc = clampMaxConcurrentDownloads(state.settings.maxConcurrentDownloads);
+          useRuforgeStore.setState({
+            maxConcurrentDownloads: mc,
+            settings: { ...state.settings, maxConcurrentDownloads: mc },
+          });
           void (async () => {
             await invoke("update_tray_config", { minimize: state.settings.minimizeToTray });
             try {

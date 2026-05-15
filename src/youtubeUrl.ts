@@ -104,3 +104,18 @@ export function extractYouTubeUrlFromText(text: string): string | null {
 
   return null;
 }
+
+/** Stable watch URL for one playlist entry from yt-dlp preview metadata. */
+export function playlistItemWatchUrl(item: {
+  webpageUrl?: string;
+  id?: string;
+}): string | null {
+  const fromWeb = item.webpageUrl?.trim();
+  if (fromWeb) {
+    const c = canonicalYouTubeWatchUrl(fromWeb);
+    if (c) return c;
+  }
+  const id = item.id?.trim();
+  if (id && YT_ID_RE.test(id)) return `https://www.youtube.com/watch?v=${id}`;
+  return null;
+}

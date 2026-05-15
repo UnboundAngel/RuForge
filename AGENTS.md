@@ -52,6 +52,7 @@ Concise context for agents working **inside this repo’s IDE workspace**. This 
 - **Live gallery UI:** **`MediaView`** (used from `App.tsx`) is aligned with the store’s gallery slice. **`GalleryView.tsx`** exists but is **not** imported by `App.tsx`; treat it as legacy / candidate for delete or future wiring—not part of the shipped Zustand path.
 - **`MiniPlayer.tsx`:** Own webview → **duplicated playback UI state** (current file, progress, hover, etc.) synchronized via Tauri events + some `localStorage` keys; do not expect the main window store to appear here.
 - **Heavy local `useState` in `PlayerView`:** Normal for playback UI (scrubber, menus, transient controls); not a “migration gap” by itself.
+- **Custom subtitles (`useSubtitleCueOverlay`):** Renders VTT cues over `<video>` (native tracks stay hidden); vertical drag persists in `localStorage`. **Layout clamps** against the scrub strip ref + player shell so captions never sit under the higher-`z` progress bar (where pointer events would trap the drag handle). Wired from **`PlayerView.tsx`** and **`MiniPlayer.tsx`**.
 
 ## Zustand migration — are we “done”?
 

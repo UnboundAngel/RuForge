@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from "motion/react";
-import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug, Captions } from 'lucide-react';
-import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel } from '../store/types';
+import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug, Captions, Layers, Minus, Plus } from 'lucide-react';
+import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel, CUSTOM_CONCURRENT_DOWNLOADS_MIN, DEFAULT_MAX_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS_CAP } from '../store/types';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from "@tauri-apps/api/event";
@@ -73,6 +73,228 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange })
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+};
+
+/** Presets + custom; dropdown trigger label + concurrency stepper live in Downloads settings. */
+type ConcurrentDownloadPresetId = "seq" | "mild" | "high" | "custom";
+
+function concurrentDownloadPresetId(concurrency: number): ConcurrentDownloadPresetId {
+  if (concurrency === 1) return "seq";
+  if (concurrency === 2) return "mild";
+  if (concurrency === 3) return "high";
+  return "custom";
+}
+
+function concurrentDownloadTriggerTitle(
+  concurrency: number,
+  preset: ConcurrentDownloadPresetId,
+): string {
+  switch (preset) {
+    case "seq":
+      return "SEQUENTIAL (1)";
+    case "mild":
+      return "MILD PARALLEL (2)";
+    case "high":
+      return "HIGHER (3)";
+    default:
+      return `CUSTOM (${concurrency})`;
+  }
+}
+
+interface MaxConcurrentDownloadsControlProps {
+  concurrency: number;
+  onConcurrencyChange: (n: number) => void | Promise<void>;
+}
+
+const PRESET_ROWS: ReadonlyArray<{
+  id: Exclude<ConcurrentDownloadPresetId, "custom">;
+  n: 1 | 2 | 3;
+  title: string;
+  hint: string;
+  recommended?: boolean;
+}> = [
+  {
+    id: "seq",
+    n: 1,
+    title: "Sequential",
+    hint: "One active job — best default for yt-dlp / source limits",
+    recommended: true,
+  },
+  {
+    id: "mild",
+    n: 2,
+    title: "Mild parallel",
+    hint: "Two jobs — modest extra throughput; watch for throttling",
+  },
+  {
+    id: "high",
+    n: 3,
+    title: "Higher parallel",
+    hint: "Three jobs — fastest presets; stronger rate-limit risk",
+  },
+];
+
+const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps> = ({
+  concurrency,
+  onConcurrencyChange,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const preset = concurrentDownloadPresetId(concurrency);
+  const triggerTitle = concurrentDownloadTriggerTitle(concurrency, preset);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const applyPresetChoice = (id: ConcurrentDownloadPresetId) => {
+    if (id === "custom") {
+      void onConcurrencyChange(
+        preset === "custom" ? concurrency : CUSTOM_CONCURRENT_DOWNLOADS_MIN,
+      );
+    } else {
+      const row = PRESET_ROWS.find((r) => r.id === id);
+      if (row) void onConcurrencyChange(row.n);
+    }
+    setIsOpen(false);
+  };
+
+  const bumpCustom = (delta: number) => {
+    let next = concurrency + delta;
+    if (next < CUSTOM_CONCURRENT_DOWNLOADS_MIN) {
+      next = 3;
+    }
+    next = Math.min(MAX_CONCURRENT_DOWNLOADS_CAP, Math.max(1, next));
+    void onConcurrencyChange(next);
+  };
+
+  const isRecommendedDefault = concurrency === DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <div className="relative" ref={containerRef}>
+        <div
+          onClick={() => setIsOpen(!isOpen)}
+          className={`flex min-w-[200px] max-w-[240px] flex-col gap-1 rounded-xl border border-white/5 bg-[#1D1613] px-4 py-2.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] transition-all hover:bg-stone-800 ${
+            isOpen ? "rounded-b-none border-b-0" : ""
+          } cursor-pointer`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[10px] font-black tracking-widest text-stone-300">
+              {triggerTitle}
+            </span>
+            <ChevronDown
+              className={`h-3 w-3 shrink-0 text-stone-500 transition-transform duration-300 ${
+                isOpen ? "rotate-180" : ""
+              }`}
+            />
+          </div>
+          {isRecommendedDefault && (
+            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-stone-500">
+              Recommended default
+            </span>
+          )}
+        </div>
+
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="absolute left-0 right-0 top-full z-50 overflow-hidden rounded-b-xl border border-t-0 border-white/5 bg-[#1D1613] shadow-[0_15px_30px_rgba(0,0,0,0.6)]"
+            >
+              {PRESET_ROWS.map((row) => {
+                const sel = preset === row.id;
+                return (
+                  <div
+                    key={row.id}
+                    onClick={() => applyPresetChoice(row.id)}
+                    className={`cursor-pointer border-t border-white/[0.03] px-4 py-3 transition-colors ${
+                      sel
+                        ? "bg-[color:var(--accent)] text-[#1D1613]"
+                        : "hover:bg-white/5 text-stone-400"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-black tracking-widest">{row.title.toUpperCase()}</span>
+                      {row.recommended && (
+                        <span
+                          className={`rounded border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider ${
+                            sel
+                              ? "border-[#1D1613]/35 text-[#1D1613]/90"
+                              : "border-[color-mix(in_srgb,var(--accent),transparent_55%)] text-[color:var(--accent)]"
+                          }`}
+                        >
+                          Recommended
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className={`mt-1 text-[9px] font-medium leading-relaxed tracking-wide ${
+                        sel ? "text-[#1D1613]/80" : "text-stone-500"
+                      }`}
+                    >
+                      {row.hint}
+                    </p>
+                  </div>
+                );
+              })}
+              <div
+                onClick={() => applyPresetChoice("custom")}
+                className={`cursor-pointer border-t border-white/[0.03] px-4 py-3 transition-colors ${
+                  preset === "custom"
+                    ? "bg-[color:var(--accent)] text-[#1D1613]"
+                    : "hover:bg-white/5 text-stone-400"
+                }`}
+              >
+                <div className="text-[10px] font-black tracking-widest">CUSTOM</div>
+                <p
+                  className={`mt-1 text-[9px] font-medium leading-relaxed tracking-wide ${
+                    preset === "custom" ? "text-[#1D1613]/80" : "text-stone-500"
+                  }`}
+                >
+                  Pick {CUSTOM_CONCURRENT_DOWNLOADS_MIN}–{MAX_CONCURRENT_DOWNLOADS_CAP} concurrent jobs (capped).
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {preset === "custom" && (
+        <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-[#1D1613] px-2 py-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]">
+          <button
+            type="button"
+            aria-label="Decrease concurrent downloads"
+            onClick={() => bumpCustom(-1)}
+            disabled={concurrency <= 1}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--accent)] transition-colors hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30"
+          >
+            <Minus className="h-3.5 w-3.5" />
+          </button>
+          <span className="min-w-[1.75rem] text-center text-[11px] font-black tabular-nums text-stone-100">
+            {concurrency}
+          </span>
+          <button
+            type="button"
+            aria-label="Increase concurrent downloads"
+            onClick={() => bumpCustom(1)}
+            disabled={concurrency >= MAX_CONCURRENT_DOWNLOADS_CAP}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--accent)] transition-colors hover:bg-white/10 disabled:pointer-events-none disabled:opacity-30"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -281,6 +503,19 @@ export const SettingsView: React.FC = () => {
                     value={settings.preferredQuality}
                     options={['4K (2160p)', '1080p (HD)', '720p', 'Best Available']}
                     onChange={(val) => updateSetting('preferredQuality', val)}
+                  />
+                }
+              />
+              <FadingDivider />
+              <SettingItem
+                icon={Layers}
+                title="Concurrent downloads"
+                description={`How many yt-dlp jobs may run together (max ${MAX_CONCURRENT_DOWNLOADS_CAP}). Lower is safer for host rate limits.`}
+                active={true}
+                control={
+                  <MaxConcurrentDownloadsControl
+                    concurrency={settings.maxConcurrentDownloads}
+                    onConcurrencyChange={(n) => updateSetting('maxConcurrentDownloads', n)}
                   />
                 }
               />

@@ -316,6 +316,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     videoRef: mediaRef as React.RefObject<HTMLVideoElement | null>,
     textElRef: subtitleOverlayTextRef,
     dragRowRef: subtitleDragRowRef,
+    layoutLimitRef: scrubberRef,
+    layoutContainerRef: containerRef,
     inactive: audioOnly,
     captionsEnabled: isSubtitlesEnabled,
     selectedLang: selectedSubtitleLang,
@@ -887,7 +889,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               <div className="subtitle-overlay-host">
                 <div
                   ref={subtitleDragRowRef}
-                  title="Drag vertically to move subtitles"
+                  title="Drag vertically to reposition (stays above the progress bar)"
                   className={`subtitle-overlay-drag-row ${isSubtitlesEnabled ? "" : "pointer-events-none"}`}
                 >
                   <div ref={subtitleOverlayTextRef} className="subtitle-overlay-text" aria-live="off" />

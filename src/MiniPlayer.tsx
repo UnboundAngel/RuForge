@@ -365,6 +365,8 @@ export default function MiniPlayer() {
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
   const subtitleOverlayTextRef = useRef<HTMLDivElement>(null);
   const subtitleDragRowRef = useRef<HTMLDivElement>(null);
+  /** Top of expanded-mode scrub strip — captions avoid overlapping higher-z controls. */
+  const subtitleLayoutLimitRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -467,6 +469,8 @@ export default function MiniPlayer() {
     videoRef: mediaRef as React.RefObject<HTMLVideoElement | null>,
     textElRef: subtitleOverlayTextRef,
     dragRowRef: subtitleDragRowRef,
+    layoutLimitRef: subtitleLayoutLimitRef,
+    layoutContainerRef: videoSurfaceRef,
     inactive: isSmallMode || !playingFile || Boolean(playingFile && isAudioOnlyPath(playingFile.path)),
     captionsEnabled: isSubtitlesEnabled,
     selectedLang: selectedSubtitleLang,
@@ -1174,7 +1178,7 @@ export default function MiniPlayer() {
                   <div className="subtitle-overlay-host">
                     <div
                       ref={subtitleDragRowRef}
-                      title="Drag vertically to move subtitles"
+                      title="Drag vertically to reposition (stays above the progress bar)"
                       className={`subtitle-overlay-drag-row ${isSubtitlesEnabled ? "" : "pointer-events-none"}`}
                     >
                       <div ref={subtitleOverlayTextRef} className="subtitle-overlay-text" aria-live="off" />
@@ -1305,6 +1309,7 @@ export default function MiniPlayer() {
               >
                 {/* True Squiggly Line Progress Area */}
                 <div 
+                  ref={subtitleLayoutLimitRef}
                   className={`w-full ${isMini ? 'h-5' : 'h-8'} cursor-pointer relative group flex items-center`}
                   onMouseDown={handleScrubberBarMouseDown}
                   onMouseMove={handleMouseMoveScrubber}
