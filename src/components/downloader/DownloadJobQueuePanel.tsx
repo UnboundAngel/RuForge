@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { motion } from "motion/react";
 import {
   Clock,
@@ -11,7 +12,11 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import { downloadJobMediaNeedsHydration, type DownloadJob } from "../../downloadQueue";
+import {
+  downloadJobMediaNeedsHydration,
+  downloadJobsQueueOrderFingerprint,
+  type DownloadJob,
+} from "../../downloadQueue";
 import { useRuforgeStore } from "../../store/ruforgeStore";
 import { DOWNLOAD_JOB_STATUS_LABEL, RF_DOWNLOADER_PANEL } from "./downloaderConstants";
 import { formatApproxFileSize } from "./downloaderFormat";
@@ -358,7 +363,18 @@ const DownloadJobRow = ({
 
 export const DownloadJobQueuePanel = () => {
   const jobsRaw = useRuforgeStore((s) => s.downloadJobs);
-  const jobs = [...jobsRaw].sort((a, b) => a.createdAt - b.createdAt);
+  const sortFingerprint = useRuforgeStore((s) => downloadJobsQueueOrderFingerprint(s.downloadJobs));
+  const sortedJobIds = useMemo(() => {
+    if (sortFingerprint === "") return [];
+    return jobsRaw.map((j) => j.id);
+    // Keyed by sortFingerprint only: jobsRaw is read when membership, createdAt, or physical order changes — not on progress/metadata alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jobsRaw omitted so progress/metadata updates do not rebuild id list
+  }, [sortFingerprint]);
+  const jobs = useMemo(() => {
+    if (sortedJobIds.length === 0) return jobsRaw;
+    const byId = new Map(jobsRaw.map((j) => [j.id, j]));
+    return sortedJobIds.map((id) => byId.get(id)!);
+  }, [sortedJobIds, jobsRaw]);
   const focusedJobId = useRuforgeStore((s) => s.focusedJobId);
   const setDownloaderFocusedJobId = useRuforgeStore((s) => s.setDownloaderFocusedJobId);
   const confirmPendingDownloadJob = useRuforgeStore((s) => s.confirmPendingDownloadJob);

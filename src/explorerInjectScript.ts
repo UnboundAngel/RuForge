@@ -69,13 +69,13 @@ export function buildExplorerInjectScript(colors: ExplorerInjectColors): string 
     }
 
     function emit(eventName, payload) {
-      if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.emit) {
-        window.__TAURI__.event.emit(eventName, payload);
+      if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+        void window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: eventName, payload });
       }
     }
 
     const style = document.createElement('style');
-    style.innerHTML = [
+    style.textContent = [
       '#neotube-dl-btn { position: fixed; top: 24px; right: 24px; z-index: 2147483646; background: rgba(29, 22, 19, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid ' + BORDER_RGBA + '; border-radius: 999px; padding: 14px 28px; display: flex; align-items: center; gap: 18px; cursor: pointer; transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1); box-shadow: 0 15px 45px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1); opacity: 0; transform: translateY(-20px) scale(0.9); pointer-events: none; user-select: none; font-family: system-ui, -apple-system, sans-serif; }',
       '#neotube-dl-btn.visible { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }',
       '#neotube-dl-btn:hover { background: ' + ACCENT + '; border-color: ' + ACCENT + '; transform: translateY(-2px) scale(1.02); box-shadow: 0 20px 50px ' + GLOW_RGBA + '; }',
@@ -96,7 +96,39 @@ export function buildExplorerInjectScript(colors: ExplorerInjectColors): string 
 
     const btn = document.createElement('div');
     btn.id = 'neotube-dl-btn';
-    btn.innerHTML = '<div class="text-group"><span class="main-text">Source Found</span><span class="sub-text">Direct Download</span></div><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>';
+    var textGroup = document.createElement('div');
+    textGroup.className = 'text-group';
+    var mainLbl = document.createElement('span');
+    mainLbl.className = 'main-text';
+    mainLbl.textContent = 'Source Found';
+    var subLbl = document.createElement('span');
+    subLbl.className = 'sub-text';
+    subLbl.textContent = 'Direct Download';
+    textGroup.appendChild(mainLbl);
+    textGroup.appendChild(subLbl);
+    btn.appendChild(textGroup);
+    var svgNS = 'http://www.w3.org/2000/svg';
+    var iconSvg = document.createElementNS(svgNS, 'svg');
+    iconSvg.setAttribute('class', 'icon');
+    iconSvg.setAttribute('viewBox', '0 0 24 24');
+    iconSvg.setAttribute('fill', 'none');
+    iconSvg.setAttribute('stroke', 'currentColor');
+    iconSvg.setAttribute('stroke-width', '3');
+    iconSvg.setAttribute('stroke-linecap', 'round');
+    iconSvg.setAttribute('stroke-linejoin', 'round');
+    var p1 = document.createElementNS(svgNS, 'path');
+    p1.setAttribute('d', 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4');
+    var pl = document.createElementNS(svgNS, 'polyline');
+    pl.setAttribute('points', '7 10 12 15 17 10');
+    var ln = document.createElementNS(svgNS, 'line');
+    ln.setAttribute('x1', '12');
+    ln.setAttribute('y1', '15');
+    ln.setAttribute('x2', '12');
+    ln.setAttribute('y2', '3');
+    iconSvg.appendChild(p1);
+    iconSvg.appendChild(pl);
+    iconSvg.appendChild(ln);
+    btn.appendChild(iconSvg);
     document.body.appendChild(btn);
 
     btn.onclick = function() {
@@ -106,16 +138,28 @@ export function buildExplorerInjectScript(colors: ExplorerInjectColors): string 
       btn.classList.remove('visible');
     };
 
+    function rfCtxButton(action, label) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'rf-item';
+      b.setAttribute('data-action', action);
+      b.textContent = label;
+      return b;
+    }
+    function rfCtxSep() {
+      var s = document.createElement('div');
+      s.className = 'rf-sep';
+      s.setAttribute('aria-hidden', 'true');
+      return s;
+    }
     const ctxMenu = document.createElement('div');
     ctxMenu.id = 'ruforge-ctx-menu';
     ctxMenu.setAttribute('role', 'menu');
-    ctxMenu.innerHTML = [
-      '<button type="button" class="rf-item" data-action="download">Download video</button>',
-      '<button type="button" class="rf-item" data-action="send-downloader">Send to downloader</button>',
-      '<div class="rf-sep" aria-hidden="true"></div>',
-      '<button type="button" class="rf-item" data-action="copy-link">Copy link</button>',
-      '<button type="button" class="rf-item" data-action="copy-id">Copy video ID</button>'
-    ].join('');
+    ctxMenu.appendChild(rfCtxButton('download', 'Download video'));
+    ctxMenu.appendChild(rfCtxButton('send-downloader', 'Send to downloader'));
+    ctxMenu.appendChild(rfCtxSep());
+    ctxMenu.appendChild(rfCtxButton('copy-link', 'Copy link'));
+    ctxMenu.appendChild(rfCtxButton('copy-id', 'Copy video ID'));
     document.body.appendChild(ctxMenu);
 
     let ctxWatchUrl = null;

@@ -43,6 +43,8 @@ import logo from "./assets/neotubeIcon.png";
 import MiniPlayer from "./MiniPlayer";
 import { isAudioOnlyPath } from "./mediaKind";
 import { flattenGalleryScanToMediaFiles } from "./galleryScan";
+import { ExplorerWatchQueueButton } from "./components/ExplorerWatchQueueButton";
+import { TitlebarHoverButton } from "./components/TitlebarHoverButton";
 import { DownloaderView } from "./components/DownloaderView";
 import { PlayerView, type PlayerViewHandle } from "./components/PlayerView";
 import { SettingsView } from "./components/SettingsView";
@@ -61,6 +63,7 @@ import {
   Globe,
   Loader2,
   AlertCircle,
+  HardDrive,
 } from "lucide-react";
 
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
@@ -68,11 +71,15 @@ import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/r
 const WindowControls = ({ 
   onMiniPlayerToggle,
   updaterPhase,
-  updaterVersion
+  updaterVersion,
+  showExplorerQueueToolbar,
+  storageBlocksNewDownloads,
 }: { 
   onMiniPlayerToggle: () => void,
   updaterPhase: UpdaterPhase,
-  updaterVersion: string | null
+  updaterVersion: string | null,
+  showExplorerQueueToolbar: boolean,
+  storageBlocksNewDownloads: boolean,
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
@@ -101,13 +108,18 @@ const WindowControls = ({
         <UpdaterStatusIndicator phase={updaterPhase} version={updaterVersion} />
       </div>
 
-      <button
+      {showExplorerQueueToolbar && (
+        <ExplorerWatchQueueButton
+          storageBlocksNewDownloads={storageBlocksNewDownloads}
+        />
+      )}
+
+      <TitlebarHoverButton
+        tooltip="Launch Mini Player"
         onClick={onMiniPlayerToggle}
-        className="w-10 h-10 flex items-center justify-center text-stone-500 hover:text-[color:var(--accent)] transition-colors"
-        title="Launch Mini Player"
       >
         <Icon icon="material-symbols:ad-group-outline" width={18} height={18} />
-      </button>
+      </TitlebarHoverButton>
 
       <div className="w-px h-4 bg-stone-500/20 mx-1" />
 
@@ -293,6 +305,11 @@ function App() {
   const storageStats = useRuforgeStore((s) => s.storageStats);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
+  const storageBlocksNewDownloads =
+    saveToInternal &&
+    (storageStats
+      ? storageStats.total_bytes / (1024 * 1024 * 1024) >= settings.storageLimitGB
+      : false);
   const setSidebarCollapsedByResize = useRuforgeStore((s) => s.setSidebarCollapsedByResize);
 
   const updateRef = useRef<Update | null>(null);
@@ -351,17 +368,35 @@ function App() {
     void refreshStorageStats();
   }, [refreshStorageStats, outputDir, saveToInternal]);
 
+  const onDownloadSuccess = useCallback(() => {
+    notify("Complete");
+    void notifyWhenUnfocused({
+      title: "RuForge",
+      body: "Download finished — your file is ready.",
+    });
+    void refreshStorageStats();
+    const jobs = useRuforgeStore.getState().downloadJobs;
+    const busy = jobs.some(
+      (j) => j.status === "queued" || j.status === "downloading",
+    );
+    if (!busy) setActiveTab("media");
+  }, [notify, refreshStorageStats, setActiveTab]);
+
+  const onDownloadError = useCallback((err: string) => {
+    notify(`Failed: ${err.split("\n")[0]}`);
+  }, [notify]);
+
   const addLog = useCallback((msg: string) => {
     console.log("[Explorer Debug]", msg);
   }, []);
 
   // Manage Embedded Explorer Webview.
   // Deps: `activeTab`, `addLog` only — not `settings.accentColor`: this effect owns the 1s poll
-  // and show/position/hide webview; accent is baked in `tauri://created` only (same as before
+  // (while Explorer is active) and show/position/hide webview; accent is baked in `tauri://created` only (same as before
   // adding accent to deps would re-run the whole effect on every accent change).
   useEffect(() => {
     let active = true;
-    let interval: number;
+    let interval: number | undefined;
     
     const syncWebview = async () => {
       if (!active) return;
@@ -452,13 +487,17 @@ function App() {
       }
     };
 
-    // Run immediately and then poll to handle animations/resizes cleanly
+    // Run immediately (layout + hide when leaving Explorer), then poll only while Explorer is visible.
     syncWebview();
-    interval = window.setInterval(syncWebview, 1000); // Polling 1s to avoid spam
+    if (activeTab === "explorer") {
+      interval = window.setInterval(syncWebview, 1000); // Polling 1s to avoid spam
+    }
 
     return () => {
       active = false;
-      clearInterval(interval);
+      if (interval !== undefined) {
+        clearInterval(interval);
+      }
     };
   }, [activeTab, addLog]);
 
@@ -649,6 +688,49 @@ function App() {
     };
   }, []);
 
+  // System tray "Show" — event name must match `TRAY_SHOW_MAIN_EVENT` in `src-tauri/src/tray.rs`.
+  // Uses the official JS `WebviewWindow` APIs (`unminimize` / `show` / `setFocus`), same layer as
+  // https://v2.tauri.app/learn/system-tray/ (JS menu `action` / window helpers).
+  // Debug lines go to the **terminal** via `invoke("tray_front_debug")` → Rust `eprintln!`.
+  useEffect(() => {
+    const trayDbg = (line: string) =>
+      invoke("tray_front_debug", { line }).catch(() => {});
+    const unlistenTrayShow = listen("ruforge:tray-show-main", async () => {
+      await trayDbg("App(main): listen fired for ruforge:tray-show-main");
+      const main = await WebviewWindow.getByLabel("main");
+      if (!main) {
+        await trayDbg("App(main): WebviewWindow.getByLabel('main') returned null");
+        return;
+      }
+      await trayDbg("App(main): got WebviewWindow label=main");
+      const raise = async (pass: string) => {
+        try {
+          await main.unminimize();
+          await trayDbg(`App(main): ${pass} unminimize ok`);
+        } catch (e) {
+          await trayDbg(`App(main): ${pass} unminimize err: ${String(e)}`);
+        }
+        try {
+          await main.show();
+          await trayDbg(`App(main): ${pass} show ok`);
+        } catch (e) {
+          await trayDbg(`App(main): ${pass} show err: ${String(e)}`);
+        }
+        try {
+          await main.setFocus();
+          await trayDbg(`App(main): ${pass} setFocus ok`);
+        } catch (e) {
+          await trayDbg(`App(main): ${pass} setFocus err: ${String(e)}`);
+        }
+      };
+      await raise("pass1");
+      window.setTimeout(() => void raise("pass2"), 120);
+    });
+    return () => {
+      unlistenTrayShow.then((f) => f());
+    };
+  }, []);
+
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -691,6 +773,25 @@ function App() {
     });
     return () => { unlisten.then(f => f()); };
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "explorer" || postInstall) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const u = await invoke<string>("get_embedded_explorer_webview_url");
+        if (alive) setLastExplorerUrl(u);
+      } catch {
+        /* Embedded explorer webview not mounted yet */
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 800);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [activeTab, postInstall, setLastExplorerUrl]);
 
   useEffect(() => {
     if (activeTab !== "settings" || postInstall) {
@@ -764,6 +865,8 @@ function App() {
         }
         updaterPhase={updaterPhase}
         updaterVersion={updaterVersion}
+        showExplorerQueueToolbar={activeTab === "explorer" && !postInstall}
+        storageBlocksNewDownloads={storageBlocksNewDownloads}
       />
 
       {/* Global Drag Region - Top strip except controls area */}
@@ -1118,23 +1221,9 @@ function App() {
                 <DownloaderView
                   key="downloader"
                   internalDir={RUFORGE_INTERNAL_DIR}
-                  storageFull={saveToInternal && (storageStats ? (storageStats.total_bytes / (1024 * 1024 * 1024)) >= settings.storageLimitGB : false)}
-                  onDownloadSuccess={() => {
-                    notify("Complete");
-                    void notifyWhenUnfocused({
-                      title: "RuForge",
-                      body: "Download finished — your file is ready.",
-                    });
-                    void refreshStorageStats();
-                    const jobs = useRuforgeStore.getState().downloadJobs;
-                    const busy = jobs.some(
-                      (j) => j.status === "queued" || j.status === "downloading",
-                    );
-                    if (!busy) setActiveTab("media");
-                  }}
-                  onDownloadError={(err) => {
-                    notify(`Failed: ${err.split('\n')[0]}`);
-                  }}
+                  storageFull={storageBlocksNewDownloads}
+                  onDownloadSuccess={onDownloadSuccess}
+                  onDownloadError={onDownloadError}
                 />
               )}
               {activeTab === "explorer" && (
@@ -1187,25 +1276,31 @@ function App() {
                     ? "bg-[#2c1818] text-stone-100 border border-red-900/35"
                     : t === "progress"
                       ? "bg-[#271C18] text-stone-50 border border-stone-50/10"
-                      : "bg-[#271C18] text-stone-50 border border-stone-50/10";
+                      : t === "warning"
+                        ? "bg-[#271C18] text-stone-50 border-2 border-dotted border-yellow-400/90"
+                        : "bg-[#271C18] text-stone-50 border border-stone-50/10";
                 const closeBtn =
                   t === "error"
                     ? "text-red-200/70 hover:text-red-100"
-                    : "text-stone-500 hover:text-stone-300";
+                    : t === "warning"
+                      ? "text-yellow-200/55 hover:text-yellow-100/90"
+                      : "text-stone-500 hover:text-stone-300";
                 return (
                 <motion.div
                   key={n.id}
                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className={`${shell} px-3 py-2 rounded-xl shadow-lg flex items-start gap-2.5 pointer-events-auto min-w-0 w-full`}
+                  className={`${shell} px-3 py-2 rounded-xl shadow-lg flex items-center gap-2.5 pointer-events-auto min-w-0 w-full`}
                 >
                   {t === "error" ? (
-                    <AlertCircle className="text-red-400 w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <AlertCircle className="text-red-400 w-4 h-4 flex-shrink-0" />
                   ) : t === "progress" ? (
-                    <Loader2 className="text-[color:var(--accent)] w-4 h-4 flex-shrink-0 mt-0.5 animate-spin" />
+                    <Loader2 className="text-[color:var(--accent)] w-4 h-4 flex-shrink-0 animate-spin" />
+                  ) : t === "warning" ? (
+                    <HardDrive className="text-yellow-400/95 w-4 h-4 flex-shrink-0" aria-hidden />
                   ) : (
-                    <CheckCircle2 className="text-emerald-400 w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="text-emerald-400 w-4 h-4 flex-shrink-0" />
                   )}
 
                   <div className="flex-1 flex flex-col min-w-0">
@@ -1217,7 +1312,7 @@ function App() {
                   <button
                     type="button"
                     onClick={() => dismissNotification(n.id)}
-                    className={`${closeBtn} transition-colors flex-shrink-0 p-0.5 rounded`}
+                    className={`${closeBtn} transition-colors flex-shrink-0 self-start p-0.5 rounded`}
                     aria-label="Dismiss"
                   >
                     <X size={14} />

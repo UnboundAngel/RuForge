@@ -8,7 +8,7 @@ mod ytdlp_binary;
 
 use std::sync::Mutex;
 
-use tauri::Manager;
+use tauri::{Listener, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::app_state::AppConfig;
@@ -19,7 +19,9 @@ use crate::commands::gallery::scan_gallery;
 use crate::commands::media::{
     delete_media, ensure_poster_if_missing, extract_frames, get_subtitle_tracks, read_local_subtitle_vtt,
 };
-use crate::commands::player::{eval_in_webview, open_mini_player, open_youtube_explorer};
+use crate::commands::player::{
+    eval_in_webview, get_embedded_explorer_webview_url, open_mini_player, open_youtube_explorer,
+};
 use crate::commands::settings::{
     authorize_cleanup, clear_ruforge_cache, get_hardware_acceleration_browser_args,
     get_hardware_acceleration_pref, get_storage_stats, open_windows_sound_settings,
@@ -30,7 +32,7 @@ use crate::commands::ytdlp_update::{
     download_ytdlp_update, get_ytdlp_update_status, warm_ytdlp_release_cache_spawn,
 };
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
-use crate::tray::setup_tray;
+use crate::tray::{setup_tray, tray_front_debug, TRAY_SHOW_MAIN_EVENT};
 
 /// Windows toast header uses the parent process name in dev unless we set an explicit AppUserModelID.
 #[cfg(windows)]
@@ -85,6 +87,18 @@ pub fn run() {
 
             setup_tray(app)?;
 
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.listen(TRAY_SHOW_MAIN_EVENT, |_event| {
+                    eprintln!(
+                        "[ruforge-tray] Rust: main webview received `{TRAY_SHOW_MAIN_EVENT}` (routing OK)"
+                    );
+                });
+            } else {
+                eprintln!(
+                    "[ruforge-tray] Rust: setup could not resolve main webview — tray emit will miss"
+                );
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -99,12 +113,14 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            tray_front_debug,
             get_video_info,
             start_download_job,
             pause_download_job,
             scan_gallery,
             open_mini_player,
             open_youtube_explorer,
+            get_embedded_explorer_webview_url,
             update_tray_config,
             extract_frames,
             ensure_poster_if_missing,

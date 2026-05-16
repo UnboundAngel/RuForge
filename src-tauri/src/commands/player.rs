@@ -2,6 +2,18 @@ use tauri::{AppHandle, Manager};
 
 use crate::hardware_acceleration::HardwareAccelerationDisk;
 
+/// Current navigation URL of the embedded `explorer-view` webview (for main-window UI).
+#[tauri::command]
+pub fn get_embedded_explorer_webview_url(app: AppHandle) -> Result<String, String> {
+    let webview = app
+        .get_webview("explorer-view")
+        .ok_or_else(|| "Explorer webview is not active.".to_string())?;
+    webview
+        .url()
+        .map(|u| u.to_string())
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn eval_in_webview(app: AppHandle, label: String, script: String) -> Result<(), String> {
     if let Some(webview) = app.get_webview(&label) {

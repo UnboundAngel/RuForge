@@ -25,6 +25,20 @@ import {
 /** One in-flight `get_video_info` per normalized URL (dedupes parallel hydrates). */
 const inflightMetaByKey = new Map<string, Promise<DownloadJobMediaSnapshot>>();
 
+/** Coalesce `persistDownloadJobs` when many hydrates finish back-to-back (e.g. startup sweep). */
+const DOWNLOAD_JOB_HYDRATE_PERSIST_DEBOUNCE_MS = 75;
+let hydratePersistTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function schedulePersistAfterDownloadJobHydrate(get: () => RuforgeStore): void {
+  if (hydratePersistTimeout !== null) {
+    clearTimeout(hydratePersistTimeout);
+  }
+  hydratePersistTimeout = setTimeout(() => {
+    hydratePersistTimeout = null;
+    persistDownloadJobs(get().downloadJobs);
+  }, DOWNLOAD_JOB_HYDRATE_PERSIST_DEBOUNCE_MS);
+}
+
 async function hydrateDownloadJobMetadata(
   get: () => RuforgeStore,
   set: StoreApi<RuforgeStore>["setState"],
@@ -49,7 +63,7 @@ async function hydrateDownloadJobMetadata(
         ),
       };
     });
-    persistDownloadJobs(get().downloadJobs);
+    schedulePersistAfterDownloadJobHydrate(get);
   };
 
   const urlTrim = url.trim();
@@ -496,7 +510,11 @@ export const createDownloadQueueSlice: StateCreator<
     applyDownloadProgress: (payload) => {
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
-          j.id === payload.jobId ? { ...j, progress: payload } : j,
+          j.id === payload.jobId &&
+          j.status !== "completed" &&
+          j.status !== "failed"
+            ? { ...j, progress: payload }
+            : j,
         );
         const focus = s.focusedJobId;
         return {

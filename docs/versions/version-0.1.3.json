@@ -798,6 +798,367 @@
           "reason": "Appended t34 ledger for downloader queue + cache + refresh UX session."
         }
       ]
+    },
+    {
+      "id": "f2",
+      "type": "fix",
+      "label": "Bounded yt-dlp stderr buffer",
+      "agent": "chad",
+      "details": [
+        "Per-job stderr lines from yt-dlp were appended to an unbounded String until the process exited.",
+        "Capped at 256 KiB UTF-8 safely by trimming the oldest prefix before each append so failure payloads still carry recent stderr without unbounded memory growth."
+      ],
+      "files": ["src-tauri/src/commands/downloader.rs"],
+      "fileEdits": [
+        {
+          "path": "src-tauri/src/commands/downloader.rs",
+          "reason": "DOWNLOAD_JOB_YTDLP_STDERR_LOG_MAX_BYTES + append_ytdlp_stderr_line_bounded / ceil_utf8_char_boundary; Stderr branch unchanged structurally, same error_log consumer on non-zero exit."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f2 row for bounded stderr accumulation fix."
+        }
+      ]
+    },
+    {
+      "id": "f3",
+      "type": "fix",
+      "label": "Download job manager mutex poison handling",
+      "agent": "chad",
+      "details": [
+        "`downloader.rs` had no `.lock().unwrap()`; poison risk was on `DownloadJobManager` mutexes (active job map + user pause set).",
+        "Lock failures return `Result` from claim/release/place/pause/remove paths used by Tauri commands; `place_running_child` kills yt-dlp if the active map cannot be locked.",
+        "Background yt-dlp output task logs `remove_active` / `take_paused` lock errors instead of unwinding."
+      ],
+      "files": [
+        "src-tauri/src/download_job_manager.rs",
+        "src-tauri/src/commands/downloader.rs",
+        "src-tauri/src/commands/ytdlp_update.rs"
+      ],
+      "fileEdits": [
+        {
+          "path": "src-tauri/src/download_job_manager.rs",
+          "reason": "lock_active / lock_paused helpers; Result-returning APIs; kill sidecar when active lock poisoned before attach."
+        },
+        {
+          "path": "src-tauri/src/commands/downloader.rs",
+          "reason": "`?` on release_claim / place_running_child; log-only lock errors inside spawned watcher."
+        },
+        {
+          "path": "src-tauri/src/commands/ytdlp_update.rs",
+          "reason": "`has_active_downloads()?` propagates poison instead of panicking."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f3 row for mutex poison handling."
+        }
+      ]
+    },
+    {
+      "id": "f4",
+      "type": "fix",
+      "label": "Post-download diagnostic walk off async thread",
+      "agent": "chad",
+      "details": [
+        "Recursive post-download directory listing (for log::info only) ran synchronously in the yt-dlp stdout/stderr watcher task before download-job-finished, blocking the async runtime on large or slow disks.",
+        "Schedule the same walk via tokio::task::spawn_blocking without awaiting so download-job-finished is not gated on traversal; listing depth, mtime cutoff, sort, and log output unchanged."
+      ],
+      "files": ["src-tauri/src/commands/downloader.rs"],
+      "fileEdits": [
+        {
+          "path": "src-tauri/src/commands/downloader.rs",
+          "reason": "Fire-and-forget spawn_blocking(log_post_download_files_written) on success; left spawn_post_download_frame_extract + emit order vs. walk unchanged aside from no longer blocking the watcher."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f4 row for post-download diag walk offload."
+        }
+      ]
+    },
+    {
+      "id": "f5",
+      "type": "fix",
+      "label": "Downloader duplicate layoutId (URL chip)",
+      "agent": "chad",
+      "details": [
+        "`showTopLeftDownloaderChrome` is true when `showQueueAddToolbar` even if `showUrlBubble` is false, so top-left queue chrome and the wide centered URL field could mount together — both used `layoutId=\"downloader-url-chip\"`, violating Framer Motion's single-peer rule.",
+        "Apply shared `layoutId` only when the URL bubble is active; queue-only top-left chrome uses layout transitions without that shared id so centered input ↔ bubble morph is preserved."
+      ],
+      "files": ["src/components/DownloaderView.tsx"],
+      "fileEdits": [
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "Top-left `motion.div`: `layoutId={showUrlBubble ? \"downloader-url-chip\" : undefined}` so it never duplicates the centered input's shared layout id."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f5 row for duplicate layoutId fix."
+        }
+      ]
+    },
+    {
+      "id": "t35",
+      "type": "fix",
+      "label": "Download queue panel: memoize createdAt sort",
+      "agent": "chad",
+      "details": [
+        "`DownloadJobQueuePanel` re-sorted `downloadJobs` on every render whenever any subscribed store slice changed (e.g. `focusedJobId`).",
+        "Added a primitive `downloadJobsSortFingerprint` store selector (id + createdAt multiset) so Zustand skips churn when only progress/metadata/etc. change.",
+        "Stable sorted job ids recomputed only when the fingerprint changes; current rows are an O(n) id→job remap when the live queue array updates."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/downloader/DownloadJobQueuePanel.tsx",
+          "reason": "downloadJobsSortFingerprint + useMemo(sortedJobIds keyed by fingerprint) + useMemo(remap jobsRaw by ids); import useMemo from react."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Ledger t35 for queue sort memoization."
+        }
+      ]
+    },
+    {
+      "id": "t36",
+      "type": "task",
+      "label": "Immersive download progress: single motion lane",
+      "agent": "chad",
+      "details": [
+        "Replaced 40 per-segment `motion.div` fills (each driven on high-frequency progress events) with one stepped-width accent bar plus a static repeating-linear-gradient track.",
+        "Preserves 40-slot / `gap-2` (0.5rem) geometry and the same lit-segment rule as `percentage >= (i/40)*100` (including one slot at 0%)."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "`BIG_PROGRESS_*` constants; stepped `calc()` width for N filled slots; one `motion.div` (`transition.duration: 0`); track stripe via `repeating-linear-gradient`; `rounded-l-full` / `rounded-full` end caps."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Ledger t36 for immersive progress bar CPU reduction."
+        }
+      ]
+    },
+    {
+      "id": "f6",
+      "type": "fix",
+      "label": "Downloader storage / staging feedback",
+      "agent": "chad",
+      "details": [
+        "Internal-library storage at the configured limit no longer fails silently for drops, manual download, URL-bar promote, clipboard queue, or `manual-download-trigger`: `notify` plus disabled controls with `title` tooltips where appropriate.",
+        "`promoteStagedBarToDownloadQueue` when metadata is not ready uses the same `quickEnqueueHint` strip as other quick-enqueue outcomes instead of returning with no UI."
+      ],
+      "files": [
+        "src/components/downloader/useDownloaderView.ts",
+        "src/components/DownloaderView.tsx",
+        "docs/versions/version-0.1.3.json"
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/downloader/useDownloaderView.ts",
+          "reason": "`STORAGE_FULL_NOTIFY` + `notify`; `storageBlocksNewDownloads`; `quickEnqueueHint` `storage_full` / `wait_metadata`; guarded URL-change promote; exports for view."
+        },
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "Primary Download + both Queue-another buttons: `disabled` + `title` when storage blocks; AnimatePresence rows for new hint keys."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f6 ledger row for this fix."
+        }
+      ]
+    },
+    {
+      "id": "f7",
+      "type": "fix",
+      "label": "Primary Download with queue focus + synced URL bar",
+      "agent": "chad",
+      "details": [
+        "`showPrimaryDownload` mixed hero `videoInfo` with queue-row focus: empty bar used only `downloadJobMediaNeedsHydration`, but a non-empty bar matching the focused URL also required `videoInfo`, so queue-first flows hid the button while the row was valid.",
+        "Aligned gating with `handleDownloadClick`: when the focused row is the target (bar empty or URLs match), visibility follows row metadata hydration only; when the bar URL diverges from the row, use the hero `videoInfo` gate for the bar URL."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/downloader/useDownloaderView.ts",
+          "reason": "`showPrimaryDownload`: `queueRowIsDownloadTarget` branches share `!downloadJobMediaNeedsHydration`; divergent bar URL uses `videoInfo && url.startsWith(\"http\")` like unfocused hero."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f7 ledger for primary-download visibility fix."
+        }
+      ]
+    },
+    {
+      "id": "f8",
+      "type": "fix",
+      "label": "Download queue reorder vs promotion order",
+      "agent": "chad",
+      "details": [
+        "Queue panel memoized a createdAt sort keyed only by id+createdAt multiset, so pure reorder did not invalidate the memo while `pumpDownloadQueue` / `promoteEligibleJobs` use physical `downloadJobs` order.",
+        "Added `downloadJobsQueueOrderFingerprint` (multiset + physical id sequence) in `downloadQueue.ts`; panel renders store order so the next promoted job matches the list."
+      ],
+      "files": ["src/downloadQueue.ts", "src/components/downloader/DownloadJobQueuePanel.tsx"],
+      "fileEdits": [
+        {
+          "path": "src/downloadQueue.ts",
+          "reason": "Exported downloadJobsQueueOrderFingerprint: multiset + physical id tail for order-sensitive memoization."
+        },
+        {
+          "path": "src/components/downloader/DownloadJobQueuePanel.tsx",
+          "reason": "Use fingerprint + physical id order for rows (not createdAt sort); reorder invalidates fingerprint."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f8 ledger for queue reorder / promotion alignment."
+        }
+      ]
+    },
+    {
+      "id": "f9",
+      "type": "fix",
+      "label": "yt-dlp progress listener unmount race",
+      "agent": "chad",
+      "details": [
+        "`listen('ytdlp-update-download-progress')` was only stored on `unsub` after awaiting `get_ytdlp_update_status` and `listen`; if the downloader view unmounted first, cleanup ran with `unsub` still undefined and the listener kept firing into stale setters.",
+        "Track disposal: when `listen` resolves after unmount, call the returned unsubscribe immediately; otherwise assign it for the normal effect cleanup path."
+      ],
+      "files": ["src/components/downloader/useDownloaderView.ts"],
+      "fileEdits": [
+        {
+          "path": "src/components/downloader/useDownloaderView.ts",
+          "reason": "`disposed` flag + subscribe-after-await: `un()` if cleanup already ran, else `unsub = un` for teardown on unmount."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f9 row for yt-dlp progress listener leak fix."
+        }
+      ]
+    },
+    {
+      "id": "t37",
+      "type": "task",
+      "label": "Stable App → Downloader download callbacks",
+      "agent": "chad",
+      "details": [
+        "Wrapped onDownloadSuccess / onDownloadError in useCallback with store action deps so props passed to DownloaderView do not churn every App render.",
+        "Prevents useDownloaderView's download-job-finished listener effect from tearing down and re-registering Tauri IPC on unrelated App updates."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/App.tsx",
+          "reason": "useCallback for onDownloadSuccess (notify, refreshStorageStats, setActiveTab) and onDownloadError (notify); pass stable refs to DownloaderView."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Ledger t37 for stable download callback memoization."
+        }
+      ]
+    },
+    {
+      "id": "f10",
+      "type": "fix",
+      "label": "Ignore IPC progress after job terminal state",
+      "agent": "chad",
+      "details": [
+        "`applyDownloadProgress` matched only `jobId`, so a late or reordered progress event could overwrite `progress` on a row already marked `completed` or `failed`, briefly reviving the progress bar in the queue UI.",
+        "Progress updates now apply only when the job status is not terminal (`completed` / `failed`), aligned with `resolveFocusAfterMutation`."
+      ],
+      "files": ["src/store/downloadQueueSlice.ts"],
+      "fileEdits": [
+        {
+          "path": "src/store/downloadQueueSlice.ts",
+          "reason": "`applyDownloadProgress`: only merge `payload` into `progress` when `j.status` is not `completed` or `failed`."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f10 ledger for terminal-state progress guard."
+        }
+      ]
+    },
+    {
+      "id": "f11",
+      "type": "fix",
+      "label": "Debounced session persist after download-job metadata hydrate",
+      "agent": "chad",
+      "details": [
+        "`applySnapshot` in `hydrateDownloadJobMetadata` called `persistDownloadJobs` after every hydrate; `queueHydrateOrphanMetadata` and parallel jobs could trigger many back-to-back full-queue JSON serializations and sessionStorage writes on startup.",
+        "Coalesce hydrate-triggered persists with a short debounce: still writes the full `get().downloadJobs` snapshot when the timer fires; all other slice paths keep immediate `persistDownloadJobs` calls."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/store/downloadQueueSlice.ts",
+          "reason": "Module-level debounced `schedulePersistAfterDownloadJobHydrate(get)` replaces synchronous persist inside `applySnapshot` only; Zustand metadata updates unchanged."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f11 ledger for hydrate persist debounce."
+        }
+      ]
+    },
+    {
+      "id": "f12",
+      "type": "fix",
+      "label": "Explorer webview sync interval only while tab active",
+      "agent": "chad",
+      "details": [
+        "The Explorer effect always started a 1s setInterval(syncWebview) even when another main tab was selected, so hide/layout work fired every second in the background.",
+        "Start the interval only when activeTab === \"explorer\"; still invoke syncWebview once per effect run so leaving Explorer immediately hides the webview. syncWebview body and 1000ms cadence unchanged while Explorer is active."
+      ],
+      "files": ["src/App.tsx"],
+      "fileEdits": [
+        {
+          "path": "src/App.tsx",
+          "reason": "Gate Explorer setInterval on activeTab === explorer; immediate syncWebview unchanged for show/hide on tab switches."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f12 for Explorer sync polling gating."
+        }
+      ]
+    },
+    {
+      "id": "f13",
+      "type": "fix",
+      "label": "Progress payload: finite numeric guards",
+      "agent": "chad",
+      "details": [
+        "`normalizeProgressPayload` accepted any `number` for percentage, indices, and byte totals; `NaN` / `Infinity` from malformed IPC survived `??` and loose `typeof` checks (e.g. `Infinity > 0`), poisoning UI math and Framer Motion.",
+        "Coerce non-finite percentage to 0; omit or clear non-finite optional indices; require finite non-negative downloaded bytes and finite positive total bytes before attaching those fields."
+      ],
+      "files": ["src/types.ts"],
+      "fileEdits": [
+        {
+          "path": "src/types.ts",
+          "reason": "finiteNonNegativeNumber / finitePositiveNumber helpers; Number.isFinite on percentage, currentIndex, totalItems; stricter dl/ttl guards in normalizeProgressPayload."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f13 for progress payload finite-numeric normalization."
+        }
+      ]
+    },
+    {
+      "id": "f14",
+      "type": "fix",
+      "label": "Notify auto-dismiss timer hygiene",
+      "agent": "chad",
+      "details": [
+        "`notify` scheduled info/warning/error auto-dismiss with untracked `setTimeout` handles; bursts left many timers that could still call `dismissNotification` after unload or HMR.",
+        "Track handles per notification id; `dismissNotification` clears the matching timer; `clearRuforgeNotificationDismissTimers` runs on `beforeunload` and Vite `import.meta.hot.dispose` (same 4s/10s delays and type rules unchanged)."
+      ],
+      "files": ["src/store/ruforgeStore.ts", "src/main.tsx"],
+      "fileEdits": [
+        {
+          "path": "src/store/ruforgeStore.ts",
+          "reason": "notificationDismissTimers map + forgetNotificationDismissTimer; notify stores handles; dismissNotification clears first; export clearRuforgeNotificationDismissTimers."
+        },
+        {
+          "path": "src/main.tsx",
+          "reason": "beforeunload + import.meta.hot.dispose call clearRuforgeNotificationDismissTimers."
+        },
+        {
+          "path": "docs/versions/version-0.1.3.json",
+          "reason": "Manifest f14 for notify timer tracking/teardown."
+        }
+      ]
     }
   ],
   "edges": []

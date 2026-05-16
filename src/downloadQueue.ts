@@ -94,6 +94,21 @@ export function createDownloadJobId(): string {
   return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/**
+ * Fingerprint for memoizing queue list order while ignoring progress/metadata churn.
+ * Multiset of `(id, createdAt)` changes on enqueue/remove; physical id tail changes on
+ * `reorderDownloadJobs` so UI order stays aligned with `promoteEligibleJobs` traversal.
+ */
+export function downloadJobsQueueOrderFingerprint(jobs: DownloadJob[]): string {
+  if (jobs.length === 0) return "";
+  const multiset = jobs
+    .map((j) => `${j.id}:${j.createdAt}`)
+    .sort()
+    .join("|");
+  const physical = jobs.map((j) => j.id).join("\x1f");
+  return `${multiset}\x1e${physical}`;
+}
+
 export function buildDownloadJobOptions(
   settings: RuforgeSettings,
   outputDir: string,

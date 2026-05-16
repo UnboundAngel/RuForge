@@ -337,7 +337,7 @@ pub async fn download_ytdlp_update(
     app: AppHandle,
     manager: State<'_, DownloadJobManager>,
 ) -> Result<YtdlpDownloadResult, String> {
-    if !manager.active.lock().unwrap().is_empty() {
+    if manager.has_active_downloads()? {
         return Err(
             "Finish or pause active downloads before updating yt-dlp.".into(),
         );
