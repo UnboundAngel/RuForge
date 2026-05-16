@@ -126,13 +126,13 @@ const PRESET_ROWS: ReadonlyArray<{
     id: "mild",
     n: 2,
     title: "Mild parallel",
-    hint: "Downloads two videos at a time. .",
+    hint: "Downloads two videos at a time. Better for avoiding rate-limiting while reducing overall download time.",
   },
   {
     id: "high",
     n: 3,
     title: "Higher parallel",
-    hint: "Three jobs: fastest presets; stronger rate-limit risk",
+    hint: "Downloads three videos at a time. Faster for larger batches, but at a higher risk of rate-limiting.",
   },
 ];
 
@@ -262,7 +262,7 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
                     preset === "custom" ? "text-[#1D1613]/80" : "text-stone-500"
                   }`}
                 >
-                  Pick {CUSTOM_CONCURRENT_DOWNLOADS_MIN}–{MAX_CONCURRENT_DOWNLOADS_CAP} concurrent jobs (capped).
+                  Pick {CUSTOM_CONCURRENT_DOWNLOADS_MIN}–{MAX_CONCURRENT_DOWNLOADS_CAP} concurrent downloads (capped).
                 </p>
               </div>
             </motion.div>

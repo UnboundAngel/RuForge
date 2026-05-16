@@ -1,5 +1,5 @@
 <#!
-  Local signed Windows build (NSIS + MSI + .sig) — does NOT push to GitHub.
+  Local signed Windows build (NSIS + MSI + .sig) - does NOT push to GitHub.
 
   Usage:
     From repo root:  npm run build:signed
@@ -9,7 +9,7 @@
 
   Password (first match wins):
     1) Environment variable TAURI_SIGNING_PRIVATE_KEY_PASSWORD (current session)
-    2) One-line file repo\.tauri-signing-password  (gitignored — create locally if you want zero prompts)
+    2) One-line file repo\.tauri-signing-password  (gitignored - create locally if you want zero prompts)
     3) Secure prompt in the console
 
   Optional:  -NoPause   (skip "Press Enter" at end, e.g. for other scripts)
@@ -41,7 +41,7 @@ elseif (Test-Path -LiteralPath $passFile) {
   $fromFile = (Get-Content -LiteralPath $passFile -Raw).Trim()
   if ([string]::IsNullOrEmpty($fromFile)) {
     Remove-Item Env:\TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
-    Write-Host "Password file is empty — assuming key has no password." -ForegroundColor DarkGray
+    Write-Host "Password file is empty - assuming key has no password." -ForegroundColor DarkGray
   }
   else {
     $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $fromFile
@@ -66,7 +66,7 @@ else {
   }
 }
 
-Write-Host "`nRunning npm run tauri build (frontend + signed bundles)…`n" -ForegroundColor Cyan
+Write-Host "`nRunning npm run tauri build (frontend + signed bundles)...`n" -ForegroundColor Cyan
 npm run tauri build
 if ($LASTEXITCODE -ne 0) {
   Write-Host "`nBuild failed (exit $LASTEXITCODE)." -ForegroundColor Red
@@ -75,10 +75,33 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $bundleRoot = Join-Path $RepoRoot "src-tauri\target\release\bundle"
-Write-Host "`nDone. Artifacts (upload these to the GitHub Release, then update updater.json on main):" -ForegroundColor Green
-Get-ChildItem -LiteralPath (Join-Path $bundleRoot "nsis") -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName)" }
-Get-ChildItem -LiteralPath (Join-Path $bundleRoot "msi") -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName)" }
-Write-Host "`nNext: paste .sig contents into updater.json and commit; do not commit installers." -ForegroundColor DarkGray
+$pkgJson = Join-Path $RepoRoot "package.json"
+$appVersion = $null
+if (Test-Path -LiteralPath $pkgJson) {
+  try {
+    $pkg = Get-Content -LiteralPath $pkgJson -Raw | ConvertFrom-Json
+    if ($pkg.version) { $appVersion = [string]$pkg.version }
+  }
+  catch { }
+}
+Write-Host "`nDone. Artifacts for this build (upload matching files to the GitHub Release, then update updater.json on main):" -ForegroundColor Green
+if ($appVersion) {
+  $verPat = "RuForge_$([regex]::Escape($appVersion))"
+  Get-ChildItem -LiteralPath (Join-Path $bundleRoot "nsis") -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match $verPat } |
+    Sort-Object Name |
+    ForEach-Object { Write-Host "  $($_.FullName)" }
+  Get-ChildItem -LiteralPath (Join-Path $bundleRoot "msi") -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match $verPat } |
+    Sort-Object Name |
+    ForEach-Object { Write-Host "  $($_.FullName)" }
+}
+else {
+  Write-Host "  (Could not read version from package.json; listing all files under bundle.)" -ForegroundColor Yellow
+  Get-ChildItem -LiteralPath (Join-Path $bundleRoot "nsis") -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { Write-Host "  $($_.FullName)" }
+  Get-ChildItem -LiteralPath (Join-Path $bundleRoot "msi") -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { Write-Host "  $($_.FullName)" }
+}
+Write-Host "`nNext: paste .sig contents into updater.json if needed, commit, and keep installers out of git." -ForegroundColor DarkGray
 
 if (-not $NoPause) {
   Read-Host "`nPress Enter to close" | Out-Null
