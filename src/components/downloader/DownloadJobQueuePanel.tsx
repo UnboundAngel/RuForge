@@ -224,7 +224,7 @@ const DownloadJobRow = ({
             <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center px-1 text-center text-[7px] font-black uppercase leading-tight tracking-tight text-[#EDD79C]/25">
-              {awaitingListMeta ? "…" : "—"}
+              {awaitingListMeta ? "…" : "-"}
             </div>
           )}
         </div>

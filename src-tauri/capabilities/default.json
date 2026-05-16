@@ -5,7 +5,8 @@
   "windows": [
     "main",
     "mini",
-    "explorer"
+    "explorer",
+    "notify"
   ],
   "permissions": [
     "core:default",
@@ -42,7 +43,6 @@
     },
     "dialog:default",
     "fs:default",
-    "notification:default",
     "updater:allow-check",
     "updater:allow-download-and-install",
     "autostart:allow-enable",

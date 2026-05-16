@@ -77,6 +77,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
 
   /** Gallery slice (not persisted). Library list matches `MediaView` / `scan_gallery` shape. */
   entries: GalleryEntry[];
+  /** Bumps when `entries` is replaced from a successful on-disk gallery scan (`fetchEntries`). */
+  libraryScanRevision: number;
   galleryLoading: boolean;
   extractingByPath: Record<string, boolean>;
   activeMenu: GalleryContextMenuState;
@@ -208,6 +210,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       isFocused: false,
 
       entries: [],
+      libraryScanRevision: 0,
       galleryLoading: true,
       extractingByPath: {},
       activeMenu: null,
@@ -488,7 +491,10 @@ export const useRuforgeStore = create<RuforgeStore>()(
           );
           if (myToken !== galleryFetchToken) return;
           if (galleryPosterEpoch !== posterEpoch) return;
-          set({ entries: unique });
+          set((s) => ({
+            entries: unique,
+            libraryScanRevision: s.libraryScanRevision + 1,
+          }));
           if (!skipPosterBackfill) {
             const mediaFiles = unique.flatMap((e) =>
               e.kind === "media" ? [e as MediaFile] : (e as PlaylistCollection).items,

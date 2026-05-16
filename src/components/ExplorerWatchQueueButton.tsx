@@ -18,6 +18,7 @@ import {
   titlebarIconButtonClass,
   titlebarTooltipClassName,
 } from "./TitlebarHoverButton";
+import { notifyWhenUnfocused } from "../systemNotify";
 
 const STORAGE_FULL_NOTIFY =
   "Library storage limit reached. Free space in Settings or switch to an external download folder.";
@@ -38,7 +39,7 @@ function explorerQueueTooltip(
 ): string {
   if (storageBlocks && !inQueue) return STORAGE_FULL_REASON;
   if (inQueue && hovering) return "Remove from download queue";
-  if (inQueue) return "Queued — click to remove";
+  if (inQueue) return "Queued - click to remove";
   return "Add this watch page to the download queue";
 }
 
@@ -144,13 +145,14 @@ export function ExplorerWatchQueueButton({
     if (storageBlocksNewDownloads) {
       flashLeftHint("storage");
       notify(STORAGE_FULL_NOTIFY, "warning");
+      void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
       return;
     }
     if (settings.skipDuplicatesAutomatically) {
       const dup = findLibraryDuplicate(canon, entries);
       if (dup) {
         notify(
-          "Already in library — skipped (turn off Skip duplicates to choose)",
+          "Already in library (skipped). Turn off Skip duplicates to choose.",
           "warning",
         );
         return;

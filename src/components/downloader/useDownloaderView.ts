@@ -33,6 +33,7 @@ import {
   type YoutubeUrlDropHandler,
   setYoutubeUrlDropHandler,
 } from "../../features/downloader/youtubeUrlDropRegistry";
+import { notifyWhenUnfocused } from "../../systemNotify";
 
 const STORAGE_FULL_NOTIFY =
   "Library storage limit reached. Free space in Settings or switch to an external download folder.";
@@ -102,6 +103,8 @@ export function useDownloaderView({
   });
   const focusShowsBigProgress = focusedJob?.status === "downloading";
   const duplicateChoiceResolverRef = useRef<((choice: DuplicateDownloadChoice) => void) | null>(null);
+  /** Last `libraryScanRevision` used for auto-skip duplicate checks; `null` = no scan cached yet. */
+  const lastDupCheckLibraryScanRev = useRef<number | null>(null);
   const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
   const [replaceDialogMatch, setReplaceDialogMatch] = useState<DuplicateMatch | null>(null);
   const storageBlocksNewDownloads = saveToInternal && storageFull;
@@ -399,6 +402,7 @@ export function useDownloaderView({
   const handleDownloadClick = useCallback(async () => {
     if (storageBlocksNewDownloads) {
       notify(STORAGE_FULL_NOTIFY, "warning");
+      void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
       return;
     }
 
@@ -525,6 +529,7 @@ export function useDownloaderView({
       if (urls.length === 0) return;
       if (storageBlocksNewDownloads) {
         notify(STORAGE_FULL_NOTIFY, "warning");
+        void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
         return;
       }
 
@@ -662,6 +667,7 @@ export function useDownloaderView({
       if (!targetUrl) return;
       if (storageBlocksNewDownloads) {
         notify(STORAGE_FULL_NOTIFY, "warning");
+        void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
         return;
       }
       const duplicate = await resolveDuplicate(targetUrl);
@@ -786,6 +792,7 @@ export function useDownloaderView({
         if (!alreadyQueued && !skipDup && st0.videoInfo && !st0.metadataLoading) {
           if (storageBlocksNewDownloads) {
             notify(STORAGE_FULL_NOTIFY, "warning");
+            void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
           } else {
             enqueueDownloadOnly(prev, "replace", { approval: "held" });
           }
@@ -799,35 +806,63 @@ export function useDownloaderView({
   );
 
   useEffect(() => {
-    const unlistenProgress = listen<ProgressPayload & { job_id?: string }>(
-      "download-progress",
-      (event) => {
-        const normalized = normalizeProgressPayload(event.payload);
-        if (!normalized) return;
-        applyDownloadProgress(normalized);
-      },
-    );
-    const unlistenFinished = listen<DownloadJobFinishedPayload>("download-job-finished", (event) => {
-      onDownloadJobFinished(event.payload);
-      if (event.payload.success) {
-        void invalidateEntries({ silent: true }).then(() => {
-          onDownloadSuccess();
-        });
-      } else {
-        onDownloadError(event.payload.error ?? "Download failed");
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
+
+    void (async () => {
+      const uProgress = await listen<ProgressPayload & { job_id?: string }>(
+        "download-progress",
+        (event) => {
+          const normalized = normalizeProgressPayload(event.payload);
+          if (!normalized) return;
+          applyDownloadProgress(normalized);
+        },
+      );
+      unlisteners.push(uProgress);
+      if (cancelled) {
+        for (const u of unlisteners) u();
+        return;
       }
-    });
-    const unlistenPaused = listen<string>("download-job-paused", (event) => {
-      onDownloadJobPaused(event.payload);
-    });
-    const unlistenManualTrigger = listen<string>("manual-download-trigger", (event) => {
-      void requestDownloadRef.current(event.payload);
-    });
+
+      const uFinished = await listen<DownloadJobFinishedPayload>("download-job-finished", (event) => {
+        onDownloadJobFinished(event.payload);
+        if (event.payload.success) {
+          void invalidateEntries({ silent: true }).then(() => {
+            onDownloadSuccess();
+          });
+        } else {
+          onDownloadError(event.payload.error ?? "Download failed");
+        }
+      });
+      unlisteners.push(uFinished);
+      if (cancelled) {
+        for (const u of unlisteners) u();
+        return;
+      }
+
+      const uPaused = await listen<string>("download-job-paused", (event) => {
+        onDownloadJobPaused(event.payload);
+      });
+      unlisteners.push(uPaused);
+      if (cancelled) {
+        for (const u of unlisteners) u();
+        return;
+      }
+
+      const uManual = await listen<string>("manual-download-trigger", (event) => {
+        void requestDownloadRef.current(event.payload);
+      });
+      unlisteners.push(uManual);
+      if (cancelled) {
+        for (const u of unlisteners) u();
+      }
+    })();
+
     return () => {
-      unlistenProgress.then((f) => f());
-      unlistenFinished.then((f) => f());
-      unlistenPaused.then((f) => f());
-      unlistenManualTrigger.then((f) => f());
+      cancelled = true;
+      for (const u of unlisteners) {
+        u();
+      }
     };
   }, [
     applyDownloadProgress,
@@ -843,16 +878,49 @@ export function useDownloaderView({
     setMetadataError(null);
     if (url.startsWith("http")) {
       setDownloaderMetadataLoading(true);
-      const fetchInfo = async () => {
+      const run = async (scheduledUrl: string) => {
+        const norm = scheduledUrl.trim();
         try {
-          const info = await invoke<VideoInfo>("get_video_info", { url });
-          if (active) {
+          if (settingsRef.current.skipDuplicatesAutomatically) {
+            const rev = useRuforgeStore.getState().libraryScanRevision;
+            let list = useRuforgeStore.getState().entries;
+            if (
+              lastDupCheckLibraryScanRev.current === null ||
+              lastDupCheckLibraryScanRev.current !== rev
+            ) {
+              await fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true });
+              if (!active) return;
+              if (useRuforgeStore.getState().url.trim() !== norm) return;
+              lastDupCheckLibraryScanRev.current = useRuforgeStore.getState().libraryScanRevision;
+              list = useRuforgeStore.getState().entries;
+            }
+            const dup = findLibraryDuplicate(norm, list);
+            if (dup) {
+              if (active && useRuforgeStore.getState().url.trim() === norm) {
+                setDownloaderUrl("");
+                setDownloaderFocusedJobId(null);
+                setVideoInfo(null);
+                setMetadataError(null);
+                setClipboardPastedHint(false);
+                setClipboardOfferUrl(null);
+                notify(
+                  "Duplicate detected, skipping per user settings.",
+                  "info",
+                );
+              }
+              return;
+            }
+          }
+
+          if (!active || useRuforgeStore.getState().url.trim() !== norm) return;
+          const info = await invoke<VideoInfo>("get_video_info", { url: norm });
+          if (active && useRuforgeStore.getState().url.trim() === norm) {
             setVideoInfo(info);
             setMetadataError(null);
           }
         } catch (e: unknown) {
           console.error(`[RuForge] get_video_info failed: ${e}`);
-          if (active) {
+          if (active && useRuforgeStore.getState().url.trim() === norm) {
             setVideoInfo(null);
             setMetadataError(String(e));
           }
@@ -860,7 +928,9 @@ export function useDownloaderView({
           if (active) setDownloaderMetadataLoading(false);
         }
       };
-      const timeoutId = setTimeout(fetchInfo, 500);
+      const timeoutId = setTimeout(() => {
+        void run(useRuforgeStore.getState().url.trim());
+      }, 500);
       return () => {
         active = false;
         clearTimeout(timeoutId);
@@ -868,7 +938,16 @@ export function useDownloaderView({
       };
     }
     setVideoInfo(null);
-  }, [url, setMetadataError, setDownloaderMetadataLoading, setVideoInfo]);
+  }, [
+    url,
+    setMetadataError,
+    setDownloaderMetadataLoading,
+    setVideoInfo,
+    setDownloaderUrl,
+    setDownloaderFocusedJobId,
+    fetchEntries,
+    notify,
+  ]);
 
   return {
     settings,

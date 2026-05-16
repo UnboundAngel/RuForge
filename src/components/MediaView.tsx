@@ -247,7 +247,7 @@ export const MediaView = ({
       try {
         await invoke("delete_media", { videoPath: file.path });
         notify("Video deleted successfully.");
-        void fetchEntries();
+        await fetchEntries();
       } catch (e) {
         console.error(e);
         notify("Failed to delete video.");

@@ -119,20 +119,20 @@ const PRESET_ROWS: ReadonlyArray<{
     id: "seq",
     n: 1,
     title: "Sequential",
-    hint: "One active job — best default for yt-dlp / source limits",
+    hint: "Downloads one video at a time. Best for avoiding rate-limiting.",
     recommended: true,
   },
   {
     id: "mild",
     n: 2,
     title: "Mild parallel",
-    hint: "Two jobs — modest extra throughput; watch for throttling",
+    hint: "Downloads two videos at a time. .",
   },
   {
     id: "high",
     n: 3,
     title: "Higher parallel",
-    hint: "Three jobs — fastest presets; stronger rate-limit risk",
+    hint: "Three jobs: fastest presets; stronger rate-limit risk",
   },
 ];
 

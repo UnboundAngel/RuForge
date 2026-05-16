@@ -201,3 +201,13 @@ body {
   display: none;
 }
 
+/* Notify overlay window (label `notify`): transparent frameless shell */
+html.ruforge-notify-root,
+html.ruforge-notify-root body {
+  background-color: transparent !important;
+}
+
+html.ruforge-notify-root body {
+  overflow: hidden;
+}
+
