@@ -33,3 +33,11 @@ src-tauri/target/
 
 # Local-only Tauri signing helper (optional one-line password for scripts/build-signed-windows.ps1)
 .tauri-signing-password
+
+# IDE / local plans
+.cursor/
+
+# Ad-hoc archives and large optional FFmpeg binaries (see AGENTS.md; do not commit multi-hundred-MB exes)
+ffmpeg.7z
+src-tauri/binaries/ffmpeg*.exe
+src-tauri/binaries/ffprobe*.exe
