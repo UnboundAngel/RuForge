@@ -85,6 +85,14 @@ export interface YtdlpUpdateDownloadProgressPayload {
   percent?: number | null;
 }
 
+function finiteNonNegativeNumber(n: unknown): n is number {
+  return typeof n === "number" && Number.isFinite(n) && n >= 0;
+}
+
+function finitePositiveNumber(n: unknown): n is number {
+  return typeof n === "number" && Number.isFinite(n) && n > 0;
+}
+
 /** Normalize Tauri event payload (camelCase from Rust; tolerate legacy snake_case). */
 export function normalizeProgressPayload(
   raw: ProgressPayload & { job_id?: string; downloaded_bytes?: number; total_bytes?: number },
@@ -93,17 +101,23 @@ export function normalizeProgressPayload(
   if (!jobId) return null;
   const dl = raw.downloadedBytes ?? raw.downloaded_bytes;
   const ttl = raw.totalBytes ?? raw.total_bytes;
+  const pctRaw = raw.percentage ?? 0;
+  const percentage = typeof pctRaw === "number" && Number.isFinite(pctRaw) ? pctRaw : 0;
+  const currentIndex =
+    typeof raw.currentIndex === "number" && Number.isFinite(raw.currentIndex) ? raw.currentIndex : undefined;
+  const totalItems =
+    typeof raw.totalItems === "number" && Number.isFinite(raw.totalItems) ? raw.totalItems : undefined;
   return {
     jobId,
-    percentage: raw.percentage ?? 0,
+    percentage,
     speed: raw.speed ?? "",
     eta: raw.eta ?? "",
     status: raw.status ?? "downloading",
-    currentIndex: raw.currentIndex,
-    totalItems: raw.totalItems,
+    currentIndex,
+    totalItems,
     currentItemTitle: raw.currentItemTitle,
-    ...(typeof dl === "number" && dl >= 0 ? { downloadedBytes: dl } : {}),
-    ...(typeof ttl === "number" && ttl > 0 ? { totalBytes: ttl } : {}),
+    ...(finiteNonNegativeNumber(dl) ? { downloadedBytes: dl } : {}),
+    ...(finitePositiveNumber(ttl) ? { totalBytes: ttl } : {}),
   };
 }
 

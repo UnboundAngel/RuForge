@@ -19,6 +19,8 @@
     "core:window:allow-set-resizable",
     "core:window:allow-maximize",
     "core:window:allow-unmaximize",
+    "core:window:allow-show",
+    "core:window:allow-unminimize",
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-focus",
     "core:event:default",

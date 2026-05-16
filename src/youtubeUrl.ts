@@ -76,6 +76,23 @@ export function isYouTubeUrl(input: string): boolean {
   return extractYouTubeVideoId(input) !== null;
 }
 
+/**
+ * True for `youtube.com/watch` or `m.youtube.com/watch` with a valid `v` id
+ * (Explorer header queue control — matches in-webview watch pages, not shorts/embed).
+ */
+export function isYouTubeDotComWatchPageUrl(input: string): boolean {
+  try {
+    const u = new URL(input.trim());
+    const host = u.hostname.replace(/^www\./i, "").toLowerCase();
+    if (host !== "youtube.com" && host !== "m.youtube.com") return false;
+    if (!/^\/watch\/?$/i.test(u.pathname)) return false;
+    const v = u.searchParams.get("v");
+    return Boolean(v && YT_ID_RE.test(v));
+  } catch {
+    return false;
+  }
+}
+
 const YT_URL_IN_TEXT_RE =
   /(?:https?:\/\/)?(?:www\.|m\.|music\.)?(?:youtube\.com\/\S+|youtu\.be\/\S+)/gi;
 

@@ -27,6 +27,11 @@ import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
 
 const CLIP_ICON_TRANSITION = { duration: 0.32, ease: [0.23, 1, 0.32, 1] as const };
 
+/** Matches the immersive downloader progress row: 40 flex slots + Tailwind `gap-2` (0.5rem). */
+const BIG_PROGRESS_SEGMENTS = 40;
+const BIG_PROGRESS_GAP_REM = 0.5;
+const BIG_PROGRESS_GAP_TOTAL_REM = (BIG_PROGRESS_SEGMENTS - 1) * BIG_PROGRESS_GAP_REM;
+
 function MainDownloaderUrlChip({
   url,
   copied,
@@ -295,6 +300,20 @@ export const DownloaderView = (props: DownloaderViewProps) => {
 
   const heroThumb = d.heroBackdropThumb.trim();
 
+  const bigProgressPctRaw = d.progress?.percentage ?? 0;
+  const bigProgressPct = Number.isFinite(bigProgressPctRaw) ? bigProgressPctRaw : 0;
+  const bigProgressFilledSegs =
+    bigProgressPct < 0
+      ? 0
+      : Math.min(
+          BIG_PROGRESS_SEGMENTS,
+          Math.floor((bigProgressPct / 100) * BIG_PROGRESS_SEGMENTS) + 1,
+        );
+  const bigProgressFillWidth =
+    bigProgressFilledSegs <= 0
+      ? "0%"
+      : `calc(${bigProgressFilledSegs} * (100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS} + ${bigProgressFilledSegs - 1} * ${BIG_PROGRESS_GAP_REM}rem)`;
+
   return (
     <div className="h-full flex flex-col relative overflow-hidden">
       {d.replaceDialogOpen && d.replaceDialogMatch && (
@@ -431,7 +450,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
               {d.showTopLeftDownloaderChrome && (
                 <motion.div
                   key={d.showUrlBubble ? "url-pill" : "queue-add-tools"}
-                  layoutId="downloader-url-chip"
+                  layoutId={d.showUrlBubble ? "downloader-url-chip" : undefined}
                   transition={d.urlChipLayoutTransition}
                   className="pointer-events-none absolute left-4 top-4 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col items-stretch gap-2 sm:left-6 sm:top-6 lg:left-8 lg:top-8"
                 >
@@ -460,8 +479,14 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   {!d.anyDownloading && d.showQueueAddToolbar && (
                     <button
                       type="button"
+                      disabled={d.storageBlocksNewDownloads}
+                      title={
+                        d.storageBlocksNewDownloads
+                          ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
+                          : undefined
+                      }
                       onClick={() => void d.handleQuickEnqueueFromClipboard()}
-                      className="group/qe pointer-events-auto inline-flex h-9 max-w-9 shrink-0 items-center self-start overflow-hidden rounded-lg border border-dotted border-[#EDD79C]/50 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,border-color] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:max-w-[min(260px,calc(100vw-3rem))] hover:border-[#EDD79C]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
+                      className="group/qe pointer-events-auto inline-flex h-9 max-w-9 shrink-0 items-center self-start overflow-hidden rounded-lg border border-dotted border-[#EDD79C]/50 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,border-color] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:max-w-[min(260px,calc(100vw-3rem))] hover:border-[#EDD79C]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:max-w-9"
                       aria-label="Queue another from clipboard"
                     >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center">
@@ -510,6 +535,30 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             className="line-clamp-2 w-full text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
                           >
                             Already in library — skipped (turn off Skip duplicates to choose)
+                          </motion.p>
+                        )}
+                        {d.quickEnqueueHint === "storage_full" && (
+                          <motion.p
+                            key="qe-storage"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                            className="line-clamp-3 w-full text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                          >
+                            Library storage is full — free space in Settings or use an external folder
+                          </motion.p>
+                        )}
+                        {d.quickEnqueueHint === "wait_metadata" && (
+                          <motion.p
+                            key="qe-wait"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                            className="line-clamp-2 w-full text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                          >
+                            Wait for the current link to finish loading before queueing another
                           </motion.p>
                         )}
                       </AnimatePresence>
@@ -596,8 +645,14 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       )}
                       <button
                         type="button"
+                        disabled={d.storageBlocksNewDownloads}
+                        title={
+                          d.storageBlocksNewDownloads
+                            ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
+                            : undefined
+                        }
                         onClick={() => void d.handleQuickEnqueueFromClipboard()}
-                        className="group/qe pointer-events-auto mx-auto inline-flex h-9 max-w-9 shrink-0 items-center overflow-hidden rounded-lg border border-dotted border-[#EDD79C]/50 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[inset_0_2px_4px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,border-color] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:max-w-[min(280px,calc(100vw-3rem))] hover:border-[#EDD79C]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)]"
+                        className="group/qe pointer-events-auto mx-auto inline-flex h-9 max-w-9 shrink-0 items-center overflow-hidden rounded-lg border border-dotted border-[#EDD79C]/50 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[inset_0_2px_4px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,border-color] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:max-w-[min(280px,calc(100vw-3rem))] hover:border-[#EDD79C]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:max-w-9"
                         aria-label="Queue another from clipboard"
                       >
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center">
@@ -643,6 +698,30 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               className="line-clamp-2 w-full px-2 text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
                             >
                               Already in library — skipped
+                            </motion.p>
+                          )}
+                          {d.quickEnqueueHint === "storage_full" && (
+                            <motion.p
+                              key="qe-storage-c"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                              className="line-clamp-3 w-full px-2 text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                            >
+                              Library storage is full — free space in Settings or use an external folder
+                            </motion.p>
+                          )}
+                          {d.quickEnqueueHint === "wait_metadata" && (
+                            <motion.p
+                              key="qe-wait-c"
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                              className="line-clamp-2 w-full px-2 text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
+                            >
+                              Wait for the current link to finish loading before queueing another
                             </motion.p>
                           )}
                         </AnimatePresence>
@@ -720,8 +799,14 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           {d.showPrimaryDownload && (
                           <button
                             type="button"
+                            disabled={d.storageBlocksNewDownloads}
+                            title={
+                              d.storageBlocksNewDownloads
+                                ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
+                                : undefined
+                            }
                             onClick={d.handleDownloadClick}
-                            className="mx-auto flex items-center gap-3 rounded-full bg-[color:var(--accent)] px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.4em] text-stone-950 shadow-xl transition-all duration-300 hover:scale-105 hover:bg-white sm:gap-4 sm:px-12 sm:py-4 sm:text-xs"
+                            className="mx-auto flex items-center gap-3 rounded-full bg-[color:var(--accent)] px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.4em] text-stone-950 shadow-xl transition-all duration-300 hover:scale-105 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-[color:var(--accent)] sm:gap-4 sm:px-12 sm:py-4 sm:text-xs"
                           >
                             <Download size={14} />
                             Download
@@ -810,19 +895,26 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             : "Downloading Media"}
                         </motion.p>
                       </div>
-                      <div className="flex gap-2 w-full max-w-2xl mx-auto h-1 px-12">
-                        {[...Array(40)].map((_, i) => (
-                          <div key={i} className="flex-1 bg-white/[0.04] rounded-full overflow-hidden relative">
-                            <motion.div
-                              className="absolute inset-0 bg-[color:var(--accent)] shadow-[0_0_10px_var(--accent-glow)]"
-                              initial={false}
-                              animate={{
-                                opacity: (d.progress?.percentage || 0) >= (i / 40) * 100 ? 1 : 0,
-                                scaleY: (d.progress?.percentage || 0) >= (i / 40) * 100 ? 1 : 0.4,
-                              }}
-                            />
-                          </div>
-                        ))}
+                      <div className="relative w-full max-w-2xl mx-auto h-1 px-12">
+                        <div
+                          className="pointer-events-none absolute inset-0 rounded-full"
+                          aria-hidden
+                          style={{
+                            backgroundImage: `repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS}), transparent calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS}), transparent calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS} + ${BIG_PROGRESS_GAP_REM}rem))`,
+                          }}
+                        />
+                        <motion.div
+                          className={`absolute left-0 top-0 bottom-0 bg-[color:var(--accent)] shadow-[0_0_10px_var(--accent-glow)] origin-left ${
+                            bigProgressFilledSegs <= 0
+                              ? ""
+                              : bigProgressFilledSegs >= BIG_PROGRESS_SEGMENTS
+                                ? "rounded-full"
+                                : "rounded-l-full"
+                          }`}
+                          initial={false}
+                          animate={{ width: bigProgressFillWidth }}
+                          transition={{ duration: 0 }}
+                        />
                       </div>
                     </div>
                     {d.focusedJob?.metadata?.isPlaylist &&

@@ -1,10 +1,34 @@
 use tauri::menu::{Menu, MenuEvent, MenuItem, Submenu};
-use tauri::tray::{TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager};
+use tauri::tray::TrayIconBuilder;
+use tauri::{AppHandle, Emitter, EventTarget, Manager};
+
+/// Emitted to the **main** webview only. Handled in `App.tsx` using `@tauri-apps/api/webviewWindow`
+/// (`unminimize`, `show`, `setFocus`) — the same public API documented for the JS window layer.
+pub const TRAY_SHOW_MAIN_EVENT: &str = "ruforge:tray-show-main";
+
+/// Prints one line to **stderr** (visible in `tauri dev` / terminal). Used from the main webview
+/// so tray debugging does not rely on the browser console.
+#[tauri::command]
+pub fn tray_front_debug(line: String) {
+    eprintln!("[ruforge-tray] {line}");
+}
+
+fn request_show_main_from_tray(app: &AppHandle) {
+    eprintln!("[ruforge-tray] Rust: Show menu item matched, emitting `{TRAY_SHOW_MAIN_EVENT}` → main webview");
+    match app.emit_to(
+        EventTarget::webview_window("main"),
+        TRAY_SHOW_MAIN_EVENT,
+        (),
+    ) {
+        Ok(()) => eprintln!("[ruforge-tray] Rust: emit_to returned Ok"),
+        Err(e) => eprintln!("[ruforge-tray] Rust: emit_to FAILED: {e}"),
+    }
+}
 
 pub fn setup_tray(app: &tauri::App) -> Result<(), tauri::Error> {
     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
+    let show_menu_id = show_i.id().clone();
 
     let reload_i = MenuItem::with_id(app, "reload", "Reload Interface", true, None::<&str>)?;
     let toggle_gpu_i = MenuItem::with_id(
@@ -33,39 +57,30 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), tauri::Error> {
 
     let mut tray_builder = TrayIconBuilder::new()
         .menu(&menu)
-        .on_menu_event(|app: &AppHandle, event: MenuEvent| match event.id.as_ref() {
-            "quit" => {
-                app.exit(0);
+        .on_menu_event(move |app: &AppHandle, event: MenuEvent| {
+            if event.id == show_menu_id {
+                request_show_main_from_tray(app);
+                return;
             }
-            "show" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+            match event.id.as_ref() {
+                "quit" => {
+                    app.exit(0);
                 }
-            }
-            "reload" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.eval("location.reload()");
+                "reload" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval("location.reload()");
+                    }
                 }
-            }
-            "toggle_gpu" => {
-                app.exit(0);
-            }
-            "reset_data" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.eval("localStorage.clear(); location.reload();");
+                "toggle_gpu" => {
+                    app.exit(0);
                 }
-                app.exit(0);
-            }
-            _ => {}
-        })
-        .on_tray_icon_event(|tray: &TrayIcon, event: TrayIconEvent| {
-            if let TrayIconEvent::Click { .. } = event {
-                let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                "reset_data" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.eval("localStorage.clear(); location.reload();");
+                    }
+                    app.exit(0);
                 }
+                _ => {}
             }
         });
 

@@ -42,7 +42,7 @@ export { RUFORGE_INTERNAL_DIR } from "./types";
 export type RuforgeNotification = {
   id: number;
   message: string;
-  type?: "info" | "error" | "progress";
+  type?: "info" | "error" | "progress" | "warning";
 };
 
 export type GalleryContextMenuState = { path: string; x: number; y: number } | null;
@@ -145,6 +145,25 @@ export interface RuforgeStore extends DownloadQueueSlice {
   invalidateEntries: (opts?: { silent?: boolean }) => Promise<void>;
   setGalleryActiveMenu: (menu: GalleryContextMenuState) => void;
   setGalleryExtractingPath: (path: string | null) => void;
+}
+
+/** Pending `notify` auto-dismiss timers, keyed by notification id. */
+const notificationDismissTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+function forgetNotificationDismissTimer(id: number): void {
+  const handle = notificationDismissTimers.get(id);
+  if (handle !== undefined) {
+    clearTimeout(handle);
+    notificationDismissTimers.delete(id);
+  }
+}
+
+/** Clears all pending auto-dismiss timers (e.g. window unload, Vite HMR module dispose). */
+export function clearRuforgeNotificationDismissTimers(): void {
+  for (const handle of notificationDismissTimers.values()) {
+    clearTimeout(handle);
+  }
+  notificationDismissTimers.clear();
 }
 
 /** Monotonic token: only the latest `fetchEntries` run may write `entries` or clear `galleryLoading`. */
@@ -407,19 +426,22 @@ export const useRuforgeStore = create<RuforgeStore>()(
       notify: (message, type = "info") => {
         const id = Date.now() + Math.floor(Math.random() * 1000);
         set((s) => ({ notifications: [...s.notifications, { id, message, type }] }));
-        if (type === "info") {
-          setTimeout(() => {
+        if (type === "info" || type === "warning") {
+          const handle = setTimeout(() => {
             get().dismissNotification(id);
           }, 4000);
+          notificationDismissTimers.set(id, handle);
         } else if (type === "error") {
-          setTimeout(() => {
+          const handle = setTimeout(() => {
             get().dismissNotification(id);
           }, 10000);
+          notificationDismissTimers.set(id, handle);
         }
         return id;
       },
 
       dismissNotification: (id) => {
+        forgetNotificationDismissTimer(id);
         set((s) => ({
           notifications: s.notifications.filter((n) => n.id !== id),
         }));

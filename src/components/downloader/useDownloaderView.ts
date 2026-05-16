@@ -34,6 +34,9 @@ import {
   setYoutubeUrlDropHandler,
 } from "../../features/downloader/youtubeUrlDropRegistry";
 
+const STORAGE_FULL_NOTIFY =
+  "Library storage limit reached. Free space in Settings or switch to an external download folder.";
+
 export type DownloaderViewProps = {
   internalDir: string;
   storageFull: boolean;
@@ -48,6 +51,7 @@ export function useDownloaderView({
   onDownloadError,
 }: DownloaderViewProps) {
   const outputDir = useRuforgeStore((s) => s.outputDir);
+  const notify = useRuforgeStore((s) => s.notify);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
@@ -100,8 +104,9 @@ export function useDownloaderView({
   const duplicateChoiceResolverRef = useRef<((choice: DuplicateDownloadChoice) => void) | null>(null);
   const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
   const [replaceDialogMatch, setReplaceDialogMatch] = useState<DuplicateMatch | null>(null);
+  const storageBlocksNewDownloads = saveToInternal && storageFull;
   const [quickEnqueueHint, setQuickEnqueueHint] = useState<
-    null | "empty" | "conflict" | "library_skip"
+    null | "empty" | "conflict" | "library_skip" | "storage_full" | "wait_metadata"
   >(null);
   const [pinnedQuickEnqueueUrls, setPinnedQuickEnqueueUrls] = useState<string[]>([]);
   const [clipboardPastedHint, setClipboardPastedHint] = useState(false);
@@ -185,16 +190,20 @@ export function useDownloaderView({
     return "";
   }, [focusedJob, videoInfo]);
 
+  /** Mirrors `handleDownloadClick`: queue-row target uses row metadata hydration; divergent bar URL uses hero `videoInfo`. */
   const showPrimaryDownload = useMemo(() => {
     if (metadataLoading) return false;
     if (focusShowsBigProgress) return false;
     if (!focusedJob) {
       return Boolean(videoInfo && url.startsWith("http"));
     }
-    if (!url.trim()) {
+    const barTrimmed = url.trim();
+    const queueRowIsDownloadTarget =
+      !barTrimmed || youtubeUrlsMatch(url, focusedJob.url);
+    if (queueRowIsDownloadTarget) {
       return !downloadJobMediaNeedsHydration(focusedJob.metadata);
     }
-    return Boolean(videoInfo && youtubeUrlsMatch(url, focusedJob.url));
+    return Boolean(videoInfo && url.startsWith("http"));
   }, [videoInfo, metadataLoading, focusedJob, url, focusShowsBigProgress]);
 
   useEffect(() => {
@@ -219,6 +228,7 @@ export function useDownloaderView({
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
+    let disposed = false;
     const run = async () => {
       setYtdlpUpdateLoading(true);
       try {
@@ -230,7 +240,7 @@ export function useDownloaderView({
         setYtdlpUpdateLoading(false);
       }
 
-      unsub = await listen<YtdlpUpdateDownloadProgressPayload>(
+      const un = await listen<YtdlpUpdateDownloadProgressPayload>(
         "ytdlp-update-download-progress",
         (event) => {
           const payload = event.payload;
@@ -246,9 +256,15 @@ export function useDownloaderView({
           }
         },
       );
+      if (disposed) {
+        un();
+        return;
+      }
+      unsub = un;
     };
     void run();
     return () => {
+      disposed = true;
       unsub?.();
     };
   }, []);
@@ -307,7 +323,7 @@ export function useDownloaderView({
       meta?: { title?: string; approval: "auto" | "pending" | "held" },
     ) => {
       const s = settingsRef.current;
-      if (!targetUrl || (saveToInternal && storageFull)) return;
+      if (!targetUrl || storageBlocksNewDownloads) return;
       const outputPath = saveToInternal ? internalDir : outputDir;
       const options = buildDownloadJobOptions(s, outputPath, choice);
       const st = useRuforgeStore.getState();
@@ -331,7 +347,7 @@ export function useDownloaderView({
         approval,
       });
     },
-    [saveToInternal, storageFull, outputDir, internalDir, enqueueDownload],
+    [storageBlocksNewDownloads, outputDir, internalDir, enqueueDownload],
   );
 
   /** Turn the hero URL bar into a queued job when adding another URL, so the first link is not lost. */
@@ -342,9 +358,12 @@ export function useDownloaderView({
     if (st.downloadJobs.some((j) => youtubeUrlsMatch(j.url, staged))) return;
     const dupLib = findLibraryDuplicate(staged, st.entries);
     if (dupLib && settingsRef.current.skipDuplicatesAutomatically) return;
-    if (!st.videoInfo || st.metadataLoading) return;
+    if (!st.videoInfo || st.metadataLoading) {
+      setQuickEnqueueHint("wait_metadata");
+      return;
+    }
     enqueueDownloadOnly(staged, "replace", { approval: "held" });
-  }, [enqueueDownloadOnly]);
+  }, [enqueueDownloadOnly, setQuickEnqueueHint]);
 
   const runDownload = useCallback(
     (
@@ -378,7 +397,10 @@ export function useDownloaderView({
   );
 
   const handleDownloadClick = useCallback(async () => {
-    if (saveToInternal && storageFull) return;
+    if (storageBlocksNewDownloads) {
+      notify(STORAGE_FULL_NOTIFY, "warning");
+      return;
+    }
 
     const st0 = useRuforgeStore.getState();
     const barUrl = st0.url.trim();
@@ -458,8 +480,8 @@ export function useDownloaderView({
     runDownload,
     pumpDownloadQueue,
     releaseHeldDownloadJobs,
-    saveToInternal,
-    storageFull,
+    storageBlocksNewDownloads,
+    notify,
     promptDuplicateChoice,
   ]);
 
@@ -500,13 +522,17 @@ export function useDownloaderView({
   /** App.tsx switches `activeTab` before invoking (main-webview intake). */
   const handleDroppedYoutubeUrls = useCallback(
     async (urls: readonly string[]) => {
-      if (urls.length === 0 || (saveToInternal && storageFull)) return;
+      if (urls.length === 0) return;
+      if (storageBlocksNewDownloads) {
+        notify(STORAGE_FULL_NOTIFY, "warning");
+        return;
+      }
 
       const st = useRuforgeStore.getState();
       const mainEmpty = !st.url.trim();
 
       const enqueueViaQuickPath = async (videoUrl: string) => {
-        if (saveToInternal && storageFull) return;
+        if (storageBlocksNewDownloads) return;
 
         const s2 = useRuforgeStore.getState();
         if (urlConflictsWithActiveDownloader(videoUrl, s2.url, s2.downloadJobs)) {
@@ -553,8 +579,8 @@ export function useDownloaderView({
       }
     },
     [
-      saveToInternal,
-      storageFull,
+      storageBlocksNewDownloads,
+      notify,
       setDownloaderUrl,
       resolveDuplicate,
       enqueueDownloadOnly,
@@ -582,7 +608,10 @@ export function useDownloaderView({
   }, [replaceDialogOpen, setDownloaderDuplicateDialogOpenInStore]);
 
   const handleQuickEnqueueFromClipboard = useCallback(async () => {
-    if (saveToInternal && storageFull) return;
+    if (storageBlocksNewDownloads) {
+      setQuickEnqueueHint("storage_full");
+      return;
+    }
 
     const clipUrl = await readClipboardYouTubeUrl();
     if (!clipUrl) {
@@ -620,8 +649,7 @@ export function useDownloaderView({
     insertPinnedQuickEnqueueUrl(clipUrl);
     setQuickEnqueueHint(null);
   }, [
-    saveToInternal,
-    storageFull,
+    storageBlocksNewDownloads,
     resolveDuplicate,
     enqueueDownloadOnly,
     promptDuplicateChoice,
@@ -631,7 +659,11 @@ export function useDownloaderView({
 
   const requestDownload = useCallback(
     async (targetUrl: string) => {
-      if (!targetUrl || (saveToInternal && storageFull)) return;
+      if (!targetUrl) return;
+      if (storageBlocksNewDownloads) {
+        notify(STORAGE_FULL_NOTIFY, "warning");
+        return;
+      }
       const duplicate = await resolveDuplicate(targetUrl);
       if (!duplicate) {
         enqueueDownloadOnly(targetUrl, "replace", { approval: "auto" });
@@ -645,8 +677,8 @@ export function useDownloaderView({
       resolveDuplicate,
       enqueueDownloadOnly,
       pumpDownloadQueue,
-      saveToInternal,
-      storageFull,
+      storageBlocksNewDownloads,
+      notify,
       setDownloaderUrl,
     ],
   );
@@ -752,14 +784,18 @@ export function useDownloaderView({
         const dupLib = findLibraryDuplicate(prev, st0.entries);
         const skipDup = dupLib && settingsRef.current.skipDuplicatesAutomatically;
         if (!alreadyQueued && !skipDup && st0.videoInfo && !st0.metadataLoading) {
-          enqueueDownloadOnly(prev, "replace", { approval: "held" });
+          if (storageBlocksNewDownloads) {
+            notify(STORAGE_FULL_NOTIFY, "warning");
+          } else {
+            enqueueDownloadOnly(prev, "replace", { approval: "held" });
+          }
         }
       }
       setDownloaderUrl(value);
       setClipboardPastedHint(false);
       setClipboardOfferUrl(null);
     },
-    [setDownloaderUrl, enqueueDownloadOnly],
+    [setDownloaderUrl, enqueueDownloadOnly, storageBlocksNewDownloads, notify],
   );
 
   useEffect(() => {
@@ -858,6 +894,7 @@ export function useDownloaderView({
     anyDownloading,
     heroBackdropThumb,
     showPrimaryDownload,
+    storageBlocksNewDownloads,
     setDownloaderFocusedJobId,
     confirmPendingDownloadJob,
     subLangsForDisplay,

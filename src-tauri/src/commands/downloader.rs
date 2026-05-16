@@ -673,6 +673,42 @@ fn spawn_post_download_frame_extract(
     });
 }
 
+/// Cap stderr retained per job by dropping oldest lines from the front (UTF-8 safe).
+const DOWNLOAD_JOB_YTDLP_STDERR_LOG_MAX_BYTES: usize = 256 * 1024;
+
+fn ceil_utf8_char_boundary(s: &str, byte_idx: usize) -> usize {
+    let mut i = byte_idx.min(s.len());
+    while i < s.len() && !s.is_char_boundary(i) {
+        i += 1;
+    }
+    i
+}
+
+fn append_ytdlp_stderr_line_bounded(log: &mut String, line_bytes: &[u8], max_bytes: usize) {
+    let mut line = String::from_utf8_lossy(line_bytes).into_owned();
+    let mut additional = line.len().saturating_add(1);
+
+    if additional > max_bytes {
+        let keep = max_bytes.saturating_sub(1);
+        if line.len() > keep {
+            let drop = line.len() - keep;
+            let cut = ceil_utf8_char_boundary(&line, drop);
+            line.drain(..cut);
+        }
+        additional = line.len().saturating_add(1);
+    }
+
+    let target_prefix_len = max_bytes.saturating_sub(additional);
+    if log.len() > target_prefix_len {
+        let drop = log.len() - target_prefix_len;
+        let cut = ceil_utf8_char_boundary(log, drop);
+        log.drain(..cut);
+    }
+
+    log.push_str(&line);
+    log.push('\n');
+}
+
 #[tauri::command]
 pub async fn start_download_job(
     app: AppHandle,
@@ -682,25 +718,54 @@ pub async fn start_download_job(
     options: DownloadOptions,
     resume: bool,
 ) -> Result<(), String> {
-    if manager.active.lock().unwrap().contains_key(&job_id) {
-        return Err(format!("Job {} is already running", job_id));
-    }
+    manager.try_claim_active_job(&job_id)?;
 
-    let probe = yt_dlp_single_json_simulate(&app, &url, Some(&options)).await?;
+    let probe = match yt_dlp_single_json_simulate(&app, &url, Some(&options)).await {
+        Ok(p) => p,
+        Err(e) => {
+            manager.release_claim_if_pending(&job_id)?;
+            return Err(e);
+        }
+    };
     let filename_template_eff = yt_dlp_effective_filename_template(&probe, &options.filename_template);
 
     if let Err(e) = std::fs::create_dir_all(&options.output_dir) {
+        manager.release_claim_if_pending(&job_id)?;
         return Err(format!("Failed to create output directory: {}", e));
     }
 
-    let args = build_ytdlp_download_args(&app, &url, &options, &filename_template_eff, resume)?;
+    let args = match build_ytdlp_download_args(&app, &url, &options, &filename_template_eff, resume) {
+        Ok(a) => a,
+        Err(e) => {
+            manager.release_claim_if_pending(&job_id)?;
+            return Err(e);
+        }
+    };
 
-    let (mut rx, child) = ytdlp_shell_command(&app)?
-        .args(args)
-        .spawn()
-        .map_err(|e| format!("Failed to start yt-dlp download: {}", e))?;
+    let shell = match ytdlp_shell_command(&app) {
+        Ok(c) => c,
+        Err(e) => {
+            manager.release_claim_if_pending(&job_id)?;
+            return Err(e);
+        }
+    };
 
-    manager.insert_active(job_id.clone(), child);
+    let (mut rx, child) = match shell.args(args).spawn() {
+        Ok(pair) => pair,
+        Err(e) => {
+            manager.release_claim_if_pending(&job_id)?;
+            return Err(format!("Failed to start yt-dlp download: {}", e));
+        }
+    };
+
+    match manager.place_running_child(&job_id, child) {
+        Ok(Ok(())) => {}
+        Ok(Err(child)) => {
+            kill_ytdlp_tree(child);
+            return Err("Download job was cancelled before yt-dlp could start.".into());
+        }
+        Err(lock_err) => return Err(lock_err),
+    }
 
     let manager_bg = manager.inner().clone();
     tauri::async_runtime::spawn(async move {
@@ -775,19 +840,35 @@ pub async fn start_download_job(
                     }
                 }
                 CommandEvent::Stderr(line_bytes) => {
-                    error_log.push_str(&String::from_utf8_lossy(&line_bytes));
-                    error_log.push('\n');
+                    append_ytdlp_stderr_line_bounded(
+                        &mut error_log,
+                        &line_bytes,
+                        DOWNLOAD_JOB_YTDLP_STDERR_LOG_MAX_BYTES,
+                    );
                 }
                 CommandEvent::Terminated(payload) => {
-                    manager_bg.remove_active(&job_id);
+                    if let Err(e) = manager_bg.remove_active(&job_id) {
+                        log::error!("[RuForge] job {} remove_active: {}", job_id, e);
+                    }
 
-                    if manager_bg.take_paused(&job_id) {
+                    let paused = match manager_bg.take_paused(&job_id) {
+                        Ok(b) => b,
+                        Err(e) => {
+                            log::error!("[RuForge] job {} take_paused: {}", job_id, e);
+                            false
+                        }
+                    };
+                    if paused {
                         let _ = app.emit("download-job-paused", job_id.clone());
                         return;
                     }
 
                     if payload.code == Some(0) {
-                        log_post_download_files_written(&diag_root, download_started_at);
+                        let diag_root_log = diag_root.clone();
+                        let started_log = download_started_at;
+                        let _ = tokio::task::spawn_blocking(move || {
+                            log_post_download_files_written(&diag_root_log, started_log);
+                        });
                         spawn_post_download_frame_extract(
                             app.clone(),
                             url.clone(),
@@ -822,8 +903,17 @@ pub async fn start_download_job(
             }
         }
 
-        manager_bg.remove_active(&job_id);
-        if !manager_bg.take_paused(&job_id) {
+        if let Err(e) = manager_bg.remove_active(&job_id) {
+            log::error!("[RuForge] job {} remove_active (channel end): {}", job_id, e);
+        }
+        let paused = match manager_bg.take_paused(&job_id) {
+            Ok(b) => b,
+            Err(e) => {
+                log::error!("[RuForge] job {} take_paused (channel end): {}", job_id, e);
+                false
+            }
+        };
+        if !paused {
             let err = "Download process ended unexpectedly".to_string();
             log::error!("[RuForge] job {}: {}", job_id, err);
             let _ = app.emit(
@@ -845,8 +935,8 @@ pub async fn pause_download_job(
     manager: State<'_, DownloadJobManager>,
     job_id: String,
 ) -> Result<(), String> {
-    manager.mark_paused(&job_id);
-    if let Some(child) = manager.remove_active(&job_id) {
+    manager.mark_paused(&job_id)?;
+    if let Some(child) = manager.remove_active(&job_id)? {
         kill_ytdlp_tree(child);
         return Ok(());
     }

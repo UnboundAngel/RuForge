@@ -1,29 +1,107 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use tauri_plugin_shell::process::CommandChild;
 
+fn lock_active<'a>(
+    mutex: &'a Mutex<HashMap<String, ActiveSlot>>,
+) -> Result<MutexGuard<'a, HashMap<String, ActiveSlot>>, String> {
+    mutex
+        .lock()
+        .map_err(|e| format!("Download job activity lock poisoned: {}", e))
+}
+
+fn lock_paused<'a>(mutex: &'a Mutex<HashSet<String>>) -> Result<MutexGuard<'a, HashSet<String>>, String> {
+    mutex
+        .lock()
+        .map_err(|e| format!("Download job pause lock poisoned: {}", e))
+}
+
+enum ActiveSlot {
+    /// Reserved between atomic claim and successful `yt-dlp` spawn attach.
+    Pending,
+    Running(CommandChild),
+}
+
 #[derive(Clone, Default)]
 pub struct DownloadJobManager {
-    pub active: Arc<Mutex<HashMap<String, CommandChild>>>,
+    active: Arc<Mutex<HashMap<String, ActiveSlot>>>,
     pub user_paused: Arc<Mutex<HashSet<String>>>,
 }
 
 impl DownloadJobManager {
-    pub fn mark_paused(&self, job_id: &str) {
-        self.user_paused.lock().unwrap().insert(job_id.to_string());
+    pub fn mark_paused(&self, job_id: &str) -> Result<(), String> {
+        lock_paused(&self.user_paused)?.insert(job_id.to_string());
+        Ok(())
     }
 
-    pub fn take_paused(&self, job_id: &str) -> bool {
-        self.user_paused.lock().unwrap().remove(job_id)
+    pub fn take_paused(&self, job_id: &str) -> Result<bool, String> {
+        Ok(lock_paused(&self.user_paused)?.remove(job_id))
     }
 
-    pub fn remove_active(&self, job_id: &str) -> Option<CommandChild> {
-        self.active.lock().unwrap().remove(job_id)
+    /// True while any job is starting or a `yt-dlp` child is tracked (used to gate yt-dlp self-update).
+    pub fn has_active_downloads(&self) -> Result<bool, String> {
+        Ok(!lock_active(&self.active)?.is_empty())
     }
 
-    pub fn insert_active(&self, job_id: String, child: CommandChild) {
-        self.active.lock().unwrap().insert(job_id, child);
+    /// Atomically reserve `job_id` or fail if it is already starting/running.
+    pub fn try_claim_active_job(&self, job_id: &str) -> Result<(), String> {
+        use std::collections::hash_map::Entry;
+        let mut guard = lock_active(&self.active)?;
+        match guard.entry(job_id.to_string()) {
+            Entry::Vacant(v) => {
+                v.insert(ActiveSlot::Pending);
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(format!("Job {} is already running", job_id)),
+        }
+    }
+
+    /// Drop a `Pending` reservation (e.g. setup failed before spawn). No-op if absent or already running.
+    pub fn release_claim_if_pending(&self, job_id: &str) -> Result<(), String> {
+        let mut guard = lock_active(&self.active)?;
+        if matches!(guard.get(job_id), Some(ActiveSlot::Pending)) {
+            guard.remove(job_id);
+        }
+        Ok(())
+    }
+
+    /// Upgrade `Pending` → `Running`. If the claim was cleared (e.g. pause), returns `Ok(Err(child))` to kill.
+    /// Lock poisoning returns `Err(message)` after killing `child` (claim was never attached).
+    pub fn place_running_child(
+        &self,
+        job_id: &str,
+        child: CommandChild,
+    ) -> Result<Result<(), CommandChild>, String> {
+        let mut guard = match lock_active(&self.active) {
+            Ok(g) => g,
+            Err(e) => {
+                kill_ytdlp_tree(child);
+                return Err(e);
+            }
+        };
+        match guard.remove(job_id) {
+            Some(ActiveSlot::Pending) => {
+                guard.insert(job_id.to_string(), ActiveSlot::Running(child));
+                Ok(Ok(()))
+            }
+            Some(ActiveSlot::Running(old)) => {
+                guard.insert(job_id.to_string(), ActiveSlot::Running(old));
+                Ok(Err(child))
+            }
+            None => Ok(Err(child)),
+        }
+    }
+
+    pub fn remove_active(&self, job_id: &str) -> Result<Option<CommandChild>, String> {
+        let mut guard = lock_active(&self.active)?;
+        let Some(slot) = guard.remove(job_id) else {
+            return Ok(None);
+        };
+        Ok(match slot {
+            ActiveSlot::Running(c) => Some(c),
+            ActiveSlot::Pending => None,
+        })
     }
 }
 
