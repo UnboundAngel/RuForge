@@ -371,8 +371,8 @@ function App() {
   const onDownloadSuccess = useCallback(() => {
     notify("Complete");
     void notifyWhenUnfocused({
-      title: "RuForge",
-      body: "Download finished — your file is ready.",
+      body: "Download finished. Your file is ready.",
+      kind: "info",
     });
     void refreshStorageStats();
     const jobs = useRuforgeStore.getState().downloadJobs;
@@ -383,7 +383,12 @@ function App() {
   }, [notify, refreshStorageStats, setActiveTab]);
 
   const onDownloadError = useCallback((err: string) => {
-    notify(`Failed: ${err.split("\n")[0]}`);
+    const line = err.split("\n")[0];
+    notify(`Failed: ${line}`);
+    void notifyWhenUnfocused({
+      body: `Failed: ${line}`,
+      kind: "error",
+    });
   }, [notify]);
 
   const addLog = useCallback((msg: string) => {

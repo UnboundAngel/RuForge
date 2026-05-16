@@ -355,7 +355,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   <p className="text-xs font-semibold tracking-tight text-[#EDD79C]/85">
                     {d.ytdlpUpdateStatus?.latestVersion != null &&
                     d.ytdlpUpdateStatus.latestVersion !== ""
-                      ? `Release ${d.ytdlpUpdateStatus.latestVersion} is available — you're running ${d.ytdlpUpdateStatus.activeVersion}.`
+                      ? `Release ${d.ytdlpUpdateStatus.latestVersion} is available. You're on ${d.ytdlpUpdateStatus.activeVersion}.`
                       : `A newer yt-dlp release is available (current ${d.ytdlpUpdateStatus?.activeVersion ?? "unknown"}).`}
                   </p>
                   {d.ytdlpUpdateInvokeError != null ? (
@@ -534,7 +534,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
                             className="line-clamp-2 w-full text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
                           >
-                            Already in library — skipped (turn off Skip duplicates to choose)
+                            Already in library (skipped). Turn off Skip duplicates to choose.
                           </motion.p>
                         )}
                         {d.quickEnqueueHint === "storage_full" && (
@@ -546,7 +546,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
                             className="line-clamp-3 w-full text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
                           >
-                            Library storage is full — free space in Settings or use an external folder
+                            Library storage is full. Free space in Settings or use an external folder.
                           </motion.p>
                         )}
                         {d.quickEnqueueHint === "wait_metadata" && (
@@ -600,7 +600,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   {d.clipboardOfferUrl && (
                     <div className="pt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
                       <span className="text-[8px] font-black uppercase tracking-[0.2em] text-stone-500">
-                        Clipboard has a YouTube link —
+                        Clipboard has a YouTube link:
                       </span>
                       <button
                         type="button"
@@ -697,7 +697,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
                               className="line-clamp-2 w-full px-2 text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
                             >
-                              Already in library — skipped
+                              Already in library (skipped)
                             </motion.p>
                           )}
                           {d.quickEnqueueHint === "storage_full" && (
@@ -709,7 +709,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
                               className="line-clamp-3 w-full px-2 text-[8px] font-bold uppercase leading-snug tracking-[0.18em] text-stone-500"
                             >
-                              Library storage is full — free space in Settings or use an external folder
+                              Library storage is full. Free space in Settings or use an external folder.
                             </motion.p>
                           )}
                           {d.quickEnqueueHint === "wait_metadata" && (

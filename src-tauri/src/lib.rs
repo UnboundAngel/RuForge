@@ -19,6 +19,9 @@ use crate::commands::gallery::scan_gallery;
 use crate::commands::media::{
     delete_media, ensure_poster_if_missing, extract_frames, get_subtitle_tracks, read_local_subtitle_vtt,
 };
+use crate::commands::notify_overlay::{
+    hide_notify_overlay_window, notify_overlay_ready, push_background_notify, sync_notify_overlay_bounds,
+};
 use crate::commands::player::{
     eval_in_webview, get_embedded_explorer_webview_url, open_mini_player, open_youtube_explorer,
 };
@@ -33,21 +36,6 @@ use crate::commands::ytdlp_update::{
 };
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
 use crate::tray::{setup_tray, tray_front_debug, TRAY_SHOW_MAIN_EVENT};
-
-/// Windows toast header uses the parent process name in dev unless we set an explicit AppUserModelID.
-#[cfg(windows)]
-fn set_windows_notification_app_id(app_id: &str) {
-    use std::ffi::OsStr;
-    use std::os::windows::prelude::OsStrExt;
-
-    let wide: Vec<u16> = OsStr::new(app_id)
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-    unsafe {
-        windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID(wide.as_ptr());
-    }
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -65,16 +53,12 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--silently"])))
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_log::Builder::new().build())
         .setup(|app| {
-            #[cfg(windows)]
-            set_windows_notification_app_id(&app.config().identifier);
-
             let handle = app.handle().clone();
             warm_ytdlp_release_cache_spawn(handle.clone());
             tauri::async_runtime::spawn(async move {
@@ -138,7 +122,11 @@ pub fn run() {
             get_subtitle_tracks,
             read_local_subtitle_vtt,
             get_ytdlp_update_status,
-            download_ytdlp_update
+            download_ytdlp_update,
+            push_background_notify,
+            sync_notify_overlay_bounds,
+            hide_notify_overlay_window,
+            notify_overlay_ready
         ])
         .run(context)
         .expect("error while running tauri application");
