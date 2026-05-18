@@ -54,6 +54,12 @@ export function clampMaxConcurrentDownloads(n: unknown): number {
 export interface RuforgeSettings {
   launchAtStartup: boolean;
   minimizeToTray: boolean;
+  /** When true, yt-dlp extracts audio only (`-x`) using `downloadAudioFormat`. */
+  downloadAudioOnly: boolean;
+  /** When true, per-row audio toggles in the download queue also update `downloadAudioOnly`. */
+  rememberAudioOnlyDefault: boolean;
+  /** yt-dlp `--audio-format` (m4a, mp3, opus). */
+  downloadAudioFormat: string;
   preferredQuality: string;
   accentColor: string;
   gridDensity: string;
@@ -77,6 +83,9 @@ export interface RuforgeSettings {
 export const DEFAULT_SETTINGS: RuforgeSettings = {
   launchAtStartup: true,
   minimizeToTray: true,
+  downloadAudioOnly: false,
+  rememberAudioOnlyDefault: false,
+  downloadAudioFormat: "m4a",
   preferredQuality: "1080p (HD)",
   accentColor: "#EDCF9B",
   gridDensity: "Default",

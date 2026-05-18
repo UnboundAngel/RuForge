@@ -1,28 +1,76 @@
 import type { DuplicateDownloadChoice } from "./components/DuplicateDownloadDialog";
 import { DEFAULT_FILENAME_TEMPLATE, SAVE_AS_NEW_FILENAME_TEMPLATE } from "./duplicateDownload";
-import { ytdlpFormatFromPreferredQuality } from "./downloadFormat";
+import { normalizeYouTubeUrlForCompare } from "./youtubeUrl";
+import {
+  normalizeDownloadAudioFormat,
+  ytdlpFormatFromPreferredQuality,
+  ytdlpFormatFromSettings,
+} from "./downloadFormat";
 import type { PlaylistItem, ProgressPayload, VideoInfo } from "./types";
 import type { RuforgeSettings } from "./store/types";
 import { effectiveDownloadSubLangs } from "./store/types";
+import { downloadJobDualSizesReady } from "./downloadJobFileSizes";
 
 /** Snapshot from `get_video_info` at enqueue time; drives downloader hero while this job is active. */
 export interface DownloadJobMediaSnapshot {
   title: string;
   thumbnail: string;
   duration: number;
+  /** Active mode display size; derived from audio/video pair when both are known. */
   fileSizeBytes?: number | null;
+  fileSizeBytesAudio?: number | null;
+  fileSizeBytesVideo?: number | null;
   isPlaylist: boolean;
   playlistItems?: PlaylistItem[];
   uploader?: string | null;
   channel?: string | null;
 }
 
-export function videoInfoToDownloadJobSnapshot(info: VideoInfo): DownloadJobMediaSnapshot {
+/** Rebuild hero `VideoInfo` from a cached job snapshot (no yt-dlp round-trip). */
+export function downloadJobSnapshotToVideoInfo(snap: DownloadJobMediaSnapshot): VideoInfo {
+  return {
+    title: snap.title,
+    thumbnail: snap.thumbnail,
+    duration: snap.duration,
+    formats: [],
+    fileSizeBytes: snap.fileSizeBytes ?? null,
+    fileSizeBytesAudio: snap.fileSizeBytesAudio ?? null,
+    fileSizeBytesVideo: snap.fileSizeBytesVideo ?? null,
+    isPlaylist: snap.isPlaylist,
+    playlistItems: snap.playlistItems,
+    uploader: snap.uploader ?? null,
+    channel: snap.channel ?? null,
+  };
+}
+
+export function videoInfoToDownloadJobSnapshot(
+  info: VideoInfo,
+  audioOnly = false,
+): DownloadJobMediaSnapshot {
+  const audio =
+    typeof info.fileSizeBytesAudio === "number" && info.fileSizeBytesAudio > 0
+      ? info.fileSizeBytesAudio
+      : null;
+  const video =
+    typeof info.fileSizeBytesVideo === "number" && info.fileSizeBytesVideo > 0
+      ? info.fileSizeBytesVideo
+      : null;
+  const legacy =
+    typeof info.fileSizeBytes === "number" && info.fileSizeBytes > 0
+      ? info.fileSizeBytes
+      : null;
+  const fileSizeBytesAudio = audio ?? (audioOnly ? legacy : null);
+  const fileSizeBytesVideo = video ?? (!audioOnly ? legacy : null);
+  const fileSizeBytes = audioOnly
+    ? (fileSizeBytesAudio ?? legacy)
+    : (fileSizeBytesVideo ?? legacy);
   return {
     title: info.title,
     thumbnail: info.thumbnail ?? "",
     duration: info.duration,
-    fileSizeBytes: info.fileSizeBytes ?? null,
+    fileSizeBytes,
+    fileSizeBytesAudio,
+    fileSizeBytesVideo,
     isPlaylist: info.isPlaylist,
     playlistItems: info.playlistItems,
     uploader: info.uploader ?? undefined,
@@ -37,7 +85,7 @@ export function downloadJobMediaNeedsHydration(
   if (!m) return true;
   if (!String(m.title ?? "").trim()) return true;
   if (!String(m.thumbnail ?? "").trim()) return true;
-  if (m.fileSizeBytes === undefined) return true;
+  if (!downloadJobDualSizesReady(m)) return true;
   return false;
 }
 
@@ -63,6 +111,8 @@ export interface DownloadJobOptions {
   browserCookies: string;
   cookieFile: string;
   subLangs: string;
+  audioOnly: boolean;
+  audioFormat: string;
 }
 
 export interface DownloadJob {
@@ -110,6 +160,22 @@ export function downloadJobsQueueOrderFingerprint(jobs: DownloadJob[]): string {
   return `${multiset}\x1e${physical}`;
 }
 
+export function patchDownloadJobOptionsForAudio(
+  options: DownloadJobOptions,
+  audioOnly: boolean,
+  settings: RuforgeSettings,
+): DownloadJobOptions {
+  return {
+    ...options,
+    audioOnly,
+    format: audioOnly
+      ? "bestaudio/best"
+      : ytdlpFormatFromPreferredQuality(settings.preferredQuality),
+    subLangs: audioOnly ? "" : effectiveDownloadSubLangs(settings),
+    audioFormat: normalizeDownloadAudioFormat(settings.downloadAudioFormat),
+  };
+}
+
 export function buildDownloadJobOptions(
   settings: RuforgeSettings,
   outputDir: string,
@@ -119,16 +185,23 @@ export function buildDownloadJobOptions(
     choice === "create_new"
       ? SAVE_AS_NEW_FILENAME_TEMPLATE
       : DEFAULT_FILENAME_TEMPLATE;
-  return {
-    format: ytdlpFormatFromPreferredQuality(settings.preferredQuality),
-    outputDir,
-    filenameTemplate,
-    browserCookies:
-      settings.browserContext === "custom" ? "" : settings.browserContext,
-    cookieFile:
-      settings.browserContext === "custom" ? settings.cookieFile : "",
-    subLangs: effectiveDownloadSubLangs(settings),
-  };
+  const audioOnly = settings.downloadAudioOnly === true;
+  return patchDownloadJobOptionsForAudio(
+    {
+      format: ytdlpFormatFromSettings(settings),
+      outputDir,
+      filenameTemplate,
+      browserCookies:
+        settings.browserContext === "custom" ? "" : settings.browserContext,
+      cookieFile:
+        settings.browserContext === "custom" ? settings.cookieFile : "",
+      subLangs: "",
+      audioOnly: false,
+      audioFormat: normalizeDownloadAudioFormat(settings.downloadAudioFormat),
+    },
+    audioOnly,
+    settings,
+  );
 }
 
 export function toInvokeDownloadOptions(opts: DownloadJobOptions) {
@@ -139,20 +212,88 @@ export function toInvokeDownloadOptions(opts: DownloadJobOptions) {
     browser_cookies: opts.browserCookies,
     cookie_file: opts.cookieFile,
     sub_langs: opts.subLangs,
+    audio_only: opts.audioOnly,
+    audio_format: opts.audioFormat,
   };
 }
 
 function normalizePersistedDownloadJob(j: DownloadJob): DownloadJob | null {
   if (!j || typeof j.id !== "string" || typeof j.url !== "string") return null;
-  if (j.status !== "queued" && j.status !== "paused") return null;
+  if (
+    j.status !== "queued" &&
+    j.status !== "paused" &&
+    j.status !== "downloading"
+  ) {
+    return null;
+  }
+
+  /** yt-dlp does not survive a full app reload — show the row as paused until the user resumes. */
+  const wasActive = j.status === "downloading";
+  const status: DownloadJob["status"] = wasActive ? "paused" : j.status;
+
   let approval = j.approval;
   if (!approval) {
-    approval = j.status === "paused" ? "manual" : "held";
-  } else if (j.status === "queued" && approval === "auto") {
+    approval = status === "paused" ? "manual" : "held";
+  } else if (status === "queued" && approval === "auto") {
     /** Never auto-start a cold session from sessionStorage (pre-download queue). */
     approval = "held";
+  } else if (status === "paused" && approval === "auto") {
+    /** Paused / in-flight rows must not re-enter the auto pump on refresh. */
+    approval = "manual";
   }
-  return { ...j, approval };
+
+  const resumeOnStart =
+    wasActive || j.resumeOnStart === true ? true : Boolean(j.resumeOnStart);
+
+  const opts = j.options;
+  let options: DownloadJobOptions = {
+    ...opts,
+    audioOnly: opts?.audioOnly === true,
+    audioFormat: normalizeDownloadAudioFormat(opts?.audioFormat),
+  };
+  if (options.audioOnly) {
+    options = {
+      ...options,
+      format: "bestaudio/best",
+      subLangs: "",
+    };
+  }
+  return {
+    ...j,
+    status,
+    approval,
+    options,
+    resumeOnStart,
+    error: wasActive ? null : j.error,
+  };
+}
+
+function downloadJobUrlRank(j: DownloadJob): number {
+  if (j.status === "downloading") return 4;
+  if (j.status === "paused") return 3;
+  if (j.status === "queued") return 2;
+  return 1;
+}
+
+/** One queue row per video URL — keeps the most active / newest job. */
+export function collapseDownloadJobsByUrl(jobs: DownloadJob[]): DownloadJob[] {
+  const byUrl = new Map<string, DownloadJob>();
+  for (const j of jobs) {
+    const key = normalizeYouTubeUrlForCompare(j.url);
+    const prev = byUrl.get(key);
+    if (!prev) {
+      byUrl.set(key, j);
+      continue;
+    }
+    const keep =
+      downloadJobUrlRank(j) > downloadJobUrlRank(prev) ||
+      (downloadJobUrlRank(j) === downloadJobUrlRank(prev) &&
+        j.createdAt >= prev.createdAt)
+        ? j
+        : prev;
+    byUrl.set(key, keep);
+  }
+  return jobs.filter((j) => byUrl.get(normalizeYouTubeUrlForCompare(j.url)) === j);
 }
 
 export function loadPersistedDownloadJobs(): DownloadJob[] {
@@ -161,18 +302,35 @@ export function loadPersistedDownloadJobs(): DownloadJob[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as DownloadJob[];
     if (!Array.isArray(parsed)) return [];
-    return parsed
+    const normalized = parsed
       .map((j) => normalizePersistedDownloadJob(j as DownloadJob))
       .filter((j): j is DownloadJob => j != null);
+    return collapseDownloadJobsByUrl(normalized);
   } catch {
     return [];
   }
 }
 
+/** Store bootstrap: restored queue + a sensible hero focus (no pump). */
+export function loadInitialDownloadQueueState(): {
+  downloadJobs: DownloadJob[];
+  focusedJobId: string | null;
+} {
+  const downloadJobs = loadPersistedDownloadJobs();
+  const focusedJobId =
+    downloadJobs.find((j) => j.status === "paused")?.id ??
+    downloadJobs.find((j) => j.status === "queued")?.id ??
+    null;
+  return { downloadJobs, focusedJobId };
+}
+
 export function persistDownloadJobs(jobs: DownloadJob[]) {
   try {
     const toSave = jobs.filter(
-      (j) => j.status === "queued" || j.status === "paused",
+      (j) =>
+        j.status === "queued" ||
+        j.status === "paused" ||
+        j.status === "downloading",
     );
     if (toSave.length === 0) {
       sessionStorage.removeItem(SESSION_QUEUE_KEY);

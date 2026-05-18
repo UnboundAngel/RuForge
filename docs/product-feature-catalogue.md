@@ -1,6 +1,6 @@
 # RuForge — Product feature catalogue (source-verified)
 
-**Generated from implementation** (React/TypeScript + Tauri v2). `docs/RuForge.md` and `AGENTS.md` are hints only; this document reflects what the code actually does as of inventory date **2026-05-16**.
+**Generated from implementation** (React/TypeScript + Tauri v2). `docs/RuForge.md` and `AGENTS.md` are hints only; this document reflects what the code actually does as of inventory date **2026-05-18** (**shipping `0.1.4`**).
 
 **Tier legend**
 
@@ -35,7 +35,8 @@
 - **Videos tab search bulge** — Expandable “Search library…” field; Escape collapses. `src/App.tsx` · **Headline**
 - **Explorer “Open in Browser” bulge** — Opens `lastExplorerUrl` in system default browser via `open_external_url`. `src/App.tsx` · **Minor**
 - **In-app toast notifications** — Bottom-right stack: types `info`/`warning` (4s), `error` (10s), `progress` (no auto-dismiss). `src/store/ruforgeStore.ts` (`notify`), `src/App.tsx` · **Headline**
-- **Storage widget (sidebar)** — Shows used GB vs limit when internal storage target; “Authorize Cleanup” when full. `src/App.tsx` (`StorageWidget`), `src/store/ruforgeStore.ts` · **Headline**
+- **Storage widget (sidebar)** — Shows used GB vs limit when internal storage target; “Authorize Cleanup” when full opens the cleanup modal (internal vault only). `src/App.tsx` (`StorageWidget`), `src/store/ruforgeStore.ts` · **Headline**
+- **Authorize Cleanup modal** — Full-screen overlay when internal storage is at cap: filter **oldest unwatched** (default), **oldest watched**, or **least watched**; checklist grid shows **watch %** + **size** (not title-heavy cards); pre-selects enough rows to reach **~75%** of the storage cap; user can deselect (warning if freed space may be insufficient); batch delete via `delete_media_batch` + playback/loop sidecar cleanup. `src/components/AuthorizeCleanupModal.tsx`, `src/cleanupCandidates.ts`, `src-tauri/src/commands/media.rs` · **Headline**
 - **Legacy `GalleryView.tsx`** — Alternate gallery UI; **not imported** by `App.tsx`. `src/components/GalleryView.tsx` · **Incidental** · **Half-wired** (dead UI)
 
 ---
@@ -52,13 +53,7 @@
 - **Quick-enqueue pinned chips** — Removable chips for URLs added via quick enqueue. `DownloaderView.tsx` (`QuickEnqueuePinnedChip`) · **Minor**
 - **Auto-stage previous URL** — Changing URL bar to different `http` link while metadata loaded auto-enqueues previous URL as **held** (unless duplicate in queue or auto-skip library duplicate). `useDownloaderView.ts` · **Minor**
 - **Global drag-and-drop** — Same enqueue rules as quick enqueue; may stage current bar first. `src/App.tsx`, `useUrlDropIntake.ts`, `dropIntake.ts`, `youtubeUrlDropRegistry` · **Headline**
-- **Explorer floating button** — On YouTube watch pages: “Source Found / Direct Download” → `manual-download-trigger`. `src/explorerInjectScript.ts` · **Headline**
-- **Explorer context menu: Download video** — Same as floating button (`manual-download-trigger`). `explorerInjectScript.ts`, `App.tsx` · **Headline**
-- **Explorer context menu: Send to downloader** — Fills downloader URL + switches to Download tab (metadata only, no queue). `explorerInjectScript.ts`, `App.tsx` · **Headline**
-- **Explorer context menu: Copy link / Copy video ID** — Clipboard + toast. `explorerInjectScript.ts`, `App.tsx` · **Minor**
-- **Explorer titlebar queue button** — Add/remove watch URL as **held**; duplicate skip when setting on. `ExplorerWatchQueueButton.tsx` · **Headline**
-- **`manual-download-trigger` path** — Auto-enqueue when no library duplicate; auto-skip silent; else **only sets URL** (no duplicate dialog). `useDownloaderView.ts` (`requestDownload`), `App.tsx` · **Headline** · **Half-wired** (duplicate dialog not shown from Explorer direct download)
-- **Duplicate `manual-download-trigger` listeners** — Both `App.tsx` (tab switch) and `useDownloaderView.ts` (`requestDownload`) subscribe. `App.tsx`, `useDownloaderView.ts` · **Incidental**
+- **Explorer titlebar queue button** — Add/remove current watch URL as **held**; duplicate skip when setting on; storage-full gate. `ExplorerWatchQueueButton.tsx` · **Headline** (sole Explorer → queue intake; inject script removed)
 - **Browser / cookie strip (idle Download tab)** — Internal (RuForge explorer profile), Firefox, Edge, Safari, Brave, custom cookie file, None. `downloaderConstants.ts` (`BROWSER_OPTIONS`), `DownloaderView.tsx` · **Headline**
 - **Default browser context `chrome`** — Persisted default but **not listed** in downloader strip UI until user picks an option; downloads still use `--cookies-from-browser chrome`. `src/store/types.ts` (`DEFAULT_SETTINGS`), `downloader.rs` · **Minor** · **Half-wired** (UI/default mismatch)
 - **Custom cookie file picker** — `.txt` via Tauri dialog when “Cookies” selected. `useDownloaderView.ts` · **Minor**
@@ -73,6 +68,7 @@
 - **Replace filename template** — `%(title)s.%(ext)s` · **Create new** — `%(title)s [%(id)s].%(ext)s`. `duplicateDownload.ts` · **Minor**
 - **Playlist detection on Download** — If hero metadata is playlist with resolvable watch URLs, enqueues each video (deduped); else single playlist URL for yt-dlp. `useDownloaderView.ts` (`handleDownloadClick`) · **Headline**
 - **Hero subtitle hint** — When download subtitles enabled: “Enqueued Captions” + language label. `DownloaderView.tsx`, `types.ts` (`downloadSubtitleLangLabel`) · **Minor**
+- **Hero / library file size display** — Approx download size on hero and on-disk size on library rows via `formatStorageSize` (whole **MB** / **GB**, **round up**, no decimals). `src/formatStorageSize.ts`, `downloaderFormat.ts`, `MediaView.tsx`, `PlaylistDetailView.tsx`; Rust `get_video_info` prefers format-matched `clen` / `requested_downloads` over inflated max-format fallback. · **Headline**
 - **Hero metadata without cookies** — `get_video_info` uses no cookie options; age-restricted preview may fail while download with cookies might work. `src-tauri/src/commands/downloader.rs` · **Incidental** · **Half-wired**
 
 ### Download queue
@@ -93,8 +89,8 @@
 - **Orphan metadata hydrate** — Thin queue rows re-fetch `get_video_info` on load. `downloadQueueSlice.ts`, `downloadQueueMetadataCache.ts` · **Minor**
 - **Queue panel hides when “done”** — When all jobs `completed` or `failed`, panel hidden (completed/failed rows not shown). `DownloadJobQueuePanel.tsx` (`queuePanelShouldShow`) · **Minor**
 - **URL conflict detection** — Blocks enqueue if URL matches main field or active queue job. `downloaderUrlConflict.ts`, `useDownloaderView.ts` · **Minor**
-- **Post-download: switch to Videos + notify** — When job finishes and nothing left active, `activeTab` → `media`, toast, unfocused OS notify. `App.tsx` (`onDownloadSuccess`) · **Headline**
-- **Download progress events** — `download-progress` (%, speed, ETA, playlist index/title, bytes), `download-job-finished`, `download-job-paused`. Rust `downloader.rs`; listeners in `useDownloaderView.ts` · **Headline**
+- **Post-download: switch to Videos + notify** — When job finishes and nothing left active, `activeTab` → `media`; single in-app “Complete” toast + unfocused overlay notify (deduped per `jobId`). `downloadQueueSlice.ts` (`onDownloadJobFinished`), `App.tsx` (IPC only) · **Headline**
+- **Download progress events** — `download-progress` (%, speed, ETA, playlist index/title, bytes), `download-job-finished`, `download-job-paused`. Rust `downloader.rs`; **one** app-level listener registration in `App.tsx` (stable refs, mount once) · **Headline**
 - **Playlist progress in queue UI** — `DownloadQueueItem` carousel for multi-item playlist jobs. `DownloadJobQueuePanel.tsx` · **Minor**
 
 ### Format, output & backend download behavior
@@ -123,7 +119,7 @@
 ### Downloader errors & notifications
 
 - **Download failure toast + overlay** — Truncated error line; unfocused notify. `App.tsx`, `downloadQueueSlice.ts` · **Headline**
-- **Success toast** — “Complete”; refreshes storage stats. `App.tsx` · **Headline**
+- **Success toast** — “Complete”; refreshes storage stats; at most once per finished job. `downloadQueueSlice.ts` · **Headline**
 - **Auto-skip duplicate toast** — “Duplicate detected, skipping per user settings.” `useDownloaderView.ts` · **Minor**
 - **yt-dlp update errors in banner** — Invoke error or `checkError` from status. `DownloaderView.tsx` · **Minor**
 
@@ -172,6 +168,7 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 | `audioPrefetchNext` | Prefetch next audio | Toggle | **true** | Hidden `<audio preload="auto">` for next **folder** track when audio-only. | **Minor** |
 | *(none)* | ReplayGain / loudness normalization | Static “Not shipped” | N/A | No-op placeholder. | **Incidental** |
 | `hardwareAcceleration` | Hardware Acceleration | Toggle | **true** (+ Rust disk pref sync on load) | Toggle → `set_hardware_acceleration_pref` → **app relaunch**; WebView2 extra args. | **Headline** |
+| — | Check for updates | Button “CHECK NOW” | — | Emits `ruforge-check-updater`; `runUpdateCheck()` → toast for up-to-date / available / error; shows installed version. `src/updaterCheck.ts`, `App.tsx`, `SettingsView.tsx` | **Headline** |
 | — | Cycle Updater UI | Button “CYCLE PHASES” | — | Emits `debug-cycle-updater` for dev updater walkthrough. | **Incidental** |
 | — | Clear Cache | “PURGE SYSTEM CACHE” | — | `clear_ruforge_cache` (ffprobe cache dir); toast with count. | **Minor** |
 
@@ -193,7 +190,8 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 | `lastExplorerUrl` | `https://www.youtube.com` | No (session) | Explorer URL mirror + Open in Browser. | **Minor** |
 | `volume` | **0.8** | `miniplayer-volume` | Player volume 0–1. | **Headline** |
 | `isMuted` | false | No | Session mute. | **Minor** |
-| `isLooping` | **false** | `miniplayer-loop` | Player + main store loop. | **Headline** |
+| `isLooping` | per file | `ruforge-loop:{path}` | Loop preference is **per video path** (`playbackLoopStorage.ts`); main store mirrors current file. | **Headline** |
+| playback speed | session | `ruforge-playback-speed` | Shared main ↔ mini via `playbackSpeedStorage.ts`. | **Headline** |
 | `miniplayer-pinned` | **false** | yes | Mini always-on-top. | **Minor** |
 | `ruforge-subtitle-drag-y` | unset | yes | Subtitle overlay vertical offset. | **Minor** |
 | `views-{path}` | 0 | per file | Play count on library cards (separate from watch progress). | **Incidental** |
@@ -246,7 +244,7 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 
 ### Loop & auto-advance
 
-- **Loop toggle** — UI + `media.loop` + **L**; skips end handler when on. · **Headline**
+- **Loop toggle** — UI + `media.loop` + **L**; persisted **per file path** (`playbackLoopStorage.ts`); switching videos loads that file’s saved loop state. · **Headline**
 - **On end (no loop)** — Write full duration to playback storage; advance per settings. · **Headline**
 - **Advance order (main)** — `folderAudioPlaylist` → library-wide sorted list (audio vs video list by file type). · **Headline**
 - **Folder playlist auto-fill** — Scans same directory for same kind (audio/video) when playing file. `App.tsx` · **Headline**
@@ -272,17 +270,22 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 
 - **Separate window** — Label `mini`; undecorated, transparent; dynamic create. `player.rs`, `MiniPlayer.tsx` · **Headline**
 - **Own `playingFile` state** — Not main Zustand store. · **Headline**
+- **Single active player** — Pop-out: main clears `playingFile`, hands off time/volume/mute/speed via `play-in-mini` (`playerHandoff.ts`); play in main closes mini (`handlePlayFile`). Only one side unpaused at a time. `ruforgeStore.ts`, `MiniPlayer.tsx`, `App.tsx` · **Headline**
+- **Seamless pop-out / pop-back** — `PlayInMiniPayload` / `SendToMainPayload` carry `startTime`, `paused`, `playbackSpeed`, volume, mute; resume guarded to avoid repeat seeks on `loadedmetadata`. · **Headline**
 - **Cross-window events** — `play-media`, `play-in-mini`, `stop-playback`, `send-to-main`, `mini-player-ready`. · **Headline**
-- **Resume** — `readResumeSeconds` or handoff `startTime`. · **Headline**
+- **Resume** — Handoff time or `readResumeSeconds`; scrub click seeks immediately with `seeked`-gated progress (no bounce). · **Headline**
 - **Pin always-on-top** — `miniplayer-pinned`. · **Minor**
 - **Back to app** — `send-to-main`, focus main, close mini. · **Headline**
 - **Media selector + bottom strip** — Empty state = scrollable library grid. · **Headline**
 - **Playlist strip plays first item only** — Not full playlist queue. · **Half-wired**
-- **Compact mode (&lt;340px or &lt;300px height)** — Smaller chrome; subtitle tracks/hook inactive. · **Headline**
+- **Expanded vs compact layout** — `isSmallMode` when width &lt; 450px or height &lt; 300px. · **Headline**
+- **Ambient video backdrop (expanded only)** — Blurred sampled backdrop via `useVideoAmbientBackdrop` (same hook family as main player); **not** shown in compact mini. · **Headline**
+- **Dynamic accent in compact mode** — `extractProminentColor` from cover/poster (skips pure black/white; samples video in first ~30s when needed); tints compact chrome text/UI. · **Headline**
 - **Audio compact UI** — Waveform animation, cover, scrub, loop. · **Minor**
-- **Dynamic accent from poster** — + settings accent. · **Minor**
+- **Subtitles** — Full overlay when not compact; disabled in compact mini. · **Minor**
+- **Per-path loop** — `readLoopForPath` / `writeLoopForPath` (`playbackLoopStorage.ts`), aligned with main. · **Headline**
+- **Shared playback speed** — `playbackSpeedStorage.ts` with main. · **Minor**
 - **Own gallery scan** — Duplicates store logic; reads `ruforge-output-dir` + hardcoded internal path. · **Incidental**
-- **Loop local state** — Writes `miniplayer-loop` but not Zustand `setLooping` (same LS key as main). · **Half-wired**
 - **Advance: full-library sorted list** — Not folder scan; uses `readAudioAutoAdvanceFolder`. · **Headline** (differs from main)
 - **Keyboard** — Space, ←/→ ±15s; **no** input guard. · **Minor**
 - **View counter** — `views-{path}` on select. · **Incidental**
@@ -342,22 +345,23 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 
 ## Explorer webview
 
-- **Embedded child webview** — Label `explorer-view` on main window; positioned by 1s poll when Explorer tab active; hidden otherwise. `App.tsx` · **Headline**
+- **Embedded child webview** — Label `explorer-view` on main window; positioned/sized when Explorer tab active; hidden otherwise. `App.tsx`, `explorerWebviewLifecycle.ts` · **Headline**
+- **Layout sync** — `ResizeObserver` on explorer container + window `resize` + Tauri `onResized` + sidebar expand/collapse re-sync webview bounds (not 1s poll only). `App.tsx` · **Headline**
+- **Pause on tab leave** — `eval_in_webview` runs `EXPLORER_PAUSE_MEDIA_SCRIPT` (HTML5 + `pauseVideo`) so audio does not continue in background. · **Headline**
+- **Reload on tab enter** — One-shot reload/navigate when entering Explorer (`explorerReloadPendingRef` + `explorerNavigateOrReloadScript`) so returning users get a fresh page without a reload loop. · **Headline**
 - **Default / session URL** — Store `lastExplorerUrl` (default YouTube home); updated by **800ms** poll `get_embedded_explorer_webview_url` while tab active. **Not persisted** across restarts. · **Minor**
-- **Inject script on create** — Accent-colored floating button + context menu; reinject **not** tied to accent setting changes. `explorerInjectScript.ts`, `App.tsx` · **Half-wired** (accent reinject)
-- **Watch-page floating download** — See Downloader intake. · **Headline**
-- **Context menu on video area only** — `#movie_player`, `ytd-player`, etc. · **Minor**
-- **YouTube URL polling in inject** — 1s interval + `yt-navigate-finish`. · **Incidental**
+- **Titlebar “add to queue”** — Only shipped Explorer → downloader intake (see Downloader). `ExplorerWatchQueueButton.tsx` · **Headline**
 - **Open in Browser** — External browser for current mirrored URL. · **Minor**
 - **Cookie profile for yt-dlp** — `explorer-data/EBWebView/Default` when browser = Internal. · **Headline** (downloader enabler)
 - **Shimmer placeholder** — Under webview while loading. `App.tsx` · **Incidental**
 - **Explorer debug logging** — `addLog` → `tray_front_debug` / stderr only. · **Incidental**
 
-### Not shipped on embedded Explorer
+### Removed / not shipped on embedded Explorer
 
+- **`explorerInjectScript.ts`** — **Removed** (floating pill, right-click download/send-to-downloader were unreliable on YouTube). No reinject path. · **Incidental** (historical)
 - **uBlock extension** — Bundled under `src-tauri/extensions/ublock/` but only loaded in **unused** `open_youtube_explorer` standalone command. · **Half-wired**
 - **Standalone explorer window** — `open_youtube_explorer` registered in Rust, **never called** from frontend. · **Half-wired**
-- **`explorer-url` event listener** — Only standalone script emits; embedded uses polling. `App.tsx` · **Half-wired**
+- **`explorer-url` event listener** — Legacy; embedded uses URL polling. `App.tsx` · **Half-wired**
 
 ---
 
@@ -381,12 +385,13 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 ### Auto-updater
 
 - **Plugin config** — `tauri.conf.json` `plugins.updater`; capabilities `updater:allow-check`, `updater:allow-download-and-install`. · **Headline**
-- **Startup check** — `check()` on main mount; drives phases `idle` | `available` | `downloading` | `installing`. `App.tsx` · **Headline**
+- **Startup + manual check** — `runUpdateCheck()` on main mount; Settings **Check for updates** re-runs with user-visible toasts. `src/updaterCheck.ts`, `App.tsx` · **Headline**
+- **`updater.json` contract** — Requires per-platform `signature` (minisign `.sig` contents) + `url`; must match uploaded release asset bytes. Repo root `updater.json` · **Headline** (release ops)
 - **Teaser card** — Top-right, `line-clamp-3`, markdown teaser from `teaserNotesFromUpdaterBody`. `UpdaterLayers.tsx` (`UpdaterMainOverlays`) · **Headline**
 - **Titlebar badge** — See shell. · **Minor**
 - **Full-screen update UI** — During download/install. `UpdaterFullWindowUpdate` · **Headline**
 - **Post-install notes** — Structured JSON or markdown via `updatePostInstall.ts`; categorized additions/fixes with Iconify slugs. · **Headline**
-- **Install + restart** — `downloadAndInstall`, `setPendingPostInstall`. · **Headline**
+- **Install + restart** — `downloadAndInstall`, `setPendingPostInstall`; does not toast “Update failed” if install reached `Finished` then app exits (installer success). `App.tsx` · **Headline**
 - **Rust startup check** — Also calls `updater.check()` in `lib.rs` but **println only** (no UI). · **Incidental** · **Half-wired**
 - **`onDismiss` on teaser** — Prop passed but **no dismiss button** in overlay component. · **Half-wired**
 - **Debug: click full-screen update UI** — Emits `debug-cycle-updater`. · **Incidental**
@@ -399,7 +404,7 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 - **Autostart** — `@tauri-apps/plugin-autostart`. · **Headline**
 - **Open external URL** — Explorer “Open in Browser”. · **Minor**
 - **Open Windows sound settings** — Player + Mini audio troubleshooting. · **Minor**
-- **Authorize cleanup** — Deletes oldest files in internal vault until **2 GB** free target. `authorize_cleanup` · **Headline**
+- **Authorize cleanup (modal)** — User-driven batch delete from internal vault (see App shell); legacy `authorize_cleanup` Rust command still exists but UI uses `delete_media_batch`. · **Headline**
 - **Clear ffprobe cache** — Settings Advanced. · **Minor**
 
 ---
@@ -409,7 +414,7 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 | Behavior | Where | Notes |
 |----------|-------|-------|
 | Queue row Enter/Space focus | `DownloadJobQueuePanel.tsx` | Accessibility |
-| Explorer inject Escape closes menu | `explorerInjectScript.ts` | |
+| ~~Explorer inject Escape closes menu~~ | Removed with `explorerInjectScript.ts` | Historical |
 | Gallery search Escape collapses | `App.tsx` | |
 | Notification timer cleanup on unload/HMR | `main.tsx`, `ruforgeStore.ts` | |
 | Persist storage diff skip on identical snapshot | `ruforgePersistStorage.ts` | Reduces LS writes during search typing |
@@ -417,6 +422,10 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 | `stop-playback` event | `App.tsx`, `MiniPlayer.tsx` | Cross-window stop |
 | Mini re-emits `play-in-mini` on `mini-player-ready` | `ruforgeStore.ts` | Handoff race fix (5s timeout) |
 | Download metadata cache | `downloadQueueMetadataCache.ts` | Session metadata for queue rows |
+| Download-finished notify dedupe | `downloadQueueSlice.ts` | `claimDownloadFinishedUserNotify(jobId)` |
+| Storage size formatting | `formatStorageSize.ts` | Round-up MB/GB for hero + library |
+| Explorer pause/reload scripts | `explorerWebviewLifecycle.ts` | Tab lifecycle |
+| Player handoff payloads | `playerHandoff.ts` | Main ↔ mini time/volume/speed |
 | YouTube URL normalization/compare | `youtubeUrl.ts` | Dedup, duplicates, conflicts |
 | Titlebar hover tooltips | `TitlebarHoverButton.tsx` | |
 | Custom dropdown component in Settings | `SettingsView.tsx` (`CustomSelect`) | |
@@ -433,7 +442,6 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 |-------|----------|
 | Hero `get_video_info` ignores cookies | `downloader.rs` — simulate with `None` |
 | Default `browserContext: "chrome"` not in downloader strip | `types.ts` vs `BROWSER_OPTIONS` |
-| Explorer direct download skips duplicate dialog | `requestDownload` only `setDownloaderUrl` |
 | Narrow layout hides center URL field | `DownloaderView.tsx` `min-[700px]` |
 | `GalleryView.tsx` unused | Not in `App.tsx` |
 | uBlock not on embedded Explorer | Only `open_youtube_explorer` |
@@ -442,16 +450,16 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 | Tray reset doesn’t clear explorer profile | `localStorage` only |
 | Auto-advance setting name vs video advance | `PlayerView.tsx`, `MiniPlayer.tsx` |
 | Mini vs main advance semantics differ | Folder scan vs library sort |
-| Mini loop/volume vs Zustand | Same LS keys, no live sync |
 | Mini playlist strip first item only | `MiniPlayer.tsx` |
+| Legacy `authorize_cleanup` command unused by UI | Modal uses `delete_media_batch` |
+| Cleanup modal visuals | Logic shipped; Jim pass optional on `AuthorizeCleanupModal.tsx` |
 | `onSubtitleToggle`, `openPath` unused in PlayerView | Props/imports |
 | `handlePlayFolderNeighbor` no UI | `ruforgeStore.ts` |
 | `clearPlaybackPos` no UI | `playbackStorage.ts` |
 | Playlist row ⋮ no menu | `PlaylistDetailView.tsx` |
 | Player audio copy mentions Open in Browser without control | `PlayerView.tsx` |
 | Updater teaser `onDismiss` unused | `UpdaterLayers.tsx` |
-| Explorer accent not reinjected on change | `App.tsx` effect deps |
-| Duplicate `manual-download-trigger` handlers | `App.tsx` + `useDownloaderView.ts` |
+| ~~Explorer inject / manual-download-trigger~~ | **Removed** `explorerInjectScript.ts` (2026-05-18) |
 
 ---
 
@@ -465,9 +473,11 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 | Player | `src/components/PlayerView.tsx`, `src/playbackStorage.ts`, `src/useSubtitleCueOverlay.ts` |
 | Mini | `src/MiniPlayer.tsx` |
 | Library | `src/components/MediaView.tsx`, `src/components/PlaylistDetailView.tsx` |
-| Explorer | `src/explorerInjectScript.ts`, `src/components/ExplorerWatchQueueButton.tsx` |
+| Explorer | `src/explorerWebviewLifecycle.ts`, `src/components/ExplorerWatchQueueButton.tsx` |
+| Cleanup | `src/components/AuthorizeCleanupModal.tsx`, `src/cleanupCandidates.ts` |
 | Settings | `src/components/SettingsView.tsx` |
-| Updater | `src/components/UpdaterLayers.tsx`, `src/updatePostInstall.ts`, `updater.json` |
+| Updater | `src/components/UpdaterLayers.tsx`, `src/updatePostInstall.ts`, `src/updaterCheck.ts`, `updater.json` |
+| Handoff / playback prefs | `src/playerHandoff.ts`, `src/playbackLoopStorage.ts`, `src/playbackSpeedStorage.ts`, `src/formatStorageSize.ts` |
 | Tauri | `src-tauri/src/lib.rs`, `commands/downloader.rs`, `commands/gallery.rs`, `commands/player.rs`, `commands/ytdlp_update.rs`, `tray.rs` |
 
 ---

@@ -4,6 +4,7 @@ import { Icon } from "@iconify/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { setMiniWindowFocused } from "./appWindowFocus";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import logo from "./assets/neotubeIcon.png";
 import {
@@ -507,15 +508,23 @@ export default function MiniPlayer() {
   useEffect(() => {
     const win = getCurrentWindow();
     
-    const onBlur = () => setIsFocused(false);
-    const onFocus = () => setIsFocused(true);
+    const onBlur = () => {
+      setIsFocused(false);
+      setMiniWindowFocused(false);
+    };
+    const onFocus = () => {
+      setIsFocused(true);
+      setMiniWindowFocused(true);
+    };
 
     window.addEventListener("focus", onFocus);
     window.addEventListener("blur", onBlur);
 
     const unlistenFocus = win.onFocusChanged(({ payload: focused }) => {
       setIsFocused(focused);
+      setMiniWindowFocused(focused);
     });
+    void win.isFocused().then((f) => setMiniWindowFocused(f));
 
     return () => { 
       window.removeEventListener("focus", onFocus);

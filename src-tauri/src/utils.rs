@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 pub const THUMB_DIR_NAME: &str = ".ruforge_thumbs";
 pub const POSTER_FILE: &str = "poster.jpg";
-pub const MEDIA_EXTS: &[&str] = &["mp4", "mkv", "webm", "mp3", "m4a", "flac"];
+pub const MEDIA_EXTS: &[&str] = &["mp4", "mkv", "webm", "mp3", "m4a", "flac", "opus", "ogg"];
 
 #[inline]
 pub fn is_media_ext(ext: &str) -> bool {

@@ -11,17 +11,20 @@ import {
   Paperclip,
   Check,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { DuplicateDownloadDialog } from "./DuplicateDownloadDialog";
 import { downloadSubtitleLangLabel } from "../store/types";
 import { formatApproxFileSize, formatDuration } from "./downloader/downloaderFormat";
-import { BROWSER_OPTIONS } from "./downloader/downloaderConstants";
+import { BROWSER_OPTIONS, downloadProgressPhaseLabel } from "./downloader/downloaderConstants";
 import {
+  DownloadJobAudioToggle,
   DownloadJobQueuePanel,
   DownloadQueueItem,
   UrlInputPacer,
 } from "./downloader/DownloadJobQueuePanel";
 import { downloadJobMediaNeedsHydration } from "../downloadQueue";
+import { downloadJobDisplayFileSizeBytes } from "../downloadJobFileSizes";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
 import { normalizeYouTubeUrlForCompare, youtubeUrlsMatch } from "../youtubeUrl";
 
@@ -37,11 +40,13 @@ function MainDownloaderUrlChip({
   copied,
   onCopy,
   onClear,
+  audioWarning = false,
 }: {
   url: string;
   copied: boolean;
   onCopy: () => void | Promise<void>;
   onClear: () => void;
+  audioWarning?: boolean;
 }) {
   const [chipHovered, setChipHovered] = useState(false);
   const [copyHovered, setCopyHovered] = useState(false);
@@ -58,84 +63,115 @@ function MainDownloaderUrlChip({
       }}
     >
       <div
-        className={`flex overflow-hidden rounded-lg border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-          chipHovered ? "max-w-[min(380px,calc(100vw-3rem))]" : "max-w-9"
+        className={`flex overflow-hidden rounded-lg transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+          audioWarning
+            ? "border border-dotted border-yellow-400/50 bg-yellow-400/10 text-yellow-400"
+            : "border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)]"
+        } backdrop-blur-md ${
+          audioWarning || chipHovered ? "max-w-[min(380px,calc(100vw-3rem))]" : "max-w-9"
         }`}
       >
-        <button
-          type="button"
-          onClick={() => void onCopy()}
-          onMouseEnter={() => setCopyHovered(true)}
-          onMouseLeave={() => setCopyHovered(false)}
-          className="relative flex min-w-0 flex-1 items-center overflow-hidden text-left"
-          aria-label="Copy link"
-        >
-          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
-            <span
-              className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-                copyHovered ? "opacity-100" : "opacity-0"
-              }`}
-              role="tooltip"
+        <AnimatePresence mode="wait" initial={false}>
+          {audioWarning ? (
+            <motion.div
+              key="audio-warn-inner"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={CLIP_ICON_TRANSITION}
+              className="flex h-9 items-center gap-2 px-3 whitespace-nowrap"
             >
-              Click to copy
-            </span>
-            <AnimatePresence mode="wait" initial={false}>
-              {copied ? (
-                <motion.span
-                  key="main-ok"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={CLIP_ICON_TRANSITION}
-                  className="absolute inset-0 flex items-center justify-center"
+              <AlertTriangle size={12} strokeWidth={3} className="shrink-0" />
+              <span className="text-[8px] font-black uppercase tracking-wider">
+                Download time increased - Download size decreased
+              </span>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="normal-inner"
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={CLIP_ICON_TRANSITION}
+              className="flex flex-1 min-w-0"
+            >
+              <button
+                type="button"
+                onClick={() => void onCopy()}
+                onMouseEnter={() => setCopyHovered(true)}
+                onMouseLeave={() => setCopyHovered(false)}
+                className="relative flex min-w-0 flex-1 items-center overflow-hidden text-left"
+                aria-label="Copy link"
+              >
+                <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+                  <span
+                    className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
+                      copyHovered ? "opacity-100" : "opacity-0"
+                    }`}
+                    role="tooltip"
+                  >
+                    Click to copy
+                  </span>
+                  <AnimatePresence mode="wait" initial={false}>
+                    {copied ? (
+                      <motion.span
+                        key="main-ok"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={CLIP_ICON_TRANSITION}
+                        className="absolute inset-0 flex items-center justify-center"
+                      >
+                        <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
+                      </motion.span>
+                    ) : (
+                      <motion.span
+                        key="main-cl"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={CLIP_ICON_TRANSITION}
+                        className="absolute inset-0 flex items-center justify-center"
+                      >
+                        <Paperclip size={14} strokeWidth={2} />
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </span>
+                <span
+                  className={`min-w-0 flex-1 truncate whitespace-nowrap py-2 text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                    chipHovered ? "px-2 opacity-100" : "opacity-0"
+                  }`}
                 >
-                  <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
-                </motion.span>
-              ) : (
-                <motion.span
-                  key="main-cl"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={CLIP_ICON_TRANSITION}
-                  className="absolute inset-0 flex items-center justify-center"
+                  {url}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClear();
+                }}
+                onMouseEnter={() => setClearHovered(true)}
+                onMouseLeave={() => setClearHovered(false)}
+                className={`relative flex h-9 shrink-0 items-center justify-center overflow-hidden text-[#EDD79C]/40 transition-[opacity,width,padding,color] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#EDD79C] ${
+                  chipHovered ? "pointer-events-auto w-8 opacity-100" : "pointer-events-none w-0 min-w-0 opacity-0"
+                }`}
+                aria-label="Clear link"
+              >
+                <span
+                  className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
+                    clearHovered && chipHovered ? "opacity-100" : "opacity-0"
+                  }`}
+                  role="tooltip"
                 >
-                  <Paperclip size={14} strokeWidth={2} />
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </span>
-          <span
-            className={`min-w-0 flex-1 truncate whitespace-nowrap py-2 text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-              chipHovered ? "px-2 opacity-100" : "opacity-0"
-            }`}
-          >
-            {url}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClear();
-          }}
-          onMouseEnter={() => setClearHovered(true)}
-          onMouseLeave={() => setClearHovered(false)}
-          className={`relative flex h-9 shrink-0 items-center justify-center overflow-hidden text-[#EDD79C]/40 transition-[opacity,width,padding,color] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#EDD79C] ${
-            chipHovered ? "pointer-events-auto w-8 opacity-100" : "pointer-events-none w-0 min-w-0 opacity-0"
-          }`}
-          aria-label="Clear link"
-        >
-          <span
-            className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-              clearHovered && chipHovered ? "opacity-100" : "opacity-0"
-            }`}
-            role="tooltip"
-          >
-            Clear link
-          </span>
-          <X size={12} strokeWidth={2.5} />
-        </button>
+                  Clear link
+                </span>
+                <X size={12} strokeWidth={2.5} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -280,18 +316,28 @@ export const DownloaderView = (props: DownloaderViewProps) => {
           const title =
             rawTitle ||
             (needs ? "Loading…" : (d.focusedJob!.url || "Video").trim());
+          const jobAudioOnly = d.focusedJob!.options.audioOnly === true;
           const heroInfoMatchesJob =
             d.videoInfo &&
             !d.metadataLoading &&
-            youtubeUrlsMatch(d.url, d.focusedJob!.url);
+            youtubeUrlsMatch(d.url, d.focusedJob!.url) &&
+            jobAudioOnly === (d.settings.downloadAudioOnly === true);
           const fileSizeBytes =
-            typeof m?.fileSizeBytes === "number" && m.fileSizeBytes > 0
-              ? m.fileSizeBytes
-              : heroInfoMatchesJob &&
-                  typeof d.videoInfo!.fileSizeBytes === "number" &&
-                  d.videoInfo!.fileSizeBytes > 0
-                ? d.videoInfo!.fileSizeBytes
-                : null;
+            downloadJobDisplayFileSizeBytes(m, jobAudioOnly) ??
+            (heroInfoMatchesJob
+              ? downloadJobDisplayFileSizeBytes(
+                  {
+                    title: d.videoInfo!.title,
+                    thumbnail: d.videoInfo!.thumbnail,
+                    duration: d.videoInfo!.duration,
+                    isPlaylist: d.videoInfo!.isPlaylist,
+                    fileSizeBytes: d.videoInfo!.fileSizeBytes ?? null,
+                    fileSizeBytesAudio: d.videoInfo!.fileSizeBytesAudio ?? null,
+                    fileSizeBytesVideo: d.videoInfo!.fileSizeBytesVideo ?? null,
+                  },
+                  jobAudioOnly,
+                )
+              : null);
           return {
             title,
             duration: m?.duration ?? 0,
@@ -304,7 +350,19 @@ export const DownloaderView = (props: DownloaderViewProps) => {
         ? {
             title: d.videoInfo.title,
             duration: d.videoInfo.duration,
-            fileSizeBytes: d.videoInfo.fileSizeBytes ?? null,
+            fileSizeBytes:
+              downloadJobDisplayFileSizeBytes(
+                {
+                  title: d.videoInfo.title,
+                  thumbnail: d.videoInfo.thumbnail,
+                  duration: d.videoInfo.duration,
+                  isPlaylist: d.videoInfo.isPlaylist,
+                  fileSizeBytes: d.videoInfo.fileSizeBytes ?? null,
+                  fileSizeBytesAudio: d.videoInfo.fileSizeBytesAudio ?? null,
+                  fileSizeBytesVideo: d.videoInfo.fileSizeBytesVideo ?? null,
+                },
+                d.settings.downloadAudioOnly === true,
+              ) ?? null,
             isPlaylist: d.videoInfo.isPlaylist,
             playlistItems: d.videoInfo.playlistItems,
           }
@@ -472,6 +530,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       copied={d.urlBubbleCopied}
                       onCopy={() => void d.handleUrlClipCopy()}
                       onClear={d.handleClearUrl}
+                      audioWarning={d.showAudioWarning}
                     />
                   )}
 
@@ -756,7 +815,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
                         className="text-center space-y-2 sm:space-y-6"
                       >
-                        <h2 className="text-xl sm:text-4xl lg:text-6xl font-black text-white leading-[0.9] tracking-tighter line-clamp-2 px-4 max-h-[1.8em] overflow-hidden">
+                        <h2 className="text-xl sm:text-4xl lg:text-6xl font-black text-white leading-[1.08] sm:leading-[1.1] tracking-tighter line-clamp-2 px-4 pb-0.5">
                           {idleHero.title}
                         </h2>
                         <div className="hidden min-[600px]:flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-8 gap-y-2 text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--accent)] opacity-60">
@@ -808,21 +867,32 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               </p>
                             </div>
                           )}
-                          {d.showPrimaryDownload && (
-                          <button
-                            type="button"
-                            disabled={d.storageBlocksNewDownloads}
-                            title={
-                              d.storageBlocksNewDownloads
-                                ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
-                                : undefined
-                            }
-                            onClick={d.handleDownloadClick}
-                            className="mx-auto flex items-center gap-3 rounded-full bg-[color:var(--accent)] px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.4em] text-stone-950 shadow-xl transition-all duration-300 hover:scale-105 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-[color:var(--accent)] sm:gap-4 sm:px-12 sm:py-4 sm:text-xs"
-                          >
-                            <Download size={14} />
-                            Download
-                          </button>
+                          {(d.showHeroAudioToggle || d.showPrimaryDownload) && (
+                            <div className="mx-auto flex flex-wrap items-center justify-center gap-3">
+                              {d.showHeroAudioToggle && (
+                                <DownloadJobAudioToggle
+                                  audioOnly={d.heroAudioOnly}
+                                  onToggle={d.toggleHeroAudio}
+                                  className="scale-110 sm:scale-125"
+                                />
+                              )}
+                              {d.showPrimaryDownload && (
+                                <button
+                                  type="button"
+                                  disabled={d.storageBlocksNewDownloads}
+                                  title={
+                                    d.storageBlocksNewDownloads
+                                      ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
+                                      : undefined
+                                  }
+                                  onClick={d.handleDownloadClick}
+                                  className="flex items-center gap-3 rounded-full bg-[color:var(--accent)] px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.4em] text-stone-950 shadow-xl transition-all duration-300 hover:scale-105 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-[color:var(--accent)] sm:gap-4 sm:px-12 sm:py-4 sm:text-xs"
+                                >
+                                  <Download size={14} />
+                                  Download
+                                </button>
+                              )}
+                            </div>
                           )}
                         </motion.div>
                         {idleHero.isPlaylist && idleHero.playlistItems && (
@@ -902,9 +972,10 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           animate={{ opacity: 1 }}
                           className="text-[11px] font-black text-[color:var(--accent)] uppercase tracking-[1em] text-center ml-[1em] opacity-60"
                         >
-                          {d.focusedJob?.metadata?.isPlaylist
-                            ? "Downloading Collection"
-                            : "Downloading Media"}
+                          {downloadProgressPhaseLabel(
+                            d.progress,
+                            d.focusedJob?.metadata?.isPlaylist,
+                          )}
                         </motion.p>
                       </div>
                       <div className="relative w-full max-w-2xl mx-auto h-1 px-12">

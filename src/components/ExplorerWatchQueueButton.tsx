@@ -18,7 +18,7 @@ import {
   titlebarIconButtonClass,
   titlebarTooltipClassName,
 } from "./TitlebarHoverButton";
-import { notifyWhenUnfocused } from "../systemNotify";
+import { deliverUserNotification } from "../systemNotify";
 
 const STORAGE_FULL_NOTIFY =
   "Library storage limit reached. Free space in Settings or switch to an external download folder.";
@@ -144,8 +144,10 @@ export function ExplorerWatchQueueButton({
     }
     if (storageBlocksNewDownloads) {
       flashLeftHint("storage");
-      notify(STORAGE_FULL_NOTIFY, "warning");
-      void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
+      void deliverUserNotification(
+        { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
+        notify,
+      );
       return;
     }
     if (settings.skipDuplicatesAutomatically) {

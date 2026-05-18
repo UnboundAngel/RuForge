@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { motion } from "motion/react";
+import { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Clock,
   Pause,
@@ -18,11 +18,19 @@ import {
   type DownloadJob,
 } from "../../downloadQueue";
 import { useRuforgeStore } from "../../store/ruforgeStore";
-import { DOWNLOAD_JOB_STATUS_LABEL, RF_DOWNLOADER_PANEL } from "./downloaderConstants";
+import {
+  DOWNLOAD_JOB_STATUS_LABEL,
+  downloadProgressPhaseLabel,
+  RF_DOWNLOADER_PANEL,
+} from "./downloaderConstants";
+import { downloadJobDisplayFileSizeBytes } from "../../downloadJobFileSizes";
 import { formatApproxFileSize } from "./downloaderFormat";
 
 function formatQueueApproxSize(job: DownloadJob): string | null {
-  const bytes = job.metadata?.fileSizeBytes;
+  const bytes = downloadJobDisplayFileSizeBytes(
+    job.metadata,
+    job.options.audioOnly === true,
+  );
   if (typeof bytes !== "number" || bytes <= 0) return null;
   const label = formatApproxFileSize(Math.round(bytes));
   return label ? `~${label}` : null;
@@ -32,9 +40,13 @@ function formatQueueTransferText(job: DownloadJob): string | null {
   if (job.status !== "downloading" || !job.progress) return null;
   const p = job.progress;
   const totalFromProgress = typeof p.totalBytes === "number" && p.totalBytes > 0 ? p.totalBytes : null;
+  const displayBytes = downloadJobDisplayFileSizeBytes(
+    job.metadata,
+    job.options.audioOnly === true,
+  );
   const totalFromMeta =
-    typeof job.metadata?.fileSizeBytes === "number" && job.metadata.fileSizeBytes > 0
-      ? Math.round(job.metadata.fileSizeBytes)
+    typeof displayBytes === "number" && displayBytes > 0
+      ? Math.round(displayBytes)
       : null;
   const total = totalFromProgress ?? totalFromMeta;
   let downloaded =
@@ -111,6 +123,69 @@ export function UrlInputPacer({
   );
 }
 
+/** Shared per-job audio toggle (queue row + downloader hero). */
+export function DownloadJobAudioToggle({
+  audioOnly,
+  onToggle,
+  disabled = false,
+  className = "",
+}: {
+  audioOnly: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const [audioHovered, setAudioHovered] = useState(false);
+  return (
+    <motion.div className={`relative ${className}`}>
+      <QueueTooltip
+        text={audioOnly ? "Audio + video" : "Audio only"}
+        visible={audioHovered && !disabled}
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        onMouseEnter={() => setAudioHovered(true)}
+        onMouseLeave={() => setAudioHovered(false)}
+        onClick={onToggle}
+        aria-pressed={audioOnly}
+        aria-label={audioOnly ? "Switch to video download" : "Switch to audio-only download"}
+        className={`flex h-[26px] w-[26px] items-center justify-center rounded-md p-1.5 text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95 disabled:pointer-events-none disabled:opacity-25 ${
+          audioOnly
+            ? "bg-[color:var(--accent)] text-[#1D1613] hover:bg-[color-mix(in_srgb,var(--accent),white_12%)]"
+            : "text-[#EDD79C]/35 hover:bg-white/5 hover:text-[#EDD79C]/70"
+        }`}
+      >
+        A
+      </button>
+    </motion.div>
+  );
+}
+
+const QueueTooltip = ({ text, visible }: { text: string; visible: boolean }) => (
+  <AnimatePresence mode="wait">
+    {visible && (
+      <motion.div
+        initial={{ opacity: 0, y: 5, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 2, scale: 0.98 }}
+        transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-[#1D1613]/95 px-2.5 py-1.5 text-[10px] font-bold font-mono text-[#EDD79C] shadow-2xl backdrop-blur-md"
+      >
+        <motion.span
+          key={text}
+          initial={{ opacity: 0, filter: "blur(4px)" }}
+          animate={{ opacity: 1, filter: "blur(0px)" }}
+          exit={{ opacity: 0, filter: "blur(2px)" }}
+          transition={{ duration: 0.15 }}
+        >
+          {text}
+        </motion.span>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
 const QueueIconButton = ({
   icon: Icon,
   onClick,
@@ -123,21 +198,28 @@ const QueueIconButton = ({
   variant?: "ghost" | "accent";
   tooltip: string;
   disabled?: boolean;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    title={tooltip}
-    className={`rounded-md p-1.5 transition-colors active:scale-95 disabled:pointer-events-none disabled:opacity-25 ${
-      variant === "accent"
-        ? "text-[color:var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent),transparent_92%)]"
-        : "text-[#EDD79C]/35 hover:bg-white/5 hover:text-[#EDD79C]/70"
-    }`}
-  >
-    <Icon size={14} strokeWidth={2} />
-  </button>
-);
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  return (
+    <div className="relative">
+      <QueueTooltip text={tooltip} visible={isHovered && !disabled} />
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        className={`rounded-md p-1.5 transition-colors active:scale-95 disabled:pointer-events-none disabled:opacity-25 ${
+          variant === "accent"
+            ? "text-[color:var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent),transparent_92%)]"
+            : "text-[#EDD79C]/35 hover:bg-white/5 hover:text-[#EDD79C]/70"
+        }`}
+      >
+        <Icon size={14} strokeWidth={2} />
+      </button>
+    </div>
+  );
+};
 
 function queuePanelShouldShow(jobs: DownloadJob[]): boolean {
   if (jobs.length === 0) return false;
@@ -156,6 +238,7 @@ const DownloadJobRow = ({
   onRetry,
   onRemove,
   onReorder,
+  onToggleAudio,
 }: {
   job: DownloadJob;
   index: number;
@@ -168,11 +251,14 @@ const DownloadJobRow = ({
   onRetry: (id: string) => void;
   onRemove: (id: string) => void | Promise<void>;
   onReorder: (from: number, to: number) => void;
+  onToggleAudio: (id: string, audioOnly: boolean) => void;
 }) => {
   const pct = job.progress?.percentage;
   const pendingApproval = job.status === "queued" && job.approval === "pending";
   const canReorder = job.status === "queued" || job.status === "paused";
+  const canEditAudio = canReorder;
   const canRemove = ["queued", "paused", "failed", "completed"].includes(job.status);
+  const audioOnly = job.options.audioOnly === true;
   const isFocused = focusedJobId === job.id;
   const statusTone =
     job.status === "downloading"
@@ -211,7 +297,9 @@ const DownloadJobRow = ({
         ? `${DOWNLOAD_JOB_STATUS_LABEL[job.status]} · manual`
         : job.status === "queued" && job.approval === "held"
           ? `${DOWNLOAD_JOB_STATUS_LABEL[job.status]} · staged`
-          : DOWNLOAD_JOB_STATUS_LABEL[job.status];
+          : job.status === "downloading"
+            ? downloadProgressPhaseLabel(job.progress, job.metadata?.isPlaylist)
+            : DOWNLOAD_JOB_STATUS_LABEL[job.status];
   return (
     <motion.li
       role="button"
@@ -254,7 +342,7 @@ const DownloadJobRow = ({
             )}
           </motion.div>
           <motion.div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className={`inline-flex items-center gap-1 text-[9px] font-medium tracking-wide ${statusTone}`}>
+            <span className={`inline-flex items-center gap-1 text-[9px] font-bold tracking-wide ${statusTone}`}>
               <StatusIcon
                 size={11}
                 strokeWidth={2}
@@ -263,13 +351,16 @@ const DownloadJobRow = ({
               {statusLabel}
             </span>
             {transferLabel != null && (
-              <span className="text-[9px] tabular-nums text-[#EDD79C]/30">{transferLabel}</span>
+              <span className="text-[9px] font-bold tabular-nums text-[#EDD79C]/30">{transferLabel}</span>
             )}
             {approxSizeLabel != null && (
-              <span className="text-[9px] tabular-nums text-[#EDD79C]/30">{approxSizeLabel}</span>
+              <span className="text-[9px] font-bold tabular-nums text-[#EDD79C]/30">{approxSizeLabel}</span>
             )}
+            <span className="text-[9px] font-bold text-[#EDD79C]/30">
+              {" · "}{audioOnly ? "audio" : "video"}
+            </span>
             {job.error && (
-              <p className="max-w-[14rem] truncate text-[9px] text-[#EDD79C]/30" title={job.error}>
+              <p className="max-w-[14rem] truncate text-[9px] font-bold text-[#EDD79C]/30" title={job.error}>
                 {job.error}
               </p>
             )}
@@ -307,6 +398,12 @@ const DownloadJobRow = ({
           role="presentation"
           onKeyDown={(e) => e.stopPropagation()}
         >
+          {canEditAudio && (
+            <DownloadJobAudioToggle
+              audioOnly={audioOnly}
+              onToggle={() => onToggleAudio(job.id, !audioOnly)}
+            />
+          )}
           {job.status === "downloading" && (
             <QueueIconButton icon={Pause} onClick={() => void onPause(job.id)} tooltip="Pause" />
           )}
@@ -397,6 +494,7 @@ export const DownloadJobQueuePanel = () => {
   const retryDownloadJob = useRuforgeStore((s) => s.retryDownloadJob);
   const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
   const reorderDownloadJobs = useRuforgeStore((s) => s.reorderDownloadJobs);
+  const setDownloadJobAudioOnly = useRuforgeStore((s) => s.setDownloadJobAudioOnly);
   if (!queuePanelShouldShow(jobsRaw)) return null;
   return (
     <motion.div
@@ -425,6 +523,7 @@ export const DownloadJobQueuePanel = () => {
             onRetry={retryDownloadJob}
             onRemove={removeDownloadJob}
             onReorder={reorderDownloadJobs}
+            onToggleAudio={setDownloadJobAudioOnly}
           />
         ))}
       </ul>

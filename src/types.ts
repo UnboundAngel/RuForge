@@ -49,18 +49,23 @@ export interface VideoInfo {
   duration: number;
   formats: any[];
   fileSizeBytes?: number | null;
+  fileSizeBytesAudio?: number | null;
+  fileSizeBytesVideo?: number | null;
   isPlaylist: boolean;
   playlistItems?: PlaylistItem[];
   uploader?: string | null;
   channel?: string | null;
 }
 
+/** Live yt-dlp phase on `download-progress` IPC; `DownloadJob.status` stays `downloading` until finished. */
+export type DownloadProgressPhase = "downloading" | "processing";
+
 export interface ProgressPayload {
   jobId: string;
   percentage: number;
   speed: string;
   eta: string;
-  status: string;
+  status: DownloadProgressPhase | string;
   currentIndex?: number;
   totalItems?: number;
   currentItemTitle?: string;
@@ -112,7 +117,10 @@ export function normalizeProgressPayload(
     percentage,
     speed: raw.speed ?? "",
     eta: raw.eta ?? "",
-    status: raw.status ?? "downloading",
+    status:
+      raw.status === "processing" || raw.status === "downloading"
+        ? raw.status
+        : "downloading",
     currentIndex,
     totalItems,
     currentItemTitle: raw.currentItemTitle,

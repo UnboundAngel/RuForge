@@ -7,8 +7,16 @@ import { useRuforgeStore } from "../../store/ruforgeStore";
 import {
   buildDownloadJobOptions,
   downloadJobMediaNeedsHydration,
+  downloadJobSnapshotToVideoInfo,
+  patchDownloadJobOptionsForAudio,
   videoInfoToDownloadJobSnapshot,
 } from "../../downloadQueue";
+import { mergeVideoInfoFileSizes, snapshotWithResolvedFileSize } from "../../downloadJobFileSizes";
+import {
+  commitDownloadJobMetadataCache,
+  downloadJobMetadataCacheKey,
+  peekDownloadJobMetadataCache,
+} from "../../downloadQueueMetadataCache";
 import { effectiveDownloadSubLangs } from "../../store/types";
 import { readClipboardYouTubeUrl } from "../../downloaderClipboardYoutube";
 import { findLibraryDuplicate, type DuplicateMatch } from "../../duplicateDownload";
@@ -30,7 +38,7 @@ import {
   type YoutubeUrlDropHandler,
   setYoutubeUrlDropHandler,
 } from "../../features/downloader/youtubeUrlDropRegistry";
-import { notifyWhenUnfocused } from "../../systemNotify";
+import { deliverUserNotification } from "../../systemNotify";
 import { ytdlpFormatFromPreferredQuality } from "../../downloadFormat";
 
 const STORAGE_FULL_NOTIFY =
@@ -67,6 +75,8 @@ export function useDownloaderView({
   const queueHydrateOrphanMetadata = useRuforgeStore((s) => s.queueHydrateOrphanMetadata);
   const pumpDownloadQueue = useRuforgeStore((s) => s.pumpDownloadQueue);
   const releaseHeldDownloadJobs = useRuforgeStore((s) => s.releaseHeldDownloadJobs);
+  const resumeDownloadJob = useRuforgeStore((s) => s.resumeDownloadJob);
+  const setDownloadJobAudioOnly = useRuforgeStore((s) => s.setDownloadJobAudioOnly);
   const videoInfo = useRuforgeStore((s) => s.videoInfo);
   const setVideoInfo = useRuforgeStore((s) => s.setVideoInfo);
   const metadataError = useRuforgeStore((s) => s.metadataError);
@@ -199,6 +209,62 @@ export function useDownloaderView({
     return Boolean(videoInfo && url.startsWith("http"));
   }, [videoInfo, metadataLoading, focusedJob, url, focusShowsBigProgress]);
 
+  /** Queued/paused row tied to hero (focused job or URL bar match). */
+  const heroEditableJob = useMemo(() => {
+    const movable = (j: (typeof downloadJobs)[number]) =>
+      j.status === "queued" || j.status === "paused";
+    if (focusedJob && movable(focusedJob)) return focusedJob;
+    const bar = url.trim();
+    if (!bar.startsWith("http")) return null;
+    return (
+      downloadJobs.find((j) => movable(j) && youtubeUrlsMatch(j.url, bar)) ?? null
+    );
+  }, [focusedJob, downloadJobs, url]);
+
+  const heroAudioOnly = heroEditableJob
+    ? heroEditableJob.options.audioOnly === true
+    : settings.downloadAudioOnly === true;
+
+  const showHeroAudioToggle = useMemo(() => {
+    if (metadataLoading || focusShowsBigProgress) return false;
+    if (heroEditableJob) return true;
+    return Boolean(videoInfo && url.startsWith("http"));
+  }, [metadataLoading, focusShowsBigProgress, heroEditableJob, videoInfo, url]);
+
+  const [showAudioWarning, setShowAudioWarning] = useState(false);
+  const audioWarningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const toggleHeroAudio = useCallback(() => {
+    let becomingAudioOnly = false;
+    if (heroEditableJob) {
+      becomingAudioOnly = !(heroEditableJob.options.audioOnly === true);
+      setDownloadJobAudioOnly(heroEditableJob.id, becomingAudioOnly);
+    } else {
+      becomingAudioOnly = !settingsRef.current.downloadAudioOnly;
+      void updateSetting("downloadAudioOnly", becomingAudioOnly);
+    }
+
+    if (becomingAudioOnly) {
+      // Trigger temporary warning chip on the URL bar icon
+      setShowAudioWarning(true);
+      if (audioWarningTimeoutRef.current) clearTimeout(audioWarningTimeoutRef.current);
+      audioWarningTimeoutRef.current = setTimeout(() => setShowAudioWarning(false), 3000);
+    } else {
+      // Clear warning immediately if switching back to video
+      setShowAudioWarning(false);
+      if (audioWarningTimeoutRef.current) {
+        clearTimeout(audioWarningTimeoutRef.current);
+        audioWarningTimeoutRef.current = null;
+      }
+    }
+  }, [heroEditableJob, setDownloadJobAudioOnly, updateSetting]);
+
+  useEffect(() => {
+    return () => {
+      if (audioWarningTimeoutRef.current) clearTimeout(audioWarningTimeoutRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     queueHydrateOrphanMetadata();
   }, [queueHydrateOrphanMetadata]);
@@ -314,15 +380,19 @@ export function useDownloaderView({
       targetUrl: string,
       choice: Exclude<DuplicateDownloadChoice, "cancel"> = "replace",
       meta?: { title?: string; approval: "auto" | "pending" | "held" },
+      audioOnly?: boolean,
     ) => {
       const s = settingsRef.current;
-      if (!targetUrl || storageBlocksNewDownloads) return;
+      if (!targetUrl || storageBlocksNewDownloads) return "";
       const outputPath = saveToInternal ? internalDir : outputDir;
-      const options = buildDownloadJobOptions(s, outputPath, choice);
+      let options = buildDownloadJobOptions(s, outputPath, choice);
+      if (audioOnly !== undefined) {
+        options = patchDownloadJobOptionsForAudio(options, audioOnly, s);
+      }
       const st = useRuforgeStore.getState();
       let snapshot =
         youtubeUrlsMatch(targetUrl, st.url) && st.videoInfo
-          ? videoInfoToDownloadJobSnapshot(st.videoInfo)
+          ? videoInfoToDownloadJobSnapshot(st.videoInfo, options.audioOnly)
           : undefined;
       const batchTitle = meta?.title?.trim();
       if (!snapshot && batchTitle) {
@@ -334,7 +404,7 @@ export function useDownloaderView({
         };
       }
       const approval = meta?.approval ?? "auto";
-      enqueueDownload(targetUrl, options, {
+      return enqueueDownload(targetUrl, options, {
         snapshot,
         title: meta?.title,
         approval,
@@ -358,15 +428,53 @@ export function useDownloaderView({
     enqueueDownloadOnly(staged, "replace", { approval: "held" });
   }, [enqueueDownloadOnly, setQuickEnqueueHint]);
 
-  const runDownload = useCallback(
-    (
+  const resolveHeroAudioOnly = useCallback(() => {
+    const st = useRuforgeStore.getState();
+    const bar = st.url.trim();
+    const focused = st.focusedJobId
+      ? st.downloadJobs.find((j) => j.id === st.focusedJobId)
+      : null;
+    const movable = (j: (typeof st.downloadJobs)[number]) =>
+      j.status === "queued" || j.status === "paused";
+    const row =
+      focused && movable(focused)
+        ? focused
+        : bar.startsWith("http")
+          ? st.downloadJobs.find((j) => movable(j) && youtubeUrlsMatch(j.url, bar))
+          : null;
+    if (row) return row.options.audioOnly === true;
+    return settingsRef.current.downloadAudioOnly === true;
+  }, []);
+
+  const startDownloadForUrl = useCallback(
+    async (
       targetUrl: string,
       choice: Exclude<DuplicateDownloadChoice, "cancel"> = "replace",
       meta?: { title?: string },
     ) => {
-      enqueueDownloadOnly(targetUrl, choice, { title: meta?.title, approval: "auto" });
+      const audioOnly = resolveHeroAudioOnly();
+      const jobId = enqueueDownloadOnly(
+        targetUrl,
+        choice,
+        { title: meta?.title, approval: "auto" },
+        audioOnly,
+      );
+      if (!jobId) return;
+      releaseHeldDownloadJobs();
+      const job = useRuforgeStore.getState().downloadJobs.find((j) => j.id === jobId);
+      if (job?.status === "paused") {
+        await resumeDownloadJob(jobId);
+      } else {
+        pumpDownloadQueue();
+      }
     },
-    [enqueueDownloadOnly],
+    [
+      enqueueDownloadOnly,
+      releaseHeldDownloadJobs,
+      resumeDownloadJob,
+      pumpDownloadQueue,
+      resolveHeroAudioOnly,
+    ],
   );
 
   const promptDuplicateChoice = useCallback((match: DuplicateMatch) => {
@@ -391,8 +499,10 @@ export function useDownloaderView({
 
   const handleDownloadClick = useCallback(async () => {
     if (storageBlocksNewDownloads) {
-      notify(STORAGE_FULL_NOTIFY, "warning");
-      void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
+      void deliverUserNotification(
+        { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
+        notify,
+      );
       return;
     }
 
@@ -425,7 +535,7 @@ export function useDownloaderView({
         for (const { url: videoUrl, title } of pairs) {
           const duplicate = await resolveDuplicate(videoUrl);
           if (!duplicate) {
-            runDownload(videoUrl, batchChoice ?? "replace", { title });
+            await startDownloadForUrl(videoUrl, batchChoice ?? "replace", { title });
             continue;
           }
           if (settingsRef.current.skipDuplicatesAutomatically) continue;
@@ -435,10 +545,8 @@ export function useDownloaderView({
             if (choice === "cancel") return;
             batchChoice = choice;
           }
-          runDownload(videoUrl, batchChoice, { title });
+          await startDownloadForUrl(videoUrl, batchChoice, { title });
         }
-        releaseHeldDownloadJobs();
-        pumpDownloadQueue();
         return;
       }
       /* No resolved watch URLs — fall through and enqueue the playlist URL once (yt-dlp). */
@@ -448,32 +556,21 @@ export function useDownloaderView({
       (barUrl && libraryDuplicate && youtubeUrlsMatch(barUrl, effectiveUrl)
         ? libraryDuplicate
         : null) ?? (await resolveDuplicate(effectiveUrl));
-    const heroAlreadyQueued = () =>
-      useRuforgeStore.getState().downloadJobs.some(
-        (j) => j.status === "queued" && youtubeUrlsMatch(j.url, effectiveUrl),
-      );
-
     if (!duplicate) {
-      releaseHeldDownloadJobs();
-      if (!heroAlreadyQueued()) runDownload(effectiveUrl);
-      pumpDownloadQueue();
+      await startDownloadForUrl(effectiveUrl);
       return;
     }
     if (settingsRef.current.skipDuplicatesAutomatically) return;
 
     const choice = await promptDuplicateChoice(duplicate);
     if (choice === "cancel") return;
-    releaseHeldDownloadJobs();
-    if (!heroAlreadyQueued()) runDownload(effectiveUrl, choice);
-    pumpDownloadQueue();
+    await startDownloadForUrl(effectiveUrl, choice);
   }, [
     url,
     focusedJobId,
     libraryDuplicate,
     resolveDuplicate,
-    runDownload,
-    pumpDownloadQueue,
-    releaseHeldDownloadJobs,
+    startDownloadForUrl,
     storageBlocksNewDownloads,
     notify,
     promptDuplicateChoice,
@@ -518,8 +615,10 @@ export function useDownloaderView({
     async (urls: readonly string[]) => {
       if (urls.length === 0) return;
       if (storageBlocksNewDownloads) {
-        notify(STORAGE_FULL_NOTIFY, "warning");
-        void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
+        void deliverUserNotification(
+          { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
+          notify,
+        );
         return;
       }
 
@@ -751,8 +850,10 @@ export function useDownloaderView({
         const skipDup = dupLib && settingsRef.current.skipDuplicatesAutomatically;
         if (!alreadyQueued && !skipDup && st0.videoInfo && !st0.metadataLoading) {
           if (storageBlocksNewDownloads) {
-            notify(STORAGE_FULL_NOTIFY, "warning");
-            void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
+            void deliverUserNotification(
+              { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
+              notify,
+            );
           } else {
             enqueueDownloadOnly(prev, "replace", { approval: "held" });
           }
@@ -769,6 +870,44 @@ export function useDownloaderView({
     let active = true;
     setMetadataError(null);
     if (url.startsWith("http")) {
+      const norm = url.trim();
+      const preferredQuality = settingsRef.current.preferredQuality;
+      const audioOnly = settingsRef.current.downloadAudioOnly;
+
+      const applyHeroFromSnapshot = (snap: ReturnType<typeof videoInfoToDownloadJobSnapshot>) => {
+        const resolved = snapshotWithResolvedFileSize(snap, audioOnly);
+        setVideoInfo(downloadJobSnapshotToVideoInfo(resolved), {
+          sourceUrl: norm,
+          preferredQuality,
+        });
+        setMetadataError(null);
+        setDownloaderMetadataLoading(false);
+      };
+
+      const st = useRuforgeStore.getState();
+      if (
+        st.videoInfo &&
+        st.videoInfoUrl &&
+        youtubeUrlsMatch(norm, st.videoInfoUrl) &&
+        st.videoInfoPreferredQuality === preferredQuality
+      ) {
+        const snap = videoInfoToDownloadJobSnapshot(st.videoInfo, audioOnly);
+        if (!downloadJobMediaNeedsHydration(snap)) {
+          if (active) applyHeroFromSnapshot(snap);
+          return () => {
+            active = false;
+          };
+        }
+      }
+
+      const cached = peekDownloadJobMetadataCache(norm);
+      if (cached) {
+        if (active) applyHeroFromSnapshot(cached);
+        return () => {
+          active = false;
+        };
+      }
+
       setDownloaderMetadataLoading(true);
       const run = async (scheduledUrl: string) => {
         const norm = scheduledUrl.trim();
@@ -805,12 +944,23 @@ export function useDownloaderView({
           }
 
           if (!active || useRuforgeStore.getState().url.trim() !== norm) return;
+          const format = ytdlpFormatFromPreferredQuality(
+            settingsRef.current.preferredQuality,
+          );
           const info = await invoke<VideoInfo>("get_video_info", {
             url: norm,
-            format: ytdlpFormatFromPreferredQuality(settings.preferredQuality),
+            format,
           });
           if (active && useRuforgeStore.getState().url.trim() === norm) {
-            setVideoInfo(info);
+            const audioOnlyNow = settingsRef.current.downloadAudioOnly;
+            const base = videoInfoToDownloadJobSnapshot(info, audioOnlyNow);
+            const snap = mergeVideoInfoFileSizes(base, info, audioOnlyNow);
+            const cacheKey = downloadJobMetadataCacheKey(norm);
+            if (cacheKey) commitDownloadJobMetadataCache(cacheKey, snap);
+            setVideoInfo(downloadJobSnapshotToVideoInfo(snap), {
+              sourceUrl: norm,
+              preferredQuality: settingsRef.current.preferredQuality,
+            });
             setMetadataError(null);
           }
         } catch (e: unknown) {
@@ -836,6 +986,7 @@ export function useDownloaderView({
   }, [
     url,
     settings.preferredQuality,
+    settings.downloadAudioOnly,
     setMetadataError,
     setDownloaderMetadataLoading,
     setVideoInfo,
@@ -869,6 +1020,10 @@ export function useDownloaderView({
     anyDownloading,
     heroBackdropThumb,
     showPrimaryDownload,
+    showHeroAudioToggle,
+    heroAudioOnly,
+    showAudioWarning,
+    toggleHeroAudio,
     storageBlocksNewDownloads,
     setDownloaderFocusedJobId,
     confirmPendingDownloadJob,

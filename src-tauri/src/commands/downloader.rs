@@ -102,6 +102,12 @@ pub struct VideoInfo {
     pub formats: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_size_bytes: Option<u64>,
+    /// Best-effort audio-only estimate from one `-J` formats pass (`bestaudio/best`-class).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size_bytes_audio: Option<u64>,
+    /// Best-effort muxed video estimate (`bestvideo+bestaudio`-class for the height cap).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size_bytes_video: Option<u64>,
     #[serde(default)]
     pub is_playlist: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -267,6 +273,181 @@ fn video_file_size_from_ytdlp_json(json: &serde_json::Value) -> Option<u64> {
     None
 }
 
+fn ytdlp_codec_is_none(raw: Option<&str>) -> bool {
+    match raw.map(str::trim) {
+        None => true,
+        Some(s) if s.is_empty() => true,
+        Some(s) => s.eq_ignore_ascii_case("none"),
+    }
+}
+
+fn format_stream_score_kbps(fmt: &serde_json::Value) -> Option<f64> {
+    fmt.get("abr")
+        .and_then(|v| v.as_f64().or_else(|| v.as_u64().map(|u| u as f64)))
+        .filter(|&t| t > 0.0)
+        .or_else(|| tbr_kbps_from_json(fmt))
+}
+
+fn max_height_from_ytdlp_format(format: &str) -> Option<u32> {
+    let needle = "height<=";
+    let mut rest = format;
+    let mut best: Option<u32> = None;
+    while let Some(i) = rest.find(needle) {
+        let after = &rest[i + needle.len()..];
+        let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if let Ok(h) = digits.parse::<u32>() {
+            if h > 0 {
+                best = Some(best.map(|b| b.max(h)).unwrap_or(h));
+            }
+        }
+        rest = after;
+    }
+    best
+}
+
+fn pick_best_audio_size_from_formats(
+    formats: &[serde_json::Value],
+    duration_secs: f64,
+) -> Option<u64> {
+    let mut best: Option<(f64, u64)> = None;
+    for fmt in formats {
+        if ytdlp_codec_is_none(fmt.get("acodec").and_then(|v| v.as_str())) {
+            continue;
+        }
+        if !ytdlp_codec_is_none(fmt.get("vcodec").and_then(|v| v.as_str())) {
+            continue;
+        }
+        let score = format_stream_score_kbps(fmt).unwrap_or(0.0);
+        let size = size_from_format_entry_for_dual(fmt, duration_secs)?;
+        let replace = match best {
+            None => true,
+            Some((prev_score, _)) => score > prev_score || (score == prev_score && score == 0.0),
+        };
+        if replace {
+            best = Some((score, size));
+        }
+    }
+    best.map(|(_, n)| n).filter(|&n| n > 0)
+}
+
+fn pick_best_video_only_size_from_formats(
+    formats: &[serde_json::Value],
+    max_height: Option<u32>,
+    duration_secs: f64,
+) -> Option<u64> {
+    let mut best: Option<(u32, f64, u64)> = None;
+    for fmt in formats {
+        if ytdlp_codec_is_none(fmt.get("vcodec").and_then(|v| v.as_str())) {
+            continue;
+        }
+        if !ytdlp_codec_is_none(fmt.get("acodec").and_then(|v| v.as_str())) {
+            continue;
+        }
+        let height = height_from_format_entry(fmt).unwrap_or(0);
+        if let Some(cap) = max_height {
+            if height > cap {
+                continue;
+            }
+        }
+        let score = format_stream_score_kbps(fmt).unwrap_or(0.0);
+        let size = size_from_format_entry_for_dual(fmt, duration_secs)?;
+        let replace = match best {
+            None => true,
+            Some((prev_h, prev_score, _)) => {
+                height > prev_h || (height == prev_h && score > prev_score)
+            }
+        };
+        if replace {
+            best = Some((height, score, size));
+        }
+    }
+    best.map(|(_, _, n)| n).filter(|&n| n > 0)
+}
+
+fn size_from_format_entry_for_dual(
+    fmt: &serde_json::Value,
+    duration_secs: f64,
+) -> Option<u64> {
+    fn u64_from_field(v: &serde_json::Value) -> Option<u64> {
+        v.as_u64()
+            .or_else(|| v.as_i64().filter(|&i| i >= 0).map(|i| i as u64))
+    }
+    fmt.get("filesize")
+        .and_then(u64_from_field)
+        .filter(|&n| n > 0)
+        .or_else(|| {
+            fmt.get("filesize_approx")
+                .and_then(u64_from_field)
+                .filter(|&n| n > 0)
+        })
+        .or_else(|| {
+            fmt.get("url")
+                .and_then(|v| v.as_str())
+                .and_then(max_clen_bytes_in_url)
+        })
+        .or_else(|| {
+            tbr_kbps_from_json(fmt).and_then(|tbr| estimate_bytes_from_bitrate(duration_secs, tbr))
+        })
+}
+
+fn height_from_format_entry(fmt: &serde_json::Value) -> Option<u32> {
+    fmt.get("height")
+        .and_then(|v| v.as_u64().or_else(|| v.as_i64().filter(|&i| i >= 0).map(|i| i as u64)))
+        .map(|h| h as u32)
+        .filter(|&h| h > 0)
+}
+
+fn dual_file_sizes_from_entry_json(
+    json: &serde_json::Value,
+    max_height: Option<u32>,
+) -> (Option<u64>, Option<u64>) {
+    let duration = ytdlp_duration_secs(json).unwrap_or(0.0);
+    if let Some(formats) = json.get("formats").and_then(|v| v.as_array()) {
+        if !formats.is_empty() {
+            let audio = pick_best_audio_size_from_formats(formats, duration);
+            let video_only = pick_best_video_only_size_from_formats(formats, max_height, duration);
+            let video = match (video_only, audio) {
+                (Some(v), Some(a)) => Some(v.saturating_add(a)),
+                (Some(v), None) => Some(v),
+                (None, Some(a)) => Some(a),
+                (None, None) => video_file_size_from_ytdlp_json(json),
+            };
+            return (audio, video);
+        }
+    }
+    let fallback = video_file_size_from_ytdlp_json(json);
+    (fallback, fallback)
+}
+
+fn dual_file_sizes_from_ytdlp_json(
+    json: &serde_json::Value,
+    video_format: Option<&str>,
+) -> (Option<u64>, Option<u64>) {
+    let max_height = video_format.and_then(max_height_from_ytdlp_format);
+    if let Some(entries) = ytdlp_usable_playlist_entries(json) {
+        let mut audio_sum = 0u64;
+        let mut video_sum = 0u64;
+        let mut any_audio = false;
+        let mut any_video = false;
+        for entry in entries {
+            let (a, v) = dual_file_sizes_from_entry_json(entry, max_height);
+            if let Some(n) = a {
+                audio_sum = audio_sum.saturating_add(n);
+                any_audio = true;
+            }
+            if let Some(n) = v {
+                video_sum = video_sum.saturating_add(n);
+                any_video = true;
+            }
+        }
+        return (
+            any_audio.then_some(audio_sum).filter(|&s| s > 0),
+            any_video.then_some(video_sum).filter(|&s| s > 0),
+        );
+    }
+    dual_file_sizes_from_entry_json(json, max_height)
+}
+
 fn sanitize_playlist_folder_name(raw: &str) -> String {
     let trimmed = raw.trim();
     let mut out: String = trimmed
@@ -413,6 +594,8 @@ fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
                 duration,
                 formats: vec![],
                 file_size_bytes: playlist_aggregate_file_size(&entries),
+                file_size_bytes_audio: None,
+                file_size_bytes_video: None,
                 is_playlist: true,
                 playlist_items: Some(previews),
                 uploader,
@@ -431,6 +614,8 @@ fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
                 duration: json["duration"].as_f64().unwrap_or(0.0),
                 formats: vec![],
                 file_size_bytes: video_file_size_from_ytdlp_json(&json),
+                file_size_bytes_audio: None,
+                file_size_bytes_video: None,
                 is_playlist: false,
                 playlist_items: None,
                 uploader,
@@ -440,6 +625,26 @@ fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
     }
 }
 
+fn ytdlp_simulate_format_eff(
+    cookie_opts: Option<&DownloadOptions>,
+    format: Option<&str>,
+) -> Option<String> {
+    if let Some(opts) = cookie_opts {
+        if opts.audio_only {
+            return Some("bestaudio/best".into());
+        }
+    }
+    format
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            cookie_opts
+                .map(|o| o.format.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+        })
+}
+
 async fn yt_dlp_single_json_simulate(
     app: &AppHandle,
     url: &str,
@@ -447,12 +652,9 @@ async fn yt_dlp_single_json_simulate(
     format: Option<&str>,
 ) -> Result<serde_json::Value, String> {
     let mut args: Vec<String> = vec!["-J".into(), "-s".into()];
-    let format_eff = format
-        .filter(|s| !s.is_empty())
-        .or_else(|| cookie_opts.map(|o| o.format.as_str()).filter(|s| !s.is_empty()));
-    if let Some(f) = format_eff {
+    if let Some(f) = ytdlp_simulate_format_eff(cookie_opts, format) {
         args.push("-f".into());
-        args.push(f.to_string());
+        args.push(f);
     }
     if let Some(opts) = cookie_opts {
         if let Some(cookie_file) = opts.cookie_file.as_ref() {
@@ -585,6 +787,36 @@ fn parse_ytdlp_percent_of_total_bytes(line: &str, percentage: f32) -> Option<(u6
     Some((downloaded as u64, total))
 }
 
+/// yt-dlp postprocessor lines on stdout after the final `[download] … 100%` (not stderr).
+/// Verified with bundled yt-dlp 2026.03.17 on Windows (`Me at the zoo`, audio `-x` / HLS worst):
+///   `[ExtractAudio] Destination: C:\...\Me at the zoo.m4a`
+///   `[FixupM3u8] Fixing MPEG-TS in MP4 container of "C:\...\Me at the zoo.mp4"`
+/// `[Merger]` / `[ffmpeg]` follow yt-dlp `PP_NAME` for mux paths (not observed on that probe).
+fn ytdlp_line_is_post_process(line: &str) -> bool {
+    const MARKERS: &[&str] = &[
+        "[ExtractAudio]",
+        "[Merger]",
+        "[ffmpeg]",
+        "[FixupM3u8]",
+        "[FixupM4a]",
+        "[FixupStretched]",
+        "[FixupTimestamp]",
+        "[FixupDuration]",
+        "[FixupDuplicateMoov]",
+        "[VideoConvertor]",
+        "[VideoRemuxer]",
+        "[EmbedSubtitle]",
+        "[Metadata]",
+        "[SubtitlesConvertor]",
+        "[Concat]",
+    ];
+    MARKERS.iter().any(|m| line.contains(m))
+}
+
+fn default_audio_format() -> String {
+    "m4a".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadOptions {
     pub format: String,
@@ -595,6 +827,12 @@ pub struct DownloadOptions {
     /// yt-dlp `--sub-langs` (e.g. `en.*`). Empty skips subtitle download flags.
     #[serde(default)]
     pub sub_langs: String,
+    /// When true, download audio only (`-x` / `--extract-audio`).
+    #[serde(default)]
+    pub audio_only: bool,
+    /// yt-dlp `--audio-format` (e.g. m4a, mp3, opus).
+    #[serde(default = "default_audio_format")]
+    pub audio_format: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -633,8 +871,20 @@ pub async fn get_video_info(
     format: Option<String>,
 ) -> Result<VideoInfo, String> {
     let fmt = format.as_deref().filter(|s| !s.is_empty());
-    let json = yt_dlp_single_json_simulate(&app, &url, None, fmt).await?;
-    Ok(video_info_from_ytdlp_single_json(json))
+    let json = yt_dlp_single_json_simulate(&app, &url, None, None).await?;
+    let (file_size_bytes_audio, file_size_bytes_video) =
+        dual_file_sizes_from_ytdlp_json(&json, fmt);
+    let audio_primary = fmt.is_some_and(|f| f.contains("bestaudio"));
+    let mut info = video_info_from_ytdlp_single_json(json);
+    info.file_size_bytes_audio = file_size_bytes_audio;
+    info.file_size_bytes_video = file_size_bytes_video;
+    info.file_size_bytes = if audio_primary {
+        file_size_bytes_audio.or(file_size_bytes_video)
+    } else {
+        file_size_bytes_video.or(file_size_bytes_audio)
+    }
+    .or(info.file_size_bytes);
+    Ok(info)
 }
 
 fn push_ytdlp_download_cookie_args(
@@ -695,6 +945,14 @@ fn yt_dlp_effective_filename_template(metadata_probe: &serde_json::Value, user_t
     }
 }
 
+fn normalize_ytdlp_audio_format(raw: &str) -> String {
+    match raw.trim().to_lowercase().as_str() {
+        "mp3" => "mp3".into(),
+        "opus" => "opus".into(),
+        _ => "m4a".into(),
+    }
+}
+
 fn build_ytdlp_download_args(
     app: &AppHandle,
     url: &str,
@@ -703,8 +961,6 @@ fn build_ytdlp_download_args(
     resume: bool,
 ) -> Result<Vec<String>, String> {
     let mut args = vec![
-        "-f".to_string(),
-        options.format.clone(),
         "-P".to_string(),
         options.output_dir.clone(),
         "-o".to_string(),
@@ -720,13 +976,34 @@ fn build_ytdlp_download_args(
         "jpg".to_string(),
     ];
 
+    if options.audio_only {
+        let audio_fmt = normalize_ytdlp_audio_format(&options.audio_format);
+        // Always bestaudio — a stale muxed `format` from the UI must not pull full video.
+        args.push("-f".to_string());
+        args.push("bestaudio/best".to_string());
+        args.push("-x".to_string());
+        args.push("--audio-format".to_string());
+        args.push(audio_fmt);
+        args.push("--audio-quality".to_string());
+        args.push("0".to_string());
+        args.push("--no-keep-video".to_string());
+    } else {
+        args.push("-f".to_string());
+        args.push(options.format.clone());
+    }
+
     if resume {
         args.push("--continue".to_string());
     }
 
     let sub_langs = options.sub_langs.trim();
-    log::info!("[RuForge] download sub_langs={:?} resume={}", sub_langs, resume);
-    if !sub_langs.is_empty() {
+    log::info!(
+        "[RuForge] download audio_only={} sub_langs={:?} resume={}",
+        options.audio_only,
+        sub_langs,
+        resume
+    );
+    if !options.audio_only && !sub_langs.is_empty() {
         args.push("--write-subs".to_string());
         args.push("--write-auto-subs".to_string());
         args.push("--sub-langs".to_string());
@@ -885,6 +1162,12 @@ pub async fn start_download_job(
         );
         let mut progress_extras = PlaylistDownloadProgressExtras::default();
         let mut error_log = String::new();
+        let mut download_reached_full = false;
+        let mut last_percentage: f32 = 0.0;
+        let mut last_speed = String::new();
+        let mut last_eta = String::new();
+        let mut last_downloaded_bytes: Option<u64> = None;
+        let mut last_total_bytes: Option<u64> = None;
 
         while let Some(event) = rx.recv().await {
             match event {
@@ -925,13 +1208,24 @@ pub async fn start_download_job(
                                     None => (None, None),
                                 };
 
+                                if percentage >= 100.0 {
+                                    download_reached_full = true;
+                                } else {
+                                    download_reached_full = false;
+                                }
+                                last_percentage = percentage;
+                                last_speed = speed.to_string();
+                                last_eta = eta.to_string();
+                                last_downloaded_bytes = downloaded_bytes;
+                                last_total_bytes = total_bytes;
+
                                 let _ = app.emit(
                                     "download-progress",
                                     ProgressPayload {
                                         job_id: job_id.clone(),
                                         percentage,
-                                        speed: speed.to_string(),
-                                        eta: eta.to_string(),
+                                        speed: last_speed.clone(),
+                                        eta: last_eta.clone(),
                                         status: "downloading".to_string(),
                                         current_index: progress_extras.current_index,
                                         total_items: progress_extras.total_items,
@@ -944,6 +1238,23 @@ pub async fn start_download_job(
                                 );
                             }
                         }
+                    } else if download_reached_full && ytdlp_line_is_post_process(&line) {
+                        let pct = last_percentage.max(100.0);
+                        let _ = app.emit(
+                            "download-progress",
+                            ProgressPayload {
+                                job_id: job_id.clone(),
+                                percentage: pct,
+                                speed: last_speed.clone(),
+                                eta: last_eta.clone(),
+                                status: "processing".to_string(),
+                                current_index: progress_extras.current_index,
+                                total_items: progress_extras.total_items,
+                                current_item_title: progress_extras.current_item_title.clone(),
+                                downloaded_bytes: last_downloaded_bytes,
+                                total_bytes: last_total_bytes,
+                            },
+                        );
                     }
                 }
                 CommandEvent::Stderr(line_bytes) => {
@@ -976,12 +1287,14 @@ pub async fn start_download_job(
                         let _ = tokio::task::spawn_blocking(move || {
                             log_post_download_files_written(&diag_root_log, started_log);
                         });
-                        spawn_post_download_frame_extract(
-                            app.clone(),
-                            url.clone(),
-                            options.clone(),
-                            filename_template_eff.clone(),
-                        );
+                        if !options.audio_only {
+                            spawn_post_download_frame_extract(
+                                app.clone(),
+                                url.clone(),
+                                options.clone(),
+                                filename_template_eff.clone(),
+                            );
+                        }
                         let _ = app.emit(
                             "download-job-finished",
                             DownloadJobFinishedPayload {
@@ -1048,4 +1361,12 @@ pub async fn pause_download_job(
         return Ok(());
     }
     Ok(())
+}
+
+/// After a webview reload the UI may show "paused" while yt-dlp still runs in-process.
+#[tauri::command]
+pub async fn stop_all_active_download_jobs(
+    manager: State<'_, DownloadJobManager>,
+) -> Result<u32, String> {
+    manager.stop_all_active_downloads()
 }

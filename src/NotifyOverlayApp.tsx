@@ -23,6 +23,23 @@ const AUTO_MS: Record<Kind, number> = {
   error: 9000,
 };
 
+const OVERLAY_DEDUPE_MS = 20_000;
+const recentOverlayBodies = new Map<string, number>();
+
+function claimOverlayBody(body: string, kind: Kind): boolean {
+  const key = `${kind}:${body}`;
+  const now = Date.now();
+  const last = recentOverlayBodies.get(key);
+  if (last != null && now - last < OVERLAY_DEDUPE_MS) return false;
+  recentOverlayBodies.set(key, now);
+  if (recentOverlayBodies.size > 64) {
+    for (const [k, at] of recentOverlayBodies) {
+      if (now - at >= OVERLAY_DEDUPE_MS) recentOverlayBodies.delete(k);
+    }
+  }
+  return true;
+}
+
 function normalizeKind(raw: string): Kind {
   if (raw === "warning" || raw === "error") return raw;
   return "info";
@@ -85,7 +102,7 @@ function NotifyCard({
           onDismiss(item.id);
         }
       }}
-      className={`w-full cursor-pointer select-none rounded-2xl border bg-[#271C18] px-3.5 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)] ${accent}`}
+      className={`w-full cursor-pointer select-none rounded-2xl border bg-[#271C18] px-3.5 py-3 ${accent}`}
     >
       <div className="flex gap-3">
         <img src={logo} alt="" className="mt-0.5 h-9 w-9 shrink-0 rounded-lg object-cover" />
@@ -121,18 +138,21 @@ export default function NotifyOverlayApp() {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let readySent = false;
     void (async () => {
       unlisten = await listen<BackgroundNotifyPayload>(PUSH_EVENT, (e) => {
         const p = e.payload;
-        setItems((prev) => [
-          ...prev,
-          {
-            ...p,
-            kind: normalizeKind(p.kind),
-          },
-        ]);
+        const kind = normalizeKind(p.kind);
+        if (!claimOverlayBody(p.body, kind)) return;
+        setItems((prev) => {
+          if (prev.some((x) => x.body === p.body && x.kind === kind)) return prev;
+          return [...prev, { ...p, kind }];
+        });
       });
-      await invoke("notify_overlay_ready").catch(() => {});
+      if (!readySent) {
+        readySent = true;
+        await invoke("notify_overlay_ready").catch(() => {});
+      }
     })();
     return () => {
       unlisten?.();
