@@ -14,7 +14,6 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
-import { buildExplorerInjectScript } from "./explorerInjectScript";
 import { useUrlDropIntake } from "./features/downloader/useUrlDropIntake";
 import { getYoutubeUrlDropHandler } from "./features/downloader/youtubeUrlDropRegistry";
 import { notifyWhenUnfocused } from "./systemNotify";
@@ -314,6 +313,8 @@ function App() {
   const explorerContainerRef = useRef<HTMLDivElement>(null);
   const explorerWebviewRef = useRef<Webview | null>(null);
   const prevActiveTabRef = useRef<ActiveTab>(activeTab);
+  /** One reload when entering Explorer; layout sync must not re-arm this. */
+  const explorerReloadPendingRef = useRef(false);
   const downloadFinishedNotifyGuardRef = useRef<Set<string>>(new Set());
   const applyDownloadProgress = useRuforgeStore((s) => s.applyDownloadProgress);
   const onDownloadJobFinished = useRuforgeStore((s) => s.onDownloadJobFinished);
@@ -325,6 +326,8 @@ function App() {
   const storageStats = useRuforgeStore((s) => s.storageStats);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
+  const lastExplorerUrlRef = useRef(lastExplorerUrl);
+  lastExplorerUrlRef.current = lastExplorerUrl;
   const storageBlocksNewDownloads =
     saveToInternal &&
     (storageStats
@@ -483,13 +486,20 @@ function App() {
   }, []);
 
   // Manage Embedded Explorer Webview.
-  // Deps: `activeTab`, `addLog`, `lastExplorerUrl` — 1s poll while Explorer is active; pause on leave.
+  // Deps: `activeTab`, layout (`isSidebarExpanded`) — URL poll updates store only; read via lastExplorerUrlRef.
   useEffect(() => {
     let active = true;
     let interval: number | undefined;
     const wasOnExplorer = prevActiveTabRef.current === "explorer";
     const onExplorer = activeTab === "explorer";
+    const enteringExplorer = !wasOnExplorer && onExplorer;
     prevActiveTabRef.current = activeTab;
+    if (enteringExplorer) {
+      explorerReloadPendingRef.current = true;
+    }
+    if (!onExplorer) {
+      explorerReloadPendingRef.current = false;
+    }
 
     const pauseExplorerMedia = async () => {
       try {
@@ -503,9 +513,8 @@ function App() {
     };
 
     const reloadExplorerPage = async () => {
-      const target = lastExplorerUrl.trim().startsWith("http")
-        ? lastExplorerUrl.trim()
-        : "https://www.youtube.com";
+      const url = lastExplorerUrlRef.current.trim();
+      const target = url.startsWith("http") ? url : "https://www.youtube.com";
       try {
         await invoke("eval_in_webview", {
           label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
@@ -514,6 +523,12 @@ function App() {
       } catch {
         /* webview still creating */
       }
+    };
+
+    const maybeReloadExplorerOnEnter = async () => {
+      if (!explorerReloadPendingRef.current) return;
+      explorerReloadPendingRef.current = false;
+      await reloadExplorerPage();
     };
 
     const syncWebview = async () => {
@@ -561,28 +576,8 @@ function App() {
             webview.once('tauri://created', () => {
               addLog("Webview successfully created!");
               explorerWebviewRef.current = webview;
-
-              const accent =
-                typeof settings.accentColor === "string" ? settings.accentColor : "#EDCF9B";
-              const rgb = syncRuforgeAccentCss(accent, true);
-              const borderRgba = rgb
-                ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`
-                : "rgba(237, 207, 155, 0.2)";
-              const glowRgba = rgb
-                ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`
-                : "rgba(237, 207, 155, 0.3)";
-
-              void invoke("eval_in_webview", {
-                label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
-                script: buildExplorerInjectScript({
-                  accent,
-                  borderRgba,
-                  glowRgba,
-                }),
-              });
-
-              if (active && activeTab === "explorer" && !wasOnExplorer) {
-                void reloadExplorerPage();
+              if (active && activeTab === "explorer") {
+                void maybeReloadExplorerOnEnter();
               }
             });
             
@@ -599,9 +594,7 @@ function App() {
             await explorerWebviewRef.current.show();
             await explorerWebviewRef.current.setPosition(new LogicalPosition(finalX, finalY));
             await explorerWebviewRef.current.setSize(new LogicalSize(finalW, finalH));
-            if (!wasOnExplorer) {
-              await reloadExplorerPage();
-            }
+            await maybeReloadExplorerOnEnter();
           } catch (e: any) {
              addLog(`Update failed: ${e?.message || String(e)}`);
           }
@@ -622,19 +615,52 @@ function App() {
       }
     };
 
-    // Run immediately (layout + hide when leaving Explorer), then poll only while Explorer is visible.
-    void syncWebview();
+    const scheduleSync = () => {
+      void syncWebview();
+    };
+
+    // Run immediately (layout + hide when leaving Explorer).
+    scheduleSync();
     if (onExplorer) {
-      interval = window.setInterval(() => void syncWebview(), 1000); // Polling 1s to avoid spam
+      // Fallback while ResizeObserver / resize events are settling (e.g. sidebar width transition).
+      interval = window.setInterval(scheduleSync, 200);
     }
+
+    window.addEventListener("resize", scheduleSync);
+
+    let resizeObserver: ResizeObserver | undefined;
+    const attachResizeObserver = () => {
+      const el = explorerContainerRef.current;
+      if (!el || !onExplorer) return;
+      resizeObserver?.disconnect();
+      resizeObserver = new ResizeObserver(scheduleSync);
+      resizeObserver.observe(el);
+    };
+    attachResizeObserver();
+    const resizeObserverRaf = requestAnimationFrame(attachResizeObserver);
+
+    let unlistenWindowResize: (() => void) | undefined;
+    void getCurrentWindow()
+      .onResized(scheduleSync)
+      .then((unlisten) => {
+        if (!active) {
+          unlisten();
+          return;
+        }
+        unlistenWindowResize = unlisten;
+      });
 
     return () => {
       active = false;
       if (interval !== undefined) {
         clearInterval(interval);
       }
+      window.removeEventListener("resize", scheduleSync);
+      cancelAnimationFrame(resizeObserverRaf);
+      resizeObserver?.disconnect();
+      unlistenWindowResize?.();
     };
-  }, [activeTab, addLog, lastExplorerUrl, settings.accentColor]);
+  }, [activeTab, addLog, isSidebarExpanded]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1328,7 +1354,7 @@ function App() {
                 />
               )}
               {activeTab === "explorer" && (
-                <div ref={explorerContainerRef} className="h-full w-full bg-[#1D1613] relative overflow-hidden">
+                <div ref={explorerContainerRef} className="absolute inset-0 min-h-0 bg-[#1D1613] overflow-hidden">
                   {/* Shimmer Placeholder */}
                   <div className="absolute inset-0 z-0 flex flex-col p-8 space-y-8 animate-pulse">
                     <div className="h-12 w-1/3 bg-white/5 rounded-2xl" />

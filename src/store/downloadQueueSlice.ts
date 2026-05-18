@@ -16,6 +16,7 @@ import {
 import type { ProgressPayload, VideoInfo } from "../types";
 import type { RuforgeStore } from "./ruforgeStore";
 import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
+import { ytdlpFormatFromPreferredQuality } from "../downloadFormat";
 import {
   commitDownloadJobMetadataCache,
   evictDownloadJobMetadataCacheIfOrphaned,
@@ -78,7 +79,8 @@ async function hydrateDownloadJobMetadata(
   let p = inflightMetaByKey.get(cacheKey);
   if (!p) {
     p = (async (): Promise<DownloadJobMediaSnapshot> => {
-      const info = await invoke<VideoInfo>("get_video_info", { url: urlTrim });
+      const format = ytdlpFormatFromPreferredQuality(get().settings.preferredQuality);
+      const info = await invoke<VideoInfo>("get_video_info", { url: urlTrim, format });
       const snap = videoInfoToDownloadJobSnapshot(info);
       commitDownloadJobMetadataCache(cacheKey, snap);
       return snap;

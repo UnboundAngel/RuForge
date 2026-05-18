@@ -5,6 +5,7 @@ import { PlaySquare, History, Loader2, Play, HardDrive, Clock, Video, Volume2, V
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
 import { getPlaybackThumbnailBar } from "../playbackStorage";
+import { formatStorageSize } from "../formatStorageSize";
 
 const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection, onClick: () => void }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -272,7 +273,7 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
                       <div className="flex items-center justify-between text-[10px] text-stone-500 font-black uppercase tracking-[0.2em]">
                         <div className="flex items-center space-x-2">
                           <HardDrive size={12} className="text-[color:var(--accent)] opacity-30" />
-                          <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                          <span>{formatStorageSize(file.size)}</span>
                         </div>
                         <div className="flex items-center space-x-2">
                           <Clock size={12} className="text-[color:var(--accent)] opacity-30" />

@@ -1,18 +1,8 @@
+import { formatStorageSize } from "../../formatStorageSize";
+
+/** Approximate download size (hero / queue); same ceiling rules as library. */
 export function formatApproxFileSize(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "";
-  const kb = 1024;
-  const mb = kb * 1024;
-  const gb = mb * 1024;
-  if (bytes >= gb) {
-    const n = bytes / gb;
-    return `${n >= 10 ? n.toFixed(1) : n.toFixed(2)} GB`;
-  }
-  if (bytes >= mb) {
-    const n = bytes / mb;
-    return `${n >= 100 ? n.toFixed(0) : n.toFixed(1)} MB`;
-  }
-  const n = bytes / kb;
-  return `${n >= 100 ? n.toFixed(0) : n.toFixed(1)} KB`;
+  return formatStorageSize(bytes);
 }
 
 export function formatDuration(seconds: number): string {

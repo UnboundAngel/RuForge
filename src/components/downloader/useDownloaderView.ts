@@ -31,6 +31,7 @@ import {
   setYoutubeUrlDropHandler,
 } from "../../features/downloader/youtubeUrlDropRegistry";
 import { notifyWhenUnfocused } from "../../systemNotify";
+import { ytdlpFormatFromPreferredQuality } from "../../downloadFormat";
 
 const STORAGE_FULL_NOTIFY =
   "Library storage limit reached. Free space in Settings or switch to an external download folder.";
@@ -804,7 +805,10 @@ export function useDownloaderView({
           }
 
           if (!active || useRuforgeStore.getState().url.trim() !== norm) return;
-          const info = await invoke<VideoInfo>("get_video_info", { url: norm });
+          const info = await invoke<VideoInfo>("get_video_info", {
+            url: norm,
+            format: ytdlpFormatFromPreferredQuality(settings.preferredQuality),
+          });
           if (active && useRuforgeStore.getState().url.trim() === norm) {
             setVideoInfo(info);
             setMetadataError(null);
@@ -831,6 +835,7 @@ export function useDownloaderView({
     setVideoInfo(null);
   }, [
     url,
+    settings.preferredQuality,
     setMetadataError,
     setDownloaderMetadataLoading,
     setVideoInfo,
