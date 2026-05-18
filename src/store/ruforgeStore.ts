@@ -25,7 +25,7 @@ import {
   createRuforgePersistStorage,
   type RuforgePersistedSubset,
 } from "./ruforgePersistStorage";
-import { loadPersistedDownloadJobs } from "../downloadQueue";
+import { loadInitialDownloadQueueState } from "../downloadQueue";
 import {
   createDownloadQueueSlice,
   type DownloadQueueSlice,
@@ -76,6 +76,10 @@ export interface RuforgeStore extends DownloadQueueSlice {
   downloading: boolean;
   progress: ProgressPayload | null;
   videoInfo: VideoInfo | null;
+  /** Normalized URL last successfully fetched into `videoInfo` (hero metadata). */
+  videoInfoUrl: string | null;
+  /** `settings.preferredQuality` used for the last hero fetch (refetch when this changes). */
+  videoInfoPreferredQuality: string | null;
   metadataError: string | null;
   isFocused: boolean;
 
@@ -140,7 +144,10 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setDownloaderMetadataLoading: (v: boolean) => void;
   setDownloading: (v: boolean) => void;
   setDownloadProgress: (p: ProgressPayload | null) => void;
-  setVideoInfo: (info: VideoInfo | null) => void;
+  setVideoInfo: (
+    info: VideoInfo | null,
+    meta?: { sourceUrl?: string; preferredQuality?: string },
+  ) => void;
   setMetadataError: (err: string | null) => void;
   setDownloaderUrlFocused: (v: boolean) => void;
   resetDownloader: () => void;
@@ -189,12 +196,14 @@ let galleryPosterEpoch = 0;
 const pathsInit = readInitialPathsFromLs();
 const playerInitVolume = readInitialPlayerVolumeFromLs();
 const playerInitLoop = readInitialPlayerLoopFromLs();
+const initialDownloadQueue = loadInitialDownloadQueueState();
 
 export const useRuforgeStore = create<RuforgeStore>()(
   persist(
     (set, get, store) => ({
       ...createDownloadQueueSlice(set, get, store),
-      downloadJobs: loadPersistedDownloadJobs(),
+      downloadJobs: initialDownloadQueue.downloadJobs,
+      focusedJobId: initialDownloadQueue.focusedJobId,
 
       settings: DEFAULT_SETTINGS,
       outputDir: pathsInit.outputDir,
@@ -218,6 +227,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
       downloading: false,
       progress: null,
       videoInfo: null,
+      videoInfoUrl: null,
+      videoInfoPreferredQuality: null,
       metadataError: null,
       isFocused: false,
 
@@ -492,7 +503,22 @@ export const useRuforgeStore = create<RuforgeStore>()(
       setDownloaderMetadataLoading: (metadataLoading) => set({ metadataLoading }),
       setDownloading: (downloading) => set({ downloading }),
       setDownloadProgress: (progress) => set({ progress }),
-      setVideoInfo: (videoInfo) => set({ videoInfo }),
+      setVideoInfo: (videoInfo, meta) =>
+        set((state) => ({
+          videoInfo,
+          videoInfoUrl:
+            videoInfo === null
+              ? null
+              : meta?.sourceUrl !== undefined
+                ? meta.sourceUrl.trim() || null
+                : state.videoInfoUrl,
+          videoInfoPreferredQuality:
+            videoInfo === null
+              ? null
+              : meta?.preferredQuality !== undefined
+                ? meta.preferredQuality
+                : state.videoInfoPreferredQuality,
+        })),
       setMetadataError: (metadataError) => set({ metadataError }),
       setDownloaderUrlFocused: (isFocused) => set({ isFocused }),
       resetDownloader: () =>
@@ -503,6 +529,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
           downloading: false,
           progress: null,
           videoInfo: null,
+          videoInfoUrl: null,
+          videoInfoPreferredQuality: null,
           metadataError: null,
           isFocused: false,
           focusedJobId: null,

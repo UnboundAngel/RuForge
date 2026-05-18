@@ -16,8 +16,8 @@ import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
 import { useUrlDropIntake } from "./features/downloader/useUrlDropIntake";
 import { getYoutubeUrlDropHandler } from "./features/downloader/youtubeUrlDropRegistry";
-import { notifyWhenUnfocused } from "./systemNotify";
-import { check, Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
+import { Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
+import { runUpdateCheck } from "./updaterCheck";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   UpdaterStatusIndicator,
@@ -69,6 +69,7 @@ import {
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
 import type { DownloadJobFinishedPayload } from "./downloadQueue";
 import { normalizeProgressPayload, type ProgressPayload } from "./types";
+import { setMainWindowFocused } from "./appWindowFocus";
 import {
   EMBEDDED_EXPLORER_WEBVIEW_LABEL,
   EXPLORER_PAUSE_MEDIA_SCRIPT,
@@ -315,11 +316,9 @@ function App() {
   const prevActiveTabRef = useRef<ActiveTab>(activeTab);
   /** One reload when entering Explorer; layout sync must not re-arm this. */
   const explorerReloadPendingRef = useRef(false);
-  const downloadFinishedNotifyGuardRef = useRef<Set<string>>(new Set());
   const applyDownloadProgress = useRuforgeStore((s) => s.applyDownloadProgress);
   const onDownloadJobFinished = useRuforgeStore((s) => s.onDownloadJobFinished);
   const onDownloadJobPaused = useRuforgeStore((s) => s.onDownloadJobPaused);
-  const invalidateEntries = useRuforgeStore((s) => s.invalidateEntries);
   const playerViewRef = useRef<PlayerViewHandle>(null);
   const refreshStorageStats = useRuforgeStore((s) => s.refreshStorageStats);
   const outputDir = useRuforgeStore((s) => s.outputDir);
@@ -344,13 +343,59 @@ function App() {
   const [updaterTeaserDismissed, setUpdaterTeaserDismissed] = useState(false);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
 
+  const applyAvailableUpdate = useCallback((next: Update) => {
+    if (updateRef.current) {
+      void updateRef.current.close().catch(() => {});
+    }
+    updateRef.current = next;
+    setUpdaterVersion(next.version);
+    setUpdaterNotes(teaserNotesFromUpdaterBody(next.body ?? ""));
+    setUpdaterTeaserDismissed(false);
+    setUpdaterPhase("available");
+  }, []);
+
+  const performUpdateCheck = useCallback(
+    async (userInitiated: boolean) => {
+      if (userInitiated) {
+        await emit("ruforge-updater-check-status", { busy: true });
+      }
+      const result = await runUpdateCheck();
+      if (userInitiated) {
+        await emit("ruforge-updater-check-status", { busy: false });
+      }
+      if (result.kind === "available") {
+        applyAvailableUpdate(result.update);
+        if (userInitiated) {
+          notify(`Update v${result.version} is available.`);
+        }
+        return;
+      }
+      if (result.kind === "up-to-date") {
+        if (userInitiated) {
+          notify(`You're up to date (v${result.currentVersion}).`);
+        }
+        return;
+      }
+      if (userInitiated) {
+        notify(
+          `Couldn't check for updates: ${result.message}. Try again later or install from GitHub Releases.`,
+          "error",
+        );
+      } else {
+        console.error("Update check failed", result.message);
+      }
+    },
+    [applyAvailableUpdate, notify],
+  );
+
   const handleInstallRestart = useCallback(async () => {
     const u = updateRef.current;
     if (!u) return;
     setUpdaterDownloaded(0);
     setUpdaterContentLength(undefined);
     setUpdaterPhase("downloading");
-    setPendingPostInstall(buildPostInstallPayload(u.version, u.body ?? "")); 
+    setPendingPostInstall(buildPostInstallPayload(u.version, u.body ?? ""));
+    let installFinished = false;
     try {
       await u.downloadAndInstall((event: DownloadEvent) => {
         if (event.event === "Started") {
@@ -358,10 +403,13 @@ function App() {
         } else if (event.event === "Progress") {
           setUpdaterDownloaded((d) => d + event.data.chunkLength);
         } else if (event.event === "Finished") {
+          installFinished = true;
           setUpdaterPhase("installing");
         }
       });
     } catch (e) {
+      // Installer often succeeds then kills the app; the promise rejects on shutdown.
+      if (installFinished) return;
       console.error(e);
       clearPendingPostInstall();
       setUpdaterPhase("available");
@@ -392,30 +440,18 @@ function App() {
     void refreshStorageStats();
   }, [refreshStorageStats, outputDir, saveToInternal]);
 
-  const onDownloadSuccess = useCallback(() => {
-    notify("Complete");
-    void notifyWhenUnfocused({
-      body: "Download finished. Your file is ready.",
-      kind: "info",
-    });
-    void refreshStorageStats();
-    const jobs = useRuforgeStore.getState().downloadJobs;
-    const busy = jobs.some(
-      (j) => j.status === "queued" || j.status === "downloading",
-    );
-    if (!busy) setActiveTab("media");
-  }, [notify, refreshStorageStats, setActiveTab]);
+  const downloadIpcHandlersRef = useRef({
+    applyDownloadProgress,
+    onDownloadJobFinished,
+    onDownloadJobPaused,
+  });
+  downloadIpcHandlersRef.current = {
+    applyDownloadProgress,
+    onDownloadJobFinished,
+    onDownloadJobPaused,
+  };
 
-  const onDownloadError = useCallback((err: string) => {
-    const line = err.split("\n")[0];
-    notify(`Failed: ${line}`);
-    void notifyWhenUnfocused({
-      body: `Failed: ${line}`,
-      kind: "error",
-    });
-  }, [notify]);
-
-  // Single app-level IPC registration (DownloaderView unmounts on tab change).
+  // Register once for the app lifetime (stable refs — avoids duplicate listeners on dep churn).
   useEffect(() => {
     const unsubs: Array<() => void> = [];
     let disposed = false;
@@ -426,7 +462,7 @@ function App() {
         (event) => {
           const normalized = normalizeProgressPayload(event.payload);
           if (!normalized) return;
-          applyDownloadProgress(normalized);
+          downloadIpcHandlersRef.current.applyDownloadProgress(normalized);
         },
       );
       if (disposed) {
@@ -435,22 +471,18 @@ function App() {
       }
       unsubs.push(uProgress);
 
-      const uFinished = await listen<DownloadJobFinishedPayload>(
-        "download-job-finished",
-        (event) => {
-          const payload = event.payload;
-          if (downloadFinishedNotifyGuardRef.current.has(payload.jobId)) return;
-          downloadFinishedNotifyGuardRef.current.add(payload.jobId);
-          onDownloadJobFinished(payload);
-          if (payload.success) {
-            void invalidateEntries({ silent: true }).then(() => {
-              onDownloadSuccess();
-            });
-          } else {
-            onDownloadError(payload.error ?? "Download failed");
-          }
-        },
-      );
+      const uFinished = await listen<
+        DownloadJobFinishedPayload & { job_id?: string }
+      >("download-job-finished", (event) => {
+        const raw = event.payload;
+        const jobId = raw.jobId ?? raw.job_id;
+        if (!jobId) return;
+        downloadIpcHandlersRef.current.onDownloadJobFinished({
+          jobId,
+          success: raw.success,
+          error: raw.error,
+        });
+      });
       if (disposed) {
         uFinished();
         return;
@@ -458,7 +490,7 @@ function App() {
       unsubs.push(uFinished);
 
       const uPaused = await listen<string>("download-job-paused", (event) => {
-        onDownloadJobPaused(event.payload);
+        downloadIpcHandlersRef.current.onDownloadJobPaused(event.payload);
       });
       if (disposed) {
         uPaused();
@@ -467,19 +499,20 @@ function App() {
       unsubs.push(uPaused);
     };
 
-    void register();
+    void (async () => {
+      await register();
+      if (disposed) return;
+      try {
+        await invoke<number>("stop_all_active_download_jobs");
+      } catch (e) {
+        console.error("[RuForge] stop_all_active_download_jobs failed", e);
+      }
+    })();
     return () => {
       disposed = true;
       for (const u of unsubs) u();
     };
-  }, [
-    applyDownloadProgress,
-    onDownloadJobFinished,
-    onDownloadJobPaused,
-    invalidateEntries,
-    onDownloadSuccess,
-    onDownloadError,
-  ]);
+  }, []);
 
   const addLog = useCallback((msg: string) => {
     console.log("[Explorer Debug]", msg);
@@ -662,30 +695,11 @@ function App() {
     };
   }, [activeTab, addLog, isSidebarExpanded]);
 
+  const performUpdateCheckRef = useRef(performUpdateCheck);
+  performUpdateCheckRef.current = performUpdateCheck;
+
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const next = await check();
-        if (cancelled) {
-          void next?.close().catch(() => {});
-          return;
-        }
-        if (!next) return;
-        if (updateRef.current) {
-          void updateRef.current.close().catch(() => {});
-        }
-        updateRef.current = next;
-        setUpdaterVersion(next.version);
-        setUpdaterNotes(teaserNotesFromUpdaterBody(next.body ?? ""));
-        setUpdaterPhase("available");
-      } catch (e) {
-        console.error("Update check failed", e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    void performUpdateCheckRef.current(false);
   }, []);
 
   useEffect(() => {
@@ -716,6 +730,37 @@ function App() {
       }
     };
     checkWindow();
+  }, []);
+
+  // Foreground state for in-app vs overlay notifications (main window only).
+  useEffect(() => {
+    const win = getCurrentWindow();
+    if (win.label !== "main") return;
+
+    let disposed = false;
+    const sync = (focused: boolean) => {
+      if (!disposed) setMainWindowFocused(focused);
+    };
+
+    void win.isFocused().then((f) => sync(f));
+
+    const onVis = () => {
+      if (document.visibilityState === "hidden") sync(false);
+      else void win.isFocused().then(sync);
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    let unlistenFocus: (() => void) | undefined;
+    void win.onFocusChanged(({ payload: focused }) => sync(focused)).then((u) => {
+      if (disposed) u();
+      else unlistenFocus = u;
+    });
+
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVis);
+      unlistenFocus?.();
+    };
   }, []);
 
   // Focus search on expand
@@ -750,6 +795,10 @@ function App() {
       useRuforgeStore.getState().stopPlayback();
     });
 
+    const unlistenManualUpdaterCheck = listen("ruforge-check-updater", () => {
+      void performUpdateCheckRef.current(true);
+    });
+
     const unlistenDebugUpdater = listen("debug-cycle-updater", () => {
       setUpdaterTeaserDismissed(false); // Reset dismissal on debug cycle
       setUpdaterPhase((current) => {
@@ -779,6 +828,7 @@ function App() {
     return () => {
       unlisten.then((f) => f());
       unlistenStop.then((f) => f());
+      unlistenManualUpdaterCheck.then((f) => f());
       unlistenDebugUpdater.then((f) => f());
     };
   }, []);

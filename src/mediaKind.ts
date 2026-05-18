@@ -20,7 +20,7 @@
  * - Deeper prefetch (MediaSource/worklet) **only if** native path rejects.
  */
 
-const AUDIO_ONLY_EXTENSIONS = new Set(["mp3", "m4a", "flac"]);
+const AUDIO_ONLY_EXTENSIONS = new Set(["mp3", "m4a", "flac", "opus", "ogg", "wav"]);
 
 export function isAudioOnlyPath(filePath: string): boolean {
   const name = filePath.replace(/^.*[/\\]/, "");

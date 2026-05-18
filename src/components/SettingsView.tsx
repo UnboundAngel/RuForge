@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from "motion/react";
-import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug, Captions, Layers, Minus, Plus } from 'lucide-react';
+import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug, Captions, Layers, Minus, Plus, RefreshCw } from 'lucide-react';
+import { getVersion } from '@tauri-apps/api/app';
+import { listen } from '@tauri-apps/api/event';
+import { DOWNLOAD_AUDIO_FORMAT_OPTIONS } from '../downloadFormat';
 import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel, CUSTOM_CONCURRENT_DOWNLOADS_MIN, DEFAULT_MAX_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS_CAP } from '../store/types';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
@@ -362,8 +365,23 @@ export const SettingsView: React.FC = () => {
   const handleSetSaveToInternal = useRuforgeStore((s) => s.handleSetSaveToInternal);
   const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
   const notify = useRuforgeStore((s) => s.notify);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [updateCheckBusy, setUpdateCheckBusy] = useState(false);
 
   const accentInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void getVersion().then(setAppVersion).catch(() => setAppVersion(null));
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<{ busy?: boolean }>("ruforge-updater-check-status", (event) => {
+      setUpdateCheckBusy(!!event.payload.busy);
+    });
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, []);
 
   const handlePickDirectory = async () => {
     const selected = await open({ directory: true, multiple: false });
@@ -493,11 +511,68 @@ export const SettingsView: React.FC = () => {
                 }
               />
               <FadingDivider />
+              <SettingItem
+                icon={Music}
+                title="Download audio only"
+                description="Extract audio with yt-dlp (no video file). Thumbnail and metadata are still saved for the library player."
+                active={settings.downloadAudioOnly}
+                control={
+                  <ToggleSlot
+                    active={settings.downloadAudioOnly}
+                    onClick={() =>
+                      updateSetting('downloadAudioOnly', !settings.downloadAudioOnly)
+                    }
+                  />
+                }
+              />
+              <FadingDivider />
+              <SettingItem
+                icon={Music}
+                title="Remember queue audio choice"
+                description="When you toggle Audio (A) on a queue row, also update the default for new downloads."
+                active={settings.rememberAudioOnlyDefault}
+                control={
+                  <ToggleSlot
+                    active={settings.rememberAudioOnlyDefault}
+                    onClick={() =>
+                      updateSetting(
+                        "rememberAudioOnlyDefault",
+                        !settings.rememberAudioOnlyDefault,
+                      )
+                    }
+                  />
+                }
+              />
+              {settings.downloadAudioOnly && (
+                <>
+                  <FadingDivider />
+                  <SettingItem
+                    icon={Music}
+                    title="Audio format"
+                    description="Passed to yt-dlp --audio-format (requires ffmpeg for conversion)."
+                    active={true}
+                    control={
+                      <CustomSelect
+                        value={(settings.downloadAudioFormat ?? 'm4a').toUpperCase()}
+                        options={DOWNLOAD_AUDIO_FORMAT_OPTIONS.map((f) => f.toUpperCase())}
+                        onChange={(val) =>
+                          updateSetting('downloadAudioFormat', val.toLowerCase())
+                        }
+                      />
+                    }
+                  />
+                </>
+              )}
+              <FadingDivider />
               <SettingItem 
                 icon={Download}
                 title="Preferred Quality"
-                description="Default video quality for new downloads."
-                active={true}
+                description={
+                  settings.downloadAudioOnly
+                    ? "Used when audio-only is off. Video quality is ignored while audio-only is enabled."
+                    : "Default video quality for new downloads."
+                }
+                active={!settings.downloadAudioOnly}
                 control={
                   <CustomSelect 
                     value={settings.preferredQuality}
@@ -524,21 +599,24 @@ export const SettingsView: React.FC = () => {
                 icon={Captions}
                 title="Download Subtitles"
                 description={
-                  settings.downloadSubtitles
+                  settings.downloadAudioOnly
+                    ? "Not used for audio-only downloads."
+                    : settings.downloadSubtitles
                     ? `yt-dlp fetches: ${downloadSubtitleLangLabel(settings.downloadSubtitleLangs ?? "en.*")}. Player shows only sidecar files on disk.`
                     : "Subtitle sidecars are not downloaded with new videos."
                 }
-                active={settings.downloadSubtitles}
+                active={settings.downloadSubtitles && !settings.downloadAudioOnly}
                 control={
                   <ToggleSlot
-                    active={settings.downloadSubtitles}
-                    onClick={() =>
-                      updateSetting("downloadSubtitles", !settings.downloadSubtitles)
-                    }
+                    active={settings.downloadSubtitles && !settings.downloadAudioOnly}
+                    onClick={() => {
+                      if (settings.downloadAudioOnly) return;
+                      updateSetting("downloadSubtitles", !settings.downloadSubtitles);
+                    }}
                   />
                 }
               />
-              {settings.downloadSubtitles && (
+              {settings.downloadSubtitles && !settings.downloadAudioOnly && (
                 <>
                   <FadingDivider />
                   <SettingItem
@@ -723,6 +801,27 @@ export const SettingsView: React.FC = () => {
                     active={settings.hardwareAcceleration} 
                     onClick={() => updateSetting('hardwareAcceleration', !settings.hardwareAcceleration)} 
                   />
+                }
+              />
+              <FadingDivider />
+              <SettingItem
+                icon={RefreshCw}
+                title="Check for updates"
+                description={
+                  appVersion
+                    ? `Installed v${appVersion}. Checks GitHub for a newer RuForge build.`
+                    : "Checks GitHub for a newer RuForge build."
+                }
+                active={!updateCheckBusy}
+                control={
+                  <button
+                    type="button"
+                    disabled={updateCheckBusy}
+                    onClick={() => void emit("ruforge-check-updater")}
+                    className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                  >
+                    {updateCheckBusy ? "CHECKING…" : "CHECK NOW"}
+                  </button>
                 }
               />
               <FadingDivider />

@@ -12,7 +12,9 @@ use tauri::{Listener, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::app_state::AppConfig;
-use crate::commands::downloader::{get_video_info, pause_download_job, start_download_job};
+use crate::commands::downloader::{
+    get_video_info, pause_download_job, start_download_job, stop_all_active_download_jobs,
+};
 use crate::download_job_manager::DownloadJobManager;
 use crate::commands::ffprobe::probe_local_media_ffprobe;
 use crate::commands::gallery::scan_gallery;
@@ -102,6 +104,7 @@ pub fn run() {
             get_video_info,
             start_download_job,
             pause_download_job,
+            stop_all_active_download_jobs,
             scan_gallery,
             open_mini_player,
             open_youtube_explorer,

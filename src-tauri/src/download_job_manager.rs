@@ -103,6 +103,23 @@ impl DownloadJobManager {
             ActiveSlot::Pending => None,
         })
     }
+
+    /// Kill every in-flight yt-dlp child (e.g. after a webview reload left the UI on "paused").
+    /// Marks each job paused first so termination handlers emit `download-job-paused`, not failure.
+    pub fn stop_all_active_downloads(&self) -> Result<u32, String> {
+        let mut guard = lock_active(&self.active)?;
+        let entries: Vec<(String, ActiveSlot)> = guard.drain().collect();
+        drop(guard);
+        let mut stopped = 0u32;
+        for (id, slot) in entries {
+            let _ = self.mark_paused(&id);
+            if let ActiveSlot::Running(child) = slot {
+                kill_ytdlp_tree(child);
+                stopped += 1;
+            }
+        }
+        Ok(stopped)
+    }
 }
 
 /// Kill yt-dlp sidecar and any child processes (Windows process tree).
