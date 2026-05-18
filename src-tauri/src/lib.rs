@@ -17,7 +17,8 @@ use crate::download_job_manager::DownloadJobManager;
 use crate::commands::ffprobe::probe_local_media_ffprobe;
 use crate::commands::gallery::scan_gallery;
 use crate::commands::media::{
-    delete_media, ensure_poster_if_missing, extract_frames, get_subtitle_tracks, read_local_subtitle_vtt,
+    delete_media, delete_media_batch, ensure_poster_if_missing, extract_frames, get_subtitle_tracks,
+    read_local_subtitle_vtt,
 };
 use crate::commands::notify_overlay::{
     hide_notify_overlay_window, notify_overlay_ready, push_background_notify, sync_notify_overlay_bounds,
@@ -109,6 +110,7 @@ pub fn run() {
             extract_frames,
             ensure_poster_if_missing,
             delete_media,
+            delete_media_batch,
             get_storage_stats,
             authorize_cleanup,
             clear_ruforge_cache,

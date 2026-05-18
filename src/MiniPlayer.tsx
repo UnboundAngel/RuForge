@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Icon } from "@iconify/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -21,13 +21,17 @@ import {
 } from "lucide-react";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "./types";
 
-type PlayInMiniPayload = { file: MediaFile; startTime: number };
 import { ScrubberHoverThumb } from "./scrubSpritePreview";
 import {
   readResumeSeconds,
   writePlaybackPos,
   getPlaybackThumbnailBar,
 } from "./playbackStorage";
+import { readLoopForPath, writeLoopForPath } from "./playbackLoopStorage";
+import { readPlaybackSpeed, writePlaybackSpeed } from "./playbackSpeedStorage";
+import { extractProminentColor } from "./prominentColor";
+import { useVideoAmbientBackdrop } from "./useVideoAmbientBackdrop";
+import type { PlayInMiniPayload, SendToMainPayload } from "./playerHandoff";
 import { ensurePostersForFiles, filesMissingPoster } from "./posterBackfill";
 import { isAudioOnlyPath } from "./mediaKind";
 import {
@@ -46,7 +50,7 @@ import {
 } from "./localVideoSubtitles";
 import { useSubtitleCueOverlay } from "./useSubtitleCueOverlay";
 
-const Waveform = ({ isPaused }: { isPaused: boolean }) => {
+const Waveform = ({ isPaused, mutedBars }: { isPaused: boolean; mutedBars?: boolean }) => {
   const bars = 14;
   const barKeyframes = useMemo(() => {
     return [...Array(bars)].map((_, i) => {
@@ -71,7 +75,7 @@ const Waveform = ({ isPaused }: { isPaused: boolean }) => {
             ease: "easeInOut",
             delay: i * 0.03,
           }}
-          className="w-[2px] bg-[color:var(--accent)] rounded-full"
+          className={`w-[2px] rounded-full ${mutedBars ? "bg-white/55" : "bg-[color:var(--accent)]"}`}
         />
       ))}
     </div>
@@ -133,93 +137,6 @@ const MarqueeText = ({ text, className }: { text: string; className?: string }) 
   );
 };
 
-async function extractProminentColor(src: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    // Do NOT set crossOrigin for local asset:// or https://asset.localhost protocol
-    // as it can often trigger CORS blocks on local resources that don't send headers.
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = 32;
-        canvas.height = 32;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return resolve(null);
-        
-        ctx.drawImage(img, 0, 0, 32, 32);
-        const imageData = ctx.getImageData(0, 0, 32, 32).data;
-        
-        let bestColor = null;
-        let maxScore = -1;
-
-        for (let i = 0; i < imageData.length; i += 4) {
-          const r = imageData[i];
-          const g = imageData[i+1];
-          const b = imageData[i+2];
-          const a = imageData[i+3];
-
-          if (a < 200) continue; 
-
-          const max = Math.max(r, g, b);
-          const min = Math.min(r, g, b);
-          
-          // Luma (perceived brightness)
-          const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-          // Saturation
-          const sat = max === 0 ? 0 : (max - min) / max;
-
-          // We want colors that are vivid but not too dark or too white.
-          // Score based on saturation and a "sweet spot" for luminance.
-          const lumWeight = 1 - Math.abs(lum - 0.5) * 2; // Peak score at 0.5 lum
-          const score = sat * lumWeight;
-
-          if (score > maxScore && lum > 0.15 && lum < 0.85) {
-            maxScore = score;
-            bestColor = { r, g, b };
-          }
-        }
-
-        if (!bestColor) {
-          // Fallback: If no "vibrant" color found, try to get a brightened average
-          let tr = 0, tg = 0, tb = 0, tc = 0;
-          for (let i = 0; i < imageData.length; i += 4) {
-            if (imageData[i+3] < 200) continue;
-            tr += imageData[i];
-            tg += imageData[i+1];
-            tb += imageData[i+2];
-            tc++;
-          }
-          if (tc > 0) {
-            bestColor = { r: tr/tc, g: tg/tc, b: tb/tc };
-          }
-        }
-
-        if (!bestColor) return resolve(null);
-
-        let { r, g, b } = bestColor;
-        const finalLum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        
-        // Always ensure visibility on black background (boost if too dark)
-        if (finalLum < 0.4) {
-          const boost = 0.4 / finalLum;
-          r = Math.min(255, r * boost);
-          g = Math.min(255, g * boost);
-          b = Math.min(255, b * boost);
-        }
-
-        const toHex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
-        resolve(`#${toHex(r)}${toHex(g)}${toHex(b)}`);
-      } catch (e) {
-        // This is usually a SecurityError if the canvas is tainted
-        console.error("Dynamic color extraction failed (SecurityError/Tainted Canvas)", e);
-        resolve(null);
-      }
-    };
-    img.onerror = () => resolve(null);
-    img.src = src;
-  });
-}
-
 export default function MiniPlayer() {
   const [defaultAccent, setDefaultAccent] = useState("#EDCF9B");
 
@@ -249,17 +166,8 @@ export default function MiniPlayer() {
 
   const [playingFile, setPlayingFile] = useState<MediaFile | null>(null);
   const coverArtSrc = playingFile?.ruforgePosterPath ?? playingFile?.thumbnailPath;
+  const playingAudioOnly = Boolean(playingFile && isAudioOnlyPath(playingFile.path));
 
-  useEffect(() => {
-    if (!coverArtSrc) {
-      syncRuforgeAccentCss(defaultAccent);
-      return;
-    }
-    const src = convertFileSrc(coverArtSrc);
-    extractProminentColor(src).then((color) => {
-      syncRuforgeAccentCss(color || defaultAccent);
-    });
-  }, [coverArtSrc, defaultAccent]);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -304,6 +212,18 @@ export default function MiniPlayer() {
   const isMini = winSize.width < 340;
 
   useEffect(() => {
+    if (!isSmallMode && playingFile && !playingAudioOnly) return;
+    if (!coverArtSrc) {
+      syncRuforgeAccentCss(defaultAccent);
+      return;
+    }
+    const src = convertFileSrc(coverArtSrc);
+    extractProminentColor(src).then((color) => {
+      syncRuforgeAccentCss(color || defaultAccent);
+    });
+  }, [coverArtSrc, defaultAccent, isSmallMode, playingFile, playingAudioOnly]);
+
+  useEffect(() => {
     const handleMouseMove = () => {
       setIsCursorVisible(true);
       if (cursorTimeout.current) clearTimeout(cursorTimeout.current);
@@ -337,12 +257,8 @@ export default function MiniPlayer() {
   const libraryPosterBackfillEpochRef = useRef(0);
   const [isGalleryHovered, setIsGalleryHovered] = useState(false);
   const [, setIsFocused] = useState(true);
-  const [isLooping, setIsLooping] = useState(() => localStorage.getItem("miniplayer-loop") === "true");
+  const [isLooping, setIsLooping] = useState(false);
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem("miniplayer-loop", isLooping.toString());
-  }, [isLooping]);
 
   const [volumeLabel, setVolumeLabel] = useState(() => {
     const saved = localStorage.getItem("miniplayer-volume");
@@ -353,11 +269,21 @@ export default function MiniPlayer() {
   const mediaRef = useRef<HTMLMediaElement>(null);
   /** When set, next `loadedmetadata` on the main media element uses this instead of `readResumeSeconds`. */
   const playInMiniStartTimeRef = useRef<number | null>(null);
+  const handoffPausedRef = useRef(false);
+  /** Avoid re-seeking on repeat `loadedmetadata` while the same file keeps playing. */
+  const resumeSeekAppliedPathRef = useRef<string | null>(null);
+  const ambientCanvasRef = useRef<HTMLCanvasElement>(null);
   const wasPlayingBeforeScrubRef = useRef(false);
+  /** Blocks `timeupdate` from snapping the scrub thumb while a seek is in flight. */
+  const isUserSeekingRef = useRef(false);
   const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaybackPersistRef = useRef(0);
   const progressRafRef = useRef<number | null>(null);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [playbackSpeed, setPlaybackSpeedState] = useState(() => readPlaybackSpeed());
+  const setPlaybackSpeed = (speed: number) => {
+    writePlaybackSpeed(speed);
+    setPlaybackSpeedState(speed);
+  };
   const [isPressing, setIsPressing] = useState<"left" | "right" | null>(null);
   const [previousSpeed, setPreviousSpeed] = useState(1);
   const videoPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -409,6 +335,7 @@ export default function MiniPlayer() {
 
   useEffect(() => {
     lastPlaybackPersistRef.current = 0;
+    resumeSeekAppliedPathRef.current = null;
     if (mediaRef.current) {
       mediaRef.current.preservesPitch = true;
       mediaRef.current.playbackRate = playbackSpeed;
@@ -603,32 +530,159 @@ export default function MiniPlayer() {
     await win.setFocus();
   };
 
+  const applyMiniHandoff = (payload: PlayInMiniPayload) => {
+    const startTime = Number.isFinite(payload.startTime) ? Math.max(0, payload.startTime) : 0;
+    const paused = payload.paused ?? false;
+    handoffPausedRef.current = paused;
+    playInMiniStartTimeRef.current = startTime;
+
+    if (typeof payload.playbackSpeed === "number" && payload.playbackSpeed > 0) {
+      setPlaybackSpeed(payload.playbackSpeed);
+    }
+    if (typeof payload.volume === "number") {
+      const vol = Math.max(0, Math.min(1, payload.volume));
+      setVolumeLabel(Math.round(vol * 100));
+      localStorage.setItem("miniplayer-volume", String(vol));
+    }
+    if (typeof payload.muted === "boolean") setIsMuted(payload.muted);
+
+    const v = mediaRef.current;
+    if (!v) return;
+    let t = startTime;
+    if (isFinite(v.duration) && v.duration > 0) t = Math.min(t, v.duration);
+    v.currentTime = t;
+    v.playbackRate = payload.playbackSpeed ?? playbackSpeed;
+    v.volume = typeof payload.volume === "number" ? payload.volume : volumeLabel / 100;
+    v.muted = payload.muted ?? isMuted;
+    if (paused) {
+      v.pause();
+      setIsPaused(true);
+    } else {
+      void v.play().catch(() => {});
+      setIsPaused(false);
+    }
+    playInMiniStartTimeRef.current = null;
+    resumeSeekAppliedPathRef.current = payload.file.path;
+  };
+
+  useEffect(() => {
+    if (!playingFile) {
+      setIsLooping(false);
+      return;
+    }
+    setIsLooping(readLoopForPath(playingFile.path));
+  }, [playingFile?.path]);
+
+  useVideoAmbientBackdrop(
+    mediaRef as React.RefObject<HTMLVideoElement | null>,
+    ambientCanvasRef,
+    Boolean(playingFile && !playingAudioOnly && !isSmallMode),
+  );
+
+  const syncProgressFromVideo = useCallback((v: HTMLMediaElement) => {
+    if (!isFinite(v.duration) || v.duration <= 0) return;
+    const t = v.currentTime;
+    setCurrentTime(t);
+    setDuration(v.duration);
+    setProgress((t / v.duration) * 100);
+    if (v.buffered.length > 0) {
+      setBuffered((v.buffered.end(v.buffered.length - 1) / v.duration) * 100);
+    }
+  }, []);
+
+  const applySeekRatio = useCallback(
+    (ratio: number, opts?: { persist?: boolean }) => {
+      const v = mediaRef.current;
+      if (!v || !isFinite(v.duration) || v.duration <= 0) return;
+      const r = Math.min(1, Math.max(0, ratio));
+      const t = r * v.duration;
+      isUserSeekingRef.current = true;
+      setScrubPreviewRatio(r);
+      setCurrentTime(t);
+      setProgress(r * 100);
+      v.currentTime = t;
+      if (opts?.persist && playingFile) {
+        writePlaybackPos(playingFile.path, t, v.duration);
+        lastPlaybackPersistRef.current = Date.now();
+      }
+    },
+    [playingFile],
+  );
+
+  const handleSeeked = useCallback(() => {
+    isUserSeekingRef.current = false;
+    setScrubPreviewRatio(null);
+    const v = mediaRef.current;
+    if (v) syncProgressFromVideo(v);
+  }, [syncProgressFromVideo]);
+
+  const applyInitialMediaSeek = (v: HTMLMediaElement) => {
+    if (isUserSeekingRef.current) return;
+    if (!playingFile) return;
+    v.volume = volumeLabel / 100;
+    v.preservesPitch = true;
+    v.playbackRate = playbackSpeed;
+
+    const handoffTime = playInMiniStartTimeRef.current;
+    const isHandoff = handoffTime !== null;
+    if (!isHandoff && resumeSeekAppliedPathRef.current === playingFile.path) return;
+
+    let t: number;
+    if (isHandoff) {
+      t = handoffTime;
+      playInMiniStartTimeRef.current = null;
+      if (isFinite(v.duration) && v.duration > 0) {
+        t = Math.min(Math.max(0, t), v.duration);
+      }
+    } else {
+      t = readResumeSeconds(playingFile.path, v.duration);
+    }
+    resumeSeekAppliedPathRef.current = playingFile.path;
+    v.currentTime = t;
+    if (handoffPausedRef.current) {
+      v.pause();
+      setIsPaused(true);
+      handoffPausedRef.current = false;
+    }
+  };
+
   useEffect(() => {
     const unlisten = listen<MediaFile>("play-media", (_event) => {
-      // If someone else (main app) starts playing, the MiniPlayer should just STOP
       setPlayingFile(null);
     });
 
     const unlistenMiniHandoff = listen<PlayInMiniPayload>("play-in-mini", (event) => {
-      const { file, startTime } = event.payload;
-      playInMiniStartTimeRef.current = Number.isFinite(startTime) ? Math.max(0, startTime) : 0;
-      setPlayingFile(file);
-      incrementViewCount(file);
-      emit("stop-playback", "mini-player");
+      const payload = event.payload;
+      playInMiniStartTimeRef.current = Number.isFinite(payload.startTime)
+        ? Math.max(0, payload.startTime)
+        : 0;
+      handoffPausedRef.current = payload.paused ?? false;
+      setPlayingFile(payload.file);
+      setIsLooping(readLoopForPath(payload.file.path));
+      incrementViewCount(payload.file);
+      void emit("stop-playback", "mini-player");
       getCurrentWindow().setFocus().catch(console.error);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => applyMiniHandoff(payload));
+      });
     });
 
     const unlistenStop = listen<string>("stop-playback", (event) => {
       if (event.payload !== "mini-player") {
+        const v = mediaRef.current;
+        if (v) v.pause();
         setPlayingFile(null);
+        setIsPaused(true);
       }
     });
 
-    return () => { 
-      unlisten.then(f => f()); 
-      unlistenMiniHandoff.then(f => f());
-      unlistenStop.then(f => f());
+    return () => {
+      unlisten.then((f) => f());
+      unlistenMiniHandoff.then((f) => f());
+      unlistenStop.then((f) => f());
     };
+    // applyMiniHandoff closes over latest volume/speed handlers
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const adjustVolume = (delta: number) => {
@@ -666,9 +720,11 @@ export default function MiniPlayer() {
   };
 
   const handleTimeUpdate = () => {
+    if (isUserSeekingRef.current) return;
     if (progressRafRef.current != null) return;
     progressRafRef.current = requestAnimationFrame(() => {
       progressRafRef.current = null;
+      if (isUserSeekingRef.current) return;
       const v = mediaRef.current;
       if (!v || !isFinite(v.duration)) return;
       const { currentTime, duration } = v;
@@ -712,23 +768,18 @@ export default function MiniPlayer() {
     if (wasPlayingBeforeScrubRef.current) v.pause();
 
     const r0 = seekRatioFromClientX(e.clientX, bar);
-    setScrubPreviewRatio(r0);
     setHoverProgress(r0);
+    applySeekRatio(r0);
 
     const onMove = (ev: MouseEvent) => {
       const r = seekRatioFromClientX(ev.clientX, bar);
-      setScrubPreviewRatio(r);
       setHoverProgress(r);
+      applySeekRatio(r);
     };
 
     const onUp = (ev: MouseEvent) => {
       const r = seekRatioFromClientX(ev.clientX, bar);
-      const m = mediaRef.current;
-      if (m && isFinite(m.duration)) {
-        m.currentTime = r * m.duration;
-        if (playingFile) writePlaybackPos(playingFile.path, m.currentTime, m.duration);
-      }
-      setScrubPreviewRatio(null);
+      applySeekRatio(r, { persist: true });
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
 
@@ -772,13 +823,13 @@ export default function MiniPlayer() {
   };
 
   const seek = (seconds: number) => {
-    if (!mediaRef.current) return;
-    mediaRef.current.currentTime += seconds;
+    const v = mediaRef.current;
+    if (!v || !isFinite(v.duration) || v.duration <= 0) return;
+    const next = Math.min(v.duration, Math.max(0, v.currentTime + seconds));
+    applySeekRatio(next / v.duration, { persist: true });
   };
 
   const showGallery = isMediaSelectorOpen;
-
-  const playingAudioOnly = Boolean(playingFile && isAudioOnlyPath(playingFile.path));
 
   const isProbablyWindows =
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
@@ -960,8 +1011,20 @@ export default function MiniPlayer() {
                 type="button"
                 onClick={async (e) => {
                   e.stopPropagation();
+                  const media = mediaRef.current;
+                  const payload: SendToMainPayload = {
+                    file: playingFile,
+                    currentTime: media?.currentTime ?? 0,
+                    paused: media ? media.paused : true,
+                    playbackSpeed,
+                    volume: media?.volume ?? volumeLabel / 100,
+                    muted: media?.muted ?? isMuted,
+                  };
+                  if (media && playingFile) {
+                    writePlaybackPos(playingFile.path, media.currentTime, media.duration);
+                  }
                   const { emit } = await import("@tauri-apps/api/event");
-                  await emit("send-to-main", playingFile);
+                  await emit("send-to-main", payload);
                   const main = await WebviewWindow.getByLabel("main");
                   await main?.setFocus().catch(console.error);
                   getCurrentWindow().close();
@@ -1039,22 +1102,7 @@ export default function MiniPlayer() {
                     onLoadedData={(e) => {
                       e.currentTarget.volume = volumeLabel / 100;
                     }}
-                    onLoadedMetadata={(e) => {
-                      const v = e.currentTarget;
-                      v.volume = volumeLabel / 100;
-                      v.preservesPitch = true;
-                      let t: number;
-                      if (playInMiniStartTimeRef.current !== null) {
-                        t = playInMiniStartTimeRef.current;
-                        playInMiniStartTimeRef.current = null;
-                        if (isFinite(v.duration) && v.duration > 0) {
-                          t = Math.min(Math.max(0, t), v.duration);
-                        }
-                      } else {
-                        t = readResumeSeconds(playingFile.path, v.duration);
-                      }
-                      v.currentTime = t;
-                    }}
+                    onLoadedMetadata={(e) => applyInitialMediaSeek(e.currentTarget)}
                     onEnded={() => {
                       if (isLooping && mediaRef.current) {
                         mediaRef.current.currentTime = 0;
@@ -1073,6 +1121,7 @@ export default function MiniPlayer() {
                       setIsPaused(true);
                     }}
                     onTimeUpdate={handleTimeUpdate}
+                    onSeeked={handleSeeked}
                   />
                   {prefetchMini && nextMini && (
                     <audio
@@ -1092,6 +1141,13 @@ export default function MiniPlayer() {
                   onMouseUp={isSmallMode ? undefined : handleMiniVideoMouseUpLeave}
                   onMouseLeave={isSmallMode ? undefined : handleMiniVideoMouseUpLeave}
                 >
+                  {!isSmallMode && (
+                    <canvas
+                      ref={ambientCanvasRef}
+                      className="pointer-events-none absolute inset-[-15%] z-0 h-[130%] w-[130%] opacity-50 blur-[100px]"
+                      aria-hidden
+                    />
+                  )}
                   <video
                     ref={mediaRef as React.RefObject<HTMLVideoElement>}
                     autoPlay
@@ -1108,23 +1164,7 @@ export default function MiniPlayer() {
                     onLoadedData={(e) => {
                       e.currentTarget.volume = volumeLabel / 100;
                     }}
-                    onLoadedMetadata={(e) => {
-                      const v = e.currentTarget;
-                      v.volume = volumeLabel / 100;
-                      v.preservesPitch = true;
-                      v.playbackRate = playbackSpeed;
-                      let t: number;
-                      if (playInMiniStartTimeRef.current !== null) {
-                        t = playInMiniStartTimeRef.current;
-                        playInMiniStartTimeRef.current = null;
-                        if (isFinite(v.duration) && v.duration > 0) {
-                          t = Math.min(Math.max(0, t), v.duration);
-                        }
-                      } else {
-                        t = readResumeSeconds(playingFile.path, v.duration);
-                      }
-                      v.currentTime = t;
-                    }}
+                    onLoadedMetadata={(e) => applyInitialMediaSeek(e.currentTarget)}
                     onEnded={() => {
                       if (isLooping && mediaRef.current) {
                         mediaRef.current.currentTime = 0;
@@ -1143,6 +1183,7 @@ export default function MiniPlayer() {
                       setIsPaused(true);
                     }}
                     onTimeUpdate={handleTimeUpdate}
+                    onSeeked={handleSeeked}
                     onClick={togglePlay}
                     onAuxClick={(e) => {
                       if (e.button === 1 && mediaRef.current) {
@@ -1253,27 +1294,32 @@ export default function MiniPlayer() {
                 <div className="absolute inset-0 pl-36 pr-8 flex flex-col justify-center pointer-events-none">
                    <div className="flex items-center justify-between mb-2">
                       <div className="min-w-0 flex-1 mr-4">
-                        <MarqueeText text={playingFile.name} className="text-[11px] font-black text-[color:var(--accent)] uppercase tracking-widest" />
+                        <MarqueeText text={playingFile.name} className="text-[11px] font-black text-stone-100/95 uppercase tracking-widest" />
                       </div>
-                      <Waveform isPaused={isPaused} />
+                      <Waveform isPaused={isPaused} mutedBars />
                    </div>
-                   <div className="w-full h-1.5 bg-white/15 rounded-full relative mb-4 pointer-events-auto cursor-pointer" onMouseDown={handleScrubberBarMouseDown}>
-                      <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
+                   <div className="w-full h-1.5 bg-white/25 rounded-full relative mb-4 pointer-events-auto cursor-pointer" onMouseDown={handleScrubberBarMouseDown}>
+                      <div className="absolute top-0 left-0 h-full bg-white/35 rounded-full" style={{ width: `${buffered}%` }} />
                       <div 
-                         className="absolute top-0 left-0 h-full bg-[color:var(--accent)] rounded-full shadow-[0_0_8px_rgba(var(--accent-rgb),0.4)]"
+                         className="absolute top-0 left-0 h-full bg-[color:var(--accent)] rounded-full shadow-[0_0_10px_color-mix(in_srgb,var(--accent),transparent_55%)]"
                          style={{ width: `${scrubBarProgressPct}%` }}
                       />
                    </div>
-                   <div className={`flex items-center justify-center ${winSize.width < 380 ? 'space-x-4' : 'space-x-8'} text-[color:var(--accent)] pointer-events-auto transition-all`}>
-                      <button onClick={() => seek(-15)} className="opacity-60 hover:opacity-100 transition-all active:scale-90">
+                   <div className={`flex items-center justify-center ${winSize.width < 380 ? 'space-x-4' : 'space-x-8'} text-stone-200 pointer-events-auto transition-all`}>
+                      <button onClick={() => seek(-15)} className="text-stone-400 hover:text-[color:var(--accent)] transition-all active:scale-90">
                         <Icon icon="tabler:rewind-backward-15" width={winSize.width < 380 ? 18 : 22} />
                       </button>
-                      <button onClick={togglePlay} className="hover:scale-110 active:scale-90 transition-all">{isPaused ? <Play size={winSize.width < 380 ? 20 : 24} fill="currentColor" /> : <Pause size={winSize.width < 380 ? 20 : 24} fill="currentColor" />}</button>
-                      <button onClick={() => seek(15)} className="opacity-60 hover:opacity-100 transition-all active:scale-90">
+                      <button onClick={togglePlay} className="text-[color:var(--accent)] hover:scale-110 active:scale-90 transition-all">{isPaused ? <Play size={winSize.width < 380 ? 20 : 24} fill="currentColor" /> : <Pause size={winSize.width < 380 ? 20 : 24} fill="currentColor" />}</button>
+                      <button onClick={() => seek(15)} className="text-stone-400 hover:text-[color:var(--accent)] transition-all active:scale-90">
                         <Icon icon="tabler:rewind-forward-15" width={winSize.width < 380 ? 18 : 22} />
                       </button>
                       <button 
-                        onClick={() => setIsLooping(!isLooping)} 
+                        onClick={() => {
+                          const next = !isLooping;
+                          setIsLooping(next);
+                          if (playingFile) writeLoopForPath(playingFile.path, next);
+                          if (mediaRef.current) mediaRef.current.loop = next;
+                        }} 
                         className={`transition-all p-1 rounded-lg active:scale-90 ${isLooping ? 'bg-[color:var(--accent)]/20' : 'opacity-40 hover:opacity-100'}`}
                         title={isLooping ? "Disable Loop" : "Enable Loop"}
                       >
@@ -1382,6 +1428,7 @@ export default function MiniPlayer() {
                         onClick={() => {
                           const nextLoop = !isLooping;
                           setIsLooping(nextLoop);
+                          if (playingFile) writeLoopForPath(playingFile.path, nextLoop);
                           if (mediaRef.current) mediaRef.current.loop = nextLoop;
                         }} 
                         className={`transition-all p-1 rounded-lg ${isLooping ? 'text-[color:var(--accent)] bg-[color:var(--accent)]/10' : 'text-stone-400 hover:text-white'}`}

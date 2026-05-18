@@ -51,7 +51,9 @@ export function peekDownloadJobMetadataCache(url: string): DownloadJobMediaSnaps
   if (!row || row.v !== 1 || !row.snap) return null;
   const t = String(row.snap.title ?? "").trim();
   const th = String(row.snap.thumbnail ?? "").trim();
+  const size = row.snap.fileSizeBytes;
   if (!t || !th) return null;
+  if (typeof size !== "number" || size <= 0) return null;
   return row.snap;
 }
 

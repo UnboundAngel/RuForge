@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { Loader2, AlertTriangle, ExternalLink } from "lucide-react";
+import { Loader2, AlertTriangle, ExternalLink, X } from "lucide-react";
 import { emit } from "@tauri-apps/api/event";
 import Markdown from "markdown-to-jsx";
 import { ChangeItem } from "../updatePostInstall";
@@ -57,10 +57,11 @@ export const RUFORGE_ICONIFY_CHANGELOG_FIXES = "fluent:window-wrench-24-regular"
 type SidebarBadgeProps = {
   phase: UpdaterPhase;
   version: string | null;
+  onClick?: () => void;
 };
 
 /** Top-right status pill for the window controls area. */
-export function UpdaterStatusIndicator({ phase, version }: SidebarBadgeProps) {
+export function UpdaterStatusIndicator({ phase, version, onClick }: SidebarBadgeProps) {
   if (phase === "downloading") {
     return (
       <motion.div 
@@ -78,8 +79,8 @@ export function UpdaterStatusIndicator({ phase, version }: SidebarBadgeProps) {
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        whileHover={{ scale: 1.05 }}
-        className="flex items-center gap-1.5 rounded-full border border-[color:var(--accent)]/20 bg-[color-mix(in_srgb,var(--accent),transparent_95%)] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-[color:var(--accent)] transition-all hover:brightness-110"
+        onClick={onClick}
+        className="flex cursor-pointer items-center gap-1.5 rounded-full border border-[color:var(--accent)]/20 bg-[color-mix(in_srgb,var(--accent),transparent_95%)] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-[color:var(--accent)] transition-all"
       >
         <AlertTriangle className="h-2.5 w-2.5 shrink-0" aria-hidden />
         <span>Update Available</span>
@@ -97,6 +98,7 @@ type MainOverlaysProps = {
   fixes?: ChangeItem[];
   onInstallRestart: () => void;
   onDismiss?: () => void;
+  dismissed?: boolean;
 };
 
 function ChangelogLayout({
@@ -201,19 +203,35 @@ function ChangelogLayout({
 }
 
 /** “Update available” card only (main pane). Download/install uses {@link UpdaterFullWindowUpdate} at app root. */
-export function UpdaterMainOverlays({ phase, version, notes, onInstallRestart }: MainOverlaysProps) {
+export function UpdaterMainOverlays({
+  phase,
+  version,
+  notes,
+  onInstallRestart,
+  onDismiss,
+  dismissed,
+}: MainOverlaysProps) {
   return (
     <AnimatePresence>
-      {phase === "available" && version && (
+      {phase === "available" && version && !dismissed && (
         <motion.div 
           initial={{ opacity: 0, x: 20, y: 0 }}
           animate={{ opacity: 1, x: 0, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
           className="pointer-events-auto absolute top-6 right-6 z-[60] w-[min(calc(100vw-3rem),19rem)] rounded-[20px] border border-white/10 bg-[#271C18]/95 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl"
         >
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="absolute top-3 right-3 p-1 text-stone-500 hover:text-stone-200 transition-colors"
+            aria-label="Dismiss update teaser"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+
           <div className="flex flex-col gap-3">
             <div>
-              <p className="text-[12px] font-black tracking-tight text-stone-100 uppercase tracking-widest">RuForge is ready to update</p>
+              <p className="text-[12px] font-black tracking-tight text-stone-100 uppercase tracking-widest pr-6">RuForge is ready to update</p>
               <div className="mt-1.5 line-clamp-3 text-[10px] leading-relaxed text-stone-500 [&_a]:pointer-events-none">
                 {notes.trim() ? (
                   <UpdaterReleaseNotesMarkdown markdown={notes.trim()} />

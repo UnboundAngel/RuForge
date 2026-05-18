@@ -15,10 +15,8 @@ import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
 import { buildExplorerInjectScript } from "./explorerInjectScript";
-import { canonicalYouTubeWatchUrl, extractYouTubeVideoId } from "./youtubeUrl";
 import { useUrlDropIntake } from "./features/downloader/useUrlDropIntake";
 import { getYoutubeUrlDropHandler } from "./features/downloader/youtubeUrlDropRegistry";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { notifyWhenUnfocused } from "./systemNotify";
 import { check, Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -49,8 +47,11 @@ import { DownloaderView } from "./components/DownloaderView";
 import { PlayerView, type PlayerViewHandle } from "./components/PlayerView";
 import { SettingsView } from "./components/SettingsView";
 import { MediaView } from "./components/MediaView";
+import { AuthorizeCleanupModal } from "./components/AuthorizeCleanupModal";
+import type { SendToMainPayload } from "./playerHandoff";
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MediaFile } from "./types";
+import { readPlaybackSpeed } from "./playbackSpeedStorage";
 import {
   Download,
   Settings,
@@ -67,6 +68,13 @@ import {
 } from "lucide-react";
 
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
+import type { DownloadJobFinishedPayload } from "./downloadQueue";
+import { normalizeProgressPayload, type ProgressPayload } from "./types";
+import {
+  EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+  EXPLORER_PAUSE_MEDIA_SCRIPT,
+  explorerNavigateOrReloadScript,
+} from "./explorerWebviewLifecycle";
 
 const WindowControls = ({ 
   onMiniPlayerToggle,
@@ -74,12 +82,14 @@ const WindowControls = ({
   updaterVersion,
   showExplorerQueueToolbar,
   storageBlocksNewDownloads,
+  onUpdaterStatusClick,
 }: { 
   onMiniPlayerToggle: () => void,
   updaterPhase: UpdaterPhase,
   updaterVersion: string | null,
   showExplorerQueueToolbar: boolean,
   storageBlocksNewDownloads: boolean,
+  onUpdaterStatusClick?: () => void,
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
@@ -105,7 +115,11 @@ const WindowControls = ({
   return (
     <div className="fixed top-0 right-0 z-[100] flex items-center h-10 pr-2 pointer-events-auto">
       <div className="mr-3">
-        <UpdaterStatusIndicator phase={updaterPhase} version={updaterVersion} />
+        <UpdaterStatusIndicator 
+          phase={updaterPhase} 
+          version={updaterVersion} 
+          onClick={onUpdaterStatusClick}
+        />
       </div>
 
       {showExplorerQueueToolbar && (
@@ -150,7 +164,7 @@ const WindowControls = ({
 const StorageWidget = () => {
   const stats = useRuforgeStore((s) => s.storageStats);
   const limitGB = useRuforgeStore((s) => s.settings.storageLimitGB);
-  const onAuthorizeCleanup = useRuforgeStore((s) => s.handleAuthorizeCleanup);
+  const onAuthorizeCleanup = useRuforgeStore((s) => s.openAuthorizeCleanupModal);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
   const isExpanded = useRuforgeStore((s) => s.isSidebarExpanded);
 
@@ -207,7 +221,7 @@ const StorageWidget = () => {
               <motion.button
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                onClick={onAuthorizeCleanup}
+                onClick={() => void onAuthorizeCleanup()}
                 className="flex w-full items-center justify-center gap-2 py-2 border border-[color-mix(in_srgb,var(--accent),transparent_80%)] hover:bg-[color-mix(in_srgb,var(--accent),transparent_92%)] rounded-xl text-[8px] font-black text-[color:var(--accent)] transition-all uppercase tracking-widest whitespace-nowrap"
               >
                 <Trash2 size={10} />
@@ -299,6 +313,12 @@ function App() {
 
   const explorerContainerRef = useRef<HTMLDivElement>(null);
   const explorerWebviewRef = useRef<Webview | null>(null);
+  const prevActiveTabRef = useRef<ActiveTab>(activeTab);
+  const downloadFinishedNotifyGuardRef = useRef<Set<string>>(new Set());
+  const applyDownloadProgress = useRuforgeStore((s) => s.applyDownloadProgress);
+  const onDownloadJobFinished = useRuforgeStore((s) => s.onDownloadJobFinished);
+  const onDownloadJobPaused = useRuforgeStore((s) => s.onDownloadJobPaused);
+  const invalidateEntries = useRuforgeStore((s) => s.invalidateEntries);
   const playerViewRef = useRef<PlayerViewHandle>(null);
   const refreshStorageStats = useRuforgeStore((s) => s.refreshStorageStats);
   const outputDir = useRuforgeStore((s) => s.outputDir);
@@ -318,6 +338,7 @@ function App() {
   const [, setUpdaterNotes] = useState("");
   const [updaterDownloaded, setUpdaterDownloaded] = useState(0);
   const [updaterContentLength, setUpdaterContentLength] = useState<number | undefined>(undefined);
+  const [updaterTeaserDismissed, setUpdaterTeaserDismissed] = useState(false);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
 
   const handleInstallRestart = useCallback(async () => {
@@ -391,23 +412,115 @@ function App() {
     });
   }, [notify]);
 
+  // Single app-level IPC registration (DownloaderView unmounts on tab change).
+  useEffect(() => {
+    const unsubs: Array<() => void> = [];
+    let disposed = false;
+
+    const register = async () => {
+      const uProgress = await listen<ProgressPayload & { job_id?: string }>(
+        "download-progress",
+        (event) => {
+          const normalized = normalizeProgressPayload(event.payload);
+          if (!normalized) return;
+          applyDownloadProgress(normalized);
+        },
+      );
+      if (disposed) {
+        uProgress();
+        return;
+      }
+      unsubs.push(uProgress);
+
+      const uFinished = await listen<DownloadJobFinishedPayload>(
+        "download-job-finished",
+        (event) => {
+          const payload = event.payload;
+          if (downloadFinishedNotifyGuardRef.current.has(payload.jobId)) return;
+          downloadFinishedNotifyGuardRef.current.add(payload.jobId);
+          onDownloadJobFinished(payload);
+          if (payload.success) {
+            void invalidateEntries({ silent: true }).then(() => {
+              onDownloadSuccess();
+            });
+          } else {
+            onDownloadError(payload.error ?? "Download failed");
+          }
+        },
+      );
+      if (disposed) {
+        uFinished();
+        return;
+      }
+      unsubs.push(uFinished);
+
+      const uPaused = await listen<string>("download-job-paused", (event) => {
+        onDownloadJobPaused(event.payload);
+      });
+      if (disposed) {
+        uPaused();
+        return;
+      }
+      unsubs.push(uPaused);
+    };
+
+    void register();
+    return () => {
+      disposed = true;
+      for (const u of unsubs) u();
+    };
+  }, [
+    applyDownloadProgress,
+    onDownloadJobFinished,
+    onDownloadJobPaused,
+    invalidateEntries,
+    onDownloadSuccess,
+    onDownloadError,
+  ]);
+
   const addLog = useCallback((msg: string) => {
     console.log("[Explorer Debug]", msg);
   }, []);
 
   // Manage Embedded Explorer Webview.
-  // Deps: `activeTab`, `addLog` only — not `settings.accentColor`: this effect owns the 1s poll
-  // (while Explorer is active) and show/position/hide webview; accent is baked in `tauri://created` only (same as before
-  // adding accent to deps would re-run the whole effect on every accent change).
+  // Deps: `activeTab`, `addLog`, `lastExplorerUrl` — 1s poll while Explorer is active; pause on leave.
   useEffect(() => {
     let active = true;
     let interval: number | undefined;
-    
+    const wasOnExplorer = prevActiveTabRef.current === "explorer";
+    const onExplorer = activeTab === "explorer";
+    prevActiveTabRef.current = activeTab;
+
+    const pauseExplorerMedia = async () => {
+      try {
+        await invoke("eval_in_webview", {
+          label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+          script: EXPLORER_PAUSE_MEDIA_SCRIPT,
+        });
+      } catch {
+        /* webview not mounted */
+      }
+    };
+
+    const reloadExplorerPage = async () => {
+      const target = lastExplorerUrl.trim().startsWith("http")
+        ? lastExplorerUrl.trim()
+        : "https://www.youtube.com";
+      try {
+        await invoke("eval_in_webview", {
+          label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+          script: explorerNavigateOrReloadScript(target),
+        });
+      } catch {
+        /* webview still creating */
+      }
+    };
+
     const syncWebview = async () => {
       if (!active) return;
       const appWindow = getCurrentWindow();
       
-      if (activeTab === "explorer") {
+      if (onExplorer) {
         if (!explorerContainerRef.current) {
           addLog("Container ref is null");
           return;
@@ -448,20 +561,29 @@ function App() {
             webview.once('tauri://created', () => {
               addLog("Webview successfully created!");
               explorerWebviewRef.current = webview;
-              
-              const accent = typeof settings.accentColor === "string" ? settings.accentColor : "#EDCF9B";
-              const rgb = syncRuforgeAccentCss(accent, true); // Get RGB for rgba borders
-              const borderRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)` : 'rgba(237, 207, 155, 0.2)';
-              const glowRgba = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)` : 'rgba(237, 207, 155, 0.3)';
 
-              invoke("eval_in_webview", {
-                label: "explorer-view",
+              const accent =
+                typeof settings.accentColor === "string" ? settings.accentColor : "#EDCF9B";
+              const rgb = syncRuforgeAccentCss(accent, true);
+              const borderRgba = rgb
+                ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`
+                : "rgba(237, 207, 155, 0.2)";
+              const glowRgba = rgb
+                ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`
+                : "rgba(237, 207, 155, 0.3)";
+
+              void invoke("eval_in_webview", {
+                label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
                 script: buildExplorerInjectScript({
                   accent,
                   borderRgba,
                   glowRgba,
                 }),
               });
+
+              if (active && activeTab === "explorer" && !wasOnExplorer) {
+                void reloadExplorerPage();
+              }
             });
             
             webview.once('tauri://error', (e) => {
@@ -477,25 +599,33 @@ function App() {
             await explorerWebviewRef.current.show();
             await explorerWebviewRef.current.setPosition(new LogicalPosition(finalX, finalY));
             await explorerWebviewRef.current.setSize(new LogicalSize(finalW, finalH));
+            if (!wasOnExplorer) {
+              await reloadExplorerPage();
+            }
           } catch (e: any) {
              addLog(`Update failed: ${e?.message || String(e)}`);
           }
         }
-      } else if (explorerWebviewRef.current) {
-        try {
-          addLog("Hiding Webview...");
-          await explorerWebviewRef.current.hide();
-        } catch (e: any) {
-          addLog(`Hide failed: ${e?.message || String(e)}`);
-          console.error("Webview hide failed", e);
+      } else {
+        if (wasOnExplorer) {
+          await pauseExplorerMedia();
+        }
+        if (explorerWebviewRef.current) {
+          try {
+            addLog("Hiding Webview...");
+            await explorerWebviewRef.current.hide();
+          } catch (e: any) {
+            addLog(`Hide failed: ${e?.message || String(e)}`);
+            console.error("Webview hide failed", e);
+          }
         }
       }
     };
 
     // Run immediately (layout + hide when leaving Explorer), then poll only while Explorer is visible.
-    syncWebview();
-    if (activeTab === "explorer") {
-      interval = window.setInterval(syncWebview, 1000); // Polling 1s to avoid spam
+    void syncWebview();
+    if (onExplorer) {
+      interval = window.setInterval(() => void syncWebview(), 1000); // Polling 1s to avoid spam
     }
 
     return () => {
@@ -504,7 +634,7 @@ function App() {
         clearInterval(interval);
       }
     };
-  }, [activeTab, addLog]);
+  }, [activeTab, addLog, lastExplorerUrl, settings.accentColor]);
 
   useEffect(() => {
     let cancelled = false;
@@ -594,51 +724,8 @@ function App() {
       useRuforgeStore.getState().stopPlayback();
     });
 
-    const unlistenManualDownload = listen<string>("manual-download-trigger", () => {
-      useRuforgeStore.getState().setActiveTab("downloader");
-    });
-
-    const unlistenExplorerSend = listen<string>(
-      "explorer-send-to-downloader",
-      (event) => {
-        const watchUrl =
-          canonicalYouTubeWatchUrl(event.payload) ?? event.payload.trim();
-        if (!watchUrl) return;
-        const st = useRuforgeStore.getState();
-        st.setDownloaderUrl(watchUrl);
-        st.setActiveTab("downloader");
-      },
-    );
-
-    const unlistenExplorerCopyLink = listen<string>(
-      "explorer-copy-watch-url",
-      (event) => {
-        const watchUrl =
-          canonicalYouTubeWatchUrl(event.payload) ?? event.payload.trim();
-        if (!watchUrl) return;
-        void writeText(watchUrl)
-          .then(() => {
-            useRuforgeStore.getState().notify("Link copied to clipboard");
-          })
-          .catch((e) => console.error("explorer copy link failed", e));
-      },
-    );
-
-    const unlistenExplorerCopyId = listen<string>(
-      "explorer-copy-video-id",
-      (event) => {
-        const id =
-          extractYouTubeVideoId(event.payload) ?? event.payload.trim();
-        if (!id) return;
-        void writeText(id)
-          .then(() => {
-            useRuforgeStore.getState().notify("Video ID copied");
-          })
-          .catch((e) => console.error("explorer copy id failed", e));
-      },
-    );
-
     const unlistenDebugUpdater = listen("debug-cycle-updater", () => {
+      setUpdaterTeaserDismissed(false); // Reset dismissal on debug cycle
       setUpdaterPhase((current) => {
         if (current === "idle") {
           setUpdaterVersion("9.9.9-mock");
@@ -666,21 +753,29 @@ function App() {
     return () => {
       unlisten.then((f) => f());
       unlistenStop.then((f) => f());
-      unlistenManualDownload.then((f) => f());
-      unlistenExplorerSend.then((f) => f());
-      unlistenExplorerCopyLink.then((f) => f());
-      unlistenExplorerCopyId.then((f) => f());
       unlistenDebugUpdater.then((f) => f());
     };
   }, []);
 
   // Send-to-main handoff from miniplayer
   useEffect(() => {
-    const unlistenHandoff = listen<MediaFile>("send-to-main", async (event) => {
+    const unlistenHandoff = listen<SendToMainPayload | MediaFile>("send-to-main", async (event) => {
+      const raw = event.payload;
+      const payload: SendToMainPayload =
+        raw && typeof raw === "object" && "currentTime" in raw
+          ? (raw as SendToMainPayload)
+          : {
+              file: raw as MediaFile,
+              currentTime: 0,
+              paused: false,
+            };
       const st = useRuforgeStore.getState();
-      st.setPlayingFile(event.payload);
+      if (typeof payload.volume === "number") st.setVolume(payload.volume);
+      if (typeof payload.muted === "boolean") st.setMuted(payload.muted);
+      st.setPlayingFile(payload.file);
       st.setActiveTab("player");
-      st.notify(`Now playing: ${event.payload.name}`);
+      useRuforgeStore.setState({ playerResumeAt: Math.max(0, payload.currentTime) });
+      st.notify(`Now playing: ${payload.file.name}`);
       const focusMain = async () => {
         const main = await WebviewWindow.getByLabel("main");
         await main?.setFocus().catch(() => {});
@@ -861,17 +956,19 @@ function App() {
       
       {/* Window Controls */}
       <WindowControls
-        onMiniPlayerToggle={() =>
-          void useRuforgeStore.getState().handlePopOut(
-            useRuforgeStore.getState().activeTab === "player"
-              ? playerViewRef.current?.getCurrentTime() ?? 0
-              : undefined,
-          )
-        }
+        onMiniPlayerToggle={() => {
+          const st = useRuforgeStore.getState();
+          const inPlayer = st.activeTab === "player";
+          void st.handlePopOut(inPlayer ? (playerViewRef.current?.getCurrentTime() ?? 0) : undefined, {
+            paused: inPlayer ? (playerViewRef.current?.getIsPaused() ?? true) : true,
+            playbackSpeed: readPlaybackSpeed(),
+          });
+        }}
         updaterPhase={updaterPhase}
         updaterVersion={updaterVersion}
         showExplorerQueueToolbar={activeTab === "explorer" && !postInstall}
         storageBlocksNewDownloads={storageBlocksNewDownloads}
+        onUpdaterStatusClick={() => setUpdaterTeaserDismissed(false)}
       />
 
       {/* Global Drag Region - Top strip except controls area */}
@@ -1202,7 +1299,8 @@ function App() {
             additions={availableUpdatePayload?.additions}
             fixes={availableUpdatePayload?.fixes}
             onInstallRestart={() => void handleInstallRestart()}
-            onDismiss={() => setUpdaterPhase("idle")}
+            onDismiss={() => setUpdaterTeaserDismissed(true)}
+            dismissed={updaterTeaserDismissed}
           />
           {postInstall && (
             <UpdaterPostInstallStack
@@ -1227,8 +1325,6 @@ function App() {
                   key="downloader"
                   internalDir={RUFORGE_INTERNAL_DIR}
                   storageFull={storageBlocksNewDownloads}
-                  onDownloadSuccess={onDownloadSuccess}
-                  onDownloadError={onDownloadError}
                 />
               )}
               {activeTab === "explorer" && (
@@ -1335,6 +1431,8 @@ function App() {
         downloaded={updaterDownloaded}
         contentLength={updaterContentLength}
       />
+
+      <AuthorizeCleanupModal />
     </div>
   );
 }

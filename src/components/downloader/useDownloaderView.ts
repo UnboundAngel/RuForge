@@ -8,7 +8,6 @@ import {
   buildDownloadJobOptions,
   downloadJobMediaNeedsHydration,
   videoInfoToDownloadJobSnapshot,
-  type DownloadJobFinishedPayload,
 } from "../../downloadQueue";
 import { effectiveDownloadSubLangs } from "../../store/types";
 import { readClipboardYouTubeUrl } from "../../downloaderClipboardYoutube";
@@ -21,11 +20,9 @@ import {
   youtubeUrlsMatch,
 } from "../../youtubeUrl";
 import {
-  ProgressPayload,
   VideoInfo,
   type YtdlpUpdateDownloadProgressPayload,
   type YtdlpUpdateStatusPayload,
-  normalizeProgressPayload,
 } from "../../types";
 import { URL_PACER_EASE } from "./downloaderConstants";
 import { urlConflictsWithActiveDownloader } from "./downloaderUrlConflict";
@@ -41,15 +38,11 @@ const STORAGE_FULL_NOTIFY =
 export type DownloaderViewProps = {
   internalDir: string;
   storageFull: boolean;
-  onDownloadSuccess: () => void;
-  onDownloadError: (msg: string) => void;
 };
 
 export function useDownloaderView({
   internalDir,
   storageFull,
-  onDownloadSuccess,
-  onDownloadError,
 }: DownloaderViewProps) {
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const notify = useRuforgeStore((s) => s.notify);
@@ -69,9 +62,6 @@ export function useDownloaderView({
   const enqueueDownload = useRuforgeStore((s) => s.enqueueDownload);
   const confirmPendingDownloadJob = useRuforgeStore((s) => s.confirmPendingDownloadJob);
   const setDownloaderFocusedJobId = useRuforgeStore((s) => s.setDownloaderFocusedJobId);
-  const applyDownloadProgress = useRuforgeStore((s) => s.applyDownloadProgress);
-  const onDownloadJobFinished = useRuforgeStore((s) => s.onDownloadJobFinished);
-  const onDownloadJobPaused = useRuforgeStore((s) => s.onDownloadJobPaused);
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const queueHydrateOrphanMetadata = useRuforgeStore((s) => s.queueHydrateOrphanMetadata);
   const pumpDownloadQueue = useRuforgeStore((s) => s.pumpDownloadQueue);
@@ -82,7 +72,6 @@ export function useDownloaderView({
   const setMetadataError = useRuforgeStore((s) => s.setMetadataError);
   const isFocused = useRuforgeStore((s) => s.isFocused);
   const setDownloaderUrlFocused = useRuforgeStore((s) => s.setDownloaderUrlFocused);
-  const invalidateEntries = useRuforgeStore((s) => s.invalidateEntries);
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
   const entries = useRuforgeStore((s) => s.entries);
   const downloadQueueBusy = useRuforgeStore((s) =>
@@ -662,36 +651,6 @@ export function useDownloaderView({
     promoteStagedBarToDownloadQueue,
   ]);
 
-  const requestDownload = useCallback(
-    async (targetUrl: string) => {
-      if (!targetUrl) return;
-      if (storageBlocksNewDownloads) {
-        notify(STORAGE_FULL_NOTIFY, "warning");
-        void notifyWhenUnfocused({ body: STORAGE_FULL_NOTIFY, kind: "warning" });
-        return;
-      }
-      const duplicate = await resolveDuplicate(targetUrl);
-      if (!duplicate) {
-        enqueueDownloadOnly(targetUrl, "replace", { approval: "auto" });
-        pumpDownloadQueue();
-        return;
-      }
-      if (settingsRef.current.skipDuplicatesAutomatically) return;
-      setDownloaderUrl(targetUrl);
-    },
-    [
-      resolveDuplicate,
-      enqueueDownloadOnly,
-      pumpDownloadQueue,
-      storageBlocksNewDownloads,
-      notify,
-      setDownloaderUrl,
-    ],
-  );
-
-  const requestDownloadRef = useRef(requestDownload);
-  requestDownloadRef.current = requestDownload;
-
   const handleUrlFocus = useCallback(() => {
     setDownloaderUrlFocused(true);
     const gen = ++clipboardReadGenRef.current;
@@ -804,74 +763,6 @@ export function useDownloaderView({
     },
     [setDownloaderUrl, enqueueDownloadOnly, storageBlocksNewDownloads, notify],
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    const unlisteners: Array<() => void> = [];
-
-    void (async () => {
-      const uProgress = await listen<ProgressPayload & { job_id?: string }>(
-        "download-progress",
-        (event) => {
-          const normalized = normalizeProgressPayload(event.payload);
-          if (!normalized) return;
-          applyDownloadProgress(normalized);
-        },
-      );
-      unlisteners.push(uProgress);
-      if (cancelled) {
-        for (const u of unlisteners) u();
-        return;
-      }
-
-      const uFinished = await listen<DownloadJobFinishedPayload>("download-job-finished", (event) => {
-        onDownloadJobFinished(event.payload);
-        if (event.payload.success) {
-          void invalidateEntries({ silent: true }).then(() => {
-            onDownloadSuccess();
-          });
-        } else {
-          onDownloadError(event.payload.error ?? "Download failed");
-        }
-      });
-      unlisteners.push(uFinished);
-      if (cancelled) {
-        for (const u of unlisteners) u();
-        return;
-      }
-
-      const uPaused = await listen<string>("download-job-paused", (event) => {
-        onDownloadJobPaused(event.payload);
-      });
-      unlisteners.push(uPaused);
-      if (cancelled) {
-        for (const u of unlisteners) u();
-        return;
-      }
-
-      const uManual = await listen<string>("manual-download-trigger", (event) => {
-        void requestDownloadRef.current(event.payload);
-      });
-      unlisteners.push(uManual);
-      if (cancelled) {
-        for (const u of unlisteners) u();
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      for (const u of unlisteners) {
-        u();
-      }
-    };
-  }, [
-    applyDownloadProgress,
-    onDownloadJobFinished,
-    onDownloadJobPaused,
-    invalidateEntries,
-    onDownloadSuccess,
-    onDownloadError,
-  ]);
 
   useEffect(() => {
     let active = true;

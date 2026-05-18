@@ -22,7 +22,7 @@ export function videoInfoToDownloadJobSnapshot(info: VideoInfo): DownloadJobMedi
     title: info.title,
     thumbnail: info.thumbnail ?? "",
     duration: info.duration,
-    fileSizeBytes: info.fileSizeBytes,
+    fileSizeBytes: info.fileSizeBytes ?? null,
     isPlaylist: info.isPlaylist,
     playlistItems: info.playlistItems,
     uploader: info.uploader ?? undefined,
@@ -37,6 +37,7 @@ export function downloadJobMediaNeedsHydration(
   if (!m) return true;
   if (!String(m.title ?? "").trim()) return true;
   if (!String(m.thumbnail ?? "").trim()) return true;
+  if (m.fileSizeBytes === undefined) return true;
   return false;
 }
 

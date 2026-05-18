@@ -126,6 +126,27 @@ fn ytdlp_uploader_channel(json: &serde_json::Value) -> (Option<String>, Option<S
     (uploader, channel)
 }
 
+fn sum_clen_bytes_in_url(url: &str) -> Option<u64> {
+    const NEEDLES: [&str; 3] = ["clen=", "clen%3D", "clen%253D"];
+    let mut sum = 0u64;
+    let mut any = false;
+    for needle in NEEDLES {
+        let mut rest = url;
+        while let Some(i) = rest.find(needle) {
+            let after = &rest[i + needle.len()..];
+            let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if let Ok(n) = digits.parse::<u64>() {
+                if n > 0 {
+                    sum = sum.saturating_add(n);
+                    any = true;
+                }
+            }
+            rest = after;
+        }
+    }
+    any.then_some(sum).filter(|&s| s > 0)
+}
+
 fn video_file_size_from_ytdlp_json(json: &serde_json::Value) -> Option<u64> {
     fn u64_from_field(v: &serde_json::Value) -> Option<u64> {
         v.as_u64().or_else(|| v.as_i64().filter(|&i| i >= 0).map(|i| i as u64))
@@ -140,6 +161,31 @@ fn video_file_size_from_ytdlp_json(json: &serde_json::Value) -> Option<u64> {
                     .and_then(u64_from_field)
                     .filter(|&n| n > 0)
             })
+            .or_else(|| {
+                fmt.get("url")
+                    .and_then(|v| v.as_str())
+                    .and_then(sum_clen_bytes_in_url)
+            })
+            .or_else(|| {
+                fmt.get("manifest_url")
+                    .and_then(|v| v.as_str())
+                    .and_then(sum_clen_bytes_in_url)
+            })
+    }
+
+    fn sum_sizes_from_format_array(arr: &[serde_json::Value]) -> Option<u64> {
+        if arr.is_empty() {
+            return None;
+        }
+        let mut sum = 0u64;
+        let mut any = false;
+        for f in arr {
+            if let Some(n) = size_from_format_entry(f) {
+                sum = sum.saturating_add(n);
+                any = true;
+            }
+        }
+        any.then_some(sum).filter(|&s| s > 0)
     }
 
     if let Some(n) = json.get("filesize").and_then(u64_from_field).filter(|&n| n > 0) {
@@ -149,24 +195,58 @@ fn video_file_size_from_ytdlp_json(json: &serde_json::Value) -> Option<u64> {
         return Some(n);
     }
 
-    if let Some(arr) = json.get("requested_formats").and_then(|v| v.as_array()) {
-        if !arr.is_empty() && arr.iter().all(|f| size_from_format_entry(f).is_some()) {
-            let sum: u64 = arr.iter().map(|f| size_from_format_entry(f).unwrap_or(0)).sum();
-            if sum > 0 {
+    for key in ["requested_formats", "requested_downloads"] {
+        if let Some(arr) = json.get(key).and_then(|v| v.as_array()) {
+            if let Some(sum) = sum_sizes_from_format_array(arr) {
                 return Some(sum);
             }
         }
     }
 
     if let Some(fid) = json.get("format_id").and_then(|v| v.as_str()) {
-        if !fid.contains('+') {
-            if let Some(arr) = json.get("formats").and_then(|v| v.as_array()) {
+        if let Some(arr) = json.get("formats").and_then(|v| v.as_array()) {
+            if fid.contains('+') {
+                let mut sum = 0u64;
+                let mut any = false;
+                for part in fid.split('+') {
+                    let part = part.trim();
+                    if part.is_empty() {
+                        continue;
+                    }
+                    for f in arr {
+                        if f.get("format_id").and_then(|v| v.as_str()) == Some(part) {
+                            if let Some(n) = size_from_format_entry(f) {
+                                sum = sum.saturating_add(n);
+                                any = true;
+                            }
+                            break;
+                        }
+                    }
+                }
+                if any && sum > 0 {
+                    return Some(sum);
+                }
+            } else {
                 for f in arr {
                     if f.get("format_id").and_then(|v| v.as_str()) == Some(fid) {
-                        return size_from_format_entry(f);
+                        if let Some(n) = size_from_format_entry(f) {
+                            return Some(n);
+                        }
                     }
                 }
             }
+        }
+    }
+
+    if let Some(arr) = json.get("formats").and_then(|v| v.as_array()) {
+        let mut best = 0u64;
+        for f in arr {
+            if let Some(n) = size_from_format_entry(f) {
+                best = best.max(n);
+            }
+        }
+        if best > 0 {
+            return Some(best);
         }
     }
 
