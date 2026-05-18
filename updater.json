@@ -1,9 +1,10 @@
 {
   "version": "0.1.4",
   "notes": "{\"notes\":\"- **New *update* screen*\\n- **Cleanup storage screen**\\n- **Fixed some bugs**\",\"additions\":[{\"text\":\"What's New after updating: categorized additions and fixes with a short summary.\"},{\"text\":\"Authorize Cleanup when your internal library is full — filter videos, see watch % and size, choose what to delete.\"},{\"text\":\"Download queue: stage multiple URLs, reorder, pause/resume, and run concurrent downloads (Settings).\"},{\"text\":\"Add the current YouTube watch page to your queue from the Explorer titlebar.\"},{\"text\":\"Drag-and-drop URLs, clipboard fill on focus, and duplicate detection before download.\"},{\"text\":\"Subtitle languages in Settings; tray menu; in-app download notifications.\"}],\"fixes\":[{\"text\":\"Duplicate download-complete notifications.\"},{\"text\":\"Explorer audio after leaving the tab, reload loop on the tab, and webview not resizing with the window.\"},{\"text\":\"Playback stutter and progress bar jumping when seeking (main and mini player).\"},{\"text\":\"Inflated download size on the hero; library file sizes now show MB/GB rounded up.\"},{\"text\":\"Downloads incorrectly showing in-progress after finishing.\"}]}",
-  "pub_date": "2026-05-18T05:05:18.821Z",
+  "pub_date": "2026-05-18T05:33:39Z",
   "platforms": {
     "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWmxJK2hZZU9aVjdscDVXODRsMDdqOHRkaXY5cTh5VVNjTEtkeUVjRzFmWkdQbmUxcDJzeitXNFVQYVJlSHFTcURTL3ZIVW5sS0lSdW9PR3F3MDhWY2dvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc5MDgyNDIwCWZpbGU6UnVGb3JnZV8wLjEuNF94NjQtc2V0dXAuZXhlCkh1Tm0yRVNaYk1nYVR0UlFXZG5mY24zVHlJTzEvOE10N3Q1UlVZTnRnZndnZjZTbzdTWlJ2TEJUVFJ4Mk9IZXFZVDkzNENwcytqNVhyRGxyZ3ljckJBPT0K",
       "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.1.4/RuForge_0.1.4_x64-setup.exe"
     }
   }
