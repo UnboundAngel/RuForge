@@ -126,9 +126,10 @@ fn ytdlp_uploader_channel(json: &serde_json::Value) -> (Option<String>, Option<S
     (uploader, channel)
 }
 
-fn sum_clen_bytes_in_url(url: &str) -> Option<u64> {
+/// Largest single `clen=` value in a stream URL (avoid summing duplicate/segment params).
+fn max_clen_bytes_in_url(url: &str) -> Option<u64> {
     const NEEDLES: [&str; 3] = ["clen=", "clen%3D", "clen%253D"];
-    let mut sum = 0u64;
+    let mut best = 0u64;
     let mut any = false;
     for needle in NEEDLES {
         let mut rest = url;
@@ -136,15 +137,32 @@ fn sum_clen_bytes_in_url(url: &str) -> Option<u64> {
             let after = &rest[i + needle.len()..];
             let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
             if let Ok(n) = digits.parse::<u64>() {
-                if n > 0 {
-                    sum = sum.saturating_add(n);
+                if n > best {
+                    best = n;
                     any = true;
                 }
             }
             rest = after;
         }
     }
-    any.then_some(sum).filter(|&s| s > 0)
+    any.then_some(best).filter(|&s| s > 0)
+}
+
+fn estimate_bytes_from_bitrate(duration_secs: f64, tbr_kbps: f64) -> Option<u64> {
+    if !(duration_secs > 0.0 && tbr_kbps > 0.0) {
+        return None;
+    }
+    let bytes = duration_secs * tbr_kbps * 1000.0 / 8.0;
+    if !bytes.is_finite() || bytes <= 0.0 {
+        return None;
+    }
+    Some(bytes.min(u64::MAX as f64) as u64)
+}
+
+fn tbr_kbps_from_json(json: &serde_json::Value) -> Option<f64> {
+    json.get("tbr")
+        .and_then(|v| v.as_f64().or_else(|| v.as_u64().map(|u| u as f64)))
+        .filter(|&t| t > 0.0)
 }
 
 fn video_file_size_from_ytdlp_json(json: &serde_json::Value) -> Option<u64> {
@@ -164,12 +182,12 @@ fn video_file_size_from_ytdlp_json(json: &serde_json::Value) -> Option<u64> {
             .or_else(|| {
                 fmt.get("url")
                     .and_then(|v| v.as_str())
-                    .and_then(sum_clen_bytes_in_url)
+                    .and_then(max_clen_bytes_in_url)
             })
             .or_else(|| {
                 fmt.get("manifest_url")
                     .and_then(|v| v.as_str())
-                    .and_then(sum_clen_bytes_in_url)
+                    .and_then(max_clen_bytes_in_url)
             })
     }
 
@@ -238,15 +256,11 @@ fn video_file_size_from_ytdlp_json(json: &serde_json::Value) -> Option<u64> {
         }
     }
 
-    if let Some(arr) = json.get("formats").and_then(|v| v.as_array()) {
-        let mut best = 0u64;
-        for f in arr {
-            if let Some(n) = size_from_format_entry(f) {
-                best = best.max(n);
+    if let Some(dur) = ytdlp_duration_secs(json) {
+        if let Some(tbr) = tbr_kbps_from_json(json) {
+            if let Some(est) = estimate_bytes_from_bitrate(dur, tbr) {
+                return Some(est);
             }
-        }
-        if best > 0 {
-            return Some(best);
         }
     }
 
@@ -430,8 +444,16 @@ async fn yt_dlp_single_json_simulate(
     app: &AppHandle,
     url: &str,
     cookie_opts: Option<&DownloadOptions>,
+    format: Option<&str>,
 ) -> Result<serde_json::Value, String> {
     let mut args: Vec<String> = vec!["-J".into(), "-s".into()];
+    let format_eff = format
+        .filter(|s| !s.is_empty())
+        .or_else(|| cookie_opts.map(|o| o.format.as_str()).filter(|s| !s.is_empty()));
+    if let Some(f) = format_eff {
+        args.push("-f".into());
+        args.push(f.to_string());
+    }
     if let Some(opts) = cookie_opts {
         if let Some(cookie_file) = opts.cookie_file.as_ref() {
             if !cookie_file.is_empty() {
@@ -605,8 +627,13 @@ struct DownloadJobFinishedPayload {
 }
 
 #[tauri::command]
-pub async fn get_video_info(app: AppHandle, url: String) -> Result<VideoInfo, String> {
-    let json = yt_dlp_single_json_simulate(&app, &url, None).await?;
+pub async fn get_video_info(
+    app: AppHandle,
+    url: String,
+    format: Option<String>,
+) -> Result<VideoInfo, String> {
+    let fmt = format.as_deref().filter(|s| !s.is_empty());
+    let json = yt_dlp_single_json_simulate(&app, &url, None, fmt).await?;
     Ok(video_info_from_ytdlp_single_json(json))
 }
 
@@ -800,7 +827,7 @@ pub async fn start_download_job(
 ) -> Result<(), String> {
     manager.try_claim_active_job(&job_id)?;
 
-    let probe = match yt_dlp_single_json_simulate(&app, &url, Some(&options)).await {
+    let probe = match yt_dlp_single_json_simulate(&app, &url, Some(&options), None).await {
         Ok(p) => p,
         Err(e) => {
             manager.release_claim_if_pending(&job_id)?;

@@ -4,6 +4,7 @@ import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, Volu
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { getPlaybackThumbnailBar, getWatchProgress, isVideoWatched } from "../playbackStorage";
+import { formatStorageSize } from "../formatStorageSize";
 import { useRuforgeStore } from "../store/ruforgeStore";
 
 const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection, onClick: () => void }) => {
@@ -193,7 +194,7 @@ const VideoCard = ({
           
           <div className="flex flex-col text-[11px] text-stone-500 font-semibold space-y-0.5">
             <div className="flex items-center gap-1.5 group-hover:text-stone-400 transition-colors">
-              <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+              <span>{formatStorageSize(file.size)}</span>
             </div>
             <div className="flex items-center gap-1 text-stone-600">
               <span>{views} {views === 1 ? 'view' : 'views'}</span>

@@ -3,6 +3,7 @@ import { Play, Shuffle, ArrowLeft, Clock, HardDrive, Layers, MoreVertical } from
 import { PlaylistCollection } from "../types";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getPlaybackThumbnailBar } from "../playbackStorage";
+import { formatStorageSize } from "../formatStorageSize";
 import { useRuforgeStore } from "../store/ruforgeStore";
 
 export const PlaylistDetailView = ({ 
@@ -168,7 +169,7 @@ export const PlaylistDetailView = ({
                 <div className="flex items-center gap-3 mt-2">
                   <div className="flex items-center gap-1.5 text-[10px] text-stone-500 font-black uppercase tracking-[0.15em]">
                     <HardDrive size={10} className="opacity-40" />
-                    <span>{(item.size / (1024 * 1024)).toFixed(1)} MB</span>
+                    <span>{formatStorageSize(item.size)}</span>
                   </div>
                 </div>
               </div>
