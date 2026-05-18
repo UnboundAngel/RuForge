@@ -82,12 +82,7 @@ export function defaultSelectedPaths(
   return selected;
 }
 
-export function formatBytes(n: number): string {
-  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
-  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;
-  if (n >= 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${n} B`;
-}
+export { formatStorageSize as formatBytes } from "./formatStorageSize";
 
 export function clearPlaybackStateForDeletedPaths(paths: string[]): void {
   for (const p of paths) {
