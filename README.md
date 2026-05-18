@@ -1,57 +1,64 @@
 # RuForge
 
-RuForge is a powerful, elegant media management and downloading tool designed to make YouTube content easier to access and enjoy offline. Whether you have a full playlist or just a single video, simply drop the link into RuForge, and it will handle the rest.
+RuForge is a YouTube downloader with a library to watch your videos and a mini player to listen to music.
 
-## Features
+My friend and I just wanted to watch YouTube videos without ads and offline. I figured I'd just build everything we both wanted in one place rather than piecing together a bunch of different tools.
 
-- **Zero-Dependency Engine:** Bundles official `yt-dlp` and `FFmpeg` binaries as sidecars. No terminal setup required.
-- **Auto-Updater:** Built-in update system that notifies you when a new version is available.
-- **High-Performance Downloader:** Integrated with `yt-dlp` for high-quality video and audio extraction.
-- **Local Media Gallery:** A beautiful, organized gallery to manage and watch your local media collection.
-- **Dynamic MiniPlayer:** A Spotify-inspired, always-on-top mini player for seamless multi-tasking while watching or listening.
-- **Customizable UI:** Full control over accent colors, grid density, and playback preferences.
+I don't know if there's better things out there, but what I do know is that RuForge works well for what it is. It's a little niche. It only works on Windows for now. It's not Plex, Jellyfin, or Kodi, though I personally use those for movies. RuForge strictly supports MP4s and YouTube. I don't plan on supporting anything beyond that right now.
 
-## Tech Stack
+## What it does
 
-- **Frontend:** React, TypeScript, Vite
-- **Styling & Animation:** Tailwind CSS, Framer Motion, Lucide Icons
-- **Backend & Native Windowing:** Tauri v2 (Rust)
-- **Media Engine (Bundled):** `yt-dlp`, FFmpeg
+Downloads run on yt-dlp. We handle playlists and cookies from your browser. There's a built-in browser you can use for cookies if you'd prefer that instead. Subtitles, quality picks, and parallel downloads are all optional and configurable in settings. Everything you download goes into both your file system and the library inside the app.
 
-## Getting Started
+The media player has keyboard controls, playback speed, a subtitle overlay, and resume. Any video you start will pick back up where you left off when you reopen it. I took reference from Spotify when building it, so that's kind of the vibe you'll get, especially when you shrink it down to the mini player.
 
-### Installation
+The built-in browser is specifically for cookies, but you can also build your download queue directly from it while you're browsing.
 
-Just download the latest **RuForge Setup (.exe)** from the [Releases](https://github.com/UnboundAngel/RuForge/releases) page and run the installer. No additional software is required.
+## Stack
 
-### Building from Source
+Tauri v2, Rust backend, React and TypeScript frontend. Windows only for now. yt-dlp and ffmpeg handle the media side.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/UnboundAngel/RuForge.git
-   cd RuForge
-   ```
+## Status
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+Version 0.1.4. Two of us use it every day and it works well. Not 1.0 yet. A few things are still half-wired and the repo has some gaps:
 
-3. **Run in development:**
-   ```bash
-   npm run tauri dev
-   ```
+- No LICENSE file committed yet. It's Apache-2.0, just hasn't landed in the tree.
+- No GitHub topics set.
+- Roadmap is in internal notes for now, not a public file.
 
-### Building for Production
+## Install
 
-To generate the standalone `.exe` and installer:
+Download the latest setup `.exe` from the [Releases](https://github.com/UnboundAngel/RuForge/releases) page and run it. No additional software required.
+
+## Building from Source
+
+Clone the repo:
+
+```bash
+git clone https://github.com/UnboundAngel/RuForge.git
+cd RuForge
+```
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run in development:
+
+```bash
+npm run tauri dev
+```
+
+Build for production:
+
 ```bash
 npm run tauri build
 ```
-The builds will be located in:
-- **Standalone EXE:** `src-tauri/target/release/ruforge.exe`
-- **Installers:** `src-tauri/target/release/bundle/nsis/` (Setup) and `src-tauri/target/release/bundle/msi/` (MSI)
 
-## Roadmap
+Builds land in `src-tauri/target/release/`. Standalone exe is `ruforge.exe`, installers are under `bundle/nsis/` and `bundle/msi/`.
 
-Feature plans and bug tracking are maintained in [miniplayer_plan.md](./miniplayer_plan.md).
+## License
+
+Apache-2.0. File's coming soon.
