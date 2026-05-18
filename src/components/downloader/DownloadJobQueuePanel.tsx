@@ -21,6 +21,13 @@ import { useRuforgeStore } from "../../store/ruforgeStore";
 import { DOWNLOAD_JOB_STATUS_LABEL, RF_DOWNLOADER_PANEL } from "./downloaderConstants";
 import { formatApproxFileSize } from "./downloaderFormat";
 
+function formatQueueApproxSize(job: DownloadJob): string | null {
+  const bytes = job.metadata?.fileSizeBytes;
+  if (typeof bytes !== "number" || bytes <= 0) return null;
+  const label = formatApproxFileSize(Math.round(bytes));
+  return label ? `~${label}` : null;
+}
+
 function formatQueueTransferText(job: DownloadJob): string | null {
   if (job.status !== "downloading" || !job.progress) return null;
   const p = job.progress;
@@ -192,6 +199,10 @@ const DownloadJobRow = ({
   const awaitingListMeta = needsMeta && !metaTitle && !shortTitle;
   const displayTitle = metaTitle || shortTitle || (awaitingListMeta ? "Loading…" : "Video");
   const transferLabel = formatQueueTransferText(job);
+  const approxSizeLabel =
+    transferLabel == null && job.status !== "downloading"
+      ? formatQueueApproxSize(job)
+      : null;
   const thumbUrl = job.metadata?.thumbnail?.trim();
   const statusLabel =
     pendingApproval
@@ -253,6 +264,9 @@ const DownloadJobRow = ({
             </span>
             {transferLabel != null && (
               <span className="text-[9px] tabular-nums text-[#EDD79C]/30">{transferLabel}</span>
+            )}
+            {approxSizeLabel != null && (
+              <span className="text-[9px] tabular-nums text-[#EDD79C]/30">{approxSizeLabel}</span>
             )}
             {job.error && (
               <p className="max-w-[14rem] truncate text-[9px] text-[#EDD79C]/30" title={job.error}>

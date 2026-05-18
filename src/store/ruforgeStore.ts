@@ -30,6 +30,10 @@ import {
   createDownloadQueueSlice,
   type DownloadQueueSlice,
 } from "./downloadQueueSlice";
+import { readLoopForPath, writeLoopForPath } from "../playbackLoopStorage";
+import { readPlaybackSpeed } from "../playbackSpeedStorage";
+import type { PlayInMiniPayload } from "../playerHandoff";
+import { writePlaybackPos } from "../playbackStorage";
 
 export type {
   ActiveTab,
@@ -89,8 +93,12 @@ export interface RuforgeStore extends DownloadQueueSlice {
   volume: number;
   isMuted: boolean;
   isLooping: boolean;
+  /** One-shot resume position (seconds) after mini → main handoff. */
+  playerResumeAt: number | null;
+  cleanupModalOpen: boolean;
 
   setPlayingFile: (file: MediaFile | null) => void;
+  clearPlayerResumeAt: () => void;
   setFolderAudioPlaylist: (files: MediaFile[]) => void;
   setVolume: (v: number) => void;
   setMuted: (muted: boolean) => void;
@@ -100,7 +108,10 @@ export interface RuforgeStore extends DownloadQueueSlice {
   handlePlayFile: (file: MediaFile, playlist?: MediaFile[]) => Promise<void>;
   handlePlayFolderNeighbor: (file: MediaFile) => void;
   handlePlayPlaylist: (files: MediaFile[], shuffle?: boolean) => void;
-  handlePopOut: (startTime?: number) => Promise<void>;
+  handlePopOut: (
+    startTime?: number,
+    opts?: { paused?: boolean; playbackSpeed?: number },
+  ) => Promise<void>;
 
   updateSetting: (key: keyof RuforgeSettings, value: RuforgeSettings[keyof RuforgeSettings]) => Promise<void>;
   mergeHardwareAccelerationFromBackend: (hw: boolean) => void;
@@ -110,7 +121,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   toggleSidebar: () => void;
   setSidebarCollapsedByResize: () => void;
   refreshStorageStats: () => Promise<void>;
-  handleAuthorizeCleanup: () => Promise<void>;
+  openAuthorizeCleanupModal: () => Promise<void>;
+  closeAuthorizeCleanupModal: () => void;
 
   setActiveTab: (tab: ActiveTab) => void;
   setSettingsTab: (tab: SettingsTab) => void;
@@ -220,8 +232,14 @@ export const useRuforgeStore = create<RuforgeStore>()(
       volume: playerInitVolume,
       isMuted: false,
       isLooping: playerInitLoop,
+      playerResumeAt: null,
+      cleanupModalOpen: false,
 
-      setPlayingFile: (playingFile) => set({ playingFile }),
+      setPlayingFile: (playingFile) => {
+        const isLooping = playingFile ? readLoopForPath(playingFile.path) : false;
+        set({ playingFile, isLooping });
+      },
+      clearPlayerResumeAt: () => set({ playerResumeAt: null }),
       setFolderAudioPlaylist: (folderAudioPlaylist) => set({ folderAudioPlaylist }),
 
       setVolume: (volume) => {
@@ -236,6 +254,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       setLooping: (isLooping) => {
+        const { playingFile } = get();
+        if (playingFile) writeLoopForPath(playingFile.path, isLooping);
         localStorage.setItem(LS_MINI_LOOP, isLooping.toString());
         set({ isLooping });
       },
@@ -244,16 +264,28 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       handlePlayFile: async (file, playlist) => {
         const mini = await WebviewWindow.getByLabel("mini");
-        if (mini) await emitTo("mini", "play-media", file);
-
-        const prev = get().playingFile;
-        if (playlist !== undefined) {
-          set({ playingFile: file, activeTab: "player", folderAudioPlaylist: playlist });
-        } else {
-          set({ playingFile: file, activeTab: "player" });
+        if (mini) {
+          await emitTo("mini", "stop-playback", "main-app");
+          try {
+            await mini.close();
+          } catch (e) {
+            console.error("Failed to close mini player", e);
+          }
         }
 
-        await emit("stop-playback", "main-app");
+        const prev = get().playingFile;
+        const isLooping = readLoopForPath(file.path);
+        if (playlist !== undefined) {
+          set({
+            playingFile: file,
+            activeTab: "player",
+            folderAudioPlaylist: playlist,
+            isLooping,
+            playerResumeAt: null,
+          });
+        } else {
+          set({ playingFile: file, activeTab: "player", isLooping, playerResumeAt: null });
+        }
 
         if (prev?.path !== file.path) {
           get().notify(`Now playing: ${file.name}`);
@@ -283,15 +315,25 @@ export const useRuforgeStore = create<RuforgeStore>()(
         );
       },
 
-      handlePopOut: async (startTime) => {
-        const { playingFile, activeTab } = get();
+      handlePopOut: async (startTime, opts) => {
+        const { playingFile, activeTab, volume, isMuted } = get();
         const fileToHandoff = playingFile;
         const wasInPlayer = activeTab === "player" && !!fileToHandoff;
+        const t = Math.max(0, startTime ?? 0);
+        const paused = opts?.paused ?? false;
+        const speed = opts?.playbackSpeed ?? readPlaybackSpeed();
         try {
           await invoke("open_mini_player");
           if (wasInPlayer && fileToHandoff) {
-            const t = startTime ?? 0;
-            const playInMiniPayload = { file: fileToHandoff, startTime: t };
+            writePlaybackPos(fileToHandoff.path, t);
+            const playInMiniPayload: PlayInMiniPayload = {
+              file: fileToHandoff,
+              startTime: t,
+              paused,
+              playbackSpeed: speed,
+              volume,
+              muted: isMuted,
+            };
             await emit("play-in-mini", playInMiniPayload);
             let unlistenFn: (() => void) | null = null;
             listen("mini-player-ready", () => {
@@ -398,22 +440,16 @@ export const useRuforgeStore = create<RuforgeStore>()(
         }
       },
 
-      handleAuthorizeCleanup: async () => {
-        const { saveToInternal, refreshStorageStats, notify } = get();
+      openAuthorizeCleanupModal: async () => {
+        const { saveToInternal, fetchEntries } = get();
         if (!saveToInternal) return;
-        try {
-          const targetFree = 2 * 1024 * 1024 * 1024;
-          const deleted = await invoke<number>("authorize_cleanup", {
-            dir: RUFORGE_INTERNAL_DIR,
-            target_free_bytes: targetFree,
-          });
-          notify(`Freed ${(deleted / (1024 * 1024 * 1024)).toFixed(1)}GB.`);
-          await refreshStorageStats();
-        } catch (e) {
-          console.error("Cleanup failed", e);
-          notify("Cleanup failed.");
+        if (get().entries.length === 0) {
+          await fetchEntries({ manageLoadingStart: false });
         }
+        set({ cleanupModalOpen: true });
       },
+
+      closeAuthorizeCleanupModal: () => set({ cleanupModalOpen: false }),
 
       setActiveTab: (tab) => set({ activeTab: tab }),
       setSettingsTab: (tab) => set({ settingsTab: tab }),

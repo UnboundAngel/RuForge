@@ -23,7 +23,7 @@ import {
 } from "./downloader/DownloadJobQueuePanel";
 import { downloadJobMediaNeedsHydration } from "../downloadQueue";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
-import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
+import { normalizeYouTubeUrlForCompare, youtubeUrlsMatch } from "../youtubeUrl";
 
 const CLIP_ICON_TRANSITION = { duration: 0.32, ease: [0.23, 1, 0.32, 1] as const };
 
@@ -280,10 +280,22 @@ export const DownloaderView = (props: DownloaderViewProps) => {
           const title =
             rawTitle ||
             (needs ? "Loading…" : (d.focusedJob!.url || "Video").trim());
+          const heroInfoMatchesJob =
+            d.videoInfo &&
+            !d.metadataLoading &&
+            youtubeUrlsMatch(d.url, d.focusedJob!.url);
+          const fileSizeBytes =
+            typeof m?.fileSizeBytes === "number" && m.fileSizeBytes > 0
+              ? m.fileSizeBytes
+              : heroInfoMatchesJob &&
+                  typeof d.videoInfo!.fileSizeBytes === "number" &&
+                  d.videoInfo!.fileSizeBytes > 0
+                ? d.videoInfo!.fileSizeBytes
+                : null;
           return {
             title,
             duration: m?.duration ?? 0,
-            fileSizeBytes: m?.fileSizeBytes ?? null,
+            fileSizeBytes,
             isPlaylist: Boolean(m?.isPlaylist),
             playlistItems: m?.playlistItems,
           };
@@ -292,7 +304,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
         ? {
             title: d.videoInfo.title,
             duration: d.videoInfo.duration,
-            fileSizeBytes: d.videoInfo.fileSizeBytes,
+            fileSizeBytes: d.videoInfo.fileSizeBytes ?? null,
             isPlaylist: d.videoInfo.isPlaylist,
             playlistItems: d.videoInfo.playlistItems,
           }

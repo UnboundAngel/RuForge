@@ -2,7 +2,8 @@
 
 > Living document tracking everything between current state and shippable v1.0.  
 > **Canonical copy for this repo:** `docs/RuForge.md` (agents: update here when work ships).  
-> Last updated: 2026-05-15
+> Last updated: 2026-05-16  
+> **Shipping version:** `0.1.4` (`package.json`, `tauri.conf.json`, `updater.json`)
 
 ---
 
@@ -19,16 +20,28 @@
 
 ## Recently Resolved
 
-### Session 2026-05-15 — Downloader wedge (v0.1.3 work in progress)
+### Release 0.1.3 → 0.1.4 — Downloader wedge (shipped)
 
-- ✅ **Download subtitle languages** — Settings → Downloads: **Download Subtitles** toggle + language picker (`downloadSubtitleLangs`). Wired to yt-dlp `--sub-langs` via `effectiveDownloadSubLangs()` → `download_video` `sub_langs`. Downloader shows selected language before download. Player lists **only on-disk** `.vtt` sidecars with clearer lang labels.
-- ✅ **Duplicate URL detection** — Before download, match gallery `sourceUrl` by normalized YouTube video id. **Already downloaded** banner shows when metadata loads (before clicking Download). **Download** opens modal: Cancel / Replace / Create new (`[%(id)s]` template). Settings **Skip Duplicates** uses ToggleSlot (no dialog checkbox).
-- ✅ **Clipboard on focus** — Focusing the paste-link field reads **current** OS clipboard (not Win+V history); auto-fills empty field or offers **Use it?** when field has text. Hint **above** input with enter animation. No settings toggle (by design).
-- ✅ **Explorer right-click menu** — On YouTube watch pages in embedded Explorer: themed menu on video area — Download video, Send to downloader, Copy link, Copy video ID. Injected via `src/explorerInjectScript.ts`; events in `App.tsx`. Recreate Explorer webview after update to pick up inject script.
-- ✅ **Download queue + pause / resume / retry** — Jobs in Zustand (`downloadQueueSlice`, persisted `ruforge-download-queue`), sidebar **Download queue** UI (`DownloadJobQueuePanel`), reorder/remove. Pause invokes Rust `pause_download_job`; resume respawns with yt-dlp **`--continue`** when `resumeOnStart`; failed jobs **Retry**. **`maxConcurrentDownloads`** is persisted in **`settings`** (default **1**) and mirrored in the queue slice; Settings → Downloads exposes presets + custom (hard cap **6**).
-- ✅ **URL bubble + queue-from-clipboard UX** — When metadata loads, the corner **URL bubble** stacks vertically: **current link chip → pinned queued URLs → Queue another → hint row** (fixed-height strip so “no clipboard link” / conflict copy fades without jumping the layout). **Paperclip** on active link rows (main + pins); **clipboard icon only** on **Queue another**, which stays **collapsed** (`max-w-9`) until hover expands the label. Link rows drop the hover wash background; copy vs clear tooltips fade on the right targets (`DownloaderView.tsx`: `MainDownloaderUrlChip`, `QuickEnqueuePinnedChip`; centered paste layout mirrors the same queue stack).
-- ✅ **yt-dlp update UX** — GitHub `releases/latest` with **12h TTL** cache (`app_data/ytdlp-update-cache.json`), **launch warm**, downloader banner (**Update yt-dlp** / **Later**), progress via `ytdlp-update-download-progress`; install to **`app_data/bin/`** after verify `--version`; all runs prefer userdata binary via [`ytdlp_binary.rs`](../src-tauri/src/ytdlp_binary.rs); commands `get_ytdlp_update_status`, `download_ytdlp_update`.
-- 🚧 **Downloader screen visuals (Jim, t25)** — polish pass on downloader layout/cards; logic unchanged.
+**Theme:** stage many URLs, control when work starts, parallel yt-dlp when configured, intake from clipboard / Explorer / drag-drop — not a general library or player pivot.
+
+- ✅ **Download queue + pause / resume / retry** — `downloadQueueSlice` (persisted), `DownloadJobQueuePanel`, Rust `DownloadJobManager`, `--continue` on resume.
+- ✅ **Queue rearchitecture** — `held` / `auto` / `pending` / `manual` approval; manual **Download** releases held rows; no pump on rehydrate; `focusedJobId` drives hero; mid-batch adds stay `pending` until row Yes/No (UI present — see backlog #15).
+- ✅ **Concurrent downloads** — Settings presets + custom (cap **6**); multi-slot `pumpDownloadQueue`.
+- ✅ **Hero art bound to active job** — metadata snapshot on enqueue; hero reads `focusedJob` / job cache, not URL bar alone (`useDownloaderView`, `downloadQueueMetadataCache`).
+- ✅ **Queue/library gating** — duplicate banner suppressed while `anyDownloading`; tab switch gating on intake paths.
+- ✅ **Downloaded / total on queue rows** — `X MB / Y MB` from progress payload (`DownloadJobQueuePanel`).
+- ✅ **URL drag-and-drop intake** — DOM `dataTransfer` via `useUrlDropIntake` / `dropIntake.ts`; main window `dragDropEnabled: false` in `tauri.conf.json` so OS file-drop does not steal URL drops; Explorer webview drop + titlebar queue button.
+- ✅ **Duplicate URL detection** — library match by normalized video id; Replace / save-as-new; Skip Duplicates in settings.
+- ✅ **Clipboard on focus** — current OS clipboard only (not Win+V history).
+- ✅ **Explorer intake** — watch-page context menu; titlebar queue control; webview URL sync (poll only while Explorer tab active).
+- ✅ **Subtitle download languages** — Settings → Downloads → `sub_langs` on `download_video`.
+- ✅ **yt-dlp auto-update** — cached GitHub check, banner, install to `app_data/bin/`.
+- ✅ **Storage-full guard (coarse)** — blocks new enqueues when internal library at limit (`storageBlocksNewDownloads`); not per-row estimated size (see backlog #10).
+- ✅ **Tray icon** — OS tray menu (Show / Quit / troubleshooting); Show emits to main webview (`src-tauri/src/tray.rs`, `TRAY_SHOW_MAIN_EVENT`).
+- ✅ **Downloader module split** — `useDownloaderView` + `src/components/downloader/*`.
+- ✅ **In-app notify overlay** — replaces PowerShell toasts for download completion (0.1.4 release notes).
+- ✅ **Subtitles (player)** — CC picker, VTT pipeline, scrubber clamp (`useSubtitleCueOverlay`) — largely 0.1.3 session 05-14.
+- 🚧 **Jim downloader visuals (t25+)** — layout/cards polish ongoing; logic frozen for Jim pass (backlog #12–14).
 
 ### Session 2026-05-14 — Subtitles end to end
 
@@ -51,9 +64,37 @@
 
 ---
 
+## Active backlog — Downloader & storage (2026-05-16)
+
+Tracked list for planning/brainstorm sessions. **Shipped** = in `0.1.4` build unless noted.
+
+| # | Feature / bug | Priority | Status | Notes |
+|---|---------------|----------|--------|-------|
+| 1 | URL drag-and-drop intake | — | ✅ Shipped | `useUrlDropIntake`, `dragDropEnabled: false` on main window |
+| 2 | Queue rearchitecture | — | ✅ Shipped | Approval system, manual trigger, auto-advance, `focusedJobId` hero |
+| 3 | Concurrent downloads | — | ✅ Shipped | Multi-slot pump; parallel yt-dlp processes |
+| 4 | Hero art bound to active job | — | ✅ Shipped | Metadata snapshot on enqueue; hero reads job not URL bar |
+| 5 | Queue/library gating | — | ✅ Shipped | No duplicate banner while jobs active; intake tab rules |
+| 6 | Downloaded / total display | — | ✅ Shipped | Queue rows: `X MB / Y MB` |
+| 7 | Tray icon right-click / Quit | — | ✅ Shipped | Tray menu + Show/Quit via `tray.rs` (0.1.3–0.1.4) |
+| 8 | **Authorize Cleanup** | 🔴 Critical | ✅ Shipped | Modal lists oldest unwatched (filter toggles), checklist by watch % + size, deletes selected via `delete_media_batch`; frees toward **~75%** of storage cap (`AuthorizeCleanupModal`, `cleanupCandidates.ts`). |
+| 9 | **ETA smoothing** | 🔴 High | 🔴 Open | Instantaneous rate → wild ETA jumps; need rolling average over last N progress samples |
+| 10 | **Storage cap before enqueue** | 🔴 High | 🔴 Open | Estimate video size vs free disk **before** queueing; red row border + “Not enough storage”. (Distinct from shipped **library-full** block.) |
+| 11 | **429 / rate-limit spacing** | 🟡 Medium | 🔴 Open | Configurable delay between **job starts** (not retry-on-failure). Concurrency presets hint at risk only. |
+| 12 | **UI overhaul — Jim pass** | 🟡 Medium | 🔴 Open | Queue right, vertical, all jobs visible, active shaded, completed hidden |
+| 13 | **Paperclip strip redesign** | 🟡 Medium | 🔴 Open | Per-job paperclip, collapsed default, expand on hover, no overflow, × to cancel |
+| 14 | **Download screen declutter** | 🟡 Medium | 🔴 Open | Chunky completion/idle visuals |
+| 15 | **Mid-download drop permission UI** | 🟡 Medium | 🟡 Partial | `pending` approval + Yes/No row exists (`DownloadJobQueuePanel`); **not fully verified E2E** |
+| 16 | **Crossfade hero art** | 🟢 Low | 🔴 Open | Plain swap works; smooth transition → Jim (#12) |
+| 17 | **Multiple download indicators** | 🟢 Low | 🔴 Open | Lower priority now queue state is correct |
+| 18 | **Playlist per-item thumbnail** | 🟢 Low | 🔴 Open | Hero does not advance thumb per playlist item |
+| 19 | **Focus-click row → hero swap** | 🟢 Low | 🟡 Verify | Likely survives rearchitecture; regression-check |
+
+---
+
 ## 🔴 P0 — Blockers
 
-Nothing currently blocking.
+- _(Authorize Cleanup #8 shipped 0.1.4 session — modal + playback-aware candidate list.)_
 
 ---
 
@@ -61,18 +102,12 @@ Nothing currently blocking.
 
 ### Downloader
 
-- ~~**Download queue.**~~ ✅ Shipped — persisted jobs, pump/start next, reorder/remove; concurrency capped in store (`maxConcurrentDownloads`, default **1**).
-- ~~**Pause / resume / retry.**~~ ✅ Shipped — pause kills sidecar path via backend; resume with **`--continue`**; per-job options retained for retry.
-- ~~**yt-dlp auto-update.**~~ ✅ Shipped — GitHub check (cached + warm on launch), downloader banner (`DownloaderView`); download to **`app_data/bin/`** with bundled sidecar fallback; `get_ytdlp_update_status` / `download_ytdlp_update` (`commands/ytdlp_update.rs`).
-- ~~**Duplicate detection by URL.**~~ ✅ Shipped (see 2026-05-15).
-- ~~**Subtitle language picker in downloader.**~~ ✅ Shipped — Settings → Downloads (separate from player `subtitlePreferredLang`).
 - **`get_video_info` paste preview without cookies.** Deprioritized — public metadata works without cookies; restricted videos may fail preview but download with internal browser. Reopen only if users complain.
+- **ETA smoothing (#9)** and **per-enqueue storage estimate (#10)** — see backlog table.
 
 ### Explorer / intake
 
-- ~~**Clipboard auto-detect on downloader focus.**~~ ✅ Shipped (current clipboard only).
-- ~~**Explorer right-click on watch video.**~~ ✅ Shipped (see 2026-05-15).
-- **Drag-and-drop URLs onto window.** Drop link → queue or downloader.
+- _(Drag-and-drop, clipboard-on-focus, Explorer context menu, titlebar queue — shipped 0.1.3–0.1.4.)_
 
 ### Library
 
@@ -83,7 +118,7 @@ Nothing currently blocking.
 ### Settings & Config
 
 - **"Storage Target" vs "Download Path" deduplication.** Merge or clarify.
-- **System tray icon click behavior.** Left-click vs menu convention.
+- ~~**System tray icon.**~~ ✅ Shipped 0.1.3–0.1.4 (backlog #7).
 
 ### Distribution
 
@@ -170,12 +205,16 @@ Nothing currently blocking.
 
 ## Suggested next (for planning sessions)
 
-**Highest leverage for the wedge (order is opinion):**
+**Downloader / storage (from backlog — order is opinion):**
 
-1. **SQLite gallery index** — before libraries get large.
-2. **Drag-and-drop URL** onto app window — fast intake alongside Explorer + clipboard.
-3. **Optional:** expose **max concurrent downloads** in Settings (engine already supports >1; default remains conservative until UX decides).
+1. **Fix Authorize Cleanup (#8)** — P0; correct free-bytes target (75% of cap), unwatched ordering, invoke args.
+2. **ETA smoothing (#9)** + **storage estimate before enqueue (#10)** — high UX trust on the wedge.
+3. **429 start spacing (#11)** — before leaning harder on concurrency >1.
 
-**Jim-sized (visuals only):** downloader screen t25; any duplicate/clipboard microcopy tweaks.
+**Library scale (still P1, separate from downloader table):**
 
-**Version graph:** shipped downloader work logged in `docs/versions/version-0.1.3.json` (t17–t24; t25 Jim WIP).
+4. **SQLite gallery index** — before libraries get large.
+
+**Jim-sized (visuals only, backlog #12–14, #16):** queue layout right column, paperclip strip, declutter idle/completion, hero crossfade.
+
+**Version graph:** downloader work in `docs/versions/version-0.1.3.json` (t17–t37, fixes f2–f14); **0.1.4** = release bump + `updater.json` notes.

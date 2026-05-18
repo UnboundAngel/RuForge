@@ -251,6 +251,20 @@ pub async fn extract_frames(app: AppHandle, video_path: String) -> Result<Vec<St
 }
 
 #[tauri::command]
+pub async fn delete_media_batch(paths: Vec<String>) -> Result<u64, String> {
+    let mut deleted_bytes: u64 = 0;
+    for video_path in paths {
+        if let Ok(meta) = std::fs::metadata(&video_path) {
+            if meta.is_file() {
+                deleted_bytes = deleted_bytes.saturating_add(meta.len());
+            }
+        }
+        delete_media(video_path).await?;
+    }
+    Ok(deleted_bytes)
+}
+
+#[tauri::command]
 pub async fn delete_media(video_path: String) -> Result<(), String> {
     let video_file_path = std::path::Path::new(&video_path);
     let video_dir = video_file_path.parent().ok_or("Invalid video path")?;

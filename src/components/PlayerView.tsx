@@ -24,6 +24,8 @@ import {
 import { type FfprobeHint, type MediaFile } from "../types";
 import { ScrubberHoverThumb } from "../scrubSpritePreview";
 import { readResumeSeconds, writePlaybackPos } from "../playbackStorage";
+import { readPlaybackSpeed, writePlaybackSpeed } from "../playbackSpeedStorage";
+import { useVideoAmbientBackdrop } from "../useVideoAmbientBackdrop";
 import {
   readAudioAutoAdvanceFolder,
   readAudioPrefetchNext,
@@ -85,6 +87,7 @@ const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 export type PlayerViewHandle = {
   getCurrentTime: () => number;
+  getIsPaused: () => boolean;
 };
 
 const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file: MediaFile }>(function PlayerViewWithFile(
@@ -123,6 +126,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const setLooping = useRuforgeStore((s) => s.setLooping);
   const setPlayingFile = useRuforgeStore((s) => s.setPlayingFile);
   const handlePopOutFromStore = useRuforgeStore((s) => s.handlePopOut);
+  const playerResumeAt = useRuforgeStore((s) => s.playerResumeAt);
+  const clearPlayerResumeAt = useRuforgeStore((s) => s.clearPlayerResumeAt);
 
   const subtitlePreferredLang = useRuforgeStore((s) =>
     typeof s.settings.subtitlePreferredLang === "string" ? s.settings.subtitlePreferredLang : null,
@@ -130,9 +135,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const audioOnly = isAudioOnlyPath(file.path);
   const mediaRef = useRef<HTMLMediaElement>(null);
-  useImperativeHandle(ref, () => ({
-    getCurrentTime: () => mediaRef.current?.currentTime ?? 0,
-  }));
   const containerRef = useRef<HTMLDivElement>(null);
   const scrubberRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
@@ -143,6 +145,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [currentTime, setCurrentTime] = useState(0);
   const [buffered, setBuffered] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  useImperativeHandle(ref, () => ({
+    getCurrentTime: () => mediaRef.current?.currentTime ?? 0,
+    getIsPaused: () => mediaRef.current?.paused ?? true,
+  }));
   const [showControls, setShowControls] = useState(true);
   const [showVolume, setShowVolume] = useState(false);
   const [scrubberHoverPos, setScrubberHoverPos] = useState(0);
@@ -156,8 +162,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blockClickRef = useRef(false);
   const wasPlayingBeforeScrubRef = useRef(false);
+  /** Blocks `timeupdate` from snapping the scrub thumb while a seek is in flight. */
+  const isUserSeekingRef = useRef(false);
   const lastPlaybackPersistRef = useRef(0);
   const progressRafRef = useRef<number | null>(null);
+  /** Avoid re-seeking on repeat `loadedmetadata` while the same file keeps playing. */
+  const resumeSeekAppliedPathRef = useRef<string | null>(null);
 
   const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([]);
   const subtitleBlobTracksRef = useRef<SubtitleTrack[]>([]);
@@ -166,7 +176,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
 
   const ambientCanvasRef = useRef<HTMLCanvasElement>(null);
-  const ambientRafRef = useRef<number | null>(null);
   const subtitleOverlayTextRef = useRef<HTMLDivElement>(null);
   const subtitleDragRowRef = useRef<HTMLDivElement>(null);
   const [mediaBlendOpacity, setMediaBlendOpacity] = useState(1);
@@ -194,39 +203,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     return () => clearTimeout(id);
   }, [file.path, audioOnly]);
 
-  useEffect(() => {
-    if (audioOnly) return;
-    const updateAmbient = () => {
-      // Throttle to ~10fps for that slow YouTube "breathing" feel
-      setTimeout(() => {
-        ambientRafRef.current = requestAnimationFrame(updateAmbient);
-      }, 100);
-
-      const video = mediaRef.current as HTMLVideoElement | null;
-      const canvas = ambientCanvasRef.current;
-      if (!video || !canvas || video.paused || video.ended || video.readyState < 2) return;
-      
-      const ctx = canvas.getContext("2d", { alpha: false });
-      if (!ctx || video.videoWidth === 0) return;
-      
-      const targetWidth = 16;
-      const targetHeight = Math.max(1, Math.floor(targetWidth * (video.videoHeight / video.videoWidth)));
-      
-      // Initialize canvas size (clears canvas when changed)
-      if (canvas.width !== targetWidth) canvas.width = targetWidth;
-      if (canvas.height !== targetHeight) canvas.height = targetHeight;
-      
-      // Temporal smoothing: Draw new frame with low opacity over previous one
-      // Since we don't clear the canvas, this creates a slow morph/crossfade
-      ctx.globalAlpha = 0.2;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.globalAlpha = 1.0;
-    };
-    ambientRafRef.current = requestAnimationFrame(updateAmbient);
-    return () => {
-      if (ambientRafRef.current !== null) cancelAnimationFrame(ambientRafRef.current);
-    };
-  }, [audioOnly]);
+  useVideoAmbientBackdrop(
+    mediaRef as React.RefObject<HTMLVideoElement | null>,
+    ambientCanvasRef,
+    !audioOnly,
+  );
 
   useEffect(() => {
     if (!file || audioOnly) {
@@ -327,7 +308,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   useEffect(() => {
     lastPlaybackPersistRef.current = 0;
-  }, [file.path]);
+    resumeSeekAppliedPathRef.current = null;
+  }, [file.path, playerResumeAt]);
 
   useEffect(() => {
     return () => {
@@ -341,7 +323,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [isVolumeDragging, setIsVolumeDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [playbackSpeed, setPlaybackSpeedState] = useState(() => readPlaybackSpeed());
+  const setPlaybackSpeed = (speed: number) => {
+    writePlaybackSpeed(speed);
+    setPlaybackSpeedState(speed);
+  };
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [clickFlash, setClickFlash] = useState<"play" | "pause" | null>(null);
@@ -477,12 +463,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   ]);
 
   const skip = (seconds: number) => {
-    if (mediaRef.current) {
-      mediaRef.current.currentTime += seconds;
-      setSkipFlash({ side: seconds > 0 ? "right" : "left", amount: Math.abs(seconds) });
-      if (skipTimeoutRef.current) clearTimeout(skipTimeoutRef.current);
-      skipTimeoutRef.current = setTimeout(() => setSkipFlash(null), 600);
-    }
+    const vid = mediaRef.current;
+    if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
+    const next = Math.min(vid.duration, Math.max(0, vid.currentTime + seconds));
+    applyScrubPosition(next / vid.duration, { persist: true });
+    setSkipFlash({ side: seconds > 0 ? "right" : "left", amount: Math.abs(seconds) });
+    if (skipTimeoutRef.current) clearTimeout(skipTimeoutRef.current);
+    skipTimeoutRef.current = setTimeout(() => setSkipFlash(null), 600);
   };
 
   const changeVolume = (v: number) => {
@@ -544,18 +531,64 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   };
 
   const handlePopOut = () => {
-    if (mediaRef.current) {
-      writePlaybackPos(file.path, mediaRef.current.currentTime, mediaRef.current.duration);
-      setVolume(mediaRef.current.volume);
-      setMuted(mediaRef.current.muted);
+    const media = mediaRef.current;
+    if (media) {
+      writePlaybackPos(file.path, media.currentTime, media.duration);
+      setVolume(media.volume);
+      setMuted(media.muted);
+      const wasPlaying = !media.paused;
+      media.pause();
+      void handlePopOutFromStore(media.currentTime, {
+        paused: !wasPlaying,
+        playbackSpeed,
+      });
+      return;
     }
-    void handlePopOutFromStore(mediaRef.current?.currentTime ?? 0);
+    void handlePopOutFromStore(0, { paused: true, playbackSpeed });
   };
 
+  const syncProgressFromVideo = useCallback((vid: HTMLMediaElement) => {
+    if (!isFinite(vid.duration) || vid.duration <= 0) return;
+    setCurrentTime(vid.currentTime);
+    setProgress((vid.currentTime / vid.duration) * 100);
+    if (vid.buffered.length > 0) {
+      setBuffered((vid.buffered.end(vid.buffered.length - 1) / vid.duration) * 100);
+    }
+  }, []);
+
+  const applyScrubPosition = useCallback(
+    (pos: number, opts?: { persist?: boolean }) => {
+      const vid = mediaRef.current;
+      if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
+      const ratio = Math.min(1, Math.max(0, pos));
+      const t = ratio * vid.duration;
+      isUserSeekingRef.current = true;
+      setScrubDragPercent(ratio * 100);
+      setCurrentTime(t);
+      setProgress(ratio * 100);
+      vid.currentTime = t;
+      if (opts?.persist) {
+        writePlaybackPos(file.path, t, vid.duration);
+        lastPlaybackPersistRef.current = Date.now();
+      }
+    },
+    [file.path],
+  );
+
+  const handleSeeked = useCallback(() => {
+    isUserSeekingRef.current = false;
+    setScrubDragPercent(null);
+    setIsScrubbing(false);
+    const vid = mediaRef.current;
+    if (vid) syncProgressFromVideo(vid);
+  }, [syncProgressFromVideo]);
+
   const handleTimeUpdate = () => {
+    if (isUserSeekingRef.current) return;
     if (progressRafRef.current != null) return;
     progressRafRef.current = requestAnimationFrame(() => {
       progressRafRef.current = null;
+      if (isUserSeekingRef.current) return;
       const vid = mediaRef.current;
       if (!vid || !isFinite(vid.duration)) return;
       setCurrentTime(vid.currentTime);
@@ -574,6 +607,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   };
 
   const handleLoadedMetadata = () => {
+    if (isUserSeekingRef.current) return;
     const vid = mediaRef.current;
     if (!vid) return;
     setDuration(vid.duration);
@@ -581,7 +615,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     vid.muted = isMuted;
     vid.preservesPitch = true;
     vid.playbackRate = playbackSpeed;
-    const resume = readResumeSeconds(file.path, vid.duration);
+
+    const handoffResume =
+      playerResumeAt !== null && Number.isFinite(playerResumeAt);
+    if (!handoffResume && resumeSeekAppliedPathRef.current === file.path) return;
+
+    const resume = handoffResume
+      ? Math.min(Math.max(0, playerResumeAt), vid.duration || playerResumeAt)
+      : readResumeSeconds(file.path, vid.duration);
+    if (handoffResume) clearPlayerResumeAt();
+    resumeSeekAppliedPathRef.current = file.path;
     vid.currentTime = resume;
   };
 
@@ -590,12 +633,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     const rect = scrubberRef.current?.getBoundingClientRect();
     if (!rect) return 0;
     return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-  };
-
-  const applyScrub = (pos: number) => {
-    if (mediaRef.current && isFinite(mediaRef.current.duration)) {
-      mediaRef.current.currentTime = pos * mediaRef.current.duration;
-    }
   };
 
   const handleScrubMouseDown = (e: React.MouseEvent) => {
@@ -609,20 +646,15 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
 
     setIsScrubbing(true);
-    setScrubDragPercent(getScrubPosition(e) * 100);
+    const pos0 = getScrubPosition(e);
+    applyScrubPosition(pos0);
 
     const onMove = (ev: MouseEvent) => {
-      setScrubDragPercent(getScrubPosition(ev) * 100);
+      applyScrubPosition(getScrubPosition(ev));
     };
 
     const onUp = (ev: MouseEvent) => {
-      applyScrub(getScrubPosition(ev));
-      const v2 = mediaRef.current;
-      if (v2 && isFinite(v2.duration) && v2.duration > 0) {
-        writePlaybackPos(file.path, v2.currentTime, v2.duration);
-      }
-      setScrubDragPercent(null);
-      setIsScrubbing(false);
+      applyScrubPosition(getScrubPosition(ev), { persist: true });
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
 
@@ -783,6 +815,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               preload="metadata"
               autoPlay
               onTimeUpdate={handleTimeUpdate}
+              onSeeked={handleSeeked}
               onLoadedMetadata={handleLoadedMetadata}
               onPause={() => setIsPaused(true)}
               onPlay={() => setIsPaused(false)}
@@ -864,6 +897,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 playsInline
                 preload="metadata"
                 onTimeUpdate={handleTimeUpdate}
+                onSeeked={handleSeeked}
                 onLoadedMetadata={handleLoadedMetadata}
                 onPause={() => setIsPaused(true)}
                 onPlay={() => setIsPaused(false)}
