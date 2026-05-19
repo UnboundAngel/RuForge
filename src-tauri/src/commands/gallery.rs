@@ -24,6 +24,8 @@ pub struct MediaFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub download_metadata_hint: Option<String>,
     pub source_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,6 +51,76 @@ pub enum GalleryEntry {
         #[serde(flatten)]
         playlist: PlaylistCollection,
     },
+}
+
+fn resolve_info_json_path(parent: &std::path::Path, stem: &str) -> Option<std::path::PathBuf> {
+    let primary = parent.join(format!("{}.info.json", stem));
+    if primary.is_file() {
+        return Some(primary);
+    }
+    let double_dot = parent.join(format!("{}..info.json", stem));
+    if double_dot.is_file() {
+        return Some(double_dot);
+    }
+    None
+}
+
+fn source_id_from_ytdlp_info(json: &serde_json::Value) -> Option<String> {
+    json["id"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
+fn ytdlp_sidecar_metadata(
+    info_json_path: &std::path::Path,
+) -> (
+    f64,
+    Option<Vec<Chapter>>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
+    std::fs::read_to_string(info_json_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+        .map(|json| {
+            let duration = json["duration"]
+                .as_f64()
+                .or_else(|| json["duration"].as_u64().map(|u| u as f64))
+                .or_else(|| json["duration"].as_i64().map(|i| i as f64))
+                .unwrap_or(0.0);
+            let chapters = json["chapters"].as_array().map(|arr| {
+                arr.iter()
+                    .filter_map(|c| {
+                        Some(Chapter {
+                            title: c["title"].as_str().unwrap_or("Chapter").to_string(),
+                            start_time: c["start_time"].as_f64().unwrap_or(0.0),
+                            end_time: c["end_time"].as_f64().unwrap_or(0.0),
+                        })
+                    })
+                    .collect::<Vec<Chapter>>()
+            });
+            let metadata_title = json["title"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from);
+            let download_metadata_hint = download_metadata_hint_from_ytdlp_info(&json);
+            let source_url = json["webpage_url"].as_str().map(String::from);
+            let source_id = source_id_from_ytdlp_info(&json);
+            (
+                duration,
+                chapters,
+                metadata_title,
+                download_metadata_hint,
+                source_url,
+                source_id,
+            )
+        })
+        .unwrap_or((0.0, None, None, None, None, None))
 }
 
 fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile> {
@@ -118,41 +190,12 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
 
         let subtitle_path = primary_vtt_sidecar(parent, stem).map(|p| p.to_string_lossy().to_string());
 
-        let info_json_path = parent.join(format!("{}.info.json", stem));
-        let (duration, chapters, metadata_title, download_metadata_hint, source_url) = if info_json_path.is_file() {
-            std::fs::read_to_string(&info_json_path)
-                .ok()
-                .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
-                .map(|json| {
-                    let duration = json["duration"]
-                        .as_f64()
-                        .or_else(|| json["duration"].as_u64().map(|u| u as f64))
-                        .or_else(|| json["duration"].as_i64().map(|i| i as f64))
-                        .unwrap_or(0.0);
-                    let chapters = json["chapters"].as_array().map(|arr| {
-                        arr.iter()
-                            .filter_map(|c| {
-                                Some(Chapter {
-                                    title: c["title"].as_str().unwrap_or("Chapter").to_string(),
-                                    start_time: c["start_time"].as_f64().unwrap_or(0.0),
-                                    end_time: c["end_time"].as_f64().unwrap_or(0.0),
-                                })
-                            })
-                            .collect::<Vec<Chapter>>()
-                    });
-                    let metadata_title = json["title"]
-                        .as_str()
-                        .map(str::trim)
-                        .filter(|s| !s.is_empty())
-                        .map(String::from);
-                    let download_metadata_hint = download_metadata_hint_from_ytdlp_info(&json);
-                    let source_url = json["webpage_url"].as_str().map(String::from);
-                    (duration, chapters, metadata_title, download_metadata_hint, source_url)
-                })
-                .unwrap_or((0.0, None, None, None, None))
-        } else {
-            (0.0, None, None, None, None)
-        };
+        let sidecar = resolve_info_json_path(parent, stem);
+        let (duration, chapters, metadata_title, download_metadata_hint, source_url, source_id) =
+            sidecar
+                .as_deref()
+                .map(ytdlp_sidecar_metadata)
+                .unwrap_or((0.0, None, None, None, None, None));
 
         let display_name = metadata_title.unwrap_or_else(|| stem.to_string());
 
@@ -176,6 +219,7 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             chapters,
             download_metadata_hint,
             source_url,
+            source_id,
         });
     }
     files
@@ -345,36 +389,11 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         }
     };
 
-    let info_json_path = parent.join(format!("{}.info.json", stem));
-    let (duration, chapters, metadata_title, download_metadata_hint, source_url) = if info_json_path.is_file() {
-        std::fs::read_to_string(&info_json_path)
-            .ok()
-            .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
-            .map(|json| {
-                let duration = json["duration"]
-                    .as_f64()
-                    .or_else(|| json["duration"].as_u64().map(|u| u as f64))
-                    .unwrap_or(0.0);
-                let chapters = json["chapters"].as_array().map(|arr| {
-                    arr.iter()
-                        .filter_map(|c| {
-                            Some(Chapter {
-                                title: c["title"].as_str().unwrap_or("Chapter").to_string(),
-                                start_time: c["start_time"].as_f64().unwrap_or(0.0),
-                                end_time: c["end_time"].as_f64().unwrap_or(0.0),
-                            })
-                        })
-                        .collect()
-                });
-                let metadata_title = json["title"].as_str().map(|s| s.trim().to_string());
-                let download_metadata_hint = download_metadata_hint_from_ytdlp_info(&json);
-                let source_url = json["webpage_url"].as_str().map(String::from);
-                (duration, chapters, metadata_title, download_metadata_hint, source_url)
-            })
-            .unwrap_or((0.0, None, None, None, None))
-    } else {
-        (0.0, None, None, None, None)
-    };
+    let sidecar = resolve_info_json_path(parent, stem);
+    let (duration, chapters, metadata_title, download_metadata_hint, source_url, source_id) = sidecar
+        .as_deref()
+        .map(ytdlp_sidecar_metadata)
+        .unwrap_or((0.0, None, None, None, None, None));
 
     let display_name = metadata_title.unwrap_or_else(|| stem.to_string());
     let created = metadata
@@ -398,5 +417,6 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         chapters,
         download_metadata_hint,
         source_url,
+        source_id,
     })
 }

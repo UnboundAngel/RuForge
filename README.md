@@ -20,7 +20,7 @@ Tauri v2, Rust backend, React and TypeScript frontend. Windows only for now. yt-
 
 ## Status
 
-Version 0.1.4. Two of us use it every day and it works well. Not 1.0 yet. A few things are still half-wired and the repo has some gaps:
+Version 0.1.5. Two of us use it every day and it works well. Not 1.0 yet. A few things are still half-wired and the repo has some gaps:
 
 - No LICENSE file committed yet. It's Apache-2.0, just hasn't landed in the tree.
 - No GitHub topics set.

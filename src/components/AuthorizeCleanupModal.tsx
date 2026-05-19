@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState, useRef, useCallback, memo } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { emitTo } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { X, Video, Trash2, CheckSquare, Square, Loader2 } from "lucide-react";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import { youtubeUrlsMatch } from "../youtubeUrl";
+import { askConfirm } from "./ConfirmDialog";
 import {
   buildCleanupCandidates,
   bytesToFreeForHeadroom,
@@ -169,15 +173,59 @@ export function AuthorizeCleanupModal() {
   }, [allSelected, candidates]);
 
   const handleConfirm = async () => {
-    const paths = candidates.filter((c) => selected.has(c.file.path)).map((c) => c.file.path);
+    const selectedCandidates = candidates.filter((c) => selected.has(c.file.path));
+    const paths = selectedCandidates.map((c) => c.file.path);
     if (paths.length === 0) {
       notify("Select at least one video to remove.", "warning");
       return;
     }
+
+    const approved = await askConfirm({
+      title: "Delete videos",
+      message: `Remove ${paths.length} selected item${paths.length === 1 ? "" : "s"} from your library?`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      itemMeta: `${formatBytes(selectedBytes)} • ${paths.length} items`
+    });
+    if (!approved) return;
+
     setBusy(true);
     try {
+      const pathSet = new Set(paths);
+      const st = useRuforgeStore.getState();
+      if (st.playingFile && pathSet.has(st.playingFile.path)) {
+        st.stopPlayback();
+        if (st.activeTab === "player") {
+          st.setActiveTab("media");
+        }
+      }
+      try {
+        const mini = await WebviewWindow.getByLabel("mini");
+        if (mini) {
+          await emitTo("mini", "stop-playback", "main-app");
+        }
+      } catch {
+        // Mini window may not exist.
+      }
+
       const deleted = await invoke<number>("delete_media_batch", { paths });
       clearPlaybackStateForDeletedPaths(paths);
+
+      const jobIds = new Set<string>();
+      for (const c of selectedCandidates) {
+        const sourceUrl = c.file.sourceUrl?.trim();
+        if (!sourceUrl) continue;
+        for (const j of useRuforgeStore.getState().downloadJobs) {
+          if (youtubeUrlsMatch(j.url, sourceUrl)) {
+            jobIds.add(j.id);
+          }
+        }
+      }
+      const removeDownloadJob = useRuforgeStore.getState().removeDownloadJob;
+      for (const id of jobIds) {
+        await removeDownloadJob(id);
+      }
+
       await refreshStorageStats();
       await invalidateEntries({ silent: true });
       if (isMounted.current) {
@@ -186,7 +234,14 @@ export function AuthorizeCleanupModal() {
       }
     } catch (e) {
       console.error(e);
-      if (isMounted.current) notify("Cleanup failed.", "error");
+      const msg = e instanceof Error ? e.message : String(e);
+      if (isMounted.current) {
+        if (/os error 32|being used by another process/i.test(msg)) {
+          notify("Close the video before deleting it.", "warning");
+        } else {
+          notify("Cleanup failed.", "error");
+        }
+      }
     } finally {
       if (isMounted.current) setBusy(false);
     }

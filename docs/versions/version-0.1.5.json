@@ -1,0 +1,56 @@
+{
+  "nodes": [
+    {
+      "id": "t-audio-warning-ui",
+      "type": "task",
+      "label": "Refine audio warning UI in downloader",
+      "agent": "chad",
+      "details": [
+        "Implemented temporary warning chip on URL bar when toggling audio mode ON.",
+        "Refined visual transition using framer-motion and removed shadow glow.",
+        "Ensured warning only triggers when switching TO audio mode."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/DownloaderView.tsx",
+          "reason": "Added warning state to URL chip and improved animations without nested borders."
+        },
+        {
+          "path": "src/components/downloader/useDownloaderView.ts",
+          "reason": "Added trigger logic for audio warning state, only firing when toggled ON."
+        }
+      ]
+    },
+    {
+      "id": "t-style-confirm-dialog",
+      "type": "task",
+      "label": "Non-blocking Toast ConfirmDialog",
+      "agent": "jim",
+      "details": [
+        "Pivoted dialog from centered modal to non-blocking toast notification in bottom-right corner.",
+        "Implemented 'blurred fill' header to fix black-bar issues on non-conforming thumbnails.",
+        "Refined proportions to a tall 'literal card' silhouette (370px wide, 4/3 aspect header).",
+        "Switched to purely text-based ghost buttons for a premium, understated aesthetic.",
+        "Integrated title/message directly under the image with minimal spacing.",
+        "Added red dotted border detail to action area for tactile 'card' feel.",
+        "Ensured context menu closes immediately upon triggering confirmation flow."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/ConfirmDialog.tsx",
+          "reason": "Redesigned as non-blocking toast with blurred-fill header, minimal text actions, and dotted border detail."
+        },
+        {
+          "path": "src/components/MediaView.tsx",
+          "reason": "Immediate menu closure on delete trigger; passing preview context to toast."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-audio-warning-ui" },
+    { "source": "t-audio-warning-ui", "target": "ruforge" },
+    { "source": "jim", "target": "t-style-confirm-dialog" },
+    { "source": "t-style-confirm-dialog", "target": "ruforge" }
+  ]
+}

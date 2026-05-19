@@ -10,6 +10,8 @@ export interface MediaFile {
   chapters: Chapter[] | null;
   downloadMetadataHint: string | null;
   sourceUrl: string | null;
+  /** yt-dlp video id from sidecar `.info.json` `id` (when `sourceUrl` is missing). */
+  sourceId: string | null;
 }
 
 export interface PlaylistCollection {

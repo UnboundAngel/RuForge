@@ -21,6 +21,12 @@ export function mediaFileFromGalleryJson(o: Record<string, unknown>): MediaFile 
     chapters: Array.isArray(o.chapters) ? (o.chapters as any) : null,
     downloadMetadataHint: null,
     sourceUrl: typeof o.sourceUrl === "string" ? o.sourceUrl : null,
+    sourceId:
+      typeof o.sourceId === "string"
+        ? o.sourceId
+        : typeof o.source_id === "string"
+          ? o.source_id
+          : null,
   };
 
   if (thumb != null && String(thumb) !== "") file.thumbnailPath = String(thumb);

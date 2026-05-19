@@ -11,6 +11,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Library,
 } from "lucide-react";
 import {
   downloadJobMediaNeedsHydration,
@@ -257,7 +258,9 @@ const DownloadJobRow = ({
   const pendingApproval = job.status === "queued" && job.approval === "pending";
   const canReorder = job.status === "queued" || job.status === "paused";
   const canEditAudio = canReorder;
-  const canRemove = ["queued", "paused", "failed", "completed"].includes(job.status);
+  const canRemove = ["queued", "paused", "failed", "completed", "skipped"].includes(
+    job.status,
+  );
   const audioOnly = job.options.audioOnly === true;
   const isFocused = focusedJobId === job.id;
   const statusTone =
@@ -267,7 +270,9 @@ const DownloadJobRow = ({
         ? "text-[#EDD79C]/35"
         : job.status === "completed"
           ? "text-[#EDD79C]/55"
-          : "text-[#EDD79C]/45";
+          : job.status === "skipped"
+            ? "text-[#EDD79C]/60"
+            : "text-[#EDD79C]/45";
   const StatusIcon =
     job.status === "downloading"
       ? Loader2
@@ -277,7 +282,9 @@ const DownloadJobRow = ({
           ? CheckCircle2
           : job.status === "failed"
             ? AlertCircle
-            : Clock;
+            : job.status === "skipped"
+              ? Library
+              : Clock;
   const metaTitle = job.metadata?.title?.trim();
   const shortTitle = job.title?.trim();
   const needsMeta = downloadJobMediaNeedsHydration(job.metadata);
@@ -314,7 +321,11 @@ const DownloadJobRow = ({
         }
       }}
       className={`group relative rounded-xl border border-white/5 bg-[#1D1613]/50 px-3.5 py-2.5 pr-9 text-left transition-colors hover:bg-[#271C18]/40 outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]/50 cursor-pointer ${
-        job.status === "downloading" ? "border-[color-mix(in_srgb,var(--accent),transparent_88%)]" : ""
+        job.status === "downloading"
+          ? "border-[color-mix(in_srgb,var(--accent),transparent_88%)]"
+          : job.status === "skipped"
+            ? "border-white/10 bg-[#1D1613]/35"
+            : ""
       } ${isFocused ? "ring-2 ring-[color-mix(in_srgb,var(--accent),transparent_55%)]" : ""}`}
     >
       <motion.div className="flex items-start gap-2">

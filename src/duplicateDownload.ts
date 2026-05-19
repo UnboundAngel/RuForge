@@ -3,7 +3,7 @@ import { extractYouTubeVideoId, youtubeUrlsMatch } from "./youtubeUrl";
 
 export type DuplicateMatch = {
   file: MediaFile;
-  matchedVia: "video_id" | "url";
+  matchedVia: "video_id" | "url" | "source_id";
 };
 
 function iterMediaFiles(entries: GalleryEntry[]): MediaFile[] {
@@ -18,7 +18,7 @@ function iterMediaFiles(entries: GalleryEntry[]): MediaFile[] {
   return out;
 }
 
-/** First library item whose `sourceUrl` matches the download URL (by video id or normalized URL). */
+/** First library item matching the download URL (`sourceUrl` or sidecar `sourceId`). */
 export function findLibraryDuplicate(
   targetUrl: string,
   entries: GalleryEntry[],
@@ -27,17 +27,26 @@ export function findLibraryDuplicate(
 
   for (const file of iterMediaFiles(entries)) {
     const source = file.sourceUrl?.trim();
-    if (!source) continue;
 
-    if (targetId) {
-      const sourceId = extractYouTubeVideoId(source);
-      if (sourceId && sourceId === targetId) {
-        return { file, matchedVia: "video_id" };
+    if (source) {
+      if (targetId) {
+        const sourceIdFromUrl = extractYouTubeVideoId(source);
+        if (sourceIdFromUrl && sourceIdFromUrl === targetId) {
+          return { file, matchedVia: "video_id" };
+        }
       }
+
+      if (youtubeUrlsMatch(targetUrl, source)) {
+        return { file, matchedVia: "url" };
+      }
+      continue;
     }
 
-    if (youtubeUrlsMatch(targetUrl, source)) {
-      return { file, matchedVia: "url" };
+    if (!targetId) continue;
+
+    const storedId = file.sourceId?.trim();
+    if (storedId && storedId === targetId) {
+      return { file, matchedVia: "source_id" };
     }
   }
 
