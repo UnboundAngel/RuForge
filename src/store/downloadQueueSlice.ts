@@ -4,6 +4,8 @@ import {
   collapseDownloadJobsByUrl,
   createDownloadJobId,
   downloadJobMediaNeedsHydration,
+  LIBRARY_DUPLICATE_SKIP_MESSAGE,
+  LIBRARY_DUPLICATE_SKIP_ROW_MS,
   patchDownloadJobOptionsForAudio,
   persistDownloadJobs,
   toInvokeDownloadOptions,
@@ -30,6 +32,7 @@ import {
   peekDownloadJobMetadataCache,
 } from "../downloadQueueMetadataCache";
 import { deliverUserNotification } from "../systemNotify";
+import { findLibraryDuplicate } from "../duplicateDownload";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 
 /** One in-flight `get_video_info` per URL (dedupes parallel hydrates). */
@@ -38,6 +41,80 @@ const inflightMetaByKey = new Map<string, Promise<DownloadJobMediaSnapshot>>();
 /** Coalesce `persistDownloadJobs` when many hydrates finish back-to-back (e.g. startup sweep). */
 const DOWNLOAD_JOB_HYDRATE_PERSIST_DEBOUNCE_MS = 75;
 let hydratePersistTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const skippedJobRemovalTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Coalesce gallery scans when duplicate-skip needs library rows before yt-dlp. */
+let entriesFetchForDuplicateCheckInflight: Promise<void> | null = null;
+
+async function ensureEntriesForDuplicateCheck(get: () => RuforgeStore): Promise<void> {
+  if (!get().settings.skipDuplicatesAutomatically) return;
+  if (get().entries.length > 0) return;
+  if (!entriesFetchForDuplicateCheckInflight) {
+    entriesFetchForDuplicateCheckInflight = get()
+      .fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true })
+      .then(() => undefined)
+      .finally(() => {
+        entriesFetchForDuplicateCheckInflight = null;
+      });
+  }
+  await entriesFetchForDuplicateCheckInflight;
+}
+
+function isYtDlpStartCancelledError(message: string): boolean {
+  return /cancelled before yt-dlp could start/i.test(message);
+}
+
+function clearSkippedJobRemovalTimer(jobId: string): void {
+  const t = skippedJobRemovalTimers.get(jobId);
+  if (t) {
+    clearTimeout(t);
+    skippedJobRemovalTimers.delete(jobId);
+  }
+}
+
+function shouldAutoSkipLibraryDuplicate(get: () => RuforgeStore, url: string): boolean {
+  if (!get().settings.skipDuplicatesAutomatically) return false;
+  return findLibraryDuplicate(url, get().entries) != null;
+}
+
+function markJobSkippedLibraryDuplicate(jobs: DownloadJob[], jobId: string): DownloadJob[] {
+  return jobs.map((j) =>
+    j.id === jobId
+      ? {
+          ...j,
+          status: "skipped" as const,
+          error: LIBRARY_DUPLICATE_SKIP_MESSAGE,
+          progress: null,
+          resumeOnStart: false,
+        }
+      : j,
+  );
+}
+
+function scheduleSkippedJobRemoval(get: () => RuforgeStore, jobId: string): void {
+  if (skippedJobRemovalTimers.has(jobId)) return;
+  const timer = setTimeout(() => {
+    skippedJobRemovalTimers.delete(jobId);
+    void get().removeDownloadJob(jobId);
+  }, LIBRARY_DUPLICATE_SKIP_ROW_MS);
+  skippedJobRemovalTimers.set(jobId, timer);
+}
+
+/** Returns true when the job was marked `skipped` (caller must not start yt-dlp). */
+async function trySkipLibraryDuplicateJob(
+  get: () => RuforgeStore,
+  jobId: string,
+  url: string,
+): Promise<boolean> {
+  if (!get().settings.skipDuplicatesAutomatically) return false;
+  await ensureEntriesForDuplicateCheck(get);
+  if (!findLibraryDuplicate(url, get().entries)) return false;
+  const job = get().downloadJobs.find((j) => j.id === jobId);
+  if (!job || job.status === "skipped") return true;
+  get().skipDownloadJobAsLibraryDuplicate(jobId);
+  return true;
+}
 
 function schedulePersistAfterDownloadJobHydrate(get: () => RuforgeStore): void {
   if (hydratePersistTimeout !== null) {
@@ -159,7 +236,7 @@ function resolveFocusAfterMutation(
 ): string | null {
   if (prevFocus) {
     const j = jobs.find((x) => x.id === prevFocus);
-    if (j && j.status !== "completed" && j.status !== "failed") {
+    if (j && j.status !== "completed" && j.status !== "failed" && j.status !== "skipped") {
       return prevFocus;
     }
   }
@@ -193,6 +270,8 @@ export type DownloadQueueSlice = {
   resumeDownloadJob: (id: string) => Promise<void>;
   retryDownloadJob: (id: string) => void;
   removeDownloadJob: (id: string) => Promise<void>;
+  /** Auto-skip duplicates: show `skipped` row briefly, then remove. */
+  skipDownloadJobAsLibraryDuplicate: (id: string) => void;
   reorderDownloadJobs: (fromIndex: number, toIndex: number) => void;
   setDownloadJobAudioOnly: (jobId: string, audioOnly: boolean) => void;
   applyDownloadProgress: (payload: ProgressPayload) => void;
@@ -214,9 +293,17 @@ export const createDownloadQueueSlice: StateCreator<
   ): void {
     void (async () => {
       try {
+        if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
+          get().pumpDownloadQueue();
+          return;
+        }
         await hydrateDownloadJobMetadata(get, set, jobId, url);
         const job = get().downloadJobs.find((j) => j.id === jobId);
         if (!job || job.status !== "downloading") return;
+        if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
+          get().pumpDownloadQueue();
+          return;
+        }
         await invoke("start_download_job", {
           jobId,
           url,
@@ -224,10 +311,17 @@ export const createDownloadQueueSlice: StateCreator<
           resume,
         });
       } catch (e) {
+        const msg = String(e);
+        if (isYtDlpStartCancelledError(msg)) {
+          if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
+            get().pumpDownloadQueue();
+            return;
+          }
+        }
         get().onDownloadJobFinished({
           jobId,
           success: false,
-          error: String(e),
+          error: msg,
         });
       }
     })();
@@ -237,9 +331,15 @@ export const createDownloadQueueSlice: StateCreator<
   function promoteEligibleJobs(
     downloadJobs: DownloadJob[],
     max: number,
-  ): { jobs: DownloadJob[]; starts: { id: string; url: string; resume: boolean }[] } {
+    getStore: () => RuforgeStore,
+  ): {
+    jobs: DownloadJob[];
+    starts: { id: string; url: string; resume: boolean }[];
+    skippedIds: string[];
+  } {
     let jobs = collapseDownloadJobsByUrl(downloadJobs);
     const starts: { id: string; url: string; resume: boolean }[] = [];
+    const skippedIds: string[] = [];
     let running = jobs.filter((j) => j.status === "downloading").length;
 
     while (running < max) {
@@ -254,6 +354,13 @@ export const createDownloadQueueSlice: StateCreator<
           ),
       );
       if (!next) break;
+
+      if (shouldAutoSkipLibraryDuplicate(getStore, next.url)) {
+        jobs = markJobSkippedLibraryDuplicate(jobs, next.id);
+        skippedIds.push(next.id);
+        continue;
+      }
+
       starts.push({
         id: next.id,
         url: next.url,
@@ -271,7 +378,7 @@ export const createDownloadQueueSlice: StateCreator<
       );
       running++;
     }
-    return { jobs, starts };
+    return { jobs, starts, skippedIds };
   }
 
   return {
@@ -414,7 +521,32 @@ export const createDownloadQueueSlice: StateCreator<
       if (kept && downloadJobMediaNeedsHydration(kept.metadata)) {
         void hydrateDownloadJobMetadata(get, set, keptId, urlTrim);
       }
+      if (get().settings.skipDuplicatesAutomatically) {
+        void (async () => {
+          await ensureEntriesForDuplicateCheck(get);
+          if (shouldAutoSkipLibraryDuplicate(get, urlTrim)) {
+            get().skipDownloadJobAsLibraryDuplicate(keptId);
+          }
+        })();
+      }
       return keptId;
+    },
+
+    skipDownloadJobAsLibraryDuplicate: (id) => {
+      const job = get().downloadJobs.find((j) => j.id === id);
+      if (!job || job.status === "skipped") return;
+
+      set((s) => {
+        const downloadJobs = markJobSkippedLibraryDuplicate(s.downloadJobs, id);
+        persistDownloadJobs(downloadJobs);
+        const focus = resolveFocusAfterMutation(downloadJobs, s.focusedJobId);
+        return {
+          downloadJobs,
+          focusedJobId: focus,
+          ...syncLegacyDownloaderUi(downloadJobs, focus),
+        };
+      });
+      scheduleSkippedJobRemoval(get, id);
     },
 
     pauseDownloadJob: async (id) => {
@@ -473,6 +605,11 @@ export const createDownloadQueueSlice: StateCreator<
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job || job.status !== "paused") return;
 
+      if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
+        get().pumpDownloadQueue();
+        return;
+      }
+
       const running = get().downloadJobs.filter((j) => j.status === "downloading").length;
       const atCapacity = running >= get().maxConcurrentDownloads;
 
@@ -503,9 +640,17 @@ export const createDownloadQueueSlice: StateCreator<
       }
 
       try {
+        if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
+          get().pumpDownloadQueue();
+          return;
+        }
         await hydrateDownloadJobMetadata(get, set, id, job.url);
         const latest = get().downloadJobs.find((j) => j.id === id);
         if (!latest || latest.status !== "downloading") return;
+        if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
+          get().pumpDownloadQueue();
+          return;
+        }
         await invoke("start_download_job", {
           jobId: id,
           url: job.url,
@@ -514,6 +659,13 @@ export const createDownloadQueueSlice: StateCreator<
         });
       } catch (e) {
         const msg = String(e);
+        if (
+          isYtDlpStartCancelledError(msg) &&
+          (await trySkipLibraryDuplicateJob(get, id, job.url))
+        ) {
+          get().pumpDownloadQueue();
+          return;
+        }
         get().onDownloadJobFinished({ jobId: id, success: false, error: msg });
       }
     },
@@ -541,6 +693,7 @@ export const createDownloadQueueSlice: StateCreator<
     removeDownloadJob: async (id) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job) return;
+      clearSkippedJobRemovalTimer(id);
       const removedUrl = job.url;
       if (job.status === "downloading") {
         await get().pauseDownloadJob(id);
@@ -654,6 +807,7 @@ export const createDownloadQueueSlice: StateCreator<
 
     onDownloadJobFinished: (payload) => {
       const starts: { id: string; url: string; resume: boolean }[] = [];
+      const skippedIds: string[] = [];
       const finishedUrl = get().downloadJobs.find((j) => j.id === payload.jobId)?.url;
 
       set((s) => {
@@ -679,12 +833,14 @@ export const createDownloadQueueSlice: StateCreator<
 
         persistDownloadJobs(downloadJobs);
 
-        const { jobs: promotedJobs, starts: batchStarts } = promoteEligibleJobs(
-          downloadJobs,
-          s.maxConcurrentDownloads,
-        );
+        const {
+          jobs: promotedJobs,
+          starts: batchStarts,
+          skippedIds: batchSkipped,
+        } = promoteEligibleJobs(downloadJobs, s.maxConcurrentDownloads, get);
         downloadJobs = promotedJobs;
         starts.push(...batchStarts);
+        skippedIds.push(...batchSkipped);
         persistDownloadJobs(downloadJobs);
 
         const focus = resolveFocusAfterMutation(downloadJobs, s.focusedJobId);
@@ -696,6 +852,9 @@ export const createDownloadQueueSlice: StateCreator<
         };
       });
 
+      for (const id of skippedIds) {
+        scheduleSkippedJobRemoval(get, id);
+      }
       for (const st of starts) {
         startHydratedDownloadJob(st.id, st.url, st.resume);
       }
@@ -705,6 +864,14 @@ export const createDownloadQueueSlice: StateCreator<
       }
 
       if (payload.success) {
+        if (finishedUrl) {
+          const heroUrl = get().url.trim();
+          if (heroUrl && youtubeUrlsMatch(heroUrl, finishedUrl)) {
+            get().setDownloaderUrl("");
+            get().setVideoInfo(null);
+            get().setMetadataError(null);
+          }
+        }
         void get().invalidateEntries({ silent: true });
         void deliverUserNotification(
           {
@@ -735,36 +902,46 @@ export const createDownloadQueueSlice: StateCreator<
     },
 
     pumpDownloadQueue: () => {
-      const starts: { id: string; url: string; resume: boolean }[] = [];
+      void (async () => {
+        await ensureEntriesForDuplicateCheck(get);
 
-      set((s) => {
-        const { jobs: downloadJobs, starts: batchStarts } = promoteEligibleJobs(
-          s.downloadJobs,
-          s.maxConcurrentDownloads,
-        );
-        starts.push(...batchStarts);
+        const starts: { id: string; url: string; resume: boolean }[] = [];
+        const skippedIds: string[] = [];
 
-        if (batchStarts.length === 0) {
+        set((s) => {
+          const {
+            jobs: downloadJobs,
+            starts: batchStarts,
+            skippedIds: batchSkipped,
+          } = promoteEligibleJobs(s.downloadJobs, s.maxConcurrentDownloads, get);
+          starts.push(...batchStarts);
+          skippedIds.push(...batchSkipped);
+
+          if (batchStarts.length === 0 && batchSkipped.length === 0) {
+            const focus = resolveFocusAfterMutation(downloadJobs, s.focusedJobId);
+            return {
+              downloadJobs,
+              focusedJobId: focus,
+              ...syncLegacyDownloaderUi(downloadJobs, focus),
+            };
+          }
+
+          persistDownloadJobs(downloadJobs);
           const focus = resolveFocusAfterMutation(downloadJobs, s.focusedJobId);
           return {
             downloadJobs,
             focusedJobId: focus,
             ...syncLegacyDownloaderUi(downloadJobs, focus),
           };
+        });
+
+        for (const id of skippedIds) {
+          scheduleSkippedJobRemoval(get, id);
         }
-
-        persistDownloadJobs(downloadJobs);
-        const focus = resolveFocusAfterMutation(downloadJobs, s.focusedJobId);
-        return {
-          downloadJobs,
-          focusedJobId: focus,
-          ...syncLegacyDownloaderUi(downloadJobs, focus),
-        };
-      });
-
-      for (const st of starts) {
-        startHydratedDownloadJob(st.id, st.url, st.resume);
-      }
+        for (const st of starts) {
+          startHydratedDownloadJob(st.id, st.url, st.resume);
+        }
+      })();
     },
   };
 };

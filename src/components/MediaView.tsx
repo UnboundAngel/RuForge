@@ -2,10 +2,51 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play } from "lucide-react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { emitTo } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { askConfirm } from "./ConfirmDialog";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { getPlaybackThumbnailBar, getWatchProgress, isVideoWatched } from "../playbackStorage";
 import { formatStorageSize } from "../formatStorageSize";
+import { clearPlaybackStateForDeletedPaths } from "../cleanupCandidates";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import { youtubeUrlsMatch } from "../youtubeUrl";
+
+function deleteMediaErrorMessage(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/os error 32|being used by another process/i.test(msg)) {
+    return "Close the video before deleting it.";
+  }
+  return "Failed to delete video.";
+}
+
+async function releasePlaybackBeforeDelete(paths: string[]): Promise<void> {
+  const pathSet = new Set(paths);
+  const st = useRuforgeStore.getState();
+  if (st.playingFile && pathSet.has(st.playingFile.path)) {
+    st.stopPlayback();
+    if (st.activeTab === "player") {
+      st.setActiveTab("media");
+    }
+  }
+  try {
+    const mini = await WebviewWindow.getByLabel("mini");
+    if (mini) {
+      await emitTo("mini", "stop-playback", "main-app");
+    }
+  } catch {
+    // Mini window may not exist.
+  }
+}
+
+async function removeQueueJobsForSourceUrl(sourceUrl: string): Promise<void> {
+  const jobs = useRuforgeStore.getState().downloadJobs;
+  const ids = jobs.filter((j) => youtubeUrlsMatch(j.url, sourceUrl)).map((j) => j.id);
+  const removeDownloadJob = useRuforgeStore.getState().removeDownloadJob;
+  for (const id of ids) {
+    await removeDownloadJob(id);
+  }
+}
 
 const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection, onClick: () => void }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -244,15 +285,34 @@ export const MediaView = ({
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
 
   const handleDelete = async (file: MediaFile) => {
-    if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
-      try {
-        await invoke("delete_media", { videoPath: file.path });
-        notify("Video deleted successfully.");
-        await fetchEntries();
-      } catch (e) {
-        console.error(e);
-        notify("Failed to delete video.");
+    setGalleryActiveMenu(null);
+    const approved = await askConfirm({
+      title: "Delete video",
+      message: `Are you sure you want to delete this video? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      itemPreview: file.thumbnailPath ?? file.ruforgePosterPath,
+      itemMeta: `${formatStorageSize(file.size)} • ${file.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "")}`
+    });
+    if (!approved) {
+      return;
+    }
+
+    await releasePlaybackBeforeDelete([file.path]);
+
+    try {
+      await invoke("delete_media", { videoPath: file.path });
+      clearPlaybackStateForDeletedPaths([file.path]);
+      const sourceUrl = file.sourceUrl?.trim();
+      if (sourceUrl) {
+        await removeQueueJobsForSourceUrl(sourceUrl);
       }
+      notify("Video deleted successfully.");
+      await fetchEntries();
+    } catch (e) {
+      console.error(e);
+      const message = deleteMediaErrorMessage(e);
+      notify(message, message.includes("Close the video") ? "warning" : "error");
     }
     setGalleryActiveMenu(null);
   };

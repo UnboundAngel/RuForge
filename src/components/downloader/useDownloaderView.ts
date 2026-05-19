@@ -8,6 +8,7 @@ import {
   buildDownloadJobOptions,
   downloadJobMediaNeedsHydration,
   downloadJobSnapshotToVideoInfo,
+  jobHasDownloadTransferStarted,
   patchDownloadJobOptionsForAudio,
   videoInfoToDownloadJobSnapshot,
 } from "../../downloadQueue";
@@ -74,6 +75,10 @@ export function useDownloaderView({
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const queueHydrateOrphanMetadata = useRuforgeStore((s) => s.queueHydrateOrphanMetadata);
   const pumpDownloadQueue = useRuforgeStore((s) => s.pumpDownloadQueue);
+  const skipDownloadJobAsLibraryDuplicate = useRuforgeStore(
+    (s) => s.skipDownloadJobAsLibraryDuplicate,
+  );
+  const libraryScanRevision = useRuforgeStore((s) => s.libraryScanRevision);
   const releaseHeldDownloadJobs = useRuforgeStore((s) => s.releaseHeldDownloadJobs);
   const resumeDownloadJob = useRuforgeStore((s) => s.resumeDownloadJob);
   const setDownloadJobAudioOnly = useRuforgeStore((s) => s.setDownloadJobAudioOnly);
@@ -333,6 +338,29 @@ export function useDownloaderView({
     if (entries.length > 0) return;
     void fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true });
   }, [url, entries.length, fetchEntries]);
+
+  /** Rows enqueued before library scan caught up — skip before yt-dlp starts (not after cancel). */
+  useEffect(() => {
+    if (!settings.skipDuplicatesAutomatically) return;
+    const st = useRuforgeStore.getState();
+    for (const j of st.downloadJobs) {
+      if (j.approval === "manual") continue;
+      if (j.status === "queued" || j.status === "paused") {
+        if (!findLibraryDuplicate(j.url, st.entries)) continue;
+        skipDownloadJobAsLibraryDuplicate(j.id);
+        continue;
+      }
+      if (j.status === "downloading" && !jobHasDownloadTransferStarted(j)) {
+        if (!findLibraryDuplicate(j.url, st.entries)) continue;
+        skipDownloadJobAsLibraryDuplicate(j.id);
+      }
+    }
+  }, [
+    entries,
+    libraryScanRevision,
+    settings.skipDuplicatesAutomatically,
+    skipDownloadJobAsLibraryDuplicate,
+  ]);
 
   const handleBrowserChange = async (val: string) => {
     updateSetting("browserContext", val);

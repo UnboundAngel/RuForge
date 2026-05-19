@@ -2,8 +2,8 @@
 
 > Living document tracking everything between current state and shippable v1.0.  
 > **Canonical copy for this repo:** `docs/RuForge.md` (agents: update here when work ships).  
-> Last updated: 2026-05-16  
-> **Shipping version:** `0.1.4` (`package.json`, `tauri.conf.json`, `updater.json`)
+> Last updated: 2026-05-18  
+> **Shipping version:** `0.1.5` (`package.json`, `tauri.conf.json`, `updater.json`)
 
 ---
 
@@ -19,6 +19,15 @@
 ---
 
 ## Recently Resolved
+
+### Release 0.1.4 → 0.1.5 — Audio, caching, confirm delete, duplicate skip (shipped)
+
+- ✅ **Audio-only download toggle** — queue + hero respect audio-only; processing phase in queue UI.
+- ✅ **Download details caching** — metadata cache for hero/queue file sizes and repeat URLs.
+- ✅ **Confirm-deletion screen** — in-app `ConfirmDialog` (no native `confirm()`); playback released before delete.
+- ✅ **Library duplicate skip** — `sourceId` from `.info.json` `id` (+ `..info.json` sidecar path); skip duplicates in queue without re-scanning every pump.
+- ✅ **Delete clears queue row** — MediaView / Authorize Cleanup remove matching download jobs by URL.
+- ✅ **Hero URL clears after download** — finished job matching hero URL resets downloader field.
 
 ### Release 0.1.3 → 0.1.4 — Downloader wedge (shipped)
 

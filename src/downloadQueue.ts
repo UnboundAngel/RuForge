@@ -94,7 +94,22 @@ export type DownloadJobStatus =
   | "downloading"
   | "paused"
   | "completed"
-  | "failed";
+  | "failed"
+  /** Brief UI state before row removal when auto-skip duplicates is on and the file is in library. */
+  | "skipped";
+
+export const LIBRARY_DUPLICATE_SKIP_MESSAGE = "Already in library";
+
+/** How long a duplicate-skipped row stays visible before removal. */
+export const LIBRARY_DUPLICATE_SKIP_ROW_MS = 1800;
+
+/** True once yt-dlp has reported real transfer/processing progress for this job. */
+export function jobHasDownloadTransferStarted(job: DownloadJob): boolean {
+  const p = job.progress;
+  if (!p) return false;
+  if (p.status === "processing") return true;
+  return typeof p.percentage === "number" && p.percentage > 0;
+}
 
 /**
  * - **held** — queued before the user clicks Download; never promoted until released to auto.
