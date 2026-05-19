@@ -12,13 +12,19 @@ Concise context for agents working **inside this repo’s IDE workspace**. This 
 - **Player:** so people can **watch what they already downloaded**; it is not the competitive wedge.
 - **Media view:** a **convenient** local library surface on top of downloaded (and scanned) files — secondary to downloader quality.
 - **In-app explorer webview:** primarily for **cookie / session flows** that yt-dlp needs (age-restricted, members-only, etc.). It is **not** positioned as a full in-app browser for casual watching. A **uBlock** payload may exist under `src-tauri` for this webview; treat it as **experimental / not relied upon** until it is verified working end-to-end.
+- **Explorer tab — where controls may live (mandatory):** The embedded explorer **child webview paints on top of** the main-column DOM. Anything rendered inside the Explorer tab body (bulges, `absolute`/`fixed` nodes under `flex-1`, etc.) can be **covered and unclickable**. **Do not** put explorer actions on tab bulges or in the content column.
+  - **Only valid chrome:** the **top title band** (`h-10`, `z-[100]`), same layer as `WindowControls` in `App.tsx`.
+  - **Left cluster:** back / forward / reload via `ExplorerTitlebarNav` — **`fixed top-0`**, flush at the sidebar→content seam (`left: 80px` collapsed / `240px` expanded; `transition-[left]` must match sidebar width animation). Wired from `App.tsx`, not from inside the explorer panel.
+  - **Right cluster:** `WindowControls` (`fixed top-0 right-0`) — download queue, mini player, then minimize / maximize / close.
 
 **How to advise:** ground recommendations in **what RuForge already is** and what is **already solved well elsewhere** (generic browsers, dedicated players, Plex-like libraries). Avoid **feature creep** and “compete with X” pivots unless the maintainer explicitly widens scope. Longer roadmap, priorities, and out-of-scope list live in the **planning doc** linked below — prefer that over inventing new product direction in chat.
 
 ## Planning & ideas (canonical doc)
 
+- **Shipped log (THIS FILE, bottom — `## Shipped log`):** the **first and mandatory** place every shipped change is recorded. One appended line per change, no format ceremony. This is the cheap, vague-input-proof capture surface. **If you change behavior, append here before you consider the task done.** See `## Shipped log` for the rule.
 - **Living roadmap / ideas (in-repo, canonical for agents):** `docs/RuForge.md` — update when shipped work lands. Optional mirror outside the repo: `c:\Random things i dont want deleted\markdown files\RuForge.md` (keep in sync by hand if you use both).
-- **In-repo machine plans:** `.cursor/plans/` (e.g. Zustand migration audit) — implementation detail, may lag; trust code + this `AGENTS.md` for “what shipped.”
+- **Graph surfaces (`docs/changes.html`, `docs/versions/version-<semver>.json`, `docs/versioner.html`):** Angel's project-tracking + release-note source. These are **drained from the Shipped log at release time only** (see `## Release ritual`, step 6) — **never** edited per-change mid-cycle. The gap between the Shipped log and the last version present in the graph surfaces IS the release-prep to-do; do not wait to be told.
+- **In-repo machine plans:** `.cursor/plans/` (e.g. Zustand migration audit) — implementation detail, may lag; trust code + this `AGENTS.md` for "what shipped."
 
 ## Who does what (this workspace vs elsewhere)
 
@@ -72,129 +78,28 @@ These should match for releases and for sane updater behavior:
 
 A past mismatch was **`Cargo.toml` behind the JS/Tauri app version** — fix on every bump.
 
-## Version graph manifests (`docs/versioner.html` + `docs/versions/`)
+## Changelog & version-graph authoring (pointer)
 
-**Purpose:** Internal per-release **dependency graph** (not the shipping “What’s new”). **Graph rows** are stored **only** in **`docs/versions/version-<semver>.json`**. **`docs/versioner.html`** keeps a small **`versions`** registry (`id`, `label`, `status`, `manifest`) plus the shared **`base`** agent/tool matrix, and **loads** each manifest at runtime.
+The full authoring detail for the release-notes and version-graph surfaces
+lives in `docs/CHANGELOG-AUTHORING.md`. It is not inlined here on purpose:
+the per-task agent path stays thin so the Shipped log and release ritual
+below are not buried under manuals.
 
-**How to create or extend JSON (additive), registry rows, `fileEdits`, created files, preview:**  
-→ **`docs/versions/MANIFEST-EXAMPLE.md`**
+You only go to that doc when the release ritual sends you (step 6), or when
+explicitly changing one of these surfaces. For all normal work, ignore it.
 
-**Every field, alias, loader rule, and registry key:**  
-→ **`docs/versions/MANIFEST-SCHEMA.md`**
+- Version graph manifests (`docs/versioner.html` + `docs/versions/version-<semver>.json`):
+  schema, registry rows, fileEdits, preview. See CHANGELOG-AUTHORING.md part 1.
+- Changelog source (`docs/changes.html`): HTML-only DOM contract (`rf-*`
+  classes, `data-version`), the embedded `<script id="changelog-data">` JSON
+  island, faded-divider rule, Canvas Architecture Workflow, Iconify category
+  icons. See CHANGELOG-AUTHORING.md part 2.
+- Structured version block + DOM template for a new release section.
+  See CHANGELOG-AUTHORING.md part 3.
 
-**New semver:** Align **`package.json`**, **`src-tauri/tauri.conf.json`**, and **`src-tauri/Cargo.toml`** (`## Versions (keep aligned)` above), add the JSON file under **`docs/versions/`**, add the **`versions`** row in **`versioner.html`** — checklist in **MANIFEST-SCHEMA.md** §B.
-
-**Preview:** `npx --yes serve docs` from repo root, then open **`/versioner.html`**.
-
-**Roles:** **Chad** — manifests, registry, loader, **`VersionGraphFormat`**. **Jim** — CSS-only on **`versioner.html`** (avoid changing **`VersionGraphFormat`** wiring unless coordinated).
-
-**`versioner.html` UX (maintainer/bot notes):**
-
-- Nodes anchor edges to **circle centers** — labels hang below via CSS so Bézier endpoints stay accurate on wide task rows.
-- **Detail panel:** scroll body is **`#detail-panel-inner`** (fixed chrome + close button); extend scroll there, not the raw `#detail-panel`.
-- **`fileEdits` / multi-path tasks:** manifests still list **`fileEdits` in JSON only** — the canvas **renders synthetic file nodes** when a task/fix has **two or more unique paths**. **Green** ring = **`action` create** semantics (**`MANIFEST-SCHEMA.md`**); **muted cream/stone** = modified. Thin **fork** edges run from parent task/fix to each path; sidebar copy uses **`reason`** when present else a short default. **By default those file nodes are hidden** — **click the parent task/fix on the canvas** to toggle the row (click again to collapse). Changing version pills or clicking empty canvas clears expansions.
-
-- **Graph extent:** Layout is **normalized into a positive bbox** and the SVG **`viewBox`** / `#graph-layer` size follow that bbox so long manifest rows do not clip edge strokes at a fixed 4000×6000 canvas.
-
-## Changelog source (`docs/changes.html`)
-
-- **Audience:** This file is **internal only** — for **you and IDE agents** (structure, copy, release hygiene). **End users do not browse this HTML.** The shipping **“What’s new” / updater** experience is built **in the app** (React + **Iconify** icons, RuForge palette). Keep `docs/changes.html` aligned with what you ship so agents can diff and port content into UI later.
-- **Canonical in-repo history** of notable changes, **one block per shipped app version** (same triplet as `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`).
-- **Format is HTML only — not Markdown.** Use the structured layout in **`### Structured version block`** below. Inline SVGs in the template are **layout stand-ins**; production UI should use the **Iconify** slugs the maintainer chooses (see **Category icons (in-app)** below).
-- **Why HTML:** Easier for agents to emit consistent, parseable trees than Markdown dialects — still **not** the user-facing surface.
-- **Order:** **Newest version first** inside `<main>`.
-- **Workflow:** **Jim (Gemini)** may own the **first visual pass** on `docs/changes.html` (spacing, typography, faded rules, cream-on-brown harmony) **without changing the DOM contract** (`rf-*` classes, `data-version`, section nesting). **Chad / agents** then **fill and maintain** list rows, counts, and copy when code changes land. On release, distill for `updater.json` `notes` / GitHub Release as needed.
-- **Divider lines (agents + Jim):** **Avoid** flat, full-width, low-contrast gray rules that “cut” the panel (they read cheap and fight the warm brown shell). **Prefer** the same language as the **Video Library** date headers: **rules that fade out** toward the edges, **muted cream / gold** (`#EDD79C`-family) with soft alpha — see `docs/changes.html` gradients. If a separator does not fade and harmonize with the brown shell, **do not add it**; use whitespace instead.
-- **Policy:** Do not replace this workflow with a Markdown twin unless the maintainer updates this section of `AGENTS.md`.
-
-**[NEW: Canvas Architecture Workflow — `docs/changes.html` only]**
-- **Architecture (Canvas Graph):** The **changes.html** changelog UI uses an interactive dependency graph on a canvas; the underlying data remains LLM-readable JSON inside that file.
-- **Source of Truth (LLM-Readable):** The changelog data lives in a structured JSON block inside a `<script type="application/json" id="changelog-data">` tag **within `docs/changes.html`**.
-- **Workflow for Agents:**
-  - **NEVER** attempt to edit the JavaScript rendering logic or the CSS styles for the **changes.html** graph.
-  - When adding new version notes, you **ONLY** append to the `versions` array inside the `<script id="changelog-data">` JSON block.
-  - Create nodes for tasks (`"type": "task"`) or fixes (`"type": "fix"`), add `details` and modified `files` to those nodes, and create `"edges"` connecting the agent(s) who did the work to the task, and the task to the `ruforge` core node.
-- **Exporting for Release:** The HTML UI includes an "Export Release Notes" button. When clicked, the JavaScript parses the JSON graph and generates a cleanly formatted Markdown summary of the selected version, ready to be copied into `updater.json` or GitHub Releases.
-
-**Related internal graph (`docs/versioner.html`):** Authoring rules and examples live in **`docs/versions/MANIFEST-EXAMPLE.md`** and **`docs/versions/MANIFEST-SCHEMA.md`** (see **`## Version graph manifests`**). Do not assume the same editing rules as **changes.html**.
-
-### Category icons (in-app, Iconify)
-
-Maintainer-provided slug set for **category** glyphs (compare contrast on `#1D1613` / `#271C18` with muted cream strokes):
-
-| Role | Iconify slug | Notes |
-|------|----------------|-------|
-| **Additions** | `material-symbols:add-ad` | “Window + plus” — reads as **new surface / feature**; pairs visually with the wrench family because both use a **frame**, but the **corner glyph differs** (plus vs wrench). |
-| **Fixes (wrench family)** | `fluent:window-wrench-24-regular` or `fluent:window-wrench-32-filled` | **Tool on window** — clear **repair / maintenance** story; **filled** pops slightly more on dark brown at small sizes. |
-| **Fixes (alternate)** | `material-symbols:reset-wrench-rounded` | Emphasizes **repair / reset** — still wrench-adjacent; distinct silhouette from `add-ad` if both are rounded. |
-| **Fixes (semantic bug)** | `mdi:bug-check-outline` | **Most semantically “fixes”** and **least confusable** with “add” (different metaphor entirely). Strong candidate if you want zero chance users mix “new” vs “fixed.” |
-
-**Opinion (for RuForge’s brown + muted cream):** At small sizes, render these icons in **muted cream** (`stone-200` / `#EDD79C` tint) or **slightly warmed white**, not pure `#fff`, so they match the library UI. **`mdi:bug-check-outline`** is the safest **distinct** choice for fixes next to **`material-symbols:add-ad`**. If you prefer a **unified “window chrome”** language, pair **`add-ad`** + **`fluent:window-wrench-24-regular`** and rely on **plus vs wrench** in the same corner — works if both icons stay **large enough** in the UI; if they shrink below ~18px, prefer **bug-check** for fixes.
-
-### Structured version block (for agents)
-
-When you add or extend a release in **`docs/changes.html`**, follow this **layout contract** so the same tree is easy to map into the in-app “What’s new” view later.
-
-**Numbered slots (what goes where):**
-
-1. **Contributor (per line)** — A short handle or name in a **left** pill on each change row (`<span class="rf-contrib">…</span>`). This is **credit for who wrote the change** (contributor / maintainer), **not** a “founder” or role badge. Use real handles or `Team` when mixed.
-2. **Color coding** — **Do not** use the tired **green = additions / red = fixes** pairing (red for fixes reads as alarm-y and ages poorly). The repo template uses **teal / mint for additions** and **indigo / lavender for fixes** (see `:root` in `docs/changes.html`). If you extend the palette, keep fixes **non-red** unless the maintainer changes this rule.
-3. **Category icons (this file)** — Inline SVGs in `docs/changes.html` are **placeholders** for layout only. **Shipping icons** = Iconify in the app (**Category icons (in-app)** table above).
-4. **Version label** — Plain **top-right** of the version block header row (`<span class="rf-version">x.y.z</span>` next to the title flex row). **Do not** copy a boxed pill jammed against the title; the template uses a clean right-aligned label (`margin-left: auto`).
-5. **Count badges** — In the **category header row**, opposite the icon + title: `<span class="rf-count">N</span>` where **N** equals the number of `<li class="rf-change-row">` entries in that category (keep counts accurate when you edit lists).
-6. **Optional scope line** — Centered rule with short text (e.g. `RuForge core`) via `<p class="rf-scope">…</p>` when the release spans multiple areas; omit if unnecessary. Rules **must** use **faded cream gradients** (see `docs/changes.html`), not flat gray hairlines.
-
-**DOM shape to mirror** (classes and nesting are stable API for this repo — extend presentation in the same file’s `<style>` block, respecting divider rules above):
-
-```html
-<section class="rf-release" id="v0-1-3" data-version="0.1.3">
-  <div class="rf-release-head">
-    <h2 class="rf-title">What&apos;s new in RuForge</h2>
-    <span class="rf-version" aria-label="Release version">0.1.3</span>
-  </div>
-  <p class="rf-scope">RuForge core</p>
-
-  <div class="rf-category rf-additions">
-    <div class="rf-category-head">
-      <div class="rf-category-title">
-        <!-- placeholder SVG in docs/changes.html; app: material-symbols:add-ad -->
-        <span>Additions</span>
-      </div>
-      <span class="rf-count">1</span>
-    </div>
-    <ul class="rf-list">
-      <li class="rf-change-row">
-        <span class="rf-contrib" title="Contributor">handle</span>
-        <span class="rf-change-text">User-visible summary of the change.</span>
-      </li>
-    </ul>
-  </div>
-
-  <div class="rf-category rf-fixes">
-    <div class="rf-category-head">
-      <div class="rf-category-title">
-        <!-- placeholder SVG; app: see Iconify table (e.g. mdi:bug-check-outline) -->
-        <span>Fixes</span>
-      </div>
-      <span class="rf-count">1</span>
-    </div>
-    <ul class="rf-list">
-      <li class="rf-change-row">
-        <span class="rf-contrib" title="Contributor">handle</span>
-        <span class="rf-change-text">What was wrong and how it behaves now.</span>
-      </li>
-    </ul>
-  </div>
-
-  <footer class="rf-foot">
-    <a href="https://github.com/UnboundAngel/RuForge/releases" target="_blank" rel="noopener noreferrer">Full changelog</a>
-  </footer>
-</section>
-```
-
-**Live reference:** Open `docs/changes.html` in a browser — the newest `<section class="rf-release">` is the **full** copy-paste reference. When adding a new version, **duplicate that section**, bump `id` / `data-version`, reset lists, and **recompute** each `.rf-count`.
-
-**Handoff (Jim):** Run a visuals-only pass on `docs/changes.html` (and optionally the future in-app changelog shell) using RuForge **brown + muted cream**; **do not** change class names, `data-version`, or list semantics. Honor **faded dividers**; no harsh full-width gray rules.
+Hard rule unchanged by the move: never edit the changes.html JS or CSS
+rendering logic. Append to the JSON island only, recompute `.rf-count`,
+honor faded dividers, fixes are non-red. Full detail in the authoring doc.
 
 ## Auto-updater (Tauri plugin-updater)
 
@@ -258,3 +163,51 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 - Prefer reading **`ruforgeStore.ts`**, **`App.tsx`**, **`MiniPlayer.tsx`**, and **`tauri.conf.json`** before large refactors.
 - For updater or signing behavior, trust **current Tauri v2 + plugin-updater docs** over memory; the surface changes over time.
+
+## Shipped log
+
+**Why this exists:** Updates were getting lost because the only places to record them lived in `docs/` — files Chad has no reason to open during a bug fix. This log lives **here, in the file you already read every task**, so there is zero distance between finishing work and recording it. Distance is what kills logging, not effort.
+
+**The rule (non-negotiable):**
+
+- **Any change to shipped runtime behavior gets ONE appended line under the current `### vX.Y.Z (unreleased)` block — before the task is considered done.** Not after release. Not "I'll batch it." Now, as the last action of the change.
+- **Vague input is not an excuse to skip.** "Log that we fixed the sidecar thing" → you append one line under the current version. There is nothing to decide: no schema, no file to create, no format. Append. Done. If you find yourself thinking "what format / where / does this need fields" — stop, that hesitation is the bug; it is one sentence appended here.
+- **Format per line:** `- **Area** — what changed, plainly. `relevant.ts` / `file.rs` if useful.` Past tense, user-or-dev-visible, one sentence. Mirror the density of the Finch log if you've seen it: terse, factual, no marketing.
+- **Newest version block on top, inside this section.** Newest line on top within a block.
+- **Do NOT create per-change files or per-version folders.** That reintroduces the exact distance/ceremony this section deletes. The flat block IS the system. Editing this file every time is fine — Finch does exactly this and never misses; editing was never the friction, distance was.
+- **`### vX.Y.Z (unreleased)`** is the live block during a cycle. At release, the ritual (below) renames it to `### vX.Y.Z` and opens a fresh `(unreleased)` block.
+
+**This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see `## Release ritual`). That is the only time the graph JSON / `changes.html` get touched. Keeping this log honest mid-cycle is what makes release night a 10-minute job instead of an archaeology dig.
+
+### v0.1.5 (unreleased)
+
+- **Explorer title bar** — back/forward/reload in `ExplorerTitlebarNav` flush at sidebar edge (`80`/`240px`); queue + window chrome stay in `WindowControls`. Documented explorer UI placement in `AGENTS.md` (no bulge / in-tab controls).
+- **Sidebar collapse label** — replaced `AnimatePresence popLayout` on “Collapse” / nav labels with overflow-clipped `max-width` transitions so text no longer flashes at the top while the rail narrows.
+- **Audio-only download** — toggle extracts audio only; `pub audio_only: bool` on Rust `DownloadOptions` (was missing from committed HEAD — serde silently dropped it).
+- **Processing… phase** — queue row + hero show "Processing…" on `progress.status === "processing"` while ffmpeg extracts; `job.status` stays `downloading`.
+- **In-app delete confirm** — replaced native `confirm()` (dead in WebView2) with React `ConfirmDialog`.
+- **Duplicate skip feedback** — transient `skipped` status, "Already in library" 1.8s then removes.
+- **Ghost queue rows on delete** — `MediaView` `handleDelete` calls `removeDownloadJob` for queue jobs matching `file.sourceUrl`.
+- **Hero URL not clearing** — `onDownloadJobFinished` clears hero URL + `videoInfo` when finished URL matches hero.
+- **Double-dot sidecar bug** — `resolve_info_json_path` now tries `{stem}.info.json` and `{stem}..info.json`; `MediaFile` gains `source_id`.
+
+## Release ritual
+
+**Why this exists:** "Push and commit everything" is ambiguous to an agent. The failure mode (observed): Chad invented a feature branch, committed there, and stranded `updater.json` off `main` — then produced a flawless postmortem of the problem it had just caused. Chad's knowledge was never the gap. The gap was no defined, ordered, verified sequence. This is that sequence.
+
+**Trigger:** Angel says ship / release / push it out. Run these steps **in order, top to bottom.** Do not reorder, do not skip, do not parallelize.
+
+**Hard rule — branching:** RuForge is a solo-dev repo. **All release commits go directly to `main`.** Do **not** create, switch to, or commit on any branch for a release. If you are not on `main`, stop and say so — do not "fix" it with git surgery on a possibly-dirty tree; ask Angel.
+
+1. **Drain the Shipped log → version bump decision.** Read the entire `### vX.Y.Z (unreleased)` block. Decide PATCH vs MINOR from its contents (behavior change = at least PATCH; new feature / new persisted setting / new command = MINOR). State the chosen version and why, one line.
+2. **Bump all three version files together** — `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version`. A mismatch here is a known past failure. Confirm all three match.
+3. **Build signed.** `Build-signed-windows.bat` or `npm run build:signed`. Locate the emitted `.sig` next to the NSIS installer under `src-tauri/target/release/bundle/`. Read the base64 out of the `.sig` file yourself — do not ask Angel to.
+4. **Update `updater.json`** — bump `version`, `pub_date`, per-platform `url` (URL tag segment must match the GitHub release tag exactly, incl. leading `v` if used), and paste the `.sig` base64 into `signature`. Distill a SHORT teaser from the Shipped block for `notes` — do not paste the whole block.
+5. **Commit + push to `main`.** Confirm current branch is `main` first. The commit MUST include `updater.json`, all three version files, and any code. Push to `origin main`. State the pushed commit hash.
+6. **Drain Shipped log → graph surfaces (scoped, this step only).** Append the now-released changes into `docs/versions/version-<semver>.json` and the `<script id="changelog-data">` JSON inside `docs/changes.html` (append to the `versions` array only; recompute `.rf-count`; **never** touch the JS/CSS/DOM contract — see the changes.html rules elsewhere in this file). Add the registry row in `docs/versioner.html`. Then in this file, rename `### vX.Y.Z (unreleased)` → `### vX.Y.Z` and open a fresh empty `### v<next> (unreleased)` block at the top of the Shipped log.
+7. **HARD BLOCK — verify live, or it did not ship.** Fetch the live raw URL:
+   `https://raw.githubusercontent.com/UnboundAngel/RuForge/main/updater.json`
+   Read the returned `version`. **You may not report the release as done, shipped, complete, or live unless that fetched `version` string equals the version you just released.** If it still shows the old version, the release **failed** — say exactly that, show the old vs expected version, and stop. "I committed it" / "I pushed it" is NOT done. The live URL serving the new version is the only definition of done. (Same principle as the session lesson: code present ≠ running on the path that matters. Committed ≠ live on `main`.)
+8. **Report.** One block: chosen version + rationale, pushed commit hash, the live `version` string you actually fetched in step 7, and confirmation the GitHub Release contains the installer asset at the manifest `url` (`.sig` stays out of the Release; it lives only in `updater.json`).
+
+**If any step fails, stop at that step and report the failure plainly. Do not continue and do not claim partial success as success.**
