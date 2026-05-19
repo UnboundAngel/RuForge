@@ -1,10 +1,10 @@
 {
   "version": "0.1.5",
   "notes": "{\"notes\":\"- **New *audio only* download toggle**\\n- **Added *download details* caching**\\n- **New *confirm-deletion* screen**\",\"additions\":[\"Audio only mode — download just the audio track, uses less space\",\"Confirm-deletion screen — no more accidental deletes\",\"Queue now shows Processing… while audio is being extracted\"],\"fixes\":[\"Videos already in your library are now detected and skipped in the queue\",\"Deleting a video also clears its queue row\",\"Downloaded video link no longer stays in the URL bar after finishing\"]}",
-  "pub_date": "2026-05-18T23:04:33Z",
+  "pub_date": "2026-05-19T03:13:11Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWmxJK2hZZU9aVjdscDVXODRsMDdqOHRkaXY5cTh5VVNjTEtkeUVjRzFmWkdQbmUxcDJzeitXNFVQYVJlSHFTcURTL3ZIVW5sS0lSdW9PR3F3MDhWY2dvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc5MDgyNDIwCWZpbGU6UnVGb3JnZV8wLjEuNF94NjQtc2V0dXAuZXhlCkh1Tm0yRVNaYk1nYVR0UlFXZG5mY24zVHlJTzEvOE10N3Q1UlVZTnRnZndnZjZTbzdTWlJ2TEJUVFJ4Mk9IZXFZVDkzNENwcytqNVhyRGxyZ3ljckJBPT0K",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWm9ZWWJGM3pUUUgwUzRTS2VrbkM0Q3FYdThiUjdPQVlMSlNZdDBpRTd6VTRpM3RRRnRwTnIvcnBPNkFvRGRUWmRUOUhXOWhHSmN3U0Vnc2VPL0JnZ3c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc5MTYwMzkxCWZpbGU6UnVGb3JnZV8wLjEuNV94NjQtc2V0dXAuZXhlCktlRlFYT1BsSFhFZThRdmNyb3pzYXZqbXVYTDZHWGp0cVRpK1R0RVh5K1RxMm1uT1BLN1E0WkdKeFYwK2RxUG03eTVIdEFwYjB6S0U4cVN4Y0hTQUR3PT0K",
       "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.1.5/RuForge_0.1.5_x64-setup.exe"
     }
   }
