@@ -24,6 +24,7 @@ import {
   UrlInputPacer,
 } from "./downloader/DownloadJobQueuePanel";
 import { downloadJobMediaNeedsHydration } from "../downloadQueue";
+import { ytdlpFormatForDownloadJob } from "../downloadFormat";
 import { downloadJobDisplayFileSizeBytes } from "../downloadJobFileSizes";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
 import { normalizeYouTubeUrlForCompare, youtubeUrlsMatch } from "../youtubeUrl";
@@ -317,11 +318,16 @@ export const DownloaderView = (props: DownloaderViewProps) => {
             rawTitle ||
             (needs ? "Loading…" : (d.focusedJob!.url || "Video").trim());
           const jobAudioOnly = d.focusedJob!.options.audioOnly === true;
+          const jobFormat = ytdlpFormatForDownloadJob(
+            d.focusedJob!.options,
+            d.settings,
+          );
           const heroInfoMatchesJob =
             d.videoInfo &&
             !d.metadataLoading &&
             youtubeUrlsMatch(d.url, d.focusedJob!.url) &&
-            jobAudioOnly === (d.settings.downloadAudioOnly === true);
+            jobAudioOnly === (d.settings.downloadAudioOnly === true) &&
+            (d.focusedJob!.options.format?.trim() || jobFormat) === jobFormat;
           const fileSizeBytes =
             downloadJobDisplayFileSizeBytes(m, jobAudioOnly) ??
             (heroInfoMatchesJob

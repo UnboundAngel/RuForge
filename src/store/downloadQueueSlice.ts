@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { StateCreator, StoreApi } from "zustand";
+import { fetchVideoInfoWithTimeout } from "../downloadVideoInfoFetch";
+import {
+  mergeDownloadProgressWithSmoothing,
+  resetDownloadProgressEtaSmoothing,
+} from "../downloadProgress";
 import {
   collapseDownloadJobsByUrl,
   createDownloadJobId,
@@ -17,9 +22,12 @@ import {
   type DownloadJobOptions,
   DEFAULT_MAX_CONCURRENT_DOWNLOADS,
 } from "../downloadQueue";
-import type { ProgressPayload, VideoInfo } from "../types";
+import type { ProgressPayload } from "../types";
 import type { RuforgeStore } from "./ruforgeStore";
-import { ytdlpFormatForDownloadJob } from "../downloadFormat";
+import {
+  ytdlpFormatForDownloadJob,
+  ytdlpVideoFormatForMetadata,
+} from "../downloadFormat";
 import {
   mergeVideoInfoFileSizes,
   snapshotWithResolvedFileSize,
@@ -34,9 +42,6 @@ import {
 import { deliverUserNotification } from "../systemNotify";
 import { findLibraryDuplicate } from "../duplicateDownload";
 import { youtubeUrlsMatch } from "../youtubeUrl";
-
-/** One in-flight `get_video_info` per URL (dedupes parallel hydrates). */
-const inflightMetaByKey = new Map<string, Promise<DownloadJobMediaSnapshot>>();
 
 /** Coalesce `persistDownloadJobs` when many hydrates finish back-to-back (e.g. startup sweep). */
 const DOWNLOAD_JOB_HYDRATE_PERSIST_DEBOUNCE_MS = 75;
@@ -155,36 +160,28 @@ async function hydrateDownloadJobMetadata(
 
   const urlTrim = url.trim();
   const audioOnly = seed.options.audioOnly === true;
-  const cacheKey = downloadJobMetadataCacheKey(urlTrim);
-
-  const cached = peekDownloadJobMetadataCache(urlTrim);
-  if (cached) {
-    applySnapshot(snapshotWithResolvedFileSize(cached, audioOnly));
-    return;
-  }
-
-  let p = inflightMetaByKey.get(cacheKey);
-  if (!p) {
-    p = (async (): Promise<DownloadJobMediaSnapshot> => {
-      const seedJob = get().downloadJobs.find((j) => j.id === jobId);
-      const format = ytdlpFormatForDownloadJob(
-        seedJob?.options ?? { audioOnly },
-        get().settings,
-      );
-      const info = await invoke<VideoInfo>("get_video_info", { url: urlTrim, format });
-      const base = videoInfoToDownloadJobSnapshot(info, audioOnly);
-      const snap = mergeVideoInfoFileSizes(base, info, audioOnly);
-      commitDownloadJobMetadataCache(cacheKey, snap);
-      return snap;
-    })();
-    inflightMetaByKey.set(cacheKey, p);
-    void p.finally(() => {
-      inflightMetaByKey.delete(cacheKey);
-    });
-  }
-
   try {
-    const snap = await p;
+    const seedJob = get().downloadJobs.find((j) => j.id === jobId);
+    const format = ytdlpFormatForDownloadJob(
+      seedJob?.options ?? { audioOnly },
+      get().settings,
+    );
+    const videoFormat = ytdlpVideoFormatForMetadata(
+      get().settings.preferredQuality,
+      format.includes("bestaudio") ? undefined : format,
+    );
+    const cacheKey = downloadJobMetadataCacheKey(urlTrim, videoFormat);
+
+    const cached = peekDownloadJobMetadataCache(urlTrim, videoFormat);
+    if (cached) {
+      applySnapshot(snapshotWithResolvedFileSize(cached, audioOnly));
+      return;
+    }
+
+    const info = await fetchVideoInfoWithTimeout(urlTrim, videoFormat, audioOnly);
+    const base = videoInfoToDownloadJobSnapshot(info, audioOnly);
+    const snap = mergeVideoInfoFileSizes(base, info, audioOnly);
+    commitDownloadJobMetadataCache(cacheKey, snap);
     applySnapshot(snapshotWithResolvedFileSize(snap, audioOnly));
   } catch {
     const cur = get().downloadJobs.find((j) => j.id === jobId);
@@ -767,13 +764,21 @@ export const createDownloadQueueSlice: StateCreator<
 
     applyDownloadProgress: (payload) => {
       set((s) => {
-        const downloadJobs = s.downloadJobs.map((j) =>
-          j.id === payload.jobId &&
-          j.status !== "completed" &&
-          j.status !== "failed"
-            ? { ...j, progress: payload }
-            : j,
-        );
+        const downloadJobs = s.downloadJobs.map((j) => {
+          if (
+            j.id !== payload.jobId ||
+            j.status === "completed" ||
+            j.status === "failed"
+          ) {
+            return j;
+          }
+          const progress = mergeDownloadProgressWithSmoothing(
+            j.id,
+            j.progress,
+            payload,
+          );
+          return { ...j, progress };
+        });
         const focus = s.focusedJobId;
         return {
           downloadJobs,
@@ -783,6 +788,7 @@ export const createDownloadQueueSlice: StateCreator<
     },
 
     onDownloadJobPaused: (jobId) => {
+      resetDownloadProgressEtaSmoothing(jobId);
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
           j.id === jobId && j.status !== "paused"
@@ -806,6 +812,7 @@ export const createDownloadQueueSlice: StateCreator<
     },
 
     onDownloadJobFinished: (payload) => {
+      resetDownloadProgressEtaSmoothing(payload.jobId);
       const starts: { id: string; url: string; resume: boolean }[] = [];
       const skippedIds: string[] = [];
       const finishedUrl = get().downloadJobs.find((j) => j.id === payload.jobId)?.url;

@@ -38,7 +38,10 @@ Fixes:
 
 **0.1.7 unreleased:** (see AGENTS.md Shipped log, keep in sync)
 
-(none yet)
+- Audio-only download: `bestaudio[ext=m4a]/bestaudio` plus no `--audio-quality 0`; fixes full-video-sized audio files from `bestaudio/best` fallback and ffmpeg VBR Q0 up-encode.
+- Downloader: dual simulate for separate audio/video size estimates; smoothed ETA with fast-download catch-up; queue transfer total uses max(progress, metadata).
+- Downloader: smoothed hero ETA; quality/audio-aware file size via yt-dlp simulate; metadata cache keyed by format.
+- Downloader: production metadata loading and progress bar regressions (monotonic %, shared yt-dlp fetch, hydration gate).
 
 ## Open P0 (blocks release)
 
@@ -46,11 +49,10 @@ Fixes:
 
 ## Next 3 (priority order)
 
-1. F-12 estimate accuracy. get_video_info simulate ignores format and cookies,
-   produces wildly wrong size estimates. Prerequisite for storage-check (#10).
-2. ETA smoothing (#9). Rolling average over last N progress samples instead of
-   instantaneous rate.
-3. 429 / rate-limit spacing (#11). Configurable delay between job starts (not retry-on-failure).
+1. Storage cap before enqueue (#10). Block when estimate exceeds free disk; needs
+   cookies-in-simulate follow-up for restricted URLs.
+2. 429 / rate-limit spacing (#11). Configurable delay between job starts (not retry-on-failure).
+3. Downloader UI polish (#12 Jim pass) or mid-download drop E2E verify (#15).
 
 ## Notes (not P0)
 

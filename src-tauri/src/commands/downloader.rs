@@ -305,6 +305,38 @@ fn max_height_from_ytdlp_format(format: &str) -> Option<u32> {
     best
 }
 
+fn ytdlp_json_has_simulated_selection(json: &serde_json::Value) -> bool {
+    json.get("requested_formats").is_some() || json.get("requested_downloads").is_some()
+}
+
+/// Upper bound from the highest-bitrate pure-audio row (fallback when simulate omits sizes).
+fn max_audio_bitrate_ceiling_bytes(
+    formats: &[serde_json::Value],
+    duration_secs: f64,
+) -> Option<u64> {
+    if !(duration_secs > 0.0) {
+        return None;
+    }
+    let mut best_kbps = 0f64;
+    for fmt in formats {
+        if ytdlp_codec_is_none(fmt.get("acodec").and_then(|v| v.as_str())) {
+            continue;
+        }
+        if !ytdlp_codec_is_none(fmt.get("vcodec").and_then(|v| v.as_str())) {
+            continue;
+        }
+        let kbps = format_stream_score_kbps(fmt).unwrap_or(0.0);
+        if kbps > best_kbps {
+            best_kbps = kbps;
+        }
+    }
+    if best_kbps > 0.0 {
+        estimate_bytes_from_bitrate(duration_secs, best_kbps)
+    } else {
+        None
+    }
+}
+
 fn pick_best_audio_size_from_formats(
     formats: &[serde_json::Value],
     duration_secs: f64,
@@ -400,8 +432,34 @@ fn height_from_format_entry(fmt: &serde_json::Value) -> Option<u32> {
 fn dual_file_sizes_from_entry_json(
     json: &serde_json::Value,
     max_height: Option<u32>,
+    audio_primary: bool,
 ) -> (Option<u64>, Option<u64>) {
     let duration = ytdlp_duration_secs(json).unwrap_or(0.0);
+
+    if audio_primary {
+        let simulated = video_file_size_from_ytdlp_json(json);
+        let ceiling = json
+            .get("formats")
+            .and_then(|v| v.as_array())
+            .and_then(|arr| max_audio_bitrate_ceiling_bytes(arr, duration));
+        let audio = match (simulated, ceiling) {
+            (Some(s), Some(c)) => Some(s.max(c)),
+            (Some(s), None) => Some(s),
+            (None, Some(c)) => Some(c),
+            (None, None) => json
+                .get("formats")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| pick_best_audio_size_from_formats(arr, duration)),
+        };
+        return (audio.filter(|&n| n > 0), None);
+    }
+
+    if ytdlp_json_has_simulated_selection(json) {
+        if let Some(simulated) = video_file_size_from_ytdlp_json(json) {
+            return (None, Some(simulated));
+        }
+    }
+
     if let Some(formats) = json.get("formats").and_then(|v| v.as_array()) {
         if !formats.is_empty() {
             let audio = pick_best_audio_size_from_formats(formats, duration);
@@ -422,6 +480,7 @@ fn dual_file_sizes_from_entry_json(
 fn dual_file_sizes_from_ytdlp_json(
     json: &serde_json::Value,
     video_format: Option<&str>,
+    audio_primary: bool,
 ) -> (Option<u64>, Option<u64>) {
     let max_height = video_format.and_then(max_height_from_ytdlp_format);
     if let Some(entries) = ytdlp_usable_playlist_entries(json) {
@@ -430,7 +489,7 @@ fn dual_file_sizes_from_ytdlp_json(
         let mut any_audio = false;
         let mut any_video = false;
         for entry in entries {
-            let (a, v) = dual_file_sizes_from_entry_json(entry, max_height);
+            let (a, v) = dual_file_sizes_from_entry_json(entry, max_height, audio_primary);
             if let Some(n) = a {
                 audio_sum = audio_sum.saturating_add(n);
                 any_audio = true;
@@ -445,7 +504,7 @@ fn dual_file_sizes_from_ytdlp_json(
             any_video.then_some(video_sum).filter(|&s| s > 0),
         );
     }
-    dual_file_sizes_from_entry_json(json, max_height)
+    dual_file_sizes_from_entry_json(json, max_height, audio_primary)
 }
 
 fn sanitize_playlist_folder_name(raw: &str) -> String {
@@ -864,18 +923,39 @@ struct DownloadJobFinishedPayload {
     error: Option<String>,
 }
 
+fn effective_video_format_for_info_probe(format: Option<&str>) -> String {
+    match format.filter(|s| !s.is_empty()) {
+        Some(s) if !s.contains("bestaudio") => s.to_string(),
+        _ => "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best".to_string(),
+    }
+}
+
 #[tauri::command]
 pub async fn get_video_info(
     app: AppHandle,
     url: String,
     format: Option<String>,
+    audio_only: Option<bool>,
 ) -> Result<VideoInfo, String> {
-    let fmt = format.as_deref().filter(|s| !s.is_empty());
-    let json = yt_dlp_single_json_simulate(&app, &url, None, None).await?;
-    let (file_size_bytes_audio, file_size_bytes_video) =
-        dual_file_sizes_from_ytdlp_json(&json, fmt);
-    let audio_primary = fmt.is_some_and(|f| f.contains("bestaudio"));
-    let mut info = video_info_from_ytdlp_single_json(json);
+    // Prefer m4a source to avoid transcoding; pure audio streams only (no /best video fallback).
+    const AUDIO_SIMULATE_FMT: &str = "bestaudio[ext=m4a]/bestaudio";
+    let audio_primary = audio_only.unwrap_or(false);
+    let video_fmt = effective_video_format_for_info_probe(format.as_deref());
+    let video_fmt_ref = video_fmt.as_str();
+
+    let (json_video_res, json_audio_res) = tokio::join!(
+        yt_dlp_single_json_simulate(&app, &url, None, Some(video_fmt_ref)),
+        yt_dlp_single_json_simulate(&app, &url, None, Some(AUDIO_SIMULATE_FMT)),
+    );
+    let json_video = json_video_res?;
+    let json_audio = json_audio_res?;
+
+    let (_, file_size_bytes_video) =
+        dual_file_sizes_from_ytdlp_json(&json_video, Some(video_fmt_ref), false);
+    let (file_size_bytes_audio, _) =
+        dual_file_sizes_from_ytdlp_json(&json_audio, None, true);
+
+    let mut info = video_info_from_ytdlp_single_json(json_video);
     info.file_size_bytes_audio = file_size_bytes_audio;
     info.file_size_bytes_video = file_size_bytes_video;
     info.file_size_bytes = if audio_primary {
@@ -978,14 +1058,15 @@ fn build_ytdlp_download_args(
 
     if options.audio_only {
         let audio_fmt = normalize_ytdlp_audio_format(&options.audio_format);
-        // Always bestaudio — a stale muxed `format` from the UI must not pull full video.
+        // Prefer m4a source so yt-dlp can copy without re-encoding; fall back to any
+        // pure-audio stream. No /best fallback: that downloads the full video then extracts
+        // audio, which up-encodes with --audio-quality 0 and produces a file matching the
+        // video size. No --audio-quality 0 for the same reason.
         args.push("-f".to_string());
-        args.push("bestaudio/best".to_string());
+        args.push("bestaudio[ext=m4a]/bestaudio".to_string());
         args.push("-x".to_string());
         args.push("--audio-format".to_string());
         args.push(audio_fmt);
-        args.push("--audio-quality".to_string());
-        args.push("0".to_string());
         args.push("--no-keep-video".to_string());
     } else {
         args.push("-f".to_string());

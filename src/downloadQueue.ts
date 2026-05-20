@@ -9,7 +9,6 @@ import {
 import type { PlaylistItem, ProgressPayload, VideoInfo } from "./types";
 import type { RuforgeSettings } from "./store/types";
 import { effectiveDownloadSubLangs } from "./store/types";
-import { downloadJobDualSizesReady } from "./downloadJobFileSizes";
 
 /** Snapshot from `get_video_info` at enqueue time; drives downloader hero while this job is active. */
 export interface DownloadJobMediaSnapshot {
@@ -85,7 +84,6 @@ export function downloadJobMediaNeedsHydration(
   if (!m) return true;
   if (!String(m.title ?? "").trim()) return true;
   if (!String(m.thumbnail ?? "").trim()) return true;
-  if (!downloadJobDualSizesReady(m)) return true;
   return false;
 }
 

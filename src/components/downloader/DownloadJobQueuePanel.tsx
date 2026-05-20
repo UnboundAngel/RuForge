@@ -49,7 +49,10 @@ function formatQueueTransferText(job: DownloadJob): string | null {
     typeof displayBytes === "number" && displayBytes > 0
       ? Math.round(displayBytes)
       : null;
-  const total = totalFromProgress ?? totalFromMeta;
+  const total =
+    totalFromProgress != null && totalFromMeta != null
+      ? Math.max(totalFromProgress, totalFromMeta)
+      : (totalFromProgress ?? totalFromMeta);
   let downloaded =
     typeof p.downloadedBytes === "number" && p.downloadedBytes >= 0
       ? Math.round(p.downloadedBytes)
@@ -475,7 +478,7 @@ const DownloadJobRow = ({
             className="h-full bg-[color-mix(in_srgb,var(--accent),transparent_35%)]"
             initial={{ width: 0 }}
             animate={{ width: `${pct}%` }}
-            transition={{ type: "spring", bounce: 0, duration: 0.5 }}
+            transition={{ duration: 0.12, ease: "linear" }}
           />
         </div>
       )}
