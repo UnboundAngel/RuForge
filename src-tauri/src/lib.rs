@@ -25,6 +25,10 @@ use crate::commands::media::{
 use crate::commands::notify_overlay::{
     hide_notify_overlay_window, notify_overlay_ready, push_background_notify, sync_notify_overlay_bounds,
 };
+use crate::commands::explorer_embed::{
+    embedded_explorer_webview_label, ensure_embedded_explorer_bounds, is_linux_host,
+    set_embedded_explorer_visible,
+};
 use crate::commands::player::{
     eval_in_webview, get_embedded_explorer_webview_url, open_mini_player, open_youtube_explorer,
 };
@@ -118,6 +122,10 @@ pub fn run() {
             authorize_cleanup,
             clear_ruforge_cache,
             eval_in_webview,
+            is_linux_host,
+            embedded_explorer_webview_label,
+            ensure_embedded_explorer_bounds,
+            set_embedded_explorer_visible,
             get_hardware_acceleration_pref,
             set_hardware_acceleration_pref,
             get_hardware_acceleration_browser_args,

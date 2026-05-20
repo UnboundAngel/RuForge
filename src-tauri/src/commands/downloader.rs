@@ -1289,10 +1289,10 @@ pub async fn start_download_job(
                                     None => (None, None),
                                 };
 
+                                // Latch: yt-dlp can emit another [download] % line below 100 after
+                                // one stream hit 100% (HLS fragments, playlist items). Do not clear.
                                 if percentage >= 100.0 {
                                     download_reached_full = true;
-                                } else {
-                                    download_reached_full = false;
                                 }
                                 last_percentage = percentage;
                                 last_speed = speed.to_string();

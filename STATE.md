@@ -17,6 +17,13 @@ Status: in progress
 under v0.1.7 (unreleased) in AGENTS.md. Open P0 is empty; Authorize Cleanup
 (#8) works via the in-app modal (see Notes).
 
+Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
+`/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
+hydrate from Tauri `downloadDir` / `homeDir` on non-Windows (`src/platformPaths.ts`).
+Sidecars: `src-tauri/binaries/*-x86_64-unknown-linux-gnu` (yt-dlp, ffmpeg, ffprobe).
+Run: `npm run tauri dev`. README still says Windows-only for end users; Linux is
+local dev, not a shipped target yet.
+
 ## What is new since last user release
 
 Closed release 0.1.6 (what users on 0.1.6 receive). The release-note drafter
@@ -38,10 +45,15 @@ Fixes:
 
 **0.1.7 unreleased:** (see AGENTS.md Shipped log, keep in sync)
 
+- Download queue: finish handler captures job URL atomically with removal; hero clears reliably.
+- Download queue: pause waits for Rust invoke before store update and pump.
+- Downloader: processing phase latch for `download_reached_full` (multi-fragment streams).
+- Linux dev: asset protocol scopes and platform default paths (`platformPaths.ts`, `tauri.conf.json`).
 - Audio-only download: `bestaudio[ext=m4a]/bestaudio` plus no `--audio-quality 0`; fixes full-video-sized audio files from `bestaudio/best` fallback and ffmpeg VBR Q0 up-encode.
 - Downloader: dual simulate for separate audio/video size estimates; smoothed ETA with fast-download catch-up; queue transfer total uses max(progress, metadata).
 - Downloader: smoothed hero ETA; quality/audio-aware file size via yt-dlp simulate; metadata cache keyed by format.
 - Downloader: production metadata loading and progress bar regressions (monotonic %, shared yt-dlp fetch, hydration gate).
+- Explorer (Linux): `explorer-surface` child window overlay instead of in-window child webview.
 
 ## Open P0 (blocks release)
 
@@ -65,8 +77,10 @@ Fixes:
 Core value: local YouTube downloader and player. The downloader is the wedge.
 Player, gallery, Explorer support that story. Not a Plex competitor.
 Stack: Tauri v2, Rust, React 19, TypeScript, Zustand, yt-dlp.
-Windows: two webviews, main and mini, optional explorer. Zustand does not span
-webviews. Cross-window sync is Tauri emit/listen only.
+Windows: two webviews, main and mini, optional explorer. Linux: same layout for
+local `tauri dev`; path defaults and asset scopes tuned, no Linux installer/updater
+in release ritual yet. Zustand does not span webviews. Cross-window sync is Tauri
+emit/listen only.
 Version triplet must stay aligned every bump: package.json,
 src-tauri/tauri.conf.json, src-tauri/Cargo.toml.
 Zustand audit doc (cite, do not restate inline):

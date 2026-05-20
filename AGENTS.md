@@ -212,6 +212,11 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Download finish hero clear**: `onDownloadJobFinished` reads the job URL inside the same `set()` snapshot as the removal update, so a concurrent queue remove no longer drops `finishedUrl` and leaves hero URL/videoInfo stuck. `downloadQueueSlice.ts`.
+- **Download queue pause**: `pauseDownloadJob` commits paused state only after `pause_download_job` invoke succeeds, so a failed pause no longer frees a slot or shows paused while yt-dlp still runs. `downloadQueueSlice.ts`.
+- **Downloader processing phase**: `download_reached_full` latches at 100% and no longer clears on later sub-100% `[download]` lines (HLS/playlist), so post-process stdout still emits `processing`. `downloader.rs`.
+- **Explorer layout (Linux)**: embedded browser uses a parented `explorer-surface` child window positioned in screen space (fixes GtkBox stacking and upward drift); closes legacy `explorer-view` child. `explorer_embed.rs`, `App.tsx`.
+- **Linux dev**: `tauri.conf.json` asset scopes for `$HOME`, `/home`, `/media`, `/mnt`, and `C:`–`F:`; `platformPaths.ts` hydrates download/internal dirs from Tauri path APIs on non-Windows; `App.tsx` / `MiniPlayer.tsx`.
 - **Audio-only download size**: format changed from `bestaudio/best` to `bestaudio[ext=m4a]/bestaudio`; removed `--audio-quality 0`. The old format fell back to the full video stream and then up-encoded via ffmpeg VBR Q0, producing an audio file the same size as the full video. `downloader.rs` and simulate constant updated together so preview matches actual output.
 - **Downloader size/ETA follow-up**: dual yt-dlp simulate (video + `bestaudio`) so audio vs video previews differ; legacy URL-only metadata cache no longer shared across modes; queue transfer uses `max(progress, metadata)` total; ETA catches up on fast downloads (min with raw yt-dlp, larger downward steps).
 - **Downloader ETA smoothing**: per-job byte-rate EMA and derived countdown in `downloadProgress.ts` via `applyDownloadProgress`; resets on pause/finish.
