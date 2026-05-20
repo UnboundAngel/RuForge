@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { fetchVideoInfoWithTimeout } from "../../downloadVideoInfoFetch";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -28,10 +29,9 @@ import {
   playlistItemWatchUrl,
   youtubeUrlsMatch,
 } from "../../youtubeUrl";
-import {
-  VideoInfo,
-  type YtdlpUpdateDownloadProgressPayload,
-  type YtdlpUpdateStatusPayload,
+import type {
+  YtdlpUpdateDownloadProgressPayload,
+  YtdlpUpdateStatusPayload,
 } from "../../types";
 import { URL_PACER_EASE } from "./downloaderConstants";
 import { urlConflictsWithActiveDownloader } from "./downloaderUrlConflict";
@@ -40,7 +40,7 @@ import {
   setYoutubeUrlDropHandler,
 } from "../../features/downloader/youtubeUrlDropRegistry";
 import { deliverUserNotification } from "../../systemNotify";
-import { ytdlpFormatFromPreferredQuality } from "../../downloadFormat";
+import { ytdlpVideoFormatForMetadata } from "../../downloadFormat";
 
 const STORAGE_FULL_NOTIFY =
   "Library storage limit reached. Free space in Settings or switch to an external download folder.";
@@ -896,6 +896,7 @@ export function useDownloaderView({
 
   useEffect(() => {
     let active = true;
+    let loadingOwned = false;
     setMetadataError(null);
     if (url.startsWith("http")) {
       const norm = url.trim();
@@ -920,7 +921,13 @@ export function useDownloaderView({
         st.videoInfoPreferredQuality === preferredQuality
       ) {
         const snap = videoInfoToDownloadJobSnapshot(st.videoInfo, audioOnly);
-        if (!downloadJobMediaNeedsHydration(snap)) {
+        const hasDualSizes =
+          (typeof st.videoInfo.fileSizeBytesAudio === "number" &&
+            st.videoInfo.fileSizeBytesAudio > 0 &&
+            typeof st.videoInfo.fileSizeBytesVideo === "number" &&
+            st.videoInfo.fileSizeBytesVideo > 0) ||
+          !downloadJobMediaNeedsHydration(snap);
+        if (hasDualSizes && !downloadJobMediaNeedsHydration(snap)) {
           if (active) applyHeroFromSnapshot(snap);
           return () => {
             active = false;
@@ -928,7 +935,8 @@ export function useDownloaderView({
         }
       }
 
-      const cached = peekDownloadJobMetadataCache(norm);
+      const videoFormat = ytdlpVideoFormatForMetadata(preferredQuality);
+      const cached = peekDownloadJobMetadataCache(norm, videoFormat);
       if (cached) {
         if (active) applyHeroFromSnapshot(cached);
         return () => {
@@ -937,6 +945,7 @@ export function useDownloaderView({
       }
 
       setDownloaderMetadataLoading(true);
+      loadingOwned = true;
       const run = async (scheduledUrl: string) => {
         const norm = scheduledUrl.trim();
         try {
@@ -947,7 +956,9 @@ export function useDownloaderView({
               lastDupCheckLibraryScanRev.current === null ||
               lastDupCheckLibraryScanRev.current !== rev
             ) {
-              await fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true });
+              await useRuforgeStore
+                .getState()
+                .fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true });
               if (!active) return;
               if (useRuforgeStore.getState().url.trim() !== norm) return;
               lastDupCheckLibraryScanRev.current = useRuforgeStore.getState().libraryScanRevision;
@@ -962,28 +973,28 @@ export function useDownloaderView({
                 setMetadataError(null);
                 setClipboardPastedHint(false);
                 setClipboardOfferUrl(null);
-                notify(
-                  "Duplicate detected, skipping per user settings.",
-                  "info",
-                );
+                useRuforgeStore
+                  .getState()
+                  .notify("Duplicate detected, skipping per user settings.", "info");
               }
               return;
             }
           }
 
           if (!active || useRuforgeStore.getState().url.trim() !== norm) return;
-          const format = ytdlpFormatFromPreferredQuality(
+          const videoFormat = ytdlpVideoFormatForMetadata(
             settingsRef.current.preferredQuality,
           );
-          const info = await invoke<VideoInfo>("get_video_info", {
-            url: norm,
-            format,
-          });
+          const audioOnlyNow = settingsRef.current.downloadAudioOnly;
+          const info = await fetchVideoInfoWithTimeout(
+            norm,
+            videoFormat,
+            audioOnlyNow,
+          );
           if (active && useRuforgeStore.getState().url.trim() === norm) {
-            const audioOnlyNow = settingsRef.current.downloadAudioOnly;
             const base = videoInfoToDownloadJobSnapshot(info, audioOnlyNow);
             const snap = mergeVideoInfoFileSizes(base, info, audioOnlyNow);
-            const cacheKey = downloadJobMetadataCacheKey(norm);
+            const cacheKey = downloadJobMetadataCacheKey(norm, videoFormat);
             if (cacheKey) commitDownloadJobMetadataCache(cacheKey, snap);
             setVideoInfo(downloadJobSnapshotToVideoInfo(snap), {
               sourceUrl: norm,
@@ -998,7 +1009,7 @@ export function useDownloaderView({
             setMetadataError(String(e));
           }
         } finally {
-          if (active) setDownloaderMetadataLoading(false);
+          if (active && loadingOwned) setDownloaderMetadataLoading(false);
         }
       };
       const timeoutId = setTimeout(() => {
@@ -1007,7 +1018,7 @@ export function useDownloaderView({
       return () => {
         active = false;
         clearTimeout(timeoutId);
-        setDownloaderMetadataLoading(false);
+        if (loadingOwned) setDownloaderMetadataLoading(false);
       };
     }
     setVideoInfo(null);
@@ -1018,10 +1029,6 @@ export function useDownloaderView({
     setMetadataError,
     setDownloaderMetadataLoading,
     setVideoInfo,
-    setDownloaderUrl,
-    setDownloaderFocusedJobId,
-    fetchEntries,
-    notify,
   ]);
 
   return {

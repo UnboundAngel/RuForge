@@ -63,8 +63,20 @@ export function mergeVideoInfoFileSizes(
   const pair = fileSizePairFromVideoInfo(info);
   const next: DownloadJobMediaSnapshot = {
     ...snap,
-    fileSizeBytesAudio: pair.audioBytes ?? snap.fileSizeBytesAudio ?? null,
-    fileSizeBytesVideo: pair.videoBytes ?? snap.fileSizeBytesVideo ?? null,
+    fileSizeBytesAudio:
+      pair.audioBytes ??
+      (typeof info.fileSizeBytesAudio === "number" && info.fileSizeBytesAudio > 0
+        ? info.fileSizeBytesAudio
+        : null) ??
+      snap.fileSizeBytesAudio ??
+      null,
+    fileSizeBytesVideo:
+      pair.videoBytes ??
+      (typeof info.fileSizeBytesVideo === "number" && info.fileSizeBytesVideo > 0
+        ? info.fileSizeBytesVideo
+        : null) ??
+      snap.fileSizeBytesVideo ??
+      null,
   };
   return snapshotWithResolvedFileSize(next, audioOnly);
 }

@@ -212,6 +212,13 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Audio-only download size**: format changed from `bestaudio/best` to `bestaudio[ext=m4a]/bestaudio`; removed `--audio-quality 0`. The old format fell back to the full video stream and then up-encoded via ffmpeg VBR Q0, producing an audio file the same size as the full video. `downloader.rs` and simulate constant updated together so preview matches actual output.
+- **Downloader size/ETA follow-up**: dual yt-dlp simulate (video + `bestaudio`) so audio vs video previews differ; legacy URL-only metadata cache no longer shared across modes; queue transfer uses `max(progress, metadata)` total; ETA catches up on fast downloads (min with raw yt-dlp, larger downward steps).
+- **Downloader ETA smoothing**: per-job byte-rate EMA and derived countdown in `downloadProgress.ts` via `applyDownloadProgress`; resets on pause/finish.
+- **Downloader size estimates**: `get_video_info` runs yt-dlp `-J -s` with user `-f` (incl. audio-only); prefers `requested_formats` sizes, audio ceiling fallback; metadata cache and in-flight fetch keyed by format + mode.
+- **Downloader hero size**: focused idle hero only merges `videoInfo` sizes when job format matches current settings (`DownloaderView.tsx`).
+- **Downloader prod regressions**: monotonic download progress (yt-dlp fragment % jumps), shared deduped `get_video_info` with timeout, queue row hydration no longer blocked on dual file sizes, metadata loading effect deps tightened, queue bar animation de-sprung.
+
 ### v0.1.6 (shipped)
 
 - **Mini player controls**: Tiny title shifts right when hover sidebar opens (marquee remeasures); compact shuffle toggles random library track and hides with volume slider; tiny skip/advance/shuffle wiring.

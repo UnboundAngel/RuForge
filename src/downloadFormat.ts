@@ -25,6 +25,16 @@ export function ytdlpFormatFromPreferredQuality(label: string | undefined): stri
   }
 }
 
+/** Video `-f` for metadata simulate (always muxed quality, never `bestaudio/best`). */
+export function ytdlpVideoFormatForMetadata(
+  preferredQuality: string | undefined,
+  formatOverride?: string,
+): string {
+  const fmt = formatOverride?.trim();
+  if (fmt && !fmt.includes("bestaudio")) return fmt;
+  return ytdlpFormatFromPreferredQuality(preferredQuality);
+}
+
 /** `-f` selector for `get_video_info` / job options (audio-only uses bestaudio, not muxed video). */
 export function ytdlpFormatFromSettings(
   settings: Pick<RuforgeSettings, "preferredQuality" | "downloadAudioOnly">,
