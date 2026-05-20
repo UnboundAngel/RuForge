@@ -4,9 +4,12 @@ export type SettingsTab = "general" | "downloads" | "appearance" | "advanced";
 
 export type GalleryFilter = "all" | "in-progress" | "watched";
 
-export const RUFORGE_INTERNAL_DIR = "C:\\RuForge\\Media";
+import {
+  DEFAULT_OUTPUT_DIR,
+  RUFORGE_INTERNAL_DIR,
+} from "../platformPaths";
 
-export const DEFAULT_OUTPUT_DIR = "C:\\Downloads";
+export { DEFAULT_OUTPUT_DIR, RUFORGE_INTERNAL_DIR };
 
 /** yt-dlp `--sub-langs` presets; label is Settings UI only. */
 export const DOWNLOAD_SUBTITLE_LANG_PRESETS: ReadonlyArray<{ label: string; ytdlp: string }> = [

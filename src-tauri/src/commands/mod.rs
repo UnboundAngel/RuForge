@@ -1,4 +1,5 @@
 pub mod downloader;
+pub mod explorer_embed;
 pub mod ffprobe;
 pub mod gallery;
 pub mod media;

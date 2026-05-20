@@ -21,6 +21,11 @@ import {
   Layers,
 } from "lucide-react";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "./types";
+import {
+  DEFAULT_OUTPUT_DIR,
+  RUFORGE_INTERNAL_DIR,
+  hydratePlatformDefaultPaths,
+} from "./platformPaths";
 
 import { ScrubberHoverThumb } from "./scrubSpritePreview";
 import {
@@ -233,6 +238,10 @@ export default function MiniPlayer() {
 
   useEffect(() => {
     emit("mini-player-ready");
+  }, []);
+
+  useEffect(() => {
+    void hydratePlatformDefaultPaths();
   }, []);
 
   useEffect(() => {
@@ -586,7 +595,7 @@ export default function MiniPlayer() {
   });
 
   const [outputDir] = useState(() => {
-    return localStorage.getItem("ruforge-output-dir") || "C:\\Downloads";
+    return localStorage.getItem("ruforge-output-dir") || DEFAULT_OUTPUT_DIR;
   });
 
   const groupEntriesByDate = (entries: GalleryEntry[]) => {
@@ -630,8 +639,7 @@ export default function MiniPlayer() {
     const run = async () => {
       const posterEpoch = ++libraryPosterBackfillEpochRef.current;
       try {
-        const ruforgeInternalDir = "C:\\RuForge\\Media";
-        const dirs = [ruforgeInternalDir, outputDir].filter(d => d && d.trim() !== "");
+        const dirs = [RUFORGE_INTERNAL_DIR, outputDir].filter((d) => d && d.trim() !== "");
         
         const scans = await Promise.all(
           dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d }))

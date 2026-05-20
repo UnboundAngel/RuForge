@@ -6,6 +6,7 @@
     "main",
     "mini",
     "explorer",
+    "explorer-surface",
     "notify"
   ],
   "permissions": [

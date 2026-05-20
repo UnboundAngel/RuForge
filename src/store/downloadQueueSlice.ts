@@ -551,6 +551,12 @@ export const createDownloadQueueSlice: StateCreator<
       if (!job) return;
 
       if (job.status === "downloading") {
+        try {
+          await invoke("pause_download_job", { jobId: id });
+        } catch (e) {
+          console.error("[RuForge] pause_download_job failed", e);
+          return;
+        }
         set((s) => {
           const downloadJobs = s.downloadJobs.map((j) =>
             j.id === id
@@ -571,11 +577,6 @@ export const createDownloadQueueSlice: StateCreator<
             ...syncLegacyDownloaderUi(downloadJobs, focus),
           };
         });
-        try {
-          await invoke("pause_download_job", { jobId: id });
-        } catch (e) {
-          console.error("[RuForge] pause_download_job failed", e);
-        }
         get().pumpDownloadQueue();
         return;
       }
@@ -815,9 +816,11 @@ export const createDownloadQueueSlice: StateCreator<
       resetDownloadProgressEtaSmoothing(payload.jobId);
       const starts: { id: string; url: string; resume: boolean }[] = [];
       const skippedIds: string[] = [];
-      const finishedUrl = get().downloadJobs.find((j) => j.id === payload.jobId)?.url;
+      let finishedUrl: string | undefined;
 
       set((s) => {
+        finishedUrl = s.downloadJobs.find((j) => j.id === payload.jobId)?.url;
+
         let downloadJobs = s.downloadJobs.map((j) =>
           j.id === payload.jobId
             ? {

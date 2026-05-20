@@ -26,7 +26,16 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["C:\\**"]
+        "scope": [
+          "$HOME/**",
+          "/home/**",
+          "/media/**",
+          "/mnt/**",
+          "C:/**",
+          "D:/**",
+          "E:/**",
+          "F:/**"
+        ]
       }
     }
   },

@@ -69,6 +69,10 @@ import {
 } from "lucide-react";
 
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
+import {
+  hydratePlatformDefaultPaths,
+  shouldReplaceStaleWindowsOutputDir,
+} from "./platformPaths";
 import type { DownloadJobFinishedPayload } from "./downloadQueue";
 import { normalizeProgressPayload, type ProgressPayload } from "./types";
 import { setMainWindowFocused } from "./appWindowFocus";
@@ -315,8 +319,12 @@ function App() {
     [bindMainWindowUrlDrop],
   );
 
-  const explorerContainerRef = useRef<HTMLDivElement>(null);
+  /** Fixed cutout to the right of the sidebar; webview bounds sync to this node. */
+  const explorerWebviewHostRef = useRef<HTMLDivElement>(null);
+  /** Windows: JS child webview handle. Linux: embedded via Rust + GTK overlay. */
   const explorerWebviewRef = useRef<Webview | null>(null);
+  const explorerLinuxEmbedRef = useRef(false);
+  const explorerWebviewLabelRef = useRef(EMBEDDED_EXPLORER_WEBVIEW_LABEL);
   const prevActiveTabRef = useRef<ActiveTab>(activeTab);
   /** One reload when entering Explorer; layout sync must not re-arm this. */
   const explorerReloadPendingRef = useRef(false);
@@ -326,7 +334,22 @@ function App() {
   const playerViewRef = useRef<PlayerViewHandle>(null);
   const refreshStorageStats = useRuforgeStore((s) => s.refreshStorageStats);
   const outputDir = useRuforgeStore((s) => s.outputDir);
+  const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
   const storageStats = useRuforgeStore((s) => s.storageStats);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { outputDir: resolved } = await hydratePlatformDefaultPaths();
+        const saved = localStorage.getItem("ruforge-output-dir");
+        if (shouldReplaceStaleWindowsOutputDir(saved)) {
+          setOutputDir(resolved);
+        }
+      } catch (e) {
+        console.warn("[RuForge] platform path hydrate failed", e);
+      }
+    })();
+  }, [setOutputDir]);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
   const lastExplorerUrlRef = useRef(lastExplorerUrl);
@@ -526,13 +549,15 @@ function App() {
   // Deps: `activeTab`, layout (`isSidebarExpanded`) — URL poll updates store only; read via lastExplorerUrlRef.
   useEffect(() => {
     let active = true;
-    let interval: number | undefined;
     const wasOnExplorer = prevActiveTabRef.current === "explorer";
     const onExplorer = activeTab === "explorer";
     const enteringExplorer = !wasOnExplorer && onExplorer;
     prevActiveTabRef.current = activeTab;
     if (enteringExplorer) {
       explorerReloadPendingRef.current = true;
+      if (mainContentRef.current) {
+        mainContentRef.current.scrollTop = 0;
+      }
     }
     if (!onExplorer) {
       explorerReloadPendingRef.current = false;
@@ -541,7 +566,7 @@ function App() {
     const pauseExplorerMedia = async () => {
       try {
         await invoke("eval_in_webview", {
-          label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+          label: explorerWebviewLabelRef.current,
           script: EXPLORER_PAUSE_MEDIA_SCRIPT,
         });
       } catch {
@@ -554,7 +579,7 @@ function App() {
       const target = url.startsWith("http") ? url : "https://www.youtube.com";
       try {
         await invoke("eval_in_webview", {
-          label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+          label: explorerWebviewLabelRef.current,
           script: explorerNavigateOrReloadScript(target),
         });
       } catch {
@@ -570,61 +595,78 @@ function App() {
 
     const syncWebview = async () => {
       if (!active) return;
-      const appWindow = getCurrentWindow();
-      
+
       if (onExplorer) {
-        if (!explorerContainerRef.current) {
-          addLog("Container ref is null");
+        if (!explorerWebviewHostRef.current) {
+          addLog("Explorer webview host ref is null");
           return;
         }
-        
-        const rect = explorerContainerRef.current.getBoundingClientRect();
-        // Webview now fills the container entirely for better immersion
+
+        const rect = explorerWebviewHostRef.current.getBoundingClientRect();
         const finalX = Math.round(rect.left);
         const finalY = Math.round(rect.top);
         const finalW = Math.round(rect.width);
         const finalH = Math.round(rect.height);
 
         addLog(`Rect: w=${finalW}, h=${finalH}, x=${finalX}, y=${finalY}`);
-        
+
         if (finalW <= 0 || finalH <= 0) {
           addLog("Skipping: Width or Height is <= 0");
           return;
         }
 
+        if (explorerLinuxEmbedRef.current) {
+          try {
+            await invoke("ensure_embedded_explorer_bounds", {
+              x: finalX,
+              y: finalY,
+              width: finalW,
+              height: finalH,
+            });
+            await maybeReloadExplorerOnEnter();
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            addLog(`Linux embed sync failed: ${msg}`);
+          }
+          return;
+        }
+
+        const appWindow = getCurrentWindow();
         if (!explorerWebviewRef.current) {
           addLog("Creating new Webview instance...");
           try {
             const dataDir = await appDataDir();
             const explorerDataPath = await join(dataDir, "explorer-data");
             const extraBrowserArgs = await invoke<string | null>("get_hardware_acceleration_browser_args");
-            
-            const webview = new Webview(appWindow, 'explorer-view', {
-              url: 'https://www.youtube.com',
+
+            const webview = new Webview(appWindow, "explorer-view", {
+              url: "https://www.youtube.com",
               x: finalX,
               y: finalY,
               width: finalW,
               height: finalH,
               dataDirectory: explorerDataPath,
-              userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              userAgent:
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               ...(extraBrowserArgs ? { additionalBrowserArgs: extraBrowserArgs } : {}),
             });
-            
-            webview.once('tauri://created', () => {
+
+            webview.once("tauri://created", () => {
               addLog("Webview successfully created!");
               explorerWebviewRef.current = webview;
               if (active && activeTab === "explorer") {
                 void maybeReloadExplorerOnEnter();
               }
             });
-            
-            webview.once('tauri://error', (e) => {
+
+            webview.once("tauri://error", (e) => {
               addLog(`Webview error: ${JSON.stringify(e)}`);
             });
-            
+
             explorerWebviewRef.current = webview;
-          } catch (e: any) {
-            addLog(`Creation failed: ${e?.message || String(e)}`);
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            addLog(`Creation failed: ${msg}`);
           }
         } else {
           try {
@@ -632,42 +674,51 @@ function App() {
             await explorerWebviewRef.current.setPosition(new LogicalPosition(finalX, finalY));
             await explorerWebviewRef.current.setSize(new LogicalSize(finalW, finalH));
             await maybeReloadExplorerOnEnter();
-          } catch (e: any) {
-             addLog(`Update failed: ${e?.message || String(e)}`);
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            addLog(`Update failed: ${msg}`);
           }
         }
       } else {
         if (wasOnExplorer) {
           await pauseExplorerMedia();
         }
-        if (explorerWebviewRef.current) {
+        if (explorerLinuxEmbedRef.current) {
+          try {
+            await invoke("set_embedded_explorer_visible", { visible: false });
+          } catch (e: unknown) {
+            console.error("Explorer hide (linux) failed", e);
+          }
+        } else if (explorerWebviewRef.current) {
           try {
             addLog("Hiding Webview...");
             await explorerWebviewRef.current.hide();
-          } catch (e: any) {
-            addLog(`Hide failed: ${e?.message || String(e)}`);
+          } catch (e: unknown) {
+            addLog(`Hide failed: ${e instanceof Error ? e.message : String(e)}`);
             console.error("Webview hide failed", e);
           }
         }
       }
     };
 
+    let syncDebounce: number | undefined;
     const scheduleSync = () => {
-      void syncWebview();
+      if (syncDebounce !== undefined) {
+        clearTimeout(syncDebounce);
+      }
+      syncDebounce = window.setTimeout(() => {
+        syncDebounce = undefined;
+        void syncWebview();
+      }, 48);
     };
 
-    // Run immediately (layout + hide when leaving Explorer).
     scheduleSync();
-    if (onExplorer) {
-      // Fallback while ResizeObserver / resize events are settling (e.g. sidebar width transition).
-      interval = window.setInterval(scheduleSync, 200);
-    }
 
     window.addEventListener("resize", scheduleSync);
 
     let resizeObserver: ResizeObserver | undefined;
     const attachResizeObserver = () => {
-      const el = explorerContainerRef.current;
+      const el = explorerWebviewHostRef.current;
       if (!el || !onExplorer) return;
       resizeObserver?.disconnect();
       resizeObserver = new ResizeObserver(scheduleSync);
@@ -689,8 +740,8 @@ function App() {
 
     return () => {
       active = false;
-      if (interval !== undefined) {
-        clearInterval(interval);
+      if (syncDebounce !== undefined) {
+        clearTimeout(syncDebounce);
       }
       window.removeEventListener("resize", scheduleSync);
       cancelAnimationFrame(resizeObserverRaf);
@@ -704,6 +755,13 @@ function App() {
 
   useEffect(() => {
     void performUpdateCheckRef.current(false);
+  }, []);
+
+  useEffect(() => {
+    void invoke<string>("embedded_explorer_webview_label").then((label) => {
+      explorerWebviewLabelRef.current = label;
+      explorerLinuxEmbedRef.current = label !== EMBEDDED_EXPLORER_WEBVIEW_LABEL;
+    });
   }, []);
 
   useEffect(() => {
@@ -1025,10 +1083,9 @@ function App() {
   const showExplorerToolbar = activeTab === "explorer" && !postInstall;
 
   const onExplorerBack = useCallback(async () => {
-    if (!explorerWebviewRef.current) return;
     try {
       await invoke("eval_in_webview", {
-        label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+        label: explorerWebviewLabelRef.current,
         script: "window.history.back()",
       });
     } catch (e) {
@@ -1037,10 +1094,9 @@ function App() {
   }, []);
 
   const onExplorerForward = useCallback(async () => {
-    if (!explorerWebviewRef.current) return;
     try {
       await invoke("eval_in_webview", {
-        label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+        label: explorerWebviewLabelRef.current,
         script: "window.history.forward()",
       });
     } catch (e) {
@@ -1049,11 +1105,10 @@ function App() {
   }, []);
 
   const onExplorerReload = useCallback(async () => {
-    if (!explorerWebviewRef.current) return;
     try {
       const url = lastExplorerUrlRef.current.trim();
       await invoke("eval_in_webview", {
-        label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+        label: explorerWebviewLabelRef.current,
         script: explorerNavigateOrReloadScript(url),
       });
     } catch (e) {
@@ -1408,7 +1463,10 @@ function App() {
               className="pointer-events-none absolute inset-0 z-[25] rounded-tl-[32px] border-2 border-dashed border-[color:color-mix(in_srgb,var(--accent),transparent_55%)] bg-[color:color-mix(in_srgb,var(--accent),transparent_93%)]"
             />
           ) : null}
-          <main ref={assignMainScrollAndUrlDropRef} className="absolute inset-0 overflow-y-auto">
+          <main
+            ref={assignMainScrollAndUrlDropRef}
+            className={`absolute inset-0 ${activeTab === "explorer" ? "overflow-hidden" : "overflow-y-auto"}`}
+          >
             <AnimatePresence mode="wait">
               {activeTab === "downloader" && (
                 <DownloaderView
@@ -1418,9 +1476,15 @@ function App() {
                 />
               )}
               {activeTab === "explorer" && (
-                <div ref={explorerContainerRef} className="absolute inset-0 min-h-0 bg-[#1D1613] overflow-hidden">
+                <div className="absolute inset-0 min-h-0 bg-[#1D1613] overflow-hidden">
+                  <div
+                    ref={explorerWebviewHostRef}
+                    className="fixed z-[1] top-10 bottom-0 right-0 pointer-events-none transition-[left] duration-500 ease-[0.23,1,0.32,1]"
+                    style={{ left: sidebarChromeLeft }}
+                    aria-hidden
+                  />
                   {/* Shimmer Placeholder */}
-                  <div className="absolute inset-0 z-0 flex flex-col p-8 space-y-8 animate-pulse">
+                  <div className="absolute inset-0 z-0 flex flex-col p-8 space-y-8 animate-pulse pointer-events-none">
                     <div className="h-12 w-1/3 bg-white/5 rounded-2xl" />
                     <div className="grid grid-cols-4 gap-6 flex-1">
                       {[...Array(8)].map((_, i) => (

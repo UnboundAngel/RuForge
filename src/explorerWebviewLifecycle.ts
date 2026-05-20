@@ -1,4 +1,4 @@
-/** Child webview label in the main window (`App.tsx`). */
+/** In-window child webview label (`App.tsx`). Linux uses `explorer-surface` via Rust. */
 export const EMBEDDED_EXPLORER_WEBVIEW_LABEL = "explorer-view";
 
 /** Pause HTML5 / YouTube player media when leaving the Explorer tab. */
