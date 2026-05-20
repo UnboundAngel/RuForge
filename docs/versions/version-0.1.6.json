@@ -1,0 +1,44 @@
+{
+  "nodes": [
+    {
+      "id": "f-audio-toggle-tooltip",
+      "type": "fix",
+      "label": "Invert audio toggle tooltip text",
+      "agent": "jim",
+      "details": [
+        "Corrected the audio toggle tooltip to describe the action (target state) rather than current state.",
+        "Tooltip now displays 'Switch to audio only' when in video mode and vice-versa."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/components/downloader/DownloadJobQueuePanel.tsx",
+          "reason": "Updated DownloadJobAudioToggle tooltip logic."
+        }
+      ]
+    },
+    {
+      "id": "t-explorer-nav-buttons",
+      "type": "task",
+      "label": "Explorer Navigation Buttons",
+      "agent": "jim",
+      "details": [
+        "Added browser-style Back, Forward, and Reload buttons to the Explorer header bar.",
+        "Integrated webview history evaluation for standard browser navigation.",
+        "Refined Explorer bulge layout to accommodate new navigation controls on the left.",
+        "Used Material Symbols for consistent browser iconography."
+      ],
+      "fileEdits": [
+        {
+          "path": "src/App.tsx",
+          "reason": "Implemented navigation button UI and webview history logic in the explorer header."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "jim", "target": "f-audio-toggle-tooltip" },
+    { "source": "f-audio-toggle-tooltip", "target": "ruforge" },
+    { "source": "jim", "target": "t-explorer-nav-buttons" },
+    { "source": "t-explorer-nav-buttons", "target": "ruforge" }
+  ]
+}

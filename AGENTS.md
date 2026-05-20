@@ -210,7 +210,9 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 **This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see `## Release ritual`). That is the only time the graph JSON / `changes.html` get touched. Keeping this log honest mid-cycle is what makes release night a 10-minute job instead of an archaeology dig.
 
-### v0.1.6 (unreleased)
+### v0.1.7 (unreleased)
+
+### v0.1.6 (shipped)
 
 - **Mini player controls**: Tiny title shifts right when hover sidebar opens (marquee remeasures); compact shuffle toggles random library track and hides with volume slider; tiny skip/advance/shuffle wiring.
 - **Mini player Video Library**: locks the mini window to 430x275 and disables resize while browsing with no active file; restores flexible resize when a video is selected. Hides the top-left library strip toggle in full-library browse. Removed the accent glow behind the Video Library header camera icon.
