@@ -41,6 +41,7 @@ import MiniPlayer from "./MiniPlayer";
 import { isAudioOnlyPath } from "./mediaKind";
 import { flattenGalleryScanToMediaFiles } from "./galleryScan";
 import { ExplorerWatchQueueButton } from "./components/ExplorerWatchQueueButton";
+import { ExplorerTitlebarNav } from "./components/ExplorerTitlebarNav";
 import { TitlebarHoverButton } from "./components/TitlebarHoverButton";
 import { DownloaderView } from "./components/DownloaderView";
 import { PlayerView, type PlayerViewHandle } from "./components/PlayerView";
@@ -277,6 +278,8 @@ function App() {
   const settingsTabShapeLayout = settingsMorphAmount < 0.02;
   useMotionValueEvent(settingsTabMorph, "change", setSettingsMorphAmount);
   const settingsTabDockLeft = isSidebarExpanded ? 264 : 104;
+  /** Sidebar width in px — explorer titlebar nav sits flush on this edge. */
+  const sidebarChromeLeft = isSidebarExpanded ? 240 : 80;
   const notifications = useRuforgeStore((s) => s.notifications);
   const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const notify = useRuforgeStore((s) => s.notify);
@@ -1019,6 +1022,45 @@ function App() {
     };
   }, [activeTab, postInstall, settingsTab, settingsTabMorph]);
 
+  const showExplorerToolbar = activeTab === "explorer" && !postInstall;
+
+  const onExplorerBack = useCallback(async () => {
+    if (!explorerWebviewRef.current) return;
+    try {
+      await invoke("eval_in_webview", {
+        label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+        script: "window.history.back()",
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const onExplorerForward = useCallback(async () => {
+    if (!explorerWebviewRef.current) return;
+    try {
+      await invoke("eval_in_webview", {
+        label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+        script: "window.history.forward()",
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const onExplorerReload = useCallback(async () => {
+    if (!explorerWebviewRef.current) return;
+    try {
+      const url = lastExplorerUrlRef.current.trim();
+      await invoke("eval_in_webview", {
+        label: EMBEDDED_EXPLORER_WEBVIEW_LABEL,
+        script: explorerNavigateOrReloadScript(url),
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
   if (isMini) return <MiniPlayer />;
 
   const navItems = [
@@ -1031,6 +1073,15 @@ function App() {
   return (
     <div className="h-screen w-screen bg-[#271C18] text-stone-50 font-sans flex overflow-hidden select-none relative">
       
+      {showExplorerToolbar && (
+        <ExplorerTitlebarNav
+          left={sidebarChromeLeft}
+          onBack={() => void onExplorerBack()}
+          onForward={() => void onExplorerForward()}
+          onReload={() => void onExplorerReload()}
+        />
+      )}
+
       {/* Window Controls */}
       <WindowControls
         onMiniPlayerToggle={() => {
@@ -1043,13 +1094,16 @@ function App() {
         }}
         updaterPhase={updaterPhase}
         updaterVersion={updaterVersion}
-        showExplorerQueueToolbar={activeTab === "explorer" && !postInstall}
+        showExplorerQueueToolbar={showExplorerToolbar}
         storageBlocksNewDownloads={storageBlocksNewDownloads}
         onUpdaterStatusClick={() => setUpdaterTeaserDismissed(false)}
       />
 
       {/* Global Drag Region - Top strip except controls area */}
-      <div className="fixed top-0 left-0 right-[200px] h-10 z-[50]" data-tauri-drag-region />
+      <div
+        className={`fixed top-0 left-0 h-10 z-[50] ${showExplorerToolbar ? "right-[280px]" : "right-[200px]"}`}
+        data-tauri-drag-region
+      />
 
       {/* ── Sidebar ─────────────────────────────────────── */}
       <div className={`${isSidebarExpanded ? 'w-[240px]' : 'w-[80px]'} flex-shrink-0 relative z-20 flex flex-col bg-transparent overflow-hidden transition-[width,opacity,filter] duration-500 ease-[0.23,1,0.32,1] ${postInstall ? 'opacity-30 grayscale-[50%] pointer-events-none' : ''}`}>
@@ -1089,19 +1143,14 @@ function App() {
                   size={18}
                   className={`flex-shrink-0 ${isActive ? "text-[color:var(--accent)]" : "text-stone-600 group-hover:text-stone-300"}`}
                 />
-                <AnimatePresence mode="popLayout">
-                  {isSidebarExpanded && (
-                    <motion.span 
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
-                      transition={{ duration: 0.3, ease: "easeOut" }}
-                      className="font-black text-[10px] uppercase tracking-[0.2em] whitespace-nowrap"
-                    >
-                      {item.label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+                <span
+                  className={`min-w-0 overflow-hidden font-black text-[10px] uppercase tracking-[0.2em] whitespace-nowrap transition-[max-width,opacity] duration-500 ease-[0.23,1,0.32,1] ${
+                    isSidebarExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0"
+                  }`}
+                  aria-hidden={!isSidebarExpanded}
+                >
+                  {item.label}
+                </span>
                 
                 {!isSidebarExpanded && !isActive && (
                   <div className="absolute left-full ml-6 px-3 py-1.5 bg-stone-900 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-100 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap">
@@ -1117,38 +1166,38 @@ function App() {
         <StorageWidget />
 
         {/* Sidebar Toggle at Bottom */}
-        <div className="p-4 mt-auto">
-          <button 
+        <div className="mt-auto min-w-0 overflow-hidden p-4">
+          <button
+            type="button"
             onClick={toggleSidebar}
-            className={`w-full h-11 flex items-center ${isSidebarExpanded ? 'justify-start px-4' : 'justify-center'} text-stone-500 hover:text-[color:var(--accent)] transition-all active:scale-95 group/toggle`}
+            aria-label={isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+            className={`group/toggle flex h-11 w-full min-w-0 items-center overflow-hidden text-stone-500 transition-all active:scale-95 hover:text-[color:var(--accent)] ${
+              isSidebarExpanded ? "justify-start px-4" : "justify-center"
+            }`}
           >
             <motion.div
               animate={{ rotate: isSidebarExpanded ? 0 : 180 }}
               transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
+              className="shrink-0"
             >
               <Icon icon="ic:twotone-subdirectory-arrow-left" fontSize={22} className="opacity-60 group-hover/toggle:opacity-100" />
             </motion.div>
-            
-            <AnimatePresence mode="popLayout">
-              {isSidebarExpanded && (
-                <motion.span
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.3 }}
-                  className="ml-4 text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap"
-                >
-                  Collapse
-                </motion.span>
-              )}
-            </AnimatePresence>
+
+            <span
+              className={`ml-4 min-w-0 overflow-hidden text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap transition-[max-width,opacity,margin] duration-500 ease-[0.23,1,0.32,1] ${
+                isSidebarExpanded ? "max-w-[6rem] opacity-100" : "max-w-0 opacity-0 ml-0"
+              }`}
+              aria-hidden={!isSidebarExpanded}
+            >
+              Collapse
+            </span>
           </button>
         </div>
       </div>
 
       {/* ── Right Column ────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 pt-[40px] relative z-10">
-
+        
         {/* Settings / Gallery tab strip */}
         <AnimatePresence mode="wait">
           {(activeTab === "settings" && !postInstall) ? (
@@ -1268,42 +1317,6 @@ function App() {
             </motion.div>
           ) : null}
         </AnimatePresence>
-
-        {/* Explorer bulge */}
-        {(activeTab === "explorer" && !postInstall) && (
-          <div className="absolute right-6 top-0 z-20 flex h-[80px] pointer-events-none">
-            <div
-              className="relative flex h-[80px] bg-[#271C18] rounded-b-[28px] px-6 items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
-              style={{ clipPath: "inset(40px -100px -100px -100px)" }}
-            >
-              <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
-              </div>
-              <div className="absolute right-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
-              </div>
-
-              <div className="flex items-center gap-5 h-[34px] flex-shrink-0">
-                <button
-                  onClick={async () => {
-                    if (explorerWebviewRef.current) {
-                      try {
-                        await invoke("open_external_url", { url: lastExplorerUrl });
-                      } catch (e) {
-                        console.error(e);
-                      }
-                    }
-                  }}
-                  className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex items-center gap-2 px-2"
-                  title="Open current page in default browser"
-                >
-                  <Globe size={16} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Open in Browser</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Gallery search/settings tab bulge */}
         {(activeTab === "media" && !postInstall) && (

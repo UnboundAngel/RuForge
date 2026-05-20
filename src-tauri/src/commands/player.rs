@@ -35,7 +35,7 @@ pub async fn open_mini_player(app: AppHandle) -> Result<(), String> {
         tauri::WebviewWindowBuilder::new(&app, "mini", tauri::WebviewUrl::App("index.html".into()))
             .title("RuForge Mini")
             .inner_size(480.0, 320.0)
-            .min_inner_size(300.0, 200.0)
+            .min_inner_size(242.0, 70.0)
             .resizable(true)
             .decorations(false)
             .transparent(true)

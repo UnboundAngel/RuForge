@@ -714,7 +714,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const playedBarPercent = scrubDragPercent !== null ? scrubDragPercent : progress;
   const isProbablyWindows =
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
-  const coverArtSrc = file.ruforgePosterPath ?? file.thumbnailPath;
+  const coverArtSrc = file.thumbnailPath ?? file.ruforgePosterPath;
 
   const playlistIdx = folderAudioPlaylist.findIndex((f) => f.path === file.path);
   const prevInFolder =
@@ -896,6 +896,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 autoPlay
                 playsInline
                 preload="metadata"
+                poster={coverArtSrc ? convertFileSrc(coverArtSrc) : undefined}
                 onTimeUpdate={handleTimeUpdate}
                 onSeeked={handleSeeked}
                 onLoadedMetadata={handleLoadedMetadata}
