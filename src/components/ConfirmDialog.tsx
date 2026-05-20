@@ -75,8 +75,8 @@ function ConfirmDialogView({
         )}
 
         <div className="relative">
-          {/* Red dotted border for the action area - increased visibility */}
-          <div className="absolute inset-0 border-2 border-dotted border-red-500/60 rounded-b-[32px] border-t-0 pointer-events-none" />
+          {/* Red dotted border for the action area - higher visibility */}
+          <div className="absolute inset-0 border-2 border-dotted border-red-500/80 rounded-b-[32px] border-t-0 pointer-events-none" />
 
           <div className="p-8 pt-4 relative">
             <div className="space-y-1.5 mb-8">

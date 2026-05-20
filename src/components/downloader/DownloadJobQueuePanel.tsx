@@ -140,7 +140,7 @@ export function DownloadJobAudioToggle({
   return (
     <motion.div className={`relative ${className}`}>
       <QueueTooltip
-        text={audioOnly ? "Audio + video" : "Audio only"}
+        text={audioOnly ? "Switch to audio + video" : "Switch to audio only"}
         visible={audioHovered && !disabled}
       />
       <button
