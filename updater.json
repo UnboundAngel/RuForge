@@ -1,11 +1,11 @@
 {
-  "version": "0.1.5",
-  "notes": "{\"notes\":\"- **New *audio only* download toggle**\\n- **Added *download details* caching**\\n- **New *confirm-deletion* screen**\",\"additions\":[\"Audio only mode — download just the audio track, uses less space\",\"Confirm-deletion screen — no more accidental deletes\",\"Queue now shows Processing… while audio is being extracted\"],\"fixes\":[\"Videos already in your library are now detected and skipped in the queue\",\"Deleting a video also clears its queue row\",\"Downloaded video link no longer stays in the URL bar after finishing\"]}",
-  "pub_date": "2026-05-19T03:13:11Z",
+  "version": "0.1.6",
+  "notes": "{\"notes\":\"Mini player micro layouts, explorer title bar navigation, and playback polish.\",\"additions\":[\"Mini player micro and compact layouts (window height down to 70px)\",\"Explorer back, forward, and reload in the title bar\",\"Video poster thumbnails when switching tracks\",\"Mini player Video Library browse mode with fixed window size\"],\"fixes\":[\"Audio visualizer no longer crashes when toggling play/pause\",\"Sidebar collapse label no longer flashes while the rail narrows\"]}",
+  "pub_date": "2026-05-20T03:21:32Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWm9ZWWJGM3pUUUgwUzRTS2VrbkM0Q3FYdThiUjdPQVlMSlNZdDBpRTd6VTRpM3RRRnRwTnIvcnBPNkFvRGRUWmRUOUhXOWhHSmN3U0Vnc2VPL0JnZ3c0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc5MTYwMzkxCWZpbGU6UnVGb3JnZV8wLjEuNV94NjQtc2V0dXAuZXhlCktlRlFYT1BsSFhFZThRdmNyb3pzYXZqbXVYTDZHWGp0cVRpK1R0RVh5K1RxMm1uT1BLN1E0WkdKeFYwK2RxUG03eTVIdEFwYjB6S0U4cVN4Y0hTQUR3PT0K",
-      "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.1.5/RuForge_0.1.5_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWm1SYlpBa0lzbG5CaGNsenRwd1p5c2pYc2Z3K1MvWnR3eFFGUlRNcCtHYlQrY3JiV1B3L1gyNVRmTjRFOUZxUEJaQzN4TWU1SURmYUpqVkVBSkRzY0EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzc5MjQ3MjQxCWZpbGU6UnVGb3JnZV8wLjEuNl94NjQtc2V0dXAuZXhlCnlsTFYxWnFZMWY2N2x2TThKd3hsNFpHb0JZcFU2clUxQUgwZ3U2a0VLbkxRelo5N281cjFEODlXdDdmbzdWejhFSTBiUWpBaFVsblhTK1R4V084VERRPT0K",
+      "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.1.6/RuForge_0.1.6_x64-setup.exe"
     }
   }
 }
