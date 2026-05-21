@@ -489,16 +489,32 @@ const DownloadJobRow = ({
 export const DownloadJobQueuePanel = () => {
   const jobsRaw = useRuforgeStore((s) => s.downloadJobs);
   const sortFingerprint = useRuforgeStore((s) => downloadJobsQueueOrderFingerprint(s.downloadJobs));
+  const jobMembershipKey = jobsRaw
+    .map((j) => j.id)
+    .sort()
+    .join("|");
   const sortedJobIds = useMemo(() => {
     if (sortFingerprint === "") return [];
     return jobsRaw.map((j) => j.id);
-    // Keyed by sortFingerprint only: jobsRaw is read when membership, createdAt, or physical order changes — not on progress/metadata alone.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- jobsRaw omitted so progress/metadata updates do not rebuild id list
-  }, [sortFingerprint]);
+    // sortFingerprint: physical order; jobMembershipKey: id set so removes cannot leave stale ids in the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- jobsRaw omitted so progress/metadata alone do not rebuild
+  }, [sortFingerprint, jobMembershipKey]);
   const jobs = useMemo(() => {
     if (sortedJobIds.length === 0) return jobsRaw;
     const byId = new Map(jobsRaw.map((j) => [j.id, j]));
-    return sortedJobIds.map((id) => byId.get(id)!);
+    const ordered: DownloadJob[] = [];
+    for (const id of sortedJobIds) {
+      const job = byId.get(id);
+      if (job) ordered.push(job);
+    }
+    // Jobs present in store but not yet in the memoized id list (rare); keep them visible.
+    if (ordered.length < jobsRaw.length) {
+      const seen = new Set(ordered.map((j) => j.id));
+      for (const j of jobsRaw) {
+        if (!seen.has(j.id)) ordered.push(j);
+      }
+    }
+    return ordered;
   }, [sortedJobIds, jobsRaw]);
   const focusedJobId = useRuforgeStore((s) => s.focusedJobId);
   const setDownloaderFocusedJobId = useRuforgeStore((s) => s.setDownloaderFocusedJobId);

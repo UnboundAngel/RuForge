@@ -670,7 +670,7 @@ fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
                     .unwrap_or("Unknown")
                     .to_string(),
                 thumbnail: json["thumbnail"].as_str().unwrap_or("").to_string(),
-                duration: json["duration"].as_f64().unwrap_or(0.0),
+                duration: ytdlp_duration_secs(&json).unwrap_or(0.0),
                 formats: vec![],
                 file_size_bytes: video_file_size_from_ytdlp_json(&json),
                 file_size_bytes_audio: None,
@@ -918,6 +918,7 @@ struct ProgressPayload {
 #[serde(rename_all = "camelCase")]
 struct DownloadJobFinishedPayload {
     job_id: String,
+    url: String,
     success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
@@ -930,32 +931,102 @@ fn effective_video_format_for_info_probe(format: Option<&str>) -> String {
     }
 }
 
+fn video_info_cookie_probe(
+    browser_cookies: Option<String>,
+    cookie_file: Option<String>,
+) -> Option<DownloadOptions> {
+    let browser = browser_cookies.filter(|s| !s.is_empty());
+    let file = cookie_file.filter(|s| !s.is_empty());
+    if browser.is_none() && file.is_none() {
+        return None;
+    }
+    Some(DownloadOptions {
+        format: String::new(),
+        output_dir: String::new(),
+        filename_template: String::new(),
+        browser_cookies: browser,
+        cookie_file: file,
+        sub_langs: String::new(),
+        audio_only: false,
+        audio_format: default_audio_format(),
+    })
+}
+
+fn get_video_info_simulate_failure_message(err: &str) -> String {
+    let trimmed = err.trim();
+    if trimmed.is_empty() {
+        "yt-dlp metadata simulate failed".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 #[tauri::command]
 pub async fn get_video_info(
     app: AppHandle,
     url: String,
     format: Option<String>,
     audio_only: Option<bool>,
+    browser_cookies: Option<String>,
+    cookie_file: Option<String>,
 ) -> Result<VideoInfo, String> {
     // Prefer m4a source to avoid transcoding; pure audio streams only (no /best video fallback).
     const AUDIO_SIMULATE_FMT: &str = "bestaudio[ext=m4a]/bestaudio";
     let audio_primary = audio_only.unwrap_or(false);
     let video_fmt = effective_video_format_for_info_probe(format.as_deref());
     let video_fmt_ref = video_fmt.as_str();
+    let cookie_probe = video_info_cookie_probe(browser_cookies, cookie_file);
+    let cookie_ref = cookie_probe.as_ref();
 
     let (json_video_res, json_audio_res) = tokio::join!(
-        yt_dlp_single_json_simulate(&app, &url, None, Some(video_fmt_ref)),
-        yt_dlp_single_json_simulate(&app, &url, None, Some(AUDIO_SIMULATE_FMT)),
+        yt_dlp_single_json_simulate(&app, &url, cookie_ref, Some(video_fmt_ref)),
+        yt_dlp_single_json_simulate(&app, &url, cookie_ref, Some(AUDIO_SIMULATE_FMT)),
     );
-    let json_video = json_video_res?;
-    let json_audio = json_audio_res?;
 
-    let (_, file_size_bytes_video) =
-        dual_file_sizes_from_ytdlp_json(&json_video, Some(video_fmt_ref), false);
-    let (file_size_bytes_audio, _) =
-        dual_file_sizes_from_ytdlp_json(&json_audio, None, true);
+    let json_video = json_video_res.as_ref().ok();
+    let json_audio = json_audio_res.as_ref().ok();
 
-    let mut info = video_info_from_ytdlp_single_json(json_video);
+    if json_video.is_none() && json_audio.is_none() {
+        return Err(match (&json_video_res, &json_audio_res) {
+            (Err(v), Err(a)) => format!(
+                "Metadata fetch failed (video: {}; audio: {})",
+                get_video_info_simulate_failure_message(v),
+                get_video_info_simulate_failure_message(a),
+            ),
+            (Err(e), Ok(_)) => get_video_info_simulate_failure_message(e),
+            (Ok(_), Err(e)) => get_video_info_simulate_failure_message(e),
+            (Ok(_), Ok(_)) => "Metadata fetch failed".to_string(),
+        });
+    }
+
+    if let Err(e) = &json_video_res {
+        if json_audio.is_some() {
+            log::warn!(
+                "[RuForge] get_video_info video simulate failed (audio ok): {}",
+                e
+            );
+        }
+    }
+    if let Err(e) = &json_audio_res {
+        if json_video.is_some() {
+            log::warn!(
+                "[RuForge] get_video_info audio simulate failed (video ok): {}",
+                e
+            );
+        }
+    }
+
+    let base_json = json_video
+        .or(json_audio)
+        .expect("at least one simulate succeeded");
+    let (_, file_size_bytes_video) = json_video
+        .map(|j| dual_file_sizes_from_ytdlp_json(j, Some(video_fmt_ref), false))
+        .unwrap_or((None, None));
+    let (file_size_bytes_audio, _) = json_audio
+        .map(|j| dual_file_sizes_from_ytdlp_json(j, None, true))
+        .unwrap_or((None, None));
+
+    let mut info = video_info_from_ytdlp_single_json(base_json.clone());
     info.file_size_bytes_audio = file_size_bytes_audio;
     info.file_size_bytes_video = file_size_bytes_video;
     info.file_size_bytes = if audio_primary {
@@ -1380,6 +1451,7 @@ pub async fn start_download_job(
                             "download-job-finished",
                             DownloadJobFinishedPayload {
                                 job_id: job_id.clone(),
+                                url: url.clone(),
                                 success: true,
                                 error: None,
                             },
@@ -1394,6 +1466,7 @@ pub async fn start_download_job(
                         "download-job-finished",
                         DownloadJobFinishedPayload {
                             job_id: job_id.clone(),
+                            url: url.clone(),
                             success: false,
                             error: Some(err),
                         },
@@ -1421,6 +1494,7 @@ pub async fn start_download_job(
                 "download-job-finished",
                 DownloadJobFinishedPayload {
                     job_id,
+                    url,
                     success: false,
                     error: Some(err),
                 },

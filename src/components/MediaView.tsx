@@ -10,6 +10,7 @@ import { getPlaybackThumbnailBar, getWatchProgress, isVideoWatched } from "../pl
 import { formatStorageSize } from "../formatStorageSize";
 import { clearPlaybackStateForDeletedPaths } from "../cleanupCandidates";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import { formatDuration } from "./downloader/downloaderFormat";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 
 function deleteMediaErrorMessage(e: unknown): string {
@@ -116,15 +117,6 @@ const VideoCard = ({
   });
   const videoRef = useRef<HTMLVideoElement>(null);
   const stillPoster = file.thumbnailPath ?? file.ruforgePosterPath;
-
-  const formatDuration = (seconds: number) => {
-    if (!seconds) return "";
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
 
   useEffect(() => {
     if (isHovered && videoRef.current) {

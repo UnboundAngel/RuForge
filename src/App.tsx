@@ -81,6 +81,13 @@ import {
   EXPLORER_PAUSE_MEDIA_SCRIPT,
   explorerNavigateOrReloadScript,
 } from "./explorerWebviewLifecycle";
+import {
+  createExplorerBoundsRafScheduler,
+  explorerBoundsEqual,
+  readExplorerHostBounds,
+  runExplorerLayoutTransitionFollowUp,
+  type ExplorerBounds,
+} from "./explorerBoundsSync";
 
 const WindowControls = ({ 
   onMiniPlayerToggle,
@@ -328,6 +335,8 @@ function App() {
   const prevActiveTabRef = useRef<ActiveTab>(activeTab);
   /** One reload when entering Explorer; layout sync must not re-arm this. */
   const explorerReloadPendingRef = useRef(false);
+  const explorerLastSyncedBoundsRef = useRef<ExplorerBounds | null>(null);
+  const explorerScheduleSyncRef = useRef<(() => void) | null>(null);
   const applyDownloadProgress = useRuforgeStore((s) => s.applyDownloadProgress);
   const onDownloadJobFinished = useRuforgeStore((s) => s.onDownloadJobFinished);
   const onDownloadJobPaused = useRuforgeStore((s) => s.onDownloadJobPaused);
@@ -506,6 +515,7 @@ function App() {
         if (!jobId) return;
         downloadIpcHandlersRef.current.onDownloadJobFinished({
           jobId,
+          url: raw.url,
           success: raw.success,
           error: raw.error,
         });
@@ -541,12 +551,9 @@ function App() {
     };
   }, []);
 
-  const addLog = useCallback((msg: string) => {
-    console.log("[Explorer Debug]", msg);
-  }, []);
-
   // Manage Embedded Explorer Webview.
-  // Deps: `activeTab`, layout (`isSidebarExpanded`) — URL poll updates store only; read via lastExplorerUrlRef.
+  // Deps: `activeTab` only. Sidebar toggles schedule via explorerScheduleSyncRef
+  // so listeners are not torn down during the 500ms width transition.
   useEffect(() => {
     let active = true;
     const wasOnExplorer = prevActiveTabRef.current === "explorer";
@@ -555,12 +562,14 @@ function App() {
     prevActiveTabRef.current = activeTab;
     if (enteringExplorer) {
       explorerReloadPendingRef.current = true;
+      explorerLastSyncedBoundsRef.current = null;
       if (mainContentRef.current) {
         mainContentRef.current.scrollTop = 0;
       }
     }
     if (!onExplorer) {
       explorerReloadPendingRef.current = false;
+      explorerLastSyncedBoundsRef.current = null;
     }
 
     const pauseExplorerMedia = async () => {
@@ -593,124 +602,112 @@ function App() {
       await reloadExplorerPage();
     };
 
+    const applyExplorerBounds = async (bounds: ExplorerBounds) => {
+      const { x: finalX, y: finalY, width: finalW, height: finalH } = bounds;
+
+      if (explorerLinuxEmbedRef.current) {
+        await invoke("ensure_embedded_explorer_bounds", {
+          x: finalX,
+          y: finalY,
+          width: finalW,
+          height: finalH,
+        });
+        return;
+      }
+
+      const appWindow = getCurrentWindow();
+      if (!explorerWebviewRef.current) {
+        const dataDir = await appDataDir();
+        const explorerDataPath = await join(dataDir, "explorer-data");
+        const extraBrowserArgs = await invoke<string | null>(
+          "get_hardware_acceleration_browser_args",
+        );
+
+        const webview = new Webview(appWindow, "explorer-view", {
+          url: "https://www.youtube.com",
+          x: finalX,
+          y: finalY,
+          width: finalW,
+          height: finalH,
+          dataDirectory: explorerDataPath,
+          userAgent:
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          ...(extraBrowserArgs ? { additionalBrowserArgs: extraBrowserArgs } : {}),
+        });
+
+        webview.once("tauri://created", () => {
+          explorerWebviewRef.current = webview;
+          if (active && activeTab === "explorer") {
+            void maybeReloadExplorerOnEnter();
+          }
+        });
+
+        webview.once("tauri://error", (e) => {
+          console.error("[RuForge] Explorer webview error", e);
+        });
+
+        explorerWebviewRef.current = webview;
+        return;
+      }
+
+      const webview = explorerWebviewRef.current;
+      await webview.show();
+      await Promise.all([
+        webview.setPosition(new LogicalPosition(finalX, finalY)),
+        webview.setSize(new LogicalSize(finalW, finalH)),
+      ]);
+    };
+
     const syncWebview = async () => {
       if (!active) return;
 
       if (onExplorer) {
-        if (!explorerWebviewHostRef.current) {
-          addLog("Explorer webview host ref is null");
+        const host = explorerWebviewHostRef.current;
+        if (!host) return;
+
+        const bounds = readExplorerHostBounds(host);
+        if (!bounds) return;
+
+        if (
+          explorerBoundsEqual(bounds, explorerLastSyncedBoundsRef.current)
+        ) {
           return;
         }
+        explorerLastSyncedBoundsRef.current = bounds;
 
-        const rect = explorerWebviewHostRef.current.getBoundingClientRect();
-        const finalX = Math.round(rect.left);
-        const finalY = Math.round(rect.top);
-        const finalW = Math.round(rect.width);
-        const finalH = Math.round(rect.height);
-
-        addLog(`Rect: w=${finalW}, h=${finalH}, x=${finalX}, y=${finalY}`);
-
-        if (finalW <= 0 || finalH <= 0) {
-          addLog("Skipping: Width or Height is <= 0");
-          return;
+        try {
+          await applyExplorerBounds(bounds);
+          await maybeReloadExplorerOnEnter();
+        } catch (e: unknown) {
+          explorerLastSyncedBoundsRef.current = null;
+          console.error("[RuForge] Explorer bounds sync failed", e);
         }
+        return;
+      }
 
-        if (explorerLinuxEmbedRef.current) {
-          try {
-            await invoke("ensure_embedded_explorer_bounds", {
-              x: finalX,
-              y: finalY,
-              width: finalW,
-              height: finalH,
-            });
-            await maybeReloadExplorerOnEnter();
-          } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : String(e);
-            addLog(`Linux embed sync failed: ${msg}`);
-          }
-          return;
+      if (wasOnExplorer) {
+        await pauseExplorerMedia();
+      }
+      if (explorerLinuxEmbedRef.current) {
+        try {
+          await invoke("set_embedded_explorer_visible", { visible: false });
+        } catch (e: unknown) {
+          console.error("Explorer hide (linux) failed", e);
         }
-
-        const appWindow = getCurrentWindow();
-        if (!explorerWebviewRef.current) {
-          addLog("Creating new Webview instance...");
-          try {
-            const dataDir = await appDataDir();
-            const explorerDataPath = await join(dataDir, "explorer-data");
-            const extraBrowserArgs = await invoke<string | null>("get_hardware_acceleration_browser_args");
-
-            const webview = new Webview(appWindow, "explorer-view", {
-              url: "https://www.youtube.com",
-              x: finalX,
-              y: finalY,
-              width: finalW,
-              height: finalH,
-              dataDirectory: explorerDataPath,
-              userAgent:
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              ...(extraBrowserArgs ? { additionalBrowserArgs: extraBrowserArgs } : {}),
-            });
-
-            webview.once("tauri://created", () => {
-              addLog("Webview successfully created!");
-              explorerWebviewRef.current = webview;
-              if (active && activeTab === "explorer") {
-                void maybeReloadExplorerOnEnter();
-              }
-            });
-
-            webview.once("tauri://error", (e) => {
-              addLog(`Webview error: ${JSON.stringify(e)}`);
-            });
-
-            explorerWebviewRef.current = webview;
-          } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : String(e);
-            addLog(`Creation failed: ${msg}`);
-          }
-        } else {
-          try {
-            await explorerWebviewRef.current.show();
-            await explorerWebviewRef.current.setPosition(new LogicalPosition(finalX, finalY));
-            await explorerWebviewRef.current.setSize(new LogicalSize(finalW, finalH));
-            await maybeReloadExplorerOnEnter();
-          } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : String(e);
-            addLog(`Update failed: ${msg}`);
-          }
-        }
-      } else {
-        if (wasOnExplorer) {
-          await pauseExplorerMedia();
-        }
-        if (explorerLinuxEmbedRef.current) {
-          try {
-            await invoke("set_embedded_explorer_visible", { visible: false });
-          } catch (e: unknown) {
-            console.error("Explorer hide (linux) failed", e);
-          }
-        } else if (explorerWebviewRef.current) {
-          try {
-            addLog("Hiding Webview...");
-            await explorerWebviewRef.current.hide();
-          } catch (e: unknown) {
-            addLog(`Hide failed: ${e instanceof Error ? e.message : String(e)}`);
-            console.error("Webview hide failed", e);
-          }
+      } else if (explorerWebviewRef.current) {
+        try {
+          await explorerWebviewRef.current.hide();
+        } catch (e: unknown) {
+          console.error("Webview hide failed", e);
         }
       }
     };
 
-    let syncDebounce: number | undefined;
-    const scheduleSync = () => {
-      if (syncDebounce !== undefined) {
-        clearTimeout(syncDebounce);
-      }
-      syncDebounce = window.setTimeout(() => {
-        syncDebounce = undefined;
+    const { schedule: scheduleSync, cancel: cancelScheduledSync } =
+      createExplorerBoundsRafScheduler(() => {
         void syncWebview();
-      }, 48);
-    };
+      });
+    explorerScheduleSyncRef.current = scheduleSync;
 
     scheduleSync();
 
@@ -740,15 +737,23 @@ function App() {
 
     return () => {
       active = false;
-      if (syncDebounce !== undefined) {
-        clearTimeout(syncDebounce);
-      }
+      explorerScheduleSyncRef.current = null;
+      cancelScheduledSync();
       window.removeEventListener("resize", scheduleSync);
       cancelAnimationFrame(resizeObserverRaf);
       resizeObserver?.disconnect();
       unlistenWindowResize?.();
     };
-  }, [activeTab, addLog, isSidebarExpanded]);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "explorer") return;
+    explorerLastSyncedBoundsRef.current = null;
+    const schedule = explorerScheduleSyncRef.current;
+    if (!schedule) return;
+    schedule();
+    runExplorerLayoutTransitionFollowUp(schedule);
+  }, [activeTab, isSidebarExpanded]);
 
   const performUpdateCheckRef = useRef(performUpdateCheck);
   performUpdateCheckRef.current = performUpdateCheck;

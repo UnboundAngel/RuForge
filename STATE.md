@@ -45,7 +45,11 @@ Fixes:
 
 **0.1.7 unreleased:** (see AGENTS.md Shipped log, keep in sync)
 
-- Download queue: finish handler captures job URL atomically with removal; hero clears reliably.
+- Download queue: per-job stall watchdog (activity-based, not a global timer); failed row + notification when yt-dlp progress stops.
+- Downloader metadata: `get_video_info` simulates use cookie context like downloads; one failed simulate no longer drops the other.
+- Downloader/gallery duration: no `NaN:NaN` labels; invalid yt-dlp durations normalized at source and in `formatDuration`.
+- Download queue panel: safe ordered job list (no crash when a memoized id outlives its row).
+- Download queue: finish handler resolves URL and clears hero in one `set()`; IPC carries `url` when the row is already gone; remove clears matching hero.
 - Download queue: pause waits for Rust invoke before store update and pump.
 - Downloader: processing phase latch for `download_reached_full` (multi-fragment streams).
 - Linux dev: asset protocol scopes and platform default paths (`platformPaths.ts`, `tauri.conf.json`).
@@ -54,6 +58,7 @@ Fixes:
 - Downloader: smoothed hero ETA; quality/audio-aware file size via yt-dlp simulate; metadata cache keyed by format.
 - Downloader: production metadata loading and progress bar regressions (monotonic %, shared yt-dlp fetch, hydration gate).
 - Explorer (Linux): `explorer-surface` child window overlay instead of in-window child webview.
+- Explorer bounds: rAF sync during sidebar/window resize; deduped IPC; listeners stay up through sidebar animation.
 
 ## Open P0 (blocks release)
 
@@ -61,8 +66,7 @@ Fixes:
 
 ## Next 3 (priority order)
 
-1. Storage cap before enqueue (#10). Block when estimate exceeds free disk; needs
-   cookies-in-simulate follow-up for restricted URLs.
+1. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
 2. 429 / rate-limit spacing (#11). Configurable delay between job starts (not retry-on-failure).
 3. Downloader UI polish (#12 Jim pass) or mid-download drop E2E verify (#15).
 

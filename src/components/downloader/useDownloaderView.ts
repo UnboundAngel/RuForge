@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { fetchVideoInfoWithTimeout } from "../../downloadVideoInfoFetch";
+import { cookieContextFromSettings } from "../../downloadQueue";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -990,6 +991,7 @@ export function useDownloaderView({
             norm,
             videoFormat,
             audioOnlyNow,
+            cookieContextFromSettings(settingsRef.current),
           );
           if (active && useRuforgeStore.getState().url.trim() === norm) {
             const base = videoInfoToDownloadJobSnapshot(info, audioOnlyNow);
@@ -1026,6 +1028,8 @@ export function useDownloaderView({
     url,
     settings.preferredQuality,
     settings.downloadAudioOnly,
+    settings.browserContext,
+    settings.cookieFile,
     setMetadataError,
     setDownloaderMetadataLoading,
     setVideoInfo,
