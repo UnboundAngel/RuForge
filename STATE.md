@@ -45,6 +45,9 @@ Fixes:
 
 **0.1.7 unreleased:** (see AGENTS.md Shipped log, keep in sync)
 
+- Player: chapter scrub hover (playhead at play, per-segment hover fill, balanced preview gap); frosted control dock with More menu.
+- Download duplicates: post-download cleanup and gallery dedupe by YouTube id so one URL does not leave two library cards (orphan audio/intermediate).
+- Player chapters: segmented scrubber from `.info.json` metadata, active chapter label, prev/next and Shift+arrow chapter jumps (main + mini).
 - Downloader hero progress: 0/100 flank the bar only (no traveling percent); speed/time under the bar instead of bottom-right.
 - Downloader URL chip: paperclip hidden when URL left the queue; bar hero clears on remove if no row matches; pinned chips pruned with queue.
 - Downloader UI: collapsible queue redesigned as a slide-out pop-up that sits on the right screen edge; hoisted active card z-indices for perfect tooltip visibility.

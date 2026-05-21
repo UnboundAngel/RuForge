@@ -212,6 +212,13 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Chapter scrubber perf**: removed duplicate scrub hover handlers on main player (parent bubble only). `PlayerView.tsx`, `ChapterScrubber.tsx`.
+- **Player chapter scrubber layout**: CSS grid `fr` columns (no flex % + gap overflow); global hover line aligned with cursor/thumbnail. **Player controls dock**: frosted bar, primary actions visible, secondary in More menu. `ChapterScrubber.tsx`, `chapters.ts`, `PlayerView.tsx`.
+- **Player chapter scrubber visibility**: restored separated rounded segment pills (`gap-[3px]` grid, per-chapter `rounded-full`); raw chapters kept when scan duration is 0; normalize on video duration. `ChapterScrubber.tsx`, `PlayerView.tsx`, `galleryScan.ts`.
+- **Chapter scrub hover preview**: thumb + spaced `w-max` caption bubble (`MarqueeText`); playhead on scaled segment; per-segment hover wash. `ChapterScrubber.tsx`.
+- **Player dock**: play/pause icon centered and sized like other bar controls. `PlayerView.tsx`.
+- **Download duplicate library rows**: after a successful job, remove orphan outputs that share the same yt-dlp `id` (e.g. leftover audio beside muxed mp4); gallery scan hides duplicates by `source_id`. `gallery.rs`, `downloader.rs`.
+- **Player chapters**: segmented scrubber per yt-dlp sidecar chapter, current chapter title, prev/next and Shift+arrow jumps; normalized in `gallery.rs` and `chapters.ts`. `ChapterScrubber.tsx`, `PlayerView.tsx`, `MiniPlayer.tsx`, `galleryScan.ts`.
 - **Windows volume mixer label**: background thread renames WebView2 child audio sessions to product name and exe icon via Core Audio API (sndvol workaround). `windows_audio_brand.rs`, `lib.rs`, `Cargo.toml`.
 - **Playback audio (WebView)**: sync store volume/mute onto `<video>` / `<audio>` on load and play; stop reading autoplay `muted` into pop-out/handoff; MiniPlayer now applies mute state. `applyMediaOutputState.ts`, `PlayerView.tsx`, `MiniPlayer.tsx`.
 - **Preview ffmpeg lock**: fixed deadlock when generating sprites/posters (nested per-file mutex); download finish always runs scrub fallback (idempotent). `media.rs`, `downloader.rs`.

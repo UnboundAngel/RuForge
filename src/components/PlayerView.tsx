@@ -20,6 +20,7 @@ import {
   X,
   Video,
   Layers,
+  Ellipsis,
 } from "lucide-react";
 import { type FfprobeHint, type MediaFile } from "../types";
 import { ScrubberHoverThumb } from "../scrubSpritePreview";
@@ -35,6 +36,13 @@ import { fetchSubtitleTracks, revokeSubtitleBlobSrcs, subtitleTracksWithBlobSrc,
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { useSubtitleCueOverlay } from "../useSubtitleCueOverlay";
 import { applyMediaOutputState } from "../applyMediaOutputState";
+import {
+  chapterAtTime,
+  nextChapterIndex,
+  normalizeChapters,
+  prevChapterIndex,
+} from "../chapters";
+import { ChapterScrubber } from "./player/ChapterScrubber";
 
 const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: string }) => {
   const speedToAngle: Record<number, number> = {
@@ -56,6 +64,9 @@ const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: strin
     </svg>
   );
 };
+
+const playerBarBtnClass =
+  "p-2 rounded-lg text-white/90 hover:text-white hover:bg-white/10 active:scale-95 transition-all shrink-0";
 
 const Tooltip = ({ text, children, side = "bottom", className = "" }: { text: string; children: React.ReactNode; side?: "bottom" | "top"; className?: string }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -338,6 +349,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   };
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [showPlayerMoreMenu, setShowPlayerMoreMenu] = useState(false);
   const [clickFlash, setClickFlash] = useState<"play" | "pause" | null>(null);
   const [skipFlash, setSkipFlash] = useState<{ side: "left" | "right"; amount: number } | null>(null);
   const skipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -364,55 +376,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     document.addEventListener("fullscreenchange", onFSChange);
     return () => document.removeEventListener("fullscreenchange", onFSChange);
   }, []);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      switch (e.code) {
-        case "Space":
-          e.preventDefault();
-          togglePlay();
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          skip(10);
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          skip(-10);
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          changeVolume(Math.min(1, volume + 0.1));
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          changeVolume(Math.max(0, volume - 0.1));
-          break;
-        case "KeyM": {
-          const next = !useRuforgeStore.getState().isMuted;
-          setMuted(next);
-          setShowVolume(true);
-          if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-          volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
-          break;
-        }
-        case "KeyF":
-          toggleFullscreen();
-          break;
-        case "KeyL": {
-          const l = useRuforgeStore.getState().isLooping;
-          setLooping(!l);
-          break;
-        }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [volume, isPaused]);
 
   const togglePlay = useCallback(() => {
     if (blockClickRef.current) {
@@ -585,6 +548,111 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     },
     [file.path],
   );
+
+  const chapters = useMemo(() => {
+    const dur =
+      isFinite(duration) && duration > 0
+        ? duration
+        : file.duration > 0
+          ? file.duration
+          : 0;
+    return normalizeChapters(file.chapters, dur);
+  }, [file.chapters, file.duration, duration]);
+
+  const activeChapter = useMemo(
+    () => (chapters ? chapterAtTime(chapters, currentTime) : null),
+    [chapters, currentTime],
+  );
+
+  const seekToTimeSeconds = useCallback(
+    (t: number) => {
+      const vid = mediaRef.current;
+      if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
+      applyScrubPosition(Math.min(1, Math.max(0, t / vid.duration)), { persist: true });
+    },
+    [applyScrubPosition],
+  );
+
+  const jumpPrevChapter = useCallback(() => {
+    if (!chapters) return;
+    const idx = activeChapter?.index ?? 0;
+    const prev = prevChapterIndex(chapters, idx);
+    if (prev !== null) seekToTimeSeconds(chapters[prev].start_time);
+    else seekToTimeSeconds(0);
+  }, [chapters, activeChapter?.index, seekToTimeSeconds]);
+
+  const jumpNextChapter = useCallback(() => {
+    if (!chapters) return;
+    const idx = activeChapter?.index ?? 0;
+    const next = nextChapterIndex(chapters, idx);
+    if (next !== null) seekToTimeSeconds(chapters[next].start_time);
+  }, [chapters, activeChapter?.index, seekToTimeSeconds]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      switch (e.code) {
+        case "Space":
+          e.preventDefault();
+          togglePlay();
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          if (e.shiftKey && chapters) {
+            jumpNextChapter();
+          } else {
+            skip(10);
+          }
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          if (e.shiftKey && chapters) {
+            jumpPrevChapter();
+          } else {
+            skip(-10);
+          }
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          changeVolume(Math.min(1, volume + 0.1));
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          changeVolume(Math.max(0, volume - 0.1));
+          break;
+        case "KeyM": {
+          const next = !useRuforgeStore.getState().isMuted;
+          setMuted(next);
+          setShowVolume(true);
+          if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
+          volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+          break;
+        }
+        case "KeyF":
+          toggleFullscreen();
+          break;
+        case "KeyL": {
+          const l = useRuforgeStore.getState().isLooping;
+          setLooping(!l);
+          break;
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    volume,
+    chapters,
+    jumpPrevChapter,
+    jumpNextChapter,
+    togglePlay,
+    skip,
+    changeVolume,
+    setMuted,
+    toggleFullscreen,
+    setLooping,
+  ]);
 
   const handleSeeked = useCallback(() => {
     isUserSeekingRef.current = false;
@@ -1058,6 +1126,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 <h2 className="text-lg font-black tracking-tight text-white leading-tight truncate max-w-xl">
                   {file.name.replace(/_/g, " ")}
                 </h2>
+                {activeChapter && (
+                  <p className="text-sm text-stone-400 truncate max-w-xl mt-0.5">
+                    {activeChapter.chapter.title}
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
                   {audioOnly && (
                     <span className="text-[10px] font-black tracking-widest text-sky-400 uppercase px-2 py-0.5 bg-sky-400/10 border border-sky-400/20 rounded-md">
@@ -1087,12 +1160,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="absolute bottom-0 left-0 right-0 px-8 pb-8 pt-24 z-50 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none"
+            className="absolute bottom-0 left-0 right-0 px-6 sm:px-8 pb-6 sm:pb-8 pt-24 z-50 bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-none"
           >
             {/* Scrubber */}
             <div
               ref={scrubberRef}
-              className={`w-full relative cursor-pointer group/scrubber py-3 -my-3 pointer-events-auto ${isScrubbing ? "cursor-grabbing" : ""}`}
+              className={`w-full min-w-0 max-w-full relative cursor-pointer group/scrubber py-3 -my-3 pointer-events-auto ${isScrubbing ? "cursor-grabbing" : ""}`}
               onMouseDown={handleScrubMouseDown}
               onMouseMove={(e) => {
                 const rect = scrubberRef.current?.getBoundingClientRect();
@@ -1102,289 +1175,292 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               }}
               onMouseLeave={() => setIsHoveringScrubber(false)}
             >
-              <div className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15`}>
-                <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
-                <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${playedBarPercent}%` }} />
-                {isHoveringScrubber && (
-                  <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${scrubberHoverPos}%` }} />
-                )}
-                <div
-                  className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg transition-opacity ${isHoveringScrubber || isScrubbing ? "opacity-100" : "opacity-0"}`}
-                  style={{ left: `${playedBarPercent}%` }}
+              {chapters && chapters.length >= 2 && (duration > 0 || file.duration > 0) ? (
+                <ChapterScrubber
+                  chapters={chapters}
+                  duration={duration > 0 ? duration : file.duration}
+                  currentTime={currentTime}
+                  bufferedPercent={buffered}
+                  playedPercent={playedBarPercent}
+                  hoverPercent={isHoveringScrubber ? scrubberHoverPos : null}
+                  isHovering={isHoveringScrubber}
+                  isScrubbing={isScrubbing}
+                  scrubberThumbs={scrubberThumbs}
+                  formatTime={formatTime}
                 />
-                {isHoveringScrubber && isFinite(duration) && duration > 0 && (
-                  <AnimatePresence>
-                    {scrubberThumbs.length > 0 ? (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
-                        animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
-                        exit={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
-                        className="absolute bottom-full mb-8 z-[100] pointer-events-none"
-                        style={{ left: `${scrubberHoverPos}%` }}
-                      >
-                        <div className="relative p-2 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                          <ScrubberHoverThumb
-                            hoverTimeSec={(scrubberHoverPos / 100) * duration}
-                            duration={duration}
-                            spritePaths={scrubberThumbs}
-                            displayWidth={192}
-                          />
-                          <div className="absolute bottom-3 left-3 right-3 flex justify-center">
-                             <span className="text-xs font-black text-[#271C18] bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">
-                               {formatTime((scrubberHoverPos / 100) * duration)}
-                             </span>
+              ) : (
+                <div className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15`}>
+                  <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
+                  <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${playedBarPercent}%` }} />
+                  {isHoveringScrubber && (
+                    <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${scrubberHoverPos}%` }} />
+                  )}
+                  <div
+                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg transition-opacity ${isHoveringScrubber || isScrubbing ? "opacity-100" : "opacity-0"}`}
+                    style={{ left: `${playedBarPercent}%` }}
+                  />
+                  {isHoveringScrubber && isFinite(duration) && duration > 0 && (
+                    <AnimatePresence>
+                      {scrubberThumbs.length > 0 ? (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
+                          animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
+                          exit={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
+                          className="absolute bottom-full mb-8 z-[100] pointer-events-none"
+                          style={{ left: `${scrubberHoverPos}%` }}
+                        >
+                          <div className="relative p-2 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                            <ScrubberHoverThumb
+                              hoverTimeSec={(scrubberHoverPos / 100) * duration}
+                              duration={duration}
+                              spritePaths={scrubberThumbs}
+                              displayWidth={192}
+                            />
+                            <div className="absolute bottom-2 left-2 right-2 flex justify-center">
+                               <span className="text-xs font-bold tabular-nums text-white bg-black/80 backdrop-blur-md border border-white/15 px-3 py-1 rounded-full shadow-lg">
+                                 {formatTime((scrubberHoverPos / 100) * duration)}
+                               </span>
+                            </div>
                           </div>
+                          <div className="w-px h-6 bg-[#271C18]/50 mx-auto mt-2" />
+                        </motion.div>
+                      ) : (
+                        <div
+                          className="absolute -top-9 -translate-x-1/2 bg-stone-950 border border-white/10 rounded-lg px-2 py-1 text-[10px] font-black tracking-wider text-white pointer-events-none whitespace-nowrap shadow-xl"
+                          style={{ left: `${scrubberHoverPos}%` }}
+                        >
+                          {formatTime((scrubberHoverPos / 100) * duration)}
                         </div>
-                        <div className="w-px h-6 bg-[#271C18]/50 mx-auto mt-2" />
-                      </motion.div>
-                    ) : (
-                      <div
-                        className="absolute -top-9 -translate-x-1/2 bg-stone-950 border border-white/10 rounded-lg px-2 py-1 text-[10px] font-black tracking-wider text-white pointer-events-none whitespace-nowrap shadow-xl"
-                        style={{ left: `${scrubberHoverPos}%` }}
-                      >
-                        {formatTime((scrubberHoverPos / 100) * duration)}
-                      </div>
-                    )}
-                  </AnimatePresence>
-                )}
-              </div>
+                      )}
+                    </AnimatePresence>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Controls Bar */}
-            <div className="flex items-center justify-between mt-3 px-2 pointer-events-auto">
-              {/* Left */}
-              <div className="flex items-center gap-1.5 sm:gap-4">
-                <Tooltip text={isPaused ? "Play" : "Pause"}>
-                  <button
-                    onClick={togglePlay}
-                    className="w-10 h-10 flex items-center justify-center text-stone-200 hover:text-white active:scale-90 transition-all"
-                  >
-                    {isPaused
-                      ? <Play className="w-8 h-8 fill-current ml-0.5" />
-                      : <Pause className="w-8 h-8 fill-current" />
-                    }
-                  </button>
-                </Tooltip>
-
-                <Tooltip text="Rewind 15 Seconds" className="hidden sm:flex">
-                  <button onClick={() => skip(-15)} className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white">
-                    <Icon icon="tabler:rewind-backward-15" width={22} />
-                  </button>
-                </Tooltip>
-                <Tooltip text="Jump 15 Seconds" className="hidden sm:flex">
-                  <button onClick={() => skip(15)} className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white">
-                    <Icon icon="tabler:rewind-forward-15" width={22} />
-                  </button>
-                </Tooltip>
-                {prevInFolder && (
-                  <Tooltip text="Previous in this folder" className="hidden md:flex">
+            {/* Controls dock */}
+            <div className="mt-3 pointer-events-auto min-w-0">
+              <div className="flex items-center justify-between gap-2 rounded-2xl bg-black/70 backdrop-blur-xl border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.55)] px-2 sm:px-3 py-1.5 min-w-0">
+                <div className="flex items-center gap-0.5 sm:gap-1 min-w-0 shrink">
+                  <Tooltip text={isPaused ? "Play" : "Pause"}>
                     <button
                       type="button"
-                      onClick={() => setPlayingFile(prevInFolder)}
-                      className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white"
+                      onClick={togglePlay}
+                      className={`${playerBarBtnClass} inline-flex items-center justify-center`}
                     >
-                      <SkipBack className="w-[18px] h-[18px]" aria-hidden />
+                      {isPaused
+                        ? <Play className="w-5 h-5 fill-current" />
+                        : <Pause className="w-5 h-5 fill-current" />}
                     </button>
                   </Tooltip>
-                )}
-                {nextInFolder && (
-                  <Tooltip text="Next in this folder" className="hidden md:flex">
-                    <button
-                      type="button"
-                      onClick={() => setPlayingFile(nextInFolder)}
-                      className="p-2 text-stone-400 transition-colors active:scale-90 hover:text-white"
-                    >
-                      <SkipForward className="w-[18px] h-[18px]" aria-hidden />
+                  <Tooltip text="Rewind 15s">
+                    <button type="button" onClick={() => skip(-15)} className={playerBarBtnClass}>
+                      <Icon icon="tabler:rewind-backward-15" width={20} />
                     </button>
                   </Tooltip>
-                )}
-
-                {/* Volume */}
-                <div className="flex items-center gap-1.5 sm:gap-3 group/vol ml-0.5 sm:ml-2">
-                  <Tooltip
-                  text={
-                    (isMuted ? "Unmute" : "Mute") +
-                    (audioOnly ? " · WASAPI exclusive mode is configured in Windows sound settings." : "")
-                  }
-                >
-                    <button
-                      onClick={() => setMuted(!isMuted)}
-                      className="p-2 text-stone-400 hover:text-white transition-colors"
-                    >
-                      <VolumeIcon className="w-5 h-5" />
+                  <Tooltip text="Forward 15s">
+                    <button type="button" onClick={() => skip(15)} className={playerBarBtnClass}>
+                      <Icon icon="tabler:rewind-forward-15" width={20} />
                     </button>
                   </Tooltip>
-                  <div
-                    ref={volumeRef}
-                    className={`relative rounded-full cursor-pointer transition-all ${isVolumeDragging ? "cursor-grabbing" : ""} w-0 opacity-0 group-hover/vol:w-24 group-hover/vol:opacity-100 h-1.5 bg-white/15`}
-                    onMouseDown={handleVolumeMouseDown}
-                  >
-                    <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_8px_rgba(39,28,24,0.5)]" style={{ width: `${isMuted ? 0 : volume * 100}%` }} />
+                  <div className="flex items-center gap-0.5 group/vol ml-0.5">
+                    <Tooltip
+                      text={
+                        (isMuted ? "Unmute" : "Mute") +
+                        (audioOnly ? " · Windows sound settings for exclusive mode" : "")
+                      }
+                    >
+                      <button type="button" onClick={() => setMuted(!isMuted)} className={playerBarBtnClass}>
+                        <VolumeIcon className="w-5 h-5" />
+                      </button>
+                    </Tooltip>
                     <div
-                      className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full shadow border border-[#271C18] transition-opacity ${isVolumeDragging ? "opacity-100" : "opacity-0 group-hover/vol:opacity-100"}`}
-                      style={{ left: `${isMuted ? 0 : volume * 100}%` }}
-                    />
+                      ref={volumeRef}
+                      className={`relative rounded-full cursor-pointer transition-all ${isVolumeDragging ? "cursor-grabbing" : ""} w-0 opacity-0 group-hover/vol:w-20 sm:group-hover/vol:w-24 group-hover/vol:opacity-100 h-1.5 bg-white/20 shrink-0`}
+                      onMouseDown={handleVolumeMouseDown}
+                    >
+                      <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full" style={{ width: `${isMuted ? 0 : volume * 100}%` }} />
+                      <div
+                        className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full shadow border border-[#271C18] transition-opacity ${isVolumeDragging ? "opacity-100" : "opacity-0 group-hover/vol:opacity-100"}`}
+                        style={{ left: `${isMuted ? 0 : volume * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex text-[11px] font-mono tabular-nums text-white/75 tracking-wide pl-1 shrink-0">
+                    <span className="text-white">{formatTime(currentTime)}</span>
+                    <span className="text-white/40 mx-1">/</span>
+                    <span>{isFinite(duration) ? formatTime(duration) : "0:00"}</span>
                   </div>
                 </div>
 
-                {/* Time */}
-                <div className="hidden min-[500px]:flex text-xs font-medium text-stone-400 font-mono tracking-wider ml-4 items-center gap-2">
-                  <span className="text-stone-200">{formatTime(currentTime)}</span>
-                  <span>/</span>
-                  <span>{isFinite(duration) ? formatTime(duration) : "0:00"}</span>
-                </div>
-              </div>
-
-              {/* Right */}
-              <div className="flex items-center gap-1 sm:gap-2">
-                <Tooltip text="Toggle Loop Playback" className="hidden md:flex">
-                  <button
-                    onClick={() => setLooping(!isLooping)}
-                    className={`p-2.5 rounded-xl transition-all outline-none border-none ${isLooping ? "text-[color:var(--accent)]" : "text-stone-500 hover:text-white"}`}
-                  >
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.div
-                        key={isLooping ? "looping" : "not-looping"}
-                        initial={{ opacity: 0, rotate: -20, scale: 0.8 }}
-                        animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                        exit={{ opacity: 0, rotate: 20, scale: 0.8 }}
-                        transition={{ duration: 0.15 }}
-                      >
-                        <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={16} height={16} />
-                      </motion.div>
-                    </AnimatePresence>
-                  </button>
-                </Tooltip>
-
-                {/* Speed */}
-                <div className="relative hidden xs:block min-[400px]:block">
-                  <Tooltip text="Playback Speed">
+                <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                  <Tooltip text={isLooping ? "Loop on" : "Loop off"}>
                     <button
-                      onClick={() => setShowSpeedMenu((s) => !s)}
-                      className={`p-2.5 rounded-xl transition-all flex items-center gap-1.5 ${showSpeedMenu ? "text-[#271C18] bg-[#271C18]/10 border border-[#271C18]/20" : "text-stone-500 hover:text-white"}`}
+                      type="button"
+                      onClick={() => setLooping(!isLooping)}
+                      className={`${playerBarBtnClass} ${isLooping ? "text-[color:var(--accent)] bg-white/10" : ""}`}
                     >
-                      <SpeedIcon speed={playbackSpeed} className="w-4 h-4" />
-                      <span className="text-[10px] font-black tracking-wider">{playbackSpeed}×</span>
+                      <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={16} height={16} />
                     </button>
                   </Tooltip>
-                  <AnimatePresence>
-                    {showSpeedMenu && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute bottom-full mb-3 right-0 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[100px]"
-                      >
-                        {PLAYBACK_SPEEDS.map((speed) => (
-                          <button
-                            key={speed}
-                            onClick={() => { setPlaybackSpeed(speed); setShowSpeedMenu(false); }}
-                            className={`w-full px-4 py-2.5 text-left text-[11px] font-black tracking-widest transition-colors ${
-                              playbackSpeed === speed ? "bg-[#271C18] text-white" : "text-stone-400 hover:bg-white/5 hover:text-white"
-                            }`}
-                          >
-                            {speed}×
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                <Tooltip text="Next Up Playlist" className="hidden sm:flex">
-                  <button
-                    onClick={() => setShowPlaylist(!showPlaylist)}
-                    className={`p-2.5 rounded-xl transition-all ${showPlaylist ? "text-[#271C18] bg-[#271C18]/10 border border-[#271C18]/20" : "text-stone-500 hover:text-white"}`}
-                  >
-                    <Layers className="w-4 h-4" />
-                  </button>
-                </Tooltip>
-
-                <Tooltip text="Launch Mini Player" className="hidden sm:flex">
-                  <button onClick={handlePopOut} className="p-2.5 rounded-xl text-stone-500 hover:text-white transition-all">
-                    <Icon icon="material-symbols:tab-unselected-sharp" className="w-5 h-5" />
-                  </button>
-                </Tooltip>
-
-                {/* Subtitles Toggle */}
-                {!audioOnly && subtitleTracks.length > 0 && (
-                  <div className="relative block">
-                    <Tooltip text="Subtitles">
+                  <div className="relative">
+                    <Tooltip text="Playback speed">
                       <button
-                        onClick={() => {
-                          if (subtitleTracks.length > 1) {
-                            setShowSubtitleMenu(!showSubtitleMenu);
-                          } else {
-                            const only = subtitleTracks[0];
-                            if (isSubtitlesEnabled) {
-                              setIsSubtitlesEnabled(false);
-                              onSubtitleToggle?.(false);
-                            } else {
-                              setSelectedSubtitleLang(only.lang);
-                              setIsSubtitlesEnabled(true);
-                              void updateSetting("subtitlePreferredLang", only.lang);
-                              onSubtitleToggle?.(true);
-                            }
-                          }
-                        }}
-                        className={`p-2.5 rounded-xl transition-all ${isSubtitlesEnabled ? "text-[color:var(--accent)]" : "text-stone-500 hover:text-white"}`}
+                        type="button"
+                        onClick={() => { setShowSpeedMenu((s) => !s); setShowPlayerMoreMenu(false); }}
+                        className={`${playerBarBtnClass} flex items-center gap-1 ${showSpeedMenu ? "bg-white/10" : ""}`}
                       >
-                        <Icon 
-                          icon={isSubtitlesEnabled ? "streamline-ultimate:subtitles-bold" : "streamline-ultimate:subtitles"} 
-                          className="w-4 h-4" 
-                        />
+                        <SpeedIcon speed={playbackSpeed} className="w-4 h-4" />
+                        <span className="text-[10px] font-black">{playbackSpeed}×</span>
                       </button>
                     </Tooltip>
-                    
                     <AnimatePresence>
-                      {showSubtitleMenu && (
+                      {showSpeedMenu && (
                         <motion.div
                           initial={{ opacity: 0, y: 8, scale: 0.95 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.95 }}
                           transition={{ duration: 0.15 }}
-                          className="absolute bottom-full mb-3 right-0 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[140px] z-[110] p-1.5"
+                          className="absolute bottom-full mb-2 right-0 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[100px] z-[110]"
                         >
-                          <button
-                            onClick={() => {
-                              setIsSubtitlesEnabled(false);
-                              onSubtitleToggle?.(false);
-                              setShowSubtitleMenu(false);
-                            }}
-                            className={`w-full px-3 py-2 text-left text-[10px] font-black tracking-widest transition-colors rounded-xl flex items-center justify-between ${!isSubtitlesEnabled ? "bg-[color:var(--accent)] text-[#1d1613]" : "text-stone-400 hover:bg-white/5 hover:text-white"}`}
-                          >
-                            <span>OFF</span>
-                            {!isSubtitlesEnabled && <Icon icon="tabler:check" width={12} />}
-                          </button>
-                          <div className="h-px bg-white/5 my-1 mx-2" />
-                          {subtitleTracks.map((track) => (
+                          {PLAYBACK_SPEEDS.map((speed) => (
                             <button
-                              key={track.lang + track.src}
-                              onClick={() => {
-                                setSelectedSubtitleLang(track.lang);
-                                setIsSubtitlesEnabled(true);
-                                void updateSetting("subtitlePreferredLang", track.lang);
-                                onSubtitleToggle?.(true);
-                                setShowSubtitleMenu(false);
-                              }}
-                              className={`w-full px-3 py-2 text-left text-[10px] font-black tracking-widest transition-colors rounded-xl flex items-center justify-between ${isSubtitlesEnabled && selectedSubtitleLang === track.lang ? "bg-[color:var(--accent)] text-[#1d1613]" : "text-stone-400 hover:bg-white/5 hover:text-white"}`}
+                              key={speed}
+                              type="button"
+                              onClick={() => { setPlaybackSpeed(speed); setShowSpeedMenu(false); }}
+                              className={`w-full px-4 py-2.5 text-left text-[11px] font-black tracking-widest transition-colors ${
+                                playbackSpeed === speed ? "bg-[#271C18] text-white" : "text-stone-400 hover:bg-white/5 hover:text-white"
+                              }`}
                             >
-                              <span className="truncate mr-2">{track.label.toUpperCase()}</span>
-                              {isSubtitlesEnabled && selectedSubtitleLang === track.lang && <Icon icon="tabler:check" width={12} />}
+                              {speed}×
                             </button>
                           ))}
                         </motion.div>
                       )}
                     </AnimatePresence>
                   </div>
-                )}
-
-                <Tooltip text="Toggle Fullscreen">
-                  <button onClick={toggleFullscreen} className="p-2.5 rounded-xl text-stone-500 hover:text-white transition-all">
-                    {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                  </button>
-                </Tooltip>
+                  <div className="relative">
+                    <Tooltip text="More controls">
+                      <button
+                        type="button"
+                        onClick={() => { setShowPlayerMoreMenu((s) => !s); setShowSpeedMenu(false); }}
+                        className={`${playerBarBtnClass} ${showPlayerMoreMenu || showPlaylist ? "bg-white/10" : ""}`}
+                      >
+                        <Ellipsis className="w-5 h-5" />
+                      </button>
+                    </Tooltip>
+                    <AnimatePresence>
+                      {showPlayerMoreMenu && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute bottom-full mb-2 right-0 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[200px] z-[110] py-1"
+                        >
+                          {chapters && (
+                            <>
+                              <button type="button" onClick={() => { jumpPrevChapter(); setShowPlayerMoreMenu(false); }} className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white flex items-center gap-2">
+                                <Icon icon="tabler:chevron-left-pipe" width={16} /> Previous chapter
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { jumpNextChapter(); setShowPlayerMoreMenu(false); }}
+                                disabled={activeChapter != null && activeChapter.index >= chapters.length - 1}
+                                className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white disabled:opacity-40 flex items-center gap-2"
+                              >
+                                <Icon icon="tabler:chevron-right-pipe" width={16} /> Next chapter
+                              </button>
+                              <div className="my-1 border-t border-white/10" />
+                            </>
+                          )}
+                          {prevInFolder && (
+                            <button type="button" onClick={() => { setPlayingFile(prevInFolder); setShowPlayerMoreMenu(false); }} className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white flex items-center gap-2">
+                              <SkipBack className="w-4 h-4" /> Previous in folder
+                            </button>
+                          )}
+                          {nextInFolder && (
+                            <button type="button" onClick={() => { setPlayingFile(nextInFolder); setShowPlayerMoreMenu(false); }} className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white flex items-center gap-2">
+                              <SkipForward className="w-4 h-4" /> Next in folder
+                            </button>
+                          )}
+                          {(prevInFolder || nextInFolder) && <div className="my-1 border-t border-white/10" />}
+                          <button
+                            type="button"
+                            onClick={() => { setShowPlaylist(!showPlaylist); setShowPlayerMoreMenu(false); }}
+                            className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-white/5 flex items-center gap-2 ${showPlaylist ? "text-[color:var(--accent)]" : "text-stone-300 hover:text-white"}`}
+                          >
+                            <Layers className="w-4 h-4" /> Up next
+                          </button>
+                          <button type="button" onClick={() => { handlePopOut(); setShowPlayerMoreMenu(false); }} className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white flex items-center gap-2">
+                            <Icon icon="material-symbols:tab-unselected-sharp" className="w-4 h-4" /> Mini player
+                          </button>
+                          {!audioOnly && subtitleTracks.length > 0 && (
+                            <>
+                              <div className="my-1 border-t border-white/10" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (subtitleTracks.length === 1) {
+                                    const only = subtitleTracks[0];
+                                    if (isSubtitlesEnabled) {
+                                      setIsSubtitlesEnabled(false);
+                                      onSubtitleToggle?.(false);
+                                    } else {
+                                      setSelectedSubtitleLang(only.lang);
+                                      setIsSubtitlesEnabled(true);
+                                      void updateSetting("subtitlePreferredLang", only.lang);
+                                      onSubtitleToggle?.(true);
+                                    }
+                                    setShowPlayerMoreMenu(false);
+                                  } else {
+                                    setShowSubtitleMenu((s) => !s);
+                                  }
+                                }}
+                                className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-white/5 flex items-center gap-2 ${isSubtitlesEnabled ? "text-[color:var(--accent)]" : "text-stone-300 hover:text-white"}`}
+                              >
+                                <Icon icon="streamline-ultimate:subtitles" className="w-4 h-4" /> Subtitles
+                              </button>
+                              {showSubtitleMenu && subtitleTracks.length > 1 && (
+                                <div className="px-2 pb-2 space-y-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setIsSubtitlesEnabled(false); onSubtitleToggle?.(false); setShowSubtitleMenu(false); }}
+                                    className={`w-full px-2 py-1.5 rounded-lg text-[10px] font-black text-left ${!isSubtitlesEnabled ? "bg-white/10 text-white" : "text-stone-500 hover:text-white"}`}
+                                  >
+                                    Off
+                                  </button>
+                                  {subtitleTracks.map((track) => (
+                                    <button
+                                      key={track.lang + track.src}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedSubtitleLang(track.lang);
+                                        setIsSubtitlesEnabled(true);
+                                        void updateSetting("subtitlePreferredLang", track.lang);
+                                        onSubtitleToggle?.(true);
+                                        setShowSubtitleMenu(false);
+                                        setShowPlayerMoreMenu(false);
+                                      }}
+                                      className={`w-full px-2 py-1.5 rounded-lg text-[10px] font-black text-left truncate ${isSubtitlesEnabled && selectedSubtitleLang === track.lang ? "bg-white/10 text-white" : "text-stone-500 hover:text-white"}`}
+                                    >
+                                      {track.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  <Tooltip text={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+                    <button type="button" onClick={toggleFullscreen} className={playerBarBtnClass}>
+                      {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </button>
+                  </Tooltip>
+                </div>
               </div>
             </div>
           </motion.div>
