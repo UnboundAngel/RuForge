@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Library,
-  List,
   Music,
   Video,
 } from "lucide-react";
@@ -26,7 +25,6 @@ import { useRuforgeStore } from "../../store/ruforgeStore";
 import {
   DOWNLOAD_JOB_STATUS_LABEL,
   downloadProgressPhaseLabel,
-  RF_DOWNLOADER_PANEL,
 } from "./downloaderConstants";
 import { downloadJobDisplayFileSizeBytes } from "../../downloadJobFileSizes";
 import { formatApproxFileSize } from "./downloaderFormat";
