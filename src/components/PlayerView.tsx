@@ -34,6 +34,7 @@ import { isAudioOnlyPath } from "../mediaKind";
 import { fetchSubtitleTracks, revokeSubtitleBlobSrcs, subtitleTracksWithBlobSrc, syncVideoTextTrackModes, type SubtitleTrack } from "../localVideoSubtitles";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { useSubtitleCueOverlay } from "../useSubtitleCueOverlay";
+import { applyMediaOutputState } from "../applyMediaOutputState";
 
 const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: string }) => {
   const speedToAngle: Record<number, number> = {
@@ -343,12 +344,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   // Sync volume/mute/loop from store to <video> / <audio> (store actions persist flat LS for MiniPlayer)
   useEffect(() => {
-    if (mediaRef.current) {
-      mediaRef.current.volume = volume;
-      mediaRef.current.muted = isMuted;
-      mediaRef.current.loop = isLooping;
-    }
-  }, [volume, isMuted, isLooping]);
+    const el = mediaRef.current;
+    if (!el) return;
+    applyMediaOutputState(el, volume, isMuted);
+    el.loop = isLooping;
+  }, [file.path, volume, isMuted, isLooping]);
 
   // Sync playback speed (preservesPitch reduces time-stretch artifacts when rate ≠ 1)
   useEffect(() => {
@@ -422,7 +422,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     const media = mediaRef.current;
     if (!media) return;
     if (media.paused) {
-      media.play();
+      applyMediaOutputState(media, volume, isMuted);
+      void media.play().catch(() => {});
       setIsPaused(false);
       setClickFlash("play");
     } else {
@@ -432,7 +433,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       writePlaybackPos(file.path, media.currentTime, media.duration);
     }
     setTimeout(() => setClickFlash(null), 500);
-  }, [file.path]);
+  }, [file.path, volume, isMuted]);
+
+  const handleMediaCanPlay = useCallback((el: HTMLMediaElement) => {
+    applyMediaOutputState(el, volume, isMuted);
+  }, [volume, isMuted]);
 
   const handlePlaybackEnded = useCallback(() => {
     if (isLooping) return;
@@ -542,7 +547,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (media) {
       writePlaybackPos(file.path, media.currentTime, media.duration);
       setVolume(media.volume);
-      setMuted(media.muted);
       const wasPlaying = !media.paused;
       media.pause();
       void handlePopOutFromStore(media.currentTime, {
@@ -618,8 +622,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     const vid = mediaRef.current;
     if (!vid) return;
     setDuration(vid.duration);
-    vid.volume = volume;
-    vid.muted = isMuted;
+    applyMediaOutputState(vid, volume, isMuted);
     vid.preservesPitch = true;
     vid.playbackRate = playbackSpeed;
 
@@ -821,6 +824,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               className="absolute w-px h-px opacity-0 pointer-events-none"
               preload="metadata"
               autoPlay
+              onCanPlay={(e) => handleMediaCanPlay(e.currentTarget)}
               onTimeUpdate={handleTimeUpdate}
               onSeeked={handleSeeked}
               onLoadedMetadata={handleLoadedMetadata}
@@ -904,6 +908,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 playsInline
                 preload="metadata"
                 poster={coverArtSrc ? convertFileSrc(coverArtSrc) : undefined}
+                onCanPlay={(e) => handleMediaCanPlay(e.currentTarget)}
                 onTimeUpdate={handleTimeUpdate}
                 onSeeked={handleSeeked}
                 onLoadedMetadata={handleLoadedMetadata}

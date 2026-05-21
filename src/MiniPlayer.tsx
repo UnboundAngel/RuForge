@@ -45,6 +45,7 @@ import {
   readAudioPrefetchNext,
   readAutoDownloadScrubberPreviews,
 } from "./audioPlaybackPrefs";
+import { applyMediaOutputState } from "./applyMediaOutputState";
 import { syncRuforgeAccentCss } from "./accentCss";
 import {
   fetchSubtitleTracks,
@@ -495,11 +496,10 @@ export default function MiniPlayer() {
   }, [playingFile]);
 
   useEffect(() => {
-    if (mediaRef.current) {
-      const targetVol = volumeLabel / 100;
-      mediaRef.current.volume = targetVol;
-    }
-  }, [playingFile, volumeLabel]);
+    const el = mediaRef.current;
+    if (!el) return;
+    applyMediaOutputState(el, volumeLabel / 100, isMuted);
+  }, [playingFile, volumeLabel, isMuted]);
 
   useEffect(() => {
     return () => {
@@ -746,8 +746,11 @@ export default function MiniPlayer() {
     if (isFinite(v.duration) && v.duration > 0) t = Math.min(t, v.duration);
     v.currentTime = t;
     v.playbackRate = payload.playbackSpeed ?? playbackSpeed;
-    v.volume = typeof payload.volume === "number" ? payload.volume : volumeLabel / 100;
-    v.muted = payload.muted ?? isMuted;
+    applyMediaOutputState(
+      v,
+      typeof payload.volume === "number" ? payload.volume : volumeLabel / 100,
+      payload.muted ?? isMuted,
+    );
     if (paused) {
       v.pause();
       setIsPaused(true);
@@ -813,7 +816,7 @@ export default function MiniPlayer() {
   const applyInitialMediaSeek = (v: HTMLMediaElement) => {
     if (isUserSeekingRef.current) return;
     if (!playingFile) return;
-    v.volume = volumeLabel / 100;
+    applyMediaOutputState(v, volumeLabel / 100, isMuted);
     v.preservesPitch = true;
     v.playbackRate = playbackSpeed;
 
@@ -1005,12 +1008,14 @@ export default function MiniPlayer() {
       blockClickRef.current = false;
       return;
     }
-    if (!mediaRef.current) return;
-    if (mediaRef.current.paused) {
-      mediaRef.current.play();
+    const media = mediaRef.current;
+    if (!media) return;
+    if (media.paused) {
+      applyMediaOutputState(media, volumeLabel / 100, isMuted);
+      void media.play().catch(() => {});
       setIsPaused(false);
     } else {
-      mediaRef.current.pause();
+      media.pause();
       setIsPaused(true);
       savePlaybackPos();
     }
@@ -1254,7 +1259,7 @@ export default function MiniPlayer() {
                     paused: media ? media.paused : true,
                     playbackSpeed,
                     volume: media?.volume ?? volumeLabel / 100,
-                    muted: media?.muted ?? isMuted,
+                    muted: isMuted,
                   };
                   if (media && playingFile) {
                     writePlaybackPos(playingFile.path, media.currentTime, media.duration);
@@ -1364,16 +1369,21 @@ export default function MiniPlayer() {
                     onPlay={() => {
                       setIsPaused(false);
                       setIsGalleryHovered(false);
-                      if (mediaRef.current) mediaRef.current.volume = volumeLabel / 100;
+                      if (mediaRef.current) {
+                        applyMediaOutputState(mediaRef.current, volumeLabel / 100, isMuted);
+                      }
                     }}
-                    onLoadedData={(e) => {
-                      e.currentTarget.volume = volumeLabel / 100;
-                    }}
+                    onCanPlay={(e) =>
+                      applyMediaOutputState(e.currentTarget, volumeLabel / 100, isMuted)
+                    }
+                    onLoadedData={(e) =>
+                      applyMediaOutputState(e.currentTarget, volumeLabel / 100, isMuted)
+                    }
                     onLoadedMetadata={(e) => applyInitialMediaSeek(e.currentTarget)}
                     onEnded={() => {
                       if (isLooping && mediaRef.current) {
                         mediaRef.current.currentTime = 0;
-                        mediaRef.current.play();
+                        void mediaRef.current.play().catch(() => {});
                         return;
                       }
                       const v = mediaRef.current;
@@ -1430,16 +1440,21 @@ export default function MiniPlayer() {
                     onPlay={() => {
                       setIsPaused(false);
                       setIsGalleryHovered(false);
-                      if (mediaRef.current) mediaRef.current.volume = volumeLabel / 100;
+                      if (mediaRef.current) {
+                        applyMediaOutputState(mediaRef.current, volumeLabel / 100, isMuted);
+                      }
                     }}
-                    onLoadedData={(e) => {
-                      e.currentTarget.volume = volumeLabel / 100;
-                    }}
+                    onCanPlay={(e) =>
+                      applyMediaOutputState(e.currentTarget, volumeLabel / 100, isMuted)
+                    }
+                    onLoadedData={(e) =>
+                      applyMediaOutputState(e.currentTarget, volumeLabel / 100, isMuted)
+                    }
                     onLoadedMetadata={(e) => applyInitialMediaSeek(e.currentTarget)}
                     onEnded={() => {
                       if (isLooping && mediaRef.current) {
                         mediaRef.current.currentTime = 0;
-                        mediaRef.current.play();
+                        void mediaRef.current.play().catch(() => {});
                         return;
                       }
                       const v = mediaRef.current;
@@ -1959,7 +1974,7 @@ export default function MiniPlayer() {
                               paused: media ? media.paused : true,
                               playbackSpeed,
                               volume: media?.volume ?? volumeLabel / 100,
-                              muted: media?.muted ?? isMuted,
+                              muted: isMuted,
                             };
                             if (media && playingFile) {
                               writePlaybackPos(playingFile.path, media.currentTime, media.duration);
@@ -2017,7 +2032,7 @@ export default function MiniPlayer() {
                               paused: media ? media.paused : true,
                               playbackSpeed,
                               volume: media?.volume ?? volumeLabel / 100,
-                              muted: media?.muted ?? isMuted,
+                              muted: isMuted,
                             };
                             if (media && playingFile) {
                               writePlaybackPos(playingFile.path, media.currentTime, media.duration);
@@ -2087,7 +2102,7 @@ export default function MiniPlayer() {
                               paused: media ? media.paused : true,
                               playbackSpeed,
                               volume: media?.volume ?? volumeLabel / 100,
-                              muted: media?.muted ?? isMuted,
+                              muted: isMuted,
                             };
                             if (media && playingFile) {
                               writePlaybackPos(playingFile.path, media.currentTime, media.duration);
