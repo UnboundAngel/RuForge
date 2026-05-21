@@ -1,3 +1,4 @@
+import { normalizeChapters } from "./chapters";
 import { normalizeDurationSeconds } from "./components/downloader/downloaderFormat";
 import type { MediaFile } from "./types";
 
@@ -19,7 +20,7 @@ export function mediaFileFromGalleryJson(o: Record<string, unknown>): MediaFile 
     thumbnailPath: null,
     ruforgePosterPath: null,
     subtitlePath: null,
-    chapters: Array.isArray(o.chapters) ? (o.chapters as any) : null,
+    chapters: null,
     downloadMetadataHint: null,
     sourceUrl: typeof o.sourceUrl === "string" ? o.sourceUrl : null,
     sourceId:
@@ -34,6 +35,14 @@ export function mediaFileFromGalleryJson(o: Record<string, unknown>): MediaFile 
   if (poster != null && String(poster) !== "") file.ruforgePosterPath = String(poster);
   if (sub != null && String(sub) !== "") file.subtitlePath = String(sub);
   if (hint != null && String(hint) !== "") file.downloadMetadataHint = String(hint);
+
+  const rawChapters = Array.isArray(o.chapters) ? (o.chapters as MediaFile["chapters"]) : null;
+  file.chapters =
+    file.duration > 0
+      ? normalizeChapters(rawChapters, file.duration)
+      : rawChapters && rawChapters.length >= 2
+        ? rawChapters
+        : null;
 
   return file;
 }

@@ -46,6 +46,8 @@ import {
   readAutoDownloadScrubberPreviews,
 } from "./audioPlaybackPrefs";
 import { applyMediaOutputState } from "./applyMediaOutputState";
+import { chapterAtTime, normalizeChapters } from "./chapters";
+import { ChapterScrubber } from "./components/player/ChapterScrubber";
 import { syncRuforgeAccentCss } from "./accentCss";
 import {
   fetchSubtitleTracks,
@@ -997,6 +999,22 @@ export default function MiniPlayer() {
 
   const scrubBarProgressPct = scrubPreviewRatio !== null ? scrubPreviewRatio * 100 : progress;
 
+  const chapters = useMemo(() => {
+    if (!playingFile) return null;
+    const dur =
+      isFinite(duration) && duration > 0
+        ? duration
+        : playingFile.duration > 0
+          ? playingFile.duration
+          : 0;
+    return normalizeChapters(playingFile.chapters, dur);
+  }, [playingFile?.chapters, playingFile?.duration, duration]);
+
+  const activeChapter = useMemo(
+    () => (chapters ? chapterAtTime(chapters, currentTime) : null),
+    [chapters, currentTime],
+  );
+
   useEffect(() => {
     if (!isPaused) {
       setIsGalleryHovered(false);
@@ -1601,7 +1619,7 @@ export default function MiniPlayer() {
                         onMouseLeave={() => setHoverProgress(null)}
                       >
                         <AnimatePresence>
-                          {hoverProgress !== null && scrubberThumbs.length > 0 && isFinite(duration) && duration > 0 && (
+                          {hoverProgress !== null && scrubberThumbs.length > 0 && !chapters && isFinite(duration) && duration > 0 && (
                             <motion.div
                               initial={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
                               animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
@@ -1627,17 +1645,35 @@ export default function MiniPlayer() {
                           )}
                         </AnimatePresence>
 
-                        <div className={`w-full rounded-full relative transition-all duration-300 ${isMini ? (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-3' : 'h-1.5') : (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-4' : 'h-2')} bg-white/15`}>
-                          <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
-                          <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${scrubBarProgressPct}%` }} />
-                          {hoverProgress !== null && (
-                            <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${hoverProgress * 100}%` }} />
-                          )}
-                          <div
-                            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 ${isMini ? 'w-3 h-3' : 'w-4 h-4'} bg-white rounded-full border-2 border-[#271C18] shadow-lg transition-opacity ${hoverProgress !== null || scrubPreviewRatio !== null ? "opacity-100" : "opacity-0"}`}
-                            style={{ left: `${scrubBarProgressPct}%` }}
+                        {chapters && chapters.length >= 2 && (duration > 0 || (playingFile?.duration ?? 0) > 0) ? (
+                          <ChapterScrubber
+                            chapters={chapters}
+                            duration={duration > 0 ? duration : (playingFile?.duration ?? 0)}
+                            currentTime={currentTime}
+                            bufferedPercent={buffered}
+                            playedPercent={scrubBarProgressPct}
+                            hoverPercent={hoverProgress !== null ? hoverProgress * 100 : null}
+                            isHovering={hoverProgress !== null}
+                            isScrubbing={scrubPreviewRatio !== null}
+                            scrubberThumbs={scrubberThumbs}
+                            formatTime={formatTime}
+                            onMouseDown={handleScrubberBarMouseDown}
+                            onMouseMove={handleMouseMoveScrubber}
+                            onMouseLeave={() => setHoverProgress(null)}
                           />
-                        </div>
+                        ) : (
+                          <div className={`w-full rounded-full relative transition-all duration-300 ${isMini ? (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-3' : 'h-1.5') : (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-4' : 'h-2')} bg-white/15`}>
+                            <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
+                            <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${scrubBarProgressPct}%` }} />
+                            {hoverProgress !== null && (
+                              <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${hoverProgress * 100}%` }} />
+                            )}
+                            <div
+                              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 ${isMini ? 'w-3 h-3' : 'w-4 h-4'} bg-white rounded-full border-2 border-[#271C18] shadow-lg transition-opacity ${hoverProgress !== null || scrubPreviewRatio !== null ? "opacity-100" : "opacity-0"}`}
+                              style={{ left: `${scrubBarProgressPct}%` }}
+                            />
+                          </div>
+                        )}
                       </div>
                       
                       <div className="flex items-center justify-between">
@@ -1849,10 +1885,16 @@ export default function MiniPlayer() {
                       {/* Text Info: Title and Artist */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center pointer-events-auto">
                         <MarqueeText text={getTrackTitle(playingFile)} className="text-[12px] font-bold text-stone-100 leading-tight" />
-                        {getArtistName(playingFile) && (
+                        {activeChapter ? (
                           <div className="text-[10px] text-stone-400 leading-tight truncate mt-0.5">
-                            {getArtistName(playingFile)}
+                            {activeChapter.chapter.title}
                           </div>
+                        ) : (
+                          getArtistName(playingFile) && (
+                            <div className="text-[10px] text-stone-400 leading-tight truncate mt-0.5">
+                              {getArtistName(playingFile)}
+                            </div>
+                          )
                         )}
                       </div>
 

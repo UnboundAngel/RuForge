@@ -1,6 +1,9 @@
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
-use crate::utils::{is_media_ext, primary_vtt_sidecar, POSTER_FILE, THUMB_DIR_NAME};
+use crate::utils::{is_media_ext, primary_vtt_sidecar, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chapter {
@@ -73,6 +76,54 @@ fn source_id_from_ytdlp_info(json: &serde_json::Value) -> Option<String> {
         .map(String::from)
 }
 
+/// Sort, fix end times, drop invalid rows. Returns None if fewer than two chapters.
+fn normalize_ytdlp_chapters(raw: Vec<Chapter>, duration: f64) -> Option<Vec<Chapter>> {
+    let mut out: Vec<Chapter> = raw
+        .into_iter()
+        .filter(|c| c.start_time.is_finite() && c.start_time >= 0.0)
+        .collect();
+    if out.is_empty() {
+        return None;
+    }
+    out.sort_by(|a, b| {
+        a.start_time
+            .partial_cmp(&b.start_time)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let dur = if duration.is_finite() && duration > 0.0 {
+        duration
+    } else {
+        0.0
+    };
+    let n = out.len();
+    for i in 0..n {
+        let next_start = if i + 1 < n {
+            out[i + 1].start_time
+        } else {
+            dur
+        };
+        let end = out[i].end_time;
+        if !end.is_finite() || end <= out[i].start_time {
+            out[i].end_time = if next_start > out[i].start_time {
+                next_start
+            } else if dur > out[i].start_time {
+                dur
+            } else {
+                out[i].start_time + 1.0
+            };
+        } else if dur > 0.0 && out[i].end_time > dur {
+            out[i].end_time = dur;
+        }
+        if out[i].title.trim().is_empty() {
+            out[i].title = "Chapter".to_string();
+        }
+    }
+    if out.len() < 2 {
+        return None;
+    }
+    Some(out)
+}
+
 fn ytdlp_sidecar_metadata(
     info_json_path: &std::path::Path,
 ) -> (
@@ -93,17 +144,36 @@ fn ytdlp_sidecar_metadata(
                 .or_else(|| json["duration"].as_i64().map(|i| i as f64))
                 .filter(|d| d.is_finite() && *d >= 0.0)
                 .unwrap_or(0.0);
-            let chapters = json["chapters"].as_array().map(|arr| {
-                arr.iter()
-                    .filter_map(|c| {
-                        Some(Chapter {
-                            title: c["title"].as_str().unwrap_or("Chapter").to_string(),
-                            start_time: c["start_time"].as_f64().unwrap_or(0.0),
-                            end_time: c["end_time"].as_f64().unwrap_or(0.0),
+            let raw_chapters: Vec<Chapter> = json["chapters"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|c| {
+                            let start = c["start_time"]
+                                .as_f64()
+                                .or_else(|| c["start_time"].as_u64().map(|u| u as f64))
+                                .or_else(|| c["start_time"].as_i64().map(|i| i as f64))?;
+                            if !start.is_finite() || start < 0.0 {
+                                return None;
+                            }
+                            let end = c["end_time"]
+                                .as_f64()
+                                .or_else(|| c["end_time"].as_u64().map(|u| u as f64))
+                                .or_else(|| c["end_time"].as_i64().map(|i| i as f64))
+                                .unwrap_or(0.0);
+                            Some(Chapter {
+                                title: c["title"]
+                                    .as_str()
+                                    .unwrap_or("Chapter")
+                                    .to_string(),
+                                start_time: start,
+                                end_time: end,
+                            })
                         })
-                    })
-                    .collect::<Vec<Chapter>>()
-            });
+                        .collect()
+                })
+                .unwrap_or_default();
+            let chapters = normalize_ytdlp_chapters(raw_chapters, duration);
             let metadata_title = json["title"]
                 .as_str()
                 .map(str::trim)
@@ -223,7 +293,7 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             source_id,
         });
     }
-    files
+    dedupe_media_files(files)
 }
 
 fn download_metadata_hint_from_ytdlp_info(json: &serde_json::Value) -> Option<String> {
@@ -283,6 +353,288 @@ fn yt_dlp_codec_token(raw: Option<&serde_json::Value>) -> Option<String> {
 
 fn gallery_skip_subdirectory(folder_name: &str) -> bool {
     folder_name.starts_with('.') || folder_name == THUMB_DIR_NAME
+}
+
+/// Stable key for collapsing multiple on-disk outputs of the same YouTube item.
+pub(crate) fn media_library_dedupe_key(file: &MediaFile) -> Option<String> {
+    if let Some(id) = file
+        .source_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        return Some(format!("id:{id}"));
+    }
+    if let Some(url) = file
+        .source_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        return Some(format!("url:{url}"));
+    }
+    None
+}
+
+/// Higher score wins when two library files share a dedupe key (prefer muxed video).
+pub(crate) fn media_library_keep_score(path: &Path, file: &MediaFile) -> u64 {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let mut score: u64 = 0;
+    if matches!(ext.as_str(), "mp4" | "mkv" | "webm") {
+        score = score.saturating_add(2_000_000_000);
+    } else if is_media_ext(&ext) {
+        score = score.saturating_add(500_000_000);
+    }
+    if file.duration.is_finite() && file.duration > 0.0 {
+        score = score.saturating_add((file.duration as u64).min(50_000_000));
+    }
+    score.saturating_add(file.size.min(1_000_000_000))
+}
+
+pub(crate) fn dedupe_media_files(files: Vec<MediaFile>) -> Vec<MediaFile> {
+    let mut best_by_key: HashMap<String, MediaFile> = HashMap::new();
+    let mut key_order: Vec<String> = Vec::new();
+    let mut no_key: Vec<MediaFile> = Vec::new();
+
+    for file in files {
+        let path = Path::new(&file.path);
+        let Some(key) = media_library_dedupe_key(&file) else {
+            no_key.push(file);
+            continue;
+        };
+        let score = media_library_keep_score(path, &file);
+        match best_by_key.get(&key) {
+            Some(prev) => {
+                let prev_score = media_library_keep_score(Path::new(&prev.path), prev);
+                if score > prev_score {
+                    best_by_key.insert(key, file);
+                }
+            }
+            None => {
+                key_order.push(key.clone());
+                best_by_key.insert(key, file);
+            }
+        }
+    }
+
+    let mut out = no_key;
+    for key in key_order {
+        if let Some(file) = best_by_key.remove(&key) {
+            out.push(file);
+        }
+    }
+    out
+}
+
+fn dedupe_gallery_entries(entries: Vec<GalleryEntry>) -> Vec<GalleryEntry> {
+    let mut best_idx_by_key: HashMap<String, usize> = HashMap::new();
+    let mut remove_indices: HashSet<usize> = HashSet::new();
+
+    for (i, entry) in entries.iter().enumerate() {
+        let GalleryEntry::Media { file } = entry else {
+            continue;
+        };
+        let Some(key) = media_library_dedupe_key(file) else {
+            continue;
+        };
+        let score = media_library_keep_score(Path::new(&file.path), file);
+        if let Some(&prev_i) = best_idx_by_key.get(&key) {
+            let GalleryEntry::Media { file: prev_file } = &entries[prev_i] else {
+                continue;
+            };
+            let prev_score = media_library_keep_score(Path::new(&prev_file.path), prev_file);
+            if score > prev_score {
+                remove_indices.insert(prev_i);
+                best_idx_by_key.insert(key, i);
+            } else {
+                remove_indices.insert(i);
+            }
+        } else {
+            best_idx_by_key.insert(key, i);
+        }
+    }
+
+    entries
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, entry)| {
+            if remove_indices.contains(&i) {
+                return None;
+            }
+            match entry {
+                GalleryEntry::Playlist { mut playlist } => {
+                    playlist.items = dedupe_media_files(playlist.items);
+                    playlist.item_count = playlist.items.len() as u32;
+                    Some(GalleryEntry::Playlist { playlist })
+                }
+                other => Some(other),
+            }
+        })
+        .collect()
+}
+
+/// Remove a stray media file from a finished download (sidecars + RuForge thumb dir).
+pub(crate) fn remove_media_download_artifacts(media_path: &Path) {
+    let parent = match media_path.parent() {
+        Some(p) => p,
+        None => return,
+    };
+    let stem = match media_path.file_stem().and_then(|s| s.to_str()) {
+        Some(s) => s,
+        None => return,
+    };
+
+    if media_path.is_file() {
+        let _ = std::fs::remove_file(media_path);
+    }
+
+    for name in [
+        format!("{stem}.jpg"),
+        format!("{stem}.webp"),
+        format!("{stem}.info.json"),
+        format!("{stem}..info.json"),
+    ] {
+        let p = parent.join(&name);
+        if p.is_file() {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+
+    if let Ok(vtts) = vtt_sidecars_for_stem(parent, stem) {
+        for (p, _) in vtts {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+
+    let thumb_dir = parent.join(THUMB_DIR_NAME).join(stem);
+    if thumb_dir.is_dir() {
+        let _ = std::fs::remove_dir_all(&thumb_dir);
+    }
+}
+
+fn collect_recent_media_paths(root: &Path, since: std::time::SystemTime) -> Vec<std::path::PathBuf> {
+    const SLACK_SECS: u64 = 15;
+    let cutoff = since
+        .checked_sub(std::time::Duration::from_secs(SLACK_SECS))
+        .unwrap_or(since);
+    let mut out: Vec<std::path::PathBuf> = Vec::new();
+
+    fn walk(
+        dir: &Path,
+        depth: u32,
+        max_depth: u32,
+        cutoff: std::time::SystemTime,
+        out: &mut Vec<std::path::PathBuf>,
+    ) {
+        if depth > max_depth {
+            return;
+        }
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for ent in rd.flatten() {
+            let p = ent.path();
+            if p.is_dir() {
+                let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if !gallery_skip_subdirectory(fname) {
+                    walk(&p, depth + 1, max_depth, cutoff, out);
+                }
+                continue;
+            }
+            if !p.is_file() {
+                continue;
+            }
+            let ext = p
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if !is_media_ext(&ext) {
+                continue;
+            }
+            let recent = std::fs::metadata(&p)
+                .and_then(|m| m.modified())
+                .map(|t| t >= cutoff)
+                .unwrap_or(true);
+            if recent {
+                out.push(p);
+            }
+        }
+    }
+
+    if root.is_dir() {
+        walk(root, 0, 8, cutoff, &mut out);
+    }
+    out.sort();
+    out
+}
+
+/// After a successful muxed download, drop orphan audio/intermediate outputs that share the same video id.
+pub(crate) fn cleanup_orphan_downloads_under(root: &Path, since: std::time::SystemTime) {
+    let paths = collect_recent_media_paths(root, since);
+    if paths.len() < 2 {
+        return;
+    }
+
+    let mut groups: HashMap<String, Vec<(std::path::PathBuf, u64, MediaFile)>> = HashMap::new();
+
+    for path in paths {
+        let metadata = match std::fs::metadata(&path) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let parent = path.parent().unwrap_or(Path::new(""));
+        let sidecar = resolve_info_json_path(parent, stem);
+        let (duration, chapters, metadata_title, download_metadata_hint, source_url, source_id) =
+            sidecar
+                .as_deref()
+                .map(ytdlp_sidecar_metadata)
+                .unwrap_or((0.0, None, None, None, None, None));
+        let file = MediaFile {
+            name: metadata_title.unwrap_or_else(|| stem.to_string()),
+            path: path.to_string_lossy().to_string(),
+            size: metadata.len(),
+            created: 0,
+            duration,
+            thumbnail_path: None,
+            ruforge_poster_path: None,
+            subtitle_path: None,
+            chapters,
+            download_metadata_hint,
+            source_url,
+            source_id,
+        };
+        let Some(key) = media_library_dedupe_key(&file) else {
+            continue;
+        };
+        let score = media_library_keep_score(&path, &file);
+        groups
+            .entry(key)
+            .or_default()
+            .push((path, score, file));
+    }
+
+    for (key, mut group) in groups {
+        if group.len() < 2 {
+            continue;
+        }
+        group.sort_by(|a, b| b.1.cmp(&a.1));
+        let keeper_path = group.first().expect("len >= 2").0.clone();
+        for (path, _, _) in group.into_iter().skip(1) {
+            log::info!(
+                "[RuForge] removing orphan download output {:?} (kept {:?}, key {})",
+                path,
+                keeper_path,
+                key
+            );
+            remove_media_download_artifacts(&path);
+        }
+    }
 }
 
 #[tauri::command]
@@ -355,7 +707,7 @@ pub async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
         }
     }
 
-    Ok(out)
+    Ok(dedupe_gallery_entries(out))
 }
 
 fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {

@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::download_job_manager::{kill_ytdlp_tree, DownloadJobManager};
 use crate::ytdlp_binary::ytdlp_shell_command;
 
+use crate::commands::gallery::cleanup_orphan_downloads_under;
 use crate::commands::media::extract_frames;
 use crate::utils::is_media_ext;
 
@@ -1494,8 +1495,10 @@ pub async fn start_download_job(
                     if payload.code == Some(0) {
                         let diag_root_log = diag_root.clone();
                         let started_log = download_started_at;
+                        let cleanup_root = diag_root.clone();
                         let _ = tokio::task::spawn_blocking(move || {
                             log_post_download_files_written(&diag_root_log, started_log);
+                            cleanup_orphan_downloads_under(&cleanup_root, started_log);
                         });
                         if auto_scrub {
                             spawn_scrub_previews_for_recent_videos(
