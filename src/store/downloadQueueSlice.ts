@@ -215,26 +215,33 @@ async function hydrateDownloadJobMetadata(
 
 /** Legacy hero bindings mirror `focusedJobId` when that job is downloading. */
 /** Clear downloader hero fields when they still show a URL that just finished or was removed. */
+const HERO_CLEAR_FIELDS = {
+  url: "",
+  videoInfo: null,
+  videoInfoUrl: null,
+  videoInfoPreferredQuality: null,
+  metadataError: null,
+} as const;
+
 function heroClearPatchForUrl(
   state: Pick<RuforgeStore, "url">,
   matchUrl: string | undefined,
-): {
-  url?: string;
-  videoInfo?: null;
-  videoInfoUrl?: null;
-  videoInfoPreferredQuality?: null;
-  metadataError?: null;
-} {
+): Partial<typeof HERO_CLEAR_FIELDS> {
   if (!matchUrl?.trim()) return {};
   const heroUrl = state.url.trim();
   if (!heroUrl || !youtubeUrlsMatch(heroUrl, matchUrl)) return {};
-  return {
-    url: "",
-    videoInfo: null,
-    videoInfoUrl: null,
-    videoInfoPreferredQuality: null,
-    metadataError: null,
-  };
+  return { ...HERO_CLEAR_FIELDS };
+}
+
+/** Drop bar + hero metadata when the URL is no longer represented in the queue. */
+function heroClearWhenUrlNotInQueue(
+  state: Pick<RuforgeStore, "url">,
+  jobs: DownloadJob[],
+): Partial<typeof HERO_CLEAR_FIELDS> {
+  const heroUrl = state.url.trim();
+  if (!heroUrl.startsWith("http")) return {};
+  if (jobs.some((j) => youtubeUrlsMatch(j.url, heroUrl))) return {};
+  return { ...HERO_CLEAR_FIELDS };
 }
 
 function syncLegacyDownloaderUi(
@@ -791,7 +798,7 @@ export const createDownloadQueueSlice: StateCreator<
           downloadJobs,
           focusedJobId: focus,
           ...syncLegacyDownloaderUi(downloadJobs, focus),
-          ...heroClearPatchForUrl(s, removedUrl),
+          ...heroClearWhenUrlNotInQueue(s, downloadJobs),
         };
       });
       evictDownloadJobMetadataCacheIfOrphaned(removedUrl, get().downloadJobs);

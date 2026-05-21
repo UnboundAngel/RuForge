@@ -212,6 +212,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Downloader hero progress**: removed top-right and traveling percent; 0/100 flank bar only, speed/time under bar. `DownloaderView.tsx`.
+- **Downloader URL chip**: hide paperclip when URL is not in queue; clear bar hero on remove when URL has no queue row; prune pinned quick-enqueue chips. `useDownloaderView.ts`, `downloadQueueSlice.ts`.
 - **Downloader floating queue**: drawer is one attached unit (top-left handle + panel); width collapse hides content fully; bottom-right float; viewport-aware portaled tooltips. `DownloadJobQueuePanel.tsx`.
 - **Downloader floating queue (expanded)**: redesigned expanded queue state; removed all section and border dividers; consolidated status, sizes, and format details into a single horizontal dot-separated paragraph to prevent layout wrapping; hid secondary actions and reordering chevrons behind dynamic hover/focus states to eliminate button clutter; transitioned small audio/video toggle to high-fidelity Music/Video Lucide icons. `DownloadJobQueuePanel.tsx`.
 - **Downloader floating queue (initial)**: moved queue panel to collapsible bottom-right floating pop-up card; added full-card faded, blurred, active-hover crossfading backdrop thumbnails; morphed left-side thumbnail directly into card surface via a CSS linear-gradient mask to remove hard-bordered boxes; integrated overflow MarqueeText titles; created z-index focus overlays to prevent outline clipping on cards. `DownloadJobQueuePanel.tsx`.
