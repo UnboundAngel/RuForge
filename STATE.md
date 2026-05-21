@@ -45,8 +45,10 @@ Fixes:
 
 **0.1.7 unreleased:** (see AGENTS.md Shipped log, keep in sync)
 
+- SponsorBlock: read-only segments for downloaded YouTube (`sourceId`), main player skip/adaptive learning, Playback settings tree (`sponsorBlockEnabled` default false until ship).
+- Settings: new Playback tab (audio advance, prefetch, SponsorBlock tree); migrated rows off Advanced.
 - Player: chapter scrub hover (playhead at play, per-segment hover fill, balanced preview gap); frosted control dock with More menu.
-- Download duplicates: post-download cleanup and gallery dedupe by YouTube id so one URL does not leave two library cards (orphan audio/intermediate).
+- Download duplicates: gallery groups muxed + `.fNNN` leftovers (shared info.json/title), sweeps folder on scan, cross-dir dedupe in store (fixes recurring twin cards).
 - Player chapters: segmented scrubber from `.info.json` metadata, active chapter label, prev/next and Shift+arrow chapter jumps (main + mini).
 - Downloader hero progress: 0/100 flank the bar only (no traveling percent); speed/time under the bar instead of bottom-right.
 - Downloader URL chip: paperclip hidden when URL left the queue; bar hero clears on remove if no row matches; pinned chips pruned with queue.
@@ -87,6 +89,7 @@ Fixes:
 
 ## Notes (not P0)
 
+- SponsorBlock is fully integrated and polished. The master toggle is enabled by default. Spec: `.cursor/plans/sponsorblock_player_polish_9c15f856.plan.md`.
 - Authorize Cleanup (#8) is shipped and works via AuthorizeCleanupModal +
   delete_media_batch toward ~75% of the storage cap. The legacy Rust
   authorize_cleanup command is not used by the UI. Do not list this as broken.

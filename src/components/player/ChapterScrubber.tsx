@@ -10,6 +10,7 @@ import {
 } from "../../chapters";
 import { ScrubberHoverThumb } from "../../scrubSpritePreview";
 import { MarqueeText } from "../downloader/DownloadJobQueuePanel";
+import { sbScrubRangeStyle, sbSegmentColor } from "../../sponsorBlockColors";
 
 const THUMB_W = 192;
 const THUMB_FRAME_PAD = 8; // p-2 per side
@@ -30,6 +31,11 @@ type ChapterScrubberProps = {
   onMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
   onMouseMove?: (e: React.MouseEvent<HTMLDivElement>) => void;
   onMouseLeave?: () => void;
+  overlay?: {
+    skipRanges: { start: number; end: number; category: string }[];
+    chapterRanges: { start: number; end: number }[];
+    poiTimes: { time: number; description?: string }[];
+  };
 };
 
 function ChapterScrubPreview({
@@ -132,6 +138,7 @@ export function ChapterScrubber({
   onMouseDown,
   onMouseMove,
   onMouseLeave,
+  overlay,
 }: ChapterScrubberProps) {
   const gridCols = useMemo(
     () => chapterGridTemplateColumns(chapters, duration),
@@ -185,6 +192,60 @@ export function ChapterScrubber({
               : 0;
           const isHoveredChapter = isHovering && i === activeHoverIndex;
 
+          const chDuration = ch.end_time - ch.start_time;
+
+          // Compute SponsorBlock skips overlapping with this chapter
+          const sbSkips = overlay?.skipRanges
+            ? overlay.skipRanges
+                .map((r) => {
+                  const overlapStart = Math.max(r.start, ch.start_time);
+                  const overlapEnd = Math.min(r.end, ch.end_time);
+                  if (overlapEnd > overlapStart && chDuration > 0) {
+                    const leftPct = ((overlapStart - ch.start_time) / chDuration) * 100;
+                    const widthPct = ((overlapEnd - overlapStart) / chDuration) * 100;
+                    const rangeStyle = sbScrubRangeStyle(r.category, "skip");
+                    if (rangeStyle) {
+                      return { leftPct, widthPct, color: rangeStyle.backgroundColor, opacity: rangeStyle.opacity };
+                    }
+                  }
+                  return null;
+                })
+                .filter(Boolean)
+            : [];
+
+          // Compute SponsorBlock chapters overlapping with this chapter
+          const sbChaps = overlay?.chapterRanges
+            ? overlay.chapterRanges
+                .map((r) => {
+                  const overlapStart = Math.max(r.start, ch.start_time);
+                  const overlapEnd = Math.min(r.end, ch.end_time);
+                  if (overlapEnd > overlapStart && chDuration > 0) {
+                    const leftPct = ((overlapStart - ch.start_time) / chDuration) * 100;
+                    const widthPct = ((overlapEnd - overlapStart) / chDuration) * 100;
+                    const rangeStyle = sbScrubRangeStyle("chapter", "chapter");
+                    if (rangeStyle) {
+                      return { leftPct, widthPct, color: rangeStyle.backgroundColor, opacity: rangeStyle.opacity };
+                    }
+                  }
+                  return null;
+                })
+                .filter(Boolean)
+            : [];
+
+          // Compute SponsorBlock POIs inside this chapter
+          const sbPois = overlay?.poiTimes
+            ? overlay.poiTimes
+                .map((p) => {
+                  if (p.time >= ch.start_time && p.time <= ch.end_time && chDuration > 0) {
+                    const leftPct = ((p.time - ch.start_time) / chDuration) * 100;
+                    const tickColor = sbSegmentColor("poi_highlight", "poi") || "#EAB308";
+                    return { leftPct, color: tickColor };
+                  }
+                  return null;
+                })
+                .filter(Boolean)
+            : [];
+
           return (
             <div
               key={`${ch.start_time}-${i}`}
@@ -199,6 +260,46 @@ export function ChapterScrubber({
                 transformOrigin: "bottom center",
               }}
             >
+              {/* SponsorBlock skip ranges inside chapter capsule */}
+              {sbSkips.map((s, idx) => s && (
+                <div
+                  key={`sb-skip-${idx}`}
+                  className="absolute top-0 bottom-0 pointer-events-none z-[1]"
+                  style={{
+                    left: `${s.leftPct}%`,
+                    width: `${s.widthPct}%`,
+                    backgroundColor: s.color,
+                    opacity: s.opacity,
+                  }}
+                />
+              ))}
+
+              {/* SponsorBlock chapter ranges inside chapter capsule */}
+              {sbChaps.map((s, idx) => s && (
+                <div
+                  key={`sb-chap-${idx}`}
+                  className="absolute top-0 bottom-0 pointer-events-none z-[1]"
+                  style={{
+                    left: `${s.leftPct}%`,
+                    width: `${s.widthPct}%`,
+                    backgroundColor: s.color,
+                    opacity: s.opacity,
+                  }}
+                />
+              ))}
+
+              {/* SponsorBlock POI vertical tick lines (no dots!) inside chapter capsule */}
+              {sbPois.map((p, idx) => p && (
+                <div
+                  key={`sb-poi-${idx}`}
+                  className="absolute top-0 bottom-0 w-[2.5px] -translate-x-1/2 opacity-95 z-[3] pointer-events-none rounded-sm"
+                  style={{
+                    left: `${p.leftPct}%`,
+                    backgroundColor: p.color,
+                  }}
+                />
+              ))}
+
               <div
                 className="absolute top-0 left-0 h-full bg-white/25 rounded-full pointer-events-none"
                 style={{ width: `${isFuture ? 0 : localBuffered}%` }}

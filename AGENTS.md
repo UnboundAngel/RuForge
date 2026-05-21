@@ -212,6 +212,12 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Download duplicate library rows (fix)**: dedupe and post-download cleanup group `.fNNN` video-only leftovers with muxed outputs via shared `Title.info.json`, title fallback, folder sweep on scan; cross-dir merge in `fetchEntries`. `gallery.rs`, `galleryDedupe.ts`, `ruforgeStore.ts`.
+- **SponsorBlock polish**: added extension-aligned color map, overlay for skip ranges and POI ticks across scrubbers, skip button fill, default-on master toggle. `useSponsorBlockPlayback.ts`, `SponsorBlockScrubOverlay.tsx`, `SponsorBlockSkipButton.tsx`, `PlayerView.tsx`.
+
+- **Settings UI**: short descriptions always visible, info icon only when long; SponsorBlock uses same SettingItem row rhythm (FadingDivider, nested indent, chevron collapse); bundled logo `src/assets/sponsorblock.svg`. `settingsDescription.tsx`, `SponsorBlockSettingsTree.tsx`.
+- **SponsorBlock**: privacy hash fetch, `{stem}.sponsorblock.json` sidecar, silent API fail; main player skip button, adaptive per-category learning, chapter/poi bar markers; Settings Playback tab with tree UI. `sponsorblock.rs`, `useSponsorBlockPlayback.ts`, `SponsorBlockSettingsTree.tsx`, `PlayerView.tsx`.
+- **Settings Playback tab**: moved auto-advance audio, prefetch, ReplayGain placeholder from Advanced; added `playback` tab in `App.tsx` / `types.ts`.
 - **Chapter scrubber perf**: removed duplicate scrub hover handlers on main player (parent bubble only). `PlayerView.tsx`, `ChapterScrubber.tsx`.
 - **Player chapter scrubber layout**: CSS grid `fr` columns (no flex % + gap overflow); global hover line aligned with cursor/thumbnail. **Player controls dock**: frosted bar, primary actions visible, secondary in More menu. `ChapterScrubber.tsx`, `chapters.ts`, `PlayerView.tsx`.
 - **Player chapter scrubber visibility**: restored separated rounded segment pills (`gap-[3px]` grid, per-chapter `rounded-full`); raw chapters kept when scan duration is 0; normalize on video duration. `ChapterScrubber.tsx`, `PlayerView.tsx`, `galleryScan.ts`.

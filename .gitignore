@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+target/
 dist-ssr
 *.local
 
@@ -36,6 +37,9 @@ src-tauri/target/
 
 # IDE / local plans
 .cursor/
+
+# Removed bundled browser extension (do not re-add)
+src-tauri/extensions/ublock/
 
 # Ad-hoc archives and large optional FFmpeg binaries (see AGENTS.md; do not commit multi-hundred-MB exes)
 ffmpeg.7z

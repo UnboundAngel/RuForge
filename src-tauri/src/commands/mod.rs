@@ -6,5 +6,6 @@ pub mod media;
 pub mod notify_overlay;
 pub mod player;
 pub mod settings;
+pub mod sponsorblock;
 pub mod system;
 pub mod ytdlp_update;

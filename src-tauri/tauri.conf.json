@@ -43,7 +43,6 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
-    "resources": ["extensions/ublock/**/*"],
     "externalBin": [
       "binaries/yt-dlp",
       "binaries/ffmpeg",

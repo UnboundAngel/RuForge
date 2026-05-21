@@ -1,13 +1,29 @@
-export type ActiveTab = "downloader" | "media" | "player" | "settings" | "explorer";
-
-export type SettingsTab = "general" | "downloads" | "appearance" | "advanced";
-
-export type GalleryFilter = "all" | "in-progress" | "watched";
-
+import type {
+  SponsorBlockCategoryMode,
+  SponsorBlockCategoryStats,
+  SponsorBlockSkipCategory,
+} from "../sponsorBlock";
+import {
+  defaultCategoryModes,
+  defaultCategoryStats,
+  mergeCategoryModes,
+  mergeCategoryStats,
+} from "../sponsorBlock";
 import {
   DEFAULT_OUTPUT_DIR,
   RUFORGE_INTERNAL_DIR,
 } from "../platformPaths";
+
+export type ActiveTab = "downloader" | "media" | "player" | "settings" | "explorer";
+
+export type SettingsTab =
+  | "general"
+  | "downloads"
+  | "playback"
+  | "appearance"
+  | "advanced";
+
+export type GalleryFilter = "all" | "in-progress" | "watched";
 
 export { DEFAULT_OUTPUT_DIR, RUFORGE_INTERNAL_DIR };
 
@@ -83,6 +99,10 @@ export interface RuforgeSettings {
   autoDownloadScrubberPreviews: boolean;
   /** Parallel yt-dlp jobs (`downloadQueueSlice.maxConcurrentDownloads` mirrors this). */
   maxConcurrentDownloads: number;
+  /** Master SponsorBlock toggle (default false until feature ships). */
+  sponsorBlockEnabled: boolean;
+  sponsorBlockCategoryModes: Record<SponsorBlockSkipCategory, SponsorBlockCategoryMode>;
+  sponsorBlockCategoryStats: Record<SponsorBlockSkipCategory, SponsorBlockCategoryStats>;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -106,6 +126,9 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   skipDuplicatesAutomatically: false,
   autoDownloadScrubberPreviews: true,
   maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+  sponsorBlockEnabled: true,
+  sponsorBlockCategoryModes: defaultCategoryModes(),
+  sponsorBlockCategoryStats: defaultCategoryStats(),
 };
 
 export function loadMergedSettings(): RuforgeSettings {
@@ -118,6 +141,9 @@ export function loadMergedSettings(): RuforgeSettings {
     return {
       ...merged,
       maxConcurrentDownloads: clampMaxConcurrentDownloads(merged.maxConcurrentDownloads),
+      sponsorBlockEnabled: merged.sponsorBlockEnabled === true,
+      sponsorBlockCategoryModes: mergeCategoryModes(merged.sponsorBlockCategoryModes),
+      sponsorBlockCategoryStats: mergeCategoryStats(merged.sponsorBlockCategoryStats),
     };
   } catch {
     return DEFAULT_SETTINGS;
