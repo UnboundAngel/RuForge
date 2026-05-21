@@ -348,12 +348,12 @@ export function useDownloaderView({
       if (j.approval === "manual") continue;
       if (j.status === "queued" || j.status === "paused") {
         if (!findLibraryDuplicate(j.url, st.entries)) continue;
-        skipDownloadJobAsLibraryDuplicate(j.id);
+        void skipDownloadJobAsLibraryDuplicate(j.id);
         continue;
       }
       if (j.status === "downloading" && !jobHasDownloadTransferStarted(j)) {
         if (!findLibraryDuplicate(j.url, st.entries)) continue;
-        skipDownloadJobAsLibraryDuplicate(j.id);
+        void skipDownloadJobAsLibraryDuplicate(j.id);
       }
     }
   }, [

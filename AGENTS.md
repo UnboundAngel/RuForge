@@ -212,6 +212,7 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Download cancellation correctness**: duplicate auto-skip and queue removal stop active yt-dlp before hiding rows; paused events no longer overwrite skipped rows; near-100% downloads use processing idle budgets; Unix pause/stop also targets direct child processes. `downloadQueueSlice.ts`, `downloadJobWatchdog.ts`, `download_job_manager.rs`.
 - **Downloader floating queue**: drawer is one attached unit (top-left handle + panel); width collapse hides content fully; bottom-right float; viewport-aware portaled tooltips. `DownloadJobQueuePanel.tsx`.
 - **Downloader floating queue (expanded)**: redesigned expanded queue state; removed all section and border dividers; consolidated status, sizes, and format details into a single horizontal dot-separated paragraph to prevent layout wrapping; hid secondary actions and reordering chevrons behind dynamic hover/focus states to eliminate button clutter; transitioned small audio/video toggle to high-fidelity Music/Video Lucide icons. `DownloadJobQueuePanel.tsx`.
 - **Downloader floating queue (initial)**: moved queue panel to collapsible bottom-right floating pop-up card; added full-card faded, blurred, active-hover crossfading backdrop thumbnails; morphed left-side thumbnail directly into card surface via a CSS linear-gradient mask to remove hard-bordered boxes; integrated overflow MarqueeText titles; created z-index focus overlays to prevent outline clipping on cards. `DownloadJobQueuePanel.tsx`.

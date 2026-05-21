@@ -112,6 +112,16 @@ function scheduleSkippedJobRemoval(get: () => RuforgeStore, jobId: string): void
   skippedJobRemovalTimers.set(jobId, timer);
 }
 
+async function pauseActiveDownloadProcess(jobId: string, label: string): Promise<boolean> {
+  try {
+    await invoke("pause_download_job", { jobId });
+    return true;
+  } catch (e) {
+    console.error(`[RuForge] ${label} pause_download_job failed`, e);
+    return false;
+  }
+}
+
 /** Returns true when the job was marked `skipped` (caller must not start yt-dlp). */
 async function trySkipLibraryDuplicateJob(
   get: () => RuforgeStore,
@@ -123,7 +133,7 @@ async function trySkipLibraryDuplicateJob(
   if (!findLibraryDuplicate(url, get().entries)) return false;
   const job = get().downloadJobs.find((j) => j.id === jobId);
   if (!job || job.status === "skipped") return true;
-  get().skipDownloadJobAsLibraryDuplicate(jobId);
+  await get().skipDownloadJobAsLibraryDuplicate(jobId);
   return true;
 }
 
@@ -300,7 +310,7 @@ export type DownloadQueueSlice = {
   retryDownloadJob: (id: string) => void;
   removeDownloadJob: (id: string) => Promise<void>;
   /** Auto-skip duplicates: show `skipped` row briefly, then remove. */
-  skipDownloadJobAsLibraryDuplicate: (id: string) => void;
+  skipDownloadJobAsLibraryDuplicate: (id: string) => Promise<void>;
   reorderDownloadJobs: (fromIndex: number, toIndex: number) => void;
   setDownloadJobAudioOnly: (jobId: string, audioOnly: boolean) => void;
   applyDownloadProgress: (payload: ProgressPayload) => void;
@@ -592,16 +602,21 @@ export const createDownloadQueueSlice: StateCreator<
         void (async () => {
           await ensureEntriesForDuplicateCheck(get);
           if (shouldAutoSkipLibraryDuplicate(get, urlTrim)) {
-            get().skipDownloadJobAsLibraryDuplicate(keptId);
+            await get().skipDownloadJobAsLibraryDuplicate(keptId);
           }
         })();
       }
       return keptId;
     },
 
-    skipDownloadJobAsLibraryDuplicate: (id) => {
+    skipDownloadJobAsLibraryDuplicate: async (id) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job || job.status === "skipped") return;
+      if (job.status === "downloading") {
+        const stopped = await pauseActiveDownloadProcess(id, "skip duplicate");
+        if (!stopped) return;
+        disarmDownloadJobWatchdog(id);
+      }
 
       set((s) => {
         const downloadJobs = markJobSkippedLibraryDuplicate(s.downloadJobs, id);
@@ -619,15 +634,13 @@ export const createDownloadQueueSlice: StateCreator<
     pauseDownloadJob: async (id) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job) return;
-      disarmDownloadJobWatchdog(id);
 
       if (job.status === "downloading") {
-        try {
-          await invoke("pause_download_job", { jobId: id });
-        } catch (e) {
-          console.error("[RuForge] pause_download_job failed", e);
+        const stopped = await pauseActiveDownloadProcess(id, "pause");
+        if (!stopped) {
           return;
         }
+        disarmDownloadJobWatchdog(id);
         set((s) => {
           const downloadJobs = s.downloadJobs.map((j) =>
             j.id === id
@@ -653,6 +666,7 @@ export const createDownloadQueueSlice: StateCreator<
       }
 
       if (job.status === "queued") {
+        disarmDownloadJobWatchdog(id);
         set((s) => {
           const downloadJobs = s.downloadJobs.map((j) =>
             j.id === id
@@ -774,12 +788,13 @@ export const createDownloadQueueSlice: StateCreator<
     removeDownloadJob: async (id) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job) return;
-      disarmDownloadJobWatchdog(id);
       clearSkippedJobRemovalTimer(id);
       const removedUrl = job.url;
       if (job.status === "downloading") {
-        await get().pauseDownloadJob(id);
+        const stopped = await pauseActiveDownloadProcess(id, "remove");
+        if (!stopped) return;
       }
+      disarmDownloadJobWatchdog(id);
       set((s) => {
         const downloadJobs = s.downloadJobs.filter((j) => j.id !== id);
         persistDownloadJobs(downloadJobs);
@@ -882,7 +897,7 @@ export const createDownloadQueueSlice: StateCreator<
       resetDownloadProgressEtaSmoothing(jobId);
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
-          j.id === jobId && j.status !== "paused"
+          j.id === jobId && j.status === "downloading"
             ? {
                 ...j,
                 status: "paused" as const,

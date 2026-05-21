@@ -41,22 +41,23 @@ export function computeDownloadJobStallThresholdMs(job: DownloadJob): number {
     return PRE_TRANSFER_MAX_MS;
   }
 
-  if (p.status === "processing") {
-    const total =
-      (typeof p.totalBytes === "number" && p.totalBytes > 0 ? p.totalBytes : null) ??
-      job.metadata?.fileSizeBytes ??
-      job.metadata?.fileSizeBytesVideo ??
-      null;
-    if (typeof total === "number" && total >= LARGE_BYTES) {
-      return PROCESSING_LARGE_IDLE_MS;
-    }
-    return PROCESSING_IDLE_MS;
-  }
+  const total =
+    (typeof p.totalBytes === "number" && p.totalBytes > 0 ? p.totalBytes : null) ??
+    job.metadata?.fileSizeBytes ??
+    job.metadata?.fileSizeBytesVideo ??
+    null;
 
   const pct =
     typeof p.percentage === "number" && Number.isFinite(p.percentage)
       ? Math.max(0, Math.min(100, p.percentage))
       : 0;
+
+  if (p.status === "processing" || pct >= 99) {
+    if (typeof total === "number" && total >= LARGE_BYTES) {
+      return PROCESSING_LARGE_IDLE_MS;
+    }
+    return PROCESSING_IDLE_MS;
+  }
 
   const etaSec = parseYtdlpEtaToSeconds(p.eta ?? "");
   if (etaSec != null && etaSec > 0) {
@@ -64,7 +65,6 @@ export function computeDownloadJobStallThresholdMs(job: DownloadJob): number {
     return Math.min(Math.max(fromEta, MIN_ACTIVE_IDLE_MS), MAX_ACTIVE_IDLE_MS);
   }
 
-  if (pct >= 99) return 6 * 60_000;
   if (pct >= 90) return 8 * 60_000;
   if (pct >= 50) return 12 * 60_000;
   return 18 * 60_000;

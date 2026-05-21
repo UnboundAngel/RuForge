@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.7 (unreleased)
 Last shipped to users: 0.1.6
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 Status: in progress
 
 ## Now
@@ -45,6 +45,7 @@ Fixes:
 
 **0.1.7 unreleased:** (see AGENTS.md Shipped log, keep in sync)
 
+- Download queue: duplicate auto-skip and queue removal stop active yt-dlp before hiding rows; paused events no longer overwrite skipped rows; near-100% downloads use processing idle budgets; Unix pause/stop also targets direct child processes.
 - Downloader UI: collapsible queue redesigned as a slide-out pop-up that sits on the right screen edge; hoisted active card z-indices for perfect tooltip visibility.
 - Downloader UI: redesigned expanded queue state, removing dividers, wrapping, and button clutter with high-fidelity Lucide icons and hover-revealed action controls.
 - Downloader UI: hero backdrop and queue row thumbnails crossfade when focus or thumb changes.

@@ -122,7 +122,7 @@ impl DownloadJobManager {
     }
 }
 
-/// Kill yt-dlp sidecar and any child processes (Windows process tree).
+/// Kill yt-dlp sidecar and any direct child processes.
 pub fn kill_ytdlp_tree(child: CommandChild) {
     let pid = child.pid();
     #[cfg(windows)]
@@ -134,5 +134,19 @@ pub fn kill_ytdlp_tree(child: CommandChild) {
             .creation_flags(CREATE_NO_WINDOW)
             .output();
     }
+    #[cfg(unix)]
+    {
+        let pid_arg = pid.to_string();
+        let _ = std::process::Command::new("pkill")
+            .args(["-TERM", "-P", &pid_arg])
+            .output();
+    }
     let _ = child.kill();
+    #[cfg(unix)]
+    {
+        let pid_arg = pid.to_string();
+        let _ = std::process::Command::new("pkill")
+            .args(["-KILL", "-P", &pid_arg])
+            .output();
+    }
 }
