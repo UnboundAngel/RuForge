@@ -56,16 +56,57 @@ pub enum GalleryEntry {
     },
 }
 
-fn resolve_info_json_path(parent: &std::path::Path, stem: &str) -> Option<std::path::PathBuf> {
-    let primary = parent.join(format!("{}.info.json", stem));
-    if primary.is_file() {
-        return Some(primary);
+/// Strip yt-dlp per-stream suffix (`Title.f399` → `Title`) so sidecars and dedupe match the muxed output.
+fn strip_ytdlp_stream_suffix(stem: &str) -> &str {
+    let Some(dot_f) = stem.rfind(".f") else {
+        return stem;
+    };
+    let tail = &stem[dot_f + 2..];
+    if tail.is_empty() {
+        return stem;
     }
-    let double_dot = parent.join(format!("{}..info.json", stem));
-    if double_dot.is_file() {
-        return Some(double_dot);
+    if tail
+        .chars()
+        .all(|c| c.is_ascii_digit() || c == '-' || c == '.')
+    {
+        return &stem[..dot_f];
+    }
+    stem
+}
+
+fn is_ytdlp_stream_intermediate_stem(stem: &str) -> bool {
+    strip_ytdlp_stream_suffix(stem) != stem
+}
+
+fn resolve_info_json_path(parent: &std::path::Path, stem: &str) -> Option<std::path::PathBuf> {
+    for candidate in [stem, strip_ytdlp_stream_suffix(stem)] {
+        let primary = parent.join(format!("{}.info.json", candidate));
+        if primary.is_file() {
+            return Some(primary);
+        }
+        let double_dot = parent.join(format!("{}..info.json", candidate));
+        if double_dot.is_file() {
+            return Some(double_dot);
+        }
     }
     None
+}
+
+fn normalize_group_title(raw: &str) -> String {
+    raw.trim().to_lowercase()
+}
+
+fn media_title_for_grouping(file: &MediaFile, path: &Path) -> String {
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    let base = strip_ytdlp_stream_suffix(stem);
+    let name = file.name.trim();
+    if !name.is_empty() && !name.eq_ignore_ascii_case(stem) && !name.eq_ignore_ascii_case(base) {
+        return normalize_group_title(name);
+    }
+    normalize_group_title(base)
 }
 
 fn source_id_from_ytdlp_info(json: &serde_json::Value) -> Option<String> {
@@ -376,7 +417,43 @@ pub(crate) fn media_library_dedupe_key(file: &MediaFile) -> Option<String> {
     None
 }
 
-/// Higher score wins when two library files share a dedupe key (prefer muxed video).
+/// Group key for dedupe and orphan cleanup (id/url when known, else same-folder title).
+pub(crate) fn media_library_group_key(path: &Path, file: &MediaFile) -> String {
+    if let Some(k) = media_library_dedupe_key(file) {
+        return k;
+    }
+    if let (Some(parent), Some(stem)) = (
+        path.parent(),
+        path.file_stem().and_then(|s| s.to_str()),
+    ) {
+        if let Some(sidecar) = resolve_info_json_path(parent, stem) {
+            let (_, _, _, _, _, source_id) = ytdlp_sidecar_metadata(sidecar.as_path());
+            if let Some(id) = source_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                return format!("id:{id}");
+            }
+            let (_, _, _, _, source_url, _) = ytdlp_sidecar_metadata(sidecar.as_path());
+            if let Some(url) = source_url
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                return format!("url:{url}");
+            }
+        }
+    }
+    let parent = path
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let title = media_title_for_grouping(file, path);
+    format!("stem:{parent}|{title}")
+}
+
+/// Higher score wins when two library files share a group key (prefer muxed, not `.fNNN` intermediates).
 pub(crate) fn media_library_keep_score(path: &Path, file: &MediaFile) -> u64 {
     let ext = path
         .extension()
@@ -392,20 +469,21 @@ pub(crate) fn media_library_keep_score(path: &Path, file: &MediaFile) -> u64 {
     if file.duration.is_finite() && file.duration > 0.0 {
         score = score.saturating_add((file.duration as u64).min(50_000_000));
     }
+    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+        if is_ytdlp_stream_intermediate_stem(stem) {
+            score = score.saturating_sub(1_500_000_000);
+        }
+    }
     score.saturating_add(file.size.min(1_000_000_000))
 }
 
 pub(crate) fn dedupe_media_files(files: Vec<MediaFile>) -> Vec<MediaFile> {
     let mut best_by_key: HashMap<String, MediaFile> = HashMap::new();
     let mut key_order: Vec<String> = Vec::new();
-    let mut no_key: Vec<MediaFile> = Vec::new();
 
     for file in files {
         let path = Path::new(&file.path);
-        let Some(key) = media_library_dedupe_key(&file) else {
-            no_key.push(file);
-            continue;
-        };
+        let key = media_library_group_key(path, &file);
         let score = media_library_keep_score(path, &file);
         match best_by_key.get(&key) {
             Some(prev) => {
@@ -421,7 +499,7 @@ pub(crate) fn dedupe_media_files(files: Vec<MediaFile>) -> Vec<MediaFile> {
         }
     }
 
-    let mut out = no_key;
+    let mut out = Vec::new();
     for key in key_order {
         if let Some(file) = best_by_key.remove(&key) {
             out.push(file);
@@ -438,10 +516,9 @@ fn dedupe_gallery_entries(entries: Vec<GalleryEntry>) -> Vec<GalleryEntry> {
         let GalleryEntry::Media { file } = entry else {
             continue;
         };
-        let Some(key) = media_library_dedupe_key(file) else {
-            continue;
-        };
-        let score = media_library_keep_score(Path::new(&file.path), file);
+        let path = Path::new(&file.path);
+        let key = media_library_group_key(path, file);
+        let score = media_library_keep_score(path, file);
         if let Some(&prev_i) = best_idx_by_key.get(&key) {
             let GalleryEntry::Media { file: prev_file } = &entries[prev_i] else {
                 continue;
@@ -497,6 +574,7 @@ pub(crate) fn remove_media_download_artifacts(media_path: &Path) {
         format!("{stem}.webp"),
         format!("{stem}.info.json"),
         format!("{stem}..info.json"),
+        format!("{stem}.sponsorblock.json"),
     ] {
         let p = parent.join(&name);
         if p.is_file() {
@@ -573,50 +651,59 @@ fn collect_recent_media_paths(root: &Path, since: std::time::SystemTime) -> Vec<
     out
 }
 
-/// After a successful muxed download, drop orphan audio/intermediate outputs that share the same video id.
-pub(crate) fn cleanup_orphan_downloads_under(root: &Path, since: std::time::SystemTime) {
-    let paths = collect_recent_media_paths(root, since);
-    if paths.len() < 2 {
+fn media_file_from_path_for_cleanup(path: &Path) -> Option<MediaFile> {
+    let metadata = std::fs::metadata(path).ok()?;
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let parent = path.parent().unwrap_or(Path::new(""));
+    let sidecar = resolve_info_json_path(parent, stem);
+    let (duration, chapters, metadata_title, download_metadata_hint, source_url, source_id) =
+        sidecar
+            .as_deref()
+            .map(ytdlp_sidecar_metadata)
+            .unwrap_or((0.0, None, None, None, None, None));
+    Some(MediaFile {
+        name: metadata_title.unwrap_or_else(|| stem.to_string()),
+        path: path.to_string_lossy().to_string(),
+        size: metadata.len(),
+        created: 0,
+        duration,
+        thumbnail_path: None,
+        ruforge_poster_path: None,
+        subtitle_path: None,
+        chapters,
+        download_metadata_hint,
+        source_url,
+        source_id,
+    })
+}
+
+/// Collapse duplicate outputs in one folder (muxed file vs `.fNNN` video-only leftover).
+fn sweep_parent_dir_for_duplicate_outputs(parent: &Path) {
+    let Ok(rd) = std::fs::read_dir(parent) else {
         return;
-    }
+    };
+    let mut groups: HashMap<String, Vec<(std::path::PathBuf, u64)>> = HashMap::new();
 
-    let mut groups: HashMap<String, Vec<(std::path::PathBuf, u64, MediaFile)>> = HashMap::new();
-
-    for path in paths {
-        let metadata = match std::fs::metadata(&path) {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        let parent = path.parent().unwrap_or(Path::new(""));
-        let sidecar = resolve_info_json_path(parent, stem);
-        let (duration, chapters, metadata_title, download_metadata_hint, source_url, source_id) =
-            sidecar
-                .as_deref()
-                .map(ytdlp_sidecar_metadata)
-                .unwrap_or((0.0, None, None, None, None, None));
-        let file = MediaFile {
-            name: metadata_title.unwrap_or_else(|| stem.to_string()),
-            path: path.to_string_lossy().to_string(),
-            size: metadata.len(),
-            created: 0,
-            duration,
-            thumbnail_path: None,
-            ruforge_poster_path: None,
-            subtitle_path: None,
-            chapters,
-            download_metadata_hint,
-            source_url,
-            source_id,
-        };
-        let Some(key) = media_library_dedupe_key(&file) else {
+    for ent in rd.flatten() {
+        let path = ent.path();
+        if !path.is_file() {
             continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if !is_media_ext(&ext) {
+            continue;
+        }
+        let file = match media_file_from_path_for_cleanup(&path) {
+            Some(f) => f,
+            None => continue,
         };
+        let key = media_library_group_key(&path, &file);
         let score = media_library_keep_score(&path, &file);
-        groups
-            .entry(key)
-            .or_default()
-            .push((path, score, file));
+        groups.entry(key).or_default().push((path, score));
     }
 
     for (key, mut group) in groups {
@@ -625,9 +712,9 @@ pub(crate) fn cleanup_orphan_downloads_under(root: &Path, since: std::time::Syst
         }
         group.sort_by(|a, b| b.1.cmp(&a.1));
         let keeper_path = group.first().expect("len >= 2").0.clone();
-        for (path, _, _) in group.into_iter().skip(1) {
+        for (path, _) in group.into_iter().skip(1) {
             log::info!(
-                "[RuForge] removing orphan download output {:?} (kept {:?}, key {})",
+                "[RuForge] removing duplicate download output {:?} (kept {:?}, key {})",
                 path,
                 keeper_path,
                 key
@@ -637,12 +724,74 @@ pub(crate) fn cleanup_orphan_downloads_under(root: &Path, since: std::time::Syst
     }
 }
 
+/// After a successful muxed download, drop stray intermediates in the same folder as new outputs.
+pub(crate) fn cleanup_orphan_downloads_under(root: &Path, since: std::time::SystemTime) {
+    let recent = collect_recent_media_paths(root, since);
+    if recent.is_empty() {
+        return;
+    }
+
+    let mut parents: HashSet<std::path::PathBuf> = HashSet::new();
+    for path in recent {
+        if let Some(parent) = path.parent() {
+            parents.insert(parent.to_path_buf());
+        }
+    }
+    for parent in parents {
+        sweep_parent_dir_for_duplicate_outputs(&parent);
+    }
+}
+
+fn collect_media_parent_dirs(dir: &Path, depth: u32, max_depth: u32, out: &mut HashSet<std::path::PathBuf>) {
+    if depth > max_depth {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut saw_media = false;
+    for ent in rd.flatten() {
+        let p = ent.path();
+        if p.is_dir() {
+            let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if !gallery_skip_subdirectory(fname) {
+                collect_media_parent_dirs(&p, depth + 1, max_depth, out);
+            }
+            continue;
+        }
+        if !p.is_file() {
+            continue;
+        }
+        let ext = p
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if is_media_ext(&ext) {
+            saw_media = true;
+        }
+    }
+    if saw_media {
+        out.insert(dir.to_path_buf());
+    }
+}
+
+fn sweep_download_tree_for_duplicates(root: &Path) {
+    let mut parents = HashSet::new();
+    collect_media_parent_dirs(root, 0, 8, &mut parents);
+    for parent in parents {
+        sweep_parent_dir_for_duplicate_outputs(&parent);
+    }
+}
+
 #[tauri::command]
 pub async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
     let dir_path = std::path::Path::new(&dir);
     if !dir_path.exists() {
         return Ok(vec![]);
     }
+
+    sweep_download_tree_for_duplicates(dir_path);
 
     let mut out: Vec<GalleryEntry> = Vec::new();
     let read_dir = match std::fs::read_dir(dir_path) {
@@ -772,4 +921,114 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         source_url,
         source_id,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_ytdlp_stream_suffix_removes_format_tail() {
+        assert_eq!(
+            strip_ytdlp_stream_suffix("My Video.f399"),
+            "My Video"
+        );
+        assert_eq!(strip_ytdlp_stream_suffix("My Video"), "My Video");
+    }
+
+    #[test]
+    fn group_key_falls_back_to_title_when_no_sidecar_id() {
+        let path = Path::new(r"C:\dl\My Video.f399.mp4");
+        let file = MediaFile {
+            name: "My Video".into(),
+            path: path.display().to_string(),
+            size: 72,
+            created: 0,
+            duration: 0.0,
+            thumbnail_path: None,
+            ruforge_poster_path: None,
+            subtitle_path: None,
+            chapters: None,
+            download_metadata_hint: None,
+            source_url: None,
+            source_id: None,
+        };
+        let key = media_library_group_key(path, &file);
+        assert!(key.starts_with("stem:"));
+        assert!(key.contains("my video"));
+    }
+
+    #[test]
+    fn keep_score_prefers_muxed_over_intermediate() {
+        let parent = Path::new(r"C:\dl");
+        let muxed = MediaFile {
+            name: "My Video".into(),
+            path: parent.join("My Video.mp4").display().to_string(),
+            size: 84_000_000,
+            created: 0,
+            duration: 924.0,
+            thumbnail_path: None,
+            ruforge_poster_path: None,
+            subtitle_path: None,
+            chapters: None,
+            download_metadata_hint: None,
+            source_url: None,
+            source_id: Some("abc123".into()),
+        };
+        let intermediate = MediaFile {
+            name: "My Video".into(),
+            path: parent.join("My Video.f399.mp4").display().to_string(),
+            size: 72_000_000,
+            created: 0,
+            duration: 0.0,
+            thumbnail_path: None,
+            ruforge_poster_path: None,
+            subtitle_path: None,
+            chapters: None,
+            download_metadata_hint: None,
+            source_url: None,
+            source_id: None,
+        };
+        let muxed_path = Path::new(&muxed.path);
+        let inter_path = Path::new(&intermediate.path);
+        assert!(
+            media_library_keep_score(muxed_path, &muxed)
+                > media_library_keep_score(inter_path, &intermediate)
+        );
+        assert_eq!(
+            media_library_group_key(muxed_path, &muxed),
+            "id:abc123"
+        );
+        let inter_key = media_library_group_key(inter_path, &intermediate);
+        assert!(inter_key.starts_with("stem:"));
+    }
+
+    #[test]
+    fn group_key_inherits_id_from_muxed_sidecar_stem() {
+        let tmp = std::env::temp_dir().join(format!(
+            "ruforge_gallery_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let _ = std::fs::create_dir_all(&tmp);
+        let info = tmp.join("My Video.info.json");
+        std::fs::write(
+            &info,
+            r#"{"id":"abc123","title":"My Video","webpage_url":"https://www.youtube.com/watch?v=abc123"}"#,
+        )
+        .expect("write info json");
+        let inter_path = tmp.join("My Video.f399.mp4");
+        let _ = std::fs::write(&inter_path, b"x").expect("write mp4");
+
+        let file = media_file_from_path_for_cleanup(&inter_path).expect("media file");
+        assert_eq!(file.source_id.as_deref(), Some("abc123"));
+        assert_eq!(
+            media_library_group_key(&inter_path, &file),
+            "id:abc123"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 }

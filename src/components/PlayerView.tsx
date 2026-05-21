@@ -43,6 +43,10 @@ import {
   prevChapterIndex,
 } from "../chapters";
 import { ChapterScrubber } from "./player/ChapterScrubber";
+import { SponsorBlockScrubOverlay } from "./player/SponsorBlockScrubOverlay";
+import { SponsorBlockSkipButton } from "./player/SponsorBlockSkipButton";
+import { useSponsorBlockPlayback } from "../hooks/useSponsorBlockPlayback";
+import type { SponsorBlockSkipCategory } from "../sponsorBlock";
 
 const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: string }) => {
   const speedToAngle: Record<number, number> = {
@@ -145,6 +149,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     typeof s.settings.subtitlePreferredLang === "string" ? s.settings.subtitlePreferredLang : null,
   );
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
+  const settings = useRuforgeStore((s) => s.settings);
   const audioOnly = isAudioOnlyPath(file.path);
   const mediaRef = useRef<HTMLMediaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -572,6 +577,64 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     },
     [applyScrubPosition],
   );
+
+  const patchSbStats = useCallback(
+    (
+      cat: SponsorBlockSkipCategory,
+      patch: Partial<{
+        appearances: number;
+        manualSkips: number;
+        undoSignals: number;
+      }>,
+    ) => {
+      const stats = { ...settings.sponsorBlockCategoryStats };
+      stats[cat] = { ...stats[cat], ...patch };
+      void updateSetting("sponsorBlockCategoryStats", stats);
+    },
+    [settings.sponsorBlockCategoryStats, updateSetting],
+  );
+
+  const onSbAppearance = useCallback(
+    (cat: SponsorBlockSkipCategory) => {
+      const cur = settings.sponsorBlockCategoryStats[cat];
+      patchSbStats(cat, { appearances: cur.appearances + 1 });
+    },
+    [settings.sponsorBlockCategoryStats, patchSbStats],
+  );
+
+  const onSbManualSkip = useCallback(
+    (cat: SponsorBlockSkipCategory) => {
+      const cur = settings.sponsorBlockCategoryStats[cat];
+      patchSbStats(cat, { manualSkips: cur.manualSkips + 1 });
+    },
+    [settings.sponsorBlockCategoryStats, patchSbStats],
+  );
+
+  const onSbDemoteUndo = useCallback(
+    (cat: SponsorBlockSkipCategory) => {
+      const cur = settings.sponsorBlockCategoryStats[cat];
+      patchSbStats(cat, { undoSignals: cur.undoSignals + 1 });
+    },
+    [settings.sponsorBlockCategoryStats, patchSbStats],
+  );
+
+  const sponsorBlock = useSponsorBlockPlayback({
+    file,
+    currentTime,
+    enabled: settings.sponsorBlockEnabled && !audioOnly,
+    settings,
+    seekTo: seekToTimeSeconds,
+    onManualSkip: onSbManualSkip,
+    onAppearance: onSbAppearance,
+    onDemoteUndo: onSbDemoteUndo,
+  });
+
+  const scrubDuration =
+    isFinite(duration) && duration > 0
+      ? duration
+      : file.duration > 0
+        ? file.duration
+        : 0;
 
   const jumpPrevChapter = useCallback(() => {
     if (!chapters) return;
@@ -1105,6 +1168,18 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         )}
       </AnimatePresence>
 
+      {/* SponsorBlock skip */}
+      <AnimatePresence>
+        {sponsorBlock.showSkipButton && (
+          <SponsorBlockSkipButton
+            showControls={showControls}
+            onClick={sponsorBlock.handleSkipClick}
+            label={sponsorBlock.skipButtonLabel}
+            activeCategory={sponsorBlock.activeSkipCategory}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Top Chrome */}
       <AnimatePresence>
         {showControls && (
@@ -1126,9 +1201,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 <h2 className="text-lg font-black tracking-tight text-white leading-tight truncate max-w-xl">
                   {file.name.replace(/_/g, " ")}
                 </h2>
-                {activeChapter && (
+                {(activeChapter || sponsorBlock.sbChapterLabel) && (
                   <p className="text-sm text-stone-400 truncate max-w-xl mt-0.5">
-                    {activeChapter.chapter.title}
+                    {activeChapter
+                      ? activeChapter.chapter.title
+                      : sponsorBlock.sbChapterLabel}
                   </p>
                 )}
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
@@ -1187,9 +1264,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                   isScrubbing={isScrubbing}
                   scrubberThumbs={scrubberThumbs}
                   formatTime={formatTime}
+                  overlay={settings.sponsorBlockEnabled && !audioOnly ? sponsorBlock.scrubOverlay : undefined}
                 />
               ) : (
-                <div className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15`}>
+                <div className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15 overflow-hidden`}>
+                  {settings.sponsorBlockEnabled && !audioOnly && scrubDuration > 0 && sponsorBlock.scrubOverlay && (
+                    <SponsorBlockScrubOverlay duration={scrubDuration} overlay={sponsorBlock.scrubOverlay} />
+                  )}
                   <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
                   <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${playedBarPercent}%` }} />
                   {isHoveringScrubber && (
@@ -1358,6 +1439,21 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                           transition={{ duration: 0.15 }}
                           className="absolute bottom-full mb-2 right-0 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[200px] z-[110] py-1"
                         >
+                          {file.sourceId && settings.sponsorBlockEnabled && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                sponsorBlock.refreshSegments();
+                                setShowPlayerMoreMenu(false);
+                              }}
+                              className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white flex items-center gap-2"
+                            >
+                              <Icon icon="mdi:refresh" width={16} /> Refresh SponsorBlock
+                            </button>
+                          )}
+                          {file.sourceId && settings.sponsorBlockEnabled && (
+                            <div className="my-1 border-t border-white/10" />
+                          )}
                           {chapters && (
                             <>
                               <button type="button" onClick={() => { jumpPrevChapter(); setShowPlayerMoreMenu(false); }} className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white flex items-center gap-2">

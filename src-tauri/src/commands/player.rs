@@ -61,12 +61,6 @@ pub async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let ext_path = app
-        .path()
-        .resource_dir()
-        .map_err(|e| e.to_string())?
-        .join("extensions/ublock");
-
     let data_dir = app
         .path()
         .app_data_dir()
@@ -83,7 +77,7 @@ pub async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
     .title("YouTube Explorer")
     .inner_size(1200.0, 800.0)
     .data_directory(data_dir)
-    .browser_extensions_enabled(true)
+    .browser_extensions_enabled(false)
     .user_agent(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     )
@@ -134,10 +128,6 @@ pub async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
 
     if let Some(browser_args) = prefs.webview_additional_browser_args() {
         builder = builder.additional_browser_args(&browser_args);
-    }
-
-    if ext_path.exists() && ext_path.join("manifest.json").exists() {
-        builder = builder.extensions_path(ext_path);
     }
 
     builder.build().map_err(|e| e.to_string())?;

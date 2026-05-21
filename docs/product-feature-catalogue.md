@@ -359,7 +359,6 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 ### Removed / not shipped on embedded Explorer
 
 - **`explorerInjectScript.ts`** — **Removed** (floating pill, right-click download/send-to-downloader were unreliable on YouTube). No reinject path. · **Incidental** (historical)
-- **uBlock extension** — Bundled under `src-tauri/extensions/ublock/` but only loaded in **unused** `open_youtube_explorer` standalone command. · **Half-wired**
 - **Standalone explorer window** — `open_youtube_explorer` registered in Rust, **never called** from frontend. · **Half-wired**
 - **`explorer-url` event listener** — Legacy; embedded uses URL polling. `App.tsx` · **Half-wired**
 
@@ -444,7 +443,6 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 | Default `browserContext: "chrome"` not in downloader strip | `types.ts` vs `BROWSER_OPTIONS` |
 | Narrow layout hides center URL field | `DownloaderView.tsx` `min-[700px]` |
 | `GalleryView.tsx` unused | Not in `App.tsx` |
-| uBlock not on embedded Explorer | Only `open_youtube_explorer` |
 | Standalone explorer + `explorer-url` dead path | Rust command unused; listener redundant |
 | Tray “Toggle GPU” doesn’t toggle pref | `tray.rs` exits only |
 | Tray reset doesn’t clear explorer profile | `localStorage` only |

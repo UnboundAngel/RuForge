@@ -1285,7 +1285,7 @@ function App() {
                     : undefined
                 }
               >
-              {(["general", "downloads", "appearance", "advanced"] as const).map((tab) => {
+              {(["general", "downloads", "playback", "appearance", "advanced"] as const).map((tab) => {
                 const isActive = settingsTab === tab;
                 return (
                   <button

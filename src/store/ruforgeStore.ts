@@ -35,6 +35,7 @@ import { readLoopForPath, writeLoopForPath } from "../playbackLoopStorage";
 import { readPlaybackSpeed } from "../playbackSpeedStorage";
 import type { PlayInMiniPayload } from "../playerHandoff";
 import { writePlaybackPos } from "../playbackStorage";
+import { dedupeGalleryEntriesCombined } from "../galleryDedupe";
 
 export type {
   ActiveTab,
@@ -551,8 +552,10 @@ export const useRuforgeStore = create<RuforgeStore>()(
           const dirs = [RUFORGE_INTERNAL_DIR, outputDir].filter((d) => d && d.trim() !== "");
           const scans = await Promise.all(dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d })));
           const combined = scans.flat();
-          const unique = combined.filter(
-            (entry, index, self) => index === self.findIndex((t) => t.path === entry.path),
+          const unique = dedupeGalleryEntriesCombined(
+            combined.filter(
+              (entry, index, self) => index === self.findIndex((t) => t.path === entry.path),
+            ),
           );
           if (myToken !== galleryFetchToken) return;
           if (galleryPosterEpoch !== posterEpoch) return;

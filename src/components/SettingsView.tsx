@@ -9,6 +9,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from "@tauri-apps/api/event";
 import { useRuforgeStore } from '../store/ruforgeStore';
+import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
+import { SettingsDescription } from './settings/settingsDescription';
 
 interface SettingItemProps {
   icon: React.ElementType;
@@ -325,32 +327,34 @@ const FadingDivider = () => (
   <div className="h-px w-full bg-gradient-to-r from-transparent via-[#EDD79C]/15 to-transparent my-1" />
 );
 
-const SettingItem: React.FC<SettingItemProps> = ({ icon: Icon, title, description, control, active, onClick }) => (
-  <div 
+const SettingItem: React.FC<SettingItemProps> = ({ icon: RowIcon, title, description, control, active, onClick }) => (
+  <div
     onClick={onClick}
     className={`group flex items-center justify-between p-6 rounded-[24px] transition-all duration-300 bg-transparent hover:bg-white/[0.02] ${
-      onClick ? 'cursor-pointer' : 'cursor-default'
+      onClick ? "cursor-pointer" : "cursor-default"
     }`}
   >
-    <div className="flex items-center gap-5">
-      <div className={`w-12 h-12 flex items-center justify-center transition-all duration-300 ${
-        active 
-        ? 'text-[color:var(--accent)]' 
-        : 'text-stone-500'
-      }`}>
-        <Icon className="w-6 h-6" />
+    <div className="flex items-start gap-5 min-w-0 flex-1">
+      <div
+        className={`w-12 h-12 flex items-center justify-center shrink-0 transition-all duration-300 ${
+          active ? "text-[color:var(--accent)]" : "text-stone-500"
+        }`}
+      >
+        <RowIcon className="w-6 h-6" />
       </div>
-      <div>
-        <h4 className={`text-sm font-bold transition-colors duration-300 ${active ? 'text-stone-100' : 'text-stone-300'}`}>
+      <div className="min-w-0 flex-1 space-y-1">
+        <h4
+          className={`text-sm font-bold transition-colors duration-300 ${
+            active ? "text-stone-100" : "text-stone-300"
+          }`}
+        >
           {title}
         </h4>
-        <p className="text-[11px] text-stone-500 mt-0.5 leading-relaxed max-w-[280px]">
-          {description}
-        </p>
+        <SettingsDescription description={description} className="max-w-[320px]" />
       </div>
     </div>
-    
-    <div onClick={(e) => e.stopPropagation()}>
+
+    <div className="shrink-0 pl-4 self-center" onClick={(e) => e.stopPropagation()}>
       {control}
     </div>
   </div>
@@ -705,6 +709,58 @@ export const SettingsView: React.FC = () => {
             </div>
           )}
 
+          {activeTab === 'playback' && (
+            <div className="flex flex-col">
+              <SettingItem
+                icon={Music}
+                title="Auto-advance local audio"
+                description="When an mp3/m4a/flac track ends, plays the next one in alphabetical path order, same folder listing for the fullscreen player’s directory scan and the Mini Player strip."
+                active={settings.audioAutoAdvanceFolder !== false}
+                control={
+                  <ToggleSlot
+                    active={settings.audioAutoAdvanceFolder !== false}
+                    onClick={() =>
+                      updateSetting(
+                        'audioAutoAdvanceFolder',
+                        !(settings.audioAutoAdvanceFolder !== false),
+                      )
+                    }
+                  />
+                }
+              />
+              <FadingDivider />
+              <SettingItem
+                icon={Music}
+                title="Prefetch next audio"
+                description="Preloads the queued track in Chromium/WebView to reduce dead air. True gapless decode is not achievable with standalone HTML audio tags."
+                active={settings.audioPrefetchNext !== false}
+                control={
+                  <ToggleSlot
+                    active={settings.audioPrefetchNext !== false}
+                    onClick={() =>
+                      updateSetting('audioPrefetchNext', !(settings.audioPrefetchNext !== false))
+                    }
+                  />
+                }
+              />
+              <FadingDivider />
+              <SettingItem
+                icon={Shield}
+                title="ReplayGain / loudness normalization"
+                description="Skipped in WebView2: chaining MediaElement + Web Audio for stable LUFS normalization is brittle across formats/OS mixers: revisit with native output or ffmpeg filters."
+                active={false}
+                control={
+                  <span className="text-[9px] font-black uppercase tracking-widest text-stone-600 px-3">
+                    Not shipped
+                  </span>
+                }
+              />
+              <FadingDivider />
+              <SponsorBlockSettingsTree />
+              <FadingDivider />
+            </div>
+          )}
+
           {activeTab === 'appearance' && (
             <div className="flex flex-col">
               <SettingItem 
@@ -773,51 +829,6 @@ export const SettingsView: React.FC = () => {
 
           {activeTab === 'advanced' && (
             <div className="flex flex-col">
-              <SettingItem 
-                icon={Music}
-                title="Auto-advance local audio"
-                description="When an mp3/m4a/flac track ends, plays the next one in alphabetical path order, same folder listing for the fullscreen player’s directory scan and the Mini Player strip."
-                active={settings.audioAutoAdvanceFolder !== false}
-                control={
-                  <ToggleSlot 
-                    active={settings.audioAutoAdvanceFolder !== false} 
-                    onClick={() =>
-                      updateSetting(
-                        'audioAutoAdvanceFolder',
-                        !(settings.audioAutoAdvanceFolder !== false),
-                      )
-                    }
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem 
-                icon={Music}
-                title="Prefetch next audio"
-                description="Preloads the queued track in Chromium/WebView to reduce dead air. True gapless decode is not achievable with standalone HTML audio tags."
-                active={settings.audioPrefetchNext !== false}
-                control={
-                  <ToggleSlot 
-                    active={settings.audioPrefetchNext !== false} 
-                    onClick={() =>
-                      updateSetting('audioPrefetchNext', !(settings.audioPrefetchNext !== false))
-                    }
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem 
-                icon={Shield}
-                title="ReplayGain / loudness normalization"
-                description="Skipped in WebView2: chaining MediaElement + Web Audio for stable LUFS normalization is brittle across formats/OS mixers: revisit with native output or ffmpeg filters."
-                active={false}
-                control={
-                  <span className="text-[9px] font-black uppercase tracking-widest text-stone-600 px-3">
-                    Not shipped
-                  </span>
-                }
-              />
-              <FadingDivider />
               <SettingItem 
                 icon={Shield}
                 title="Hardware Acceleration"
