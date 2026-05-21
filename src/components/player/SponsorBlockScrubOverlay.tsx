@@ -66,7 +66,7 @@ export const SponsorBlockScrubOverlay: React.FC<ScrubOverlayProps> = ({
 
       {/* POI Highlight Ticks */}
       {poiTimes.map((p, i) => {
-        const tickColor = sbSegmentColor("poi_highlight", "poi") || "#EAB308";
+        const tickColor = sbSegmentColor("poi_highlight", "poi") || "#FF1684";
         const leftPct = (p.time / duration) * 100;
 
         return (

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play } from "lucide-react";
+import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music } from "lucide-react";
+import { isAudioOnlyPath } from "../mediaKind";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { askConfirm } from "./ConfirmDialog";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
@@ -97,15 +98,21 @@ const VideoCard = ({
   });
   const videoRef = useRef<HTMLVideoElement>(null);
   const stillPoster = file.thumbnailPath ?? file.ruforgePosterPath;
+  const isAudioItem = isAudioOnlyPath(file.path);
+  const showVideoPreview = isHovered && !isAudioItem;
 
   useEffect(() => {
-    if (isHovered && videoRef.current) {
+    if (!showVideoPreview) return;
+    if (videoRef.current) {
       videoRef.current.play().catch(() => {});
-    } else if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0.1;
     }
-  }, [isHovered]);
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0.1;
+      }
+    };
+  }, [showVideoPreview]);
 
   const handlePlayAction = async () => {
     const newViews = views + 1;
@@ -134,7 +141,7 @@ const VideoCard = ({
     >
       {/* Thumbnail Area */}
       <div className="relative aspect-video rounded-2xl overflow-hidden bg-[#1D1613] shadow-lg transition-all duration-500 group-hover:shadow-2xl group-hover:shadow-black/40 border border-white/5">
-        {isHovered ? (
+        {showVideoPreview ? (
           <>
             <video 
               ref={videoRef}
@@ -159,15 +166,30 @@ const VideoCard = ({
           <img 
             src={convertFileSrc(stillPoster)}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-80"
+            className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${
+              isHovered ? "opacity-100 scale-105" : "opacity-80 scale-100"
+            }`}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-[#2a221e]">
-            <Video className="w-12 h-12 text-stone-700" strokeWidth={1.25} aria-hidden />
+            {isAudioItem ? (
+              <Music className="w-12 h-12 text-stone-700" strokeWidth={1.25} aria-hidden />
+            ) : (
+              <Video className="w-12 h-12 text-stone-700" strokeWidth={1.25} aria-hidden />
+            )}
           </div>
         )}
         
         <div className={`absolute inset-0 bg-black/20 transition-opacity duration-300 ${isHovered ? 'opacity-0' : 'opacity-100'}`} />
+
+        {isAudioItem && (
+          <div
+            className="absolute top-2 left-2 z-30 flex items-center justify-center p-1 rounded-full bg-black/55 backdrop-blur-sm border border-white/10 pointer-events-none"
+            aria-hidden
+          >
+            <Music size={12} className="text-white/85" strokeWidth={2.25} />
+          </div>
+        )}
         
         {file.duration > 0 && (
           <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/80 rounded-md text-[10px] font-black text-white tracking-wider z-20">

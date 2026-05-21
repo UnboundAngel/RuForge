@@ -45,6 +45,12 @@ Fixes:
 
 **0.1.7 unreleased:** (see AGENTS.md Shipped log, keep in sync)
 
+- Audio-only UX: library hover keeps cover art; main player left art plus live spectrum visualizer (graph connect fix); top-left Music badge on audio cards; removed WebView explainer and Sound settings CTA.
+- Mini player large mode: tooltips clamp inside window; elapsed/total via `formatDuration`; volume icon tiers match level/mute.
+- SponsorBlock: audio-only main player and mini large/small scrub layouts (skip button + bar overlay); compact/micro/tiny mini excluded.
+- Audio-only hero: full-canvas Whispers-style 90-bar equalizer (loudness + random per-bar targets, always visible).
+- Audio visualizer: `captureStream` tap fixes flat bars while playing (idle animation only on pause).
+- SponsorBlock scrub colors: official extension `barTypes` palette and 0.7 bar opacity (`sponsorBlockColors.ts`).
 - SponsorBlock: read-only segments for downloaded YouTube (`sourceId`), main player skip/adaptive learning, Playback settings tree (`sponsorBlockEnabled` default false until ship).
 - Settings: new Playback tab (audio advance, prefetch, SponsorBlock tree); migrated rows off Advanced.
 - Player: chapter scrub hover (playhead at play, per-segment hover fill, balanced preview gap); frosted control dock with More menu.

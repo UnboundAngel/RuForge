@@ -14,7 +14,6 @@ import {
   Minimize2,
   ArrowLeft,
   Music,
-  Speaker,
   SkipBack,
   SkipForward,
   X,
@@ -43,6 +42,7 @@ import {
   prevChapterIndex,
 } from "../chapters";
 import { ChapterScrubber } from "./player/ChapterScrubber";
+import { AudioHeroStage } from "./player/AudioHeroStage";
 import { SponsorBlockScrubOverlay } from "./player/SponsorBlockScrubOverlay";
 import { SponsorBlockSkipButton } from "./player/SponsorBlockSkipButton";
 import { useSponsorBlockPlayback } from "../hooks/useSponsorBlockPlayback";
@@ -358,6 +358,24 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [clickFlash, setClickFlash] = useState<"play" | "pause" | null>(null);
   const [skipFlash, setSkipFlash] = useState<{ side: "left" | "right"; amount: number } | null>(null);
   const skipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+
+  const audioMediaSrc = useMemo(
+    () => (audioOnly ? convertFileSrc(file.path) : ""),
+    [audioOnly, file.path],
+  );
+  const prefetchAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  /** crossOrigin before src so asset URLs are CORS-clean for Web Audio MediaElementSource. */
+  useEffect(() => {
+    if (!audioOnly || !audioMediaSrc) return;
+    const el = mediaRef.current;
+    if (!el) return;
+    el.crossOrigin = "anonymous";
+    if (el.src !== audioMediaSrc) {
+      el.src = audioMediaSrc;
+    }
+  }, [audioOnly, audioMediaSrc]);
 
   // Sync volume/mute/loop from store to <video> / <audio> (store actions persist flat LS for MiniPlayer)
   useEffect(() => {
@@ -621,7 +639,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const sponsorBlock = useSponsorBlockPlayback({
     file,
     currentTime,
-    enabled: settings.sponsorBlockEnabled && !audioOnly,
+    enabled: settings.sponsorBlockEnabled,
     settings,
     seekTo: seekToTimeSeconds,
     onManualSkip: onSbManualSkip,
@@ -853,8 +871,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   const VolumeIcon = isMuted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
   const playedBarPercent = scrubDragPercent !== null ? scrubDragPercent : progress;
-  const isProbablyWindows =
-    typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
   const coverArtSrc = file.thumbnailPath ?? file.ruforgePosterPath;
 
   const playlistIdx = folderAudioPlaylist.findIndex((f) => f.path === file.path);
@@ -866,9 +882,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       : null;
   const prefetchNextEnabled = audioOnly && readAudioPrefetchNext() && nextInFolder !== null;
 
-  const openWindowsSoundSettings = useCallback(() => {
-    void invoke("open_windows_sound_settings").catch(console.error);
-  }, []);
+  useEffect(() => {
+    if (!prefetchNextEnabled || !nextInFolder) return;
+    const el = prefetchAudioRef.current;
+    if (!el) return;
+    const src = convertFileSrc(nextInFolder.path);
+    el.crossOrigin = "anonymous";
+    if (el.src !== src) {
+      el.src = src;
+    }
+  }, [prefetchNextEnabled, nextInFolder]);
 
   return (
     <motion.div
@@ -950,8 +973,17 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         {audioOnly ? (
           <>
             <audio
-              ref={mediaRef}
-              src={convertFileSrc(file.path)}
+              crossOrigin="anonymous"
+              ref={(node) => {
+                mediaRef.current = node;
+                setAudioEl(node);
+                if (node) {
+                  node.crossOrigin = "anonymous";
+                  if (audioMediaSrc && node.src !== audioMediaSrc) {
+                    node.src = audioMediaSrc;
+                  }
+                }
+              }}
               className="absolute w-px h-px opacity-0 pointer-events-none"
               preload="metadata"
               autoPlay
@@ -967,14 +999,15 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             />
             {prefetchNextEnabled && nextInFolder && (
               <audio
+                crossOrigin="anonymous"
+                ref={prefetchAudioRef}
                 preload="auto"
-                src={convertFileSrc(nextInFolder.path)}
                 className="absolute w-px h-px opacity-0 pointer-events-none"
                 aria-hidden
               />
             )}
             <div
-              className="absolute inset-0 flex flex-col items-center justify-center gap-5 px-10 bg-gradient-to-b from-stone-950 via-black to-black"
+              className="absolute inset-0"
               onClick={togglePlay}
               onDoubleClick={toggleFullscreen}
               onMouseDown={handleMouseDown}
@@ -987,37 +1020,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
               }}
             >
-              <div className="flex flex-col items-center gap-4 max-w-lg w-full pointer-events-none">
-                {coverArtSrc ? (
-                  <img
-                    src={convertFileSrc(coverArtSrc)}
-                    alt=""
-                    className="max-h-[min(55vh,520px)] max-w-[min(90vw,520px)] rounded-2xl shadow-2xl border border-white/10 object-contain"
-                  />
-                ) : (
-                  <Music className="w-28 h-28 text-[color:var(--accent)] opacity-30" strokeWidth={1} aria-hidden />
-                )}
-                <p className="text-center text-[11px] font-medium text-stone-600 max-w-sm leading-relaxed">
-                  {file.sourceUrl 
-                    ? "In-app playback uses WebView audio (Chromium engine). Click 'Open in Browser' at the top to watch the original source in your native browser."
-                    : "In-app playback uses WebView audio (Chromium engine). Opens the same file in your default browser/player if you prefer another decoder."
-                  }
-                </p>
-              </div>
-              {isProbablyWindows && (
-                <button
-                  type="button"
-                  className="pointer-events-auto z-10 shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-[10px] font-black tracking-[0.12em] text-stone-300 uppercase hover:bg-white/10 hover:text-white transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openWindowsSoundSettings();
-                  }}
-                  title="Open Windows Settings → Sound (output device, exclusive mode app controls, enhancements)"
-                >
-                  <Speaker className="w-3.5 h-3.5" strokeWidth={2} aria-hidden />
-                  Sound settings…
-                </button>
-              )}
+              <AudioHeroStage
+                coverSrc={coverArtSrc ? convertFileSrc(coverArtSrc) : null}
+                audioEl={audioEl}
+                connectKey={file.path}
+                isPaused={isPaused}
+                isMuted={isMuted}
+              />
             </div>
           </>
         ) : (
@@ -1264,11 +1273,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                   isScrubbing={isScrubbing}
                   scrubberThumbs={scrubberThumbs}
                   formatTime={formatTime}
-                  overlay={settings.sponsorBlockEnabled && !audioOnly ? sponsorBlock.scrubOverlay : undefined}
+                  overlay={settings.sponsorBlockEnabled ? sponsorBlock.scrubOverlay : undefined}
                 />
               ) : (
                 <div className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15 overflow-hidden`}>
-                  {settings.sponsorBlockEnabled && !audioOnly && scrubDuration > 0 && sponsorBlock.scrubOverlay && (
+                  {settings.sponsorBlockEnabled && scrubDuration > 0 && sponsorBlock.scrubOverlay && (
                     <SponsorBlockScrubOverlay duration={scrubDuration} overlay={sponsorBlock.scrubOverlay} />
                   )}
                   <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
@@ -1345,12 +1354,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                     </button>
                   </Tooltip>
                   <div className="flex items-center gap-0.5 group/vol ml-0.5">
-                    <Tooltip
-                      text={
-                        (isMuted ? "Unmute" : "Mute") +
-                        (audioOnly ? " · Windows sound settings for exclusive mode" : "")
-                      }
-                    >
+                    <Tooltip text={isMuted ? "Unmute" : "Mute"}>
                       <button type="button" onClick={() => setMuted(!isMuted)} className={playerBarBtnClass}>
                         <VolumeIcon className="w-5 h-5" />
                       </button>

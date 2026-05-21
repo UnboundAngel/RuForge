@@ -212,6 +212,24 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Audio analyser teardown**: hard release clears MES attachment set so track changes re-tap; RAF alive guard on hero canvas. `audioAnalyserGraph.ts`, `AudioHeroStage.tsx`.
+- **Audio hero equalizer look**: segmented LED block render in paintWaveform only. `AudioHeroStage.tsx`.
+- **Audio hero equalizer visibility**: restored normal blend and bar opacity after over-dim pass; balanced AMP_CAP so cover and bars both read. `AudioHeroStage.tsx`.
+- **Audio hero equalizer**: Whispers-style full-canvas 90-bar dancer (always visible, loudness-driven random targets + smooth, not frequency-mapped). `AudioHeroStage.tsx`.
+- **Audio LED adaptive range**: visible row window tracks recent peak usage; segments scale to fill strip; AGC normalization for quiet tracks; global row cap hides unused rows. `AudioHeroStage.tsx`, `audioAnalyserGraph.ts`.
+- **Audio-only CORS**: `crossOrigin="anonymous"` + ordered src via `convertFileSrc` (Tauri v2 `HeaderConfig` has no ACAO key). `PlayerView.tsx`.
+- **Audio LED strips**: draw lit segments only (no ghost grid); per-bin `readLedBandLevels`; higher gain; strips flush to art via flex layout. `AudioHeroStage.tsx`, `audioAnalyserGraph.ts`.
+- **Audio-only LED visualizer**: segmented mirrored bars (30 per side, bronze-gold-orange-red ramp); personality-driven heights; MES soft-release + captureStream->destination; dual strip canvases. `AudioHeroStage.tsx`, `audioAnalyserGraph.ts`.
+- **Audio side ribbons (fix)**: single continuous glass strip per side (no A/B blade or center seam); straight inner edge; media-element analyser first on audio. `AudioHeroStage.tsx`, `audioAnalyserGraph.ts`.
+- **Audio side waveforms (fix)**: flat idle baseline (no faux sine on pause); adaptive time-domain gain while playing; auto-fallback to media-element tap if captureStream reads silence. `audioAnalyserGraph.ts`, `AudioHeroStage.tsx`.
+- **Audio-only hero**: blurred cover backdrop, centered art, thin glass side waveforms (A top / B bottom per side, mirrored left-right); replaced horizontal spectrum. `AudioHeroStage.tsx`, `PlayerView.tsx`.
+- **Audio visualizer (fix)**: tap `captureStream()` so bars follow playback in WebView2; idle wave only when paused; peak + waveform bins. `audioAnalyserGraph.ts`, `AudioHeroVisualizer.tsx`.
+- **Audio visualizer (fix)**: spectrum reacts to playback via shared per-element Web Audio graph, callback ref on `<audio>`, suspended context resume on play, time-domain + frequency sampling; mute dampens bars not idle freeze. `audioAnalyserGraph.ts`, `AudioHeroVisualizer.tsx`, `PlayerView.tsx`.
+- **Media library audio badge**: top-left Music pill on audio-only gallery cards. `MediaView.tsx`.
+- **Audio-only UX**: library hover keeps cover art for audio files (no blank video preview); main player hero is left cover art plus live spectrum visualizer (AnalyserNode), removed WebView copy and Sound settings button. `MediaView.tsx`, `PlayerView.tsx`, `AudioHeroVisualizer.tsx`.
+- **Mini player large mode (fix)**: clamped fixed-position tooltips stay inside the window; elapsed/total uses shared `formatDuration`; volume icon tiers match mute/level like main player. `MiniPlayer.tsx`.
+- **SponsorBlock reach**: audio-only main player and mini large/small layouts (scrub bar present); compact/micro/tiny mini layouts unchanged. `PlayerView.tsx`, `MiniPlayer.tsx`.
+- **SponsorBlock colors**: aligned scrub/POI palette and 0.7 bar opacity with official extension `barTypes` (chapter `#FFC83D`, POI `#FF1684`, `music_offtopic`). `sponsorBlockColors.ts`, `SponsorBlockScrubOverlay.tsx`, `ChapterScrubber.tsx`.
 - **Download duplicate library rows (fix)**: dedupe and post-download cleanup group `.fNNN` video-only leftovers with muxed outputs via shared `Title.info.json`, title fallback, folder sweep on scan; cross-dir merge in `fetchEntries`. `gallery.rs`, `galleryDedupe.ts`, `ruforgeStore.ts`.
 - **SponsorBlock polish**: added extension-aligned color map, overlay for skip ranges and POI ticks across scrubbers, skip button fill, default-on master toggle. `useSponsorBlockPlayback.ts`, `SponsorBlockScrubOverlay.tsx`, `SponsorBlockSkipButton.tsx`, `PlayerView.tsx`.
 
