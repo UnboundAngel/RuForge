@@ -23,6 +23,7 @@ import {
 import { effectiveDownloadSubLangs } from "../../store/types";
 import { readClipboardYouTubeUrl } from "../../downloaderClipboardYoutube";
 import { findLibraryDuplicate, type DuplicateMatch } from "../../duplicateDownload";
+import { applyReplaceBeforeDownload } from "../../replaceLibraryDownload";
 import type { DuplicateDownloadChoice } from "../DuplicateDownloadDialog";
 import {
   canonicalYouTubeWatchUrl,
@@ -502,6 +503,11 @@ export function useDownloaderView({
       choice: Exclude<DuplicateDownloadChoice, "cancel"> = "replace",
       meta?: { title?: string },
     ) => {
+      const replaced = await applyReplaceBeforeDownload(targetUrl, choice);
+      if (!replaced.ok) {
+        notify(replaced.reason, "warning");
+        return;
+      }
       const audioOnly = resolveHeroAudioOnly();
       const jobId = enqueueDownloadOnly(
         targetUrl,
@@ -524,6 +530,7 @@ export function useDownloaderView({
       resumeDownloadJob,
       pumpDownloadQueue,
       resolveHeroAudioOnly,
+      notify,
     ],
   );
 
@@ -702,6 +709,11 @@ export function useDownloaderView({
         const choice = await promptDuplicateChoice(duplicate);
         if (choice === "cancel") return;
 
+        const replaced = await applyReplaceBeforeDownload(videoUrl, choice);
+        if (!replaced.ok) {
+          notify(replaced.reason, "warning");
+          return;
+        }
         enqueueDownloadOnly(videoUrl, choice, { approval });
         insertPinnedQuickEnqueueUrl(videoUrl);
       };
@@ -789,6 +801,11 @@ export function useDownloaderView({
 
     const choice = await promptDuplicateChoice(duplicate);
     if (choice === "cancel") return;
+    const replaced = await applyReplaceBeforeDownload(clipUrl, choice);
+    if (!replaced.ok) {
+      notify(replaced.reason, "warning");
+      return;
+    }
     enqueueDownloadOnly(clipUrl, choice, { approval });
     insertPinnedQuickEnqueueUrl(clipUrl);
     setQuickEnqueueHint(null);
@@ -796,6 +813,7 @@ export function useDownloaderView({
     storageBlocksNewDownloads,
     resolveDuplicate,
     enqueueDownloadOnly,
+    notify,
     promptDuplicateChoice,
     insertPinnedQuickEnqueueUrl,
     promoteStagedBarToDownloadQueue,

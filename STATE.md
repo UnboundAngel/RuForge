@@ -64,6 +64,8 @@ Fixes:
 - Downloader: production metadata loading and progress bar regressions (monotonic %, shared yt-dlp fetch, hydration gate).
 - Explorer (Linux): `explorer-surface` child window overlay instead of in-window child webview.
 - Explorer bounds: rAF sync during sidebar/window resize; deduped IPC; listeners stay up through sidebar animation.
+- Library replace: removes matched file before re-download when user picks Replace (fixes duplicate audio + video rows).
+- Delete / replace: cancels stray ffmpeg preview sidecars so Windows file locks clear sooner.
 
 ## Open P0 (blocks release)
 

@@ -212,6 +212,7 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Library replace + delete locks**: Replace removes the matched library file before re-download (audio vs video ext); delete cancels in-flight RuForge ffmpeg preview work and waits for the per-file lock. `replaceLibraryDownload.ts`, `media.rs`, `process_tree.rs`, `useDownloaderView.ts`.
 - **Downloader hero progress**: removed top-right and traveling percent; 0/100 flank bar only, speed/time under bar. `DownloaderView.tsx`.
 - **Downloader URL chip**: hide paperclip when URL is not in queue; clear bar hero on remove when URL has no queue row; prune pinned quick-enqueue chips. `useDownloaderView.ts`, `downloadQueueSlice.ts`.
 - **Downloader floating queue**: drawer is one attached unit (top-left handle + panel); width collapse hides content fully; bottom-right float; viewport-aware portaled tooltips. `DownloadJobQueuePanel.tsx`.

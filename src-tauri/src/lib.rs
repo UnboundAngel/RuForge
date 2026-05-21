@@ -1,6 +1,7 @@
 mod app_state;
 mod commands;
 mod download_job_manager;
+mod process_tree;
 mod hardware_acceleration;
 mod tray;
 mod utils;
