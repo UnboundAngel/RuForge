@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Clock,
@@ -12,6 +13,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Library,
+  List,
+  Music,
+  Video,
 } from "lucide-react";
 import {
   downloadJobMediaNeedsHydration,
@@ -26,6 +30,143 @@ import {
 } from "./downloaderConstants";
 import { downloadJobDisplayFileSizeBytes } from "../../downloadJobFileSizes";
 import { formatApproxFileSize } from "./downloaderFormat";
+
+const THUMB_CROSSFADE = { duration: 0.32, ease: [0.23, 1, 0.32, 1] as const };
+const QUEUE_DRAWER_EASE = [0.23, 1, 0.32, 1] as const;
+const QUEUE_DRAWER_WIDTH = 360;
+
+function computeTooltipPlacement(
+  anchor: DOMRect,
+  tooltipWidth: number,
+  tooltipHeight: number,
+): { top: number; left: number; transform: string } {
+  const pad = 10;
+  const gap = 8;
+  const vw = window.innerWidth;
+  const tw = Math.max(tooltipWidth, 1);
+  const th = Math.max(tooltipHeight, 1);
+
+  const preferAbove = anchor.top - gap - th >= pad;
+  const top = preferAbove ? anchor.top - gap : anchor.bottom + gap;
+  const translateY = preferAbove ? "-100%" : "0";
+
+  const centerX = anchor.left + anchor.width / 2;
+  const half = tw / 2;
+
+  let left = centerX;
+  let translateX = "-50%";
+
+  if (centerX - half < pad) {
+    left = anchor.left;
+    translateX = "0";
+  } else if (centerX + half > vw - pad) {
+    left = anchor.right;
+    translateX = "-100%";
+  }
+
+  return { top, left, transform: `translate(${translateX}, ${translateY})` };
+}
+
+/** Crossfade when `src` changes (queue row / downloader hero). Visual only. */
+export function CrossfadeThumbImage({
+  src,
+  alt = "",
+  wrapperClassName = "",
+  imgClassName = "h-full w-full object-cover",
+}: {
+  src: string;
+  alt?: string;
+  wrapperClassName?: string;
+  imgClassName?: string;
+}) {
+  const key = src.trim();
+  if (!key) return null;
+  return (
+    <div className={`relative overflow-hidden ${wrapperClassName}`}>
+      <AnimatePresence mode="sync" initial={false}>
+        <motion.img
+          key={key}
+          src={key}
+          alt={alt}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={THUMB_CROSSFADE}
+          className={`absolute inset-0 ${imgClassName}`}
+        />
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** Smooth crossfading backdrop with custom active hover state inside Framer Motion. */
+export function CrossfadeBackdropImage({
+  src,
+  isHovered,
+}: {
+  src: string;
+  isHovered: boolean;
+}) {
+  const key = src.trim();
+  if (!key) return null;
+  return (
+    <div className="absolute inset-0 z-0 overflow-hidden rounded-xl pointer-events-none">
+      <AnimatePresence mode="sync" initial={false}>
+        <motion.img
+          key={key}
+          src={key}
+          alt=""
+          initial={{ opacity: 0, scale: 1.04 }}
+          animate={{ opacity: isHovered ? 0.22 : 0.13, scale: isHovered ? 1.025 : 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
+          className="absolute inset-0 h-full w-full object-cover blur-[6px] saturate-[1.2]"
+        />
+      </AnimatePresence>
+      <div className="absolute inset-0 bg-gradient-to-r from-[#1D1613]/94 via-[#1D1613]/88 to-[#1D1613]/94" />
+    </div>
+  );
+}
+
+/** Marquee text that animates when title overflows its container boundaries. */
+export const MarqueeText = ({
+  text,
+  className = "",
+  layoutKey,
+}: {
+  text: string;
+  className?: string;
+  layoutKey?: boolean | number | string;
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [shouldMarquee, setShouldMarquee] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      if (containerRef.current && textRef.current) {
+        const isOverflowing = textRef.current.offsetWidth > containerRef.current.offsetWidth;
+        setShouldMarquee(isOverflowing);
+      }
+    };
+    check();
+    const t = setTimeout(check, 120);
+    window.addEventListener("resize", check);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", check);
+    };
+  }, [text, layoutKey]);
+
+  return (
+    <div ref={containerRef} className={`${className} overflow-hidden whitespace-nowrap`}>
+      <div className={`flex w-max ${shouldMarquee ? "animate-marquee" : ""}`}>
+        <span ref={textRef} className={shouldMarquee ? "pr-12" : ""}>{text}</span>
+        {shouldMarquee && <span className="pr-12">{text}</span>}
+      </div>
+    </div>
+  );
+};
 
 function formatQueueApproxSize(job: DownloadJob): string | null {
   const bytes = downloadJobDisplayFileSizeBytes(
@@ -140,55 +281,106 @@ export function DownloadJobAudioToggle({
   className?: string;
 }) {
   const [audioHovered, setAudioHovered] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const IconComponent = audioOnly ? Music : Video;
   return (
     <motion.div className={`relative ${className}`}>
       <QueueTooltip
         text={audioOnly ? "Switch to audio + video" : "Switch to audio only"}
         visible={audioHovered && !disabled}
+        anchorRef={buttonRef}
       />
       <button
+        ref={buttonRef}
         type="button"
         disabled={disabled}
         onMouseEnter={() => setAudioHovered(true)}
         onMouseLeave={() => setAudioHovered(false)}
         onClick={onToggle}
-        aria-pressed={audioOnly}
         aria-label={audioOnly ? "Switch to video download" : "Switch to audio-only download"}
-        className={`flex h-[26px] w-[26px] items-center justify-center rounded-md p-1.5 text-[10px] font-black uppercase tracking-wider transition-colors active:scale-95 disabled:pointer-events-none disabled:opacity-25 ${
-          audioOnly
-            ? "bg-[color:var(--accent)] text-[#1D1613] hover:bg-[color-mix(in_srgb,var(--accent),white_12%)]"
-            : "text-[#EDD79C]/35 hover:bg-white/5 hover:text-[#EDD79C]/70"
-        }`}
+        className="flex h-7 w-7 items-center justify-center rounded-md p-1.5 text-[#EDD79C]/40 transition-colors hover:bg-white/5 hover:text-[#EDD79C]/75 active:scale-95 disabled:pointer-events-none disabled:opacity-25"
       >
-        A
+        <IconComponent
+          size={13}
+          strokeWidth={2.5}
+          className={audioOnly ? "opacity-90" : "opacity-70"}
+        />
       </button>
     </motion.div>
   );
 }
 
-const QueueTooltip = ({ text, visible }: { text: string; visible: boolean }) => (
-  <AnimatePresence mode="wait">
-    {visible && (
-      <motion.div
-        initial={{ opacity: 0, y: 5, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 2, scale: 0.98 }}
-        transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/10 bg-[#1D1613]/95 px-2.5 py-1.5 text-[10px] font-bold font-mono text-[#EDD79C] shadow-2xl backdrop-blur-md"
+const QueueTooltip = ({
+  text,
+  visible,
+  anchorRef,
+}: {
+  text: string;
+  visible: boolean;
+  anchorRef: React.RefObject<HTMLElement | null>;
+}) => {
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<{
+    top: number;
+    left: number;
+    transform: string;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!visible || !anchorRef.current) {
+      setPlacement(null);
+      return;
+    }
+    const update = () => {
+      const anchor = anchorRef.current;
+      const tip = measureRef.current;
+      if (!anchor) return;
+      const r = anchor.getBoundingClientRect();
+      const tw = tip?.offsetWidth ?? 0;
+      const th = tip?.offsetHeight ?? 0;
+      if (tw === 0 || th === 0) return;
+      setPlacement(computeTooltipPlacement(r, tw, th));
+    };
+    update();
+    const raf = requestAnimationFrame(() => requestAnimationFrame(update));
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [visible, anchorRef, text]);
+
+  if (!visible || typeof document === "undefined") return null;
+
+  return createPortal(
+    <>
+      <div
+        ref={measureRef}
+        aria-hidden
+        className="pointer-events-none fixed left-0 top-0 whitespace-nowrap rounded-lg border border-white/10 bg-[#1D1613]/95 px-2.5 py-1.5 text-[10px] font-bold font-mono text-[#EDD79C] opacity-0"
       >
-        <motion.span
-          key={text}
-          initial={{ opacity: 0, filter: "blur(4px)" }}
-          animate={{ opacity: 1, filter: "blur(0px)" }}
-          exit={{ opacity: 0, filter: "blur(2px)" }}
-          transition={{ duration: 0.15 }}
+        {text}
+      </div>
+      {placement ? (
+        <div
+          style={{
+            position: "fixed",
+            top: placement.top,
+            left: placement.left,
+            transform: placement.transform,
+            zIndex: 10000,
+          }}
+          className="pointer-events-none whitespace-nowrap rounded-lg border border-white/10 bg-[#1D1613]/95 px-2.5 py-1.5 text-[10px] font-bold font-mono text-[#EDD79C] shadow-2xl backdrop-blur-md"
         >
           {text}
-        </motion.span>
-      </motion.div>
-    )}
-  </AnimatePresence>
-);
+        </div>
+      ) : null}
+    </>,
+    document.body,
+  );
+};
 
 const QueueIconButton = ({
   icon: Icon,
@@ -204,10 +396,12 @@ const QueueIconButton = ({
   disabled?: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   return (
     <div className="relative">
-      <QueueTooltip text={tooltip} visible={isHovered && !disabled} />
+      <QueueTooltip text={tooltip} visible={isHovered && !disabled} anchorRef={buttonRef} />
       <button
+        ref={buttonRef}
         type="button"
         onClick={onClick}
         disabled={disabled}
@@ -257,6 +451,7 @@ const DownloadJobRow = ({
   onReorder: (from: number, to: number) => void;
   onToggleAudio: (id: string, audioOnly: boolean) => void;
 }) => {
+  const [isHovered, setIsHovered] = useState(false);
   const pct = job.progress?.percentage;
   const pendingApproval = job.status === "queued" && job.approval === "pending";
   const canReorder = job.status === "queued" || job.status === "paused";
@@ -323,62 +518,87 @@ const DownloadJobRow = ({
           onFocusRow(job.id);
         }
       }}
-      className={`group relative rounded-xl border border-white/5 bg-[#1D1613]/50 px-3.5 py-2.5 pr-9 text-left transition-colors hover:bg-[#271C18]/40 outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]/50 cursor-pointer ${
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`group relative overflow-visible rounded-xl border border-white/5 bg-[#1D1613]/40 py-2.5 text-left transition-colors hover:bg-[#271C18]/30 outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]/50 cursor-pointer ${
         job.status === "downloading"
-          ? "border-[color-mix(in_srgb,var(--accent),transparent_88%)]"
+          ? "border-[color-mix(in_srgb,var(--accent),transparent_85%)]"
           : job.status === "skipped"
-            ? "border-white/10 bg-[#1D1613]/35"
+            ? "border-white/10 bg-[#1D1613]/25"
             : ""
-      } ${isFocused ? "ring-2 ring-[color-mix(in_srgb,var(--accent),transparent_55%)]" : ""}`}
+      } ${thumbUrl ? "pl-[84px]" : "pl-3.5"} pr-3.5 ${
+        isHovered || isFocused ? "z-[60]" : "z-10"
+      }`}
     >
-      <motion.div className="flex items-start gap-2">
-        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-stone-950/80 ring-1 ring-white/5">
-          {thumbUrl ? (
-            <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center px-1 text-center text-[7px] font-black uppercase leading-tight tracking-tight text-[#EDD79C]/25">
-              {awaitingListMeta ? "…" : "-"}
-            </div>
-          )}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
+        {/* Background faded and blurred thumbnail crossfader */}
+        {thumbUrl && (
+          <CrossfadeBackdropImage src={thumbUrl} isHovered={isHovered} />
+        )}
+
+      {/* Morphing Left Thumbnail Bleed (No hard-bordered box) */}
+      {thumbUrl ? (
+        <div
+          className="absolute left-0 top-0 bottom-0 w-[72px] overflow-hidden rounded-l-xl pointer-events-none z-10"
+          style={{
+            maskImage: "linear-gradient(to right, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 100%)",
+            WebkitMaskImage: "linear-gradient(to right, rgba(0,0,0,1) 35%, rgba(0,0,0,0) 100%)",
+          }}
+        >
+          <CrossfadeThumbImage
+            src={thumbUrl}
+            wrapperClassName="h-full w-full"
+            imgClassName="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+          />
         </div>
-        <motion.div className="min-w-0 flex-1 space-y-1 pb-5">
-          <motion.div className="flex items-baseline gap-2">
-            <p
-              className="truncate text-[12px] font-semibold leading-snug text-[#EDD79C]/90"
-              title={metaTitle || shortTitle || job.url}
-            >
-              {displayTitle}
+      ) : null}
+
+        {/* Selected glowing outline overlay overlay */}
+        <div
+          className={`absolute inset-0 z-30 rounded-xl border transition-all duration-300 ${
+            isFocused
+              ? "border-[color:var(--accent)] shadow-[0_0_12px_var(--accent-glow)] opacity-100"
+              : "border-transparent opacity-0"
+          }`}
+        />
+      </div>
+
+      <motion.div className="relative z-10 flex items-center justify-between gap-3 h-full">
+        {/* Left Side: Metadata and Title */}
+        <motion.div className="min-w-0 flex-1 space-y-0.5 pb-1">
+          <motion.div className="flex items-baseline gap-2 min-w-0">
+            {!thumbUrl && (
+              <div className="relative h-5 w-5 shrink-0 overflow-hidden rounded bg-stone-950/80 mr-1 flex items-center justify-center">
+                <div className="text-center text-[7px] font-black uppercase leading-tight tracking-tight text-[#EDD79C]/25">
+                  {awaitingListMeta ? "…" : "-"}
+                </div>
+              </div>
+            )}
+            <MarqueeText
+              text={displayTitle}
+              className="text-[12px] font-semibold leading-snug text-[#EDD79C]/90 flex-1 min-w-0"
+              layoutKey={isFocused}
+            />
+          </motion.div>
+
+          <div className="flex items-center gap-1.5 text-[10px] font-medium text-[#EDD79C]/50 truncate">
+            <span>{statusLabel}</span>
+            {(transferLabel || approxSizeLabel) && (
+              <>
+                <span className="text-[#EDD79C]/20">•</span>
+                <span className="font-mono text-[9.5px]">{transferLabel || approxSizeLabel}</span>
+              </>
+            )}
+            <span className="text-[#EDD79C]/20">•</span>
+            <span className="text-[9.5px]">{audioOnly ? "audio" : "video"}</span>
+          </div>
+
+          {job.error && (
+            <p className="max-w-[14rem] truncate text-[9px] font-bold text-red-400/70" title={job.error}>
+              {job.error}
             </p>
-            {job.status === "downloading" && typeof pct === "number" && (
-              <span className="shrink-0 text-[10px] font-mono tabular-nums text-[color:var(--accent)]/70">
-                {pct.toFixed(0)}%
-              </span>
-            )}
-          </motion.div>
-          <motion.div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className={`inline-flex items-center gap-1 text-[9px] font-bold tracking-wide ${statusTone}`}>
-              <StatusIcon
-                size={11}
-                strokeWidth={2}
-                className={job.status === "downloading" ? "animate-spin opacity-70" : "opacity-60"}
-              />
-              {statusLabel}
-            </span>
-            {transferLabel != null && (
-              <span className="text-[9px] font-bold tabular-nums text-[#EDD79C]/30">{transferLabel}</span>
-            )}
-            {approxSizeLabel != null && (
-              <span className="text-[9px] font-bold tabular-nums text-[#EDD79C]/30">{approxSizeLabel}</span>
-            )}
-            <span className="text-[9px] font-bold text-[#EDD79C]/30">
-              {" · "}{audioOnly ? "audio" : "video"}
-            </span>
-            {job.error && (
-              <p className="max-w-[14rem] truncate text-[9px] font-bold text-[#EDD79C]/30" title={job.error}>
-                {job.error}
-              </p>
-            )}
-          </motion.div>
+          )}
+
           {pendingApproval && (
             <div
               className="flex flex-wrap items-center gap-2 pt-1"
@@ -406,76 +626,90 @@ const DownloadJobRow = ({
             </div>
           )}
         </motion.div>
-        <motion.div
-          className="flex shrink-0 items-center gap-0.5"
-          onClick={(e) => e.stopPropagation()}
-          role="presentation"
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          {canEditAudio && (
-            <DownloadJobAudioToggle
-              audioOnly={audioOnly}
-              onToggle={() => onToggleAudio(job.id, !audioOnly)}
-            />
-          )}
-          {job.status === "downloading" && (
-            <QueueIconButton icon={Pause} onClick={() => void onPause(job.id)} tooltip="Pause" />
-          )}
-          {job.status === "paused" && (
-            <QueueIconButton
-              icon={Play}
-              onClick={() => void onResume(job.id)}
-              tooltip="Resume"
-              variant="accent"
-            />
-          )}
-          {job.status === "failed" && (
-            <QueueIconButton icon={RefreshCw} onClick={() => onRetry(job.id)} tooltip="Retry" />
-          )}
-          {canRemove && (
-            <QueueIconButton icon={Trash2} onClick={() => void onRemove(job.id)} tooltip="Remove from queue" />
-          )}
-        </motion.div>
+
+        {/* Right Side: Dynamic Actions / Status Panel */}
+        <div className="relative z-20 flex shrink-0 items-center justify-end min-w-[36px] h-9 pr-1 overflow-visible">
+          <AnimatePresence mode="wait">
+            {isHovered || isFocused ? (
+              <motion.div
+                key="actions"
+                initial={{ opacity: 0, x: 8, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 4, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                className="flex items-center gap-0.5"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                role="presentation"
+              >
+                {canReorder && index > 0 && (
+                  <QueueIconButton
+                    icon={ChevronUp}
+                    onClick={() => onReorder(index, index - 1)}
+                    tooltip="Move up"
+                  />
+                )}
+                {canReorder && index < total - 1 && (
+                  <QueueIconButton
+                    icon={ChevronDown}
+                    onClick={() => onReorder(index, index + 1)}
+                    tooltip="Move down"
+                  />
+                )}
+                {canEditAudio && (
+                  <DownloadJobAudioToggle
+                    audioOnly={audioOnly}
+                    onToggle={() => onToggleAudio(job.id, !audioOnly)}
+                  />
+                )}
+                {job.status === "downloading" && (
+                  <QueueIconButton icon={Pause} onClick={() => void onPause(job.id)} tooltip="Pause" />
+                )}
+                {job.status === "paused" && (
+                  <QueueIconButton
+                    icon={Play}
+                    onClick={() => void onResume(job.id)}
+                    tooltip="Resume"
+                    variant="accent"
+                  />
+                )}
+                {job.status === "failed" && (
+                  <QueueIconButton icon={RefreshCw} onClick={() => onRetry(job.id)} tooltip="Retry" />
+                )}
+                {canRemove && (
+                  <QueueIconButton icon={Trash2} onClick={() => void onRemove(job.id)} tooltip="Remove from queue" />
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="status"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.15 }}
+                className="flex items-center justify-center"
+              >
+                {job.status === "downloading" && typeof pct === "number" ? (
+                  <span className="text-[11px] font-mono font-black tabular-nums text-[color:var(--accent)] tracking-tight">
+                    {pct.toFixed(0)}%
+                  </span>
+                ) : (
+                  <StatusIcon
+                    size={13}
+                    strokeWidth={2.5}
+                    className={`${statusTone} opacity-60`}
+                  />
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </motion.div>
-      {canReorder && (
-        <motion.div
-          className="absolute bottom-1.5 right-1.5 flex flex-col overflow-hidden rounded-md border border-white/5 bg-[#1D1613]/80"
-          role="group"
-          aria-label="Reorder in queue"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            disabled={index === 0}
-            title="Move up"
-            onClick={(e) => {
-              e.stopPropagation();
-              onReorder(index, index - 1);
-            }}
-            className="px-1 py-0.5 text-[#EDD79C]/40 transition-colors hover:bg-white/5 hover:text-[#EDD79C]/75 disabled:pointer-events-none disabled:opacity-20"
-          >
-            <ChevronUp size={11} strokeWidth={2.5} />
-          </button>
-          <motion.div className="h-px bg-white/5" />
-          <button
-            type="button"
-            disabled={index === total - 1}
-            title="Move down"
-            onClick={(e) => {
-              e.stopPropagation();
-              onReorder(index, index + 1);
-            }}
-            className="px-1 py-0.5 text-[#EDD79C]/40 transition-colors hover:bg-white/5 hover:text-[#EDD79C]/75 disabled:pointer-events-none disabled:opacity-20"
-          >
-            <ChevronDown size={11} strokeWidth={2.5} />
-          </button>
-        </motion.div>
-      )}
+
       {job.status === "downloading" && typeof pct === "number" && (
-        <div className="absolute bottom-0 left-3 right-3 h-[3px] overflow-hidden rounded-full bg-white/5">
+        <div className="absolute bottom-0 left-0 right-0 h-[4px] overflow-hidden rounded-b-xl bg-white/5">
           <motion.div
-            className="h-full bg-[color-mix(in_srgb,var(--accent),transparent_35%)]"
+            className="h-full bg-[color:var(--accent)] shadow-[0_0_10px_var(--accent-glow)]"
             initial={{ width: 0 }}
             animate={{ width: `${pct}%` }}
             transition={{ duration: 0.12, ease: "linear" }}
@@ -496,8 +730,6 @@ export const DownloadJobQueuePanel = () => {
   const sortedJobIds = useMemo(() => {
     if (sortFingerprint === "") return [];
     return jobsRaw.map((j) => j.id);
-    // sortFingerprint: physical order; jobMembershipKey: id set so removes cannot leave stale ids in the list.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- jobsRaw omitted so progress/metadata alone do not rebuild
   }, [sortFingerprint, jobMembershipKey]);
   const jobs = useMemo(() => {
     if (sortedJobIds.length === 0) return jobsRaw;
@@ -507,7 +739,6 @@ export const DownloadJobQueuePanel = () => {
       const job = byId.get(id);
       if (job) ordered.push(job);
     }
-    // Jobs present in store but not yet in the memoized id list (rare); keep them visible.
     if (ordered.length < jobsRaw.length) {
       const seen = new Set(ordered.map((j) => j.id));
       for (const j of jobsRaw) {
@@ -516,6 +747,7 @@ export const DownloadJobQueuePanel = () => {
     }
     return ordered;
   }, [sortedJobIds, jobsRaw]);
+
   const focusedJobId = useRuforgeStore((s) => s.focusedJobId);
   const setDownloaderFocusedJobId = useRuforgeStore((s) => s.setDownloaderFocusedJobId);
   const confirmPendingDownloadJob = useRuforgeStore((s) => s.confirmPendingDownloadJob);
@@ -525,38 +757,92 @@ export const DownloadJobQueuePanel = () => {
   const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
   const reorderDownloadJobs = useRuforgeStore((s) => s.reorderDownloadJobs);
   const setDownloadJobAudioOnly = useRuforgeStore((s) => s.setDownloadJobAudioOnly);
+
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [drawerRightInset, setDrawerRightInset] = useState(16);
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)");
+    const sync = () => setDrawerRightInset(mq.matches ? 24 : 16);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const drawerTransition = { duration: 0.3, ease: QUEUE_DRAWER_EASE };
+
   if (!queuePanelShouldShow(jobsRaw)) return null;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`mx-auto mt-6 w-full max-w-lg px-4 py-3.5 text-left ${RF_DOWNLOADER_PANEL}`}
+      className="fixed bottom-4 z-[200] pointer-events-auto"
+      initial={false}
+      animate={{ right: isExpanded ? drawerRightInset : 0 }}
+      transition={drawerTransition}
     >
-      <motion.div className="mb-3 px-0.5 text-center">
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#EDD79C]">Download queue</p>
-        <p className="mt-1 text-[9px] text-[#EDD79C]/40">
-          {jobsRaw.length} {jobsRaw.length === 1 ? "job" : "jobs"}
-        </p>
-      </motion.div>
-      <ul className="space-y-2">
-        {jobs.map((job, index) => (
-          <DownloadJobRow
-            key={job.id}
-            job={job}
-            index={index}
-            total={jobs.length}
-            focusedJobId={focusedJobId}
-            onFocusRow={setDownloaderFocusedJobId}
-            onConfirmPending={confirmPendingDownloadJob}
-            onPause={pauseDownloadJob}
-            onResume={resumeDownloadJob}
-            onRetry={retryDownloadJob}
-            onRemove={removeDownloadJob}
-            onReorder={reorderDownloadJobs}
-            onToggleAudio={setDownloadJobAudioOnly}
-          />
-        ))}
-      </ul>
+      <div
+        className={`flex flex-row items-stretch overflow-hidden border border-white/5 bg-[#271C18]/92 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-md ${
+          isExpanded ? "rounded-2xl" : "rounded-l-xl"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => setIsExpanded((open) => !open)}
+          aria-label={isExpanded ? "Collapse download queue" : "Expand download queue"}
+          className={`flex w-9 shrink-0 bg-transparent p-0 transition-[background-color] duration-200 hover:bg-white/[0.02] ${
+            isExpanded ? "self-stretch border-r border-white/5" : "min-h-[80px]"
+          }`}
+        />
+
+        <motion.div
+          initial={false}
+          animate={{
+            width: isExpanded ? QUEUE_DRAWER_WIDTH : 0,
+            opacity: isExpanded ? 1 : 0,
+          }}
+          transition={drawerTransition}
+          className="overflow-hidden"
+          style={{ pointerEvents: isExpanded ? "auto" : "none" }}
+          aria-hidden={!isExpanded}
+        >
+          <div
+            className="p-4 text-left"
+            style={{
+              width: QUEUE_DRAWER_WIDTH,
+              maxWidth: "min(360px, calc(100vw - 3rem - 36px))",
+            }}
+          >
+            <div className="mb-4 min-h-[32px] pr-1">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#EDD79C]">
+                Download queue
+              </h3>
+              <p className="mt-0.5 text-[9px] text-[#EDD79C]/40">
+                {jobsRaw.length} {jobsRaw.length === 1 ? "job active" : "jobs active"}
+              </p>
+            </div>
+
+            <ul className="max-h-[300px] sm:max-h-[380px] overflow-y-auto overflow-x-visible scrollbar-none space-y-2 pr-0.5">
+              {jobs.map((job, index) => (
+                <DownloadJobRow
+                  key={job.id}
+                  job={job}
+                  index={index}
+                  total={jobs.length}
+                  focusedJobId={focusedJobId}
+                  onFocusRow={setDownloaderFocusedJobId}
+                  onConfirmPending={confirmPendingDownloadJob}
+                  onPause={pauseDownloadJob}
+                  onResume={resumeDownloadJob}
+                  onRetry={retryDownloadJob}
+                  onRemove={removeDownloadJob}
+                  onReorder={reorderDownloadJobs}
+                  onToggleAudio={setDownloadJobAudioOnly}
+                />
+              ))}
+            </ul>
+          </div>
+        </motion.div>
+      </div>
     </motion.div>
   );
 };

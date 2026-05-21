@@ -45,6 +45,9 @@ Fixes:
 
 **0.1.7 unreleased:** (see AGENTS.md Shipped log, keep in sync)
 
+- Downloader UI: collapsible queue redesigned as a slide-out pop-up that sits on the right screen edge; hoisted active card z-indices for perfect tooltip visibility.
+- Downloader UI: redesigned expanded queue state, removing dividers, wrapping, and button clutter with high-fidelity Lucide icons and hover-revealed action controls.
+- Downloader UI: hero backdrop and queue row thumbnails crossfade when focus or thumb changes.
 - Download queue: per-job stall watchdog (activity-based, not a global timer); failed row + notification when yt-dlp progress stops.
 - Downloader metadata: `get_video_info` simulates use cookie context like downloads; one failed simulate no longer drops the other.
 - Downloader/gallery duration: no `NaN:NaN` labels; invalid yt-dlp durations normalized at source and in `formatDuration`.

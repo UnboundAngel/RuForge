@@ -401,13 +401,24 @@ export const DownloaderView = (props: DownloaderViewProps) => {
         />
       )}
       {heroThumb ? (
-        <div className="absolute inset-0 z-0">
-          <img
-            src={heroThumb}
-            alt=""
-            className="w-full h-full object-cover opacity-40 blur-[12px] saturate-[1.1]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#1D1613]/80 via-transparent to-[#1D1613]" />
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <AnimatePresence mode="sync" initial={false}>
+            <motion.div
+              key={heroThumb}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+              className="absolute inset-0"
+            >
+              <img
+                src={heroThumb}
+                alt=""
+                className="h-full w-full object-cover opacity-40 blur-[12px] saturate-[1.1]"
+              />
+            </motion.div>
+          </AnimatePresence>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#1D1613]/80 via-transparent to-[#1D1613]" />
         </div>
       ) : null}
       <div className="relative z-10 flex h-full flex-col p-4 sm:p-10 lg:p-16">
