@@ -212,7 +212,12 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
-- **Download finish hero clear**: `onDownloadJobFinished` reads the job URL inside the same `set()` snapshot as the removal update, so a concurrent queue remove no longer drops `finishedUrl` and leaves hero URL/videoInfo stuck. `downloadQueueSlice.ts`.
+- **Explorer bounds sync**: rAF-coalesced layout updates during sidebar transition and window resize; skips redundant IPC when rect unchanged; sidebar toggle no longer tears down listeners. `explorerBoundsSync.ts`, `App.tsx`, `explorer_embed.rs`.
+- **Download stall watchdog**: per-job activity-based idle detection (ETA-aware, longer pre-transfer/processing budgets); marks failed, kills yt-dlp via pause, notifies user. `downloadJobWatchdog.ts`, `downloadQueueSlice.ts`.
+- **Downloader metadata cookies**: `get_video_info` passes browser/cookie-file opts into both yt-dlp simulates (same as download); partial success keeps title/sizes when only video or audio simulate succeeds. `downloader.rs`, `downloadVideoInfoFetch.ts`, `downloadQueue.ts`, `useDownloaderView.ts`, `downloadQueueSlice.ts`.
+- **Duration display**: `formatDuration` guards non-finite values; `normalizeDurationSeconds` / `sanitizeVideoInfo` at fetch and snapshot boundaries; Rust single-video `get_video_info` uses `ytdlp_duration_secs`. `downloaderFormat.ts`, `downloader.rs`, `gallery.rs`.
+- **Download queue panel**: sorted job list drops ids missing from `downloadJobs` instead of non-null asserting; `jobMembershipKey` keeps `sortedJobIds` in sync on remove. `DownloadJobQueuePanel.tsx`.
+- **Download finish hero clear**: `onDownloadJobFinished` resolves finished URL from the queue row and IPC `url` inside one `set()`, clears hero fields in that same update, and `removeDownloadJob` clears hero when the removed URL matches; Rust `download-job-finished` includes `url`. `downloadQueueSlice.ts`, `downloader.rs`, `App.tsx`.
 - **Download queue pause**: `pauseDownloadJob` commits paused state only after `pause_download_job` invoke succeeds, so a failed pause no longer frees a slot or shows paused while yt-dlp still runs. `downloadQueueSlice.ts`.
 - **Downloader processing phase**: `download_reached_full` latches at 100% and no longer clears on later sub-100% `[download]` lines (HLS/playlist), so post-process stdout still emits `processing`. `downloader.rs`.
 - **Explorer layout (Linux)**: embedded browser uses a parented `explorer-surface` child window positioned in screen space (fixes GtkBox stacking and upward drift); closes legacy `explorer-view` child. `explorer_embed.rs`, `App.tsx`.

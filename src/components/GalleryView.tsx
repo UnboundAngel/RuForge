@@ -5,6 +5,7 @@ import { PlaySquare, History, Loader2, Play, HardDrive, Clock, Video, Volume2, V
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
 import { getPlaybackThumbnailBar } from "../playbackStorage";
+import { formatDuration } from "./downloader/downloaderFormat";
 import { formatStorageSize } from "../formatStorageSize";
 
 const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection, onClick: () => void }) => {
@@ -130,15 +131,6 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
   };
 
   const groupedEntries = groupEntriesByDate(entries);
-
-  const formatDuration = (seconds: number) => {
-    if (!seconds) return "";
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
 
   return (
     <motion.div 

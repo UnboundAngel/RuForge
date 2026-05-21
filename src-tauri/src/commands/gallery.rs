@@ -91,6 +91,7 @@ fn ytdlp_sidecar_metadata(
                 .as_f64()
                 .or_else(|| json["duration"].as_u64().map(|u| u as f64))
                 .or_else(|| json["duration"].as_i64().map(|i| i as f64))
+                .filter(|d| d.is_finite() && *d >= 0.0)
                 .unwrap_or(0.0);
             let chapters = json["chapters"].as_array().map(|arr| {
                 arr.iter()

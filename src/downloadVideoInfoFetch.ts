@@ -1,9 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
+import { sanitizeVideoInfo } from "./components/downloader/downloaderFormat";
 import type { VideoInfo } from "./types";
 
 const METADATA_FETCH_TIMEOUT_MS = 120_000;
 
-/** One in-flight `get_video_info` per URL + video quality format (snapshot holds both audio and video sizes). */
+export type VideoInfoCookieContext = {
+  browserCookies?: string;
+  cookieFile?: string;
+};
+
+/** One in-flight `get_video_info` per URL + format + cookie context. */
 const inflightByKey = new Map<string, Promise<VideoInfo>>();
 
 function timeoutError(): Error {
@@ -12,16 +18,29 @@ function timeoutError(): Error {
   );
 }
 
-export function videoInfoFetchInflightKey(url: string, videoFormat: string): string {
+function cookieInflightSuffix(cookies?: VideoInfoCookieContext): string {
+  if (!cookies) return "";
+  const browser = cookies.browserCookies ?? "";
+  const file = cookies.cookieFile ?? "";
+  if (!browser && !file) return "";
+  return `\x1f${browser}\x1f${file}`;
+}
+
+export function videoInfoFetchInflightKey(
+  url: string,
+  videoFormat: string,
+  cookies?: VideoInfoCookieContext,
+): string {
   const key = url.trim();
   if (!key) return "";
-  return `${key}\x1f${videoFormat}`;
+  return `${key}\x1f${videoFormat}${cookieInflightSuffix(cookies)}`;
 }
 
 export async function fetchVideoInfoWithTimeout(
   url: string,
   videoFormat: string,
   audioOnly = false,
+  cookies?: VideoInfoCookieContext,
   timeoutMs = METADATA_FETCH_TIMEOUT_MS,
 ): Promise<VideoInfo> {
   const key = url.trim();
@@ -29,7 +48,7 @@ export async function fetchVideoInfoWithTimeout(
     throw new Error("URL is empty");
   }
 
-  const inflightKey = videoInfoFetchInflightKey(key, videoFormat);
+  const inflightKey = videoInfoFetchInflightKey(key, videoFormat, cookies);
   let p = inflightByKey.get(inflightKey);
   if (!p) {
     p = (async () => {
@@ -40,12 +59,14 @@ export async function fetchVideoInfoWithTimeout(
             url: key,
             format: videoFormat,
             audioOnly,
+            browserCookies: cookies?.browserCookies ?? "",
+            cookieFile: cookies?.cookieFile ?? "",
           }),
           new Promise<VideoInfo>((_, reject) => {
             timer = setTimeout(() => reject(timeoutError()), timeoutMs);
           }),
         ]);
-        return result;
+        return sanitizeVideoInfo(result);
       } finally {
         if (timer !== undefined) clearTimeout(timer);
       }

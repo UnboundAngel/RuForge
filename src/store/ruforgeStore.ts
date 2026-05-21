@@ -5,6 +5,7 @@ import { emit, emitTo, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { sanitizeVideoInfo } from "../components/downloader/downloaderFormat";
 import type { GalleryEntry, MediaFile, PlaylistCollection, ProgressPayload, VideoInfo } from "../types";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
 import {
@@ -505,7 +506,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       setDownloadProgress: (progress) => set({ progress }),
       setVideoInfo: (videoInfo, meta) =>
         set((state) => ({
-          videoInfo,
+          videoInfo: videoInfo === null ? null : sanitizeVideoInfo(videoInfo),
           videoInfoUrl:
             videoInfo === null
               ? null

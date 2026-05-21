@@ -3,6 +3,7 @@ import { Play, Shuffle, ArrowLeft, Clock, HardDrive, Layers, MoreVertical } from
 import { PlaylistCollection } from "../types";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getPlaybackThumbnailBar } from "../playbackStorage";
+import { formatDuration } from "./downloader/downloaderFormat";
 import { formatStorageSize } from "../formatStorageSize";
 import { useRuforgeStore } from "../store/ruforgeStore";
 
@@ -16,14 +17,6 @@ export const PlaylistDetailView = ({
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
   const handlePlayPlaylist = useRuforgeStore((s) => s.handlePlayPlaylist);
   const mainThumbnail = playlist.stackThumbnailPath || (playlist.items[0]?.thumbnailPath || playlist.items[0]?.ruforgePosterPath);
-
-  const formatDuration = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
 
   return (
     <motion.div 

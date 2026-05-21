@@ -39,6 +39,12 @@ import {
   evictDownloadJobMetadataCacheWhenIdle,
   peekDownloadJobMetadataCache,
 } from "../downloadQueueMetadataCache";
+import {
+  armDownloadJobWatchdog,
+  disarmDownloadJobWatchdog,
+  initDownloadJobWatchdog,
+  touchDownloadJobWatchdog,
+} from "../downloadJobWatchdog";
 import { deliverUserNotification } from "../systemNotify";
 import { findLibraryDuplicate } from "../duplicateDownload";
 import { youtubeUrlsMatch } from "../youtubeUrl";
@@ -178,7 +184,10 @@ async function hydrateDownloadJobMetadata(
       return;
     }
 
-    const info = await fetchVideoInfoWithTimeout(urlTrim, videoFormat, audioOnly);
+    const info = await fetchVideoInfoWithTimeout(urlTrim, videoFormat, audioOnly, {
+      browserCookies: seed.options.browserCookies,
+      cookieFile: seed.options.cookieFile,
+    });
     const base = videoInfoToDownloadJobSnapshot(info, audioOnly);
     const snap = mergeVideoInfoFileSizes(base, info, audioOnly);
     commitDownloadJobMetadataCache(cacheKey, snap);
@@ -205,6 +214,29 @@ async function hydrateDownloadJobMetadata(
 }
 
 /** Legacy hero bindings mirror `focusedJobId` when that job is downloading. */
+/** Clear downloader hero fields when they still show a URL that just finished or was removed. */
+function heroClearPatchForUrl(
+  state: Pick<RuforgeStore, "url">,
+  matchUrl: string | undefined,
+): {
+  url?: string;
+  videoInfo?: null;
+  videoInfoUrl?: null;
+  videoInfoPreferredQuality?: null;
+  metadataError?: null;
+} {
+  if (!matchUrl?.trim()) return {};
+  const heroUrl = state.url.trim();
+  if (!heroUrl || !youtubeUrlsMatch(heroUrl, matchUrl)) return {};
+  return {
+    url: "",
+    videoInfo: null,
+    videoInfoUrl: null,
+    videoInfoPreferredQuality: null,
+    metadataError: null,
+  };
+}
+
 function syncLegacyDownloaderUi(
   jobs: DownloadJob[],
   focusedJobId: string | null,
@@ -277,27 +309,63 @@ export type DownloadQueueSlice = {
   pumpDownloadQueue: () => void;
 };
 
+const DOWNLOAD_STALL_ERROR =
+  "Download stalled (no progress from yt-dlp). Check your connection, then Retry or Resume.";
+
+function handleStalledDownloadJob(get: () => RuforgeStore): (jobId: string) => void {
+  return (jobId) => {
+    void (async () => {
+      const job = get().downloadJobs.find((j) => j.id === jobId);
+      if (!job || job.status !== "downloading") return;
+
+      try {
+        await invoke("pause_download_job", { jobId });
+      } catch (e) {
+        console.warn("[RuForge] stall cleanup pause_download_job:", e);
+      }
+
+      const latest = get().downloadJobs.find((j) => j.id === jobId);
+      if (!latest || latest.status !== "downloading") return;
+
+      get().onDownloadJobFinished({
+        jobId,
+        url: job.url,
+        success: false,
+        error: DOWNLOAD_STALL_ERROR,
+      });
+    })();
+  };
+}
+
 export const createDownloadQueueSlice: StateCreator<
   RuforgeStore,
   [],
   [],
   DownloadQueueSlice
 > = (set, get) => {
+  initDownloadJobWatchdog(get, handleStalledDownloadJob(get));
+
   function startHydratedDownloadJob(
     jobId: string,
     url: string,
     resume: boolean,
   ): void {
+    armDownloadJobWatchdog(jobId);
     void (async () => {
       try {
         if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
+          disarmDownloadJobWatchdog(jobId);
           get().pumpDownloadQueue();
           return;
         }
         await hydrateDownloadJobMetadata(get, set, jobId, url);
         const job = get().downloadJobs.find((j) => j.id === jobId);
-        if (!job || job.status !== "downloading") return;
+        if (!job || job.status !== "downloading") {
+          disarmDownloadJobWatchdog(jobId);
+          return;
+        }
         if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
+          disarmDownloadJobWatchdog(jobId);
           get().pumpDownloadQueue();
           return;
         }
@@ -311,12 +379,14 @@ export const createDownloadQueueSlice: StateCreator<
         const msg = String(e);
         if (isYtDlpStartCancelledError(msg)) {
           if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
+            disarmDownloadJobWatchdog(jobId);
             get().pumpDownloadQueue();
             return;
           }
         }
         get().onDownloadJobFinished({
           jobId,
+          url,
           success: false,
           error: msg,
         });
@@ -549,6 +619,7 @@ export const createDownloadQueueSlice: StateCreator<
     pauseDownloadJob: async (id) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job) return;
+      disarmDownloadJobWatchdog(id);
 
       if (job.status === "downloading") {
         try {
@@ -637,15 +708,21 @@ export const createDownloadQueueSlice: StateCreator<
         return;
       }
 
+      armDownloadJobWatchdog(id);
       try {
         if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
+          disarmDownloadJobWatchdog(id);
           get().pumpDownloadQueue();
           return;
         }
         await hydrateDownloadJobMetadata(get, set, id, job.url);
         const latest = get().downloadJobs.find((j) => j.id === id);
-        if (!latest || latest.status !== "downloading") return;
+        if (!latest || latest.status !== "downloading") {
+          disarmDownloadJobWatchdog(id);
+          return;
+        }
         if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
+          disarmDownloadJobWatchdog(id);
           get().pumpDownloadQueue();
           return;
         }
@@ -656,6 +733,7 @@ export const createDownloadQueueSlice: StateCreator<
           resume: true,
         });
       } catch (e) {
+        disarmDownloadJobWatchdog(id);
         const msg = String(e);
         if (
           isYtDlpStartCancelledError(msg) &&
@@ -664,7 +742,12 @@ export const createDownloadQueueSlice: StateCreator<
           get().pumpDownloadQueue();
           return;
         }
-        get().onDownloadJobFinished({ jobId: id, success: false, error: msg });
+        get().onDownloadJobFinished({
+          jobId: id,
+          url: job.url,
+          success: false,
+          error: msg,
+        });
       }
     },
 
@@ -691,6 +774,7 @@ export const createDownloadQueueSlice: StateCreator<
     removeDownloadJob: async (id) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job) return;
+      disarmDownloadJobWatchdog(id);
       clearSkippedJobRemovalTimer(id);
       const removedUrl = job.url;
       if (job.status === "downloading") {
@@ -707,6 +791,7 @@ export const createDownloadQueueSlice: StateCreator<
           downloadJobs,
           focusedJobId: focus,
           ...syncLegacyDownloaderUi(downloadJobs, focus),
+          ...heroClearPatchForUrl(s, removedUrl),
         };
       });
       evictDownloadJobMetadataCacheIfOrphaned(removedUrl, get().downloadJobs);
@@ -786,9 +871,14 @@ export const createDownloadQueueSlice: StateCreator<
           ...syncLegacyDownloaderUi(downloadJobs, focus),
         };
       });
+      const job = get().downloadJobs.find((j) => j.id === payload.jobId);
+      if (job?.status === "downloading") {
+        touchDownloadJobWatchdog(payload.jobId);
+      }
     },
 
     onDownloadJobPaused: (jobId) => {
+      disarmDownloadJobWatchdog(jobId);
       resetDownloadProgressEtaSmoothing(jobId);
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
@@ -813,13 +903,16 @@ export const createDownloadQueueSlice: StateCreator<
     },
 
     onDownloadJobFinished: (payload) => {
+      disarmDownloadJobWatchdog(payload.jobId);
       resetDownloadProgressEtaSmoothing(payload.jobId);
       const starts: { id: string; url: string; resume: boolean }[] = [];
       const skippedIds: string[] = [];
       let finishedUrl: string | undefined;
 
       set((s) => {
-        finishedUrl = s.downloadJobs.find((j) => j.id === payload.jobId)?.url;
+        const finishedJob = s.downloadJobs.find((j) => j.id === payload.jobId);
+        finishedUrl =
+          payload.url?.trim() || finishedJob?.url?.trim() || undefined;
 
         let downloadJobs = s.downloadJobs.map((j) =>
           j.id === payload.jobId
@@ -859,6 +952,7 @@ export const createDownloadQueueSlice: StateCreator<
           downloadJobs,
           focusedJobId: focus,
           ...syncLegacyDownloaderUi(downloadJobs, focus),
+          ...(payload.success ? heroClearPatchForUrl(s, finishedUrl) : {}),
         };
       });
 
@@ -874,14 +968,6 @@ export const createDownloadQueueSlice: StateCreator<
       }
 
       if (payload.success) {
-        if (finishedUrl) {
-          const heroUrl = get().url.trim();
-          if (heroUrl && youtubeUrlsMatch(heroUrl, finishedUrl)) {
-            get().setDownloaderUrl("");
-            get().setVideoInfo(null);
-            get().setMetadataError(null);
-          }
-        }
         void get().invalidateEntries({ silent: true });
         void deliverUserNotification(
           {

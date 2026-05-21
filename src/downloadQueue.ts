@@ -6,6 +6,7 @@ import {
   ytdlpFormatFromPreferredQuality,
   ytdlpFormatFromSettings,
 } from "./downloadFormat";
+import { normalizeDurationSeconds } from "./components/downloader/downloaderFormat";
 import type { PlaylistItem, ProgressPayload, VideoInfo } from "./types";
 import type { RuforgeSettings } from "./store/types";
 import { effectiveDownloadSubLangs } from "./store/types";
@@ -30,7 +31,7 @@ export function downloadJobSnapshotToVideoInfo(snap: DownloadJobMediaSnapshot): 
   return {
     title: snap.title,
     thumbnail: snap.thumbnail,
-    duration: snap.duration,
+    duration: normalizeDurationSeconds(snap.duration),
     formats: [],
     fileSizeBytes: snap.fileSizeBytes ?? null,
     fileSizeBytesAudio: snap.fileSizeBytesAudio ?? null,
@@ -63,15 +64,19 @@ export function videoInfoToDownloadJobSnapshot(
   const fileSizeBytes = audioOnly
     ? (fileSizeBytesAudio ?? legacy)
     : (fileSizeBytesVideo ?? legacy);
+  const playlistItems = info.playlistItems?.map((item) => ({
+    ...item,
+    duration: normalizeDurationSeconds(item.duration),
+  }));
   return {
     title: info.title,
     thumbnail: info.thumbnail ?? "",
-    duration: info.duration,
+    duration: normalizeDurationSeconds(info.duration),
     fileSizeBytes,
     fileSizeBytesAudio,
     fileSizeBytesVideo,
     isPlaylist: info.isPlaylist,
-    playlistItems: info.playlistItems,
+    playlistItems,
     uploader: info.uploader ?? undefined,
     channel: info.channel ?? undefined,
   };
@@ -148,6 +153,8 @@ export type DownloadJobFinishedPayload = {
   jobId: string;
   success: boolean;
   error?: string;
+  /** Set by Rust on IPC finish; used when the queue row was removed before this handler runs. */
+  url?: string;
 };
 
 export { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from "./store/types";
@@ -189,6 +196,18 @@ export function patchDownloadJobOptionsForAudio(
   };
 }
 
+/** Cookie context for yt-dlp metadata simulate and download (matches `DownloadOptions`). */
+export function cookieContextFromSettings(
+  settings: Pick<RuforgeSettings, "browserContext" | "cookieFile">,
+): Pick<DownloadJobOptions, "browserCookies" | "cookieFile"> {
+  return {
+    browserCookies:
+      settings.browserContext === "custom" ? "" : settings.browserContext,
+    cookieFile:
+      settings.browserContext === "custom" ? settings.cookieFile : "",
+  };
+}
+
 export function buildDownloadJobOptions(
   settings: RuforgeSettings,
   outputDir: string,
@@ -199,15 +218,14 @@ export function buildDownloadJobOptions(
       ? SAVE_AS_NEW_FILENAME_TEMPLATE
       : DEFAULT_FILENAME_TEMPLATE;
   const audioOnly = settings.downloadAudioOnly === true;
+  const cookies = cookieContextFromSettings(settings);
   return patchDownloadJobOptionsForAudio(
     {
       format: ytdlpFormatFromSettings(settings),
       outputDir,
       filenameTemplate,
-      browserCookies:
-        settings.browserContext === "custom" ? "" : settings.browserContext,
-      cookieFile:
-        settings.browserContext === "custom" ? settings.cookieFile : "",
+      browserCookies: cookies.browserCookies,
+      cookieFile: cookies.cookieFile,
       subLangs: "",
       audioOnly: false,
       audioFormat: normalizeDownloadAudioFormat(settings.downloadAudioFormat),

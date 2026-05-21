@@ -1,3 +1,4 @@
+import { normalizeDurationSeconds } from "./components/downloader/downloaderFormat";
 import type { MediaFile } from "./types";
 
 /**
@@ -14,7 +15,7 @@ export function mediaFileFromGalleryJson(o: Record<string, unknown>): MediaFile 
     path: String(o.path ?? ""),
     size: Number(o.size ?? 0),
     created: Number(o.created ?? 0),
-    duration: Number(o.duration ?? 0),
+    duration: normalizeDurationSeconds(Number(o.duration ?? 0)),
     thumbnailPath: null,
     ruforgePosterPath: null,
     subtitlePath: null,
