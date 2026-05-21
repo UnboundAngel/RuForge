@@ -2,42 +2,25 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play } from "lucide-react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { emitTo } from "@tauri-apps/api/event";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { askConfirm } from "./ConfirmDialog";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { getPlaybackThumbnailBar, getWatchProgress, isVideoWatched } from "../playbackStorage";
 import { formatStorageSize } from "../formatStorageSize";
 import { clearPlaybackStateForDeletedPaths } from "../cleanupCandidates";
+import { releasePlaybackBeforeDelete } from "../releasePlaybackBeforeDelete";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { formatDuration } from "./downloader/downloaderFormat";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 
 function deleteMediaErrorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
+  if (/preview generation is still finishing/i.test(msg)) {
+    return msg;
+  }
   if (/os error 32|being used by another process/i.test(msg)) {
-    return "Close the video before deleting it.";
+    return "Close the video or wait for preview generation to finish, then try again.";
   }
   return "Failed to delete video.";
-}
-
-async function releasePlaybackBeforeDelete(paths: string[]): Promise<void> {
-  const pathSet = new Set(paths);
-  const st = useRuforgeStore.getState();
-  if (st.playingFile && pathSet.has(st.playingFile.path)) {
-    st.stopPlayback();
-    if (st.activeTab === "player") {
-      st.setActiveTab("media");
-    }
-  }
-  try {
-    const mini = await WebviewWindow.getByLabel("mini");
-    if (mini) {
-      await emitTo("mini", "stop-playback", "main-app");
-    }
-  } catch {
-    // Mini window may not exist.
-  }
 }
 
 async function removeQueueJobsForSourceUrl(sourceUrl: string): Promise<void> {

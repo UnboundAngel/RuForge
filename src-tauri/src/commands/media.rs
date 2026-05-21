@@ -2,20 +2,57 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
+use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
 
+use crate::process_tree::kill_shell_child_tree;
 use crate::utils::{POSTER_FILE, THUMB_DIR_NAME};
 
-/// One ffmpeg/ffprobe pipeline at a time per video path (avoids overlapping sidecars from
-/// Strict Mode double-mounts, main + mini player, or poster backfill + scrubber extract).
-static FFMPEG_PER_VIDEO: OnceLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = OnceLock::new();
+struct FfmpegVideoSlot {
+    lock: Arc<Mutex<()>>,
+    child: Arc<Mutex<Option<CommandChild>>>,
+}
 
-fn ffmpeg_lock_map() -> &'static Mutex<HashMap<String, Arc<Mutex<()>>>> {
+/// One ffmpeg pipeline at a time per video path (avoids overlapping sidecars from
+/// Strict Mode double-mounts, main + mini player, or poster backfill + scrubber extract).
+static FFMPEG_PER_VIDEO: OnceLock<Mutex<HashMap<String, Arc<FfmpegVideoSlot>>>> = OnceLock::new();
+
+fn ffmpeg_slot_map() -> &'static Mutex<HashMap<String, Arc<FfmpegVideoSlot>>> {
     FFMPEG_PER_VIDEO.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+async fn ffmpeg_slot_for(video_path: &str) -> Arc<FfmpegVideoSlot> {
+    let key = video_path.to_string();
+    let mut map = ffmpeg_slot_map().lock().await;
+    map.entry(key)
+        .or_insert_with(|| {
+            Arc::new(FfmpegVideoSlot {
+                lock: Arc::new(Mutex::new(())),
+                child: Arc::new(Mutex::new(None)),
+            })
+        })
+        .clone()
+}
+
+/// Stop any in-flight RuForge ffmpeg sidecar for this file (preview sprites / poster).
+pub async fn cancel_ffmpeg_for_video(video_path: &str) {
+    let slot = {
+        let map = ffmpeg_slot_map().lock().await;
+        map.get(video_path).cloned()
+    };
+    let Some(slot) = slot else {
+        return;
+    };
+    let child = slot.child.lock().await.take();
+    if let Some(child) = child {
+        kill_shell_child_tree(child);
+    }
 }
 
 async fn with_per_video_ffmpeg_lock<F, Fut, T>(video_path: &str, run: F) -> T
@@ -23,15 +60,47 @@ where
     F: FnOnce() -> Fut,
     Fut: Future<Output = T>,
 {
-    let key = video_path.to_string();
-    let slot = {
-        let mut map = ffmpeg_lock_map().lock().await;
-        map.entry(key)
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone()
-    };
-    let _guard = slot.lock().await;
+    let slot = ffmpeg_slot_for(video_path).await;
+    let _guard = slot.lock.lock().await;
     run().await
+}
+
+async fn run_ffmpeg_sidecar(app: &AppHandle, video_path: &str, args: Vec<&str>) -> Result<(), String> {
+    let slot = ffmpeg_slot_for(video_path).await;
+    let _guard = slot.lock.lock().await;
+
+    let (mut rx, child) = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|e| e.to_string())?
+        .args(args)
+        .spawn()
+        .map_err(|e| format!("Failed to start ffmpeg sidecar: {}", e))?;
+
+    *slot.child.lock().await = Some(child);
+
+    let mut success = false;
+    while let Some(event) = rx.recv().await {
+        match event {
+            CommandEvent::Terminated(payload) => {
+                success = payload.code == Some(0);
+                break;
+            }
+            CommandEvent::Error(err) => {
+                *slot.child.lock().await = None;
+                return Err(format!("ffmpeg sidecar error: {}", err));
+            }
+            CommandEvent::Stdout(_) | CommandEvent::Stderr(_) => {}
+            _ => {}
+        }
+    }
+
+    *slot.child.lock().await = None;
+    if success {
+        Ok(())
+    } else {
+        Err("ffmpeg sidecar failed".into())
+    }
 }
 
 /// Matches `fps=1/5` × `tile=10x10`: 100 frames per sheet, 5 seconds per frame → 500s video span per sheet.
@@ -91,11 +160,10 @@ fn collect_sprite_paths(thumb_dir: &std::path::Path) -> Vec<std::path::PathBuf> 
 
 async fn write_poster_jpeg(app: &AppHandle, video_path: &str, dest: &std::path::Path) -> Result<(), String> {
     let dest_str = dest.to_str().ok_or("Invalid poster path")?;
-    let output = app
-        .shell()
-        .sidecar("ffmpeg")
-        .map_err(|e| e.to_string())?
-        .args([
+    run_ffmpeg_sidecar(
+        app,
+        video_path,
+        vec![
             "-hide_banner",
             "-loglevel",
             "error",
@@ -109,16 +177,10 @@ async fn write_poster_jpeg(app: &AppHandle, video_path: &str, dest: &std::path::
             "-q:v",
             "3",
             dest_str,
-        ])
-        .output()
-        .await
-        .map_err(|e| format!("ffmpeg sidecar poster: {}", e))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err("ffmpeg sidecar failed to write poster.jpg".into())
-    }
+        ],
+    )
+    .await
+    .map_err(|_| "ffmpeg sidecar failed to write poster.jpg".to_string())
 }
 
 async fn ensure_poster_if_missing_inner(app: AppHandle, video_path: String) -> Result<(), String> {
@@ -198,11 +260,10 @@ async fn extract_frames_inner(app: AppHandle, video_path: String) -> Result<Vec<
     if !preview_sprites_complete(&thumb_dir, duration_secs) {
         let output_pattern = thumb_dir.join("sprite_%03d.jpg");
 
-        let output = app
-            .shell()
-            .sidecar("ffmpeg")
-            .map_err(|e| e.to_string())?
-            .args([
+        run_ffmpeg_sidecar(
+            &app,
+            &video_path,
+            vec![
                 "-hide_banner",
                 "-loglevel",
                 "error",
@@ -213,14 +274,10 @@ async fn extract_frames_inner(app: AppHandle, video_path: String) -> Result<Vec<
                 "-q:v",
                 "5",
                 output_pattern.to_str().ok_or("Bad sprite path")?,
-            ])
-            .output()
-            .await
-            .map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
-
-        if !output.status.success() {
-            return Err("ffmpeg sidecar failed to extract frames".to_string());
-        }
+            ],
+        )
+        .await
+        .map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
 
         let sprites = collect_sprite_paths(&thumb_dir);
         if sprites.is_empty() {
@@ -266,6 +323,19 @@ pub async fn delete_media_batch(paths: Vec<String>) -> Result<u64, String> {
 
 #[tauri::command]
 pub async fn delete_media(video_path: String) -> Result<(), String> {
+    cancel_ffmpeg_for_video(&video_path).await;
+
+    let slot = ffmpeg_slot_for(&video_path).await;
+    let _guard = match tokio::time::timeout(Duration::from_secs(8), slot.lock.lock()).await {
+        Ok(guard) => guard,
+        Err(_) => {
+            return Err(
+                "Preview generation is still finishing for this file. Wait a few seconds and try again."
+                    .to_string(),
+            );
+        }
+    };
+
     let video_file_path = std::path::Path::new(&video_path);
     let video_dir = video_file_path.parent().ok_or("Invalid video path")?;
     let video_name = video_file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
