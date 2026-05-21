@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from "motion/react";
-import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug, Captions, Layers, Minus, Plus, RefreshCw } from 'lucide-react';
+import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug, Captions, Layers, Minus, Plus, RefreshCw, Film } from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { DOWNLOAD_AUDIO_FORMAT_OPTIONS } from '../downloadFormat';
@@ -642,6 +642,33 @@ export const SettingsView: React.FC = () => {
                   />
                 </>
               )}
+              <FadingDivider />
+              <SettingItem
+                icon={Film}
+                title="Auto scrubber previews"
+                description={
+                  settings.downloadAudioOnly
+                    ? "Not used for audio-only downloads."
+                    : settings.autoDownloadScrubberPreviews
+                    ? "Sprite sheets for the player scrubber are built after each video download."
+                    : "Use Generate Previews in the library to build scrubber sprites manually."
+                }
+                active={settings.autoDownloadScrubberPreviews && !settings.downloadAudioOnly}
+                control={
+                  <ToggleSlot
+                    active={
+                      settings.autoDownloadScrubberPreviews && !settings.downloadAudioOnly
+                    }
+                    onClick={() => {
+                      if (settings.downloadAudioOnly) return;
+                      void updateSetting(
+                        "autoDownloadScrubberPreviews",
+                        !settings.autoDownloadScrubberPreviews,
+                      );
+                    }}
+                  />
+                }
+              />
               <FadingDivider />
               <SettingItem
                 icon={Download}

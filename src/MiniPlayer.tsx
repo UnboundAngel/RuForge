@@ -43,6 +43,7 @@ import { isAudioOnlyPath } from "./mediaKind";
 import {
   readAudioAutoAdvanceFolder,
   readAudioPrefetchNext,
+  readAutoDownloadScrubberPreviews,
 } from "./audioPlaybackPrefs";
 import { syncRuforgeAccentCss } from "./accentCss";
 import {
@@ -281,12 +282,17 @@ export default function MiniPlayer() {
   }, []);
   const cursorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const autoScrubberPreviews = readAutoDownloadScrubberPreviews();
+
   useEffect(() => {
     if (!playingFile || isAudioOnlyPath(playingFile.path)) {
       setScrubberThumbs([]);
       return;
     }
-    invoke<string[]>("extract_frames", { videoPath: playingFile.path })
+    invoke<string[]>("extract_frames", {
+      videoPath: playingFile.path,
+      allowGenerate: autoScrubberPreviews,
+    })
       .then((paths) =>
         setScrubberThumbs(
           paths.filter((p) => {
@@ -296,7 +302,7 @@ export default function MiniPlayer() {
         ),
       )
       .catch(console.error);
-  }, [playingFile]);
+  }, [playingFile, autoScrubberPreviews]);
 
   const [winSize, setWinSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 

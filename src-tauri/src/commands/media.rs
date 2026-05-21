@@ -57,18 +57,20 @@ pub async fn cancel_ffmpeg_for_video(video_path: &str) {
 
 async fn with_per_video_ffmpeg_lock<F, Fut, T>(video_path: &str, run: F) -> T
 where
-    F: FnOnce() -> Fut,
+    F: FnOnce(Arc<FfmpegVideoSlot>) -> Fut,
     Fut: Future<Output = T>,
 {
     let slot = ffmpeg_slot_for(video_path).await;
     let _guard = slot.lock.lock().await;
-    run().await
+    run(slot.clone()).await
 }
 
-async fn run_ffmpeg_sidecar(app: &AppHandle, video_path: &str, args: Vec<&str>) -> Result<(), String> {
-    let slot = ffmpeg_slot_for(video_path).await;
-    let _guard = slot.lock.lock().await;
-
+/// Caller must already hold `slot.lock` (via [`with_per_video_ffmpeg_lock`]).
+async fn run_ffmpeg_sidecar_unlocked(
+    app: &AppHandle,
+    slot: &Arc<FfmpegVideoSlot>,
+    args: Vec<&str>,
+) -> Result<(), String> {
     let (mut rx, child) = app
         .shell()
         .sidecar("ffmpeg")
@@ -158,11 +160,16 @@ fn collect_sprite_paths(thumb_dir: &std::path::Path) -> Vec<std::path::PathBuf> 
     out
 }
 
-async fn write_poster_jpeg(app: &AppHandle, video_path: &str, dest: &std::path::Path) -> Result<(), String> {
+async fn write_poster_jpeg(
+    app: &AppHandle,
+    slot: &Arc<FfmpegVideoSlot>,
+    video_path: &str,
+    dest: &std::path::Path,
+) -> Result<(), String> {
     let dest_str = dest.to_str().ok_or("Invalid poster path")?;
-    run_ffmpeg_sidecar(
+    run_ffmpeg_sidecar_unlocked(
         app,
-        video_path,
+        slot,
         vec![
             "-hide_banner",
             "-loglevel",
@@ -183,7 +190,22 @@ async fn write_poster_jpeg(app: &AppHandle, video_path: &str, dest: &std::path::
     .map_err(|_| "ffmpeg sidecar failed to write poster.jpg".to_string())
 }
 
-async fn ensure_poster_if_missing_inner(app: AppHandle, video_path: String) -> Result<(), String> {
+#[tauri::command]
+pub async fn ensure_poster_if_missing(app: AppHandle, video_path: String) -> Result<(), String> {
+    let vk = video_path.clone();
+    with_per_video_ffmpeg_lock(&vk, |slot| {
+        let app = app.clone();
+        let video_path = video_path;
+        async move { ensure_poster_if_missing_inner(app, video_path, slot).await }
+    })
+    .await
+}
+
+async fn ensure_poster_if_missing_inner(
+    app: AppHandle,
+    video_path: String,
+    slot: Arc<FfmpegVideoSlot>,
+) -> Result<(), String> {
     let video_file_path = Path::new(&video_path);
     if !video_file_path.is_file() {
         return Ok(());
@@ -214,21 +236,15 @@ async fn ensure_poster_if_missing_inner(app: AppHandle, video_path: String) -> R
         }
     }
     std::fs::create_dir_all(&thumb_dir).map_err(|e| e.to_string())?;
-    write_poster_jpeg(&app, &video_path, &poster_dest).await
+    write_poster_jpeg(&app, &slot, &video_path, &poster_dest).await
 }
 
-#[tauri::command]
-pub async fn ensure_poster_if_missing(app: AppHandle, video_path: String) -> Result<(), String> {
-    let vk = video_path.clone();
-    with_per_video_ffmpeg_lock(&vk, || {
-        let app = app.clone();
-        let video_path = video_path;
-        async move { ensure_poster_if_missing_inner(app, video_path).await }
-    })
-    .await
-}
-
-async fn extract_frames_inner(app: AppHandle, video_path: String) -> Result<Vec<String>, String> {
+async fn extract_frames_inner(
+    app: AppHandle,
+    video_path: String,
+    allow_generate: bool,
+    slot: Arc<FfmpegVideoSlot>,
+) -> Result<Vec<String>, String> {
     let video_file_path = Path::new(&video_path);
     let video_dir = video_file_path.parent().ok_or("Invalid video path")?;
     let video_name = video_file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
@@ -250,19 +266,25 @@ async fn extract_frames_inner(app: AppHandle, video_path: String) -> Result<Vec<
     let poster_dest = thumb_dir.join(POSTER_FILE);
     let duration_secs = duration_from_ytdlp_info_json(video_file_path);
 
+    let existing: Vec<String> = collect_sprite_paths(&thumb_dir)
+        .into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+
     if preview_sprites_complete(&thumb_dir, duration_secs) && poster_dest.is_file() {
-        return Ok(collect_sprite_paths(&thumb_dir)
-            .into_iter()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect());
+        return Ok(existing);
+    }
+
+    if !allow_generate {
+        return Ok(existing);
     }
 
     if !preview_sprites_complete(&thumb_dir, duration_secs) {
         let output_pattern = thumb_dir.join("sprite_%03d.jpg");
 
-        run_ffmpeg_sidecar(
+        run_ffmpeg_sidecar_unlocked(
             &app,
-            &video_path,
+            &slot,
             vec![
                 "-hide_banner",
                 "-loglevel",
@@ -286,7 +308,7 @@ async fn extract_frames_inner(app: AppHandle, video_path: String) -> Result<Vec<
     }
 
     if !poster_dest.is_file() {
-        let _ = write_poster_jpeg(&app, &video_path, &poster_dest).await;
+        let _ = write_poster_jpeg(&app, &slot, &video_path, &poster_dest).await;
     }
 
     let out: Vec<String> = collect_sprite_paths(&thumb_dir)
@@ -297,14 +319,33 @@ async fn extract_frames_inner(app: AppHandle, video_path: String) -> Result<Vec<
 }
 
 #[tauri::command]
-pub async fn extract_frames(app: AppHandle, video_path: String) -> Result<Vec<String>, String> {
+pub async fn extract_frames(
+    app: AppHandle,
+    video_path: String,
+    allow_generate: Option<bool>,
+) -> Result<Vec<String>, String> {
+    let allow_generate = allow_generate.unwrap_or(true);
     let vk = video_path.clone();
-    with_per_video_ffmpeg_lock(&vk, || {
+    with_per_video_ffmpeg_lock(&vk, |slot| {
         let app = app.clone();
         let video_path = video_path;
-        async move { extract_frames_inner(app, video_path).await }
+        async move { extract_frames_inner(app, video_path, allow_generate, slot).await }
     })
     .await
+}
+
+/// After canceling ffmpeg, wait briefly for the per-file lock (best effort).
+async fn wait_ffmpeg_slot_idle(video_path: &str, max_wait: Duration) {
+    let slot = ffmpeg_slot_for(video_path).await;
+    let deadline = tokio::time::Instant::now() + max_wait;
+    while tokio::time::Instant::now() < deadline {
+        cancel_ffmpeg_for_video(video_path).await;
+        if let Ok(guard) = slot.lock.try_lock() {
+            drop(guard);
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 #[tauri::command]
@@ -324,17 +365,7 @@ pub async fn delete_media_batch(paths: Vec<String>) -> Result<u64, String> {
 #[tauri::command]
 pub async fn delete_media(video_path: String) -> Result<(), String> {
     cancel_ffmpeg_for_video(&video_path).await;
-
-    let slot = ffmpeg_slot_for(&video_path).await;
-    let _guard = match tokio::time::timeout(Duration::from_secs(8), slot.lock.lock()).await {
-        Ok(guard) => guard,
-        Err(_) => {
-            return Err(
-                "Preview generation is still finishing for this file. Wait a few seconds and try again."
-                    .to_string(),
-            );
-        }
-    };
+    wait_ffmpeg_slot_idle(&video_path, Duration::from_secs(2)).await;
 
     let video_file_path = std::path::Path::new(&video_path);
     let video_dir = video_file_path.parent().ok_or("Invalid video path")?;

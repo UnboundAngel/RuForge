@@ -36,7 +36,7 @@ export async function applyReplaceBeforeDownload(
       return {
         ok: false,
         reason:
-          "Could not remove the existing file. Close playback or wait for preview generation to finish.",
+          "Could not remove the existing file. Close the player and try again.",
       };
     }
     return { ok: false, reason: "Could not remove the existing file before replacing." };

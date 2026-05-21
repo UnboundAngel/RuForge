@@ -79,6 +79,8 @@ export interface RuforgeSettings {
   downloadSubtitleLangs: string;
   /** When true, duplicate YouTube URLs are skipped without prompting. */
   skipDuplicatesAutomatically: boolean;
+  /** When true, ffmpeg scrubber sprite sheets are built after each video download. */
+  autoDownloadScrubberPreviews: boolean;
   /** Parallel yt-dlp jobs (`downloadQueueSlice.maxConcurrentDownloads` mirrors this). */
   maxConcurrentDownloads: number;
 }
@@ -102,6 +104,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   downloadSubtitles: true,
   downloadSubtitleLangs: "en.*",
   skipDuplicatesAutomatically: false,
+  autoDownloadScrubberPreviews: true,
   maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
 };
 

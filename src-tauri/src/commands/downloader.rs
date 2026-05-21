@@ -1,4 +1,6 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
@@ -8,6 +10,7 @@ use crate::download_job_manager::{kill_ytdlp_tree, DownloadJobManager};
 use crate::ytdlp_binary::ytdlp_shell_command;
 
 use crate::commands::media::extract_frames;
+use crate::utils::is_media_ext;
 
 /// Where yt-dlp wrote files for this job: playlist subfolder if template has a fixed prefix, else output root.
 fn post_download_diag_listing_root(output_dir: &Path, filename_template_eff: &str) -> std::path::PathBuf {
@@ -876,6 +879,15 @@ fn default_audio_format() -> String {
     "m4a".to_string()
 }
 
+fn default_auto_scrub_previews() -> bool {
+    true
+}
+
+/// Scrubber sprites are for video files only (not audio-only library entries).
+fn is_video_scrub_ext(ext: &str) -> bool {
+    matches!(ext, "mp4" | "mkv" | "webm")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadOptions {
     pub format: String,
@@ -892,6 +904,9 @@ pub struct DownloadOptions {
     /// yt-dlp `--audio-format` (e.g. m4a, mp3, opus).
     #[serde(default = "default_audio_format")]
     pub audio_format: String,
+    /// When true, build ffmpeg scrubber sprite sheets after a successful video download.
+    #[serde(default = "default_auto_scrub_previews")]
+    pub auto_scrub_previews: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -949,6 +964,7 @@ fn video_info_cookie_probe(
         sub_langs: String::new(),
         audio_only: false,
         audio_format: default_audio_format(),
+        auto_scrub_previews: true,
     })
 }
 
@@ -1169,42 +1185,75 @@ fn build_ytdlp_download_args(
     Ok(args)
 }
 
-fn spawn_post_download_frame_extract(
-    app: AppHandle,
-    video_url: String,
-    options: DownloadOptions,
-    filename_template_eff: String,
-) {
-    tokio::spawn(async move {
-        let mut get_name_args = vec![
-            "-P".to_string(),
-            options.output_dir.clone(),
-            "-o".to_string(),
-            filename_template_eff,
-            "--windows-filenames".to_string(),
-            "--trim-filenames".to_string(),
-            "200".to_string(),
-            "--get-filename".to_string(),
-        ];
-        let _ = push_ytdlp_download_cookie_args(&app, &mut get_name_args, &options);
-        get_name_args.push(video_url);
+fn collect_recent_video_paths(root: &Path, since: SystemTime) -> Vec<PathBuf> {
+    const SLACK_SECS: u64 = 15;
+    let cutoff = since
+        .checked_sub(std::time::Duration::from_secs(SLACK_SECS))
+        .unwrap_or(since);
 
-        let Ok(cmd) = ytdlp_shell_command(&app) else {
+    let mut out: Vec<PathBuf> = Vec::new();
+
+    fn walk(
+        dir: &Path,
+        depth: u32,
+        max_depth: u32,
+        cutoff: SystemTime,
+        out: &mut Vec<PathBuf>,
+    ) {
+        if depth > max_depth {
+            return;
+        }
+        let Ok(rd) = std::fs::read_dir(dir) else {
             return;
         };
-        if let Ok(output) = cmd.args(get_name_args).output().await {
-            for raw in output.stdout.split(|&b| b == b'\n') {
-                let path_str = match std::str::from_utf8(raw) {
-                    Ok(s) => s.trim(),
-                    Err(_) => continue,
-                };
-                if path_str.is_empty() {
-                    continue;
-                }
-                if std::path::Path::new(path_str).is_file() {
-                    let _ = extract_frames(app.clone(), path_str.to_string()).await;
-                }
+        for ent in rd.flatten() {
+            let p = ent.path();
+            if p.is_dir() {
+                walk(&p, depth + 1, max_depth, cutoff, out);
+                continue;
             }
+            if !p.is_file() {
+                continue;
+            }
+            let ext = p
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            if !is_media_ext(&ext) || !is_video_scrub_ext(&ext) {
+                continue;
+            }
+            let recent = std::fs::metadata(&p)
+                .and_then(|m| m.modified())
+                .map(|t| t >= cutoff)
+                .unwrap_or(true);
+            if recent {
+                out.push(p);
+            }
+        }
+    }
+
+    if root.is_dir() {
+        walk(root, 0, 8, cutoff, &mut out);
+    }
+    out.sort();
+    out
+}
+
+fn spawn_scrub_previews_for_recent_videos(
+    app: AppHandle,
+    listing_root: PathBuf,
+    since: SystemTime,
+) {
+    tokio::spawn(async move {
+        let paths = tokio::task::spawn_blocking(move || {
+            collect_recent_video_paths(&listing_root, since)
+        })
+        .await
+        .unwrap_or_default();
+        for path in paths {
+            let path_str = path.to_string_lossy().to_string();
+            let _ = extract_frames(app.clone(), path_str, Some(true)).await;
         }
     });
 }
@@ -1312,6 +1361,8 @@ pub async fn start_download_job(
             Path::new(&options.output_dir),
             &filename_template_eff,
         );
+        let auto_scrub = options.auto_scrub_previews && !options.audio_only;
+        let scrub_spawned = Arc::new(AtomicBool::new(false));
         let mut progress_extras = PlaylistDownloadProgressExtras::default();
         let mut error_log = String::new();
         let mut download_reached_full = false;
@@ -1407,6 +1458,13 @@ pub async fn start_download_job(
                                 total_bytes: last_total_bytes,
                             },
                         );
+                        if auto_scrub && !scrub_spawned.swap(true, Ordering::SeqCst) {
+                            spawn_scrub_previews_for_recent_videos(
+                                app.clone(),
+                                diag_root.clone(),
+                                download_started_at,
+                            );
+                        }
                     }
                 }
                 CommandEvent::Stderr(line_bytes) => {
@@ -1439,12 +1497,11 @@ pub async fn start_download_job(
                         let _ = tokio::task::spawn_blocking(move || {
                             log_post_download_files_written(&diag_root_log, started_log);
                         });
-                        if !options.audio_only {
-                            spawn_post_download_frame_extract(
+                        if auto_scrub {
+                            spawn_scrub_previews_for_recent_videos(
                                 app.clone(),
-                                url.clone(),
-                                options.clone(),
-                                filename_template_eff.clone(),
+                                diag_root.clone(),
+                                download_started_at,
                             );
                         }
                         let _ = app.emit(
