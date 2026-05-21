@@ -238,7 +238,7 @@ export function ChapterScrubber({
                 .map((p) => {
                   if (p.time >= ch.start_time && p.time <= ch.end_time && chDuration > 0) {
                     const leftPct = ((p.time - ch.start_time) / chDuration) * 100;
-                    const tickColor = sbSegmentColor("poi_highlight", "poi") || "#EAB308";
+                    const tickColor = sbSegmentColor("poi_highlight", "poi") || "#FF1684";
                     return { leftPct, color: tickColor };
                   }
                   return null;

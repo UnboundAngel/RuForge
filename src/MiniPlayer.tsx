@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Icon } from "@iconify/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -48,6 +49,11 @@ import {
 import { applyMediaOutputState } from "./applyMediaOutputState";
 import { chapterAtTime, normalizeChapters } from "./chapters";
 import { ChapterScrubber } from "./components/player/ChapterScrubber";
+import { SponsorBlockScrubOverlay } from "./components/player/SponsorBlockScrubOverlay";
+import { SponsorBlockSkipButton } from "./components/player/SponsorBlockSkipButton";
+import { useSponsorBlockPlayback } from "./hooks/useSponsorBlockPlayback";
+import type { SponsorBlockSkipCategory } from "./sponsorBlock";
+import { loadMergedSettings, type RuforgeSettings } from "./store/types";
 import { syncRuforgeAccentCss } from "./accentCss";
 import {
   fetchSubtitleTracks,
@@ -59,6 +65,22 @@ import {
   type SubtitleTrack,
 } from "./localVideoSubtitles";
 import { useSubtitleCueOverlay } from "./useSubtitleCueOverlay";
+import { formatDuration } from "./components/downloader/downloaderFormat";
+
+const SPONSORBLOCK_STUB_FILE: MediaFile = {
+  name: "",
+  path: "",
+  size: 0,
+  created: 0,
+  duration: 0,
+  thumbnailPath: null,
+  ruforgePosterPath: null,
+  subtitlePath: null,
+  chapters: null,
+  downloadMetadataHint: null,
+  sourceUrl: null,
+  sourceId: null,
+};
 
 const Waveform = ({ isPaused, mutedBars }: { isPaused: boolean; mutedBars?: boolean }) => {
   const playingPaths1 = [
@@ -161,25 +183,153 @@ const getTrackTitle = (file: MediaFile | null) => {
 const VIDEO_LIBRARY_MAX_WIDTH = 430;
 const VIDEO_LIBRARY_MAX_HEIGHT = 275;
 
+function computeMiniTooltipPlacement(
+  anchor: DOMRect,
+  tooltipWidth: number,
+  tooltipHeight: number,
+  side: "bottom" | "top",
+): { top: number; left: number; transform: string } {
+  const pad = 8;
+  const gap = 8;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const tw = Math.max(tooltipWidth, 1);
+  const th = Math.max(tooltipHeight, 1);
+
+  const preferBelow = side === "top";
+  const belowTop = anchor.bottom + gap;
+  const aboveTop = anchor.top - gap;
+  const fitsBelow = belowTop + th <= vh - pad;
+  const fitsAbove = aboveTop - th >= pad;
+
+  let top: number;
+  let translateY: string;
+  if (preferBelow && fitsBelow) {
+    top = belowTop;
+    translateY = "0";
+  } else if (!preferBelow && fitsAbove) {
+    top = aboveTop;
+    translateY = "-100%";
+  } else if (fitsBelow) {
+    top = belowTop;
+    translateY = "0";
+  } else {
+    top = aboveTop;
+    translateY = "-100%";
+  }
+
+  const centerX = anchor.left + anchor.width / 2;
+  const half = tw / 2;
+  let left = centerX;
+  let translateX = "-50%";
+
+  if (centerX - half < pad) {
+    left = anchor.left;
+    translateX = "0";
+  } else if (centerX + half > vw - pad) {
+    left = anchor.right;
+    translateX = "-100%";
+  }
+
+  return { top, left, transform: `translate(${translateX}, ${translateY})` };
+}
+
+function MiniVolumeIcon({
+  size,
+  muted,
+  volumePercent,
+  className,
+}: {
+  size: number;
+  muted: boolean;
+  volumePercent: number;
+  className?: string;
+}) {
+  if (muted || volumePercent <= 0) {
+    return <VolumeX size={size} className={className} />;
+  }
+  if (volumePercent < 50) {
+    return <Volume1 size={size} className={className} />;
+  }
+  return <Volume2 size={size} className={className} />;
+}
+
 const Tooltip = ({ text, children, side = "bottom", disabled = false }: { text: string; children: React.ReactNode; side?: "bottom" | "top"; disabled?: boolean }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<{ top: number; left: number; transform: string } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!isHovered || disabled || !anchorRef.current) {
+      setPlacement(null);
+      return;
+    }
+    const update = () => {
+      const anchor = anchorRef.current;
+      const tip = measureRef.current;
+      if (!anchor) return;
+      const r = anchor.getBoundingClientRect();
+      const tw = tip?.offsetWidth ?? 0;
+      const th = tip?.offsetHeight ?? 0;
+      if (tw === 0 || th === 0) return;
+      setPlacement(computeMiniTooltipPlacement(r, tw, th, side));
+    };
+    update();
+    const raf = requestAnimationFrame(() => requestAnimationFrame(update));
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", update);
+    };
+  }, [isHovered, disabled, side, text]);
+
   if (disabled) return <>{children}</>;
+
+  const tipClassName =
+    "px-2 py-1 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-lg text-[8px] font-black tracking-[0.2em] text-white uppercase whitespace-nowrap shadow-2xl shadow-black pointer-events-none";
+
   return (
-    <div className="relative flex flex-col items-center" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div
+      ref={anchorRef}
+      className="relative flex flex-col items-center"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       {children}
-      <AnimatePresence>
-        {isHovered && (
-          <motion.div
-            initial={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className={`absolute ${side === "bottom" ? "bottom-full mb-3" : "top-full mt-3"} px-2 py-1 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-lg text-[8px] font-black tracking-[0.2em] text-white uppercase whitespace-nowrap z-[100] shadow-2xl shadow-black pointer-events-none left-1/2 -translate-x-1/2`}
-          >
-            {text}
-          </motion.div>
+      {typeof document !== "undefined" &&
+        createPortal(
+          <>
+            <div
+              ref={measureRef}
+              aria-hidden
+              className={`fixed left-0 top-0 opacity-0 ${tipClassName}`}
+            >
+              {text}
+            </div>
+            <AnimatePresence>
+              {isHovered && placement && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  style={{
+                    position: "fixed",
+                    top: placement.top,
+                    left: placement.left,
+                    transform: placement.transform,
+                    zIndex: 10000,
+                  }}
+                  className={tipClassName}
+                >
+                  {text}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>,
+          document.body,
         )}
-      </AnimatePresence>
     </div>
   );
 };
@@ -228,17 +378,27 @@ const MarqueeText = ({
 export default function MiniPlayer() {
   const [defaultAccent, setDefaultAccent] = useState("#EDCF9B");
 
+  const [settings, setSettings] = useState<RuforgeSettings>(() => loadMergedSettings());
+
+  useEffect(() => {
+    const refresh = () => setSettings(loadMergedSettings());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "ruforge-settings") refresh();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("ruforge-settings");
-      const parsed = raw ? JSON.parse(raw) : null;
-      const hex = typeof parsed?.accentColor === "string" ? parsed.accentColor : "#EDCF9B";
+      const hex =
+        typeof settings.accentColor === "string" ? settings.accentColor : "#EDCF9B";
       setDefaultAccent(hex);
       syncRuforgeAccentCss(hex);
     } catch {
       syncRuforgeAccentCss("#EDCF9B");
     }
-  }, []);
+  }, [settings.accentColor]);
 
   useEffect(() => {
     emit("mini-player-ready");
@@ -943,13 +1103,6 @@ export default function MiniPlayer() {
     });
   };
 
-  const formatTime = (seconds: number) => {
-    if (isNaN(seconds)) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const seekRatioFromClientX = (clientX: number, bar: HTMLElement) => {
     const rect = bar.getBoundingClientRect();
     if (rect.width <= 0) return 0;
@@ -1014,6 +1167,97 @@ export default function MiniPlayer() {
     () => (chapters ? chapterAtTime(chapters, currentTime) : null),
     [chapters, currentTime],
   );
+
+  const miniSbScrubBar = Boolean(playingFile) && (isLargeMode || isSmallMode);
+
+  const seekToTimeSeconds = useCallback(
+    (t: number) => {
+      const v = mediaRef.current;
+      if (!v || !isFinite(v.duration) || v.duration <= 0) return;
+      applySeekRatio(t / v.duration, { persist: true });
+    },
+    [applySeekRatio],
+  );
+
+  const patchSbStats = useCallback(
+    (
+      cat: SponsorBlockSkipCategory,
+      patch: Partial<{
+        appearances: number;
+        manualSkips: number;
+        undoSignals: number;
+      }>,
+    ) => {
+      setSettings((prev) => {
+        const stats = { ...prev.sponsorBlockCategoryStats };
+        stats[cat] = { ...stats[cat], ...patch };
+        const next = { ...prev, sponsorBlockCategoryStats: stats };
+        try {
+          const raw = localStorage.getItem("ruforge-settings");
+          const parsed =
+            raw && typeof raw === "string"
+              ? (JSON.parse(raw) as Record<string, unknown>)
+              : {};
+          localStorage.setItem(
+            "ruforge-settings",
+            JSON.stringify({ ...parsed, sponsorBlockCategoryStats: stats }),
+          );
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const onSbAppearance = useCallback(
+    (cat: SponsorBlockSkipCategory) => {
+      const cur = settings.sponsorBlockCategoryStats[cat];
+      patchSbStats(cat, { appearances: cur.appearances + 1 });
+    },
+    [settings.sponsorBlockCategoryStats, patchSbStats],
+  );
+
+  const onSbManualSkip = useCallback(
+    (cat: SponsorBlockSkipCategory) => {
+      const cur = settings.sponsorBlockCategoryStats[cat];
+      patchSbStats(cat, { manualSkips: cur.manualSkips + 1 });
+    },
+    [settings.sponsorBlockCategoryStats, patchSbStats],
+  );
+
+  const onSbDemoteUndo = useCallback(
+    (cat: SponsorBlockSkipCategory) => {
+      const cur = settings.sponsorBlockCategoryStats[cat];
+      patchSbStats(cat, { undoSignals: cur.undoSignals + 1 });
+    },
+    [settings.sponsorBlockCategoryStats, patchSbStats],
+  );
+
+  const sponsorBlock = useSponsorBlockPlayback({
+    file: playingFile ?? SPONSORBLOCK_STUB_FILE,
+    currentTime,
+    enabled:
+      settings.sponsorBlockEnabled &&
+      miniSbScrubBar &&
+      Boolean(playingFile?.sourceId?.trim()),
+    settings,
+    seekTo: seekToTimeSeconds,
+    onManualSkip: onSbManualSkip,
+    onAppearance: onSbAppearance,
+    onDemoteUndo: onSbDemoteUndo,
+  });
+
+  const scrubDuration =
+    isFinite(duration) && duration > 0
+      ? duration
+      : playingFile && playingFile.duration > 0
+        ? playingFile.duration
+        : 0;
+
+  const sbOverlayActive =
+    settings.sponsorBlockEnabled && miniSbScrubBar && scrubDuration > 0;
 
   useEffect(() => {
     if (!isPaused) {
@@ -1199,6 +1443,7 @@ export default function MiniPlayer() {
   };
 
   const controlsVisible = !isSmallMode && ((isCursorVisible && isHovering) || isPaused || isGalleryHovered);
+  const sbSkipShowControls = isSmallMode ? true : controlsVisible;
 
   return (
     <div 
@@ -1207,6 +1452,17 @@ export default function MiniPlayer() {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={() => setIsHovering(false)}
     >
+
+      <AnimatePresence>
+        {miniSbScrubBar && sponsorBlock.showSkipButton && (
+          <SponsorBlockSkipButton
+            showControls={sbSkipShowControls}
+            onClick={sponsorBlock.handleSkipClick}
+            label={sponsorBlock.skipButtonLabel}
+            activeCategory={sponsorBlock.activeSkipCategory}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Dynamic Volume/Mute Overlay (Mini Flush Bottom Right) */}
       <AnimatePresence>
@@ -1218,7 +1474,11 @@ export default function MiniPlayer() {
             className={`absolute bottom-0 right-0 z-[80] bg-black/80 backdrop-blur-2xl border-t border-l border-white/10 rounded-tl-2xl ${(isMicroMode || isTinyMode) ? 'p-1.5 px-2 space-x-1.5' : isMini ? 'p-2 space-x-2' : isNarrow ? 'p-3 space-x-3' : 'p-4 space-x-3'} flex items-center pointer-events-none shadow-2xl`}
           >
             <div className="text-[color:var(--accent)]">
-              {isMuted ? <VolumeX size={(isMicroMode || isTinyMode) ? 10 : isMini ? 12 : 16} /> : volumeLabel > 50 ? <Volume2 size={(isMicroMode || isTinyMode) ? 10 : isMini ? 12 : 16} /> : <Volume1 size={(isMicroMode || isTinyMode) ? 10 : isMini ? 12 : 16} />}
+              <MiniVolumeIcon
+                size={(isMicroMode || isTinyMode) ? 10 : isMini ? 12 : 16}
+                muted={isMuted}
+                volumePercent={isMuted ? 0 : volumeLabel}
+              />
             </div>
             <div className="flex flex-col">
               <span className={`${(isMicroMode || isTinyMode) ? 'text-[8px]' : isMini ? 'text-[9px]' : 'text-xs'} font-black text-[color:var(--accent)] leading-none`}>{isMuted ? "MUTED" : `${volumeLabel}%`}</span>
@@ -1636,7 +1896,7 @@ export default function MiniPlayer() {
                                 />
                                 <div className="absolute bottom-2 left-2 right-2 flex justify-center">
                                    <span className="text-[9px] font-black text-[color:var(--accent)] bg-black/40 px-2 py-0.5 rounded-full backdrop-blur-sm">
-                                     {formatTime(hoverProgress * duration)}
+                                     {formatDuration(hoverProgress * duration)}
                                    </span>
                                 </div>
                               </div>
@@ -1656,13 +1916,20 @@ export default function MiniPlayer() {
                             isHovering={hoverProgress !== null}
                             isScrubbing={scrubPreviewRatio !== null}
                             scrubberThumbs={scrubberThumbs}
-                            formatTime={formatTime}
+                            formatTime={formatDuration}
                             onMouseDown={handleScrubberBarMouseDown}
                             onMouseMove={handleMouseMoveScrubber}
                             onMouseLeave={() => setHoverProgress(null)}
+                            overlay={sbOverlayActive ? sponsorBlock.scrubOverlay : undefined}
                           />
                         ) : (
-                          <div className={`w-full rounded-full relative transition-all duration-300 ${isMini ? (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-3' : 'h-1.5') : (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-4' : 'h-2')} bg-white/15`}>
+                          <div className={`w-full rounded-full relative overflow-hidden transition-all duration-300 ${isMini ? (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-3' : 'h-1.5') : (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-4' : 'h-2')} bg-white/15`}>
+                            {sbOverlayActive && (
+                              <SponsorBlockScrubOverlay
+                                duration={scrubDuration}
+                                overlay={sponsorBlock.scrubOverlay}
+                              />
+                            )}
                             <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
                             <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${scrubBarProgressPct}%` }} />
                             {hoverProgress !== null && (
@@ -1783,8 +2050,10 @@ export default function MiniPlayer() {
                             </div>
                           )}
                         </div>
-                        <div className={`${isMini ? 'text-[8px]' : 'text-[10px]'} font-bold text-stone-500 tracking-wider`}>
-                          {formatTime(Math.max(0, duration - currentTime))}
+                        <div className={`${isMini ? "text-[8px]" : "text-[10px]"} font-bold text-stone-500 tracking-wider tabular-nums`}>
+                          <span className="text-stone-300">{formatDuration(currentTime)}</span>
+                          <span className="text-stone-600 mx-1">/</span>
+                          <span>{scrubDuration > 0 ? formatDuration(scrubDuration) : "0:00"}</span>
                         </div>
                         <div className={`flex items-center ${isMini ? 'space-x-1.5' : 'space-x-2'} text-stone-500`}>
                           <AnimatePresence mode="wait">
@@ -1796,7 +2065,12 @@ export default function MiniPlayer() {
                                 exit={{ opacity: 0 }}
                                 className={`flex items-center ${isMini ? 'space-x-1' : 'space-x-2'}`}
                               >
-                                 {isMuted ? <VolumeX size={isMini ? 12 : 16} className="text-[color:var(--accent)] opacity-50" /> : <Volume2 size={isMini ? 12 : 16} />}
+                                 <MiniVolumeIcon
+                                   size={isMini ? 12 : 16}
+                                   muted={isMuted}
+                                   volumePercent={isMuted ? 0 : volumeLabel}
+                                   className={isMuted ? "text-[color:var(--accent)] opacity-50" : undefined}
+                                 />
                                  <span className={`${isMini ? 'text-[8px]' : 'text-[10px]'} font-bold`}>{isMuted ? "MUTED" : `${volumeLabel}%`}</span>
                               </motion.div>
                             )}
@@ -1822,7 +2096,13 @@ export default function MiniPlayer() {
                         </div>
                         <Waveform isPaused={isPaused} mutedBars />
                      </div>
-                     <div className="w-full h-1.5 bg-white/25 rounded-full relative mb-4 pointer-events-auto cursor-pointer" onMouseDown={handleScrubberBarMouseDown}>
+                     <div className="w-full h-1.5 bg-white/25 rounded-full relative overflow-hidden mb-4 pointer-events-auto cursor-pointer" onMouseDown={handleScrubberBarMouseDown}>
+                        {sbOverlayActive && (
+                          <SponsorBlockScrubOverlay
+                            duration={scrubDuration}
+                            overlay={sponsorBlock.scrubOverlay}
+                          />
+                        )}
                         <div className="absolute top-0 left-0 h-full bg-white/35 rounded-full" style={{ width: `${buffered}%` }} />
                         <div 
                            className="absolute top-0 left-0 h-full bg-[color:var(--accent)] rounded-full shadow-[0_0_10px_color-mix(in_srgb,var(--accent),transparent_55%)]"
@@ -1924,7 +2204,11 @@ export default function MiniPlayer() {
                             className={`text-stone-400 hover:text-white transition-colors active:scale-95 flex items-center justify-center ${outerBtnSize} z-30`}
                             title={isMuted ? "Unmute" : "Mute"}
                           >
-                            {isMuted ? <VolumeX size={outerIconSize} /> : volumeLabel > 50 ? <Volume2 size={outerIconSize} /> : <Volume1 size={outerIconSize} />}
+                            <MiniVolumeIcon
+                              size={outerIconSize}
+                              muted={isMuted}
+                              volumePercent={isMuted ? 0 : volumeLabel}
+                            />
                           </button>
                           {/* Sliding range input overlays sibling buttons */}
                           <div className={`absolute ${isUltraCompact ? "left-6" : "left-8"} top-1/2 -translate-y-1/2 w-0 overflow-hidden group-hover/vol:w-20 transition-all duration-300 ease-out flex items-center h-8 pl-2 z-20 pointer-events-none group-hover/vol:pointer-events-auto`}>
