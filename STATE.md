@@ -67,6 +67,8 @@ Fixes:
 - Library replace: removes matched file before re-download when user picks Replace (fixes duplicate audio + video rows).
 - Delete / replace: cancels stray ffmpeg preview sidecars so Windows file locks clear sooner.
 - Auto scrubber previews: Settings → Downloads toggle (default on); sprites build on download processing/finish; off keeps right-click Generate Previews only.
+- Windows volume mixer: WebView2 sessions relabeled as RuForge (Core Audio display name/icon workaround).
+- Playback audio: WebView autoplay mute no longer leaves silent playback; store mute synced on load/play; pop-out handoff no longer copies DOM `muted`. `applyMediaOutputState.ts`, `PlayerView.tsx`, `MiniPlayer.tsx`.
 - Delete vs previews: player does not start ffmpeg on open when auto scrubber is off; delete cancels preview work instead of blocking ~8s.
 - Preview ffmpeg: fixed nested-lock deadlock on sprite generation; download finish always runs scrub pass when auto scrub is on.
 

@@ -212,6 +212,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Windows volume mixer label**: background thread renames WebView2 child audio sessions to product name and exe icon via Core Audio API (sndvol workaround). `windows_audio_brand.rs`, `lib.rs`, `Cargo.toml`.
+- **Playback audio (WebView)**: sync store volume/mute onto `<video>` / `<audio>` on load and play; stop reading autoplay `muted` into pop-out/handoff; MiniPlayer now applies mute state. `applyMediaOutputState.ts`, `PlayerView.tsx`, `MiniPlayer.tsx`.
 - **Preview ffmpeg lock**: fixed deadlock when generating sprites/posters (nested per-file mutex); download finish always runs scrub fallback (idempotent). `media.rs`, `downloader.rs`.
 - **Delete vs auto previews**: player respects auto scrubber previews setting (no ffmpeg on open when off); delete cancels ffmpeg and stops blocking; deleting shows progress toast. `media.rs`, `PlayerView.tsx`, `MediaView.tsx`.
 - **Auto scrubber previews**: Settings → Downloads toggle (default on); video downloads spawn ffmpeg sprite sheets on processing/finish; manual Generate Previews when off. `types.ts`, `downloadQueue.ts`, `downloader.rs`, `SettingsView.tsx`.

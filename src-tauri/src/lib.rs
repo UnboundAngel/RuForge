@@ -6,6 +6,8 @@ mod hardware_acceleration;
 mod tray;
 mod utils;
 mod ytdlp_binary;
+#[cfg(windows)]
+mod windows_audio_brand;
 
 use std::sync::Mutex;
 
@@ -51,6 +53,9 @@ pub fn run() {
     let mut context = tauri::generate_context!();
     apply_hardware_acceleration_prefs_to_context(&mut context);
 
+    #[cfg(windows)]
+    windows_audio_brand::set_explicit_app_user_model_id(&context.config().identifier);
+
     tauri::Builder::default()
         .manage(AppConfig {
             minimize_to_tray: Mutex::new(true),
@@ -78,6 +83,17 @@ pub fn run() {
             });
 
             setup_tray(app)?;
+
+            #[cfg(windows)]
+            {
+                let display_name = app
+                    .config()
+                    .product_name
+                    .clone()
+                    .unwrap_or_else(|| "RuForge".to_string());
+                let icon_path = std::env::current_exe().unwrap_or_default();
+                windows_audio_brand::spawn_mixer_branding_thread(display_name, icon_path);
+            }
 
             if let Some(main) = app.get_webview_window("main") {
                 let _ = main.listen(TRAY_SHOW_MAIN_EVENT, |_event| {
