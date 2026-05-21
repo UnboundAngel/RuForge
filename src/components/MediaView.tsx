@@ -14,11 +14,8 @@ import { youtubeUrlsMatch } from "../youtubeUrl";
 
 function deleteMediaErrorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
-  if (/preview generation is still finishing/i.test(msg)) {
-    return msg;
-  }
   if (/os error 32|being used by another process/i.test(msg)) {
-    return "Close the video or wait for preview generation to finish, then try again.";
+    return "This file is still in use. Close the player, wait a moment, then try again.";
   }
   return "Failed to delete video.";
 }
@@ -251,6 +248,7 @@ export const MediaView = ({
   const searchQuery = useRuforgeStore((s) => s.searchValue);
   const filter = useRuforgeStore((s) => s.galleryFilter);
   const notify = useRuforgeStore((s) => s.notify);
+  const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const entries = useRuforgeStore((s) => s.entries);
   const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
   const activeMenu = useRuforgeStore((s) => s.activeMenu);
@@ -274,6 +272,7 @@ export const MediaView = ({
     }
 
     await releasePlaybackBeforeDelete([file.path]);
+    const deletingId = notify("Deleting…", "progress");
 
     try {
       await invoke("delete_media", { videoPath: file.path });
@@ -287,15 +286,17 @@ export const MediaView = ({
     } catch (e) {
       console.error(e);
       const message = deleteMediaErrorMessage(e);
-      notify(message, message.includes("Close the video") ? "warning" : "error");
+      notify(message, message.includes("still in use") ? "warning" : "error");
+    } finally {
+      dismissNotification(deletingId);
+      setGalleryActiveMenu(null);
     }
-    setGalleryActiveMenu(null);
   };
 
   const handleExtract = async (file: MediaFile) => {
     setGalleryExtractingPath(file.path);
     try {
-      await invoke("extract_frames", { videoPath: file.path });
+      await invoke("extract_frames", { videoPath: file.path, allowGenerate: true });
       notify("Previews generated successfully.");
       await fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true });
     } catch (e) {

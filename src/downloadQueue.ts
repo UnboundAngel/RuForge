@@ -131,6 +131,8 @@ export interface DownloadJobOptions {
   subLangs: string;
   audioOnly: boolean;
   audioFormat: string;
+  /** When true, Rust runs `extract_frames` after a successful video download. */
+  autoScrubberPreviews: boolean;
 }
 
 export interface DownloadJob {
@@ -229,6 +231,7 @@ export function buildDownloadJobOptions(
       subLangs: "",
       audioOnly: false,
       audioFormat: normalizeDownloadAudioFormat(settings.downloadAudioFormat),
+      autoScrubberPreviews: settings.autoDownloadScrubberPreviews !== false,
     },
     audioOnly,
     settings,
@@ -245,6 +248,7 @@ export function toInvokeDownloadOptions(opts: DownloadJobOptions) {
     sub_langs: opts.subLangs,
     audio_only: opts.audioOnly,
     audio_format: opts.audioFormat,
+    auto_scrub_previews: opts.autoScrubberPreviews !== false,
   };
 }
 
@@ -281,6 +285,7 @@ function normalizePersistedDownloadJob(j: DownloadJob): DownloadJob | null {
     ...opts,
     audioOnly: opts?.audioOnly === true,
     audioFormat: normalizeDownloadAudioFormat(opts?.audioFormat),
+    autoScrubberPreviews: opts?.autoScrubberPreviews !== false,
   };
   if (options.audioOnly) {
     options = {

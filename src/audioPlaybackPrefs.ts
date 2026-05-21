@@ -18,3 +18,8 @@ export function readAudioAutoAdvanceFolder(): boolean {
 export function readAudioPrefetchNext(): boolean {
   return readRuforgeSettingsRecord().audioPrefetchNext !== false;
 }
+
+/** Settings → Downloads: build scrub sprites after download / when opening the player. */
+export function readAutoDownloadScrubberPreviews(): boolean {
+  return readRuforgeSettingsRecord().autoDownloadScrubberPreviews !== false;
+}

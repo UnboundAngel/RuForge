@@ -66,6 +66,9 @@ Fixes:
 - Explorer bounds: rAF sync during sidebar/window resize; deduped IPC; listeners stay up through sidebar animation.
 - Library replace: removes matched file before re-download when user picks Replace (fixes duplicate audio + video rows).
 - Delete / replace: cancels stray ffmpeg preview sidecars so Windows file locks clear sooner.
+- Auto scrubber previews: Settings → Downloads toggle (default on); sprites build on download processing/finish; off keeps right-click Generate Previews only.
+- Delete vs previews: player does not start ffmpeg on open when auto scrubber is off; delete cancels preview work instead of blocking ~8s.
+- Preview ffmpeg: fixed nested-lock deadlock on sprite generation; download finish always runs scrub pass when auto scrub is on.
 
 ## Open P0 (blocks release)
 

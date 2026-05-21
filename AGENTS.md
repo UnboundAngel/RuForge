@@ -212,6 +212,9 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.7 (unreleased)
 
+- **Preview ffmpeg lock**: fixed deadlock when generating sprites/posters (nested per-file mutex); download finish always runs scrub fallback (idempotent). `media.rs`, `downloader.rs`.
+- **Delete vs auto previews**: player respects auto scrubber previews setting (no ffmpeg on open when off); delete cancels ffmpeg and stops blocking; deleting shows progress toast. `media.rs`, `PlayerView.tsx`, `MediaView.tsx`.
+- **Auto scrubber previews**: Settings → Downloads toggle (default on); video downloads spawn ffmpeg sprite sheets on processing/finish; manual Generate Previews when off. `types.ts`, `downloadQueue.ts`, `downloader.rs`, `SettingsView.tsx`.
 - **Library replace + delete locks**: Replace removes the matched library file before re-download (audio vs video ext); delete cancels in-flight RuForge ffmpeg preview work and waits for the per-file lock. `replaceLibraryDownload.ts`, `media.rs`, `process_tree.rs`, `useDownloaderView.ts`.
 - **Downloader hero progress**: removed top-right and traveling percent; 0/100 flank bar only, speed/time under bar. `DownloaderView.tsx`.
 - **Downloader URL chip**: hide paperclip when URL is not in queue; clear bar hero on remove when URL has no queue row; prune pinned quick-enqueue chips. `useDownloaderView.ts`, `downloadQueueSlice.ts`.

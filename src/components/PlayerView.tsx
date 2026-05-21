@@ -209,12 +209,19 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     !audioOnly,
   );
 
+  const autoScrubberPreviews = useRuforgeStore(
+    (s) => s.settings.autoDownloadScrubberPreviews !== false,
+  );
+
   useEffect(() => {
     if (!file || audioOnly) {
       setScrubberThumbs([]);
       return;
     }
-    invoke<string[]>("extract_frames", { videoPath: file.path })
+    invoke<string[]>("extract_frames", {
+      videoPath: file.path,
+      allowGenerate: autoScrubberPreviews,
+    })
       .then((paths) =>
         setScrubberThumbs(
           paths.filter((p) => {
@@ -224,7 +231,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         ),
       )
       .catch(console.error);
-  }, [file, audioOnly]);
+  }, [file, audioOnly, autoScrubberPreviews]);
 
   /** Warm ffprobe disk cache; results are not shown in the player UI. */
   useEffect(() => {
