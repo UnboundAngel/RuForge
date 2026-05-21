@@ -541,7 +541,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   transition={d.urlChipLayoutTransition}
                   className="pointer-events-none absolute left-4 top-4 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col items-stretch gap-2 sm:left-6 sm:top-6 lg:left-8 lg:top-8"
                 >
-                  {d.url.startsWith("http") && (
+                  {d.showMainUrlChip && (
                     <MainDownloaderUrlChip
                       url={d.url}
                       copied={d.urlBubbleCopied}
@@ -946,21 +946,12 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                 </div>
               ) : (
                 <motion.div className="relative h-full flex flex-col justify-center items-center">
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="absolute top-0 right-0 text-right space-y-6"
-                  >
-                    <div className="flex flex-col items-end">
-                      <span className="text-[10px] font-black text-stone-600 uppercase tracking-[0.4em] mb-2">
-                        Progress
-                      </span>
-                      <p className="text-3xl font-black text-white font-mono tracking-tighter leading-none">
-                        {d.progress?.percentage.toFixed(0) || 0}
-                        <span className="text-[color:var(--accent)] opacity-40 ml-0.5">%</span>
-                      </p>
-                    </div>
-                    {d.progress?.currentIndex !== undefined && d.progress?.totalItems !== undefined && (
+                  {d.progress?.currentIndex !== undefined && d.progress?.totalItems !== undefined && (
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="absolute top-0 right-0 text-right"
+                    >
                       <div className="flex flex-col items-end">
                         <span className="text-[10px] font-black text-stone-600 uppercase tracking-[0.4em] mb-2">
                           Item
@@ -969,8 +960,8 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           {d.progress.currentIndex + 1} / {d.progress.totalItems}
                         </p>
                       </div>
-                    )}
-                  </motion.div>
+                    </motion.div>
+                  )}
                   <div className="w-full flex flex-col items-center">
                     <div className="w-full max-w-4xl space-y-16 mb-20">
                       <div className="space-y-8">
@@ -995,26 +986,66 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           )}
                         </motion.p>
                       </div>
-                      <div className="relative w-full max-w-2xl mx-auto h-1 px-12">
-                        <div
-                          className="pointer-events-none absolute inset-0 rounded-full"
-                          aria-hidden
-                          style={{
-                            backgroundImage: `repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS}), transparent calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS}), transparent calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS} + ${BIG_PROGRESS_GAP_REM}rem))`,
-                          }}
-                        />
-                        <motion.div
-                          className={`absolute left-0 top-0 bottom-0 bg-[color:var(--accent)] shadow-[0_0_10px_var(--accent-glow)] origin-left ${
-                            bigProgressFilledSegs <= 0
-                              ? ""
-                              : bigProgressFilledSegs >= BIG_PROGRESS_SEGMENTS
-                                ? "rounded-full"
-                                : "rounded-l-full"
-                          }`}
-                          initial={false}
-                          animate={{ width: bigProgressFillWidth }}
-                          transition={{ duration: 0 }}
-                        />
+                      <div className="w-full max-w-2xl mx-auto">
+                        <div className="flex items-end gap-2 sm:gap-3">
+                          <span
+                            className="pointer-events-none w-5 shrink-0 text-right text-[10px] font-mono font-black tabular-nums leading-none text-stone-500/35"
+                            aria-hidden
+                          >
+                            0
+                          </span>
+                          <div className="relative h-1 min-w-0 flex-1">
+                            <div className="absolute inset-0">
+                              <div
+                                className="pointer-events-none absolute inset-0 rounded-full"
+                                aria-hidden
+                                style={{
+                                  backgroundImage: `repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS}), transparent calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS}), transparent calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS} + ${BIG_PROGRESS_GAP_REM}rem))`,
+                                }}
+                              />
+                              <motion.div
+                                className={`absolute left-0 top-0 bottom-0 bg-[color:var(--accent)] shadow-[0_0_10px_var(--accent-glow)] origin-left ${
+                                  bigProgressFilledSegs <= 0
+                                    ? ""
+                                    : bigProgressFilledSegs >= BIG_PROGRESS_SEGMENTS
+                                      ? "rounded-full"
+                                      : "rounded-l-full"
+                                }`}
+                                initial={false}
+                                animate={{ width: bigProgressFillWidth }}
+                                transition={{ duration: 0 }}
+                              />
+                            </div>
+                          </div>
+                          <span
+                            className="pointer-events-none w-7 shrink-0 text-[10px] font-mono font-black tabular-nums leading-none text-stone-500/35"
+                            aria-hidden
+                          >
+                            100
+                          </span>
+                        </div>
+                        <div className="mt-4 flex min-h-[3.25rem] flex-wrap items-end justify-center gap-x-10 gap-y-2 text-center">
+                          {d.progress?.speed && d.progress.speed !== "0 MB/S" && (
+                            <div className="space-y-1">
+                              <p className="text-[9px] font-black text-stone-600 uppercase tracking-[0.3em]">
+                                Speed
+                              </p>
+                              <p className="text-lg font-black text-[color:var(--accent)] opacity-90 tabular-nums tracking-tighter sm:text-xl">
+                                {d.progress.speed}
+                              </p>
+                            </div>
+                          )}
+                          {d.progress?.eta && d.progress.eta !== "???" && (
+                            <div className="space-y-1">
+                              <p className="text-[9px] font-black text-stone-600 uppercase tracking-[0.3em]">
+                                Time
+                              </p>
+                              <p className="text-lg font-black text-white tabular-nums tracking-tighter sm:text-xl">
+                                {d.progress.eta}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {d.focusedJob?.metadata?.isPlaylist &&
@@ -1036,26 +1067,6 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       </motion.div>
                     )}
                   </div>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="absolute -bottom-10 -right-10 flex items-center gap-10 text-right"
-                  >
-                    {d.progress?.speed && d.progress.speed !== "0 MB/S" && (
-                      <div className="space-y-1">
-                        <p className="text-[9px] font-black text-stone-600 uppercase tracking-[0.3em]">Speed</p>
-                        <p className="text-xl font-black text-[color:var(--accent)] opacity-90 tabular-nums tracking-tighter">
-                          {d.progress.speed}
-                        </p>
-                      </div>
-                    )}
-                    {d.progress?.eta && d.progress.eta !== "???" && (
-                      <div className="space-y-1">
-                        <p className="text-[9px] font-black text-stone-600 uppercase tracking-[0.3em]">Time</p>
-                        <p className="text-xl font-black text-white tabular-nums tracking-tighter">{d.progress.eta}</p>
-                      </div>
-                    )}
-                  </motion.div>
                 </motion.div>
               )}
             </div>

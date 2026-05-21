@@ -84,6 +84,7 @@ export function useDownloaderView({
   const resumeDownloadJob = useRuforgeStore((s) => s.resumeDownloadJob);
   const setDownloadJobAudioOnly = useRuforgeStore((s) => s.setDownloadJobAudioOnly);
   const videoInfo = useRuforgeStore((s) => s.videoInfo);
+  const videoInfoUrl = useRuforgeStore((s) => s.videoInfoUrl);
   const setVideoInfo = useRuforgeStore((s) => s.setVideoInfo);
   const metadataError = useRuforgeStore((s) => s.metadataError);
   const setMetadataError = useRuforgeStore((s) => s.setMetadataError);
@@ -178,6 +179,20 @@ export function useDownloaderView({
     () => Boolean(showUrlBubble || showQueueAddToolbar),
     [showUrlBubble, showQueueAddToolbar],
   );
+
+  /** Paperclip chip only when the bar URL still matches the queue or an unstaged hero preview. */
+  const showMainUrlChip = useMemo(() => {
+    const trimmed = url.trim();
+    if (!trimmed.startsWith("http")) return false;
+    if (downloadJobs.some((j) => youtubeUrlsMatch(j.url, trimmed))) return true;
+    if (focusedJob && youtubeUrlsMatch(focusedJob.url, trimmed)) return true;
+    return Boolean(
+      videoInfo &&
+        videoInfoUrl &&
+        !metadataLoading &&
+        youtubeUrlsMatch(trimmed, videoInfoUrl),
+    );
+  }, [url, downloadJobs, focusedJob, videoInfo, videoInfoUrl, metadataLoading]);
 
   const libraryDuplicate = useMemo(() => {
     if (!url.startsWith("http")) return null;
@@ -274,6 +289,12 @@ export function useDownloaderView({
   useEffect(() => {
     queueHydrateOrphanMetadata();
   }, [queueHydrateOrphanMetadata]);
+
+  useEffect(() => {
+    setPinnedQuickEnqueueUrls((prev) =>
+      prev.filter((u) => downloadJobs.some((j) => youtubeUrlsMatch(j.url, u))),
+    );
+  }, [downloadJobs]);
 
   useEffect(() => {
     const resolve = duplicateChoiceResolverRef.current;
@@ -1051,6 +1072,7 @@ export function useDownloaderView({
     clipboardOfferUrl,
     urlBubbleCopied,
     showUrlBubble,
+    showMainUrlChip,
     showQueueAddToolbar,
     showTopLeftDownloaderChrome,
     showDuplicateBanner,
