@@ -8,14 +8,15 @@
 
 Shipping version: 0.1.8 (unreleased)
 Last shipped to users: 0.1.7
-Last updated: 2026-05-21
+Last updated: 2026-05-22
 Status: in progress
 
 ## Now
 
-0.1.7 is live on main updater.json and GitHub Release v0.1.7. Next work logs
-under v0.1.8 (unreleased) in AGENTS.md. Open P0 is empty; Authorize Cleanup
-(#8) works via the in-app modal (see Notes).
+0.1.8 unreleased has a library cleanup data-loss fix staged: duplicate cleanup
+only physically removes yt-dlp `.fNNN` stream leftovers. 0.1.7 is live on main
+updater.json and GitHub Release v0.1.7. Open P0 is empty; Authorize Cleanup (#8)
+works via the in-app modal (see Notes).
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -56,6 +57,9 @@ Fixes:
 - Download hero clears on finish/remove; explorer bounds sync during sidebar resize.
 
 **0.1.8 unreleased:** (see AGENTS.md Shipped log)
+
+Fixes:
+- Library duplicate cleanup no longer deletes intentional create-new or audio/video outputs that share source metadata; physical cleanup is limited to `.fNNN` yt-dlp stream leftovers.
 
 ## Open P0 (blocks release)
 

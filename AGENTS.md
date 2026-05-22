@@ -216,6 +216,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.8 (unreleased)
 
+- **Library cleanup data loss (fix)**: duplicate cleanup now physically removes only yt-dlp `.fNNN` stream leftovers, preserving create-new and audio/video files that share source metadata. `gallery.rs`.
+
 ### v0.1.7 (shipped)
 
 - **Audio analyser teardown**: hard release clears MES attachment set so track changes re-tap; RAF alive guard on hero canvas. `audioAnalyserGraph.ts`, `AudioHeroStage.tsx`.
