@@ -477,6 +477,21 @@ pub(crate) fn media_library_keep_score(path: &Path, file: &MediaFile) -> u64 {
     score.saturating_add(file.size.min(1_000_000_000))
 }
 
+fn should_remove_duplicate_download_output(keeper_path: &Path, candidate_path: &Path) -> bool {
+    let Some(candidate_stem) = candidate_path.file_stem().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    let candidate_base = strip_ytdlp_stream_suffix(candidate_stem);
+    if candidate_base == candidate_stem {
+        return false;
+    }
+
+    let Some(keeper_stem) = keeper_path.file_stem().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    strip_ytdlp_stream_suffix(keeper_stem).eq_ignore_ascii_case(candidate_base)
+}
+
 pub(crate) fn dedupe_media_files(files: Vec<MediaFile>) -> Vec<MediaFile> {
     let mut best_by_key: HashMap<String, MediaFile> = HashMap::new();
     let mut key_order: Vec<String> = Vec::new();
@@ -713,6 +728,9 @@ fn sweep_parent_dir_for_duplicate_outputs(parent: &Path) {
         group.sort_by(|a, b| b.1.cmp(&a.1));
         let keeper_path = group.first().expect("len >= 2").0.clone();
         for (path, _) in group.into_iter().skip(1) {
+            if !should_remove_duplicate_download_output(&keeper_path, &path) {
+                continue;
+            }
             log::info!(
                 "[RuForge] removing duplicate download output {:?} (kept {:?}, key {})",
                 path,
@@ -927,6 +945,18 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
 mod tests {
     use super::*;
 
+    fn unique_temp_dir(name: &str) -> std::path::PathBuf {
+        let tmp = std::env::temp_dir().join(format!(
+            "ruforge_gallery_{name}_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&tmp).expect("create temp dir");
+        tmp
+    }
+
     #[test]
     fn strip_ytdlp_stream_suffix_removes_format_tail() {
         assert_eq!(
@@ -1005,14 +1035,7 @@ mod tests {
 
     #[test]
     fn group_key_inherits_id_from_muxed_sidecar_stem() {
-        let tmp = std::env::temp_dir().join(format!(
-            "ruforge_gallery_test_{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        ));
-        let _ = std::fs::create_dir_all(&tmp);
+        let tmp = unique_temp_dir("sidecar_id");
         let info = tmp.join("My Video.info.json");
         std::fs::write(
             &info,
@@ -1028,6 +1051,69 @@ mod tests {
             media_library_group_key(&inter_path, &file),
             "id:abc123"
         );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn duplicate_sweep_removes_only_stream_intermediate() {
+        let tmp = unique_temp_dir("remove_intermediate");
+        let info = tmp.join("My Video.info.json");
+        let muxed_path = tmp.join("My Video.mp4");
+        let inter_path = tmp.join("My Video.f399.mp4");
+        std::fs::write(
+            &info,
+            r#"{"id":"abc123","title":"My Video","webpage_url":"https://www.youtube.com/watch?v=abc123"}"#,
+        )
+        .expect("write info json");
+        std::fs::write(&muxed_path, b"muxed").expect("write muxed");
+        std::fs::write(&inter_path, b"intermediate").expect("write intermediate");
+
+        sweep_parent_dir_for_duplicate_outputs(&tmp);
+
+        assert!(muxed_path.is_file());
+        assert!(info.is_file());
+        assert!(!inter_path.exists());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn duplicate_sweep_keeps_create_new_same_source_id() {
+        let tmp = unique_temp_dir("keep_create_new");
+        let video_info = tmp.join("Song.info.json");
+        let audio_info = tmp.join("Song [abc123].info.json");
+        let video_path = tmp.join("Song.mp4");
+        let audio_path = tmp.join("Song [abc123].m4a");
+        let info_body =
+            r#"{"id":"abc123","title":"Song","webpage_url":"https://www.youtube.com/watch?v=abc123"}"#;
+        std::fs::write(&video_info, info_body).expect("write video info");
+        std::fs::write(&audio_info, info_body).expect("write audio info");
+        std::fs::write(&video_path, b"video").expect("write video");
+        std::fs::write(&audio_path, b"audio").expect("write audio");
+
+        sweep_parent_dir_for_duplicate_outputs(&tmp);
+
+        assert!(video_path.is_file());
+        assert!(audio_path.is_file());
+        assert!(video_info.is_file());
+        assert!(audio_info.is_file());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn duplicate_sweep_keeps_non_intermediate_stem_fallback_matches() {
+        let tmp = unique_temp_dir("keep_stem_fallback");
+        let video_path = tmp.join("Official Video.mp4");
+        let audio_path = tmp.join("Official Video.m4a");
+        std::fs::write(&video_path, b"video").expect("write video");
+        std::fs::write(&audio_path, b"audio").expect("write audio");
+
+        sweep_parent_dir_for_duplicate_outputs(&tmp);
+
+        assert!(video_path.is_file());
+        assert!(audio_path.is_file());
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
