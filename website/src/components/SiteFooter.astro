@@ -1,0 +1,122 @@
+---
+import Icon from './Icon.astro';
+import { Image } from 'astro:assets';
+import ruforgeLogo from '../assets/ruforge-logo.png';
+import { SITE } from '../lib/site';
+
+const productLinks = [
+  { href: '/changelog', label: 'Changelog', icon: 'list' as const },
+  { href: '/roadmap', label: 'Roadmap', icon: 'map' as const },
+  { href: SITE.releases, label: 'Releases', icon: 'download' as const },
+];
+
+const communityLinks = [
+  { href: SITE.github, label: 'GitHub', icon: 'github' as const },
+  { href: SITE.discussions, label: 'Discussions', icon: 'message' as const },
+  { href: `${SITE.github}/issues`, label: 'Issue Tracker', icon: 'wrench' as const },
+];
+
+const legalLinks = [
+  { href: '/legal/privacy', label: 'Privacy Policy', icon: 'shield' as const },
+  { href: '/legal/terms', label: 'Terms of Use', icon: 'scale' as const },
+  { href: '/legal/notice', label: 'Legal Notice', icon: 'file' as const },
+  { href: SITE.license, label: 'Apache-2.0 License', icon: 'external' as const },
+];
+---
+
+<footer class="mt-32 pb-16 pt-24 text-sm text-rf-text-muted bg-rf-surface/10">
+  <div class="rf-container">
+    <div class="grid gap-12 sm:grid-cols-2 md:grid-cols-4">
+      {/* Brand Column */}
+      <div class="space-y-4">
+        <div class="flex items-center gap-3">
+          <Image
+            src={ruforgeLogo}
+            alt="RuForge logo"
+            width={28}
+            height={28}
+            widths={[28, 56]}
+            class="rounded-md"
+            loading="lazy"
+          />
+          <span class="text-base font-semibold tracking-tight text-rf-text">RuForge</span>
+        </div>
+        <p class="max-w-xs text-xs leading-relaxed opacity-80">
+          The lightweight, local-first media manager and downloader for Windows. Built with Tauri, Rust, and React.
+        </p>
+      </div>
+
+      {/* Product Column */}
+      <div class="space-y-4">
+        <h3 class="text-xs font-semibold tracking-wider text-rf-text uppercase">Product</h3>
+        <ul class="space-y-3">
+          {
+            productLinks.map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  class="inline-flex items-center gap-2 text-rf-text-muted no-underline transition-colors hover:text-rf-text"
+                >
+                  <Icon name={link.icon} size={15} class="opacity-70" />
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      {/* Community Column */}
+      <div class="space-y-4">
+        <h3 class="text-xs font-semibold tracking-wider text-rf-text uppercase">Community</h3>
+        <ul class="space-y-3">
+          {
+            communityLinks.map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  class="inline-flex items-center gap-2 text-rf-text-muted no-underline transition-colors hover:text-rf-text"
+                >
+                  <Icon name={link.icon} size={15} class="opacity-70" />
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      {/* Legal Column */}
+      <div class="space-y-4">
+        <h3 class="text-xs font-semibold tracking-wider text-rf-text uppercase">Legal</h3>
+        <ul class="space-y-3">
+          {
+            legalLinks.map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  class="inline-flex items-center gap-2 text-rf-text-muted no-underline transition-colors hover:text-rf-text"
+                >
+                  <Icon name={link.icon} size={15} class="opacity-70" />
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+
+    {/* Bottom strip */}
+    <div class="mt-24 pt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between text-xs opacity-80">
+      <p class="leading-relaxed">
+        &copy; {new Date().getFullYear()} RuForge. Apache-2.0 licensed. Not affiliated with YouTube or Google.
+      </p>
+      <div class="flex flex-wrap gap-x-6 gap-y-2">
+        <a href="/legal/privacy" class="text-rf-text-muted no-underline hover:text-rf-text">Privacy Policy</a>
+        <a href="/legal/terms" class="text-rf-text-muted no-underline hover:text-rf-text">Terms of Use</a>
+        <a href="/legal/notice" class="text-rf-text-muted no-underline hover:text-rf-text">Legal Notice</a>
+      </div>
+    </div>
+  </div>
+</footer>

@@ -1,0 +1,40 @@
+---
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import { SITE } from '../lib/site';
+
+const path = Astro.url.pathname;
+const nav = [
+  { href: '/changelog', label: 'Changelog', icon: 'list' as const },
+  { href: '/roadmap', label: 'Roadmap', icon: 'map' as const },
+  { href: '/legal', label: 'Legal', icon: 'shield' as const },
+];
+---
+
+<header class="rf-container py-6">
+  <div class="flex flex-wrap items-center justify-between gap-6">
+    <Logo showWordmark={false} />
+    <nav class="flex flex-wrap items-center gap-2 text-sm">
+      {
+        nav.map((item) => (
+          <a
+            href={item.href}
+            class:list={[
+              'inline-flex items-center gap-2 rounded-lg px-3 py-2 no-underline transition-colors',
+              path === item.href || path.startsWith(`${item.href}/`)
+                ? 'bg-rf-surface text-rf-text'
+                : 'text-rf-text-muted hover:text-rf-text',
+            ]}
+          >
+            <Icon name={item.icon} size={16} />
+            {item.label}
+          </a>
+        ))
+      }
+      <a href={SITE.releases} class="rf-btn ml-2 text-sm">
+        <Icon name="download" size={16} class="text-rf-bg" />
+        Download
+      </a>
+    </nav>
+  </div>
+</header>

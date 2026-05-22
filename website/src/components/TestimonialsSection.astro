@@ -1,0 +1,335 @@
+---
+import TestimonialsColumn from './TestimonialsColumn.astro';
+import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
+---
+
+<section
+  class="testimonials-section scroll-reveal"
+  aria-labelledby="testimonials-heading"
+>
+  <div class="testimonials-section-glow" aria-hidden="true"></div>
+
+  <div class="rf-container testimonials-section-inner">
+    <header class="testimonials-section-header">
+      <p class="testimonials-section-eyebrow">
+        <span class="testimonials-section-eyebrow-dot" aria-hidden="true"></span>
+        Field notes
+      </p>
+      <h2 id="testimonials-heading" class="testimonials-section-title">
+        People who actually use it
+      </h2>
+      <p class="testimonials-section-lead">
+        Two of us, a pile of notes, zero PR polish. Swap in your photos under
+        <code class="testimonials-section-code">public/testimonials/</code>.
+      </p>
+    </header>
+
+    <div class="testimonials-columns-mask">
+      {
+        TESTIMONIAL_COLUMNS.map((col) => (
+          <TestimonialsColumn
+            testimonials={col.items}
+            duration={col.duration}
+            offset={col.offset}
+            class:list={[
+              col.hideBelow === 'md' && 'hidden md:block',
+              col.hideBelow === 'lg' && 'hidden lg:block',
+            ]}
+          />
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .testimonials-section {
+    position: relative;
+    padding: 6rem 0;
+    overflow: hidden;
+  }
+
+  .testimonials-section-glow {
+    position: absolute;
+    left: 50%;
+    top: 45%;
+    z-index: 0;
+    width: min(900px, 90vw);
+    height: 420px;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    background: radial-gradient(ellipse, rgb(237 215 156 / 0.06), transparent 68%);
+    pointer-events: none;
+  }
+
+  .testimonials-section-inner {
+    position: relative;
+    z-index: 1;
+  }
+
+  .testimonials-section-header {
+    max-width: 36rem;
+    margin-inline: auto;
+    margin-bottom: 3rem;
+    text-align: center;
+  }
+
+  .testimonials-section-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgb(201 184 122 / 0.75);
+  }
+
+  .testimonials-section-eyebrow-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: #edd79c;
+    opacity: 0.7;
+  }
+
+  .testimonials-section-title {
+    margin: 1rem 0 0;
+    font-size: clamp(1.85rem, 4vw, 2.65rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.12;
+    color: #edd79c;
+  }
+
+  .testimonials-section-lead {
+    margin: 1rem auto 0;
+    max-width: 28rem;
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    color: rgb(201 184 122 / 0.82);
+  }
+
+  .testimonials-section-code {
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    padding: 0.1em 0.35em;
+    border-radius: 0.25rem;
+    background: rgb(39 28 24 / 0.8);
+    color: #edd79c;
+  }
+
+  .testimonials-columns-mask {
+    display: flex;
+    justify-content: center;
+    gap: 1.25rem;
+    max-height: 720px;
+    overflow: hidden;
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      black 14%,
+      black 86%,
+      transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      black 14%,
+      black 86%,
+      transparent 100%
+    );
+  }
+
+  :global(.testimonials-column) {
+    flex: 0 0 19.5rem;
+    overflow: hidden;
+  }
+
+  :global(.testimonials-column:hover .testimonials-column-track) {
+    animation-play-state: paused;
+  }
+
+  :global(.testimonials-column-track) {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding-bottom: 1.25rem;
+    animation: testimonials-scroll var(--scroll-duration, 22s) linear infinite;
+    animation-delay: var(--scroll-offset, 0s);
+    will-change: transform;
+  }
+
+  :global(.testimonial-card) {
+    position: relative;
+    width: 100%;
+    padding: 1.35rem 1.4rem 1.25rem;
+    border-radius: 1rem;
+    border: 1px solid rgb(var(--rim-rgb, 237 215 156) / 0.42);
+    background: #271c18;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+    transition: border-color 0.25s ease, transform 0.25s ease;
+  }
+
+  :global(.testimonial-card:hover) {
+    border-color: rgb(var(--rim-rgb, 237 215 156) / 0.58);
+    transform: translateY(-1px);
+  }
+
+  :global(.testimonial-card .card-spotlight-border) {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: radial-gradient(
+      120px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+      rgba(237, 215, 156, 0.35),
+      transparent 75%
+    );
+    -webkit-mask:
+      linear-gradient(#fff, #fff) content-box,
+      linear-gradient(#fff, #fff);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    z-index: 2;
+  }
+
+  :global(.testimonial-card:hover .card-spotlight-border) {
+    opacity: 1;
+  }
+
+  :global(.testimonial-card-stars) {
+    display: flex;
+    gap: 0.15rem;
+    margin-bottom: 0.85rem;
+    color: rgb(237 215 156 / 0.55);
+  }
+
+  :global(.testimonial-card-quote) {
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+
+  :global(.testimonial-card-quote p) {
+    margin: 0;
+    font-size: 0.9375rem;
+    line-height: 1.62;
+    font-weight: 400;
+    color: #edd79c;
+    letter-spacing: -0.01em;
+  }
+
+  :global(.testimonial-card-quote .quote-pause) {
+    color: rgb(var(--rim-rgb, 237 215 156) / 0.72);
+    font-weight: 500;
+    padding-inline: 0.12em;
+  }
+
+  :global(.testimonial-card-author) {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.15rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgb(237 215 156 / 0.08);
+  }
+
+  :global(.testimonial-card-avatar-wrap) {
+    position: relative;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  :global(.testimonial-card-avatar) {
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    object-fit: cover;
+    border: 1px solid rgb(var(--rim-rgb, 237 215 156) / 0.5);
+    background: #1d1613;
+  }
+
+  :global(.testimonial-card-avatar.is-hidden) {
+    display: none;
+  }
+
+  :global(.testimonial-card-initials) {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid rgb(var(--rim-rgb, 237 215 156) / 0.5);
+    background: linear-gradient(145deg, #32241f, #1d1613);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #edd79c;
+  }
+
+  :global(.testimonial-card-initials.is-visible) {
+    display: flex;
+  }
+
+  :global(.testimonial-card-meta) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+  }
+
+  :global(.testimonial-card-name) {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: #edd79c;
+  }
+
+  :global(.testimonial-card-role) {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: rgb(201 184 122 / 0.72);
+  }
+
+  @keyframes testimonials-scroll {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-50%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(.testimonials-column-track) {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  function initTestimonialAvatars() {
+    document.querySelectorAll<HTMLImageElement>('[data-testimonial-avatar]').forEach((img) => {
+      const showInitials = () => {
+        img.classList.add('is-hidden');
+        const initials = img.parentElement?.querySelector('.testimonial-card-initials');
+        initials?.classList.add('is-visible');
+      };
+      img.addEventListener('error', showInitials);
+      if (img.complete && img.naturalWidth === 0) showInitials();
+    });
+  }
+
+  function run() {
+    initTestimonialAvatars();
+  }
+
+  run();
+  document.addEventListener('astro:after-swap', run);
+</script>

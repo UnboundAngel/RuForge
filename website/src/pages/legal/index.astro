@@ -1,0 +1,51 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import Icon from '../../components/Icon.astro';
+import type { IconName } from '../../lib/icons';
+import { LEGAL_LINKS } from '../../lib/site';
+
+const docMeta: Record<string, { icon: IconName; blurb: string }> = {
+  'Privacy Policy': {
+    icon: 'shield',
+    blurb: 'What RuForge stores locally and what leaves your machine.',
+  },
+  'Terms of Use': {
+    icon: 'scale',
+    blurb: 'License, responsibilities, and acceptable use.',
+  },
+  'Legal Notice': {
+    icon: 'file',
+    blurb: 'Copyright, disclaimers, and contact.',
+  },
+};
+---
+
+<BaseLayout title="Legal" description="Privacy, terms, and legal notice for RuForge.">
+  <div class="rf-container space-y-12">
+    <PageHeader
+      title="Legal"
+      description="Policies for the RuForge desktop app. Select a document to read the full text."
+      icon="shield"
+    />
+
+    <div class="grid gap-5 sm:grid-cols-3">
+      {
+        LEGAL_LINKS.map((doc) => {
+          const meta = docMeta[doc.title];
+          return (
+            <a href={doc.href} class="rf-link-card flex-col sm:flex-row">
+              <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-rf-bg/80 text-rf-accent">
+                <Icon name={meta.icon} size={22} />
+              </span>
+              <span class="space-y-2">
+                <span class="block text-lg font-medium text-rf-text">{doc.title}</span>
+                <span class="block text-sm leading-relaxed text-rf-text-muted">{meta.blurb}</span>
+              </span>
+            </a>
+          );
+        })
+      }
+    </div>
+  </div>
+</BaseLayout>

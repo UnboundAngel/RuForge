@@ -8,14 +8,15 @@
 
 Shipping version: 0.1.8 (unreleased)
 Last shipped to users: 0.1.7
-Last updated: 2026-05-21
+Last updated: 2026-05-22
 Status: in progress
 
 ## Now
 
-0.1.7 is live on main updater.json and GitHub Release v0.1.7. Next work logs
-under v0.1.8 (unreleased) in AGENTS.md. Open P0 is empty; Authorize Cleanup
-(#8) works via the in-app modal (see Notes).
+0.1.7 is live on main updater.json and GitHub Release v0.1.7. Unreleased 0.1.8
+includes post-install What's New scroll/clamp fix and mini player large-mode
+video no longer washed by cover/gradient/ambient/control blur layers. Open P0
+is empty; Authorize Cleanup (#8) works via the in-app modal (see Notes).
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -55,7 +56,10 @@ Fixes:
 - Preview ffmpeg deadlock fix; delete cancels preview work.
 - Download hero clears on finish/remove; explorer bounds sync during sidebar resize.
 
-**0.1.8 unreleased:** (see AGENTS.md Shipped log)
+**0.1.8 unreleased:** Post-install What's New modal viewport clamp and internal
+scroll for long release notes; mini player large-mode video crisp during playback
+(no cover/gradient/ambient/control blur wash). High-fidelity public site in
+`website/` (Astro 5, 3D perspective hero hover, scrolling marquee, interactive feature grid, custom scrollbars, card border spotlights, and staggered scroll-reveal animations). (see AGENTS.md Shipped log)
 
 ## Open P0 (blocks release)
 

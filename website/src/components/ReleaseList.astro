@@ -1,0 +1,67 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import Icon from './Icon.astro';
+
+interface Props {
+  releases: CollectionEntry<'releases'>[];
+  compact?: boolean;
+}
+
+const { releases, compact = false } = Astro.props;
+
+const formatDate = (date: Date) =>
+  date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+---
+
+<div class:list={[compact ? 'space-y-8' : 'space-y-16']}>
+  {
+    releases.map((release) => (
+      <article class:list={[!compact && 'rf-release-block']}>
+        <header class="mb-8 space-y-2">
+          <p class="rf-version rounded-md bg-rf-bg/60 px-2.5 py-1 w-fit">
+            v{release.data.version}
+          </p>
+          <time class="block text-sm text-rf-text-muted" datetime={release.data.date.toISOString()}>
+            {formatDate(release.data.date)}
+          </time>
+        </header>
+
+        {release.data.additions.length > 0 && (
+          <section class="mb-10">
+            <h3 class="rf-section-label rf-section-label-add">
+              <Icon name="plus" size={14} />
+              Additions
+              <span class="rf-badge rf-badge-add ml-1">{release.data.additions.length}</span>
+            </h3>
+            <ul class="rf-change-list">
+              {release.data.additions.map((item) => (
+                <li class="rf-change-item rf-change-item-add">
+                  <Icon name="plus" size={14} class="mt-1 text-rf-add shrink-0" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {release.data.fixes.length > 0 && (
+          <section>
+            <h3 class="rf-section-label rf-section-label-fix">
+              <Icon name="wrench" size={14} />
+              Fixes
+              <span class="rf-badge rf-badge-fix ml-1">{release.data.fixes.length}</span>
+            </h3>
+            <ul class="rf-change-list">
+              {release.data.fixes.map((item) => (
+                <li class="rf-change-item rf-change-item-fix">
+                  <Icon name="wrench" size={14} class="mt-1 text-rf-fix shrink-0" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </article>
+    ))
+  }
+</div>

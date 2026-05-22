@@ -1,0 +1,585 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import HeroCarousel from '../components/HeroCarousel.astro';
+import Icon from '../components/Icon.astro';
+import TestimonialsSection from '../components/TestimonialsSection.astro';
+import { Image } from 'astro:assets';
+import highlightCoffee from '../assets/highlight-coffee-beans.webp';
+import { getCollection } from 'astro:content';
+import { SITE } from '../lib/site';
+
+const allReleases = await getCollection('releases');
+const latestRelease = allReleases.sort(
+  (a, b) => b.data.date.getTime() - a.data.date.getTime(),
+)[0];
+
+const features = [
+  {
+    title: 'Downloader Screen',
+    icon: 'download' as const,
+    description: 'Archive videos, playlists, and audio directly. yt-dlp quality selection, browser cookie syncing, and auto-stall watchdog.',
+    link: '/roadmap?area=Download+Screen',
+    linkText: 'Explore Downloader'
+  },
+  {
+    title: 'Media Library',
+    icon: 'list' as const,
+    description: 'Auto-scan folders, deduplicate muxed streams, and store local view counters and watch progress privately.',
+    link: '/roadmap?area=Video+Library',
+    linkText: 'Browse Library Details'
+  },
+  {
+    title: 'Media Player',
+    icon: 'play' as const,
+    description: 'Hardware-accelerated rendering, keyboard controls, segmented chapter bars, and drag-and-drop subtitle cues.',
+    link: '/roadmap?area=Player+Screen',
+    linkText: 'Discover Player'
+  },
+  {
+    title: 'SponsorBlock',
+    icon: 'star' as const,
+    description: 'Skip non-music segments, intros, and sponsor ads on the fly using a privacy-preserving local SHA-256 prefix hash.',
+    link: '/roadmap',
+    linkText: 'Learn Skip Mechanics'
+  },
+  {
+    title: 'Mini Player',
+    icon: 'map' as const,
+    description: 'Compact borderless corner player with a visualizer overlay, transparent hover window chrome, and full volume controls.',
+    link: '/roadmap',
+    linkText: 'Pop Out Mini Details'
+  },
+  {
+    title: 'Advanced Settings',
+    icon: 'wrench' as const,
+    description: 'Tailor parallel task thresholds, manage download directory scopes, cookies sync keys, and automatic space cleanups.',
+    link: '/roadmap?area=Settings+Screen',
+    linkText: 'View Settings Architecture'
+  }
+];
+---
+
+<BaseLayout>
+  <div class="relative overflow-hidden min-h-screen flex flex-col justify-between">
+    {/* Premium Radial Accent Lights */}
+    <div class="absolute -top-40 left-1/2 -z-10 h-[600px] w-[1000px] -translate-x-1/2 rounded-full bg-rf-accent/[0.04] blur-[140px] pointer-events-none ambient-glow-1"></div>
+    <div class="absolute top-[600px] right-[-100px] -z-10 h-[450px] w-[450px] rounded-full bg-rf-accent/[0.015] blur-[100px] pointer-events-none ambient-glow-2"></div>
+    <div class="absolute bottom-40 left-[-200px] -z-10 h-[500px] w-[500px] rounded-full bg-rf-accent/[0.01] blur-[120px] pointer-events-none ambient-glow-3"></div>
+
+    {/* Hero Section */}
+    <section class="rf-container pt-16 pb-20 md:pt-24 md:pb-28 text-center relative">
+      <div class="max-w-3xl mx-auto space-y-6 md:space-y-8 animate-fade-in">
+        <h1 class="text-4xl font-bold tracking-tight text-rf-text sm:text-5xl lg:text-6xl leading-[1.1]">
+          Your media library,<br class="hidden sm:inline" /> forged locally.
+        </h1>
+        
+        <p class="max-w-xl mx-auto text-base sm:text-lg leading-relaxed text-rf-text-muted/90">
+          A lightweight, local-first media collector. Streamlined yt-dlp downloading and fine-tuned offline playback with SponsorBlock, chapters, and custom subtitles.
+        </p>
+
+        <div class="flex flex-wrap items-center justify-center gap-4">
+          <a href={SITE.releases} class="rf-btn shadow-lg shadow-rf-accent/5 hover:scale-[1.01]">
+            <Icon name="download" size={18} class="text-rf-bg" />
+            Download for Windows
+          </a>
+          <a href={SITE.github} class="rf-btn-ghost">
+            <Icon name="github" size={18} />
+            GitHub Source
+          </a>
+          <span class="rf-version rounded-lg bg-rf-surface/60 px-3 py-2 border border-rf-border">v{SITE.latestVersion}</span>
+        </div>
+      </div>
+
+      {/* 3D Slanted Carousel Container */}
+      <div class="mt-20 md:mt-24 max-w-4xl mx-auto animate-slide-up" style="perspective: 2000px;">
+        <div 
+          class="relative p-1.5 bg-rf-surface/10 rounded-2xl shadow-3xl border border-rf-border/20 overflow-hidden group/carousel carousel-3d-wrapper"
+        >
+          <HeroCarousel />
+          {/* Bottom Gradient Fade to Blend with Background */}
+          <div class="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#1D1613] via-[#1D1613]/50 to-transparent pointer-events-none z-10"></div>
+        </div>
+      </div>
+    </section>
+
+    {/* Tech stack ticker */}
+    <section class="tech-ticker w-full overflow-hidden py-5 scroll-reveal" aria-label="Built with">
+      <div class="tech-ticker__rail relative w-full overflow-hidden">
+        <div class="tech-ticker__fade tech-ticker__fade--left" aria-hidden="true"></div>
+        <div class="tech-ticker__fade tech-ticker__fade--right" aria-hidden="true"></div>
+        <div class="flex gap-20 w-max animate-marquee">
+          <div class="tech-ticker__row flex shrink-0 items-center gap-20">
+            <span class="tech-ticker__item">YouTube Downloader</span>
+            <span class="tech-ticker__item">yt-dlp Engine</span>
+            <span class="tech-ticker__item">SponsorBlock API</span>
+            <span class="tech-ticker__item">Tauri v2 Shell</span>
+            <span class="tech-ticker__item">Rust Core</span>
+            <span class="tech-ticker__item">React 19 Core</span>
+            <span class="tech-ticker__item">FFmpeg Processing</span>
+            <span class="tech-ticker__item">Zustand State Store</span>
+          </div>
+          <div class="tech-ticker__row flex shrink-0 items-center gap-20" aria-hidden="true">
+            <span class="tech-ticker__item">YouTube Downloader</span>
+            <span class="tech-ticker__item">yt-dlp Engine</span>
+            <span class="tech-ticker__item">SponsorBlock API</span>
+            <span class="tech-ticker__item">Tauri v2 Shell</span>
+            <span class="tech-ticker__item">Rust Core</span>
+            <span class="tech-ticker__item">React 19 Core</span>
+            <span class="tech-ticker__item">FFmpeg Processing</span>
+            <span class="tech-ticker__item">Zustand State Store</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* Grid of Interactive Details Cards */}
+    <section class="rf-container py-24 md:py-32">
+      <div class="text-center max-w-2xl mx-auto mb-16 md:mb-20 space-y-4 scroll-reveal">
+        <h2 class="text-3xl font-bold tracking-tight text-rf-text sm:text-4xl">
+          Everything you need. Offline.
+        </h2>
+        <p class="text-base text-rf-text-muted/90">
+          A fully integrated workflow engine that indexes your catalog on disk and protects your online data footprint.
+        </p>
+      </div>
+
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {
+          features.map((feat, index) => (
+            <a 
+              href={feat.link}
+              class="feature-card scroll-reveal group/card flex flex-col justify-between rounded-2xl bg-rf-surface/40 hover:bg-rf-surface/55 border border-rf-border/30 p-6 transition-all duration-300 relative overflow-hidden"
+              style={`transition-delay: ${index * 80}ms;`}
+            >
+              {/* Dynamic Interactive Border Spotlight */}
+              <div class="card-spotlight-border"></div>
+
+              {/* Subtle background glow effect inside individual cards */}
+              <div class="absolute -right-10 -bottom-10 h-32 w-32 bg-rf-accent/[0.02] rounded-full blur-2xl pointer-events-none transition-all duration-500 group-hover/card:bg-rf-accent/[0.04] group-hover/card:scale-110"></div>
+              
+              <div class="space-y-4">
+                <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-rf-bg/80 text-rf-accent border border-rf-border/40 group-hover/card:border-rf-accent/15 transition-all">
+                  {feat.icon === 'download' && <Icon name="download" size={20} />}
+                  {feat.icon === 'list' && <Icon name="list" size={20} />}
+                  {feat.icon === 'play' && <Icon name="play" size={20} />}
+                  {feat.icon === 'star' && <Icon name="star" size={20} />}
+                  {feat.icon === 'map' && <Icon name="map" size={20} />}
+                  {feat.icon === 'wrench' && <Icon name="wrench" size={20} />}
+                </span>
+                
+                <div class="space-y-2">
+                  <h3 class="text-base font-semibold text-rf-text group-hover/card:text-rf-accent transition-colors">
+                    {feat.title}
+                  </h3>
+                  <p class="text-xs sm:text-sm text-rf-text-muted leading-relaxed">
+                    {feat.description}
+                  </p>
+                </div>
+              </div>
+
+              <div class="pt-6">
+                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-rf-accent tracking-wide group/link">
+                  {feat.linkText}
+                  <svg class="h-4 w-4 transform transition-all duration-300 group-hover/link:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="4" y1="12" x2="17" y2="12" class="opacity-0 -translate-x-2 transition-all duration-300 group-hover/link:opacity-100 group-hover/link:translate-x-0" stroke-linecap="round"/>
+                    <path d="M12 5l7 7-7 7" class="transform transition-transform duration-300 group-hover/link:translate-x-0.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+              </div>
+            </a>
+          ))
+        }
+      </div>
+    </section>
+
+    <TestimonialsSection />
+
+    {/* High-Fidelity Rich Highlight Card at Bottom */}
+    <section class="rf-container pb-28 scroll-reveal">
+      <div class="highlight-card relative overflow-hidden rounded-3xl p-8 md:p-14 border border-rf-border/40 group/highlight">
+        <Image
+          src={highlightCoffee}
+          alt=""
+          class="highlight-card-photo"
+          width={1376}
+          height={768}
+          widths={[768, 1024, 1376]}
+          sizes="100vw"
+          loading="lazy"
+          decoding="async"
+        />
+        <div class="highlight-card-scrim" aria-hidden="true"></div>
+
+        <div class="relative z-10 max-w-2xl space-y-6 md:space-y-8">
+          <div class="inline-flex items-center gap-2 rounded-full bg-rf-accent/10 px-4 py-1.5 border border-rf-accent/20">
+            <Icon name="star" size={14} class="text-rf-accent" />
+            <span class="text-xs font-semibold tracking-wider text-rf-accent uppercase">Always-on media freedom</span>
+          </div>
+          
+          <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-rf-text leading-[1.25]">
+            Designed for speed.<br />Engineered for local privacy.
+          </h2>
+          
+          <p class="text-sm md:text-base leading-relaxed text-rf-text-muted/90">
+            RuForge compiles direct Rust bindings with Tauri to deliver near-zero overhead. Your downloads run concurrently, SponsorBlock filters on the fly, and your library indexing is entirely local. No trackers, no accounts, no subscriptions.
+          </p>
+
+          <div class="pt-4 flex flex-wrap items-center gap-4">
+            <a href={SITE.releases} class="rf-btn">
+              <Icon name="download" size={16} class="text-rf-bg" />
+              Download Latest Client
+            </a>
+            <a href="/roadmap" class="rf-btn-ghost">
+              Interactive Roadmap
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* Latest Release Banner (1 line teaser + link) */}
+    {
+      latestRelease && (
+        <section class="rf-container pb-16 flex justify-center scroll-reveal">
+          <div class="inline-flex flex-col sm:flex-row items-center gap-x-3 gap-y-1.5 text-xs text-rf-text-muted bg-rf-surface/20 px-4 py-2.5 rounded-full border border-rf-border/50 hover:border-rf-accent/20 transition-all duration-300">
+            <span class="flex h-2 w-2 rounded-full bg-rf-accent/80 shrink-0"></span>
+            <span class="font-medium text-rf-text">v{latestRelease.data.version} released:</span>
+            <span class="line-clamp-1 max-w-[320px] sm:max-w-md md:max-w-lg">{latestRelease.data.additions[0]}</span>
+            <a href="/changelog" class="text-rf-accent font-medium hover:underline flex items-center gap-0.5 sm:ml-2 shrink-0">
+              View Changelog
+              <Icon name="external" size={12} class="opacity-70" />
+            </a>
+          </div>
+        </section>
+      )
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  /* Tech stack ticker */
+  .tech-ticker {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .tech-ticker::before,
+  .tech-ticker::after {
+    content: '';
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgb(237 215 156 / 0.14) 50%,
+      transparent 100%
+    );
+  }
+
+  .tech-ticker::before {
+    top: 0;
+  }
+
+  .tech-ticker::after {
+    bottom: 0;
+  }
+
+  .tech-ticker__fade--left,
+  .tech-ticker__fade--right {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: min(7rem, 16vw);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .tech-ticker__fade--left {
+    left: 0;
+    background: linear-gradient(90deg, #1d1613 20%, transparent);
+  }
+
+  .tech-ticker__fade--right {
+    right: 0;
+    background: linear-gradient(270deg, #1d1613 20%, transparent);
+  }
+
+  .tech-ticker__item {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: rgb(201 184 122 / 0.34);
+  }
+
+  .tech-ticker__item:nth-child(3n + 1) {
+    color: rgb(237 215 156 / 0.5);
+  }
+
+  .tech-ticker:hover .animate-marquee {
+    animation-play-state: paused;
+  }
+
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .animate-marquee {
+    animation: marquee 40s linear infinite;
+  }
+
+  /* Bottom highlight card: coffee photo background */
+  .highlight-card {
+    min-height: 18rem;
+  }
+
+  .highlight-card-photo,
+  .highlight-card-photo img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 42%;
+  }
+
+  .highlight-card-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      102deg,
+      rgb(29 22 19 / 0.9) 0%,
+      rgb(29 22 19 / 0.78) 42%,
+      rgb(29 22 19 / 0.52) 72%,
+      rgb(29 22 19 / 0.38) 100%
+    );
+    pointer-events: none;
+  }
+
+  .highlight-card .rf-btn-ghost {
+    background: rgb(29 22 19 / 0.35);
+    backdrop-filter: blur(6px);
+  }
+
+  /* Interactive 3D Perspective Tilt on Screenshot Carousel */
+  .carousel-3d-wrapper {
+    transform: rotateX(5deg) translateY(-10px);
+    transform-style: preserve-3d;
+    transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.8s ease, shadow 0.8s ease;
+  }
+
+  .carousel-3d-wrapper:hover {
+    transform: rotateX(0deg) translateY(0px) scale(1.015);
+    border-color: rgba(237, 215, 156, 0.25);
+  }
+
+  /* Subtle CSS-only movement for background blurs */
+  @keyframes float-glow-1 {
+    0% {
+      transform: translate(-50%, -40%) scale(1);
+      opacity: 0.04;
+    }
+    50% {
+      transform: translate(-47%, -45%) scale(1.1);
+      opacity: 0.08;
+    }
+    100% {
+      transform: translate(-50%, -40%) scale(1);
+      opacity: 0.04;
+    }
+  }
+
+  @keyframes float-glow-2 {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.015;
+    }
+    50% {
+      transform: translate(-15px, 25px) scale(1.08);
+      opacity: 0.03;
+    }
+    100% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.015;
+    }
+  }
+
+  @keyframes float-glow-3 {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.01;
+    }
+    50% {
+      transform: translate(20px, -15px) scale(1.05);
+      opacity: 0.02;
+    }
+    100% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.01;
+    }
+  }
+
+  .ambient-glow-1 {
+    animation: float-glow-1 15s ease-in-out infinite;
+  }
+
+  .ambient-glow-2 {
+    animation: float-glow-2 18s ease-in-out infinite;
+  }
+
+  .ambient-glow-3 {
+    animation: float-glow-3 20s ease-in-out infinite;
+  }
+
+  /* Entrance animations */
+  .animate-fade-in {
+    animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 150ms;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Dynamic Interactive Border Spotlight */
+  .card-spotlight-border {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: radial-gradient(
+      140px circle at var(--mouse-x, 0px) var(--mouse-y, 0px),
+      rgba(237, 215, 156, 0.28),
+      transparent 80%
+    );
+    -webkit-mask: 
+      linear-gradient(#fff, #fff) content-box, 
+      linear-gradient(#fff, #fff);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: 5;
+  }
+
+  .feature-card:hover .card-spotlight-border {
+    opacity: 1;
+  }
+
+  /* Staggered Scroll Reveal */
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform, opacity;
+  }
+
+  .scroll-reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Custom scrollbar for home page */
+  :global(.home-scrollbar) {
+    scrollbar-color: rgba(237, 215, 156, 0.2) #1D1613;
+    scrollbar-width: thin;
+  }
+
+  :global(.home-scrollbar::-webkit-scrollbar) {
+    width: 8px;
+    height: 8px;
+  }
+
+  :global(.home-scrollbar::-webkit-scrollbar-track) {
+    background: #1D1613;
+  }
+
+  :global(.home-scrollbar::-webkit-scrollbar-thumb) {
+    background: rgba(237, 215, 156, 0.2);
+    border-radius: 999px;
+    border: 2px solid #1D1613;
+    transition: background 0.3s ease;
+  }
+
+  :global(.home-scrollbar::-webkit-scrollbar-thumb:hover) {
+    background: rgba(237, 215, 156, 0.45);
+  }
+</style>
+
+<script>
+  // Add custom scrollbar class specifically for home page
+  document.documentElement.classList.add('home-scrollbar');
+
+  // Card spotlight tracking
+  function initCardSpotlights() {
+    const cards = document.querySelectorAll<HTMLElement>('.feature-card, .spotlight-card');
+    cards.forEach((card) => {
+      card.addEventListener('mousemove', (e) => {
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        card.style.setProperty('--mouse-x', `${x}px`);
+        card.style.setProperty('--mouse-y', `${y}px`);
+      });
+    });
+  }
+
+  // Intersection Observer for scroll-reveal animations
+  function initScrollReveal() {
+    const observerOptions = {
+      root: null,
+      rootMargin: '0px 0px -8% 0px',
+      threshold: 0.02
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, observerOptions);
+
+    document.querySelectorAll('.scroll-reveal').forEach((el) => {
+      observer.observe(el);
+    });
+  }
+
+  // Run initializations
+  function init() {
+    initCardSpotlights();
+    initScrollReveal();
+  }
+
+  init();
+  document.addEventListener('astro:after-swap', init);
+</script>
