@@ -1,0 +1,52 @@
+{
+  "nodes": [
+    {
+      "id": "t-audio-hero",
+      "type": "task",
+      "label": "Audio-only hero and LED equalizer",
+      "agent": "chad",
+      "details": [
+        "Full-canvas LED equalizer, glass side waveforms, library Music badge, m4a-sized audio downloads."
+      ],
+      "fileEdits": [
+        { "path": "src/components/player/AudioHeroStage.tsx", "reason": "Audio hero visualizer and equalizer." },
+        { "path": "src/audioAnalyserGraph.ts", "reason": "Web Audio tap and LED band levels." },
+        { "path": "src/components/PlayerView.tsx", "reason": "Audio-only player wiring." }
+      ]
+    },
+    {
+      "id": "t-sponsorblock-chapters",
+      "type": "task",
+      "label": "SponsorBlock and chapter scrubber",
+      "agent": "chad",
+      "details": [
+        "Skip segments, scrub overlays, Playback settings tree, segmented chapter bar with hover preview."
+      ],
+      "fileEdits": [
+        { "path": "src/components/player/ChapterScrubber.tsx", "reason": "Chapter segmented scrubber." },
+        { "path": "src/components/player/SponsorBlockScrubOverlay.tsx", "reason": "SponsorBlock scrub overlay." }
+      ]
+    },
+    {
+      "id": "t-downloader-queue",
+      "type": "task",
+      "label": "Downloader queue and estimates",
+      "agent": "chad",
+      "details": [
+        "Floating queue drawer, dual simulate sizes, smoothed ETA, stall watchdog, duplicate library dedupe."
+      ],
+      "fileEdits": [
+        { "path": "src/components/downloader/DownloadJobQueuePanel.tsx", "reason": "Floating download queue UI." },
+        { "path": "src-tauri/src/gallery.rs", "reason": "Gallery dedupe and download cleanup." }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-audio-hero" },
+    { "source": "t-audio-hero", "target": "ruforge" },
+    { "source": "chad", "target": "t-sponsorblock-chapters" },
+    { "source": "t-sponsorblock-chapters", "target": "ruforge" },
+    { "source": "chad", "target": "t-downloader-queue" },
+    { "source": "t-downloader-queue", "target": "ruforge" }
+  ]
+}
