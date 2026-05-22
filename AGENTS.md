@@ -54,7 +54,7 @@ ships to users.
 
 - **Shipped log (THIS FILE, bottom, `## Shipped log`):** the **first and mandatory** place every shipped change is recorded. One appended line per change, no format ceremony. This is the cheap, vague-input-proof capture surface. **If you change behavior, append here before you consider the task done.** See `## Shipped log` for the rule.
 - **Living roadmap / ideas (in-repo, canonical for agents):** `docs/RuForge.md`. Update when shipped work lands. Optional mirror outside the repo: `c:\Random things i dont want deleted\markdown files\RuForge.md` (keep in sync by hand if you use both).
-- **Graph surfaces (`docs/changes.html`, `docs/versions/version-<semver>.json`, `docs/versioner.html`):** Angel's project-tracking + release-note source. These are **drained from the Shipped log at release time only** (see `## Release ritual`, step 6). **Never** edited per-change mid-cycle. The gap between the Shipped log and the last version present in the graph surfaces IS the release-prep to-do; do not wait to be told.
+- **Graph surfaces (`docs/changes.html`, `docs/versions/version-<semver>.json`, `docs/versioner.html`):** Angel's project-tracking + release-note source. These are **drained from the Shipped log at release time only** (see `## Release ritual`, step 8). **Never** edited per-change mid-cycle. The gap between the Shipped log and the last version present in the graph surfaces IS the release-prep to-do; do not wait to be told.
 - **In-repo machine plans:** `.cursor/plans/` (e.g. Zustand migration audit). Implementation detail, may lag; trust code + this `AGENTS.md` for "what shipped."
 
 ## Who does what (this workspace vs elsewhere)
@@ -65,6 +65,8 @@ ships to users.
 | **Jim** (Gemini) | Your CLI or Antigravity. **Not** Cursor | **Visuals only:** layout, typography, color, motion, component styling. **No** business logic, state machines, or store changes. |
 
 **Handoff rule:** If something needs Jim's pass (pure UI polish), Chad should **not** pretend to be Jim. Instead, Chad ends with a **short, copy-paste prompt for you to run in Jim's environment** (file paths, desired look, explicit "do not change logic or props contracts"). Chad implements or preserves the logic and prop surfaces Jim should style against.
+
+**Release handoff (Angel vs agent):** On ship / release / push it out, **the only step that requires Angel** is running the **signed Windows build** locally (`Build-signed-windows.bat` or `npm run build:signed`), because the **private signing key** must not leave the machine. After that build finishes, Angel may paste the build summary in chat; the agent reads the `.sig` from disk under `src-tauri/target/release/bundle/` and does **everything else** without waiting for more input: version bumps (if not done yet), `updater.json` (teaser markdown + structured `additions` / `fixes`, `signature`, `url`, `pub_date`), **commit message**, **commit + push to `main`**, **`gh release create`** (tag `v<semver>`, title, Release body, upload NSIS `.exe` and optional MSI), Shipped log / `STATE.md` / graph surfaces (release ritual step 6), and live `updater.json` verification. Do **not** ask Angel to create the GitHub Release, write release copy, tag, or push unless `gh` auth is missing or the push fails.
 
 ## Agent editing guardrails (mandatory)
 
@@ -165,6 +167,8 @@ Omit `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if the key has no password.
 
 **One-click local signed build (Windows, no Git push):** run `Build-signed-windows.bat` from the repo root, or `npm run build:signed`. Script loads `%USERPROFILE%\.tauri\ruforge.key`, sets signing env vars, runs `npm run tauri build`, then prints paths under `src-tauri/target/release/bundle/`. Optional password file **`.tauri-signing-password`** (single line, gitignored) avoids typing each run. To recreate a **Desktop shortcut** to the batch file, run once: `powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/create-desktop-shortcut.ps1`.
 
+**Who runs the signed build:** **Angel only** (private key). Agents prepare release notes and bump versions first, then tell Angel to run the batch once; after artifacts exist, the agent pastes the NSIS `.sig` into `updater.json` from the printed path. Agents do **not** run `tauri build` for release signing unless Angel explicitly asks.
+
 **After a successful release build**, Tauri writes **one `.sig` per bundle** next to the installer, for example:
 
 - `src-tauri\target\release\bundle\msi\RuForge_<version>_x64_en-US.msi.sig`
@@ -210,7 +214,9 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 **This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see `## Release ritual`). That is the only time the graph JSON / `changes.html` get touched. Keeping this log honest mid-cycle is what makes release night a 10-minute job instead of an archaeology dig.
 
-### v0.1.7 (unreleased)
+### v0.1.8 (unreleased)
+
+### v0.1.7 (shipped)
 
 - **Audio analyser teardown**: hard release clears MES attachment set so track changes re-tap; RAF alive guard on hero canvas. `audioAnalyserGraph.ts`, `AudioHeroStage.tsx`.
 - **Audio hero equalizer look**: segmented LED block render in paintWaveform only. `AudioHeroStage.tsx`.
@@ -315,17 +321,29 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 **Trigger:** Angel says ship / release / push it out. Run these steps **in order, top to bottom.** Do not reorder, do not skip, do not parallelize.
 
+**Angel vs agent (default):** See **Release handoff** under **Who does what**. Angel runs the signed build only; the agent owns GitHub (`gh`), commits, tags, and release copy.
+
 **Hard rule (branching):** RuForge is a solo-dev repo. **All release commits go directly to `main`.** Do **not** create, switch to, or commit on any branch for a release. If you are not on `main`, stop and say so. Do not "fix" it with git surgery on a possibly-dirty tree; ask Angel.
 
 1. **Drain the Shipped log → version bump decision.** Read the entire `### vX.Y.Z (unreleased)` block. Decide PATCH vs MINOR from its contents (behavior change = at least PATCH; new feature / new persisted setting / new command = MINOR). State the chosen version and why, one line.
 2. **Bump all three version files together:** `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version`. A mismatch here is a known past failure. Confirm all three match.
-3. **Build signed.** `Build-signed-windows.bat` or `npm run build:signed`. Locate the emitted `.sig` next to the NSIS installer under `src-tauri/target/release/bundle/`. Read the base64 out of the `.sig` file yourself. Do not ask Angel to.
-4. **Update `updater.json`:** bump `version`, `pub_date`, per-platform `url` (URL tag segment must match the GitHub release tag exactly, incl. leading `v` if used), and paste the `.sig` base64 into `signature`. Distill a SHORT teaser from the Shipped block for `notes`. Do not paste the whole block.
-   The `signature` value is the literal base64 CONTENTS of the `.sig` file,
-   never a path or URL to it. This is a documented common failure that
-   breaks every install silently.
-5. **Commit + push to `main`.** Confirm current branch is `main` first. The commit MUST include `updater.json`, all three version files, and any code. Push to `origin main`. State the pushed commit hash.
-6. **Drain Shipped log → graph surfaces AND roll STATE.md (scoped, this
+3. **Prep `updater.json` notes (agent, before build).** Write structured JSON in `notes`: markdown **teaser** (header + three bullets for the pre-download card; full markdown supported), plus `additions` and `fixes` arrays for post-install. Set `version`, `url` (`.../releases/download/v<semver>/RuForge_<semver>_x64-setup.exe`), leave `signature` empty until step 5.
+4. **Signed build (Angel only).** Angel runs `Build-signed-windows.bat` or `npm run build:signed`. Agent then reads NSIS `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/` (do not ask Angel to paste base64 unless the file is missing).
+5. **Finish `updater.json` (agent).** Paste `.sig` base64 into `signature`, set `pub_date` from the build time or minisign timestamp. The `signature` value is the literal base64 CONTENTS of the `.sig` file, never a path or URL. That mistake breaks every install silently.
+6. **Commit + push to `main` (agent).** Confirm current branch is `main`. Write a clear commit message (version + one-line summary). The commit MUST include `updater.json`, all three version files, and any unreleased code. Push to `origin main`. State the pushed commit hash.
+7. **GitHub Release (agent, `gh`).** Use GitHub CLI on `UnboundAngel/RuForge`. Tag **`v<semver>`** must match the `updater.json` download path. Example:
+
+   ```powershell
+   gh release create v0.1.7 `
+     "src-tauri/target/release/bundle/nsis/RuForge_0.1.7_x64-setup.exe" `
+     "src-tauri/target/release/bundle/msi/RuForge_0.1.7_x64_en-US.msi" `
+     --title "RuForge 0.1.7" `
+     --notes "## RuForge 0.1.7`n`n<paste teaser + additions/fixes from updater notes>"
+   ```
+
+   Upload the NSIS `.exe` (required for auto-update). MSI is optional. Do **not** attach `.sig` files. If the release already exists, use `gh release upload` or edit; do not duplicate tags. Release body can mirror the `updater.json` teaser and bullet lists (markdown). Installers stay out of git.
+
+8. **Drain Shipped log → graph surfaces AND roll STATE.md (scoped, this
    step only).**
    a. Append the now-released changes into
       `docs/versions/version-<semver>.json` and the
@@ -344,8 +362,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
       reflects only the new empty cycle. Refresh `Now`, `Next 3`, and
       `Open P0` to current reality. Update `Last updated:` to today.
    STATE.md and the AGENTS.md Shipped log must agree on what is shipped vs
-   unreleased after this step. If they do not, step 6 is not complete.
-7. **HARD BLOCK: verify live, or it did not ship.** Fetch the live raw URL:
+   unreleased after this step. If they do not, step 8 is not complete.
+9. **HARD BLOCK: verify live, or it did not ship.** Fetch the live raw URL:
    `https://raw.githubusercontent.com/UnboundAngel/RuForge/main/updater.json`
    - Confirm the response body PARSES as JSON. A 200 with malformed JSON
      still means every user gets nothing: Tauri validates the entire
@@ -361,6 +379,6 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
    is NOT done. Live, parsed, and version-matched is the only definition of
    done. (Same principle as the session lesson: code present ≠ running on
    the path that matters. Committed ≠ live on `main`.)
-8. **Report.** One block: chosen version + rationale, pushed commit hash, the live `version` string you actually fetched in step 7, and confirmation the GitHub Release contains the installer asset at the manifest `url` (`.sig` stays out of the Release; it lives only in `updater.json`).
+10. **Report.** One block: chosen version + rationale, pushed commit hash, GitHub Release URL, the live `version` string you actually fetched in step 9, and confirmation the Release asset matches `updater.json` `url` (`.sig` only in `updater.json`).
 
 **If any step fails, stop at that step and report the failure plainly. Do not continue and do not claim partial success as success.**

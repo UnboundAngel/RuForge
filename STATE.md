@@ -6,15 +6,15 @@
 > this header. If this file and the code disagree, the code wins and this
 > file is stale: fix it forward, do not trust it blindly.
 
-Shipping version: 0.1.7 (unreleased)
-Last shipped to users: 0.1.6
+Shipping version: 0.1.8 (unreleased)
+Last shipped to users: 0.1.7
 Last updated: 2026-05-21
 Status: in progress
 
 ## Now
 
-0.1.6 is live on main updater.json and GitHub Release v0.1.6. Next work logs
-under v0.1.7 (unreleased) in AGENTS.md. Open P0 is empty; Authorize Cleanup
+0.1.7 is live on main updater.json and GitHub Release v0.1.7. Next work logs
+under v0.1.8 (unreleased) in AGENTS.md. Open P0 is empty; Authorize Cleanup
 (#8) works via the in-app modal (see Notes).
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
@@ -26,62 +26,36 @@ local dev, not a shipped target yet.
 
 ## What is new since last user release
 
-Closed release 0.1.6 (what users on 0.1.6 receive). The release-note drafter
-reads this for the last shipped delta, not the git tree. For the in-flight
-0.1.7 cycle, mirror AGENTS.md Shipped log into this section after each ship
-task until the ritual rolls the header.
+Closed release 0.1.7 (what users on 0.1.7 receive). The release-note drafter
+reads this for the last shipped delta, not the git tree.
 
-**0.1.6 shipped:**
+**0.1.7 shipped:**
 
 Additions:
-- Mini player micro and compact layouts (window height down to 70px).
-- Explorer back, forward, and reload in the title bar.
-- Video poster thumbnails when switching tracks.
-- Mini player Video Library browse mode (430x275, no resize while browsing).
+- Audio-only player hero with full-canvas LED equalizer and glass side waveforms.
+- Music badge on audio library cards; hover preview keeps cover art.
+- SponsorBlock skip button, scrub overlays, chapter/POI colors, Playback settings tree.
+- Segmented chapter scrubber with hover thumbnail preview and chapter prev/next.
+- Frosted player control dock with More menu for secondary actions.
+- Settings Playback tab (auto-advance audio, prefetch, SponsorBlock).
+- Floating bottom-right download queue drawer with crossfading thumbnails.
+- Per-job download stall watchdog.
+- Auto scrubber preview sprites on download (Settings, default on).
+- Dual yt-dlp simulate for audio vs video size estimates and smoothed ETA.
+- Windows volume mixer labels RuForge with app icon.
+- Mini player large layout: tooltips clamp in window; volume icons match main player.
 
 Fixes:
-- Audio visualizer crash when toggling play/pause.
-- Sidebar collapse label flash while the rail narrows.
+- Audio visualizer bars follow playback in WebView2.
+- Audio-only downloads prefer m4a, not full-video-sized files.
+- Duplicate library cards after muxed downloads and cross-folder dedupe.
+- WebView volume/mute sync; mini handoff no longer inherits autoplay mute.
+- Download pause only after Rust confirms; processing latch for HLS.
+- Duration labels no longer show NaN.
+- Preview ffmpeg deadlock fix; delete cancels preview work.
+- Download hero clears on finish/remove; explorer bounds sync during sidebar resize.
 
-**0.1.7 unreleased:** (see AGENTS.md Shipped log, keep in sync)
-
-- Audio-only UX: library hover keeps cover art; main player left art plus live spectrum visualizer (graph connect fix); top-left Music badge on audio cards; removed WebView explainer and Sound settings CTA.
-- Mini player large mode: tooltips clamp inside window; elapsed/total via `formatDuration`; volume icon tiers match level/mute.
-- SponsorBlock: audio-only main player and mini large/small scrub layouts (skip button + bar overlay); compact/micro/tiny mini excluded.
-- Audio-only hero: full-canvas Whispers-style 90-bar equalizer (loudness + random per-bar targets, always visible).
-- Audio visualizer: `captureStream` tap fixes flat bars while playing (idle animation only on pause).
-- SponsorBlock scrub colors: official extension `barTypes` palette and 0.7 bar opacity (`sponsorBlockColors.ts`).
-- SponsorBlock: read-only segments for downloaded YouTube (`sourceId`), main player skip/adaptive learning, Playback settings tree (`sponsorBlockEnabled` default false until ship).
-- Settings: new Playback tab (audio advance, prefetch, SponsorBlock tree); migrated rows off Advanced.
-- Player: chapter scrub hover (playhead at play, per-segment hover fill, balanced preview gap); frosted control dock with More menu.
-- Download duplicates: gallery groups muxed + `.fNNN` leftovers (shared info.json/title), sweeps folder on scan, cross-dir dedupe in store (fixes recurring twin cards).
-- Player chapters: segmented scrubber from `.info.json` metadata, active chapter label, prev/next and Shift+arrow chapter jumps (main + mini).
-- Downloader hero progress: 0/100 flank the bar only (no traveling percent); speed/time under the bar instead of bottom-right.
-- Downloader URL chip: paperclip hidden when URL left the queue; bar hero clears on remove if no row matches; pinned chips pruned with queue.
-- Downloader UI: collapsible queue redesigned as a slide-out pop-up that sits on the right screen edge; hoisted active card z-indices for perfect tooltip visibility.
-- Downloader UI: redesigned expanded queue state, removing dividers, wrapping, and button clutter with high-fidelity Lucide icons and hover-revealed action controls.
-- Downloader UI: hero backdrop and queue row thumbnails crossfade when focus or thumb changes.
-- Download queue: per-job stall watchdog (activity-based, not a global timer); failed row + notification when yt-dlp progress stops.
-- Downloader metadata: `get_video_info` simulates use cookie context like downloads; one failed simulate no longer drops the other.
-- Downloader/gallery duration: no `NaN:NaN` labels; invalid yt-dlp durations normalized at source and in `formatDuration`.
-- Download queue panel: safe ordered job list (no crash when a memoized id outlives its row).
-- Download queue: finish handler resolves URL and clears hero in one `set()`; IPC carries `url` when the row is already gone; remove clears matching hero.
-- Download queue: pause waits for Rust invoke before store update and pump.
-- Downloader: processing phase latch for `download_reached_full` (multi-fragment streams).
-- Linux dev: asset protocol scopes and platform default paths (`platformPaths.ts`, `tauri.conf.json`).
-- Audio-only download: `bestaudio[ext=m4a]/bestaudio` plus no `--audio-quality 0`; fixes full-video-sized audio files from `bestaudio/best` fallback and ffmpeg VBR Q0 up-encode.
-- Downloader: dual simulate for separate audio/video size estimates; smoothed ETA with fast-download catch-up; queue transfer total uses max(progress, metadata).
-- Downloader: smoothed hero ETA; quality/audio-aware file size via yt-dlp simulate; metadata cache keyed by format.
-- Downloader: production metadata loading and progress bar regressions (monotonic %, shared yt-dlp fetch, hydration gate).
-- Explorer (Linux): `explorer-surface` child window overlay instead of in-window child webview.
-- Explorer bounds: rAF sync during sidebar/window resize; deduped IPC; listeners stay up through sidebar animation.
-- Library replace: removes matched file before re-download when user picks Replace (fixes duplicate audio + video rows).
-- Delete / replace: cancels stray ffmpeg preview sidecars so Windows file locks clear sooner.
-- Auto scrubber previews: Settings → Downloads toggle (default on); sprites build on download processing/finish; off keeps right-click Generate Previews only.
-- Windows volume mixer: WebView2 sessions relabeled as RuForge (Core Audio display name/icon workaround).
-- Playback audio: WebView autoplay mute no longer leaves silent playback; store mute synced on load/play; pop-out handoff no longer copies DOM `muted`. `applyMediaOutputState.ts`, `PlayerView.tsx`, `MiniPlayer.tsx`.
-- Delete vs previews: player does not start ffmpeg on open when auto scrubber is off; delete cancels preview work instead of blocking ~8s.
-- Preview ffmpeg: fixed nested-lock deadlock on sprite generation; download finish always runs scrub pass when auto scrub is on.
+**0.1.8 unreleased:** (see AGENTS.md Shipped log)
 
 ## Open P0 (blocks release)
 
