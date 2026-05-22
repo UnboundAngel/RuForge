@@ -1,0 +1,193 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-rf-bg: #1d1613;
+  --color-rf-surface: #271c18;
+  --color-rf-text: #edd79c;
+  --color-rf-text-muted: #c9b87a;
+  --color-rf-accent: #edd79c;
+  --color-rf-border: rgb(237 215 156 / 0.12);
+  --color-rf-add: #9cb86a;
+  --color-rf-add-bg: rgb(156 184 106 / 0.12);
+  --color-rf-fix: #d49a7a;
+  --color-rf-fix-bg: rgb(212 154 122 / 0.12);
+  --color-rf-todo: #e8c06a;
+  --color-rf-todo-bg: rgb(232 192 106 / 0.1);
+  --color-rf-done: #8a9e78;
+  --color-rf-done-bg: rgb(138 158 120 / 0.1);
+  --color-rf-critical: #7faa6e;
+  --color-rf-critical-bg: rgb(94 130 82 / 0.22);
+  --color-rf-high: #d4b06a;
+  --color-rf-high-bg: rgb(212 176 106 / 0.14);
+  --font-sans: system-ui, 'Segoe UI', Inter, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+}
+
+@layer base {
+  html {
+    @apply bg-rf-bg text-rf-text antialiased;
+    font-family: var(--font-sans);
+  }
+
+  body {
+    @apply min-h-screen;
+  }
+
+  a {
+    @apply text-rf-accent underline-offset-4 transition-opacity hover:opacity-80;
+  }
+
+  ::selection {
+    background: rgb(237 215 156 / 0.25);
+  }
+}
+
+@layer components {
+  .rf-container {
+    @apply mx-auto w-full max-w-5xl px-6;
+  }
+
+  .rf-surface {
+    @apply rounded-xl bg-rf-surface;
+  }
+
+  .rf-link-card {
+    @apply flex gap-4 rounded-xl bg-rf-surface px-6 py-6 no-underline transition-opacity hover:opacity-90;
+  }
+
+  .rf-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-rf-accent px-5 py-2.5 text-sm font-medium text-rf-bg no-underline transition-all duration-200 ease-out hover:opacity-100 hover:brightness-[1.03] hover:shadow-[0_0_12px_rgba(237,215,156,0.18)] active:scale-[0.98];
+  }
+
+  .rf-btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-rf-border px-4 py-2 text-sm text-rf-text no-underline transition-all duration-200 ease-out hover:opacity-100 hover:bg-rf-surface/65 hover:border-rf-accent/30 hover:shadow-[0_0_12px_rgba(237,215,156,0.05)] active:scale-[0.98];
+  }
+
+  .rf-version {
+    font-family: var(--font-mono);
+    @apply text-xs tracking-wide text-rf-text-muted;
+  }
+
+  .rf-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .rf-badge-add {
+    @apply bg-rf-add-bg text-rf-add;
+  }
+
+  .rf-badge-fix {
+    @apply bg-rf-fix-bg text-rf-fix;
+  }
+
+  .rf-badge-todo {
+    @apply bg-rf-todo-bg text-rf-todo;
+  }
+
+  .rf-badge-done {
+    @apply bg-rf-done-bg text-rf-done;
+  }
+
+  .rf-badge-critical {
+    @apply bg-rf-critical-bg text-rf-critical;
+  }
+
+  .rf-badge-high {
+    @apply bg-rf-high-bg text-rf-high;
+  }
+
+  .rf-section-label {
+    @apply mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest;
+  }
+
+  .rf-section-label-add {
+    @apply text-rf-add;
+  }
+
+  .rf-section-label-fix {
+    @apply text-rf-fix;
+  }
+
+  .rf-change-list {
+    @apply space-y-3;
+  }
+
+  .rf-change-item {
+    @apply flex gap-3 rounded-lg px-4 py-3.5 leading-relaxed;
+  }
+
+  .rf-change-item-add {
+    @apply bg-rf-add-bg text-rf-text-muted;
+  }
+
+  .rf-change-item-fix {
+    @apply bg-rf-fix-bg text-rf-text-muted;
+  }
+
+  .rf-release-block {
+    @apply space-y-10 rounded-xl bg-rf-surface/50 px-6 py-8 sm:px-8 sm:py-10;
+  }
+
+  .rf-prose {
+    @apply text-rf-text-muted leading-relaxed;
+
+    & h1 {
+      @apply mb-6 text-2xl font-semibold text-rf-text;
+    }
+
+    & h2 {
+      @apply mb-5 mt-14 flex items-center gap-2 border-l-4 border-rf-accent/50 pl-4 text-lg font-semibold text-rf-text;
+    }
+
+    & h3 {
+      @apply mb-4 mt-10 text-base font-semibold text-rf-text;
+    }
+
+    & p {
+      @apply mb-6 leading-7;
+    }
+
+    & ul,
+    & ol {
+      @apply mb-8 space-y-4 pl-1;
+    }
+
+    & ul {
+      @apply list-none;
+    }
+
+    & ul > li {
+      @apply relative pl-6 leading-7;
+    }
+
+    & ul > li::before {
+      content: '';
+      @apply absolute left-0 top-[0.65em] h-1.5 w-1.5 rounded-full bg-rf-accent/70;
+    }
+
+    & ol {
+      @apply list-decimal pl-6;
+    }
+
+    & li {
+      @apply text-rf-text-muted;
+    }
+
+    & li > p {
+      @apply mb-3;
+    }
+
+    & strong {
+      @apply font-medium text-rf-text;
+    }
+
+    & code {
+      font-family: var(--font-mono);
+      @apply rounded-md bg-rf-surface px-1.5 py-0.5 text-sm text-rf-text;
+    }
+
+    & a {
+      @apply text-rf-accent;
+    }
+  }
+}

@@ -1,0 +1,37 @@
+---
+import '../styles/global.css';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { SITE } from '../lib/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title = SITE.name, description = SITE.description } = Astro.props;
+const pageTitle = title === SITE.name ? title : `${title} · ${SITE.name}`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={SITE.ogImage} />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <title>{pageTitle}</title>
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <SiteHeader />
+    <main class="flex-1 py-10 md:py-14">
+      <slot />
+    </main>
+    <SiteFooter />
+  </body>
+</html>

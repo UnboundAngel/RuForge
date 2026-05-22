@@ -1,0 +1,396 @@
+---
+import Icon from './Icon.astro';
+import { Image } from 'astro:assets';
+import { discoverScreenshotSlides } from '../lib/screenshots';
+
+const slides = discoverScreenshotSlides();
+const intervalMs = 6000;
+const carouselId = 'hero-screenshots';
+---
+
+<div
+  id="hero-carousel"
+  class="hero-carousel"
+  data-interval={intervalMs}
+  data-slide-count={slides.length}
+>
+  {
+    slides.length > 0 ? (
+      <div
+        class="hero-carousel-root"
+        role="region"
+        aria-roledescription="carousel"
+        aria-label="RuForge app screenshots"
+        tabindex="0"
+      >
+        <div class="hero-carousel-viewport rounded-xl bg-rf-surface overflow-hidden">
+          {
+            slides.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  class="hero-carousel-arrow hero-carousel-arrow-prev"
+                  data-action="prev"
+                  aria-label="Previous screenshot"
+                >
+                  <Icon name="chevron-left" size={22} />
+                </button>
+                <button
+                  type="button"
+                  class="hero-carousel-arrow hero-carousel-arrow-next"
+                  data-action="next"
+                  aria-label="Next screenshot"
+                >
+                  <Icon name="chevron-right" size={22} />
+                </button>
+              </>
+            )
+          }
+          <div class="hero-carousel-track" id={`${carouselId}-track`}>
+            {
+              slides.map((slide, index) => (
+                <figure
+                  id={`${carouselId}-slide-${index}`}
+                  class:list={['hero-carousel-slide', index === 0 && 'is-active']}
+                  data-index={index}
+                  role="group"
+                  aria-roledescription="slide"
+                  aria-label={`${index + 1} of ${slides.length}`}
+                  aria-hidden={index === 0 ? 'false' : 'true'}
+                >
+                  {
+                    <Image
+                      src={slide.image}
+                      alt={`RuForge screenshot: ${slide.name}`}
+                      width={1200}
+                      height={675}
+                      widths={[640, 960, 1200]}
+                      sizes="(max-width: 768px) 100vw, 1024px"
+                      class="hero-carousel-slide-img"
+                      loading={index === 0 ? 'eager' : 'lazy'}
+                      fetchpriority={index === 0 ? 'high' : undefined}
+                      decoding="async"
+                    />
+                  }
+                </figure>
+              ))
+            }
+          </div>
+        </div>
+
+        {
+          slides.length > 1 && (
+            <div class="hero-carousel-controls mt-4">
+              <div
+                class="hero-carousel-progress"
+                role="tablist"
+                aria-label="Choose screenshot"
+              >
+                {
+                  slides.map((slide, index) => (
+                    <button
+                      type="button"
+                      id={`${carouselId}-tab-${index}`}
+                      class:list={['hero-carousel-segment', index === 0 && 'is-active']}
+                      data-index={index}
+                      role="tab"
+                      aria-controls={`${carouselId}-slide-${index}`}
+                      aria-label={slide.name.replace(/-/g, ' ')}
+                      aria-selected={index === 0 ? 'true' : 'false'}
+                      tabindex={index === 0 ? 0 : -1}
+                    >
+                      <span class="hero-carousel-fill" />
+                    </button>
+                  ))
+                }
+              </div>
+              <button
+                type="button"
+                class="hero-carousel-pause"
+                data-action="toggle-autoplay"
+                aria-label="Pause autoplay"
+                aria-pressed="false"
+              >
+                <Icon name="pause" size={16} class="hero-carousel-pause-icon" />
+                <Icon name="play" size={16} class="hero-carousel-play-icon hidden" />
+              </button>
+            </div>
+          )
+        }
+      </div>
+    ) : (
+      <div class="flex aspect-video w-full items-center justify-center rounded-xl bg-rf-surface px-6 text-center text-sm leading-relaxed text-rf-text-muted">
+        <p>
+          Add PNG or WebP files to <code class="text-rf-text">website/public/screenshots/</code> (see README).
+        </p>
+      </div>
+    )
+  }
+</div>
+
+{
+  slides.length > 1 && (
+    <style>
+      .hero-carousel-root {
+        position: relative;
+      }
+      .hero-carousel-viewport {
+        aspect-ratio: 16 / 9;
+        position: relative;
+      }
+      .hero-carousel-track {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+      .hero-carousel-slide {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        opacity: 0;
+        transition: opacity 0.7s ease;
+        pointer-events: none;
+      }
+      .hero-carousel-slide.is-active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .hero-carousel-slide img,
+      .hero-carousel-slide-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top center;
+        display: block;
+      }
+      .hero-carousel-arrow {
+        position: absolute;
+        top: 50%;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        margin-top: -1.25rem;
+        border: none;
+        border-radius: 999px;
+        background: rgb(29 22 19 / 0.75);
+        color: #edd79c;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      .hero-carousel-viewport:hover .hero-carousel-arrow,
+      .hero-carousel-viewport:focus-within .hero-carousel-arrow {
+        opacity: 1;
+      }
+      .hero-carousel-arrow-prev {
+        left: 0.75rem;
+      }
+      .hero-carousel-arrow-next {
+        right: 0.75rem;
+      }
+      .hero-carousel-arrow:hover {
+        background: rgb(39 28 24 / 0.95);
+      }
+      .hero-carousel-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .hero-carousel-progress {
+        display: flex;
+        flex: 1;
+        gap: 0.5rem;
+      }
+      .hero-carousel-segment {
+        flex: 1;
+        height: 3px;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: rgb(237 215 156 / 0.15);
+        cursor: pointer;
+        overflow: hidden;
+      }
+      .hero-carousel-segment:focus-visible {
+        outline: 2px solid #edd79c;
+        outline-offset: 2px;
+      }
+      .hero-carousel-fill {
+        display: block;
+        height: 100%;
+        width: 0%;
+        border-radius: inherit;
+        background: #edd79c;
+        pointer-events: none;
+      }
+      .hero-carousel-segment.is-active .hero-carousel-fill {
+        width: 100%;
+        transition: width linear;
+      }
+      .hero-carousel-segment.is-done .hero-carousel-fill {
+        width: 100%;
+        transition: none;
+      }
+      .hero-carousel-pause {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border: 1px solid rgb(237 215 156 / 0.12);
+        border-radius: 0.5rem;
+        background: #271c18;
+        color: #edd79c;
+        cursor: pointer;
+      }
+      .hero-carousel-pause:hover {
+        opacity: 0.9;
+      }
+      .hero-carousel-pause .hidden {
+        display: none;
+      }
+      .hero-carousel-pause.is-paused .hero-carousel-pause-icon {
+        display: none;
+      }
+      .hero-carousel-pause.is-paused .hero-carousel-play-icon {
+        display: block;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .hero-carousel-slide {
+          transition: none;
+        }
+        .hero-carousel-segment.is-active .hero-carousel-fill {
+          transition: none;
+        }
+      }
+    </style>
+  )
+}
+
+<script>
+  function initHeroCarousel(root: HTMLElement) {
+    const slideCount = Number(root.dataset.slideCount) || 0;
+    if (slideCount <= 1) return;
+
+    const intervalMs = Number(root.dataset.interval) || 6000;
+    const slideEls = root.querySelectorAll<HTMLElement>('.hero-carousel-slide');
+    const segments = root.querySelectorAll<HTMLButtonElement>('.hero-carousel-segment');
+    const fills = root.querySelectorAll<HTMLElement>('.hero-carousel-fill');
+    const prevBtn = root.querySelector<HTMLButtonElement>('[data-action="prev"]');
+    const nextBtn = root.querySelector<HTMLButtonElement>('[data-action="next"]');
+    const pauseBtn = root.querySelector<HTMLButtonElement>('[data-action="toggle-autoplay"]');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let index = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let paused = reducedMotion;
+
+    const setPaused = (value: boolean) => {
+      paused = value;
+      if (!pauseBtn) return;
+      pauseBtn.classList.toggle('is-paused', paused);
+      pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      pauseBtn.setAttribute('aria-label', paused ? 'Resume autoplay' : 'Pause autoplay');
+    };
+
+    const setActive = (next: number) => {
+      index = (next + slideCount) % slideCount;
+      slideEls.forEach((el, i) => {
+        const on = i === index;
+        el.classList.toggle('is-active', on);
+        el.setAttribute('aria-hidden', on ? 'false' : 'true');
+      });
+
+      segments.forEach((seg, i) => {
+        const on = i === index;
+        seg.classList.toggle('is-active', on);
+        seg.classList.toggle('is-done', i < index);
+        seg.setAttribute('aria-selected', on ? 'true' : 'false');
+        seg.tabIndex = on ? 0 : -1;
+        const fill = fills[i];
+        if (!fill) return;
+        fill.style.transition = 'none';
+        fill.style.width = i < index ? '100%' : '0%';
+        void fill.offsetWidth;
+        if (on && !reducedMotion && !paused) {
+          fill.style.transition = `width ${intervalMs}ms linear`;
+          fill.style.width = '100%';
+        } else if (on) {
+          fill.style.width = '100%';
+        }
+      });
+    };
+
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      if (paused) return;
+      timer = setTimeout(() => {
+        setActive(index + 1);
+        schedule();
+      }, intervalMs);
+    };
+
+    const go = (delta: number) => {
+      setActive(index + delta);
+      schedule();
+    };
+
+    prevBtn?.addEventListener('click', () => go(-1));
+    nextBtn?.addEventListener('click', () => go(1));
+
+    segments.forEach((seg) => {
+      seg.addEventListener('click', () => {
+        const i = Number(seg.dataset.index);
+        if (Number.isNaN(i)) return;
+        setActive(i);
+        schedule();
+      });
+      seg.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          go(1);
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          go(-1);
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          setActive(0);
+          schedule();
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          setActive(slideCount - 1);
+          schedule();
+        }
+      });
+    });
+
+    pauseBtn?.addEventListener('click', () => {
+      setPaused(!paused);
+      if (paused) {
+        if (timer) clearTimeout(timer);
+      } else {
+        schedule();
+      }
+    });
+
+    root.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        go(1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        go(-1);
+      }
+    });
+
+    setPaused(reducedMotion);
+    setActive(0);
+    if (!paused) schedule();
+  }
+
+  document.querySelectorAll<HTMLElement>('#hero-carousel[data-slide-count]').forEach(initHeroCarousel);
+</script>

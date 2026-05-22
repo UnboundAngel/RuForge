@@ -121,21 +121,21 @@ function ChangelogLayout({
   const notesTrim = notes?.trim() || "";
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-2">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="mb-2 flex shrink-0 items-center justify-between">
         <h2 className="text-[20px] font-black text-stone-100 tracking-tight">{title}</h2>
         <span className="text-[10px] font-black text-stone-500 tabular-nums tracking-widest uppercase">
           Build {version}
         </span>
       </div>
 
-      <div className="flex items-center gap-4 mb-8">
+      <div className="mb-8 flex shrink-0 items-center gap-4">
         <div className="h-px flex-1 bg-gradient-to-r from-transparent via-stone-500/10 to-transparent" />
         <span className="text-[9px] font-black uppercase tracking-[0.4em] text-stone-600 whitespace-nowrap">{scope}</span>
         <div className="h-px flex-1 bg-gradient-to-l from-transparent via-stone-500/10 to-transparent" />
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hover:scrollbar-thumb-white/20 transition-all space-y-10">
+      <div className="min-h-0 flex-1 overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hover:scrollbar-thumb-white/20 transition-all space-y-10">
         {notesTrim && (
           <div className="px-1">
             <UpdaterReleaseNotesMarkdown markdown={notesTrim} className="text-[12px] leading-relaxed text-stone-400" />
@@ -195,7 +195,7 @@ function ChangelogLayout({
         )}
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 shrink-0">
         {footer}
       </div>
     </div>
@@ -456,7 +456,7 @@ export function UpdaterPostInstallStack({
 }: PostInstallProps) {
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[150] flex items-center justify-center p-8">
+      <div className="fixed inset-0 z-[150] flex items-center justify-center overflow-hidden p-8">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -468,7 +468,7 @@ export function UpdaterPostInstallStack({
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 8 }}
-          className="relative w-full max-w-2xl max-h-[85vh] rounded-[32px] border border-white/10 bg-[#271C18] p-8 shadow-[0_32px_64px_rgba(0,0,0,0.6)] flex flex-col"
+          className="relative flex min-h-0 w-full max-w-2xl max-h-[min(85vh,calc(100dvh-4rem))] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#271C18] p-8 shadow-[0_32px_64px_rgba(0,0,0,0.6)]"
         >
           <ChangelogLayout
             version={version}

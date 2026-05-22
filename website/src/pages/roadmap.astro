@@ -1,0 +1,137 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import Icon from '../components/Icon.astro';
+import { getCollection } from 'astro:content';
+import { SITE } from '../lib/site';
+import { priorityBadgeClass, statusBadgeClass } from '../lib/roadmapBadges';
+
+const items = await getCollection('roadmap');
+const appAreas = [...new Set(items.map((i) => i.data.appArea))].sort();
+const rows = items.map((entry) => ({
+  id: entry.id,
+  ...entry.data,
+}));
+---
+
+<BaseLayout title="Roadmap" description="Public feature tracker for RuForge.">
+  <div class="rf-container space-y-10">
+    <PageHeader
+      title="Roadmap"
+      description="What we are building next. Finished items stay visible but muted."
+      icon="map"
+    >
+      <a href={SITE.discussions} class="rf-btn mt-2 inline-flex w-fit">
+        <Icon name="message" size={16} class="text-rf-bg" />
+        Suggest a feature
+      </a>
+    </PageHeader>
+
+    <div class="flex flex-wrap gap-8 rounded-xl bg-rf-surface/60 px-6 py-6 text-sm">
+      <fieldset class="space-y-3">
+        <legend class="rf-section-label text-rf-text-muted">Status</legend>
+        <div class="flex flex-wrap gap-3">
+          <label class="flex cursor-pointer items-center gap-2 rounded-lg bg-rf-bg/50 px-3 py-2 text-rf-text-muted">
+            <input type="radio" name="status-filter" value="all" checked class="accent-rf-accent" />
+            All
+          </label>
+          <label class="flex cursor-pointer items-center gap-2 rounded-lg bg-rf-todo-bg px-3 py-2 text-rf-todo">
+            <input type="radio" name="status-filter" value="To-Do" class="accent-rf-todo" />
+            <Icon name="circle" size={14} />
+            To-Do
+          </label>
+          <label class="flex cursor-pointer items-center gap-2 rounded-lg bg-rf-done-bg px-3 py-2 text-rf-done">
+            <input type="radio" name="status-filter" value="Finished" class="accent-rf-done" />
+            <Icon name="check" size={14} />
+            Finished
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="space-y-3">
+        <legend class="rf-section-label text-rf-text-muted">App area</legend>
+        <select
+          id="area-filter"
+          class="rounded-lg border border-rf-border bg-rf-bg px-4 py-2.5 text-rf-text"
+        >
+          <option value="all">All areas</option>
+          {appAreas.map((area) => <option value={area}>{area}</option>)}
+        </select>
+      </fieldset>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[760px] border-separate border-spacing-y-2 text-left text-sm">
+        <thead>
+          <tr class="text-xs uppercase tracking-wider text-rf-text-muted">
+            <th class="pb-2 pr-4 font-medium">App Area</th>
+            <th class="pb-2 pr-4 font-medium">Feature</th>
+            <th class="pb-2 pr-4 font-medium">Priority</th>
+            <th class="pb-2 pr-4 font-medium">Status</th>
+            <th class="pb-2 font-medium">Difficulty</th>
+          </tr>
+        </thead>
+        <tbody id="roadmap-body">
+          {
+            rows.map((row) => (
+              <tr
+                data-status={row.status}
+                data-area={row.appArea}
+                class:list={[
+                  'align-middle transition-opacity',
+                  row.status === 'Finished' ? 'opacity-50' : 'opacity-100',
+                ]}
+              >
+                <td class="rounded-l-lg bg-rf-surface/70 py-4 pr-4 pl-4 text-rf-text-muted">
+                  {row.appArea}
+                </td>
+                <td class="bg-rf-surface/70 py-4 pr-4 text-rf-text">{row.featureName}</td>
+                <td class="bg-rf-surface/70 py-4 pr-4">
+                  <span class={priorityBadgeClass(row.priority)}>
+                    {row.priority === 'Extremely important' && <Icon name="star" size={12} />}
+                    {row.priority}
+                  </span>
+                </td>
+                <td class="bg-rf-surface/70 py-4 pr-4">
+                  <span class={statusBadgeClass(row.status)}>
+                    {row.status === 'Finished' ? (
+                      <Icon name="check" size={12} />
+                    ) : (
+                      <Icon name="circle" size={12} />
+                    )}
+                    {row.status}
+                  </span>
+                </td>
+                <td class="rounded-r-lg bg-rf-surface/70 py-4 pr-4 rf-version">{row.difficulty}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const statusInputs = document.querySelectorAll<HTMLInputElement>('input[name="status-filter"]');
+    const areaSelect = document.getElementById('area-filter') as HTMLSelectElement;
+    const rows = document.querySelectorAll<HTMLTableRowElement>('#roadmap-body tr');
+
+    function applyFilters() {
+      const status =
+        document.querySelector<HTMLInputElement>('input[name="status-filter"]:checked')?.value ??
+        'all';
+      const area = areaSelect?.value ?? 'all';
+
+      rows.forEach((row) => {
+        const rowStatus = row.dataset.status ?? '';
+        const rowArea = row.dataset.area ?? '';
+        const statusMatch = status === 'all' || rowStatus === status;
+        const areaMatch = area === 'all' || rowArea === area;
+        row.hidden = !(statusMatch && areaMatch);
+      });
+    }
+
+    statusInputs.forEach((input) => input.addEventListener('change', applyFilters));
+    areaSelect?.addEventListener('change', applyFilters);
+  </script>
+</BaseLayout>

@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import ReleaseList from '../components/ReleaseList.astro';
+import Icon from '../components/Icon.astro';
+import { getCollection } from 'astro:content';
+import { SITE } from '../lib/site';
+
+const releases = (await getCollection('releases')).sort(
+  (a, b) => b.data.date.getTime() - a.data.date.getTime(),
+);
+---
+
+<BaseLayout title="Changelog" description="Release history for RuForge on Windows.">
+  <div class="rf-container space-y-12">
+    <PageHeader
+      title="Changelog"
+      description="Newest releases first. Installers are on GitHub Releases."
+      icon="list"
+    >
+      <a
+        href={SITE.releases}
+        class="rf-btn-ghost mt-2 inline-flex w-fit text-rf-text-muted hover:text-rf-text"
+      >
+        <Icon name="github" size={16} />
+        GitHub Releases
+        <Icon name="external" size={14} class="opacity-60" />
+      </a>
+    </PageHeader>
+    <ReleaseList releases={releases} />
+  </div>
+</BaseLayout>

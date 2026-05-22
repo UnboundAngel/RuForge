@@ -216,6 +216,28 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.8 (unreleased)
 
+- **Public website landing**: Tech ticker uses hairline gradient rails, edge fades, accent cadence on labels, pause on hover; removed panel background and heavy borders. `index.astro`.
+- **Public website landing**: Reworked tech ticker marquee layout to completely remove separator dots and fade the text opacity to be highly subtle. `index.astro`.
+- **Public website images**: Migrated logos, carousel screenshots, testimonial avatars, and highlight photo to Astro `<Image />` via `src/assets/` and `sharp` (responsive WebP, build-time optimization). `imageAssets.ts`, components, `package.json`.
+- **Public website landing**: Bottom highlight card uses coffee beans WebP background (`highlight-coffee-beans.webp`) with readability scrim instead of gradient. `index.astro`, `public/highlight-coffee-beans.webp`.
+- **Public website testimonials (fix)**: Removed left accent tab; full-card thin border only with 16 spread muted rim hues so same-avatar cards match quietly. `testimonials.ts`, `TestimonialsSection.astro`, `TestimonialsColumn.astro`.
+- **Public website testimonials**: Replaced em dashes in quotes with styled middle-dot pauses; matching avatar file shares rim color and avatar ring so card sets are visible while scrolling. `testimonials.ts`, `TestimonialsColumn.astro`, `TestimonialsSection.astro`.
+- **Public website testimonials**: Import all 16 `public/website` assets (including formerly skipped unused-named files) as angel-01..09 and susie-01..07 WebP; expanded image pools in `testimonials.ts`.
+- **Public website landing**: Expanded testimonials to 30 quotes (Angel/Susie casual voice), round-robin three-column split, cyclic avatar paths, README for nine Pinterest photos. `testimonials.ts`, `TestimonialsSection.astro`, `public/testimonials/README.md`.
+- **Public website landing**: Reworked testimonials: flat cards without inner shadow wash, cursor border spotlight, natural copy, star row, avatar initials fallback, column pause-on-hover. `TestimonialsSection.astro`, `testimonials.ts`.
+- **Public website landing (fix)**: Resolved button hover transition flickering where buttons would momentarily bright-flash and then dim down. Prevented standard link `opacity-80` dimming inheritance and added premium scale-down active states and glowing shadows on hover. `global.css`, `index.astro`.
+- **Public website landing**: Added staggered scroll-reveal animations, custom accent scrollbars, and dynamic interactive border spotlight mouse-tracking hover effects to details cards. Removed 'Windows Desktop Client' pill and fixed logo anchor accessible name. `index.astro`, `Logo.astro`.
+- **Public website landing**: Reworked home page for a modern high-fidelity look featuring 3D perspective hero hover transitions, bottom-faded screenshot blends, scrolling tech marquee ticker, and an interactive grid of 6 detail cards with transitioning arrows. `index.astro`.
+- **Public website landing**: Reworked home page for a highly-focused developer-centric design, reducing word count by over 65%, rendering logo-only in the header, and adding subtle CSS-only ambient movement. `index.astro`, `SiteHeader.astro`.
+- **Public website landing**: Redesigned landing page and site footer with improved visual hierarchy, multi-column links, and spacing-based visual separation. `index.astro`, `SiteFooter.astro`.
+- **Public website**: Astro 5 static site in `website/` (home, changelog, roadmap, legal); Cloudflare Pages ready; design tokens match app shell. `website/`.
+- **Public website legal**: `marked` renders `docs/legal/*.md` after unescaping and paragraph reflow (fixes `\-` lists and per-line breaks). `website/src/lib/legal.ts`.
+- **Public website polish**: RuForge logo from `neotubeIcon.png`, inline icons, color-coded changelog (add/fix) and roadmap badges, improved spacing. `website/src/components/`, `website/docs/ICON-WISHLIST.md`.
+- **Public website home**: logo only in header; hero carousel from `website/public/screenshots/` with progress bar. Dev-only `ruforgeScreenshot.frame()` in console for 1200×675 captures. `HeroCarousel.astro`, `devScreenshotFrame.ts`.
+- **Public website carousel**: eager+fetchpriority on first slide only; deferred `data-src` for rest; prev/next, pause, tab keyboard. `HeroCarousel.astro`.
+- **Mini player video (fix)**: large-mode playback no longer stacks blurred cover/gradient or idle ambient blur; controls dock unmounts when hidden so backdrop-blur cannot wash the frame. `MiniPlayer.tsx`.
+- **Updater post-install**: What's New modal clamps to viewport; header/footer fixed, notes/additions/fixes scroll with thin scrollbar. `UpdaterLayers.tsx`.
+
 ### v0.1.7 (shipped)
 
 - **Audio analyser teardown**: hard release clears MES attachment set so track changes re-tap; RAF alive guard on hero canvas. `audioAnalyserGraph.ts`, `AudioHeroStage.tsx`.

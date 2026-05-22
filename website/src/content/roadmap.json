@@ -1,0 +1,177 @@
+[
+  {
+    "appArea": "Download Screen",
+    "difficulty": "High",
+    "featureName": "Audio Only option",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Low",
+    "featureName": "Make mini player minier",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "High",
+    "featureName": "ETA smoothing",
+    "priority": "Medium",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Medium",
+    "featureName": "Queue layout, paperclip strip, declutter",
+    "priority": "Low",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Low",
+    "featureName": "Hero art crossfade",
+    "priority": "Low",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Settings Screen",
+    "difficulty": "Low",
+    "featureName": "Auto scrubber previews on download (Settings, default on)",
+    "priority": "Medium",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Settings Screen",
+    "difficulty": "Medium",
+    "featureName": "Add Chapter support",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Settings Screen",
+    "difficulty": "Low",
+    "featureName": "Delay between job starts",
+    "priority": "Medium",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Medium",
+    "featureName": "Import SponsorBlock",
+    "priority": "High",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "High",
+    "featureName": "Add Playlist Creation",
+    "priority": "Extremely important",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "High",
+    "featureName": "SQLite-backed gallery index",
+    "priority": "Low",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Video Library",
+    "difficulty": "Medium",
+    "featureName": "Media view playlist right-click menu (Play all, shuffle, delete, ...)",
+    "priority": "Low",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "High",
+    "featureName": "Storage estimate before enqueue",
+    "priority": "High",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Settings Screen",
+    "difficulty": "Low",
+    "featureName": "Storage Target vs Download Path clarity",
+    "priority": "Low",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "Medium",
+    "featureName": "Updater E2E — real release test",
+    "priority": "High",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "Low",
+    "featureName": "Release checklist (updater.json + signatures)",
+    "priority": "High",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "High",
+    "featureName": "SmartScreen / first-install trust",
+    "priority": "Medium",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Settings Screen",
+    "difficulty": "High",
+    "featureName": "Crash reporting (opt-in)",
+    "priority": "High",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Video Library",
+    "difficulty": "Medium",
+    "featureName": "Fix scrubber no longer working to extract preview images",
+    "priority": "High",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Video Library",
+    "difficulty": "Low",
+    "featureName": "Fix negative scroll values from appearing on time bar",
+    "priority": "Low",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Medium",
+    "featureName": "Download history",
+    "priority": "Extremely important",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Video Library",
+    "difficulty": "Low",
+    "featureName": "Storage not updating after video deleted",
+    "priority": "High",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Medium",
+    "featureName": "Fix file size accuracy on card preview",
+    "priority": "High",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Medium",
+    "featureName": "Comments toggle",
+    "priority": "Extremely important",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Low",
+    "featureName": "Move video data into json file temp - SQLite database longterm",
+    "priority": "Low",
+    "status": "To-Do"
+  }
+]

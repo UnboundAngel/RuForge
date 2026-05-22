@@ -1,0 +1,22 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Icon from '../../components/Icon.astro';
+import { renderLegalHtml } from '../../lib/legal';
+
+const html = renderLegalHtml('LEGAL.md');
+---
+
+<BaseLayout title="Legal Notice" description="RuForge legal notice.">
+  <div class="rf-container max-w-3xl space-y-8">
+    <a href="/legal" class="inline-flex items-center gap-2 text-sm text-rf-text-muted no-underline hover:text-rf-text">
+      <span aria-hidden="true">←</span> Legal
+    </a>
+    <div class="flex items-center gap-3">
+      <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-rf-surface text-rf-text-muted">
+        <Icon name="file" size={22} />
+      </span>
+      <p class="text-sm text-rf-text-muted">Copyright and maintainer contact</p>
+    </div>
+    <article class="rf-prose" set:html={html} />
+  </div>
+</BaseLayout>

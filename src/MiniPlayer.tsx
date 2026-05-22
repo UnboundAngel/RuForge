@@ -1601,8 +1601,8 @@ export default function MiniPlayer() {
         transition={{ type: "spring", damping: 30, stiffness: 200 }}
         className="absolute inset-0 z-10 pointer-events-none flex flex-col items-center justify-center bg-black"
       >
-        {/* Unified Cover Art Background */}
-        {playingFile && coverArtSrc && (
+        {/* Cover art backdrop: audio-only and layouts where video is not shown (not large-mode video). */}
+        {playingFile && coverArtSrc && (playingAudioOnly || isSmallMode || isCompactMode) && (
           <>
             {/* If in small or compact mode, show the image on the full background fading to the right */}
             {(isSmallMode || isCompactMode) && (
@@ -1617,15 +1617,14 @@ export default function MiniPlayer() {
               </div>
             )}
 
-            {/* If in large mode, show the blurred image on the full background */}
-            {isLargeMode && (
+            {/* Large-mode blurred backdrop is audio-only (video uses a plain surface). */}
+            {isLargeMode && playingAudioOnly && (
               <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
                 <img
                   src={convertFileSrc(coverArtSrc)}
                   alt=""
                   className="w-full h-full object-cover opacity-35 blur-[12px] scale-105"
                 />
-                {/* Smooth gradient fade or overlay to prevent readability issues */}
                 <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/90 to-black" />
               </div>
             )}
@@ -1699,7 +1698,7 @@ export default function MiniPlayer() {
                   onMouseUp={isLargeMode ? handleMiniVideoMouseUpLeave : undefined}
                   onMouseLeave={isLargeMode ? handleMiniVideoMouseUpLeave : undefined}
                 >
-                  {isLargeMode && (
+                  {isLargeMode && isPaused && (
                     <canvas
                       ref={ambientCanvasRef}
                       className="pointer-events-none absolute inset-[-15%] z-0 h-[130%] w-[130%] opacity-50 blur-[100px]"
@@ -1851,20 +1850,15 @@ export default function MiniPlayer() {
                     transition={{ duration: 0.2 }}
                     className="absolute inset-0 pointer-events-none"
                   >
-                    <motion.div 
-                      initial={false}
-                      animate={{
-                        opacity:
-                          ((isCursorVisible && isHovering) || isPaused || isGalleryHovered)
-                            ? 1
-                            : 0,
-                      }}
+                    <AnimatePresence>
+                      {controlsVisible && (
+                    <motion.div
+                      key="large-controls"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
                       transition={{ type: "spring", damping: 30, stiffness: 200 }}
-                      className={`absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-xl rounded-t-[24px] ${isMini ? 'py-2.5 px-4 space-y-3' : isNarrow ? 'py-3.5 px-5 space-y-3.5' : 'py-4 px-6 space-y-4'} flex flex-col border-t border-white/5 shadow-2xl z-20 ${
-                        ((isCursorVisible && isHovering) || isPaused || isGalleryHovered)
-                          ? "pointer-events-auto"
-                          : "pointer-events-none"
-                      }`}
+                      className={`absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-xl rounded-t-[24px] ${isMini ? 'py-2.5 px-4 space-y-3' : isNarrow ? 'py-3.5 px-5 space-y-3.5' : 'py-4 px-6 space-y-4'} flex flex-col border-t border-white/5 shadow-2xl z-20 pointer-events-auto`}
                       onMouseEnter={() => {
                         setIsHovering(true);
                         if (isPaused) setIsGalleryHovered(true);
@@ -2078,6 +2072,8 @@ export default function MiniPlayer() {
                         </div>
                       </div>
                     </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
                 )}
 

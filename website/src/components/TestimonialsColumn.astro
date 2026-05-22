@@ -1,0 +1,79 @@
+---
+import type { Testimonial } from '../lib/testimonials';
+import { quoteSegments } from '../lib/testimonials';
+import { Image } from 'astro:assets';
+
+interface Props {
+  testimonials: Testimonial[];
+  duration?: number;
+  offset?: string;
+  class?: string;
+}
+
+const { testimonials, duration = 22, offset = '0s', class: className = '' } = Astro.props;
+const loopItems = [...testimonials, ...testimonials];
+
+function initial(name: string) {
+  return name.trim().charAt(0).toUpperCase();
+}
+---
+
+<div
+  class:list={['testimonials-column', className]}
+  style={`--scroll-duration: ${duration}s; --scroll-offset: ${offset}`}
+>
+  <div class="testimonials-column-track">
+    {
+      loopItems.map((item, i) => (
+        <article
+          class="testimonial-card spotlight-card"
+          style={`--rim-rgb: ${item.rimRgb}`}
+          data-image-key={item.imageKey}
+          aria-hidden={i >= testimonials.length ? 'true' : undefined}
+        >
+          <div class="card-spotlight-border" aria-hidden="true"></div>
+          <div class="testimonial-card-stars" aria-label="5 out of 5">
+            {Array.from({ length: 5 }).map(() => (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+            ))}
+          </div>
+          <blockquote class="testimonial-card-quote">
+            <p>
+              {
+                quoteSegments(item.text).map((seg) =>
+                  seg.type === 'pause' ? (
+                    <span class="quote-pause" aria-hidden="true">·</span>
+                  ) : (
+                    seg.value
+                  ),
+                )
+              }
+            </p>
+          </blockquote>
+          <footer class="testimonial-card-author">
+            <div class="testimonial-card-avatar-wrap">
+              <Image
+                src={item.image}
+                alt=""
+                width={44}
+                height={44}
+                widths={[44, 88]}
+                class="testimonial-card-avatar"
+                loading="lazy"
+                decoding="async"
+                data-testimonial-avatar
+              />
+              <span class="testimonial-card-initials" aria-hidden="true">{initial(item.name)}</span>
+            </div>
+            <div class="testimonial-card-meta">
+              <span class="testimonial-card-name">{item.name}</span>
+              <span class="testimonial-card-role">{item.role}</span>
+            </div>
+          </footer>
+        </article>
+      ))
+    }
+  </div>
+</div>
