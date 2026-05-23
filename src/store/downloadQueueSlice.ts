@@ -123,7 +123,7 @@ async function trySkipLibraryDuplicateJob(
   if (!findLibraryDuplicate(url, get().entries)) return false;
   const job = get().downloadJobs.find((j) => j.id === jobId);
   if (!job || job.status === "skipped") return true;
-  get().skipDownloadJobAsLibraryDuplicate(jobId);
+  await get().skipDownloadJobAsLibraryDuplicate(jobId);
   return true;
 }
 
@@ -307,7 +307,7 @@ export type DownloadQueueSlice = {
   retryDownloadJob: (id: string) => void;
   removeDownloadJob: (id: string) => Promise<void>;
   /** Auto-skip duplicates: show `skipped` row briefly, then remove. */
-  skipDownloadJobAsLibraryDuplicate: (id: string) => void;
+  skipDownloadJobAsLibraryDuplicate: (id: string) => Promise<void>;
   reorderDownloadJobs: (fromIndex: number, toIndex: number) => void;
   setDownloadJobAudioOnly: (jobId: string, audioOnly: boolean) => void;
   applyDownloadProgress: (payload: ProgressPayload) => void;
@@ -599,16 +599,29 @@ export const createDownloadQueueSlice: StateCreator<
         void (async () => {
           await ensureEntriesForDuplicateCheck(get);
           if (shouldAutoSkipLibraryDuplicate(get, urlTrim)) {
-            get().skipDownloadJobAsLibraryDuplicate(keptId);
+            await get().skipDownloadJobAsLibraryDuplicate(keptId);
           }
         })();
       }
       return keptId;
     },
 
-    skipDownloadJobAsLibraryDuplicate: (id) => {
+    skipDownloadJobAsLibraryDuplicate: async (id) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job || job.status === "skipped") return;
+
+      if (job.status === "downloading") {
+        disarmDownloadJobWatchdog(id);
+        try {
+          await invoke("pause_download_job", { jobId: id });
+        } catch (e) {
+          console.error("[RuForge] pause_download_job failed before duplicate skip", e);
+          return;
+        }
+        const latest = get().downloadJobs.find((j) => j.id === id);
+        if (!latest || latest.status === "skipped") return;
+        if (latest.status !== "downloading" && latest.status !== "paused") return;
+      }
 
       set((s) => {
         const downloadJobs = markJobSkippedLibraryDuplicate(s.downloadJobs, id);
@@ -861,7 +874,8 @@ export const createDownloadQueueSlice: StateCreator<
           if (
             j.id !== payload.jobId ||
             j.status === "completed" ||
-            j.status === "failed"
+            j.status === "failed" ||
+            j.status === "skipped"
           ) {
             return j;
           }
@@ -889,7 +903,7 @@ export const createDownloadQueueSlice: StateCreator<
       resetDownloadProgressEtaSmoothing(jobId);
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
-          j.id === jobId && j.status !== "paused"
+          j.id === jobId && j.status === "downloading"
             ? {
                 ...j,
                 status: "paused" as const,
@@ -912,6 +926,8 @@ export const createDownloadQueueSlice: StateCreator<
     onDownloadJobFinished: (payload) => {
       disarmDownloadJobWatchdog(payload.jobId);
       resetDownloadProgressEtaSmoothing(payload.jobId);
+      const currentJob = get().downloadJobs.find((j) => j.id === payload.jobId);
+      if (!currentJob || currentJob.status === "skipped") return;
       const starts: { id: string; url: string; resume: boolean }[] = [];
       const skippedIds: string[] = [];
       let finishedUrl: string | undefined;

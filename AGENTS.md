@@ -216,6 +216,7 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.8 (unreleased)
 
+- **Downloader correctness (fix)**: Auto-skip duplicates now stops already-started native downloads before showing a skipped row, ignores late finish/progress events for skipped jobs, and playlist regroup keeps moved files inside the root where they were found. `downloadQueueSlice.ts`, `useDownloaderView.ts`, `gallery.rs`.
 - **Public website features**: Tutorial hubs on landing page use 3-column stacked-card previews (step 1 cover, hover spreads steps 2–3) and click opens full 3-step modal; all six hubs in one grid. `TutorialHubsGrid.tsx`, `stacked-cards-interaction.tsx`, `tutorial-hub-modal.tsx`, `index.astro`.
 - **Public website features**: Wired all five feature sketch tutorial hubs (library, player, SponsorBlock, mini player, settings) from `public/website/tutorials/` into landing page; shared `TutorialSketchHub.astro`. `FeatureTutorialSections.astro`, `index.astro`.
 - **SponsorBlock scrub hover**: Color-coded pill for every bar segment (skip, highlight/POI, SB chapter, music off-topic, etc.) on seek hover. `ScrubHoverPreview.tsx`, `sponsorBlock.ts`.

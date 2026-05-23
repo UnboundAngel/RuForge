@@ -1146,20 +1146,15 @@ pub fn regroup_playlist_downloads(
     if roots.is_empty() {
         return Err("No download folders to search.".into());
     }
-    let primary = roots
-        .first()
-        .cloned()
-        .ok_or_else(|| "No download folder.".to_string())?;
-    if !primary.is_dir() {
+    if !roots.iter().any(|root| root.is_dir()) {
         return Err("Download directory does not exist.".into());
     }
     let folder_name = sanitize_playlist_folder_name_regroup(&folder_title);
-    let dest_dir = primary.join(&folder_name);
-    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
 
     let mut moved = 0u32;
     let mut skipped = 0u32;
     let mut not_found = 0u32;
+    let mut first_dest_dir: Option<PathBuf> = None;
 
     for item in items {
         let Some(source_id) = item
@@ -1171,17 +1166,22 @@ pub fn regroup_playlist_downloads(
             not_found += 1;
             continue;
         };
-        let mut src: Option<PathBuf> = None;
+        let mut found: Option<(PathBuf, PathBuf)> = None;
         for root in &roots {
             if let Some(p) = find_root_media_by_source_id(root, source_id) {
-                src = Some(p);
+                found = Some((root.clone(), p));
                 break;
             }
         }
-        let Some(src) = src else {
+        let Some((source_root, src)) = found else {
             not_found += 1;
             continue;
         };
+        let dest_dir = source_root.join(&folder_name);
+        if first_dest_dir.is_none() {
+            first_dest_dir = Some(dest_dir.clone());
+        }
+        std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
         if src.parent().map(|p| p == dest_dir).unwrap_or(false) {
             skipped += 1;
             continue;
@@ -1203,7 +1203,10 @@ pub fn regroup_playlist_downloads(
         moved,
         skipped,
         not_found,
-        folder_path: dest_dir.to_string_lossy().to_string(),
+        folder_path: first_dest_dir
+            .or_else(|| roots.first().map(|root| root.join(&folder_name)))
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default(),
     })
 }
 
@@ -1314,6 +1317,54 @@ mod tests {
         assert_eq!(
             media_library_group_key(&inter_path, &file),
             "id:abc123"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn regroup_playlist_downloads_keeps_files_in_source_root() {
+        let tmp = std::env::temp_dir().join(format!(
+            "ruforge_regroup_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let internal = tmp.join("internal");
+        let external = tmp.join("external");
+        std::fs::create_dir_all(&internal).expect("create internal dir");
+        std::fs::create_dir_all(&external).expect("create external dir");
+
+        let media = external.join("Video.mp4");
+        let info = external.join("Video.info.json");
+        std::fs::write(&media, b"video").expect("write media");
+        std::fs::write(
+            &info,
+            r#"{"id":"external123","title":"Video","webpage_url":"https://www.youtube.com/watch?v=external123"}"#,
+        )
+        .expect("write info json");
+
+        let result = regroup_playlist_downloads(
+            vec![
+                internal.to_string_lossy().to_string(),
+                external.to_string_lossy().to_string(),
+            ],
+            "Playlist".into(),
+            vec![RegroupPlaylistItem {
+                index: 1,
+                source_id: Some("external123".into()),
+                title: "Video".into(),
+            }],
+        )
+        .expect("regroup playlist");
+
+        assert_eq!(result.moved, 1);
+        assert!(!internal.join("Playlist").join("01 - Video.mp4").exists());
+        assert!(external.join("Playlist").join("01 - Video.mp4").exists());
+        assert_eq!(
+            result.folder_path,
+            external.join("Playlist").to_string_lossy().to_string()
         );
 
         let _ = std::fs::remove_dir_all(&tmp);

@@ -15,8 +15,9 @@ Status: in progress
 
 0.1.7 is live on main updater.json and GitHub Release v0.1.7. Unreleased 0.1.8
 includes playlist download fixes (URL intake, per-item audio, duplicate preview,
-ordered subfolder + stack cards, regroup flat files (Debugging tab) plus
-post-install What's New scroll/clamp and mini player large-mode video clarity.
+ordered subfolder + stack cards, regroup flat files (Debugging tab), plus
+duplicate auto-skip and regroup destination correctness fixes, post-install
+What's New scroll/clamp, and mini player large-mode video clarity.
 Open P0 is empty; Authorize Cleanup (#8) works via the in-app modal (see Notes).
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
@@ -58,7 +59,7 @@ Fixes:
 - Download hero clears on finish/remove; explorer bounds sync during sidebar resize.
 
 **0.1.8 unreleased:** Scrubber hover previews fixed (chapter scrub path, sprite reload after
-Generate Previews, `..info.json` duration for sprite sheets). SponsorBlock scrub/skip now fetches all categories (self-promo,
+Generate Previews, `..info.json` duration for sprite sheets). Downloader auto-skip now stops already-started native duplicate jobs before hiding them, and playlist regroup keeps moved files in the source root instead of crossing storage targets. SponsorBlock scrub/skip now fetches all categories (self-promo,
 intro, POI, chapters, etc.), not sponsor-only API default; stale sidecars refresh
 on play. Playlist downloader: playlist URLs from clipboard, per-video audio in
 preview, duplicate badges before Download, files in numbered playlist folder (Media
