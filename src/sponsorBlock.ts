@@ -64,6 +64,121 @@ export function categoryLabel(cat: SponsorBlockSkipCategory): string {
   return labels[cat];
 }
 
+/** Scrub hover pill copy (extension-aligned where it helps). */
+export function scrubSegmentPillLabel(category: string): string {
+  if (isSkipCategory(category)) return categoryLabel(category);
+  if (category === "music_offtopic") return "Non-music section";
+  if (category === "poi_highlight") return "Highlight";
+  if (category === "chapter") return "Chapter";
+  if (category === "exclusive_access") return "Exclusive access";
+  return category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export type ScrubSkipRange = { start: number; end: number; category: string };
+
+export type ScrubPoiMarker = { time: number; description?: string };
+
+export type ScrubSbChapterRange = {
+  start: number;
+  end: number;
+  description?: string;
+};
+
+export type ScrubBarOverlay = {
+  skipRanges: ScrubSkipRange[];
+  chapterRanges: ScrubSbChapterRange[];
+  poiTimes: ScrubPoiMarker[];
+};
+
+export type ActiveScrubSegment = {
+  category: string;
+  label: string;
+  key: string;
+};
+
+export function skipRangeAtTime(
+  ranges: ScrubSkipRange[],
+  t: number,
+): ScrubSkipRange | null {
+  if (!Number.isFinite(t) || t < 0) return null;
+  for (const r of ranges) {
+    if (!Number.isFinite(r.start) || !Number.isFinite(r.end)) continue;
+    if (t >= r.start && t < r.end) return r;
+  }
+  return null;
+}
+
+/** Nearest POI tick within scrub hit tolerance (POIs are points, not ranges). */
+export function poiMarkerNearTime(
+  markers: ScrubPoiMarker[],
+  t: number,
+  durationSec: number,
+): ScrubPoiMarker | null {
+  if (!Number.isFinite(t) || t < 0 || markers.length === 0) return null;
+  const toleranceSec = Math.max(2.5, durationSec > 0 ? durationSec / 400 : 2.5);
+  let best: ScrubPoiMarker | null = null;
+  let bestDist = Infinity;
+  for (const m of markers) {
+    if (!Number.isFinite(m.time) || m.time < 0) continue;
+    const d = Math.abs(t - m.time);
+    if (d <= toleranceSec && d < bestDist) {
+      bestDist = d;
+      best = m;
+    }
+  }
+  return best;
+}
+
+export function sbChapterRangeAtTime(
+  ranges: ScrubSbChapterRange[],
+  t: number,
+): ScrubSbChapterRange | null {
+  if (!Number.isFinite(t) || t < 0) return null;
+  for (const r of ranges) {
+    if (!Number.isFinite(r.start) || !Number.isFinite(r.end)) continue;
+    if (t >= r.start && t < r.end) return r;
+  }
+  return null;
+}
+
+/** Resolve which SponsorBlock segment the scrub hover is over (all bar types). */
+export function activeScrubSegmentAtTime(
+  hoverTimeSec: number,
+  durationSec: number,
+  overlay: ScrubBarOverlay,
+): ActiveScrubSegment | null {
+  const skip = skipRangeAtTime(overlay.skipRanges, hoverTimeSec);
+  if (skip) {
+    return {
+      category: skip.category,
+      label: scrubSegmentPillLabel(skip.category),
+      key: `skip-${skip.start}-${skip.end}-${skip.category}`,
+    };
+  }
+
+  const poi = poiMarkerNearTime(overlay.poiTimes, hoverTimeSec, durationSec);
+  if (poi) {
+    const desc = poi.description?.trim();
+    return {
+      category: "poi_highlight",
+      label: desc || scrubSegmentPillLabel("poi_highlight"),
+      key: `poi-${poi.time}`,
+    };
+  }
+
+  const sbChapter = sbChapterRangeAtTime(overlay.chapterRanges, hoverTimeSec);
+  if (sbChapter) {
+    const desc = sbChapter.description?.trim();
+    return {
+      category: "chapter",
+      label: desc || scrubSegmentPillLabel("chapter"),
+      key: `sb-ch-${sbChapter.start}-${sbChapter.end}`,
+    };
+  }
+
+  return null;
+}
+
 export function defaultCategoryModes(): Record<
   SponsorBlockSkipCategory,
   SponsorBlockCategoryMode

@@ -5,8 +5,7 @@ import Icon from '../components/Icon.astro';
 import TestimonialsSection from '../components/TestimonialsSection.astro';
 import MotionDownloadButton from '../components/ui/MotionDownloadButton.astro';
 import HeroAnimatedTitle from '../components/HeroAnimatedTitle';
-import DownloadTutorialHub from '../components/DownloadTutorialHub.astro';
-import FeatureVisualCard from '../components/FeatureVisualCard.astro';
+import TutorialHubsGrid from '../components/TutorialHubsGrid.astro';
 import TechTickerIcon from '../components/TechTickerIcon.astro';
 import { techTickerItems } from '../lib/techTickerIcons';
 import { Image } from 'astro:assets';
@@ -18,51 +17,6 @@ const allReleases = await getCollection('releases');
 const latestRelease = allReleases.sort(
   (a, b) => b.data.date.getTime() - a.data.date.getTime(),
 )[0];
-
-const features = [
-  {
-    title: 'Downloader Screen',
-    icon: 'download' as const,
-    description: 'Archive videos, playlists, and audio directly. yt-dlp quality selection, browser cookie syncing, and auto-stall watchdog.',
-    link: '/roadmap?area=Download+Screen',
-    linkText: 'Explore Downloader'
-  },
-  {
-    title: 'Media Library',
-    icon: 'list' as const,
-    description: 'Auto-scan folders, deduplicate muxed streams, and store local view counters and watch progress privately.',
-    link: '/roadmap?area=Video+Library',
-    linkText: 'Browse Library Details'
-  },
-  {
-    title: 'Media Player',
-    icon: 'play' as const,
-    description: 'Hardware-accelerated rendering, keyboard controls, segmented chapter bars, and drag-and-drop subtitle cues.',
-    link: '/roadmap?area=Player+Screen',
-    linkText: 'Discover Player'
-  },
-  {
-    title: 'SponsorBlock',
-    icon: 'star' as const,
-    description: 'Skip non-music segments, intros, and sponsor ads on the fly using a privacy-preserving local SHA-256 prefix hash.',
-    link: '/roadmap',
-    linkText: 'Learn Skip Mechanics'
-  },
-  {
-    title: 'Mini Player',
-    icon: 'map' as const,
-    description: 'Compact borderless corner player with a visualizer overlay, transparent hover window chrome, and full volume controls.',
-    link: '/roadmap',
-    linkText: 'Pop Out Mini Details'
-  },
-  {
-    title: 'Advanced Settings',
-    icon: 'wrench' as const,
-    description: 'Tailor parallel task thresholds, manage download directory scopes, cookies sync keys, and automatic space cleanups.',
-    link: '/roadmap?area=Settings+Screen',
-    linkText: 'View Settings Architecture'
-  }
-];
 ---
 
 <BaseLayout>
@@ -157,55 +111,7 @@ const features = [
         </p>
       </div>
 
-      <DownloadTutorialHub />
-
-      <div class="feature-visual-grid">
-        <FeatureVisualCard
-          href={features[1].link}
-          title={features[1].title}
-          description={features[1].description}
-          linkText={features[1].linkText}
-          icon={features[1].icon}
-          tone="feature-visual-card--library"
-          delay={0}
-        />
-        <FeatureVisualCard
-          href={features[2].link}
-          title={features[2].title}
-          description={features[2].description}
-          linkText={features[2].linkText}
-          icon={features[2].icon}
-          tone="feature-visual-card--player"
-          delay={80}
-        />
-        <FeatureVisualCard
-          href={features[3].link}
-          title={features[3].title}
-          description={features[3].description}
-          linkText={features[3].linkText}
-          icon={features[3].icon}
-          tone="feature-visual-card--sponsor"
-          delay={160}
-        />
-        <FeatureVisualCard
-          href={features[4].link}
-          title={features[4].title}
-          description={features[4].description}
-          linkText={features[4].linkText}
-          icon={features[4].icon}
-          tone="feature-visual-card--mini"
-          delay={240}
-        />
-        <FeatureVisualCard
-          href={features[5].link}
-          title={features[5].title}
-          description={features[5].description}
-          linkText={features[5].linkText}
-          icon={features[5].icon}
-          tone="feature-visual-card--settings"
-          delay={320}
-        />
-      </div>
+      <TutorialHubsGrid />
     </section>
 
     <TestimonialsSection />
@@ -506,44 +412,6 @@ const features = [
     to {
       opacity: 1;
       transform: translateY(0);
-    }
-  }
-
-  .feature-visual-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
-  }
-
-  @media (min-width: 640px) {
-    .feature-visual-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-
-  @media (min-width: 1024px) {
-    .feature-visual-grid {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-    }
-
-    .feature-visual-grid > :nth-child(1) {
-      grid-column: span 2;
-    }
-
-    .feature-visual-grid > :nth-child(2) {
-      grid-column: span 2;
-    }
-
-    .feature-visual-grid > :nth-child(3) {
-      grid-column: span 2;
-    }
-
-    .feature-visual-grid > :nth-child(4) {
-      grid-column: 2 / span 2;
-    }
-
-    .feature-visual-grid > :nth-child(5) {
-      grid-column: 4 / span 2;
     }
   }
 

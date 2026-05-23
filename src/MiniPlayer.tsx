@@ -28,7 +28,8 @@ import {
   hydratePlatformDefaultPaths,
 } from "./platformPaths";
 
-import { ScrubberHoverThumb } from "./scrubSpritePreview";
+import { ScrubHoverPreview } from "./components/player/ScrubHoverPreview";
+import { useScrubberThumbs } from "./useScrubberThumbs";
 import {
   readResumeSeconds,
   writePlaybackPos,
@@ -426,7 +427,6 @@ export default function MiniPlayer() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [buffered, setBuffered] = useState(0);
-  const [scrubberThumbs, setScrubberThumbs] = useState<string[]>([]);
   const [hoverProgress, setHoverProgress] = useState<number | null>(null);
   const [scrubPreviewRatio, setScrubPreviewRatio] = useState<number | null>(null);
   const [isCursorVisible, setIsCursorVisible] = useState(true);
@@ -447,25 +447,10 @@ export default function MiniPlayer() {
 
   const autoScrubberPreviews = readAutoDownloadScrubberPreviews();
 
-  useEffect(() => {
-    if (!playingFile || isAudioOnlyPath(playingFile.path)) {
-      setScrubberThumbs([]);
-      return;
-    }
-    invoke<string[]>("extract_frames", {
-      videoPath: playingFile.path,
-      allowGenerate: autoScrubberPreviews,
-    })
-      .then((paths) =>
-        setScrubberThumbs(
-          paths.filter((p) => {
-            const f = p.replace(/^.*[/\\]/, "");
-            return f.startsWith("sprite_") && f.endsWith(".jpg");
-          }),
-        ),
-      )
-      .catch(console.error);
-  }, [playingFile, autoScrubberPreviews]);
+  const scrubberThumbs = useScrubberThumbs(playingFile?.path, {
+    audioOnly: playingFile ? isAudioOnlyPath(playingFile.path) : true,
+    allowGenerate: autoScrubberPreviews,
+  });
 
   const [winSize, setWinSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -1873,30 +1858,22 @@ export default function MiniPlayer() {
                         onMouseLeave={() => setHoverProgress(null)}
                       >
                         <AnimatePresence>
-                          {hoverProgress !== null && scrubberThumbs.length > 0 && !chapters && isFinite(duration) && duration > 0 && (
-                            <motion.div
-                              initial={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
-                              animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
-                              exit={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
-                              className="absolute bottom-full mb-4 z-[100] pointer-events-none"
-                              style={{ left: `${hoverProgress * 100}%` }}
-                            >
-                              <div className="relative p-1.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                                <ScrubberHoverThumb
-                                  hoverTimeSec={hoverProgress * duration}
-                                  duration={duration}
-                                  spritePaths={scrubberThumbs}
-                                  displayWidth={128}
-                                />
-                                <div className="absolute bottom-2 left-2 right-2 flex justify-center">
-                                   <span className="text-[9px] font-black text-[color:var(--accent)] bg-black/40 px-2 py-0.5 rounded-full backdrop-blur-sm">
-                                     {formatDuration(hoverProgress * duration)}
-                                   </span>
-                                </div>
-                              </div>
-                              <div className="w-px h-4 bg-[color:var(--accent)] opacity-50 mx-auto mt-1" />
-                            </motion.div>
-                          )}
+                          {hoverProgress !== null &&
+                            !chapters &&
+                            isFinite(duration) &&
+                            duration > 0 && (
+                              <ScrubHoverPreview
+                                hoverTimeSec={hoverProgress * duration}
+                                duration={duration}
+                                spritePaths={scrubberThumbs}
+                                formatTime={formatDuration}
+                                cursorPercent={hoverProgress * 100}
+                                thumbWidth={128}
+                                sbOverlay={
+                                  sbOverlayActive ? sponsorBlock.scrubOverlay : undefined
+                                }
+                              />
+                            )}
                         </AnimatePresence>
 
                         {chapters && chapters.length >= 2 && (duration > 0 || (playingFile?.duration ?? 0) > 0) ? (
@@ -1917,20 +1894,24 @@ export default function MiniPlayer() {
                             overlay={sbOverlayActive ? sponsorBlock.scrubOverlay : undefined}
                           />
                         ) : (
-                          <div className={`w-full rounded-full relative overflow-hidden transition-all duration-300 ${isMini ? (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-3' : 'h-1.5') : (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-4' : 'h-2')} bg-white/15`}>
-                            {sbOverlayActive && (
-                              <SponsorBlockScrubOverlay
-                                duration={scrubDuration}
-                                overlay={sponsorBlock.scrubOverlay}
-                              />
-                            )}
-                            <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
-                            <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${scrubBarProgressPct}%` }} />
-                            {hoverProgress !== null && (
-                              <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${hoverProgress * 100}%` }} />
-                            )}
+                          <div className="relative w-full overflow-visible">
                             <div
-                              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 ${isMini ? 'w-3 h-3' : 'w-4 h-4'} bg-white rounded-full border-2 border-[#271C18] shadow-lg transition-opacity ${hoverProgress !== null || scrubPreviewRatio !== null ? "opacity-100" : "opacity-0"}`}
+                              className={`w-full rounded-full relative overflow-hidden transition-all duration-300 ${isMini ? (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-3' : 'h-1.5') : (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-4' : 'h-2')} bg-white/15`}
+                            >
+                              {sbOverlayActive && (
+                                <SponsorBlockScrubOverlay
+                                  duration={scrubDuration}
+                                  overlay={sponsorBlock.scrubOverlay}
+                                />
+                              )}
+                              <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
+                              <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${scrubBarProgressPct}%` }} />
+                              {hoverProgress !== null && (
+                                <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${hoverProgress * 100}%` }} />
+                              )}
+                            </div>
+                            <div
+                              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 ${isMini ? 'w-3 h-3' : 'w-4 h-4'} bg-white rounded-full border-2 border-[#271C18] shadow-lg pointer-events-none z-20 transition-opacity ${hoverProgress !== null || scrubPreviewRatio !== null ? "opacity-100" : "opacity-0"}`}
                               style={{ left: `${scrubBarProgressPct}%` }}
                             />
                           </div>

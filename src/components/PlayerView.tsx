@@ -22,7 +22,8 @@ import {
   Ellipsis,
 } from "lucide-react";
 import { type FfprobeHint, type MediaFile } from "../types";
-import { ScrubberHoverThumb } from "../scrubSpritePreview";
+import { ScrubHoverPreview } from "./player/ScrubHoverPreview";
+import { useScrubberThumbs } from "../useScrubberThumbs";
 import { readResumeSeconds, writePlaybackPos } from "../playbackStorage";
 import { readPlaybackSpeed, writePlaybackSpeed } from "../playbackSpeedStorage";
 import { useVideoAmbientBackdrop } from "../useVideoAmbientBackdrop";
@@ -172,7 +173,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [isHoveringScrubber, setIsHoveringScrubber] = useState(false);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubDragPercent, setScrubDragPercent] = useState<number | null>(null);
-  const [scrubberThumbs, setScrubberThumbs] = useState<string[]>([]);
   const [isPressing, setIsPressing] = useState<"left" | "right" | null>(null);
   const [previousSpeed, setPreviousSpeed] = useState(1);
   const pressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -230,25 +230,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     (s) => s.settings.autoDownloadScrubberPreviews !== false,
   );
 
-  useEffect(() => {
-    if (!file || audioOnly) {
-      setScrubberThumbs([]);
-      return;
-    }
-    invoke<string[]>("extract_frames", {
-      videoPath: file.path,
-      allowGenerate: autoScrubberPreviews,
-    })
-      .then((paths) =>
-        setScrubberThumbs(
-          paths.filter((p) => {
-            const f = p.replace(/^.*[/\\]/, "");
-            return f.startsWith("sprite_") && f.endsWith(".jpg");
-          }),
-        ),
-      )
-      .catch(console.error);
-  }, [file, audioOnly, autoScrubberPreviews]);
+  const scrubberThumbs = useScrubberThumbs(file.path, {
+    audioOnly,
+    allowGenerate: autoScrubberPreviews,
+  });
 
   /** Warm ffprobe disk cache; results are not shown in the player UI. */
   useEffect(() => {
@@ -1276,52 +1261,37 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                   overlay={settings.sponsorBlockEnabled ? sponsorBlock.scrubOverlay : undefined}
                 />
               ) : (
-                <div className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15 overflow-hidden`}>
-                  {settings.sponsorBlockEnabled && scrubDuration > 0 && sponsorBlock.scrubOverlay && (
-                    <SponsorBlockScrubOverlay duration={scrubDuration} overlay={sponsorBlock.scrubOverlay} />
-                  )}
-                  <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
-                  <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${playedBarPercent}%` }} />
-                  {isHoveringScrubber && (
-                    <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${scrubberHoverPos}%` }} />
-                  )}
+                <div className="relative w-full overflow-visible">
                   <div
-                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg transition-opacity ${isHoveringScrubber || isScrubbing ? "opacity-100" : "opacity-0"}`}
+                    className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15 overflow-hidden`}
+                  >
+                    {settings.sponsorBlockEnabled && scrubDuration > 0 && sponsorBlock.scrubOverlay && (
+                      <SponsorBlockScrubOverlay duration={scrubDuration} overlay={sponsorBlock.scrubOverlay} />
+                    )}
+                    <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
+                    <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${playedBarPercent}%` }} />
+                    {isHoveringScrubber && (
+                      <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${scrubberHoverPos}%` }} />
+                    )}
+                  </div>
+                  <div
+                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg pointer-events-none z-20 transition-opacity ${isHoveringScrubber || isScrubbing ? "opacity-100" : "opacity-0"}`}
                     style={{ left: `${playedBarPercent}%` }}
                   />
                   {isHoveringScrubber && isFinite(duration) && duration > 0 && (
                     <AnimatePresence>
-                      {scrubberThumbs.length > 0 ? (
-                        <motion.div
-                          initial={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
-                          animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
-                          exit={{ opacity: 0, y: 10, scale: 0.8, x: "-50%" }}
-                          className="absolute bottom-full mb-8 z-[100] pointer-events-none"
-                          style={{ left: `${scrubberHoverPos}%` }}
-                        >
-                          <div className="relative p-2 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                            <ScrubberHoverThumb
-                              hoverTimeSec={(scrubberHoverPos / 100) * duration}
-                              duration={duration}
-                              spritePaths={scrubberThumbs}
-                              displayWidth={192}
-                            />
-                            <div className="absolute bottom-2 left-2 right-2 flex justify-center">
-                               <span className="text-xs font-bold tabular-nums text-white bg-black/80 backdrop-blur-md border border-white/15 px-3 py-1 rounded-full shadow-lg">
-                                 {formatTime((scrubberHoverPos / 100) * duration)}
-                               </span>
-                            </div>
-                          </div>
-                          <div className="w-px h-6 bg-[#271C18]/50 mx-auto mt-2" />
-                        </motion.div>
-                      ) : (
-                        <div
-                          className="absolute -top-9 -translate-x-1/2 bg-stone-950 border border-white/10 rounded-lg px-2 py-1 text-[10px] font-black tracking-wider text-white pointer-events-none whitespace-nowrap shadow-xl"
-                          style={{ left: `${scrubberHoverPos}%` }}
-                        >
-                          {formatTime((scrubberHoverPos / 100) * duration)}
-                        </div>
-                      )}
+                      <ScrubHoverPreview
+                        hoverTimeSec={(scrubberHoverPos / 100) * duration}
+                        duration={duration}
+                        spritePaths={scrubberThumbs}
+                        formatTime={formatTime}
+                        cursorPercent={scrubberHoverPos}
+                        sbOverlay={
+                          settings.sponsorBlockEnabled
+                            ? sponsorBlock.scrubOverlay
+                            : undefined
+                        }
+                      />
                     </AnimatePresence>
                   )}
                 </div>

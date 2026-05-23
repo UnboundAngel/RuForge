@@ -5,6 +5,26 @@ use sha2::{Digest, Sha256};
 
 const SB_API_BASE: &str = "https://sponsor.ajay.app";
 
+/// Sidecar tag bump refetches when older caches only stored sponsor segments (API default).
+const SB_SIDECAR_API_TAG: &str = "skipSegments-hash-v2";
+
+/// Categories RuForge renders on the scrub bar and skip button (matches extension barTypes).
+const SB_FETCH_CATEGORIES: &[&str] = &[
+    "sponsor",
+    "selfpromo",
+    "interaction",
+    "intro",
+    "outro",
+    "preview",
+    "filler",
+    "music_offtopic",
+    "poi_highlight",
+    "chapter",
+];
+
+/// Without these, the API defaults to actionType=skip only (no chapters or POI ticks).
+const SB_FETCH_ACTION_TYPES: &[&str] = &["skip", "chapter", "poi"];
+
 fn resolve_info_json_path(parent: &Path, stem: &str) -> Option<PathBuf> {
     let primary = parent.join(format!("{}.info.json", stem));
     if primary.is_file() {
@@ -165,6 +185,17 @@ fn normalize_api_segment(s: ApiSegment) -> Option<SponsorBlockSegmentDto> {
     })
 }
 
+fn sponsorblock_fetch_query() -> Vec<(&'static str, &'static str)> {
+    let mut q = vec![("service", "YouTube")];
+    for cat in SB_FETCH_CATEGORIES {
+        q.push(("category", *cat));
+    }
+    for action in SB_FETCH_ACTION_TYPES {
+        q.push(("actionType", *action));
+    }
+    q
+}
+
 async fn fetch_segments_from_api(video_id: &str) -> Option<Vec<SponsorBlockSegmentDto>> {
     let prefix = hash_prefix_4(video_id);
     let url = format!("{SB_API_BASE}/api/skipSegments/{prefix}");
@@ -172,7 +203,12 @@ async fn fetch_segments_from_api(video_id: &str) -> Option<Vec<SponsorBlockSegme
         .timeout(std::time::Duration::from_secs(12))
         .build()
         .ok()?;
-    let resp = client.get(&url).send().await.ok()?;
+    let resp = client
+        .get(&url)
+        .query(&sponsorblock_fetch_query())
+        .send()
+        .await
+        .ok()?;
     if !resp.status().is_success() {
         return None;
     }
@@ -245,6 +281,10 @@ pub async fn ensure_sponsorblock_segments(
         || cached.is_none()
         || cached
             .as_ref()
+            .map(|c| c.api != SB_SIDECAR_API_TAG)
+            .unwrap_or(false)
+        || cached
+            .as_ref()
             .map(|c| sidecar_is_stale(c, local_dur))
             .unwrap_or(false);
 
@@ -253,7 +293,7 @@ pub async fn ensure_sponsorblock_segments(
             let sidecar = SponsorBlockSidecarDto {
                 video_id: video_id.clone(),
                 fetched_at: iso_now(),
-                api: "skipSegments-hash".to_string(),
+                api: SB_SIDECAR_API_TAG.to_string(),
                 segments: segments.clone(),
             };
             let _ = write_sidecar(&sidecar_path, &sidecar);

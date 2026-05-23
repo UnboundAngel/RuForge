@@ -216,6 +216,11 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.8 (unreleased)
 
+- **Public website features**: Tutorial hubs on landing page use 3-column stacked-card previews (step 1 cover, hover spreads steps 2–3) and click opens full 3-step modal; all six hubs in one grid. `TutorialHubsGrid.tsx`, `stacked-cards-interaction.tsx`, `tutorial-hub-modal.tsx`, `index.astro`.
+- **Public website features**: Wired all five feature sketch tutorial hubs (library, player, SponsorBlock, mini player, settings) from `public/website/tutorials/` into landing page; shared `TutorialSketchHub.astro`. `FeatureTutorialSections.astro`, `index.astro`.
+- **SponsorBlock scrub hover**: Color-coded pill for every bar segment (skip, highlight/POI, SB chapter, music off-topic, etc.) on seek hover. `ScrubHoverPreview.tsx`, `sponsorBlock.ts`.
+- **Scrubber previews (fix)**: Simple (no-chapter) seek bar no longer clips hover previews (`overflow-hidden` only on track); chapter path unchanged; sprite reload event + `..info.json` duration. `PlayerView.tsx`, `ChapterScrubber.tsx`, `useScrubberThumbs.ts`, `media.rs`.
+- **SponsorBlock (fix)**: API fetch requests all skip/chapter/POI categories (not sponsor-only default); old sidecars refetch on next play. `sponsorblock.rs`.
 - **Playlist regroup (fix)**: Group playlist modal refreshes library scan, matches by id/url/title, searches internal + custom roots; Debugging settings tab (toggle in General) holds regroup + cycle updater UI. `duplicateDownload.ts`, `RegroupPlaylistModal.tsx`, `SettingsView.tsx`, `gallery.rs`.
 - **Playlist downloads (fix)**: Playlist URL clipboard/focus/paste/drop; link chip paste vs copy; per-row audio toggle and sizes; pre-download duplicate summary; batch jobs land in ordered subfolder for Media stack cards; Settings regroup tool for flat files. `youtubeUrl.ts`, `playlistDownloadPlan.ts`, `useDownloaderView.ts`, `DownloaderView.tsx`, `downloader.rs`, `gallery.rs`, `RegroupPlaylistModal.tsx`.
 - **Public website features (fix)**: Download flow art: copy from `public/website/tutorials/download/` into `src/assets` only (never overwrite drop folder); all three steps 515x749. `DownloadTutorialHub.astro`, `tutorials/download/README.md`.

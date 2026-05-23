@@ -1,0 +1,168 @@
+---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
+export interface TutorialSketchStep {
+  title: string;
+  description: string;
+  image: ImageMetadata;
+}
+
+interface Props {
+  eyebrow: string;
+  steps: readonly TutorialSketchStep[];
+  class?: string;
+}
+
+const SKETCH_WIDTH = 515;
+const SKETCH_HEIGHT = 749;
+
+const { eyebrow, steps, class: className } = Astro.props;
+---
+
+<div class:list={['tutorial-sketch-hub', 'scroll-reveal', className]}>
+  <p class="tutorial-sketch-hub__eyebrow font-display">{eyebrow}</p>
+
+  <div class="tutorial-sketch-hub__grid">
+    {
+      steps.map((step) => (
+        <article class="flow-card flow-card--sketch">
+          <div
+            class="flow-card__sketch-frame"
+            style={`aspect-ratio: ${SKETCH_WIDTH} / ${SKETCH_HEIGHT}`}
+          >
+            <Image
+              src={step.image}
+              alt=""
+              class="flow-card__sketch-img"
+              width={SKETCH_WIDTH}
+              height={SKETCH_HEIGHT}
+              widths={[515, 1030]}
+              sizes="(min-width: 768px) 33vw, 100vw"
+              loading="lazy"
+              decoding="async"
+            />
+            <div class="flow-card__sketch-copy">
+              <h3 class="flow-card__sketch-title font-display">{step.title}</h3>
+              <p class="flow-card__sketch-desc">{step.description}</p>
+            </div>
+          </div>
+        </article>
+      ))
+    }
+  </div>
+</div>
+
+<style>
+  .tutorial-sketch-hub {
+    margin-bottom: 3.5rem;
+  }
+
+  .tutorial-sketch-hub__eyebrow {
+    margin: 0 0 1.75rem;
+    text-align: center;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-rf-text);
+  }
+
+  .tutorial-sketch-hub__grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  @media (min-width: 768px) {
+    .tutorial-sketch-hub__grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.125rem;
+      align-items: stretch;
+    }
+  }
+
+  .flow-card--sketch {
+    overflow: visible;
+    background: transparent;
+    box-shadow: 0 12px 36px rgb(0 0 0 / 0.25);
+    border-radius: 1.35rem;
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .flow-card--sketch:hover {
+    transform: translateY(-4px);
+  }
+
+  .flow-card__sketch-frame {
+    position: relative;
+    width: 100%;
+  }
+
+  .flow-card__sketch-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: top center;
+  }
+
+  .flow-card__sketch-copy {
+    position: absolute;
+    top: 57.5%;
+    bottom: 4.5%;
+    left: 9%;
+    right: 9%;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    padding: 1.85rem 0.5rem 0.5rem;
+    color: #2c221e;
+  }
+
+  .flow-card__sketch-title {
+    margin: 0 0 0.45rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: #2c221e;
+  }
+
+  .flow-card__sketch-desc {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: rgb(44 34 30 / 0.82);
+  }
+
+  @media (min-width: 768px) {
+    .flow-card--sketch {
+      display: flex;
+      flex-direction: column;
+      min-height: 100%;
+    }
+
+    .flow-card--sketch .flow-card__sketch-frame {
+      flex: 1 1 auto;
+      aspect-ratio: unset;
+      height: 100%;
+      min-height: 100%;
+    }
+
+    .flow-card--sketch .flow-card__sketch-img {
+      height: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-card--sketch {
+      transition: none;
+    }
+
+    .flow-card--sketch:hover {
+      transform: none;
+    }
+  }
+</style>
