@@ -1285,8 +1285,21 @@ function App() {
                     : undefined
                 }
               >
-              {(["general", "downloads", "playback", "appearance", "advanced"] as const).map((tab) => {
+              {(
+                [
+                  "general",
+                  "downloads",
+                  "playback",
+                  "appearance",
+                  "advanced",
+                  ...(settings.showDebuggingSettings ? (["debugging"] as const) : []),
+                ] as const
+              ).map((tab) => {
                 const isActive = settingsTab === tab;
+                const tabLabel =
+                  tab === "debugging"
+                    ? "DEBUGGING"
+                    : tab.toUpperCase();
                 return (
                   <button
                     key={tab}
@@ -1329,7 +1342,7 @@ function App() {
                           : "text-stone-400 hover:text-stone-50"
                       }`}
                     >
-                      {tab}
+                      {tabLabel}
                     </span>
                   </button>
                 );

@@ -12,6 +12,8 @@ export interface MediaFile {
   sourceUrl: string | null;
   /** yt-dlp video id from sidecar `.info.json` `id` (when `sourceUrl` is missing). */
   sourceId: string | null;
+  /** yt-dlp `playlist_index` from sidecar when downloaded as part of a playlist. */
+  playlistIndex?: number | null;
 }
 
 export interface PlaylistCollection {
@@ -43,6 +45,9 @@ export interface PlaylistItem {
   /** yt-dlp entry id when present (often the watch id). */
   id?: string;
   webpageUrl?: string;
+  fileSizeBytes?: number | null;
+  fileSizeBytesAudio?: number | null;
+  fileSizeBytesVideo?: number | null;
 }
 
 export interface VideoInfo {

@@ -1,40 +1,116 @@
 ---
 import Logo from './Logo.astro';
-import Icon from './Icon.astro';
+import HeaderDownloadButton from './HeaderDownloadButton.astro';
 import { SITE } from '../lib/site';
 
 const path = Astro.url.pathname;
 const nav = [
-  { href: '/changelog', label: 'Changelog', icon: 'list' as const },
-  { href: '/roadmap', label: 'Roadmap', icon: 'map' as const },
-  { href: '/legal', label: 'Legal', icon: 'shield' as const },
+  { href: '/changelog', label: 'Changelog' },
+  { href: '/roadmap', label: 'Roadmap' },
+  { href: '/legal', label: 'Legal' },
 ];
 ---
 
-<header class="rf-container py-6">
-  <div class="flex flex-wrap items-center justify-between gap-6">
-    <Logo showWordmark={false} />
-    <nav class="flex flex-wrap items-center gap-2 text-sm">
+<div class="site-header-anchor">
+  <header class="site-header-pill">
+    <Logo size={32} showWordmark={false} class="site-header-logo shrink-0" />
+
+    <nav class="site-header-nav" aria-label="Primary">
       {
         nav.map((item) => (
           <a
             href={item.href}
             class:list={[
-              'inline-flex items-center gap-2 rounded-lg px-3 py-2 no-underline transition-colors',
+              'site-header-nav-link no-underline',
               path === item.href || path.startsWith(`${item.href}/`)
-                ? 'bg-rf-surface text-rf-text'
-                : 'text-rf-text-muted hover:text-rf-text',
+                ? 'site-header-nav-link--active'
+                : '',
             ]}
           >
-            <Icon name={item.icon} size={16} />
             {item.label}
           </a>
         ))
       }
-      <a href={SITE.releases} class="rf-btn ml-2 text-sm">
-        <Icon name="download" size={16} class="text-rf-bg" />
-        Download
-      </a>
     </nav>
-  </div>
-</header>
+
+    <HeaderDownloadButton />
+  </header>
+</div>
+
+<style>
+  .site-header-anchor {
+    position: fixed;
+    top: max(0.875rem, env(safe-area-inset-top, 0px));
+    left: 0;
+    right: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: center;
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+
+  .site-header-pill {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: min(64rem, calc(100vw - 2rem));
+    min-height: 3.25rem;
+    padding: 0.375rem 0.5rem 0.375rem 0.875rem;
+    border-radius: 9999px;
+    border: 1px solid rgb(237 215 156 / 0.14);
+    background: rgb(39 28 24 / 0.82);
+    backdrop-filter: blur(14px);
+    box-shadow:
+      0 10px 40px rgb(0 0 0 / 0.38),
+      0 2px 10px rgb(0 0 0 / 0.22),
+      inset 0 1px 0 rgb(237 215 156 / 0.06);
+    overflow: hidden;
+  }
+
+  .site-header-nav {
+    flex: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .site-header-nav {
+      display: flex;
+    }
+  }
+
+  .site-header-nav-link {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-rf-text-muted);
+    border-radius: 9999px;
+    transition:
+      color 0.2s ease,
+      background-color 0.2s ease;
+  }
+
+  .site-header-nav-link:hover {
+    color: var(--color-rf-text);
+    background: rgb(237 215 156 / 0.06);
+  }
+
+  .site-header-nav-link--active {
+    color: var(--color-rf-text);
+    background: rgb(237 215 156 / 0.1);
+  }
+
+  .site-header-logo {
+    margin-right: 0.125rem;
+  }
+</style>

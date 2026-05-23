@@ -133,6 +133,10 @@ export interface DownloadJobOptions {
   audioFormat: string;
   /** When true, Rust runs `extract_frames` after a successful video download. */
   autoScrubberPreviews: boolean;
+  /** Sanitized subfolder for playlist batch jobs. */
+  playlistOutputFolder?: string | null;
+  /** 1-based playlist index for ordered filenames. */
+  playlistIndex?: number | null;
 }
 
 export interface DownloadJob {
@@ -249,8 +253,17 @@ export function toInvokeDownloadOptions(opts: DownloadJobOptions) {
     audio_only: opts.audioOnly,
     audio_format: opts.audioFormat,
     auto_scrub_previews: opts.autoScrubberPreviews !== false,
+    playlist_output_folder: opts.playlistOutputFolder ?? null,
+    playlist_index: opts.playlistIndex ?? null,
   };
 }
+
+export type PlaylistBatchEnqueueMeta = {
+  title?: string;
+  approval?: "auto" | "pending" | "held";
+  playlistOutputFolder?: string;
+  playlistIndex?: number;
+};
 
 function normalizePersistedDownloadJob(j: DownloadJob): DownloadJob | null {
   if (!j || typeof j.id !== "string" || typeof j.url !== "string") return null;

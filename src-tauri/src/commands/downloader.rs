@@ -95,6 +95,12 @@ pub struct PlaylistItemPreview {
     pub id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub webpage_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size_bytes_audio: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size_bytes_video: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -575,7 +581,9 @@ fn ytdlp_usable_playlist_entries(json: &serde_json::Value) -> Option<Vec<&serde_
     }
 }
 
-fn playlist_preview_from_entry(entry: &serde_json::Value) -> PlaylistItemPreview {
+fn playlist_preview_from_entry(entry: &serde_json::Value, max_height: Option<u32>) -> PlaylistItemPreview {
+    let (audio_sz, video_sz) = dual_file_sizes_from_entry_json(entry, max_height, false);
+    let legacy = video_file_size_from_ytdlp_json(entry);
     PlaylistItemPreview {
         title: entry
             .get("title")
@@ -599,6 +607,9 @@ fn playlist_preview_from_entry(entry: &serde_json::Value) -> PlaylistItemPreview
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(str::to_string),
+        file_size_bytes: legacy,
+        file_size_bytes_audio: audio_sz,
+        file_size_bytes_video: video_sz,
     }
 }
 
@@ -617,8 +628,11 @@ fn playlist_aggregate_file_size(entries: &[&serde_json::Value]) -> Option<u64> {
 fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
     match ytdlp_usable_playlist_entries(&json) {
         Some(entries) => {
-            let previews: Vec<PlaylistItemPreview> =
-                entries.iter().copied().map(playlist_preview_from_entry).collect();
+            let previews: Vec<PlaylistItemPreview> = entries
+                .iter()
+                .copied()
+                .map(|e| playlist_preview_from_entry(e, None))
+                .collect();
             let title = json
                 .get("playlist_title")
                 .and_then(|v| v.as_str())
@@ -908,6 +922,12 @@ pub struct DownloadOptions {
     /// When true, build ffmpeg scrubber sprite sheets after a successful video download.
     #[serde(default = "default_auto_scrub_previews")]
     pub auto_scrub_previews: bool,
+    /// Sanitized subfolder under `output_dir` for per-video playlist batch jobs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playlist_output_folder: Option<String>,
+    /// 1-based index in the playlist for filename ordering (`01 - title.ext`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playlist_index: Option<u32>,
 }
 
 #[derive(Clone, Serialize)]
@@ -966,6 +986,8 @@ fn video_info_cookie_probe(
         audio_only: false,
         audio_format: default_audio_format(),
         auto_scrub_previews: true,
+        playlist_output_folder: None,
+        playlist_index: None,
     })
 }
 
@@ -1085,7 +1107,32 @@ fn push_ytdlp_download_cookie_args(
     Ok(())
 }
 
-fn yt_dlp_effective_filename_template(metadata_probe: &serde_json::Value, user_template: &str) -> String {
+fn yt_dlp_effective_filename_template(
+    metadata_probe: &serde_json::Value,
+    user_template: &str,
+    options: &DownloadOptions,
+) -> String {
+    if let Some(folder) = options
+        .playlist_output_folder
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        let idx = options.playlist_index.unwrap_or(0);
+        let prefix = if idx > 0 {
+            format!("{:02} - ", idx)
+        } else {
+            String::new()
+        };
+        let trimmed = user_template.trim_start_matches(|c| c == '/' || c == '\\');
+        let inner = if trimmed.is_empty() {
+            format!("{}%(title)s.%(ext)s", prefix)
+        } else {
+            format!("{}{}", prefix, trimmed)
+        };
+        return format!("{}/{}", folder, inner);
+    }
+
     match ytdlp_usable_playlist_entries(metadata_probe) {
         Some(_) => {
             let raw = metadata_probe
@@ -1313,7 +1360,8 @@ pub async fn start_download_job(
             return Err(e);
         }
     };
-    let filename_template_eff = yt_dlp_effective_filename_template(&probe, &options.filename_template);
+    let filename_template_eff =
+        yt_dlp_effective_filename_template(&probe, &options.filename_template, &options);
 
     if let Err(e) = std::fs::create_dir_all(&options.output_dir) {
         manager.release_claim_if_pending(&job_id)?;

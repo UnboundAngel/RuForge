@@ -1,0 +1,121 @@
+---
+import Icon from './Icon.astro';
+import type { IconName } from '../lib/icons';
+
+interface Props {
+  href: string;
+  title: string;
+  description: string;
+  linkText: string;
+  icon: IconName;
+  tone: string;
+  delay?: number;
+}
+
+const { href, title, description, linkText, icon, tone, delay = 0 } = Astro.props;
+---
+
+<a
+  href={href}
+  class:list={['feature-visual-card', 'scroll-reveal', 'no-underline', tone]}
+  style={`transition-delay: ${delay}ms;`}
+>
+  <div class="feature-visual-card__media" aria-hidden="true">
+    <span class="feature-visual-card__icon">
+      <Icon name={icon} size={28} />
+    </span>
+  </div>
+  <div class="feature-visual-card__text">
+    <h3 class="feature-visual-card__title font-display">{title}</h3>
+    <p class="feature-visual-card__desc">{description}</p>
+    <span class="feature-visual-card__link">{linkText}</span>
+  </div>
+</a>
+
+<style>
+  .feature-visual-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 1.5rem;
+    border: 1px solid rgb(237 215 156 / 0.1);
+    transition:
+      transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.35s ease,
+      border-color 0.35s ease;
+  }
+
+  .feature-visual-card:hover {
+    transform: translateY(-4px);
+    border-color: rgb(237 215 156 / 0.22);
+    box-shadow: 0 16px 36px rgb(0 0 0 / 0.32);
+  }
+
+  .feature-visual-card__media {
+    min-height: 7.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+
+  .feature-visual-card__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 1rem;
+    background: rgb(29 22 19 / 0.35);
+    border: 1px solid rgb(237 215 156 / 0.15);
+    color: var(--color-rf-accent);
+  }
+
+  .feature-visual-card__text {
+    padding: 1.15rem 1.25rem 1.35rem;
+    background: rgb(29 22 19 / 0.5);
+    border-top: 1px solid rgb(237 215 156 / 0.08);
+  }
+
+  .feature-visual-card__title {
+    margin: 0 0 0.45rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-rf-text);
+  }
+
+  .feature-visual-card__desc {
+    margin: 0 0 0.85rem;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: var(--color-rf-text-muted);
+  }
+
+  .feature-visual-card__link {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-rf-accent);
+  }
+
+  .feature-visual-card--library .feature-visual-card__media {
+    background: linear-gradient(160deg, rgb(52 46 38) 0%, rgb(34 29 25) 100%);
+  }
+
+  .feature-visual-card--player .feature-visual-card__media {
+    background: linear-gradient(160deg, rgb(58 44 38) 0%, rgb(36 28 24) 100%);
+  }
+
+  .feature-visual-card--sponsor .feature-visual-card__media {
+    background: linear-gradient(160deg, rgb(48 40 52) 0%, rgb(32 26 34) 100%);
+  }
+
+  .feature-visual-card--mini .feature-visual-card__media {
+    background: linear-gradient(160deg, rgb(44 50 58) 0%, rgb(28 32 38) 100%);
+  }
+
+  .feature-visual-card--settings .feature-visual-card__media {
+    background: linear-gradient(160deg, rgb(50 48 40) 0%, rgb(30 28 24) 100%);
+  }
+</style>

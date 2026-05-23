@@ -1,0 +1,27 @@
+/* Cabinet Grotesk (display / headings) */
+@font-face {
+  font-family: 'Cabinet Grotesk';
+  src: url('/fonts/cabinet-grotesk/CabinetGrotesk_Complete/Fonts/WEB/fonts/CabinetGrotesk-Variable.woff2')
+    format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+/* Satoshi (body / UI copy) */
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/satoshi/Satoshi_Complete/Fonts/WEB/fonts/Satoshi-Variable.woff2') format('woff2');
+  font-weight: 300 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+/* Patrick Hand (hero animated underline title) */
+@font-face {
+  font-family: 'Patrick Hand';
+  src: url('/fonts/patrick-hand/webfonts/patrick-hand-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+  font-style: normal;
+}

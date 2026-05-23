@@ -11,6 +11,7 @@ import { emit } from "@tauri-apps/api/event";
 import { useRuforgeStore } from '../store/ruforgeStore';
 import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
 import { SettingsDescription } from './settings/settingsDescription';
+import { RegroupPlaylistModal } from './RegroupPlaylistModal';
 
 interface SettingItemProps {
   icon: React.ElementType;
@@ -362,8 +363,10 @@ const SettingItem: React.FC<SettingItemProps> = ({ icon: RowIcon, title, descrip
 
 export const SettingsView: React.FC = () => {
   const activeTab = useRuforgeStore((s) => s.settingsTab);
+  const setSettingsTab = useRuforgeStore((s) => s.setSettingsTab);
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const [regroupPlaylistOpen, setRegroupPlaylistOpen] = useState(false);
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const handleSetSaveToInternal = useRuforgeStore((s) => s.handleSetSaveToInternal);
@@ -466,6 +469,25 @@ export const SettingsView: React.FC = () => {
                   <ToggleSlot 
                     active={settings.minimizeToTray} 
                     onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)} 
+                  />
+                }
+              />
+              <FadingDivider />
+              <SettingItem
+                icon={Bug}
+                title="Debugging settings"
+                description="Shows a Debugging tab with developer tools (group playlist files, cycle updater UI, and future debug actions)."
+                active={settings.showDebuggingSettings}
+                control={
+                  <ToggleSlot
+                    active={settings.showDebuggingSettings}
+                    onClick={() => {
+                      const next = !settings.showDebuggingSettings;
+                      void updateSetting('showDebuggingSettings', next);
+                      if (!next && useRuforgeStore.getState().settingsTab === 'debugging') {
+                        setSettingsTab('general');
+                      }
+                    }}
                   />
                 }
               />
@@ -864,21 +886,6 @@ export const SettingsView: React.FC = () => {
               />
               <FadingDivider />
               <SettingItem 
-                icon={Bug}
-                title="Cycle Updater UI"
-                description="Developer Tool: Step through Available, Downloading, Installing, and Post-Install phases to verify UI polish."
-                active={true}
-                control={
-                  <button 
-                    onClick={() => void emit("debug-cycle-updater")}
-                    className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                  >
-                    CYCLE PHASES
-                  </button>
-                }
-              />
-              <FadingDivider />
-              <SettingItem 
                 icon={Trash2}
                 title="Clear Cache"
                 description="Delete temporary files and thumbnail cache."
@@ -889,6 +896,39 @@ export const SettingsView: React.FC = () => {
                     className="px-5 py-2.5 text-red-400 bg-[#1D1613] hover:bg-red-500/10 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-red-400/20 active:scale-95"
                   >
                     PURGE SYSTEM CACHE
+                  </button>
+                }
+              />
+            </div>
+          )}
+
+          {activeTab === 'debugging' && (
+            <div className="flex flex-col">
+              <RegroupPlaylistModal
+                open={regroupPlaylistOpen}
+                onClose={() => setRegroupPlaylistOpen(false)}
+                customOutputDir={outputDir}
+              />
+              <SettingItem
+                icon={Layers}
+                title="Group playlist downloads"
+                description="Move flat playlist files into a numbered subfolder so Media shows one stack card."
+                active={true}
+                onClick={() => setRegroupPlaylistOpen(true)}
+              />
+              <FadingDivider />
+              <SettingItem
+                icon={Bug}
+                title="Cycle updater UI"
+                description="Step through Available, Downloading, Installing, and Post-Install updater phases."
+                active={true}
+                control={
+                  <button
+                    type="button"
+                    onClick={() => void emit("debug-cycle-updater")}
+                    className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                  >
+                    CYCLE PHASES
                   </button>
                 }
               />

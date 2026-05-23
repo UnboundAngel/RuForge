@@ -1,4 +1,51 @@
 const YT_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+const YT_PLAYLIST_ID_RE = /^[A-Za-z0-9_-]{10,}$/;
+
+function isYoutubeHost(host: string): boolean {
+  const h = host.replace(/^www\./i, "").toLowerCase();
+  return (
+    h === "youtube.com" ||
+    h === "m.youtube.com" ||
+    h === "music.youtube.com" ||
+    h === "youtu.be"
+  );
+}
+
+function parseYoutubeUrl(input: string): URL | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
+  } catch {
+    return null;
+  }
+}
+
+/** Canonical playlist id from `list=` or `/playlist?list=`, or null. */
+export function extractYouTubePlaylistId(input: string): string | null {
+  const url = parseYoutubeUrl(input);
+  if (!url || !isYoutubeHost(url.hostname)) return null;
+
+  const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+  if (host === "youtu.be") return null;
+
+  const list = url.searchParams.get("list")?.trim();
+  if (list && YT_PLAYLIST_ID_RE.test(list)) return list;
+
+  if (/^\/playlist\/?$/i.test(url.pathname)) {
+    const fromPath = url.searchParams.get("list")?.trim();
+    if (fromPath && YT_PLAYLIST_ID_RE.test(fromPath)) return fromPath;
+  }
+
+  return null;
+}
+
+/** Stable https playlist URL, or null if not a playlist link. */
+export function canonicalYouTubePlaylistUrl(input: string): string | null {
+  const id = extractYouTubePlaylistId(input);
+  if (!id) return null;
+  return `https://www.youtube.com/playlist?list=${id}`;
+}
 
 /** Canonical 11-char YouTube video id, or null if not a recognizable watch URL. */
 export function extractYouTubeVideoId(input: string): string | null {
@@ -8,29 +55,22 @@ export function extractYouTubeVideoId(input: string): string | null {
   const short = trimmed.match(/(?:^|\/\/)(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/i);
   if (short?.[1] && YT_ID_RE.test(short[1])) return short[1];
 
-  try {
-    const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
-    const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+  const url = parseYoutubeUrl(trimmed);
+  if (!url) return null;
 
-    if (host === "youtu.be") {
-      const id = url.pathname.replace(/^\//, "").split("/")[0] ?? "";
-      if (YT_ID_RE.test(id)) return id;
-    }
+  const host = url.hostname.replace(/^www\./i, "").toLowerCase();
 
-    if (
-      host === "youtube.com" ||
-      host === "m.youtube.com" ||
-      host === "music.youtube.com" ||
-      host === "www.youtube.com"
-    ) {
-      const v = url.searchParams.get("v");
-      if (v && YT_ID_RE.test(v)) return v;
+  if (host === "youtu.be") {
+    const id = url.pathname.replace(/^\//, "").split("/")[0] ?? "";
+    if (YT_ID_RE.test(id)) return id;
+  }
 
-      const pathMatch = url.pathname.match(/\/(?:shorts|embed|live)\/([a-zA-Z0-9_-]{11})/i);
-      if (pathMatch?.[1] && YT_ID_RE.test(pathMatch[1])) return pathMatch[1];
-    }
-  } catch {
-    return null;
+  if (isYoutubeHost(url.hostname)) {
+    const v = url.searchParams.get("v");
+    if (v && YT_ID_RE.test(v)) return v;
+
+    const pathMatch = url.pathname.match(/\/(?:shorts|embed|live)\/([a-zA-Z0-9_-]{11})/i);
+    if (pathMatch?.[1] && YT_ID_RE.test(pathMatch[1])) return pathMatch[1];
   }
 
   return null;
@@ -49,15 +89,22 @@ const TRACKING_PARAMS = [
   "utm_content",
 ];
 
-/** Stable comparison key: `youtube:<id>` when id is known, else normalized URL string. */
+function stripTrackingParams(url: URL): void {
+  for (const p of TRACKING_PARAMS) url.searchParams.delete(p);
+  url.hash = "";
+}
+
+/** Stable comparison key: video id, playlist id, or normalized URL string. */
 export function normalizeYouTubeUrlForCompare(input: string): string {
-  const id = extractYouTubeVideoId(input);
-  if (id) return `youtube:${id}`;
+  const videoId = extractYouTubeVideoId(input);
+  if (videoId) return `youtube:${videoId}`;
+
+  const playlistId = extractYouTubePlaylistId(input);
+  if (playlistId) return `youtube:playlist:${playlistId}`;
 
   try {
     const url = new URL(input.trim());
-    for (const p of TRACKING_PARAMS) url.searchParams.delete(p);
-    url.hash = "";
+    stripTrackingParams(url);
     return url.toString().toLowerCase();
   } catch {
     return input.trim().toLowerCase();
@@ -65,15 +112,23 @@ export function normalizeYouTubeUrlForCompare(input: string): string {
 }
 
 export function youtubeUrlsMatch(a: string, b: string): boolean {
+  const playlistA = extractYouTubePlaylistId(a);
+  const playlistB = extractYouTubePlaylistId(b);
+  if (playlistA && playlistB) return playlistA === playlistB;
+
   const idA = extractYouTubeVideoId(a);
   const idB = extractYouTubeVideoId(b);
   if (idA && idB) return idA === idB;
+
   return normalizeYouTubeUrlForCompare(a) === normalizeYouTubeUrlForCompare(b);
 }
 
-/** True when the string contains a recognizable YouTube watch URL. */
+/** True when the string is a recognizable YouTube watch or playlist URL. */
 export function isYouTubeUrl(input: string): boolean {
-  return extractYouTubeVideoId(input) !== null;
+  return (
+    extractYouTubeVideoId(input) !== null ||
+    extractYouTubePlaylistId(input) !== null
+  );
 }
 
 /**
@@ -96,6 +151,19 @@ export function isYouTubeDotComWatchPageUrl(input: string): boolean {
 const YT_URL_IN_TEXT_RE =
   /(?:https?:\/\/)?(?:www\.|m\.|music\.)?(?:youtube\.com\/\S+|youtu\.be\/\S+)/gi;
 
+/**
+ * Preferred downloader URL: playlist when `list=` is present, else watch URL.
+ */
+export function canonicalYouTubeDownloaderUrl(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const playlist = canonicalYouTubePlaylistUrl(trimmed);
+  if (playlist) return playlist;
+
+  return canonicalYouTubeWatchUrl(trimmed);
+}
+
 /** Stable https watch URL for the downloader field, or null if not YouTube. */
 export function canonicalYouTubeWatchUrl(input: string): string | null {
   const id = extractYouTubeVideoId(input);
@@ -103,20 +171,31 @@ export function canonicalYouTubeWatchUrl(input: string): string | null {
   return `https://www.youtube.com/watch?v=${id}`;
 }
 
-/** First YouTube URL in arbitrary clipboard text (whitespace, quotes, extra lines). */
+/** First YouTube URL in arbitrary clipboard text (playlist preferred when `list=` is set). */
 export function extractYouTubeUrlFromText(text: string): string | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
 
-  const direct = canonicalYouTubeWatchUrl(trimmed);
+  const direct = canonicalYouTubeDownloaderUrl(trimmed);
   if (direct) return direct;
 
   const matches = trimmed.match(YT_URL_IN_TEXT_RE);
   if (!matches) return null;
 
   for (const candidate of matches) {
-    const canonical = canonicalYouTubeWatchUrl(candidate);
-    if (canonical) return canonical;
+    const playlist = canonicalYouTubePlaylistUrl(candidate);
+    if (playlist) return playlist;
+  }
+
+  for (const candidate of matches) {
+    const watch = canonicalYouTubeWatchUrl(candidate);
+    if (watch) {
+      if (extractYouTubePlaylistId(candidate)) {
+        const pl = canonicalYouTubePlaylistUrl(candidate);
+        if (pl) return pl;
+      }
+      return watch;
+    }
   }
 
   return null;
@@ -135,4 +214,18 @@ export function playlistItemWatchUrl(item: {
   const id = item.id?.trim();
   if (id && YT_ID_RE.test(id)) return `https://www.youtube.com/watch?v=${id}`;
   return null;
+}
+
+/** Match Rust `sanitize_playlist_folder_name` for download/regroup folder names. */
+export function sanitizePlaylistFolderName(raw: string): string {
+  let s = raw.trim();
+  if (!s) return "playlist";
+  const forbidden = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+  for (const ch of forbidden) {
+    s = s.split(ch).join("_");
+  }
+  s = s.replace(/\s+/g, " ").trim();
+  if (!s.length) return "playlist";
+  if (s.length > 120) s = s.slice(0, 120).trim();
+  return s || "playlist";
 }

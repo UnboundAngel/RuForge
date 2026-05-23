@@ -1,0 +1,50 @@
+---
+import {
+  isTechTickerSvgIcon,
+  techTickerBrandColors,
+  techTickerSvgPaths,
+  type TechTickerIconId,
+} from '../lib/techTickerIcons';
+
+interface Props {
+  icon: TechTickerIconId;
+}
+
+const { icon } = Astro.props;
+
+const brandAssets: Partial<Record<TechTickerIconId, { src: string; wide?: boolean }>> = {
+  ytdlp: { src: '/icons/tech/ytdlp.svg', wide: true },
+  sponsorblock: { src: '/icons/tech/sponsorblock.svg' },
+  zustand: { src: '/icons/tech/zustand.svg' },
+};
+
+const brand = brandAssets[icon];
+---
+
+{
+  isTechTickerSvgIcon(icon) ? (
+    <svg
+      class="tech-ticker__icon-svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path fill={techTickerBrandColors[icon]} d={techTickerSvgPaths[icon]} />
+    </svg>
+  ) : brand ? (
+    <img
+      class:list={[
+        'tech-ticker__icon-img',
+        brand.wide && 'tech-ticker__icon-img--wide',
+      ]}
+      src={brand.src}
+      alt=""
+      width={brand.wide ? 52 : 16}
+      height={16}
+      loading="lazy"
+      decoding="async"
+    />
+  ) : null
+}

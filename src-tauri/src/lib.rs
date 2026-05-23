@@ -20,7 +20,7 @@ use crate::commands::downloader::{
 };
 use crate::download_job_manager::DownloadJobManager;
 use crate::commands::ffprobe::probe_local_media_ffprobe;
-use crate::commands::gallery::scan_gallery;
+use crate::commands::gallery::{regroup_playlist_downloads, scan_gallery};
 use crate::commands::sponsorblock::ensure_sponsorblock_segments;
 use crate::commands::media::{
     delete_media, delete_media_batch, ensure_poster_if_missing, extract_frames, get_subtitle_tracks,
@@ -128,6 +128,7 @@ pub fn run() {
             pause_download_job,
             stop_all_active_download_jobs,
             scan_gallery,
+            regroup_playlist_downloads,
             ensure_sponsorblock_segments,
             open_mini_player,
             open_youtube_explorer,
