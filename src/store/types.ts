@@ -21,7 +21,8 @@ export type SettingsTab =
   | "downloads"
   | "playback"
   | "appearance"
-  | "advanced";
+  | "advanced"
+  | "debugging";
 
 export type GalleryFilter = "all" | "in-progress" | "watched";
 
@@ -99,6 +100,8 @@ export interface RuforgeSettings {
   autoDownloadScrubberPreviews: boolean;
   /** Parallel yt-dlp jobs (`downloadQueueSlice.maxConcurrentDownloads` mirrors this). */
   maxConcurrentDownloads: number;
+  /** When true, Settings shows the Debugging tab (group playlist, updater UI cycle, etc.). */
+  showDebuggingSettings: boolean;
   /** Master SponsorBlock toggle (default false until feature ships). */
   sponsorBlockEnabled: boolean;
   sponsorBlockCategoryModes: Record<SponsorBlockSkipCategory, SponsorBlockCategoryMode>;
@@ -126,6 +129,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   skipDuplicatesAutomatically: false,
   autoDownloadScrubberPreviews: true,
   maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+  showDebuggingSettings: false,
   sponsorBlockEnabled: true,
   sponsorBlockCategoryModes: defaultCategoryModes(),
   sponsorBlockCategoryStats: defaultCategoryStats(),
@@ -141,6 +145,7 @@ export function loadMergedSettings(): RuforgeSettings {
     return {
       ...merged,
       maxConcurrentDownloads: clampMaxConcurrentDownloads(merged.maxConcurrentDownloads),
+      showDebuggingSettings: merged.showDebuggingSettings === true,
       sponsorBlockEnabled: merged.sponsorBlockEnabled === true,
       sponsorBlockCategoryModes: mergeCategoryModes(merged.sponsorBlockCategoryModes),
       sponsorBlockCategoryStats: mergeCategoryStats(merged.sponsorBlockCategoryStats),

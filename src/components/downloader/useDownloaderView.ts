@@ -1,4 +1,11 @@
-import { useEffect, useRef, useCallback, useState, useMemo } from "react";
+import {
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+  useMemo,
+  type ClipboardEvent,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { fetchVideoInfoWithTimeout } from "../../downloadVideoInfoFetch";
 import { cookieContextFromSettings } from "../../downloadQueue";
@@ -13,6 +20,7 @@ import {
   jobHasDownloadTransferStarted,
   patchDownloadJobOptionsForAudio,
   videoInfoToDownloadJobSnapshot,
+  type PlaylistBatchEnqueueMeta,
 } from "../../downloadQueue";
 import { mergeVideoInfoFileSizes, snapshotWithResolvedFileSize } from "../../downloadJobFileSizes";
 import {
@@ -26,9 +34,17 @@ import { findLibraryDuplicate, type DuplicateMatch } from "../../duplicateDownlo
 import { applyReplaceBeforeDownload } from "../../replaceLibraryDownload";
 import type { DuplicateDownloadChoice } from "../DuplicateDownloadDialog";
 import {
-  canonicalYouTubeWatchUrl,
-  normalizeYouTubeUrlForCompare,
+  buildPlaylistEnqueuePlan,
+  isPlaylistDownloaderUrl,
+  playlistItemKey,
+  resolveAudioOnlyForPlaylistItem,
+  sumPlaylistDisplayBytes,
+} from "../../playlistDownloadPlan";
+import {
+  canonicalYouTubeDownloaderUrl,
+  extractYouTubeUrlFromText,
   playlistItemWatchUrl,
+  sanitizePlaylistFolderName,
   youtubeUrlsMatch,
 } from "../../youtubeUrl";
 import type {
@@ -122,6 +138,9 @@ export function useDownloaderView({
   const [pinnedQuickEnqueueUrls, setPinnedQuickEnqueueUrls] = useState<string[]>([]);
   const [clipboardPastedHint, setClipboardPastedHint] = useState(false);
   const [clipboardOfferUrl, setClipboardOfferUrl] = useState<string | null>(null);
+  const [playlistItemAudioOverrides, setPlaylistItemAudioOverrides] = useState<
+    Record<string, boolean>
+  >({});
   const clipboardReadGenRef = useRef(0);
   const [urlBubbleCopied, setUrlBubbleCopied] = useState(false);
   const urlBubbleCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,11 +216,56 @@ export function useDownloaderView({
 
   const libraryDuplicate = useMemo(() => {
     if (!url.startsWith("http")) return null;
+    if (videoInfo?.isPlaylist) return null;
     return findLibraryDuplicate(url, entries);
-  }, [url, entries]);
+  }, [url, entries, videoInfo?.isPlaylist]);
+
+  /** Queued/paused row tied to hero (focused job or URL bar match). */
+  const heroEditableJob = useMemo(() => {
+    const movable = (j: (typeof downloadJobs)[number]) =>
+      j.status === "queued" || j.status === "paused";
+    if (focusedJob && movable(focusedJob)) return focusedJob;
+    const bar = url.trim();
+    if (!bar.startsWith("http")) return null;
+    return (
+      downloadJobs.find((j) => movable(j) && youtubeUrlsMatch(j.url, bar)) ?? null
+    );
+  }, [focusedJob, downloadJobs, url]);
+
+  const heroAudioOnly = heroEditableJob
+    ? heroEditableJob.options.audioOnly === true
+    : settings.downloadAudioOnly === true;
+
+  const playlistEnqueuePlan = useMemo(() => {
+    if (!videoInfo?.isPlaylist || !videoInfo.playlistItems?.length) return null;
+    return buildPlaylistEnqueuePlan(
+      videoInfo.playlistItems,
+      entries,
+      playlistItemAudioOverrides,
+      heroAudioOnly,
+      settings.skipDuplicatesAutomatically,
+    );
+  }, [
+    videoInfo,
+    entries,
+    playlistItemAudioOverrides,
+    heroAudioOnly,
+    settings.skipDuplicatesAutomatically,
+  ]);
+
+  const playlistDuplicateSummary = useMemo(() => {
+    if (!playlistEnqueuePlan || playlistEnqueuePlan.duplicates.length === 0) {
+      return null;
+    }
+    const n = playlistEnqueuePlan.duplicates.length;
+    const total = playlistEnqueuePlan.totalResolved;
+    return `${n} of ${total} already in library`;
+  }, [playlistEnqueuePlan]);
+
   const showDuplicateBanner =
     Boolean(libraryDuplicate) &&
     Boolean(videoInfo) &&
+    !videoInfo?.isPlaylist &&
     !metadataLoading &&
     !downloadQueueBusy &&
     !settings.skipDuplicatesAutomatically;
@@ -219,6 +283,9 @@ export function useDownloaderView({
   const showPrimaryDownload = useMemo(() => {
     if (metadataLoading) return false;
     if (focusShowsBigProgress) return false;
+    if (videoInfo?.isPlaylist && playlistEnqueuePlan) {
+      return playlistEnqueuePlan.toDownload.length > 0;
+    }
     if (!focusedJob) {
       return Boolean(videoInfo && url.startsWith("http"));
     }
@@ -229,23 +296,14 @@ export function useDownloaderView({
       return !downloadJobMediaNeedsHydration(focusedJob.metadata);
     }
     return Boolean(videoInfo && url.startsWith("http"));
-  }, [videoInfo, metadataLoading, focusedJob, url, focusShowsBigProgress]);
-
-  /** Queued/paused row tied to hero (focused job or URL bar match). */
-  const heroEditableJob = useMemo(() => {
-    const movable = (j: (typeof downloadJobs)[number]) =>
-      j.status === "queued" || j.status === "paused";
-    if (focusedJob && movable(focusedJob)) return focusedJob;
-    const bar = url.trim();
-    if (!bar.startsWith("http")) return null;
-    return (
-      downloadJobs.find((j) => movable(j) && youtubeUrlsMatch(j.url, bar)) ?? null
-    );
-  }, [focusedJob, downloadJobs, url]);
-
-  const heroAudioOnly = heroEditableJob
-    ? heroEditableJob.options.audioOnly === true
-    : settings.downloadAudioOnly === true;
+  }, [
+    videoInfo,
+    metadataLoading,
+    focusedJob,
+    url,
+    focusShowsBigProgress,
+    playlistEnqueuePlan,
+  ]);
 
   const showHeroAudioToggle = useMemo(() => {
     if (metadataLoading || focusShowsBigProgress) return false;
@@ -430,7 +488,9 @@ export function useDownloaderView({
     (
       targetUrl: string,
       choice: Exclude<DuplicateDownloadChoice, "cancel"> = "replace",
-      meta?: { title?: string; approval: "auto" | "pending" | "held" },
+      meta?: PlaylistBatchEnqueueMeta & {
+        approval?: "auto" | "pending" | "held";
+      },
       audioOnly?: boolean,
     ) => {
       const s = settingsRef.current;
@@ -439,6 +499,13 @@ export function useDownloaderView({
       let options = buildDownloadJobOptions(s, outputPath, choice);
       if (audioOnly !== undefined) {
         options = patchDownloadJobOptionsForAudio(options, audioOnly, s);
+      }
+      if (meta?.playlistOutputFolder) {
+        options = {
+          ...options,
+          playlistOutputFolder: meta.playlistOutputFolder,
+          playlistIndex: meta.playlistIndex ?? null,
+        };
       }
       const st = useRuforgeStore.getState();
       let snapshot =
@@ -501,18 +568,28 @@ export function useDownloaderView({
     async (
       targetUrl: string,
       choice: Exclude<DuplicateDownloadChoice, "cancel"> = "replace",
-      meta?: { title?: string },
+      meta?: {
+        title?: string;
+        audioOnly?: boolean;
+        playlistOutputFolder?: string;
+        playlistIndex?: number;
+      },
     ) => {
       const replaced = await applyReplaceBeforeDownload(targetUrl, choice);
       if (!replaced.ok) {
         notify(replaced.reason, "warning");
         return;
       }
-      const audioOnly = resolveHeroAudioOnly();
+      const audioOnly = meta?.audioOnly ?? resolveHeroAudioOnly();
       const jobId = enqueueDownloadOnly(
         targetUrl,
         choice,
-        { title: meta?.title, approval: "auto" },
+        {
+          title: meta?.title,
+          approval: "auto",
+          playlistOutputFolder: meta?.playlistOutputFolder,
+          playlistIndex: meta?.playlistIndex,
+        },
         audioOnly,
       );
       if (!jobId) return;
@@ -575,38 +652,65 @@ export function useDownloaderView({
     const playlistItems = vi?.isPlaylist ? vi.playlistItems : undefined;
 
     if (playlistItems && playlistItems.length > 0) {
-      const pairs: { url: string; title: string }[] = [];
-      const seen = new Set<string>();
-      for (const item of playlistItems) {
-        const u = playlistItemWatchUrl(item);
-        if (!u) continue;
-        const k = normalizeYouTubeUrlForCompare(u);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        pairs.push({ url: u, title: item.title });
+      const plan = buildPlaylistEnqueuePlan(
+        playlistItems,
+        st0.entries,
+        playlistItemAudioOverrides,
+        resolveHeroAudioOnly(),
+        settingsRef.current.skipDuplicatesAutomatically,
+      );
+
+      if (plan.toDownload.length === 0) {
+        if (plan.duplicates.length > 0) {
+          notify(
+            settingsRef.current.skipDuplicatesAutomatically
+              ? "All videos in this playlist are already in your library."
+              : "No new videos to download. Resolve duplicates in library first.",
+            "info",
+          );
+        } else {
+          notify("No downloadable videos found in this playlist.", "warning");
+        }
+        return;
       }
 
-      if (pairs.length > 0) {
-        let batchChoice: Exclude<DuplicateDownloadChoice, "cancel"> | null = null;
+      const folder = sanitizePlaylistFolderName(vi?.title ?? "playlist");
+      let batchChoice: Exclude<DuplicateDownloadChoice, "cancel"> | null = null;
+      let started = 0;
+      const skipped = settingsRef.current.skipDuplicatesAutomatically
+        ? plan.duplicates.length
+        : 0;
 
-        for (const { url: videoUrl, title } of pairs) {
-          const duplicate = await resolveDuplicate(videoUrl);
-          if (!duplicate) {
-            await startDownloadForUrl(videoUrl, batchChoice ?? "replace", { title });
-            continue;
-          }
-          if (settingsRef.current.skipDuplicatesAutomatically) continue;
-
+      for (const item of plan.toDownload) {
+        const duplicate = await resolveDuplicate(item.url);
+        if (duplicate && !settingsRef.current.skipDuplicatesAutomatically) {
           if (batchChoice === null) {
             const choice = await promptDuplicateChoice(duplicate);
             if (choice === "cancel") return;
             batchChoice = choice;
           }
-          await startDownloadForUrl(videoUrl, batchChoice, { title });
+        } else if (duplicate) {
+          continue;
         }
-        return;
+
+        await startDownloadForUrl(item.url, batchChoice ?? "replace", {
+          title: item.title,
+          audioOnly: item.audioOnly,
+          playlistOutputFolder: folder,
+          playlistIndex: item.index,
+        });
+        started += 1;
       }
-      /* No resolved watch URLs — fall through and enqueue the playlist URL once (yt-dlp). */
+
+      if (skipped > 0 && started > 0) {
+        notify(
+          `Skipped ${skipped} duplicate(s), started ${started} download(s).`,
+          "info",
+        );
+      } else if (skipped > 0 && started === 0) {
+        notify("All videos in this playlist are already in your library.", "info");
+      }
+      return;
     }
 
     const duplicate =
@@ -617,7 +721,10 @@ export function useDownloaderView({
       await startDownloadForUrl(effectiveUrl);
       return;
     }
-    if (settingsRef.current.skipDuplicatesAutomatically) return;
+    if (settingsRef.current.skipDuplicatesAutomatically) {
+      notify("This video is already in your library.", "info");
+      return;
+    }
 
     const choice = await promptDuplicateChoice(duplicate);
     if (choice === "cancel") return;
@@ -631,10 +738,12 @@ export function useDownloaderView({
     storageBlocksNewDownloads,
     notify,
     promptDuplicateChoice,
+    playlistItemAudioOverrides,
+    resolveHeroAudioOnly,
   ]);
 
   const insertPinnedQuickEnqueueUrl = useCallback((targetUrl: string) => {
-    const canon = canonicalYouTubeWatchUrl(targetUrl) ?? targetUrl.trim();
+    const canon = canonicalYouTubeDownloaderUrl(targetUrl) ?? targetUrl.trim();
     setPinnedQuickEnqueueUrls((prev) => {
       if (prev.some((x) => youtubeUrlsMatch(x, canon))) return prev;
       return [canon, ...prev];
@@ -819,24 +928,58 @@ export function useDownloaderView({
     promoteStagedBarToDownloadQueue,
   ]);
 
-  const handleUrlFocus = useCallback(() => {
-    setDownloaderUrlFocused(true);
-    const gen = ++clipboardReadGenRef.current;
-    void (async () => {
-      const clipUrl = await readClipboardYouTubeUrl();
-      if (gen !== clipboardReadGenRef.current) return;
-      if (!clipUrl) return;
+  const applyClipboardYoutubeUrl = useCallback(
+    (clipUrl: string) => {
       const currentUrl = useRuforgeStore.getState().url;
       if (youtubeUrlsMatch(currentUrl, clipUrl)) return;
       if (!currentUrl.trim()) {
         setDownloaderUrl(clipUrl);
+        setPlaylistItemAudioOverrides({});
         setClipboardPastedHint(true);
         setClipboardOfferUrl(null);
         return;
       }
       setClipboardOfferUrl(clipUrl);
+    },
+    [setDownloaderUrl],
+  );
+
+  const readClipboardIntoUrl = useCallback(() => {
+    const gen = ++clipboardReadGenRef.current;
+    void (async () => {
+      const clipUrl = await readClipboardYouTubeUrl();
+      if (gen !== clipboardReadGenRef.current) return;
+      if (!clipUrl) return;
+      applyClipboardYoutubeUrl(clipUrl);
     })();
-  }, [setDownloaderUrl, setDownloaderUrlFocused]);
+  }, [applyClipboardYoutubeUrl]);
+
+  const handleUrlFocus = useCallback(() => {
+    setDownloaderUrlFocused(true);
+    readClipboardIntoUrl();
+  }, [setDownloaderUrlFocused, readClipboardIntoUrl]);
+
+  const handleUrlClick = useCallback(() => {
+    readClipboardIntoUrl();
+  }, [readClipboardIntoUrl]);
+
+  const handleUrlClipPaste = useCallback(() => {
+    readClipboardIntoUrl();
+  }, [readClipboardIntoUrl]);
+
+  const handleUrlPaste = useCallback(
+    (e: ClipboardEvent<HTMLInputElement>) => {
+      const text = e.clipboardData.getData("text");
+      const extracted = extractYouTubeUrlFromText(text);
+      if (!extracted) return;
+      e.preventDefault();
+      setDownloaderUrl(extracted);
+      setPlaylistItemAudioOverrides({});
+      setClipboardPastedHint(true);
+      setClipboardOfferUrl(null);
+    },
+    [setDownloaderUrl],
+  );
 
   const handleUrlBlur = useCallback(() => {
     clipboardReadGenRef.current += 1;
@@ -847,9 +990,32 @@ export function useDownloaderView({
   const applyClipboardOffer = useCallback(() => {
     if (!clipboardOfferUrl) return;
     setDownloaderUrl(clipboardOfferUrl);
+    setPlaylistItemAudioOverrides({});
     setClipboardPastedHint(true);
     setClipboardOfferUrl(null);
   }, [clipboardOfferUrl, setDownloaderUrl]);
+
+  const togglePlaylistItemAudio = useCallback((itemKey: string, audioOnly: boolean) => {
+    setPlaylistItemAudioOverrides((prev) => ({ ...prev, [itemKey]: audioOnly }));
+  }, []);
+
+  const playlistHeroDisplayBytes = useMemo(() => {
+    if (!videoInfo?.isPlaylist || !videoInfo.playlistItems?.length) return null;
+    return sumPlaylistDisplayBytes(
+      videoInfo.playlistItems,
+      playlistItemAudioOverrides,
+      heroAudioOnly,
+    );
+  }, [videoInfo, playlistItemAudioOverrides, heroAudioOnly]);
+
+  const isPlaylistItemDuplicate = useCallback(
+    (item: { id?: string; webpageUrl?: string }) => {
+      const watch = playlistItemWatchUrl(item);
+      if (!watch) return false;
+      return Boolean(findLibraryDuplicate(watch, entries));
+    },
+    [entries],
+  );
 
   const clearUrlBubbleCopied = useCallback(() => {
     setUrlBubbleCopied(false);
@@ -887,6 +1053,7 @@ export function useDownloaderView({
     setDownloaderMetadataLoading(false);
     setClipboardPastedHint(false);
     setClipboardOfferUrl(null);
+    setPlaylistItemAudioOverrides({});
     clearUrlBubbleCopied();
     setQuickEnqueueHint(null);
     setPinnedQuickEnqueueUrls([]);
@@ -930,6 +1097,12 @@ export function useDownloaderView({
       setDownloaderUrl(value);
       setClipboardPastedHint(false);
       setClipboardOfferUrl(null);
+      if (
+        !incoming.startsWith("http") ||
+        (prev.startsWith("http") && !youtubeUrlsMatch(prev, incoming))
+      ) {
+        setPlaylistItemAudioOverrides({});
+      }
     },
     [setDownloaderUrl, enqueueDownloadOnly, storageBlocksNewDownloads, notify],
   );
@@ -1004,20 +1177,22 @@ export function useDownloaderView({
               lastDupCheckLibraryScanRev.current = useRuforgeStore.getState().libraryScanRevision;
               list = useRuforgeStore.getState().entries;
             }
-            const dup = findLibraryDuplicate(norm, list);
-            if (dup) {
-              if (active && useRuforgeStore.getState().url.trim() === norm) {
-                setDownloaderUrl("");
-                setDownloaderFocusedJobId(null);
-                setVideoInfo(null);
-                setMetadataError(null);
-                setClipboardPastedHint(false);
-                setClipboardOfferUrl(null);
-                useRuforgeStore
-                  .getState()
-                  .notify("Duplicate detected, skipping per user settings.", "info");
+            if (!isPlaylistDownloaderUrl(norm)) {
+              const dup = findLibraryDuplicate(norm, list);
+              if (dup) {
+                if (active && useRuforgeStore.getState().url.trim() === norm) {
+                  setDownloaderUrl("");
+                  setDownloaderFocusedJobId(null);
+                  setVideoInfo(null);
+                  setMetadataError(null);
+                  setClipboardPastedHint(false);
+                  setClipboardOfferUrl(null);
+                  useRuforgeStore
+                    .getState()
+                    .notify("Duplicate detected, skipping per user settings.", "info");
+                }
+                return;
               }
-              return;
             }
           }
 
@@ -1037,7 +1212,39 @@ export function useDownloaderView({
             const snap = mergeVideoInfoFileSizes(base, info, audioOnlyNow);
             const cacheKey = downloadJobMetadataCacheKey(norm, videoFormat);
             if (cacheKey) commitDownloadJobMetadataCache(cacheKey, snap);
-            setVideoInfo(downloadJobSnapshotToVideoInfo(snap), {
+            const heroInfo = downloadJobSnapshotToVideoInfo(snap);
+
+            if (
+              settingsRef.current.skipDuplicatesAutomatically &&
+              heroInfo.isPlaylist &&
+              heroInfo.playlistItems?.length
+            ) {
+              const plan = buildPlaylistEnqueuePlan(
+                heroInfo.playlistItems,
+                useRuforgeStore.getState().entries,
+                playlistItemAudioOverrides,
+                audioOnlyNow,
+                true,
+              );
+              if (
+                plan.toDownload.length === 0 &&
+                plan.duplicates.length > 0
+              ) {
+                setDownloaderUrl("");
+                setDownloaderFocusedJobId(null);
+                setVideoInfo(null);
+                setMetadataError(null);
+                setClipboardPastedHint(false);
+                setClipboardOfferUrl(null);
+                useRuforgeStore.getState().notify(
+                  "All videos in this playlist are already in your library.",
+                  "info",
+                );
+                return;
+              }
+            }
+
+            setVideoInfo(heroInfo, {
               sourceUrl: norm,
               preferredQuality: settingsRef.current.preferredQuality,
             });
@@ -1094,6 +1301,14 @@ export function useDownloaderView({
     showQueueAddToolbar,
     showTopLeftDownloaderChrome,
     showDuplicateBanner,
+    playlistDuplicateSummary,
+    playlistEnqueuePlan,
+    playlistHeroDisplayBytes,
+    playlistItemAudioOverrides,
+    togglePlaylistItemAudio,
+    isPlaylistItemDuplicate,
+    playlistItemKey,
+    resolveAudioOnlyForPlaylistItem,
     queueBrowsingHidesUrlChrome,
     focusShowsBigProgress,
     anyDownloading,
@@ -1112,8 +1327,11 @@ export function useDownloaderView({
     handleDownloadClick: () => void handleDownloadClick(),
     handleDuplicateChoice,
     handleUrlFocus,
+    handleUrlClick,
     handleUrlBlur,
+    handleUrlPaste,
     applyClipboardOffer,
+    handleUrlClipPaste,
     handleUrlClipCopy,
     handleClearUrl,
     handleUrlChange,

@@ -1,5 +1,5 @@
 import {
-  canonicalYouTubeWatchUrl,
+  canonicalYouTubeDownloaderUrl,
   extractYouTubeUrlFromText,
   youtubeUrlsMatch,
 } from "../../youtubeUrl";
@@ -32,14 +32,14 @@ export function parseDroppedUrls(dataTransfer: DataTransfer): string[] {
   return out;
 }
 
-/** Canonical YouTube watch URLs only (MVP: non‑YouTube dropped strings are ignored). */
+/** Canonical YouTube watch or playlist URLs (non-YouTube dropped strings are ignored). */
 export function filterSupportedYouTubeUrls(urls: string[]): string[] {
   const canonList: string[] = [];
   const seen = new Set<string>();
 
   for (const raw of urls) {
     const canon =
-      canonicalYouTubeWatchUrl(raw.trim()) ?? extractYouTubeUrlFromText(raw);
+      canonicalYouTubeDownloaderUrl(raw.trim()) ?? extractYouTubeUrlFromText(raw);
     if (!canon) continue;
     if (seen.has(canon)) continue;
     if (canonList.some((c) => youtubeUrlsMatch(c, canon))) continue;

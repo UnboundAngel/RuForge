@@ -39,18 +39,23 @@ const BIG_PROGRESS_GAP_TOTAL_REM = (BIG_PROGRESS_SEGMENTS - 1) * BIG_PROGRESS_GA
 function MainDownloaderUrlChip({
   url,
   copied,
+  pasted,
+  onPasteFromClipboard,
   onCopy,
   onClear,
   audioWarning = false,
 }: {
   url: string;
   copied: boolean;
+  pasted?: boolean;
+  onPasteFromClipboard: () => void | Promise<void>;
   onCopy: () => void | Promise<void>;
   onClear: () => void;
   audioWarning?: boolean;
 }) {
   const [chipHovered, setChipHovered] = useState(false);
   const [copyHovered, setCopyHovered] = useState(false);
+  const [pasteHovered, setPasteHovered] = useState(false);
   const [clearHovered, setClearHovered] = useState(false);
 
   return (
@@ -60,6 +65,7 @@ function MainDownloaderUrlChip({
       onMouseLeave={() => {
         setChipHovered(false);
         setCopyHovered(false);
+        setPasteHovered(false);
         setClearHovered(false);
       }}
     >
@@ -98,53 +104,68 @@ function MainDownloaderUrlChip({
             >
               <button
                 type="button"
+                onClick={() => void onPasteFromClipboard()}
+                onMouseEnter={() => setPasteHovered(true)}
+                onMouseLeave={() => setPasteHovered(false)}
+                className="relative flex h-9 w-9 shrink-0 items-center justify-center"
+                aria-label="Paste link from clipboard"
+              >
+                <span
+                  className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
+                    pasteHovered ? "opacity-100" : "opacity-0"
+                  }`}
+                  role="tooltip"
+                >
+                  Paste link
+                </span>
+                <AnimatePresence mode="wait" initial={false}>
+                  {pasted ? (
+                    <motion.span
+                      key="main-paste-ok"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={CLIP_ICON_TRANSITION}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="main-cl"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={CLIP_ICON_TRANSITION}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      <Paperclip size={14} strokeWidth={2} />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </button>
+              <button
+                type="button"
                 onClick={() => void onCopy()}
                 onMouseEnter={() => setCopyHovered(true)}
                 onMouseLeave={() => setCopyHovered(false)}
-                className="relative flex min-w-0 flex-1 items-center overflow-hidden text-left"
+                className="relative min-w-0 flex-1 truncate whitespace-nowrap py-2 text-left text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-white"
                 aria-label="Copy link"
               >
-                <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
-                  <span
-                    className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-                      copyHovered ? "opacity-100" : "opacity-0"
-                    }`}
-                    role="tooltip"
-                  >
-                    Click to copy
-                  </span>
-                  <AnimatePresence mode="wait" initial={false}>
-                    {copied ? (
-                      <motion.span
-                        key="main-ok"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={CLIP_ICON_TRANSITION}
-                        className="absolute inset-0 flex items-center justify-center"
-                      >
-                        <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
-                      </motion.span>
-                    ) : (
-                      <motion.span
-                        key="main-cl"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={CLIP_ICON_TRANSITION}
-                        className="absolute inset-0 flex items-center justify-center"
-                      >
-                        <Paperclip size={14} strokeWidth={2} />
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                <span
+                  className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
+                    copyHovered ? "opacity-100" : "opacity-0"
+                  }`}
+                  role="tooltip"
+                >
+                  Copy link
                 </span>
                 <span
-                  className={`min-w-0 flex-1 truncate whitespace-nowrap py-2 text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                  className={`block truncate transition-opacity duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
                     chipHovered ? "px-2 opacity-100" : "opacity-0"
                   }`}
                 >
-                  {url}
+                  {copied ? "Copied" : url}
                 </span>
               </button>
               <button
@@ -545,6 +566,8 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                     <MainDownloaderUrlChip
                       url={d.url}
                       copied={d.urlBubbleCopied}
+                      pasted={d.clipboardPastedHint}
+                      onPasteFromClipboard={() => void d.handleUrlClipPaste()}
                       onCopy={() => void d.handleUrlClipCopy()}
                       onClear={d.handleClearUrl}
                       audioWarning={d.showAudioWarning}
@@ -676,15 +699,22 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       </motion.p>
                     )}
                   </AnimatePresence>
-                  <input
-                    type="text"
-                    value={d.url}
-                    onChange={(e) => d.handleUrlChange(e.target.value)}
-                    onFocus={d.handleUrlFocus}
-                    onBlur={d.handleUrlBlur}
-                    placeholder="PASTE LINK"
-                    className="w-full bg-transparent text-center text-lg sm:text-xl font-black tracking-[0.2em] text-stone-100 placeholder:text-stone-800 outline-none border-none transition-all uppercase"
-                  />
+                  <div
+                    className="w-full cursor-text"
+                    onClick={() => d.handleUrlClick()}
+                    role="presentation"
+                  >
+                    <input
+                      type="text"
+                      value={d.url}
+                      onChange={(e) => d.handleUrlChange(e.target.value)}
+                      onFocus={d.handleUrlFocus}
+                      onBlur={d.handleUrlBlur}
+                      onPaste={(e) => d.handleUrlPaste(e)}
+                      placeholder="PASTE LINK"
+                      className="w-full bg-transparent text-center text-lg sm:text-xl font-black tracking-[0.2em] text-stone-100 placeholder:text-stone-800 outline-none border-none transition-all uppercase"
+                    />
+                  </div>
                   {d.clipboardOfferUrl && (
                     <div className="pt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
                       <span className="text-[8px] font-black uppercase tracking-[0.2em] text-stone-500">
@@ -840,12 +870,19 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             <Clock size={12} className="opacity-50" />
                             <span>{formatDuration(idleHero.duration)}</span>
                           </div>
-                          {idleHero.fileSizeBytes != null && idleHero.fileSizeBytes > 0 && (
-                            <div className="flex items-center gap-1.5">
-                              <HardDrive size={12} className="opacity-50" />
-                              <span title="Approximate size">~{formatApproxFileSize(idleHero.fileSizeBytes)}</span>
-                            </div>
-                          )}
+                          {(() => {
+                            const bytes =
+                              idleHero.isPlaylist && d.playlistHeroDisplayBytes != null
+                                ? d.playlistHeroDisplayBytes
+                                : idleHero.fileSizeBytes;
+                            if (bytes == null || bytes <= 0) return null;
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <HardDrive size={12} className="opacity-50" />
+                                <span title="Approximate size">~{formatApproxFileSize(bytes)}</span>
+                              </div>
+                            );
+                          })()}
                           {idleHero.isPlaylist && (
                             <div className="flex items-center gap-1.5">
                               <List size={12} className="opacity-50" />
@@ -872,6 +909,14 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               <span className="text-[#EDD79C]/80">Download</span> to replace it or save a copy.
                             </p>
                           </motion.div>
+                        )}
+                        {d.playlistDuplicateSummary && (
+                          <p className="text-center text-[9px] font-black uppercase tracking-[0.28em] text-stone-500">
+                            {d.playlistDuplicateSummary}
+                            {d.playlistEnqueuePlan &&
+                              d.playlistEnqueuePlan.toDownload.length === 0 &&
+                              " · nothing new to download"}
+                          </p>
                         )}
                         <motion.div className="space-y-4 pt-2 sm:space-y-5 sm:pt-6">
                           {d.settings.downloadSubtitles && d.subLangsForDisplay && (
@@ -914,28 +959,57 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         </motion.div>
                         {idleHero.isPlaylist && idleHero.playlistItems && (
                           <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto scrollbar-none space-y-1.5 hidden min-[750px]:block">
-                            {idleHero.playlistItems.map((item, idx) => (
-                              <div
-                                key={`playlist-row-${idx}-${item.webpageUrl ?? item.title}`}
-                                className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors group"
-                              >
-                                <div className="w-24 aspect-video rounded-lg overflow-hidden bg-stone-900 flex-shrink-0">
-                                  <img
-                                    src={item.thumbnail}
-                                    alt=""
-                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                            {idleHero.playlistItems.map((item, idx) => {
+                              const rowKey = d.playlistItemKey(item, idx + 1);
+                              const rowAudio = d.resolveAudioOnlyForPlaylistItem(
+                                rowKey,
+                                d.playlistItemAudioOverrides,
+                                d.heroAudioOnly,
+                              );
+                              const dup = d.isPlaylistItemDuplicate(item);
+                              const rowBytes = rowAudio
+                                ? (item.fileSizeBytesAudio ?? item.fileSizeBytes)
+                                : (item.fileSizeBytesVideo ?? item.fileSizeBytes);
+                              return (
+                                <div
+                                  key={`playlist-row-${idx}-${item.webpageUrl ?? item.title}`}
+                                  className={`flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group ${
+                                    dup ? "opacity-55" : ""
+                                  }`}
+                                >
+                                  <div className="w-24 aspect-video rounded-lg overflow-hidden bg-stone-900 flex-shrink-0 relative">
+                                    <img
+                                      src={item.thumbnail}
+                                      alt=""
+                                      className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                                    />
+                                    {dup && (
+                                      <span className="absolute top-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider text-[#EDD79C]">
+                                        In library
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 text-left min-w-0">
+                                    <h4 className="text-[11px] font-black uppercase tracking-widest text-stone-400 group-hover:text-white truncate">
+                                      {item.title}
+                                    </h4>
+                                    <span className="text-[10px] font-mono text-stone-600 mt-1 block">
+                                      {formatDuration(item.duration)}
+                                      {rowBytes != null && rowBytes > 0
+                                        ? ` · ~${formatApproxFileSize(rowBytes)}`
+                                        : ""}
+                                    </span>
+                                  </div>
+                                  <DownloadJobAudioToggle
+                                    audioOnly={rowAudio}
+                                    onToggle={() =>
+                                      d.togglePlaylistItemAudio(rowKey, !rowAudio)
+                                    }
+                                    className="shrink-0 scale-90"
                                   />
                                 </div>
-                                <div className="flex-1 text-left min-w-0">
-                                  <h4 className="text-[11px] font-black uppercase tracking-widest text-stone-400 group-hover:text-white truncate">
-                                    {item.title}
-                                  </h4>
-                                  <span className="text-[10px] font-mono text-stone-600 mt-1 block">
-                                    {formatDuration(item.duration)}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </motion.div>

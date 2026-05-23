@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +29,8 @@ pub struct MediaFile {
     pub source_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playlist_index: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -174,6 +176,7 @@ fn ytdlp_sidecar_metadata(
     Option<String>,
     Option<String>,
     Option<String>,
+    Option<u32>,
 ) {
     std::fs::read_to_string(info_json_path)
         .ok()
@@ -223,6 +226,11 @@ fn ytdlp_sidecar_metadata(
             let download_metadata_hint = download_metadata_hint_from_ytdlp_info(&json);
             let source_url = json["webpage_url"].as_str().map(String::from);
             let source_id = source_id_from_ytdlp_info(&json);
+            let playlist_index = json["playlist_index"]
+                .as_u64()
+                .or_else(|| json["playlist_index"].as_i64().map(|i| i as u64))
+                .map(|u| u as u32)
+                .filter(|&n| n > 0);
             (
                 duration,
                 chapters,
@@ -230,9 +238,44 @@ fn ytdlp_sidecar_metadata(
                 download_metadata_hint,
                 source_url,
                 source_id,
+                playlist_index,
             )
         })
-        .unwrap_or((0.0, None, None, None, None, None))
+        .unwrap_or((0.0, None, None, None, None, None, None))
+}
+
+fn leading_index_from_media_stem(stem: &str) -> Option<u32> {
+    let trimmed = stem.trim();
+    let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    digits.parse::<u32>().ok().filter(|&n| n > 0)
+}
+
+fn compare_media_playlist_order(a: &MediaFile, b: &MediaFile) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (a.playlist_index, b.playlist_index) {
+        (Some(ia), Some(ib)) => ia.cmp(&ib),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => {
+            let pa = Path::new(&a.path);
+            let pb = Path::new(&b.path);
+            let sa = pa
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .and_then(leading_index_from_media_stem);
+            let sb = pb
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .and_then(leading_index_from_media_stem);
+            match (sa, sb) {
+                (Some(ia), Some(ib)) => ia.cmp(&ib),
+                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            }
+        }
+    }
 }
 
 fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile> {
@@ -303,11 +346,18 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
         let subtitle_path = primary_vtt_sidecar(parent, stem).map(|p| p.to_string_lossy().to_string());
 
         let sidecar = resolve_info_json_path(parent, stem);
-        let (duration, chapters, metadata_title, download_metadata_hint, source_url, source_id) =
-            sidecar
-                .as_deref()
-                .map(ytdlp_sidecar_metadata)
-                .unwrap_or((0.0, None, None, None, None, None));
+        let (
+            duration,
+            chapters,
+            metadata_title,
+            download_metadata_hint,
+            source_url,
+            source_id,
+            playlist_index,
+        ) = sidecar
+            .as_deref()
+            .map(ytdlp_sidecar_metadata)
+            .unwrap_or((0.0, None, None, None, None, None, None));
 
         let display_name = metadata_title.unwrap_or_else(|| stem.to_string());
 
@@ -332,7 +382,11 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             download_metadata_hint,
             source_url,
             source_id,
+            playlist_index,
         });
+    }
+    if files.len() >= 2 {
+        files.sort_by(compare_media_playlist_order);
     }
     dedupe_media_files(files)
 }
@@ -427,7 +481,7 @@ pub(crate) fn media_library_group_key(path: &Path, file: &MediaFile) -> String {
         path.file_stem().and_then(|s| s.to_str()),
     ) {
         if let Some(sidecar) = resolve_info_json_path(parent, stem) {
-            let (_, _, _, _, _, source_id) = ytdlp_sidecar_metadata(sidecar.as_path());
+            let (_, _, _, _, _, source_id, _) = ytdlp_sidecar_metadata(sidecar.as_path());
             if let Some(id) = source_id
                 .as_deref()
                 .map(str::trim)
@@ -435,7 +489,7 @@ pub(crate) fn media_library_group_key(path: &Path, file: &MediaFile) -> String {
             {
                 return format!("id:{id}");
             }
-            let (_, _, _, _, source_url, _) = ytdlp_sidecar_metadata(sidecar.as_path());
+            let (_, _, _, _, source_url, _, _) = ytdlp_sidecar_metadata(sidecar.as_path());
             if let Some(url) = source_url
                 .as_deref()
                 .map(str::trim)
@@ -656,11 +710,18 @@ fn media_file_from_path_for_cleanup(path: &Path) -> Option<MediaFile> {
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let parent = path.parent().unwrap_or(Path::new(""));
     let sidecar = resolve_info_json_path(parent, stem);
-    let (duration, chapters, metadata_title, download_metadata_hint, source_url, source_id) =
-        sidecar
-            .as_deref()
-            .map(ytdlp_sidecar_metadata)
-            .unwrap_or((0.0, None, None, None, None, None));
+    let (
+        duration,
+        chapters,
+        metadata_title,
+        download_metadata_hint,
+        source_url,
+        source_id,
+        playlist_index,
+    ) = sidecar
+        .as_deref()
+        .map(ytdlp_sidecar_metadata)
+        .unwrap_or((0.0, None, None, None, None, None, None));
     Some(MediaFile {
         name: metadata_title.unwrap_or_else(|| stem.to_string()),
         path: path.to_string_lossy().to_string(),
@@ -674,6 +735,7 @@ fn media_file_from_path_for_cleanup(path: &Path) -> Option<MediaFile> {
         download_metadata_hint,
         source_url,
         source_id,
+        playlist_index,
     })
 }
 
@@ -892,10 +954,18 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
     };
 
     let sidecar = resolve_info_json_path(parent, stem);
-    let (duration, chapters, metadata_title, download_metadata_hint, source_url, source_id) = sidecar
+    let (
+        duration,
+        chapters,
+        metadata_title,
+        download_metadata_hint,
+        source_url,
+        source_id,
+        playlist_index,
+    ) = sidecar
         .as_deref()
         .map(ytdlp_sidecar_metadata)
-        .unwrap_or((0.0, None, None, None, None, None));
+        .unwrap_or((0.0, None, None, None, None, None, None));
 
     let display_name = metadata_title.unwrap_or_else(|| stem.to_string());
     let created = metadata
@@ -920,6 +990,220 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         download_metadata_hint,
         source_url,
         source_id,
+        playlist_index,
+    })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegroupPlaylistItem {
+    pub index: u32,
+    pub source_id: Option<String>,
+    pub title: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegroupPlaylistResult {
+    pub moved: u32,
+    pub skipped: u32,
+    pub not_found: u32,
+    pub folder_path: String,
+}
+
+fn sanitize_playlist_folder_name_regroup(raw: &str) -> String {
+    let mut s = raw.trim().to_string();
+    if s.is_empty() {
+        return "playlist".to_string();
+    }
+    for ch in ['<', '>', ':', '"', '/', '\\', '|', '?', '*'] {
+        s = s.replace(ch, "_");
+    }
+    s = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if s.is_empty() {
+        return "playlist".to_string();
+    }
+    if s.len() > 120 {
+        s.truncate(120);
+        s = s.trim().to_string();
+    }
+    s
+}
+
+fn sidecar_video_id_matches(sidecar_path: Option<&std::path::Path>, source_id: &str) -> bool {
+    let Some(path) = sidecar_path else {
+        return false;
+    };
+    let (_, _, _, _, source_url, sid, _) = ytdlp_sidecar_metadata(path);
+    if sid.as_deref() == Some(source_id) {
+        return true;
+    }
+    if let Some(url) = source_url.as_deref() {
+        if let Some(id) = url
+            .split("v=")
+            .nth(1)
+            .and_then(|rest| rest.split('&').next())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            if id == source_id {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn find_root_media_by_source_id(root: &Path, source_id: &str) -> Option<PathBuf> {
+    let Ok(rd) = std::fs::read_dir(root) else {
+        return None;
+    };
+    for ent in rd.flatten() {
+        let p = ent.path();
+        if !p.is_file() {
+            continue;
+        }
+        let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !is_media_ext(ext) {
+            continue;
+        }
+        let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let parent = p.parent().unwrap_or(root);
+        let sidecar = resolve_info_json_path(parent, stem);
+        if sidecar_video_id_matches(sidecar.as_deref(), source_id) {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn move_media_bundle(from_media: &Path, dest_media: &Path) -> Result<(), String> {
+    if dest_media.exists() {
+        return Err(format!(
+            "Destination already exists: {}",
+            dest_media.display()
+        ));
+    }
+    let parent = from_media.parent().unwrap_or(Path::new("."));
+    let stem = from_media
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    std::fs::rename(from_media, dest_media).map_err(|e| e.to_string())?;
+    for candidate in [stem, strip_ytdlp_stream_suffix(stem)] {
+        for ext in ["info.json", "jpg", "webp", "vtt"] {
+            let side = parent.join(format!("{}.{ext}", candidate));
+            if side.is_file() {
+                let dest_side = dest_media
+                    .parent()
+                    .unwrap_or(Path::new("."))
+                    .join(format!(
+                        "{}.{}",
+                        dest_media
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("file"),
+                        ext
+                    ));
+                if !dest_side.exists() {
+                    let _ = std::fs::rename(&side, &dest_side);
+                }
+            }
+        }
+        let thumb_dir = parent.join(THUMB_DIR_NAME).join(candidate);
+        if thumb_dir.is_dir() {
+            let dest_thumb = dest_media
+                .parent()
+                .unwrap_or(Path::new("."))
+                .join(THUMB_DIR_NAME)
+                .join(
+                    dest_media
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("file"),
+                );
+            let _ = std::fs::create_dir_all(dest_thumb.parent().unwrap_or(Path::new(".")));
+            if !dest_thumb.exists() {
+                let _ = std::fs::rename(&thumb_dir, &dest_thumb);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn regroup_playlist_downloads(
+    search_roots: Vec<String>,
+    folder_title: String,
+    items: Vec<RegroupPlaylistItem>,
+) -> Result<RegroupPlaylistResult, String> {
+    let roots: Vec<PathBuf> = search_roots
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .collect();
+    if roots.is_empty() {
+        return Err("No download folders to search.".into());
+    }
+    let primary = roots
+        .first()
+        .cloned()
+        .ok_or_else(|| "No download folder.".to_string())?;
+    if !primary.is_dir() {
+        return Err("Download directory does not exist.".into());
+    }
+    let folder_name = sanitize_playlist_folder_name_regroup(&folder_title);
+    let dest_dir = primary.join(&folder_name);
+    std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+
+    let mut moved = 0u32;
+    let mut skipped = 0u32;
+    let mut not_found = 0u32;
+
+    for item in items {
+        let Some(source_id) = item
+            .source_id
+            .as_ref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+        else {
+            not_found += 1;
+            continue;
+        };
+        let mut src: Option<PathBuf> = None;
+        for root in &roots {
+            if let Some(p) = find_root_media_by_source_id(root, source_id) {
+                src = Some(p);
+                break;
+            }
+        }
+        let Some(src) = src else {
+            not_found += 1;
+            continue;
+        };
+        if src.parent().map(|p| p == dest_dir).unwrap_or(false) {
+            skipped += 1;
+            continue;
+        }
+        let ext = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mp4");
+        let safe_title = sanitize_playlist_folder_name_regroup(&item.title);
+        let dest_name = format!("{:02} - {}.{}", item.index.max(1), safe_title, ext);
+        let dest_path = dest_dir.join(&dest_name);
+        match move_media_bundle(&src, &dest_path) {
+            Ok(()) => moved += 1,
+            Err(_) => skipped += 1,
+        }
+    }
+
+    Ok(RegroupPlaylistResult {
+        moved,
+        skipped,
+        not_found,
+        folder_path: dest_dir.to_string_lossy().to_string(),
     })
 }
 
@@ -952,6 +1236,7 @@ mod tests {
             download_metadata_hint: None,
             source_url: None,
             source_id: None,
+            playlist_index: None,
         };
         let key = media_library_group_key(path, &file);
         assert!(key.starts_with("stem:"));
@@ -974,6 +1259,7 @@ mod tests {
             download_metadata_hint: None,
             source_url: None,
             source_id: Some("abc123".into()),
+            playlist_index: None,
         };
         let intermediate = MediaFile {
             name: "My Video".into(),
@@ -988,6 +1274,7 @@ mod tests {
             download_metadata_hint: None,
             source_url: None,
             source_id: None,
+            playlist_index: None,
         };
         let muxed_path = Path::new(&muxed.path);
         let inter_path = Path::new(&intermediate.path);

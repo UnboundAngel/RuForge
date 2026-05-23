@@ -216,6 +216,28 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.8 (unreleased)
 
+- **Playlist regroup (fix)**: Group playlist modal refreshes library scan, matches by id/url/title, searches internal + custom roots; Debugging settings tab (toggle in General) holds regroup + cycle updater UI. `duplicateDownload.ts`, `RegroupPlaylistModal.tsx`, `SettingsView.tsx`, `gallery.rs`.
+- **Playlist downloads (fix)**: Playlist URL clipboard/focus/paste/drop; link chip paste vs copy; per-row audio toggle and sizes; pre-download duplicate summary; batch jobs land in ordered subfolder for Media stack cards; Settings regroup tool for flat files. `youtubeUrl.ts`, `playlistDownloadPlan.ts`, `useDownloaderView.ts`, `DownloaderView.tsx`, `downloader.rs`, `gallery.rs`, `RegroupPlaylistModal.tsx`.
+- **Public website features (fix)**: Download flow art: copy from `public/website/tutorials/download/` into `src/assets` only (never overwrite drop folder); all three steps 515x749. `DownloadTutorialHub.astro`, `tutorials/download/README.md`.
+- **Public website features**: Download flow all three steps use sketch PNGs (`downloadStep1/2/3.png`); title + description overlay only (step labels in art). `DownloadTutorialHub.astro`.
+- **Public website features (fix)**: Sketch card copy top-aligned in lower panel (not bottom-centered); README documents 252:369 export size. `DownloadTutorialHub.astro`, `tutorials/download/README.md`.
+- **Public website features (fix)**: Download step 01: no duplicate STEP 01 badge (label in PNG); sketch cards stretch to row height on desktop. Step 02 unchanged. `DownloadTutorialHub.astro`.
+- **Public website features (fix)**: Replaced download flow step 02 sketch frame with larger `downloadStep2.png` export; aspect ratio updated. `DownloadTutorialHub.astro`.
+- **Public website features (fix)**: Download flow step 02 uses Figma sketch frame asset `downloadStep2.png` with overlaid Step 02 badge and copy; steps 01 and 03 unchanged. `DownloadTutorialHub.astro`.
+- **Public website landing (fix)**: Highlight card release footer: no top rule or status dot, single-line hierarchy, normal padding so text does not clip the card bottom. `index.astro`.
+- **Public website landing**: Latest-release teaser moved into highlight card footer instead of floating pill below. `index.astro`.
+- **Public website landing (fix)**: Tech ticker brand colors restored (inline Simple Icons hex, no monochrome filter); Zustand bear visible with fixed SVG fills instead of `currentColor` in `<img>`. `techTickerIcons.ts`, `TechTickerIcon.astro`, `index.astro`, `zustand.svg`.
+- **Public website landing (fix)**: Tech ticker: no glow/separators; Simple Icons for YouTube/Tauri/Rust/React/FFmpeg; yt-dlp + Zustand from `public/website` (bear silhouette ~9 KB not 119 KB); brand SVGs monochrome via CSS filter. `TechTickerIcon.astro`, `techTickerIcons.ts`, `index.astro`, `public/icons/tech/`.
+- **Public website landing (design)**: Upgraded the tech stack ticker with premium hover-interactive capsule badges, customized glowing inline SVG icons, subtle amber radial ambient lighting, and increased padding for standard layout density. `index.astro`.
+- **Public website features (fix)**: Reworked download tutorial cards to map 1-to-1 to portrait Figma frames (5:6 aspect ratio, 400x480) with full edge-to-edge coverage and uniform premium warm cream bottom text panels. `DownloadTutorialHub.astro`, `tutorials/download/README.md`.
+- **Public website features**: Daylight-style download tutorial hub (header art, hover 1-to-3 step cards with screenshots); color-coded visual cards for other features. `DownloadTutorialHub.astro`, `FeatureVisualCard.astro`, `index.astro`.
+- **Public website header (fix)**: OS-detect static Download pill (uil windows / simple-icons linux / generic mac); no motion expand; safe-area padding; hero title spacing below underline. `HeaderDownloadButton.astro`, `animated-underline-text-one.tsx`.
+- **Public website header**: Floating sticky pill nav (logo home, Changelog/Roadmap/Legal, motion Download CTA) like Daylight Health pattern. `SiteHeader.astro`, `BaseLayout.astro`.
+- **Public website fonts/hero**: Unzipped Cabinet Grotesk, Satoshi, Patrick Hand into `public/fonts`; hero uses framer-motion AnimatedText island (hand-drawn underline). `fonts.css`, `HeroAnimatedTitle.tsx`, `animated-underline-text-one.tsx`.
+- **Public website footer (fix)**: Increased content top padding so link columns sit below the top fade band on the paper background. `SiteFooter.astro`.
+- **Public website footer**: Aged-paper doodle WebP background via Astro Image, curved top radius, top fade into page bg, scrim for link legibility. `footer-doodles-aged-paper.webp`, `SiteFooter.astro`.
+- **Public website landing (fix)**: Motion download button hides label until hover, fixed icon position, Iconify twotone icons with crossfade (off / download / done on click). `MotionDownloadButton.astro`.
+- **Public website landing**: Highlight card download CTA is rounded motion button (accent circle expands on hover, download icon, label "Download Latest"). `MotionDownloadButton.astro`, `index.astro`.
 - **Public website landing**: Tech ticker uses hairline gradient rails, edge fades, accent cadence on labels, pause on hover; removed panel background and heavy borders. `index.astro`.
 - **Public website landing**: Reworked tech ticker marquee layout to completely remove separator dots and fade the text opacity to be highly subtle. `index.astro`.
 - **Public website images**: Migrated logos, carousel screenshots, testimonial avatars, and highlight photo to Astro `<Image />` via `src/assets/` and `sharp` (responsive WebP, build-time optimization). `imageAssets.ts`, components, `package.json`.

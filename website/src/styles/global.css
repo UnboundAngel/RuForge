@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './fonts.css';
 
 @theme {
   --color-rf-bg: #1d1613;
@@ -19,7 +20,9 @@
   --color-rf-critical-bg: rgb(94 130 82 / 0.22);
   --color-rf-high: #d4b06a;
   --color-rf-high-bg: rgb(212 176 106 / 0.14);
-  --font-sans: system-ui, 'Segoe UI', Inter, sans-serif;
+  --font-sans: 'Satoshi', system-ui, 'Segoe UI', sans-serif;
+  --font-display: 'Cabinet Grotesk', 'Satoshi', system-ui, sans-serif;
+  --font-hand: 'Patrick Hand', cursive;
   --font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
 }
 
@@ -30,7 +33,16 @@
   }
 
   body {
-    @apply min-h-screen;
+    @apply min-h-screen font-sans;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
   }
 
   a {

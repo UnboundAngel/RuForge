@@ -1,0 +1,206 @@
+---
+interface Props {
+  href: string;
+  label?: string;
+  class?: string;
+}
+
+const { href, label = 'Download Latest', class: className = '' } = Astro.props;
+
+const iconClass = 'motion-download-btn__svg';
+---
+
+<a
+  href={href}
+  class:list={['motion-download-btn', 'group', className]}
+  target={href.startsWith('http') ? '_blank' : undefined}
+  rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
+  aria-label={label}
+  data-motion-download-btn
+>
+  <span class="motion-download-btn__circle" aria-hidden="true"></span>
+  <span class="motion-download-btn__icon" aria-hidden="true">
+    <span class="motion-download-btn__icon-stack">
+      <span class="motion-download-btn__icon-layer motion-download-btn__icon-layer--idle">
+        <svg class={iconClass} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M13 5h-2v3.17l2 2z" opacity=".3"></path>
+          <path
+            fill="currentColor"
+            d="m11 8.17l-2-2V3h6v6h4l-3.59 3.59L13 10.17V5h-2zm10.19 13.02L2.81 2.81L1.39 4.22L6.17 9H5l7 7l.59-.59L15.17 18H5v2h12.17l2.61 2.61z"
+          ></path>
+        </svg>
+      </span>
+      <span class="motion-download-btn__icon-layer motion-download-btn__icon-layer--hover">
+        <svg class={iconClass} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M13 9V5h-2v6H9.83L12 13.17L14.17 11H13z" opacity=".3"></path>
+          <path fill="currentColor" d="M15 9V3H9v6H5l7 7l7-7zm-3 4.17L9.83 11H11V5h2v6h1.17zM5 18h14v2H5z"></path>
+        </svg>
+      </span>
+      <span class="motion-download-btn__icon-layer motion-download-btn__icon-layer--done">
+        <svg class={iconClass} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M20.13 5.41L18.72 4l-9.19 9.19l-4.25-4.24l-1.41 1.41l5.66 5.66zM5 18h14v2H5z"></path>
+        </svg>
+      </span>
+    </span>
+  </span>
+  <span class="motion-download-btn__label">{label}</span>
+</a>
+
+<script>
+  function bindMotionDownloadButtons() {
+    document.querySelectorAll<HTMLAnchorElement>('[data-motion-download-btn]').forEach((btn) => {
+      if (btn.dataset.motionBound === 'true') return;
+      btn.dataset.motionBound = 'true';
+      btn.addEventListener(
+        'click',
+        () => {
+          btn.classList.add('is-activated');
+        },
+        { once: false },
+      );
+    });
+  }
+
+  bindMotionDownloadButtons();
+  document.addEventListener('astro:page-load', bindMotionDownloadButtons);
+</script>
+
+<style>
+  .motion-download-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 3.25rem;
+    min-width: 3.25rem;
+    padding: 0.25rem;
+    border-radius: 9999px;
+    border: none;
+    outline: none;
+    text-decoration: none;
+    cursor: pointer;
+    background: transparent;
+    isolation: isolate;
+    transition: padding 0.5s ease;
+  }
+
+  .motion-download-btn:focus-visible {
+    outline: 2px solid rgb(237 215 156 / 0.55);
+    outline-offset: 3px;
+  }
+
+  .motion-download-btn__circle {
+    position: absolute;
+    top: 0.25rem;
+    left: 0.25rem;
+    bottom: 0.25rem;
+    width: 3rem;
+    margin: 0;
+    display: block;
+    border-radius: 9999px;
+    background: var(--color-rf-accent);
+    overflow: hidden;
+    transition: width 0.5s ease;
+    z-index: 0;
+  }
+
+  .motion-download-btn:hover,
+  .motion-download-btn:focus-visible {
+    padding: 0.25rem 1.5rem 0.25rem 0.25rem;
+  }
+
+  .motion-download-btn:hover .motion-download-btn__circle,
+  .motion-download-btn:focus-visible .motion-download-btn__circle {
+    width: calc(100% - 0.5rem);
+  }
+
+  .motion-download-btn__icon {
+    position: absolute;
+    top: 50%;
+    left: 1.75rem;
+    z-index: 2;
+    width: 1.5rem;
+    height: 1.5rem;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .motion-download-btn__icon-stack {
+    position: relative;
+    display: block;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .motion-download-btn__icon-layer {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+
+  .motion-download-btn__svg {
+    display: block;
+    width: 1.5rem;
+    height: 1.5rem;
+    color: var(--color-rf-bg);
+  }
+
+  .motion-download-btn:not(:hover):not(.is-activated) .motion-download-btn__icon-layer--idle,
+  .motion-download-btn:not(:hover):not(.is-activated):focus-visible .motion-download-btn__icon-layer--idle {
+    opacity: 1;
+  }
+
+  .motion-download-btn:hover:not(.is-activated) .motion-download-btn__icon-layer--hover,
+  .motion-download-btn:focus-visible:not(.is-activated) .motion-download-btn__icon-layer--hover {
+    opacity: 1;
+  }
+
+  .motion-download-btn.is-activated .motion-download-btn__icon-layer--done {
+    opacity: 1;
+  }
+
+  .motion-download-btn__label {
+    position: relative;
+    z-index: 1;
+    max-width: 0;
+    margin-left: 0;
+    overflow: hidden;
+    opacity: 0;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    color: var(--color-rf-text);
+    pointer-events: none;
+    transition:
+      opacity 0.45s ease,
+      max-width 0.5s ease,
+      margin-left 0.5s ease,
+      color 0.5s ease;
+  }
+
+  .motion-download-btn:hover .motion-download-btn__label,
+  .motion-download-btn:focus-visible .motion-download-btn__label {
+    max-width: 12rem;
+    margin-left: 2.75rem;
+    opacity: 1;
+    color: var(--color-rf-bg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .motion-download-btn,
+    .motion-download-btn__circle,
+    .motion-download-btn__icon-layer,
+    .motion-download-btn__label {
+      transition: none;
+    }
+
+    .motion-download-btn:hover .motion-download-btn__circle,
+    .motion-download-btn:focus-visible .motion-download-btn__circle {
+      width: calc(100% - 0.5rem);
+    }
+  }
+</style>

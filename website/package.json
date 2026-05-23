@@ -14,10 +14,16 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/react": "^5.0.5",
     "@tailwindcss/vite": "^4.3.0",
     "astro": "5.18.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.40.0",
     "marked": "^18.0.4",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "sharp": "^0.34.5",
+    "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.0",
     "zod": "^3.25.76"
   }

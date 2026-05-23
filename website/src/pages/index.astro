@@ -3,6 +3,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import HeroCarousel from '../components/HeroCarousel.astro';
 import Icon from '../components/Icon.astro';
 import TestimonialsSection from '../components/TestimonialsSection.astro';
+import MotionDownloadButton from '../components/ui/MotionDownloadButton.astro';
+import HeroAnimatedTitle from '../components/HeroAnimatedTitle';
+import DownloadTutorialHub from '../components/DownloadTutorialHub.astro';
+import FeatureVisualCard from '../components/FeatureVisualCard.astro';
+import TechTickerIcon from '../components/TechTickerIcon.astro';
+import { techTickerItems } from '../lib/techTickerIcons';
 import { Image } from 'astro:assets';
 import highlightCoffee from '../assets/highlight-coffee-beans.webp';
 import { getCollection } from 'astro:content';
@@ -69,11 +75,11 @@ const features = [
     {/* Hero Section */}
     <section class="rf-container pt-16 pb-20 md:pt-24 md:pb-28 text-center relative">
       <div class="max-w-3xl mx-auto space-y-6 md:space-y-8 animate-fade-in">
-        <h1 class="text-4xl font-bold tracking-tight text-rf-text sm:text-5xl lg:text-6xl leading-[1.1]">
-          Your media library,<br class="hidden sm:inline" /> forged locally.
-        </h1>
-        
-        <p class="max-w-xl mx-auto text-base sm:text-lg leading-relaxed text-rf-text-muted/90">
+        <div class="hero-title-wrap">
+          <HeroAnimatedTitle client:load lineOne="Your media library," lineTwo="forged locally." />
+        </div>
+
+        <p class="hero-subcopy max-w-xl mx-auto text-base sm:text-lg leading-relaxed text-rf-text-muted/90">
           A lightweight, local-first media collector. Streamlined yt-dlp downloading and fine-tuned offline playback with SponsorBlock, chapters, and custom subtitles.
         </p>
 
@@ -103,30 +109,38 @@ const features = [
     </section>
 
     {/* Tech stack ticker */}
-    <section class="tech-ticker w-full overflow-hidden py-5 scroll-reveal" aria-label="Built with">
+    <section class="tech-ticker w-full overflow-hidden py-8 scroll-reveal" aria-label="Built with">
       <div class="tech-ticker__rail relative w-full overflow-hidden">
         <div class="tech-ticker__fade tech-ticker__fade--left" aria-hidden="true"></div>
         <div class="tech-ticker__fade tech-ticker__fade--right" aria-hidden="true"></div>
-        <div class="flex gap-20 w-max animate-marquee">
-          <div class="tech-ticker__row flex shrink-0 items-center gap-20">
-            <span class="tech-ticker__item">YouTube Downloader</span>
-            <span class="tech-ticker__item">yt-dlp Engine</span>
-            <span class="tech-ticker__item">SponsorBlock API</span>
-            <span class="tech-ticker__item">Tauri v2 Shell</span>
-            <span class="tech-ticker__item">Rust Core</span>
-            <span class="tech-ticker__item">React 19 Core</span>
-            <span class="tech-ticker__item">FFmpeg Processing</span>
-            <span class="tech-ticker__item">Zustand State Store</span>
+        <div class="flex gap-6 w-max animate-marquee">
+          <div class="tech-ticker__row flex shrink-0 items-center gap-6">
+            {
+              techTickerItems.map((item) => (
+                <div class="tech-ticker__item group flex items-center gap-3 bg-rf-surface/20 hover:bg-rf-surface/35 px-5 py-2.5 rounded-xl border border-rf-border/40 hover:border-rf-border/60 transition-colors duration-300 cursor-default">
+                  <span class="tech-ticker__icon-slot flex shrink-0 items-center justify-center">
+                    <TechTickerIcon icon={item.icon} />
+                  </span>
+                  <span class="font-sans text-[11px] font-semibold tracking-[0.16em] uppercase text-rf-text-muted/60 group-hover:text-rf-text-muted transition-colors duration-300">
+                    {item.name}
+                  </span>
+                </div>
+              ))
+            }
           </div>
-          <div class="tech-ticker__row flex shrink-0 items-center gap-20" aria-hidden="true">
-            <span class="tech-ticker__item">YouTube Downloader</span>
-            <span class="tech-ticker__item">yt-dlp Engine</span>
-            <span class="tech-ticker__item">SponsorBlock API</span>
-            <span class="tech-ticker__item">Tauri v2 Shell</span>
-            <span class="tech-ticker__item">Rust Core</span>
-            <span class="tech-ticker__item">React 19 Core</span>
-            <span class="tech-ticker__item">FFmpeg Processing</span>
-            <span class="tech-ticker__item">Zustand State Store</span>
+          <div class="tech-ticker__row flex shrink-0 items-center gap-6" aria-hidden="true">
+            {
+              techTickerItems.map((item) => (
+                <div class="tech-ticker__item group flex items-center gap-3 bg-rf-surface/20 hover:bg-rf-surface/35 px-5 py-2.5 rounded-xl border border-rf-border/40 hover:border-rf-border/60 transition-colors duration-300 cursor-default">
+                  <span class="tech-ticker__icon-slot flex shrink-0 items-center justify-center">
+                    <TechTickerIcon icon={item.icon} />
+                  </span>
+                  <span class="font-sans text-[11px] font-semibold tracking-[0.16em] uppercase text-rf-text-muted/60 group-hover:text-rf-text-muted transition-colors duration-300">
+                    {item.name}
+                  </span>
+                </div>
+              ))
+            }
           </div>
         </div>
       </div>
@@ -135,7 +149,7 @@ const features = [
     {/* Grid of Interactive Details Cards */}
     <section class="rf-container py-24 md:py-32">
       <div class="text-center max-w-2xl mx-auto mb-16 md:mb-20 space-y-4 scroll-reveal">
-        <h2 class="text-3xl font-bold tracking-tight text-rf-text sm:text-4xl">
+        <h2 class="font-display text-3xl font-bold tracking-tight text-rf-text sm:text-4xl">
           Everything you need. Offline.
         </h2>
         <p class="text-base text-rf-text-muted/90">
@@ -143,59 +157,61 @@ const features = [
         </p>
       </div>
 
-      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {
-          features.map((feat, index) => (
-            <a 
-              href={feat.link}
-              class="feature-card scroll-reveal group/card flex flex-col justify-between rounded-2xl bg-rf-surface/40 hover:bg-rf-surface/55 border border-rf-border/30 p-6 transition-all duration-300 relative overflow-hidden"
-              style={`transition-delay: ${index * 80}ms;`}
-            >
-              {/* Dynamic Interactive Border Spotlight */}
-              <div class="card-spotlight-border"></div>
+      <DownloadTutorialHub />
 
-              {/* Subtle background glow effect inside individual cards */}
-              <div class="absolute -right-10 -bottom-10 h-32 w-32 bg-rf-accent/[0.02] rounded-full blur-2xl pointer-events-none transition-all duration-500 group-hover/card:bg-rf-accent/[0.04] group-hover/card:scale-110"></div>
-              
-              <div class="space-y-4">
-                <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-rf-bg/80 text-rf-accent border border-rf-border/40 group-hover/card:border-rf-accent/15 transition-all">
-                  {feat.icon === 'download' && <Icon name="download" size={20} />}
-                  {feat.icon === 'list' && <Icon name="list" size={20} />}
-                  {feat.icon === 'play' && <Icon name="play" size={20} />}
-                  {feat.icon === 'star' && <Icon name="star" size={20} />}
-                  {feat.icon === 'map' && <Icon name="map" size={20} />}
-                  {feat.icon === 'wrench' && <Icon name="wrench" size={20} />}
-                </span>
-                
-                <div class="space-y-2">
-                  <h3 class="text-base font-semibold text-rf-text group-hover/card:text-rf-accent transition-colors">
-                    {feat.title}
-                  </h3>
-                  <p class="text-xs sm:text-sm text-rf-text-muted leading-relaxed">
-                    {feat.description}
-                  </p>
-                </div>
-              </div>
-
-              <div class="pt-6">
-                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-rf-accent tracking-wide group/link">
-                  {feat.linkText}
-                  <svg class="h-4 w-4 transform transition-all duration-300 group-hover/link:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="4" y1="12" x2="17" y2="12" class="opacity-0 -translate-x-2 transition-all duration-300 group-hover/link:opacity-100 group-hover/link:translate-x-0" stroke-linecap="round"/>
-                    <path d="M12 5l7 7-7 7" class="transform transition-transform duration-300 group-hover/link:translate-x-0.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </span>
-              </div>
-            </a>
-          ))
-        }
+      <div class="feature-visual-grid">
+        <FeatureVisualCard
+          href={features[1].link}
+          title={features[1].title}
+          description={features[1].description}
+          linkText={features[1].linkText}
+          icon={features[1].icon}
+          tone="feature-visual-card--library"
+          delay={0}
+        />
+        <FeatureVisualCard
+          href={features[2].link}
+          title={features[2].title}
+          description={features[2].description}
+          linkText={features[2].linkText}
+          icon={features[2].icon}
+          tone="feature-visual-card--player"
+          delay={80}
+        />
+        <FeatureVisualCard
+          href={features[3].link}
+          title={features[3].title}
+          description={features[3].description}
+          linkText={features[3].linkText}
+          icon={features[3].icon}
+          tone="feature-visual-card--sponsor"
+          delay={160}
+        />
+        <FeatureVisualCard
+          href={features[4].link}
+          title={features[4].title}
+          description={features[4].description}
+          linkText={features[4].linkText}
+          icon={features[4].icon}
+          tone="feature-visual-card--mini"
+          delay={240}
+        />
+        <FeatureVisualCard
+          href={features[5].link}
+          title={features[5].title}
+          description={features[5].description}
+          linkText={features[5].linkText}
+          icon={features[5].icon}
+          tone="feature-visual-card--settings"
+          delay={320}
+        />
       </div>
     </section>
 
     <TestimonialsSection />
 
     {/* High-Fidelity Rich Highlight Card at Bottom */}
-    <section class="rf-container pb-28 scroll-reveal">
+    <section class="rf-container pb-20 md:pb-24 scroll-reveal">
       <div class="highlight-card relative overflow-hidden rounded-3xl p-8 md:p-14 border border-rf-border/40 group/highlight">
         <Image
           src={highlightCoffee}
@@ -210,49 +226,52 @@ const features = [
         />
         <div class="highlight-card-scrim" aria-hidden="true"></div>
 
-        <div class="relative z-10 max-w-2xl space-y-6 md:space-y-8">
-          <div class="inline-flex items-center gap-2 rounded-full bg-rf-accent/10 px-4 py-1.5 border border-rf-accent/20">
-            <Icon name="star" size={14} class="text-rf-accent" />
-            <span class="text-xs font-semibold tracking-wider text-rf-accent uppercase">Always-on media freedom</span>
-          </div>
-          
-          <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-rf-text leading-[1.25]">
-            Designed for speed.<br />Engineered for local privacy.
-          </h2>
-          
-          <p class="text-sm md:text-base leading-relaxed text-rf-text-muted/90">
-            RuForge compiles direct Rust bindings with Tauri to deliver near-zero overhead. Your downloads run concurrently, SponsorBlock filters on the fly, and your library indexing is entirely local. No trackers, no accounts, no subscriptions.
-          </p>
+        <div class="relative z-10 flex flex-col">
+          <div class="max-w-2xl space-y-6 md:space-y-8">
+            <div class="inline-flex items-center gap-2 rounded-full bg-rf-accent/10 px-4 py-1.5 border border-rf-accent/20">
+              <Icon name="star" size={14} class="text-rf-accent" />
+              <span class="text-xs font-semibold tracking-wider text-rf-accent uppercase">Always-on media freedom</span>
+            </div>
 
-          <div class="pt-4 flex flex-wrap items-center gap-4">
-            <a href={SITE.releases} class="rf-btn">
-              <Icon name="download" size={16} class="text-rf-bg" />
-              Download Latest Client
-            </a>
-            <a href="/roadmap" class="rf-btn-ghost">
-              Interactive Roadmap
-            </a>
+            <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-rf-text leading-[1.25]">
+              Designed for speed.<br />Engineered for local privacy.
+            </h2>
+
+            <p class="text-sm md:text-base leading-relaxed text-rf-text-muted/90">
+              RuForge compiles direct Rust bindings with Tauri to deliver near-zero overhead. Your downloads run concurrently, SponsorBlock filters on the fly, and your library indexing is entirely local. No trackers, no accounts, no subscriptions.
+            </p>
+
+            <div class="pt-4 flex flex-wrap items-center gap-4">
+              <MotionDownloadButton href={SITE.releases} />
+              <a href="/roadmap" class="rf-btn-ghost">
+                Interactive Roadmap
+              </a>
+            </div>
           </div>
+
+          {
+            latestRelease && (
+              <footer class="highlight-card-release mt-8 md:mt-10">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-8">
+                  <p class="min-w-0 text-sm leading-relaxed text-rf-text-muted/90">
+                    <span class="font-semibold text-rf-accent">v{latestRelease.data.version}</span>
+                    <span class="text-rf-text-muted/50" aria-hidden="true"> · </span>
+                    <span>{latestRelease.data.additions[0]}</span>
+                  </p>
+                  <a
+                    href="/changelog"
+                    class="highlight-card-release-link inline-flex items-center gap-1.5 text-sm font-medium text-rf-accent no-underline shrink-0 transition-opacity hover:opacity-90"
+                  >
+                    View changelog
+                    <Icon name="external" size={14} class="opacity-75" />
+                  </a>
+                </div>
+              </footer>
+            )
+          }
         </div>
       </div>
     </section>
-
-    {/* Latest Release Banner (1 line teaser + link) */}
-    {
-      latestRelease && (
-        <section class="rf-container pb-16 flex justify-center scroll-reveal">
-          <div class="inline-flex flex-col sm:flex-row items-center gap-x-3 gap-y-1.5 text-xs text-rf-text-muted bg-rf-surface/20 px-4 py-2.5 rounded-full border border-rf-border/50 hover:border-rf-accent/20 transition-all duration-300">
-            <span class="flex h-2 w-2 rounded-full bg-rf-accent/80 shrink-0"></span>
-            <span class="font-medium text-rf-text">v{latestRelease.data.version} released:</span>
-            <span class="line-clamp-1 max-w-[320px] sm:max-w-md md:max-w-lg">{latestRelease.data.additions[0]}</span>
-            <a href="/changelog" class="text-rf-accent font-medium hover:underline flex items-center gap-0.5 sm:ml-2 shrink-0">
-              View Changelog
-              <Icon name="external" size={12} class="opacity-70" />
-            </a>
-          </div>
-        </section>
-      )
-    }
   </div>
 </BaseLayout>
 
@@ -263,28 +282,40 @@ const features = [
     isolation: isolate;
   }
 
-  .tech-ticker::before,
-  .tech-ticker::after {
-    content: '';
-    position: absolute;
-    left: 10%;
-    right: 10%;
-    height: 1px;
-    pointer-events: none;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgb(237 215 156 / 0.14) 50%,
-      transparent 100%
-    );
+  .tech-ticker__icon-slot {
+    width: 1rem;
+    height: 1rem;
   }
 
-  .tech-ticker::before {
-    top: 0;
+  .tech-ticker__icon-svg {
+    display: block;
+    width: 1rem;
+    height: 1rem;
   }
 
-  .tech-ticker::after {
-    bottom: 0;
+  .tech-ticker__icon-img {
+    display: block;
+    width: 1rem;
+    height: 1rem;
+    object-fit: contain;
+    opacity: 0.92;
+    transition: opacity 0.3s ease;
+  }
+
+  .tech-ticker__item:hover .tech-ticker__icon-img {
+    opacity: 1;
+  }
+
+  .tech-ticker__icon-slot:has(.tech-ticker__icon-img--wide) {
+    width: auto;
+    min-width: 1rem;
+    max-width: 3.25rem;
+  }
+
+  .tech-ticker__icon-img--wide {
+    width: auto;
+    max-width: 3.25rem;
+    height: 1rem;
   }
 
   .tech-ticker__fade--left,
@@ -305,19 +336,6 @@ const features = [
   .tech-ticker__fade--right {
     right: 0;
     background: linear-gradient(270deg, #1d1613 20%, transparent);
-  }
-
-  .tech-ticker__item {
-    font-size: 0.6875rem;
-    font-weight: 500;
-    letter-spacing: 0.24em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    color: rgb(201 184 122 / 0.34);
-  }
-
-  .tech-ticker__item:nth-child(3n + 1) {
-    color: rgb(237 215 156 / 0.5);
   }
 
   .tech-ticker:hover .animate-marquee {
@@ -364,6 +382,11 @@ const features = [
   .highlight-card .rf-btn-ghost {
     background: rgb(29 22 19 / 0.35);
     backdrop-filter: blur(6px);
+  }
+
+  .highlight-card-release-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   /* Interactive 3D Perspective Tilt on Screenshot Carousel */
@@ -437,6 +460,24 @@ const features = [
   }
 
   /* Entrance animations */
+  .hero-title-wrap {
+    margin-bottom: 0.25rem;
+  }
+
+  .hero-subcopy {
+    margin-top: 0.5rem;
+  }
+
+  @media (min-width: 768px) {
+    .hero-title-wrap {
+      margin-bottom: 0.5rem;
+    }
+
+    .hero-subcopy {
+      margin-top: 0.75rem;
+    }
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -465,6 +506,44 @@ const features = [
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+
+  .feature-visual-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  @media (min-width: 640px) {
+    .feature-visual-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .feature-visual-grid {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .feature-visual-grid > :nth-child(1) {
+      grid-column: span 2;
+    }
+
+    .feature-visual-grid > :nth-child(2) {
+      grid-column: span 2;
+    }
+
+    .feature-visual-grid > :nth-child(3) {
+      grid-column: span 2;
+    }
+
+    .feature-visual-grid > :nth-child(4) {
+      grid-column: 2 / span 2;
+    }
+
+    .feature-visual-grid > :nth-child(5) {
+      grid-column: 4 / span 2;
     }
   }
 
