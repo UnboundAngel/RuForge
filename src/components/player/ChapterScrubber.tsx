@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import {
   bufferedPercentInChapter,
   chapterAtHoverPercent,
@@ -8,12 +8,10 @@ import {
   hoverPercentInChapter,
   type NormalizedChapter,
 } from "../../chapters";
-import { ScrubberHoverThumb } from "../../scrubSpritePreview";
-import { MarqueeText } from "../downloader/DownloadJobQueuePanel";
+import { ScrubHoverPreview } from "./ScrubHoverPreview";
+import type { ScrubBarOverlay } from "../../sponsorBlock";
 import { sbScrubRangeStyle, sbSegmentColor } from "../../sponsorBlockColors";
 
-const THUMB_W = 192;
-const THUMB_FRAME_PAD = 8; // p-2 per side
 const BASE_TRACK_H = 6; // px, matches h-1.5
 const HOVER_SCALE = 2; // visual height multiplier for hovered segment only
 
@@ -31,98 +29,8 @@ type ChapterScrubberProps = {
   onMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
   onMouseMove?: (e: React.MouseEvent<HTMLDivElement>) => void;
   onMouseLeave?: () => void;
-  overlay?: {
-    skipRanges: { start: number; end: number; category: string }[];
-    chapterRanges: { start: number; end: number }[];
-    poiTimes: { time: number; description?: string }[];
-  };
+  overlay?: ScrubBarOverlay;
 };
-
-function ChapterScrubPreview({
-  hoverTimeSec,
-  duration,
-  spritePaths,
-  chapterTitle,
-  chapterKey,
-  formatTime,
-  cursorPercent,
-}: {
-  hoverTimeSec: number;
-  duration: number;
-  spritePaths: string[];
-  chapterTitle: string;
-  chapterKey: number;
-  formatTime: (time: number) => string;
-  cursorPercent: number;
-}) {
-  const hasThumb = spritePaths.length > 0;
-  const halfThumb = THUMB_W / 2;
-
-  const cardW = hasThumb ? THUMB_W + THUMB_FRAME_PAD * 2 : undefined;
-  const clampHalf = hasThumb ? (cardW ?? THUMB_W) / 2 : halfThumb;
-  const titleMaxW = hasThumb && cardW ? Math.max(72, cardW - 76) : 200;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 4, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 4, scale: 0.98 }}
-      transition={{ duration: 0.1 }}
-      className="absolute bottom-full z-[100] pointer-events-none -translate-x-1/2 mb-5"
-      style={{
-        left: `clamp(${clampHalf}px, ${cursorPercent}%, calc(100% - ${clampHalf}px))`,
-        ...(cardW
-          ? {
-              width: cardW,
-              maxWidth: `min(${cardW}px, calc(100vw - 24px))`,
-            }
-          : {}),
-      }}
-    >
-      <div
-        className={`flex flex-col items-center min-w-0 gap-1.5 ${cardW ? "w-full" : ""}`}
-      >
-        {hasThumb && cardW && (
-          <div className="w-full shrink-0 rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl shadow-2xl overflow-hidden p-2">
-            <ScrubberHoverThumb
-              hoverTimeSec={hoverTimeSec}
-              duration={duration}
-              spritePaths={spritePaths}
-              displayWidth={THUMB_W}
-              className="rounded-lg"
-            />
-          </div>
-        )}
-        <div className="flex w-max max-w-full shrink-0 items-center gap-2 rounded-full border border-white/15 bg-black/85 backdrop-blur-md px-3 py-1.5 shadow-xl">
-          <span className="text-[12px] font-bold tabular-nums text-white shrink-0">
-            {formatTime(hoverTimeSec)}
-          </span>
-          <span className="w-px h-3.5 bg-white/20 shrink-0" aria-hidden />
-          <div
-            className="min-w-0 shrink"
-            style={{ maxWidth: titleMaxW }}
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={chapterKey}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.08 }}
-              >
-                <MarqueeText
-                  text={chapterTitle}
-                  layoutKey={chapterKey}
-                  className="text-[11px] font-semibold text-white/95"
-                />
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
 
 export function ChapterScrubber({
   chapters,
@@ -334,16 +242,17 @@ export function ChapterScrubber({
         {isHovering &&
           isFinite(duration) &&
           duration > 0 &&
-          hoverPercent !== null &&
-          hoverChapter && (
-            <ChapterScrubPreview
+          hoverPercent !== null && (
+            <ScrubHoverPreview
               hoverTimeSec={hoverTimeSec}
               duration={duration}
               spritePaths={scrubberThumbs}
-              chapterTitle={hoverChapter.chapter.title}
-              chapterKey={hoverChapter.index}
+              chapterTitle={hoverChapter?.chapter.title ?? ""}
+              chapterKey={hoverChapter?.index ?? -1}
+              showChapterTitle={hoverChapter != null}
               formatTime={formatTime}
               cursorPercent={hoverPercent}
+              sbOverlay={overlay}
             />
           )}
       </AnimatePresence>

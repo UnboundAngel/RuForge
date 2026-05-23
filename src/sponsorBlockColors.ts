@@ -10,6 +10,7 @@ export const SPONSORBLOCK_CATEGORY_COLORS: Record<string, string> = {
   music_offtopic: "#FF9900",
   poi_highlight: "#FF1684",
   chapter: "#FFC83D",
+  exclusive_access: "#008a5c",
 };
 
 /** Scrub overlay opacity from extension barTypes (all categories). */
@@ -38,5 +39,22 @@ export function sbScrubRangeStyle(
   return {
     backgroundColor: color,
     opacity: SPONSORBLOCK_BAR_OPACITY,
+  };
+}
+
+/** Pill under scrub hover preview (border + tint + readable text). */
+export function sbScrubPillStyle(category: string): {
+  borderColor: string;
+  backgroundColor: string;
+  color: string;
+} {
+  const actionType =
+    category === "chapter" ? "chapter" : category === "poi_highlight" ? "poi" : "skip";
+  const accent = sbSegmentColor(category, actionType) ?? "#a8a8a8";
+  const darkText = new Set(["selfpromo", "intro", "preview", "chapter"]);
+  return {
+    borderColor: accent,
+    backgroundColor: `${accent}40`,
+    color: darkText.has(category) ? "#141414" : "#ffffff",
   };
 }

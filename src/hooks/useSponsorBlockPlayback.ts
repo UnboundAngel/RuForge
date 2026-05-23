@@ -228,13 +228,17 @@ export function useSponsorBlockPlayback({
       };
     }
     const skipRanges = segments
-      .filter((s) => isSkipCategory(s.category) && s.actionType === "skip")
+      .filter((s) => s.actionType === "skip")
       .map((s) => ({ start: s.segment[0], end: s.segment[1], category: s.category }))
       .filter((r) => Number.isFinite(r.start) && Number.isFinite(r.end) && r.end > r.start);
 
     const chapterRanges = segments
       .filter((s) => s.category === "chapter" && s.actionType === "chapter")
-      .map((s) => ({ start: s.segment[0], end: s.segment[1] }))
+      .map((s) => ({
+        start: s.segment[0],
+        end: s.segment[1],
+        description: s.description,
+      }))
       .filter((r) => Number.isFinite(r.start) && Number.isFinite(r.end) && r.end > r.start);
 
     const poiTimes = segments

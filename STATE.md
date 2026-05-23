@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.8 (unreleased)
 Last shipped to users: 0.1.7
-Last updated: 2026-05-22
+Last updated: 2026-05-23
 Status: in progress
 
 ## Now
@@ -57,12 +57,16 @@ Fixes:
 - Preview ffmpeg deadlock fix; delete cancels preview work.
 - Download hero clears on finish/remove; explorer bounds sync during sidebar resize.
 
-**0.1.8 unreleased:** Playlist downloader: playlist URLs from clipboard, per-video
-audio in preview, duplicate badges before Download, files in numbered playlist
-folder (Media stack card), regroup flat downloads (Debugging tab, library match fix).
-General toggle reveals Debugging tab (regroup + cycle updater). Post-install
-What's New scroll/clamp; mini player large-mode video without blur wash; public
-site in `website/`. (see AGENTS.md Shipped log)
+**0.1.8 unreleased:** Scrubber hover previews fixed (chapter scrub path, sprite reload after
+Generate Previews, `..info.json` duration for sprite sheets). SponsorBlock scrub/skip now fetches all categories (self-promo,
+intro, POI, chapters, etc.), not sponsor-only API default; stale sidecars refresh
+on play. Playlist downloader: playlist URLs from clipboard, per-video audio in
+preview, duplicate badges before Download, files in numbered playlist folder (Media
+stack card), regroup flat downloads (Debugging tab, library match fix). General
+toggle reveals Debugging tab (regroup + cycle updater). Post-install What's New
+scroll/clamp; mini player large-mode video without blur wash; public site in
+`website/` with sketch tutorial hubs for download plus library, player, SponsorBlock,
+mini player, and settings. (see AGENTS.md Shipped log)
 
 ## Open P0 (blocks release)
 

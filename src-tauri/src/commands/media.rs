@@ -5,14 +5,14 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
 
 use crate::process_tree::kill_shell_child_tree;
-use crate::utils::{POSTER_FILE, THUMB_DIR_NAME};
+use crate::utils::{duration_from_ytdlp_info_json, POSTER_FILE, THUMB_DIR_NAME};
 
 struct FfmpegVideoSlot {
     lock: Arc<Mutex<()>>,
@@ -112,30 +112,6 @@ fn sprite_sheets_required(duration_secs: f64) -> usize {
         return 1;
     }
     ((duration_secs / SECONDS_PER_SHEET).ceil() as usize).max(1)
-}
-
-fn duration_from_ytdlp_info_json(video_path: &Path) -> f64 {
-    let parent = match video_path.parent() {
-        Some(p) => p,
-        None => return 0.0,
-    };
-    let stem = match video_path.file_stem().and_then(|s| s.to_str()) {
-        Some(s) => s,
-        None => return 0.0,
-    };
-    let info_path = parent.join(format!("{}.info.json", stem));
-    let Ok(txt) = std::fs::read_to_string(&info_path) else {
-        return 0.0;
-    };
-    let Ok(json) = serde_json::from_str::<serde_json::Value>(&txt) else {
-        return 0.0;
-    };
-    json["duration"]
-        .as_f64()
-        .or_else(|| json["duration"].as_u64().map(|u| u as f64))
-        .or_else(|| json["duration"].as_i64().map(|i| i as f64))
-        .filter(|d| d.is_finite() && *d > 0.0)
-        .unwrap_or(0.0)
 }
 
 fn preview_sprites_complete(thumb_dir: &Path, duration_secs: f64) -> bool {
@@ -271,7 +247,7 @@ async fn extract_frames_inner(
         .map(|p| p.to_string_lossy().to_string())
         .collect();
 
-    if preview_sprites_complete(&thumb_dir, duration_secs) && poster_dest.is_file() {
+    if preview_sprites_complete(&thumb_dir, duration_secs) {
         return Ok(existing);
     }
 
@@ -326,12 +302,21 @@ pub async fn extract_frames(
 ) -> Result<Vec<String>, String> {
     let allow_generate = allow_generate.unwrap_or(true);
     let vk = video_path.clone();
-    with_per_video_ffmpeg_lock(&vk, |slot| {
+    let result = with_per_video_ffmpeg_lock(&vk, |slot| {
         let app = app.clone();
-        let video_path = video_path;
+        let video_path = video_path.clone();
         async move { extract_frames_inner(app, video_path, allow_generate, slot).await }
     })
-    .await
+    .await;
+    if let Ok(ref paths) = result {
+        if !paths.is_empty() {
+            let _ = app.emit(
+                "scrub-sprites-updated",
+                serde_json::json!({ "videoPath": vk }),
+            );
+        }
+    }
+    result
 }
 
 /// After canceling ffmpeg, wait briefly for the per-file lock (best effort).

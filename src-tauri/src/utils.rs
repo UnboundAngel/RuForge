@@ -4,6 +4,46 @@ pub const THUMB_DIR_NAME: &str = ".ruforge_thumbs";
 pub const POSTER_FILE: &str = "poster.jpg";
 pub const MEDIA_EXTS: &[&str] = &["mp4", "mkv", "webm", "mp3", "m4a", "flac", "opus", "ogg"];
 
+/// yt-dlp may write `{stem}.info.json` or the legacy `{stem}..info.json` double-dot sidecar.
+pub fn resolve_info_json_path(parent: &Path, stem: &str) -> Option<PathBuf> {
+    let primary = parent.join(format!("{}.info.json", stem));
+    if primary.is_file() {
+        return Some(primary);
+    }
+    let double_dot = parent.join(format!("{}..info.json", stem));
+    if double_dot.is_file() {
+        return Some(double_dot);
+    }
+    None
+}
+
+pub fn duration_from_ytdlp_info_json(video_path: &Path) -> f64 {
+    let parent = match video_path.parent() {
+        Some(p) => p,
+        None => return 0.0,
+    };
+    let stem = match video_path.file_stem().and_then(|s| s.to_str()) {
+        Some(s) => s,
+        None => return 0.0,
+    };
+    let info_path = match resolve_info_json_path(parent, stem) {
+        Some(p) => p,
+        None => return 0.0,
+    };
+    let Ok(txt) = std::fs::read_to_string(&info_path) else {
+        return 0.0;
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&txt) else {
+        return 0.0;
+    };
+    json["duration"]
+        .as_f64()
+        .or_else(|| json["duration"].as_u64().map(|u| u as f64))
+        .or_else(|| json["duration"].as_i64().map(|i| i as f64))
+        .filter(|d| d.is_finite() && *d > 0.0)
+        .unwrap_or(0.0)
+}
+
 #[inline]
 pub fn is_media_ext(ext: &str) -> bool {
     MEDIA_EXTS.contains(&ext)

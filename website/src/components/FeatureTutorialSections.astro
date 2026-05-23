@@ -1,0 +1,142 @@
+---
+/**
+ * Feature sketch tutorials (library, player, sponsor, mini, settings).
+ * Art source: repo-root public/website/tutorials/*.png (copy into src/assets on update).
+ */
+import TutorialSketchHub from './TutorialSketchHub.astro';
+import libraryStep1 from '../assets/tutorials/library/libraryStep1.png';
+import libraryStep2 from '../assets/tutorials/library/libraryStep2.png';
+import libraryStep3 from '../assets/tutorials/library/libraryStep3.png';
+import playerStep1 from '../assets/tutorials/player/playerStep1.png';
+import playerStep2 from '../assets/tutorials/player/playerStep2.png';
+import playerStep3 from '../assets/tutorials/player/playerStep3.png';
+import sponsorStep1 from '../assets/tutorials/sponsor/sponsorStep1.png';
+import sponsorStep2 from '../assets/tutorials/sponsor/sponsorStep2.png';
+import sponsorStep3 from '../assets/tutorials/sponsor/sponsorStep3.png';
+import miniStep1 from '../assets/tutorials/mini/miniStep1.png';
+import miniStep2 from '../assets/tutorials/mini/miniStep2.png';
+import miniStep3 from '../assets/tutorials/mini/miniStep3.png';
+import settingsStep1 from '../assets/tutorials/settings/settingsStep1.png';
+import settingsStep2 from '../assets/tutorials/settings/settingsStep2.png';
+import settingsStep3 from '../assets/tutorials/settings/settingsStep3.png';
+---
+
+<TutorialSketchHub
+  eyebrow="Media Library"
+  steps={[
+    {
+      title: 'Browse your catalog',
+      description:
+        'Scan folders, filter by type, and see watch progress on every card. Your library stays on disk with no account sync.',
+      image: libraryStep1,
+    },
+    {
+      title: 'Playlists on shuffle',
+      description:
+        'Open a playlist and play through it at random. RuForge keeps queue order local so you can binge without leaving the app.',
+      image: libraryStep2,
+    },
+    {
+      title: 'Delete with confidence',
+      description:
+        'Remove files from disk and the index together. In-flight preview jobs cancel so deletes never block the UI.',
+      image: libraryStep3,
+    },
+  ]}
+/>
+
+<TutorialSketchHub
+  eyebrow="Media Player"
+  steps={[
+    {
+      title: 'Scrub to any moment',
+      description:
+        'Drag the seeker or hover the chapter bar to jump. Thumbnail previews line up with the playhead so you land on the right frame.',
+      image: playerStep1,
+    },
+    {
+      title: 'Watch without flash',
+      description:
+        'Hardware-friendly playback with keyboard shortcuts, volume, and loop. The player is built for files you already own.',
+      image: playerStep2,
+    },
+    {
+      title: 'See what plays next',
+      description:
+        'Folder queue and library order show the next file before you skip. Auto-advance respects your playback settings.',
+      image: playerStep3,
+    },
+  ]}
+/>
+
+<TutorialSketchHub
+  eyebrow="SponsorBlock"
+  steps={[
+    {
+      title: 'Skip in one tap',
+      description:
+        'When a segment starts, hit the skip control in the corner. RuForge learns your preferences per category over time.',
+      image: sponsorStep1,
+    },
+    {
+      title: 'Segments on the bar',
+      description:
+        'Sponsor ranges and chapters paint on the scrubber with extension-aligned colors. A SponsorBlock strip sits under the timeline.',
+      image: sponsorStep2,
+    },
+    {
+      title: 'Tune what gets skipped',
+      description:
+        'Open Playback settings to toggle categories, intros, and music-offtopic. Hashes stay local; nothing leaves your machine.',
+      image: sponsorStep3,
+    },
+  ]}
+/>
+
+<TutorialSketchHub
+  eyebrow="Mini Player"
+  steps={[
+    {
+      title: 'Pop out from the title bar',
+      description:
+        'Use the mini player control in the top-right chrome to detach playback into a borderless corner window.',
+      image: miniStep1,
+    },
+    {
+      title: 'Large mode with library strip',
+      description:
+        'Resize to the comfortable large layout and pick the next file from the bottom media row without returning to the main window.',
+      image: miniStep2,
+    },
+    {
+      title: 'Shrink out of the way',
+      description:
+        'Drop to the smallest height for a marquee title and tight controls. Stays readable while staying off your workspace.',
+      image: miniStep3,
+    },
+  ]}
+/>
+
+<TutorialSketchHub
+  eyebrow="Advanced Settings"
+  steps={[
+    {
+      title: 'General preferences',
+      description:
+        'Set theme, accent, paths, and startup behavior. Everything persists locally for the main and mini windows.',
+      image: settingsStep1,
+    },
+    {
+      title: 'Download behavior',
+      description:
+        'Parallel jobs, output folders, cookie sync, and automatic scrubber previews. Match yt-dlp options to how you archive.',
+      image: settingsStep2,
+    },
+    {
+      title: 'Playback controls',
+      description:
+        'Auto-advance, prefetch, SponsorBlock tree, and ReplayGain placeholders live together under Playback.',
+      image: settingsStep3,
+    },
+  ]}
+/>
