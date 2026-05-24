@@ -214,8 +214,11 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 **This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see `## Release ritual`). That is the only time the graph JSON / `changes.html` get touched. Keeping this log honest mid-cycle is what makes release night a 10-minute job instead of an archaeology dig.
 
-### v0.1.8 (unreleased)
+### v0.1.9 (unreleased)
 
+### v0.1.8 (shipped)
+
+- **Settings updates**: Downloads tab adds yt-dlp Check & Update (force GitHub check, auto-install user copy); Advanced Check now auto-downloads RuForge when newer. `SettingsView.tsx`, `useYtdlpUpdate.ts`, `ytdlp_update.rs`, `App.tsx`.
 - **Public website download page (fix)**: Hero mark uses Obsidian-style card shimmer + sigmoid-mapped moving logo highlights (not static corner spotlight); clickable card. `DownloadHeroMark.tsx`, `global.css`.
 - **Public website download page (fix)**: Obsidian-style `/download` layout (header clearance, hero spacing, wide rounded CTA, flat App panel with Linux formats on one row); dropped `flushTop` so icon no longer clips nav. `DownloadLanding.tsx`, `download.astro`, `global.css`.
 - **Public website download page**: Obsidian-style `/download` hero (logo, OS-detected CTA, version meta) plus App panel (Windows Universal link, macOS/Linux coming soon in accent yellow, Linux package rows with Simple Icons). macOS uses Lucide monitor icon, not Apple logo. `DownloadLanding.tsx`, `detectPlatform.ts`, `downloadPlatformIcons.ts`, `global.css`.

@@ -246,7 +246,10 @@ pub fn warm_ytdlp_release_cache_spawn(app_handle: AppHandle) {
 }
 
 #[tauri::command]
-pub async fn get_ytdlp_update_status(app: AppHandle) -> Result<YtdlpUpdateStatus, String> {
+pub async fn get_ytdlp_update_status(
+    app: AppHandle,
+    force_refresh: Option<bool>,
+) -> Result<YtdlpUpdateStatus, String> {
     let bundled_line = yt_dlp_version_line(&app, bundled_ytdlp_command).await?;
     let active_line = yt_dlp_version_line(&app, ytdlp_shell_command).await?;
 
@@ -257,8 +260,9 @@ pub async fn get_ytdlp_update_status(app: AppHandle) -> Result<YtdlpUpdateStatus
     }
     .to_string();
 
+    let force = force_refresh == Some(true);
     let mut check_error = None::<String>;
-    let cache = match refresh_ytdlp_release_cache_inner(&app, false).await {
+    let cache = match refresh_ytdlp_release_cache_inner(&app, force).await {
         Ok(c) => c,
         Err(e) => {
             check_error = Some(e.clone());

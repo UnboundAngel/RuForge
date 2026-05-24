@@ -6,10 +6,9 @@ import {
   useMemo,
   type ClipboardEvent,
 } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { fetchVideoInfoWithTimeout } from "../../downloadVideoInfoFetch";
 import { cookieContextFromSettings } from "../../downloadQueue";
-import { listen } from "@tauri-apps/api/event";
+import { useYtdlpUpdate } from "../../hooks/useYtdlpUpdate";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useRuforgeStore } from "../../store/ruforgeStore";
@@ -47,10 +46,6 @@ import {
   sanitizePlaylistFolderName,
   youtubeUrlsMatch,
 } from "../../youtubeUrl";
-import type {
-  YtdlpUpdateDownloadProgressPayload,
-  YtdlpUpdateStatusPayload,
-} from "../../types";
 import { URL_PACER_EASE } from "./downloaderConstants";
 import { urlConflictsWithActiveDownloader } from "./downloaderUrlConflict";
 import {
@@ -145,11 +140,14 @@ export function useDownloaderView({
   const [urlBubbleCopied, setUrlBubbleCopied] = useState(false);
   const urlBubbleCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ytdlpUpdateDismissed, setYtdlpUpdateDismissed] = useState(false);
-  const [ytdlpUpdateStatus, setYtdlpUpdateStatus] = useState<YtdlpUpdateStatusPayload | null>(null);
-  const [ytdlpUpdateLoading, setYtdlpUpdateLoading] = useState(true);
-  const [ytdlpUpdating, setYtdlpUpdating] = useState(false);
-  const [ytdlpUpdatePercent, setYtdlpUpdatePercent] = useState<number | null>(null);
-  const [ytdlpUpdateInvokeError, setYtdlpUpdateInvokeError] = useState<string | null>(null);
+  const {
+    status: ytdlpUpdateStatus,
+    loading: ytdlpUpdateLoading,
+    updating: ytdlpUpdating,
+    percent: ytdlpUpdatePercent,
+    invokeError: ytdlpUpdateInvokeError,
+    downloadUpdate: downloadYtdlpUpdateNow,
+  } = useYtdlpUpdate();
   const showYtdlpStrip = Boolean(
     !ytdlpUpdateDismissed &&
       !ytdlpUpdateLoading &&
@@ -372,49 +370,6 @@ export function useDownloaderView({
   }, [quickEnqueueHint]);
 
   useEffect(() => {
-    let unsub: (() => void) | undefined;
-    let disposed = false;
-    const run = async () => {
-      setYtdlpUpdateLoading(true);
-      try {
-        const status = await invoke<YtdlpUpdateStatusPayload>("get_ytdlp_update_status");
-        setYtdlpUpdateStatus(status);
-      } catch {
-        setYtdlpUpdateStatus(null);
-      } finally {
-        setYtdlpUpdateLoading(false);
-      }
-
-      const un = await listen<YtdlpUpdateDownloadProgressPayload>(
-        "ytdlp-update-download-progress",
-        (event) => {
-          const payload = event.payload;
-          const phase = payload.phase;
-          const p = typeof payload.percent === "number" ? payload.percent : null;
-
-          if (phase === "downloading") setYtdlpUpdatePercent((prev) => p ?? prev);
-          if (phase === "verifying") setYtdlpUpdatePercent(null);
-          if (phase === "done") {
-            setYtdlpUpdating(false);
-            setYtdlpUpdatePercent(100);
-            setTimeout(() => setYtdlpUpdatePercent(null), 900);
-          }
-        },
-      );
-      if (disposed) {
-        un();
-        return;
-      }
-      unsub = un;
-    };
-    void run();
-    return () => {
-      disposed = true;
-      unsub?.();
-    };
-  }, []);
-
-  useEffect(() => {
     if (!url.startsWith("http")) return;
     if (entries.length > 0) return;
     void fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true });
@@ -460,28 +415,6 @@ export function useDownloaderView({
 
   const dismissYtdlpUpdateBanner = useCallback(() => {
     setYtdlpUpdateDismissed(true);
-  }, []);
-
-  const downloadYtdlpUpdateNow = useCallback(async () => {
-    setYtdlpUpdateInvokeError(null);
-    setYtdlpUpdating(true);
-    setYtdlpUpdatePercent(null);
-    try {
-      await invoke("download_ytdlp_update");
-      const status = await invoke<YtdlpUpdateStatusPayload>("get_ytdlp_update_status");
-      setYtdlpUpdateStatus(status);
-    } catch (e) {
-      const msg =
-        typeof e === "string"
-          ? e
-          : e instanceof Error && e.message
-            ? e.message
-            : "Could not download yt-dlp.";
-      setYtdlpUpdateInvokeError(msg);
-      setYtdlpUpdatePercent(null);
-    } finally {
-      setYtdlpUpdating(false);
-    }
   }, []);
 
   const enqueueDownloadOnly = useCallback(

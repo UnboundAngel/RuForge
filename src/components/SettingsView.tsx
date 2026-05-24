@@ -12,6 +12,7 @@ import { useRuforgeStore } from '../store/ruforgeStore';
 import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
 import { SettingsDescription } from './settings/settingsDescription';
 import { RegroupPlaylistModal } from './RegroupPlaylistModal';
+import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 
 interface SettingItemProps {
   icon: React.ElementType;
@@ -374,6 +375,15 @@ export const SettingsView: React.FC = () => {
   const notify = useRuforgeStore((s) => s.notify);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [updateCheckBusy, setUpdateCheckBusy] = useState(false);
+  const {
+    status: ytdlpStatus,
+    loading: ytdlpLoading,
+    checking: ytdlpChecking,
+    updating: ytdlpUpdating,
+    percent: ytdlpPercent,
+    invokeError: ytdlpError,
+    checkAndUpdate: checkAndUpdateYtdlp,
+  } = useYtdlpUpdate(activeTab === 'downloads');
 
   const accentInputRef = useRef<HTMLInputElement>(null);
 
@@ -405,6 +415,50 @@ export const SettingsView: React.FC = () => {
       console.error(e);
       notify("Failed to clear cache.");
     }
+  };
+
+  const ytdlpBusy = ytdlpLoading || ytdlpChecking || ytdlpUpdating;
+
+  const ytdlpVersionDescription = (() => {
+    if (ytdlpLoading && !ytdlpStatus) {
+      return "Checking bundled YouTube downloader version…";
+    }
+    if (ytdlpError && !ytdlpStatus) {
+      return ytdlpError;
+    }
+    if (!ytdlpStatus) {
+      return "Checks GitHub for the latest yt-dlp release and installs it when newer.";
+    }
+    const active = ytdlpStatus.activeVersion;
+    const latest = ytdlpStatus.latestVersion?.trim();
+    const source =
+      ytdlpStatus.activeSource === "userdata" ? "user copy" : "bundled copy";
+    if (ytdlpStatus.updateAvailable && latest) {
+      return `Active ${active} (${source}). Release ${latest} is available on GitHub.`;
+    }
+    if (latest && latest !== active) {
+      return `Active ${active} (${source}). Latest upstream release is ${latest}.`;
+    }
+    if (latest) {
+      return `Active ${active} (${source}). Up to date with release ${latest}.`;
+    }
+    if (ytdlpStatus.checkError) {
+      return `Active ${active} (${source}). Could not reach GitHub: ${ytdlpStatus.checkError}`;
+    }
+    return `Active ${active} (${source}). Checks GitHub for the latest yt-dlp release.`;
+  })();
+
+  const handleYtdlpCheckAndUpdate = async () => {
+    const result = await checkAndUpdateYtdlp();
+    if (!result.ok) {
+      notify(result.error ?? "Could not check yt-dlp version.", "error");
+      return;
+    }
+    if (result.updated) {
+      notify(`yt-dlp updated to ${result.status?.activeVersion ?? "latest"}.`);
+      return;
+    }
+    notify(`yt-dlp is up to date (${result.status?.activeVersion ?? "current"}).`);
   };
 
   return (
@@ -714,6 +768,43 @@ export const SettingsView: React.FC = () => {
                 }
               />
               <FadingDivider />
+              <SettingItem
+                icon={RefreshCw}
+                title="YouTube downloader (yt-dlp)"
+                description={ytdlpVersionDescription}
+                active={!ytdlpBusy}
+                control={
+                  <motion.div layout className="flex flex-col items-end gap-2 min-w-[140px]">
+                    {typeof ytdlpPercent === "number" && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="w-full h-1 rounded-full bg-white/10 overflow-hidden"
+                      >
+                        <div
+                          className="h-full bg-[color:var(--accent)] transition-[width] duration-200"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, ytdlpPercent))}%`,
+                          }}
+                        />
+                      </motion.div>
+                    )}
+                    <button
+                      type="button"
+                      disabled={ytdlpBusy}
+                      onClick={() => void handleYtdlpCheckAndUpdate()}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                    >
+                      {ytdlpUpdating
+                        ? "UPDATING…"
+                        : ytdlpChecking
+                          ? "CHECKING…"
+                          : "CHECK & UPDATE"}
+                    </button>
+                  </motion.div>
+                }
+              />
+              <FadingDivider />
               <SettingItem 
                 icon={FolderOpen}
                 title="Download Path"
@@ -869,8 +960,8 @@ export const SettingsView: React.FC = () => {
                 title="Check for updates"
                 description={
                   appVersion
-                    ? `Installed v${appVersion}. Checks GitHub for a newer RuForge build.`
-                    : "Checks GitHub for a newer RuForge build."
+                    ? `Installed v${appVersion}. Checks GitHub for a newer RuForge build and downloads it when available.`
+                    : "Checks GitHub for a newer RuForge build and downloads it when available."
                 }
                 active={!updateCheckBusy}
                 control={
