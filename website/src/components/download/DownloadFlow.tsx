@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Download } from 'lucide-react';
-import { SITE } from '../../lib/site';
+import DownloadLanding from './DownloadLanding';
 import {
   type ProgressSnapshot,
   fetchInstaller,
@@ -158,26 +157,7 @@ export default function DownloadFlow({
   return (
     <div className="rf-dl-flow">
       {!started && showLandingInitial && (
-        <section className="rf-dl-landing-min">
-          <h1 className="rf-dl-landing-title">Download RuForge</h1>
-          <p className="rf-dl-landing-lead">
-            Windows installer for v{version}. Local library, yt-dlp downloads, chapters, SponsorBlock.
-          </p>
-          <div className="rf-dl-landing-actions">
-            <button type="button" className="rf-dl-btn-primary" onClick={() => beginDownload(false)}>
-              <Download size={18} strokeWidth={1.75} aria-hidden />
-              Download for Windows
-            </button>
-            <a
-              href={SITE.github}
-              className="rf-dl-btn-secondary rf-dl-btn-secondary--link"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              GitHub
-            </a>
-          </div>
-        </section>
+        <DownloadLanding version={version} logoSrc={logoSrc} onDownload={() => beginDownload(false)} />
       )}
 
       <DownloadProgressModal

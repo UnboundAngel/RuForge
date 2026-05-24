@@ -10,7 +10,7 @@ import {
 import { getImage } from 'astro:assets';
 import logoImg from '../assets/ruforge-logo.png';
 
-const logoOptimized = await getImage({ src: logoImg, width: 56, height: 56, format: 'webp' });
+const logoOptimized = await getImage({ src: logoImg, width: 176, height: 176, format: 'webp' });
 
 /** Demo: /download?download=demo — auto-start: /download?start=1 */
 const params = Astro.url.searchParams;
@@ -26,8 +26,7 @@ const directDownloadUrl = directInstallerDownloadUrl(version);
 
 <BaseLayout
   title="Download RuForge"
-  description="Download the RuForge Windows installer."
-  flushTop
+  description="Download RuForge for Windows. macOS and Linux builds are planned."
 >
   <DownloadFlow
     client:load
