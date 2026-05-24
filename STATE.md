@@ -48,7 +48,7 @@ Fixes:
 - Mini player large mode: video no longer washed by stacked blur.
 - Playlist regroup matches by id, url, or title across internal and custom roots.
 
-**0.1.9 unreleased:** (empty cycle; see AGENTS.md Shipped log)
+**0.1.9 unreleased:** Downloader cookie fixes (None default, metadata retry without cookies on export failure, clearer errors). App and website icons use `public/RuForgeLogo.png`. `/download` hero loads SVGO-compressed `RuForgeLogo.svg` at runtime (not inlined); pointer-driven blade gradients. (see AGENTS.md Shipped log)
 
 ## Open P0 (blocks release)
 

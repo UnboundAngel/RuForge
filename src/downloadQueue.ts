@@ -9,7 +9,7 @@ import {
 import { normalizeDurationSeconds } from "./components/downloader/downloaderFormat";
 import type { PlaylistItem, ProgressPayload, VideoInfo } from "./types";
 import type { RuforgeSettings } from "./store/types";
-import { effectiveDownloadSubLangs } from "./store/types";
+import { effectiveDownloadSubLangs, normalizeBrowserContext } from "./store/types";
 
 /** Snapshot from `get_video_info` at enqueue time; drives downloader hero while this job is active. */
 export interface DownloadJobMediaSnapshot {
@@ -206,11 +206,10 @@ export function patchDownloadJobOptionsForAudio(
 export function cookieContextFromSettings(
   settings: Pick<RuforgeSettings, "browserContext" | "cookieFile">,
 ): Pick<DownloadJobOptions, "browserCookies" | "cookieFile"> {
+  const ctx = normalizeBrowserContext(settings.browserContext);
   return {
-    browserCookies:
-      settings.browserContext === "custom" ? "" : settings.browserContext,
-    cookieFile:
-      settings.browserContext === "custom" ? settings.cookieFile : "",
+    browserCookies: ctx === "custom" ? "" : ctx,
+    cookieFile: ctx === "custom" ? settings.cookieFile : "",
   };
 }
 

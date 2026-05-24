@@ -216,6 +216,11 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.9 (unreleased)
 
+- **Downloader cookies (fix)**: Default browser context is None (not hidden Chrome); legacy `chrome` migrates on settings load; metadata fetch retries without cookies when export fails; humanized errors name Internal vs external browser; Rust ignores legacy `chrome` in yt-dlp args. `types.ts`, `downloadQueue.ts`, `downloader.rs`, `DownloaderView.tsx`, `useDownloaderView.ts`.
+- **Public website download hero (fix)**: Restored uncorrupted `RuForgeLogo.svg` export (no SVGO; radial gradients intact) at `website/public/download-hero-logo.svg`; gradient config synced to re-export transforms. `downloadHeroLogoLight.ts`.
+- **Public website download hero**: Hero SVG from `public/RuForgeLogo.svg` (SVGO ~55% smaller), fetched at runtime instead of inlined in HTML; gradient IDs remapped for new export. `DownloadHeroMark.tsx`, `downloadHeroLogoLight.ts`, `website/public/download-hero-logo.svg`.
+- **Public website download hero**: Inline Figma SVG (`download-hero-logo.svg`) with pointer-driven `gradientTransform` on blade + text radial fills (Obsidian-style); dropped PNG mask overlay and CSS brown plate. `DownloadHeroMark.tsx`, `downloadHeroLogoLight.ts`, `download.astro`, `global.css`.
+
 ### v0.1.8 (shipped)
 
 - **Settings updates**: Downloads tab adds yt-dlp Check & Update (force GitHub check, auto-install user copy); Advanced Check now auto-downloads RuForge when newer. `SettingsView.tsx`, `useYtdlpUpdate.ts`, `ytdlp_update.rs`, `App.tsx`.

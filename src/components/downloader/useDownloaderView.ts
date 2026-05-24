@@ -12,6 +12,7 @@ import { useYtdlpUpdate } from "../../hooks/useYtdlpUpdate";
 import { open } from "@tauri-apps/plugin-dialog";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useRuforgeStore } from "../../store/ruforgeStore";
+import { browserContextForDownloaderUi } from "../../store/types";
 import {
   buildDownloadJobOptions,
   downloadJobMediaNeedsHydration,
@@ -1281,5 +1282,6 @@ export function useDownloaderView({
     ytdlpUpdateInvokeError,
     dismissYtdlpUpdateBanner,
     downloadYtdlpUpdateNow,
+    browserContextUi: browserContextForDownloaderUi(settings.browserContext),
   };
 }
