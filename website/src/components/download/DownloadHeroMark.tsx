@@ -1,7 +1,17 @@
-import { useCallback, useEffect, useRef, type CSSProperties, type PointerEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react';
+import { applyDownloadHeroLogoLight } from '../../lib/downloadHeroLogoLight';
+
+const HERO_LOGO_SVG_URL = '/download-hero-logo.svg';
 
 type DownloadHeroMarkProps = {
-  logoSrc: string;
   onActivate?: () => void;
 };
 
@@ -30,21 +40,36 @@ const CENTER_STYLE = {
   '--mouse-y': '50%',
 } as CSSProperties;
 
-export default function DownloadHeroMark({ logoSrc, onActivate }: DownloadHeroMarkProps) {
-  const cardRef = useRef<HTMLButtonElement>(null);
-  const interactive = Boolean(onActivate);
+export default function DownloadHeroMark({ onActivate }: DownloadHeroMarkProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const logoWrapRef = useRef<HTMLDivElement>(null);
+  const canDownload = Boolean(onActivate);
   const trackingRef = useRef(false);
+  const reducedMotionRef = useRef(false);
+  const [heroLogoSvg, setHeroLogoSvg] = useState<string | null>(null);
 
-  const applyPointer = useCallback((clientX: number, clientY: number) => {
-    const el = cardRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const { lx, ly, mx, my } = lightFromPointer(clientX, clientY, rect);
-    el.style.setProperty('--spot-lx', String(lx));
-    el.style.setProperty('--spot-ly', String(ly));
-    el.style.setProperty('--mouse-x', mx);
-    el.style.setProperty('--mouse-y', my);
+  const applyLogoLight = useCallback((lx: number, ly: number) => {
+    const svg = logoWrapRef.current?.querySelector('svg');
+    if (!svg) return;
+    applyDownloadHeroLogoLight(svg, lx, ly);
   }, []);
+
+  const applyPointer = useCallback(
+    (clientX: number, clientY: number) => {
+      const el = cardRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const { lx, ly, mx, my } = lightFromPointer(clientX, clientY, rect);
+      el.style.setProperty('--spot-lx', String(lx));
+      el.style.setProperty('--spot-ly', String(ly));
+      el.style.setProperty('--mouse-x', mx);
+      el.style.setProperty('--mouse-y', my);
+      if (!reducedMotionRef.current) {
+        applyLogoLight(lx, ly);
+      }
+    },
+    [applyLogoLight],
+  );
 
   const resetPointer = useCallback(() => {
     const el = cardRef.current;
@@ -53,17 +78,18 @@ export default function DownloadHeroMark({ logoSrc, onActivate }: DownloadHeroMa
     el.style.setProperty('--spot-ly', '0');
     el.style.setProperty('--mouse-x', '50%');
     el.style.setProperty('--mouse-y', '50%');
-  }, []);
+    applyLogoLight(0, 0);
+  }, [applyLogoLight]);
 
   const onCardPointerMove = useCallback(
-    (e: PointerEvent<HTMLButtonElement>) => {
+    (e: PointerEvent<HTMLDivElement>) => {
       applyPointer(e.clientX, e.clientY);
     },
     [applyPointer],
   );
 
   const onCardPointerEnter = useCallback(
-    (e: PointerEvent<HTMLButtonElement>) => {
+    (e: PointerEvent<HTMLDivElement>) => {
       trackingRef.current = true;
       applyPointer(e.clientX, e.clientY);
     },
@@ -76,10 +102,30 @@ export default function DownloadHeroMark({ logoSrc, onActivate }: DownloadHeroMa
   }, [resetPointer]);
 
   useEffect(() => {
-    if (!interactive) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced) return;
+    let cancelled = false;
+    fetch(HERO_LOGO_SVG_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.text();
+      })
+      .then((markup) => {
+        if (!cancelled) setHeroLogoSvg(markup);
+      })
+      .catch(() => {
+        if (!cancelled) setHeroLogoSvg(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
+  useEffect(() => {
+    if (!heroLogoSvg) return;
+    reducedMotionRef.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    applyLogoLight(0, 0);
+  }, [applyLogoLight, heroLogoSvg]);
+
+  useEffect(() => {
     const onDocumentMove = (e: MouseEvent) => {
       if (!trackingRef.current) return;
       applyPointer(e.clientX, e.clientY);
@@ -87,45 +133,50 @@ export default function DownloadHeroMark({ logoSrc, onActivate }: DownloadHeroMa
 
     document.addEventListener('mousemove', onDocumentMove, { passive: true });
     return () => document.removeEventListener('mousemove', onDocumentMove);
-  }, [interactive, applyPointer]);
+  }, [applyPointer]);
 
-  const maskStyle = {
-    WebkitMaskImage: `url(${logoSrc})`,
-    maskImage: `url(${logoSrc})`,
-  } as CSSProperties;
+  const onClick = useCallback(() => {
+    if (canDownload && onActivate) onActivate();
+  }, [canDownload, onActivate]);
+
+  const onKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (!canDownload || !onActivate) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onActivate();
+      }
+    },
+    [canDownload, onActivate],
+  );
 
   return (
     <div className="rf-dl-hero-mark">
-      <button
+      <div
         ref={cardRef}
-        type="button"
-        className="rf-dl-hero-mark-btn rf-dl-logo-shimmer"
-        onClick={onActivate}
-        onPointerMove={interactive ? onCardPointerMove : undefined}
-        onPointerEnter={interactive ? onCardPointerEnter : undefined}
-        onPointerLeave={interactive ? onCardPointerLeave : undefined}
-        disabled={!interactive}
-        aria-label={interactive ? 'Download RuForge' : 'RuForge app icon'}
+        role={canDownload ? 'button' : 'img'}
+        tabIndex={canDownload ? 0 : -1}
+        aria-disabled={canDownload ? undefined : true}
+        aria-label={canDownload ? 'Download RuForge' : 'RuForge app icon'}
+        className={`rf-dl-hero-mark-btn rf-dl-logo-shimmer${canDownload ? '' : ' rf-dl-hero-mark-btn--static'}`}
         style={CENTER_STYLE}
+        onClick={onClick}
+        onKeyDown={onKeyDown}
+        onPointerMove={onCardPointerMove}
+        onPointerEnter={onCardPointerEnter}
+        onPointerLeave={onCardPointerLeave}
       >
         <div className="rf-dl-hero-mark-card">
           <span className="rf-dl-hero-mark-noise" aria-hidden />
           <div className="rf-dl-hero-mark-stack">
-            <span className="rf-dl-hero-mark-plate" aria-hidden />
-            <div className="rf-dl-hero-mark-logo-wrap">
-              <div className="rf-dl-hero-mark-lit" style={maskStyle} aria-hidden />
-              <img
-                src={logoSrc}
-                alt=""
-                width={168}
-                height={168}
-                className="rf-dl-hero-mark-logo"
-                decoding="async"
-              />
-            </div>
+            <div
+              ref={logoWrapRef}
+              className="rf-dl-hero-mark-logo-wrap rf-dl-hero-mark-logo-svg"
+              {...(heroLogoSvg ? { dangerouslySetInnerHTML: { __html: heroLogoSvg } } : {})}
+            />
           </div>
         </div>
-      </button>
+      </div>
     </div>
   );
 }

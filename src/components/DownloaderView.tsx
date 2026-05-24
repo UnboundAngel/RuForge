@@ -520,11 +520,11 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                     className="flex items-center gap-2 group transition-all duration-300"
                   >
                     <div
-                      className={`w-1 h-1 rounded-full transition-all duration-300 ${d.settings.browserContext === opt.value ? "bg-[color:var(--accent)] scale-150" : "bg-stone-800 group-hover:bg-stone-600"}`}
+                      className={`w-1 h-1 rounded-full transition-all duration-300 ${d.browserContextUi === opt.value ? "bg-[color:var(--accent)] scale-150" : "bg-stone-800 group-hover:bg-stone-600"}`}
                     />
                     <span
                       className={`text-[8px] font-black uppercase tracking-[0.3em] ${
-                        d.settings.browserContext === opt.value
+                        d.browserContextUi === opt.value
                           ? "text-[color:var(--accent)]"
                           : "text-stone-700 group-hover:text-stone-500"
                       }`}
@@ -535,7 +535,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                 ))}
               </div>
               <AnimatePresence>
-                {!d.settings.browserContext && (
+                {!d.browserContextUi && (
                   <motion.div
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -544,7 +544,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   >
                     <Info size={10} className="text-[color:var(--accent)] opacity-40" />
                     <span className="text-[7px] font-black text-[color:var(--accent)] opacity-30 uppercase tracking-[0.2em]">
-                      Select a browser if you encounter errors
+                      None: public videos. Pick Internal or Firefox for signed-in content.
                     </span>
                   </motion.div>
                 )}

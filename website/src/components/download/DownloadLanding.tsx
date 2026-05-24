@@ -15,7 +15,6 @@ const COMING_SOON = 'Coming soon';
 
 type DownloadLandingProps = {
   version: string;
-  logoSrc: string;
   onDownload: () => void;
 };
 
@@ -26,7 +25,10 @@ function HeroPlatformIcon({ platform }: { platform: DetectedPlatform }) {
   return <PlatformIcon icon={platform === 'linux' ? 'linux' : 'windows'} size={18} />;
 }
 
-export default function DownloadLanding({ version, logoSrc, onDownload }: DownloadLandingProps) {
+export default function DownloadLanding({
+  version,
+  onDownload,
+}: DownloadLandingProps) {
   const [platform, setPlatform] = useState<DetectedPlatform>('windows');
   const windowsReady = platform === 'windows';
 
@@ -37,7 +39,9 @@ export default function DownloadLanding({ version, logoSrc, onDownload }: Downlo
   return (
     <div className="rf-dl-page">
       <section className="rf-dl-hero" aria-labelledby="rf-dl-hero-title">
-        <DownloadHeroMark logoSrc={logoSrc} onActivate={windowsReady ? onDownload : undefined} />
+        <DownloadHeroMark
+          onActivate={windowsReady ? onDownload : undefined}
+        />
 
         <h1 id="rf-dl-hero-title" className="rf-dl-hero-title">
           {SITE.name}

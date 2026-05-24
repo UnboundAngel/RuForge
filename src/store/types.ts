@@ -119,7 +119,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   gridDensity: "Default",
   hardwareAcceleration: true,
   storageLimitGB: 50,
-  browserContext: "chrome",
+  browserContext: "",
   cookieFile: "",
   audioAutoAdvanceFolder: true,
   audioPrefetchNext: true,
@@ -135,6 +135,18 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   sponsorBlockCategoryStats: defaultCategoryStats(),
 };
 
+/** Hidden legacy default was `"chrome"` (not in downloader UI). Treat as no cookie source. */
+export function normalizeBrowserContext(raw: string | undefined | null): string {
+  const v = (raw ?? "").trim();
+  if (!v || v === "chrome") return "";
+  return v;
+}
+
+/** Value for downloader browser-strip selection (None when unset or legacy chrome). */
+export function browserContextForDownloaderUi(raw: string | undefined | null): string {
+  return normalizeBrowserContext(raw);
+}
+
 export function loadMergedSettings(): RuforgeSettings {
   try {
     const saved = localStorage.getItem("ruforge-settings");
@@ -144,6 +156,7 @@ export function loadMergedSettings(): RuforgeSettings {
     const merged = { ...DEFAULT_SETTINGS, ...(parsed as Partial<RuforgeSettings>) };
     return {
       ...merged,
+      browserContext: normalizeBrowserContext(merged.browserContext),
       maxConcurrentDownloads: clampMaxConcurrentDownloads(merged.maxConcurrentDownloads),
       showDebuggingSettings: merged.showDebuggingSettings === true,
       sponsorBlockEnabled: merged.sponsorBlockEnabled === true,

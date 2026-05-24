@@ -722,6 +722,92 @@ fn ytdlp_simulate_format_eff(
         })
 }
 
+fn cookie_browser_label(browser: &str) -> &'static str {
+    match browser {
+        "ruforge" => "RuForge Internal browser (Explorer)",
+        "firefox" => "Firefox",
+        "edge" => "Microsoft Edge",
+        "chrome" => "Google Chrome",
+        "brave" => "Brave",
+        "safari" => "Safari",
+        _ => "browser",
+    }
+}
+
+fn ytdlp_stderr_is_cookie_export_failure(err: &str) -> bool {
+    let lower = err.to_ascii_lowercase();
+    lower.contains("cookie database")
+        || lower.contains("export cookies")
+        || lower.contains("failed to decrypt with dpapi")
+        || lower.contains("could not copy chrome")
+        || (lower.contains("permission denied") && lower.contains("cookie"))
+}
+
+fn ytdlp_browser_cookie_arg(app: &AppHandle, browser: &str) -> Result<String, String> {
+    if browser == "ruforge" {
+        let data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| e.to_string())?
+            .join("explorer-data");
+        let profile_dir = data_dir.join("EBWebView").join("Default");
+        Ok(format!("chrome:{}", profile_dir.to_string_lossy()))
+    } else {
+        Ok(browser.to_string())
+    }
+}
+
+fn ytdlp_push_cookie_cli_args(
+    app: &AppHandle,
+    args: &mut Vec<String>,
+    cookie_file: Option<&str>,
+    browser_cookies: Option<&str>,
+) -> Result<(), String> {
+    if let Some(file) = cookie_file.filter(|s| !s.is_empty()) {
+        args.push("--cookies".into());
+        args.push(file.to_string());
+        return Ok(());
+    }
+    if let Some(browser) = browser_cookies.filter(|s| !s.is_empty() && *s != "chrome") {
+        args.push("--cookies-from-browser".into());
+        args.push(ytdlp_browser_cookie_arg(app, browser)?);
+    }
+    Ok(())
+}
+
+fn humanize_ytdlp_cookie_error(_err: &str, browser: Option<&str>) -> String {
+    let source = browser.map(cookie_browser_label).unwrap_or("browser");
+    format!(
+        "Could not read cookies from {}. For public videos choose None. For signed-in content try Firefox, export a cookies.txt file, or restart RuForge before using Internal.",
+        source
+    )
+}
+
+fn format_download_job_failure(
+    error_log: &str,
+    code: Option<i32>,
+    browser_cookies: Option<&str>,
+) -> String {
+    if ytdlp_stderr_is_cookie_export_failure(error_log) {
+        return humanize_ytdlp_cookie_error(error_log, browser_cookies);
+    }
+    let trimmed = error_log.trim();
+    if trimmed.is_empty() {
+        format!("Download failed (exit code {:?})", code)
+    } else {
+        format!("Download failed (code {:?}): {}", code, trimmed)
+    }
+}
+
+fn get_video_info_simulate_failure_message(err: &str) -> String {
+    let trimmed = err.trim();
+    if trimmed.is_empty() {
+        "yt-dlp metadata simulate failed".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 async fn yt_dlp_single_json_simulate(
     app: &AppHandle,
     url: &str,
@@ -734,28 +820,12 @@ async fn yt_dlp_single_json_simulate(
         args.push(f);
     }
     if let Some(opts) = cookie_opts {
-        if let Some(cookie_file) = opts.cookie_file.as_ref() {
-            if !cookie_file.is_empty() {
-                args.push("--cookies".into());
-                args.push(cookie_file.clone());
-            }
-        } else if let Some(browser) = opts.browser_cookies.as_ref() {
-            if !browser.is_empty() {
-                let browser_arg = if browser == "ruforge" {
-                    let data_dir = app
-                        .path()
-                        .app_data_dir()
-                        .map_err(|e| e.to_string())?
-                        .join("explorer-data");
-                    let profile_dir = data_dir.join("EBWebView").join("Default");
-                    format!("chrome:{}", profile_dir.to_string_lossy())
-                } else {
-                    browser.clone()
-                };
-                args.push("--cookies-from-browser".into());
-                args.push(browser_arg);
-            }
-        }
+        ytdlp_push_cookie_cli_args(
+            app,
+            &mut args,
+            opts.cookie_file.as_deref(),
+            opts.browser_cookies.as_deref(),
+        )?;
     }
     args.push(url.to_string());
 
@@ -771,6 +841,40 @@ async fn yt_dlp_single_json_simulate(
         return Err(err_msg);
     }
     serde_json::from_slice(&output.stdout).map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))
+}
+
+async fn yt_dlp_single_json_simulate_resilient(
+    app: &AppHandle,
+    url: &str,
+    cookie_opts: Option<&DownloadOptions>,
+    format: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    match yt_dlp_single_json_simulate(app, url, cookie_opts, format).await {
+        Ok(json) => Ok(json),
+        Err(err) if cookie_opts.is_some() && ytdlp_stderr_is_cookie_export_failure(&err) => {
+            let label = cookie_opts
+                .and_then(|o| o.browser_cookies.as_deref())
+                .map(cookie_browser_label)
+                .unwrap_or("browser");
+            log::warn!(
+                "[RuForge] yt-dlp could not read {} cookies; retrying metadata without cookies",
+                label
+            );
+            match yt_dlp_single_json_simulate(app, url, None, format).await {
+                Ok(json) => Ok(json),
+                Err(retry_err) => Err(format!(
+                    "{} Metadata error: {}",
+                    humanize_ytdlp_cookie_error(&err, cookie_opts.and_then(|o| o.browser_cookies.as_deref())),
+                    get_video_info_simulate_failure_message(&retry_err)
+                )),
+            }
+        }
+        Err(err) if cookie_opts.is_some() => Err(humanize_ytdlp_cookie_error(
+            &err,
+            cookie_opts.and_then(|o| o.browser_cookies.as_deref()),
+        )),
+        Err(err) => Err(get_video_info_simulate_failure_message(&err)),
+    }
 }
 
 #[derive(Default, Clone)]
@@ -971,7 +1075,8 @@ fn video_info_cookie_probe(
     browser_cookies: Option<String>,
     cookie_file: Option<String>,
 ) -> Option<DownloadOptions> {
-    let browser = browser_cookies.filter(|s| !s.is_empty());
+    let browser = browser_cookies
+        .filter(|s| !s.is_empty() && s != "chrome");
     let file = cookie_file.filter(|s| !s.is_empty());
     if browser.is_none() && file.is_none() {
         return None;
@@ -989,15 +1094,6 @@ fn video_info_cookie_probe(
         playlist_output_folder: None,
         playlist_index: None,
     })
-}
-
-fn get_video_info_simulate_failure_message(err: &str) -> String {
-    let trimmed = err.trim();
-    if trimmed.is_empty() {
-        "yt-dlp metadata simulate failed".to_string()
-    } else {
-        trimmed.to_string()
-    }
 }
 
 #[tauri::command]
@@ -1018,8 +1114,8 @@ pub async fn get_video_info(
     let cookie_ref = cookie_probe.as_ref();
 
     let (json_video_res, json_audio_res) = tokio::join!(
-        yt_dlp_single_json_simulate(&app, &url, cookie_ref, Some(video_fmt_ref)),
-        yt_dlp_single_json_simulate(&app, &url, cookie_ref, Some(AUDIO_SIMULATE_FMT)),
+        yt_dlp_single_json_simulate_resilient(&app, &url, cookie_ref, Some(video_fmt_ref)),
+        yt_dlp_single_json_simulate_resilient(&app, &url, cookie_ref, Some(AUDIO_SIMULATE_FMT)),
     );
 
     let json_video = json_video_res.as_ref().ok();
@@ -1082,29 +1178,12 @@ fn push_ytdlp_download_cookie_args(
     args: &mut Vec<String>,
     options: &DownloadOptions,
 ) -> Result<(), String> {
-    if let Some(cookie_file) = options.cookie_file.as_ref() {
-        if !cookie_file.is_empty() {
-            args.push("--cookies".into());
-            args.push(cookie_file.clone());
-        }
-    } else if let Some(browser) = options.browser_cookies.as_ref() {
-        if !browser.is_empty() {
-            if browser == "ruforge" {
-                let data_dir = app
-                    .path()
-                    .app_data_dir()
-                    .map_err(|e| e.to_string())?
-                    .join("explorer-data");
-                let profile_dir = data_dir.join("EBWebView").join("Default");
-                args.push("--cookies-from-browser".into());
-                args.push(format!("chrome:{}", profile_dir.to_string_lossy()));
-            } else {
-                args.push("--cookies-from-browser".into());
-                args.push(browser.clone());
-            }
-        }
-    }
-    Ok(())
+    ytdlp_push_cookie_cli_args(
+        app,
+        args,
+        options.cookie_file.as_deref(),
+        options.browser_cookies.as_deref(),
+    )
 }
 
 fn yt_dlp_effective_filename_template(
@@ -1353,7 +1432,7 @@ pub async fn start_download_job(
 ) -> Result<(), String> {
     manager.try_claim_active_job(&job_id)?;
 
-    let probe = match yt_dlp_single_json_simulate(&app, &url, Some(&options), None).await {
+    let probe = match yt_dlp_single_json_simulate_resilient(&app, &url, Some(&options), None).await {
         Ok(p) => p,
         Err(e) => {
             manager.release_claim_if_pending(&job_id)?;
@@ -1411,6 +1490,7 @@ pub async fn start_download_job(
             &filename_template_eff,
         );
         let auto_scrub = options.auto_scrub_previews && !options.audio_only;
+        let browser_cookies_for_errors = options.browser_cookies.clone();
         let scrub_spawned = Arc::new(AtomicBool::new(false));
         let mut progress_extras = PlaylistDownloadProgressExtras::default();
         let mut error_log = String::new();
@@ -1567,8 +1647,11 @@ pub async fn start_download_job(
                         return;
                     }
 
-                    let err =
-                        format!("Download failed (code {:?}): {}", payload.code, error_log);
+                    let err = format_download_job_failure(
+                        &error_log,
+                        payload.code,
+                        browser_cookies_for_errors.as_deref(),
+                    );
                     log::error!("[RuForge] job {} failed: {}", job_id, err);
                     let _ = app.emit(
                         "download-job-finished",
@@ -1632,4 +1715,29 @@ pub async fn stop_all_active_download_jobs(
     manager: State<'_, DownloadJobManager>,
 ) -> Result<u32, String> {
     manager.stop_all_active_downloads()
+}
+
+#[cfg(test)]
+mod cookie_error_tests {
+    use super::*;
+
+    #[test]
+    fn detects_chrome_cookie_database_errors() {
+        assert!(ytdlp_stderr_is_cookie_export_failure(
+            "ERROR: Could not copy Chrome cookie database."
+        ));
+        assert!(ytdlp_stderr_is_cookie_export_failure(
+            "ERROR: Failed to decrypt with DPAPI. See https://github.com/yt-dlp/yt-dlp/issues/10927"
+        ));
+        assert!(!ytdlp_stderr_is_cookie_export_failure(
+            "ERROR: Video unavailable"
+        ));
+    }
+
+    #[test]
+    fn humanizes_ruforge_cookie_source() {
+        let msg = humanize_ytdlp_cookie_error("cookie database", Some("ruforge"));
+        assert!(msg.contains("RuForge Internal browser"));
+        assert!(msg.contains("None"));
+    }
 }

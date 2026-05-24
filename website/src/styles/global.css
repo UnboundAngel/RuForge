@@ -806,7 +806,7 @@
     cursor: pointer;
   }
 
-  .rf-dl-hero-mark-btn:disabled {
+  .rf-dl-hero-mark-btn--static {
     cursor: default;
   }
 
@@ -867,18 +867,18 @@
     mix-blend-mode: normal;
   }
 
-  .rf-dl-logo-shimmer:hover:not(:disabled) .rf-dl-hero-mark-card::before {
+  .rf-dl-logo-shimmer:hover .rf-dl-hero-mark-card::before {
     opacity: 1;
   }
 
-  .rf-dl-logo-shimmer:hover:not(:disabled) .rf-dl-hero-mark-card {
+  .rf-dl-logo-shimmer:hover .rf-dl-hero-mark-card {
     transform: scale(1.04);
     box-shadow:
       inset 0 1px 1px 1px rgb(255 255 255 / 0.05),
       0 1.35rem 2.25rem 0.65rem rgb(0 0 0 / 0.28);
   }
 
-  .rf-dl-logo-shimmer:hover:not(:disabled) .rf-dl-hero-mark-card::after {
+  .rf-dl-logo-shimmer:hover .rf-dl-hero-mark-card::after {
     width: 55%;
     height: 40%;
     background: rgb(120 40 30 / 0.45);
@@ -912,46 +912,16 @@
     height: 100%;
   }
 
-  /* Facet-like highlights clipped to logo shape (PNG stand-in for Obsidian SVG gradients) */
-  .rf-dl-hero-mark-lit {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-    -webkit-mask-size: contain;
-    mask-size: contain;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-    mask-position: center;
-    background:
-      radial-gradient(
-        3.25rem circle at calc(50% + var(--spot-lx) * 0.45%) calc(50% + var(--spot-ly) * 0.4%),
-        rgb(255 255 255 / 0.55) 0%,
-        transparent 72%
-      ),
-      radial-gradient(
-        2.75rem circle at calc(50% - var(--spot-lx) * 0.35%) calc(50% - var(--spot-ly) * 0.32%),
-        rgb(255 240 210 / 0.28) 0%,
-        transparent 70%
-      ),
-      radial-gradient(
-        2rem circle at calc(50% + var(--spot-lx) * 0.2%) calc(50% - var(--spot-ly) * 0.55%),
-        rgb(255 255 255 / 0.18) 0%,
-        transparent 68%
-      );
-    mix-blend-mode: soft-light;
-    transition: background-position 0.08s linear;
+  .rf-dl-hero-mark-logo-svg {
+    width: 100%;
+    height: 100%;
   }
 
-  .rf-dl-hero-mark-plate {
-    position: absolute;
-    z-index: 0;
-    /* Sized to fill the logo’s transparent download cutout, not just the arrow */
-    width: 3.5rem;
-    height: 4rem;
-    border-radius: 0.35rem;
-    background: var(--rf-dl-mark-plate);
+  .rf-dl-hero-mark-logo-svg svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 0.2rem 0.45rem rgb(0 0 0 / 0.38));
   }
 
   .rf-dl-hero-mark-logo {
@@ -1166,10 +1136,6 @@
 
     .rf-dl-logo-shimmer .rf-dl-hero-mark-card::before {
       opacity: 0;
-    }
-
-    .rf-dl-hero-mark-lit {
-      background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.2), transparent 65%);
     }
   }
 

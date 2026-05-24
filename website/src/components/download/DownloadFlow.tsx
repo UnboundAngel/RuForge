@@ -157,7 +157,10 @@ export default function DownloadFlow({
   return (
     <div className="rf-dl-flow">
       {!started && showLandingInitial && (
-        <DownloadLanding version={version} logoSrc={logoSrc} onDownload={() => beginDownload(false)} />
+        <DownloadLanding
+          version={version}
+          onDownload={() => beginDownload(false)}
+        />
       )}
 
       <DownloadProgressModal
