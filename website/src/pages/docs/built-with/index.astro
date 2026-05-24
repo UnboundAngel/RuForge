@@ -1,0 +1,13 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import BuiltWithIndexTemplate from '../../../components/BuiltWithIndexTemplate.astro';
+import { getBuiltWithIndexNavContext } from '../../../lib/builtWithPages';
+---
+
+<BaseLayout
+  title="Built with"
+  description="How RuForge uses YouTube, yt-dlp, Tauri, React, and the rest of the stack."
+  builtWithNav={getBuiltWithIndexNavContext()}
+>
+  <BuiltWithIndexTemplate />
+</BaseLayout>

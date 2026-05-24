@@ -819,7 +819,7 @@ export const DownloadJobQueuePanel = () => {
               </p>
             </div>
 
-            <ul className="max-h-[300px] sm:max-h-[380px] overflow-y-auto overflow-x-visible scrollbar-none space-y-2 pr-0.5">
+            <ul className="max-h-[300px] sm:max-h-[380px] overflow-y-auto overflow-x-visible space-y-2 pr-0.5">
               {jobs.map((job, index) => (
                 <DownloadJobRow
                   key={job.id}

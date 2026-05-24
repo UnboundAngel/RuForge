@@ -1,0 +1,64 @@
+---
+/** Registers built-with directional view transitions (inline, survives ClientRouter). */
+---
+
+<script is:inline>
+  (function () {
+    function readNav(doc) {
+      const kind = doc.documentElement.getAttribute('data-built-with-nav');
+      const raw = doc.documentElement.getAttribute('data-built-with-index');
+      const index =
+        raw === null || raw === '' || Number.isNaN(Number(raw)) ? null : Number(raw);
+      return { kind, index };
+    }
+
+    function computeDirection(oldDoc, newDoc) {
+      const oldNav = readNav(oldDoc);
+      const newNav = readNav(newDoc);
+      const onBuiltWith =
+        oldNav.kind === 'index' ||
+        oldNav.kind === 'detail' ||
+        newNav.kind === 'index' ||
+        newNav.kind === 'detail';
+      if (!onBuiltWith) return 'none';
+
+      if (oldNav.kind === 'index' && newNav.kind === 'detail') return 'forward';
+      if (oldNav.kind === 'detail' && newNav.kind === 'index') return 'back';
+
+      if (oldNav.kind === 'detail' && newNav.kind === 'detail') {
+        if (oldNav.index === null || newNav.index === null) return 'none';
+        if (newNav.index > oldNav.index) return 'forward';
+        if (newNav.index < oldNav.index) return 'back';
+      }
+
+      return 'none';
+    }
+
+    function syncPersistedSidebar() {
+      const slug = document.documentElement.getAttribute('data-built-with-active-slug');
+      const aside = document.querySelector('[data-built-with-sidebar]');
+      if (!aside || !slug) return;
+      aside.querySelectorAll('[data-built-with-slug]').forEach((el) => {
+        const link = el;
+        const isActive = link.getAttribute('data-built-with-slug') === slug;
+        link.classList.toggle('is-active', isActive);
+        if (isActive) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+      });
+    }
+
+    document.addEventListener('astro:before-swap', (event) => {
+      const direction = computeDirection(document, event.newDocument);
+      document.documentElement.setAttribute('data-bw-direction', direction);
+      event.newDocument.documentElement.setAttribute('data-bw-direction', direction);
+    });
+
+    document.addEventListener('astro:after-swap', () => {
+      const nav = document.documentElement.getAttribute('data-built-with-nav');
+      if (nav === 'index' || nav === 'detail') {
+        window.scrollTo(0, 0);
+      }
+      syncPersistedSidebar();
+    });
+  })();
+</script>

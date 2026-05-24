@@ -1,0 +1,152 @@
+---
+import PageHeader from './PageHeader.astro';
+import Icon from './Icon.astro';
+import BuiltWithTechIcon from './BuiltWithTechIcon.astro';
+import InlineCodeText from './InlineCodeText.astro';
+import CodeSnippetPanel from './CodeSnippetPanel';
+import type { BuiltWithPage } from '../lib/builtWithPages';
+import {
+  builtWithHref,
+  getBuiltWithNavItems,
+} from '../lib/builtWithPages';
+import { SITE } from '../lib/site';
+import { readCodeSnippet } from '../lib/readCodeSnippet';
+import { highlightCode } from '../lib/highlightCode';
+
+interface Props {
+  page: BuiltWithPage;
+}
+
+const { page } = Astro.props;
+const navItems = getBuiltWithNavItems();
+
+const resolvedSnippets = await Promise.all(
+  (page.codeExamples ?? []).map(async (example) => {
+    const snippet = readCodeSnippet(example);
+    const html = await highlightCode(snippet.code, snippet.language);
+    return { ...snippet, html };
+  }),
+);
+---
+
+<article class="rf-container space-y-10 pb-6">
+  <div class="space-y-10" transition:name="built-with-chrome">
+    <nav class="text-xs text-rf-text-muted" aria-label="Breadcrumb">
+      <ol class="flex flex-wrap items-center gap-2">
+        <li><a href="/" class="no-underline hover:text-rf-text">Home</a></li>
+        <li aria-hidden="true">/</li>
+        <li><a href="/docs" class="no-underline hover:text-rf-text">Docs</a></li>
+        <li aria-hidden="true">/</li>
+        <li>
+          <a href="/docs/built-with" class="no-underline hover:text-rf-text">Built with</a>
+        </li>
+        <li aria-hidden="true">/</li>
+        <li class="text-rf-text">{page.title}</li>
+      </ol>
+    </nav>
+
+    <PageHeader title={page.title}>
+      <BuiltWithTechIcon slot="icon" icon={page.icon} size="lg" ariaLabel={page.title} />
+      <p slot="description" class="max-w-2xl text-base leading-relaxed text-rf-text-muted">
+        <InlineCodeText text={page.lead} />
+      </p>
+    </PageHeader>
+  </div>
+
+  <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_16rem]">
+    <div class="space-y-6" transition:name="built-with-main" transition:animate="none">
+      {
+        page.paragraphs.map((paragraph) => (
+          <p class="text-sm leading-relaxed text-rf-text-muted">
+            <InlineCodeText text={paragraph} />
+          </p>
+        ))
+      }
+
+      {
+        resolvedSnippets.length > 0 && (
+          <section class="space-y-3" aria-labelledby="built-with-snippets-heading">
+            <h2 id="built-with-snippets-heading" class="text-sm font-semibold text-rf-text">
+              In the repo
+            </h2>
+            <div class="space-y-3">
+              {
+                resolvedSnippets.map((snippet) => (
+                  <CodeSnippetPanel
+                    client:visible
+                    file={snippet.file}
+                    languageLabel={snippet.languageLabel}
+                    lineHint={snippet.lineHint}
+                    caption={snippet.caption}
+                    html={snippet.html}
+                  />
+                ))
+              }
+            </div>
+          </section>
+        )
+      }
+
+      {
+        page.touchpoints && page.touchpoints.length > 0 && (
+          <section class="rounded-xl border border-rf-border/60 bg-rf-surface/50 px-6 py-6">
+            <h2 class="text-sm font-semibold text-rf-text">Where it shows up</h2>
+            <ul class="mt-4 space-y-2 text-sm leading-relaxed text-rf-text-muted">
+              {page.touchpoints.map((item) => (
+                <li class="flex gap-2">
+                  <span class="mt-2 h-1 w-1 shrink-0 rounded-full bg-rf-accent" aria-hidden="true" />
+                  <span>
+                    <InlineCodeText text={item} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+    </div>
+
+    <aside
+      class="space-y-6 lg:sticky lg:top-28 lg:self-start"
+      transition:name="built-with-sidebar"
+      transition:persist
+      data-built-with-sidebar
+    >
+      <div class="rounded-xl border border-rf-border/60 bg-rf-surface/60 px-5 py-5">
+        <h3 class="text-xs font-semibold tracking-widest text-rf-text-muted uppercase">Built with</h3>
+        <ul class="rf-scrollbar mt-4 max-h-[22rem] space-y-1 overflow-y-auto text-sm">
+          {
+            navItems.map((item) => (
+              <li>
+                <a
+                  href={builtWithHref(item.slug)}
+                  data-built-with-slug={item.slug}
+                  class:list={[
+                    'rf-built-with-nav-link flex items-center gap-2.5 rounded-md px-1 py-1.5 no-underline transition-colors',
+                    item.slug === page.slug
+                      ? 'is-active text-rf-text'
+                      : 'text-rf-text-muted hover:text-rf-text',
+                  ]}
+                  aria-current={item.slug === page.slug ? 'page' : undefined}
+                >
+                  <BuiltWithTechIcon icon={item.icon} size="sm" />
+                  <span class="min-w-0 flex-1 leading-snug">{item.title}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+        <p class="mt-4 border-t border-rf-border/40 pt-4">
+          <a href="/docs/built-with" class="text-rf-accent no-underline text-sm">
+            View all tools
+          </a>
+        </p>
+      </div>
+
+      <a href="/download?start=1" class="rf-btn w-full justify-center no-underline">
+        <Icon name="download" size={16} class="text-rf-bg" />
+        Download RuForge
+      </a>
+    </aside>
+  </div>
+</article>

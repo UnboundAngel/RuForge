@@ -1,20 +1,37 @@
 ---
+import { ClientRouter } from 'astro:transitions';
+import { fade } from 'astro:transitions';
 import '../styles/global.css';
 import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
+import BuiltWithTransitions from '../components/BuiltWithTransitions.astro';
+import type { BuiltWithNavContext } from '../lib/builtWithPages';
 import { SITE } from '../lib/site';
 
 interface Props {
   title?: string;
   description?: string;
+  /** Home landing: no main top padding so backdrop meets the viewport edge. */
+  flushTop?: boolean;
+  /** Enables directional built-with page transitions and html data attrs. */
+  builtWithNav?: BuiltWithNavContext;
 }
 
-const { title = SITE.name, description = SITE.description } = Astro.props;
+const { title = SITE.name, description = SITE.description, flushTop = false, builtWithNav } =
+  Astro.props;
 const pageTitle = title === SITE.name ? title : `${title} · ${SITE.name}`;
+const builtWithMainTransition = builtWithNav !== undefined;
 ---
 
 <!doctype html>
-<html lang="en">
+<html
+  lang="en"
+  class="rf-scrollbar"
+  transition:animate="none"
+  data-built-with-nav={builtWithNav?.kind}
+  data-built-with-index={builtWithNav?.index}
+  data-built-with-active-slug={builtWithNav?.activeSlug}
+>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -26,12 +43,23 @@ const pageTitle = title === SITE.name ? title : `${title} · ${SITE.name}`;
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>{pageTitle}</title>
+    <ClientRouter />
   </head>
   <body class="flex min-h-screen flex-col">
-    <SiteHeader />
-    <main class="flex-1 pt-4 pb-10 md:pt-6 md:pb-14">
+    <div transition:persist="site-header">
+      <SiteHeader />
+    </div>
+    <main
+      class:list={[
+        'flex-1 pb-10 md:pb-14',
+        !flushTop && 'pt-20 md:pt-24',
+      ]}
+      transition:name="page-main"
+      transition:animate={builtWithMainTransition ? 'none' : fade({ duration: '0.22s' })}
+    >
       <slot />
     </main>
     <SiteFooter />
+    <BuiltWithTransitions />
   </body>
 </html>

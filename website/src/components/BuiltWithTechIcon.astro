@@ -1,0 +1,74 @@
+---
+import {
+  isTechTickerSvgIcon,
+  techTickerSvgPaths,
+  type TechTickerIconId,
+} from '../lib/techTickerIcons';
+
+interface Props {
+  icon: TechTickerIconId;
+  /** Icon box size: sm 16px, md 20px (docs default), lg 22px (page header). */
+  size?: 'sm' | 'md' | 'lg';
+  /** Accessible label; omit when decorative inside a labeled link. */
+  ariaLabel?: string;
+  /** Wider brand mark (yt-dlp). Defaults from icon id. */
+  wide?: boolean;
+}
+
+const { icon, size = 'md', ariaLabel, wide = icon === 'ytdlp' } = Astro.props;
+
+const sizeClass =
+  size === 'sm' ? 'h-4 w-4' : size === 'lg' ? 'h-[1.375rem] w-[1.375rem]' : 'h-5 w-5';
+
+const brandAssets: Partial<Record<TechTickerIconId, string>> = {
+  ytdlp: '/icons/tech/ytdlp.svg',
+  zustand: '/icons/tech/zustand.svg',
+  sponsorblock: '/icons/tech/sponsorblock.svg',
+};
+
+const brandSrc = brandAssets[icon];
+---
+
+{
+  icon === 'lucide' ? (
+    <svg
+      viewBox="0 0 24 24"
+      class:list={['rf-docs-built-with__icon shrink-0', sizeClass]}
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden={!ariaLabel}
+      aria-label={ariaLabel}
+      role={ariaLabel ? 'img' : undefined}
+    >
+      <path d="M14 12C14 9.79086 12.2091 8 10 8C7.79086 8 6 9.79086 6 12C6 16.4183 9.58172 20 14 20C18.4183 20 22 16.4183 22 12C22 8.446 20.455 5.25285 18 3.05557" />
+      <path d="M10 12C10 14.2091 11.7909 16 14 16C16.2091 16 18 14.2091 18 12C18 7.58172 14.4183 4 10 4C5.58172 4 2 7.58172 2 12C2 15.5841 3.57127 18.8012 6.06253 21" />
+    </svg>
+  ) : isTechTickerSvgIcon(icon) ? (
+    <svg
+      viewBox="0 0 24 24"
+      class:list={['rf-docs-built-with__icon shrink-0', sizeClass]}
+      aria-hidden={!ariaLabel}
+      aria-label={ariaLabel}
+      role={ariaLabel ? 'img' : undefined}
+    >
+      <path fill="currentColor" d={techTickerSvgPaths[icon]} />
+    </svg>
+  ) : brandSrc ? (
+    <img
+      src={brandSrc}
+      alt={ariaLabel ?? ''}
+      width={wide ? 52 : size === 'sm' ? 16 : size === 'lg' ? 22 : 20}
+      height={size === 'sm' ? 16 : size === 'lg' ? 22 : 20}
+      class:list={[
+        'rf-docs-built-with__img shrink-0',
+        wide && 'rf-docs-built-with__img--wide',
+        size === 'sm' && 'rf-docs-built-with__img--sm',
+      ]}
+      loading="lazy"
+      decoding="async"
+    />
+  ) : null
+}

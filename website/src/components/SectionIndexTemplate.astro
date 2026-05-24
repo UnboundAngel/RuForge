@@ -1,0 +1,42 @@
+---
+import PageHeader from './PageHeader.astro';
+import Icon from './Icon.astro';
+import type { NavSection } from '../lib/sitePages';
+import { pageHref } from '../lib/sitePages';
+
+interface Props {
+  section: NavSection;
+}
+
+const { section } = Astro.props;
+const entries = section.pages;
+---
+
+<div class="rf-container space-y-10 pb-6">
+  <PageHeader title={section.label} description={section.description} icon="map" />
+
+  <ul class="grid gap-4 sm:grid-cols-2">
+    {
+      entries.map((item) => {
+        const href = item.externalHref ?? pageHref(section.id, item.slug);
+        const external = Boolean(item.externalHref?.startsWith('http'));
+        return (
+          <li>
+            <a href={href} class="rf-link-card group h-full flex-col" {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rf-bg/60 text-rf-accent">
+                <Icon name={external ? 'external' : 'file'} size={18} />
+              </span>
+              <span class="min-w-0 flex-1 space-y-1">
+                <span class="flex items-center gap-2 text-base font-semibold text-rf-text group-hover:text-rf-accent">
+                  {item.title}
+                  {external && <Icon name="external" size={14} class="opacity-60" />}
+                </span>
+                <span class="block text-sm leading-relaxed text-rf-text-muted">{item.description}</span>
+              </span>
+            </a>
+          </li>
+        );
+      })
+    }
+  </ul>
+</div>

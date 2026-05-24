@@ -1,39 +1,41 @@
 ---
 import Logo from './Logo.astro';
+import Icon from './Icon.astro';
 import HeaderDownloadButton from './HeaderDownloadButton.astro';
+import SiteHeaderNav from './SiteHeaderNav';
 import { SITE } from '../lib/site';
-
-const path = Astro.url.pathname;
-const nav = [
-  { href: '/changelog', label: 'Changelog' },
-  { href: '/roadmap', label: 'Roadmap' },
-  { href: '/legal', label: 'Legal' },
-];
 ---
 
 <div class="site-header-anchor">
   <header class="site-header-pill">
-    <Logo size={32} showWordmark={false} class="site-header-logo shrink-0" />
+    <div class="site-header-start">
+      <a href="/" class="site-header-logo-link shrink-0 no-underline" aria-label="RuForge home">
+        <Logo size={32} showWordmark={false} class="site-header-logo shrink-0" />
+      </a>
+      <span class="site-header-version rf-version">v{SITE.latestVersion}</span>
+    </div>
 
-    <nav class="site-header-nav" aria-label="Primary">
-      {
-        nav.map((item) => (
-          <a
-            href={item.href}
-            class:list={[
-              'site-header-nav-link no-underline',
-              path === item.href || path.startsWith(`${item.href}/`)
-                ? 'site-header-nav-link--active'
-                : '',
-            ]}
-          >
-            {item.label}
-          </a>
-        ))
-      }
-    </nav>
+    <div class="site-header-nav-wrap">
+      <SiteHeaderNav client:idle />
+    </div>
 
-    <HeaderDownloadButton />
+    <div class="site-header-actions">
+      <div class="site-header-github-slot">
+        <a
+          href={SITE.github}
+          class="site-header-github no-underline"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Unbound Angel on GitHub"
+        >
+          <span class="site-header-github__label">Unbound Angel</span>
+          <span class="site-header-github__icon" aria-hidden="true">
+            <Icon name="github" size={18} />
+          </span>
+        </a>
+      </div>
+      <HeaderDownloadButton />
+    </div>
   </header>
 </div>
 
@@ -43,74 +45,217 @@ const nav = [
     top: max(0.875rem, env(safe-area-inset-top, 0px));
     left: 0;
     right: 0;
-    z-index: 50;
+    z-index: 100;
     display: flex;
     justify-content: center;
     padding-left: max(1rem, env(safe-area-inset-left, 0px));
     padding-right: max(1rem, env(safe-area-inset-right, 0px));
     pointer-events: none;
     box-sizing: border-box;
+    isolation: isolate;
   }
 
   .site-header-pill {
+    position: relative;
     pointer-events: auto;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
     width: 100%;
-    max-width: min(64rem, calc(100vw - 2rem));
+    max-width: min(80rem, calc(100vw - 1.5rem));
     min-height: 3.25rem;
-    padding: 0.375rem 0.5rem 0.375rem 0.875rem;
+    padding: 0.375rem 0.5rem 0.375rem 0.75rem;
     border-radius: 9999px;
     border: 1px solid rgb(237 215 156 / 0.14);
-    background: rgb(39 28 24 / 0.82);
-    backdrop-filter: blur(14px);
+    background: transparent;
     box-shadow:
       0 10px 40px rgb(0 0 0 / 0.38),
       0 2px 10px rgb(0 0 0 / 0.22),
       inset 0 1px 0 rgb(237 215 156 / 0.06);
-    overflow: hidden;
+    overflow: visible;
   }
 
-  .site-header-nav {
-    flex: 1;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    gap: 0.125rem;
-    min-width: 0;
+  /* Frost on ::before (same pattern as mega-menu) so menu viewport blur still works. */
+  .site-header-pill::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    background: rgb(39 28 24 / 0.52);
+    -webkit-backdrop-filter: blur(20px) saturate(1.35);
+    backdrop-filter: blur(20px) saturate(1.35);
+    pointer-events: none;
   }
 
-  @media (min-width: 640px) {
-    .site-header-nav {
-      display: flex;
+  @supports not (
+    (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+  ) {
+    .site-header-pill::before {
+      background: rgb(39 28 24 / 0.94);
     }
   }
 
-  .site-header-nav-link {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+  .site-header-pill > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .site-header-start {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    min-width: 0;
+  }
+
+  .site-header-logo-link {
+    display: inline-flex;
+    color: inherit;
+  }
+
+  .site-header-version {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-height: 2rem;
+    padding: 0.45rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgb(237 215 156 / 0.18);
+    background: rgb(29 22 19 / 0.55);
+    font-size: 0.75rem;
+    line-height: 1.1;
+    letter-spacing: 0.05em;
     color: var(--color-rf-text-muted);
+  }
+
+  @media (min-width: 1280px) {
+    .site-header-version {
+      display: inline-flex;
+    }
+  }
+
+  .site-header-nav-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding-inline: 0.125rem;
+  }
+
+  .site-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  @media (min-width: 1024px) {
+    .site-header-actions {
+      margin-left: 0;
+    }
+  }
+
+  .site-header-github-slot {
+    position: relative;
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .site-header-github {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    z-index: 3;
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    height: 2.25rem;
+    max-width: 2.25rem;
+    overflow: hidden;
+    white-space: nowrap;
     border-radius: 9999px;
+    color: var(--color-rf-text-muted);
+    transform: translateY(-50%);
     transition:
+      max-width 0.45s cubic-bezier(0.16, 1, 0.3, 1),
       color 0.2s ease,
       background-color 0.2s ease;
   }
 
-  .site-header-nav-link:hover {
+  .site-header-github:hover,
+  .site-header-github:focus-visible {
     color: var(--color-rf-text);
     background: rgb(237 215 156 / 0.06);
   }
 
-  .site-header-nav-link--active {
-    color: var(--color-rf-text);
-    background: rgb(237 215 156 / 0.1);
+  .site-header-github__label {
+    padding-left: 0.85rem;
+    padding-right: 0.1rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.06em;
+    text-transform: none;
+    opacity: 0;
+    transition: opacity 0.3s ease 0.08s;
   }
 
-  .site-header-logo {
-    margin-right: 0.125rem;
+  .site-header-github__icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  @media (min-width: 640px) {
+    .site-header-github:hover,
+    .site-header-github:focus-visible {
+      max-width: 11rem;
+    }
+
+    .site-header-github:hover .site-header-github__label,
+    .site-header-github:focus-visible .site-header-github__label {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .site-header-github {
+      transition: color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .site-header-github__label {
+      transition: none;
+    }
+
+    @media (min-width: 640px) {
+      .site-header-github:hover,
+      .site-header-github:focus-visible {
+        max-width: 11rem;
+      }
+
+      .site-header-github:hover .site-header-github__label,
+      .site-header-github:focus-visible .site-header-github__label {
+        opacity: 1;
+      }
+    }
+  }
+
+  .site-header-mobile-menu > summary {
+    list-style: none;
+  }
+
+  .site-header-mobile-menu[open] > summary {
+    color: var(--color-rf-text);
+    background: rgb(237 215 156 / 0.1);
   }
 </style>

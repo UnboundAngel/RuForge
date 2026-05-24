@@ -425,7 +425,7 @@ export const MediaView = ({
       </div>
 
       {/* Video Grid */}
-      <div className="flex-1 overflow-y-auto px-10 pb-32 scrollbar-none">
+      <div className="flex-1 overflow-y-auto px-10 pb-32">
         <AnimatePresence mode="wait">
           <motion.div
             key={filter}

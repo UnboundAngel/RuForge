@@ -135,7 +135,7 @@ function ChangelogLayout({
         <div className="h-px flex-1 bg-gradient-to-l from-transparent via-stone-500/10 to-transparent" />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent hover:scrollbar-thumb-white/20 transition-all space-y-10">
+      <div className="min-h-0 flex-1 overflow-y-auto pr-3 space-y-10">
         {notesTrim && (
           <div className="px-1">
             <UpdaterReleaseNotesMarkdown markdown={notesTrim} className="text-[12px] leading-relaxed text-stone-400" />

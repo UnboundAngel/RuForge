@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import DownloadFlow from '../components/download/DownloadFlow';
+import { SITE } from '../lib/site';
+import {
+  directInstallerDownloadUrl,
+  installerFetchUrls,
+  windowsInstallerFilename,
+} from '../lib/downloadRelease';
+import { getImage } from 'astro:assets';
+import logoImg from '../assets/ruforge-logo.png';
+
+const logoOptimized = await getImage({ src: logoImg, width: 56, height: 56, format: 'webp' });
+
+/** Demo: /download?download=demo — auto-start: /download?start=1 */
+const params = Astro.url.searchParams;
+const autoStart = params.get('start') === '1';
+const demo = params.get('download') === 'demo';
+const showLanding = !autoStart && !demo;
+
+const version = SITE.latestVersion;
+const filename = windowsInstallerFilename(version);
+const fetchUrls = installerFetchUrls(version);
+const directDownloadUrl = directInstallerDownloadUrl(version);
+---
+
+<BaseLayout
+  title="Download RuForge"
+  description="Download the RuForge Windows installer."
+  flushTop
+>
+  <DownloadFlow
+    client:load
+    version={version}
+    fetchUrls={fetchUrls}
+    directDownloadUrl={directDownloadUrl}
+    filename={filename}
+    logoSrc={logoOptimized.src}
+    autoStart={autoStart}
+    demo={demo}
+    showLanding={showLanding}
+    troubleHref={SITE.releases}
+  />
+</BaseLayout>

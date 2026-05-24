@@ -366,7 +366,7 @@ export function AuthorizeCleanupModal() {
 
             {/* Grid */}
             <div 
-              className="flex-1 overflow-y-auto p-10 scrollbar-none relative z-10"
+              className="flex-1 overflow-y-auto p-10 relative z-10"
               onScroll={handleScroll}
             >
               <LayoutGroup id="cleanup-grid">

@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ContentPageTemplate from '../../components/ContentPageTemplate.astro';
+import {
+  findPage,
+  getStaticPagePaths,
+  type NavSectionId,
+} from '../../lib/sitePages';
+
+export function getStaticPaths() {
+  return getStaticPagePaths().map(({ section, slug }) => ({
+    params: { section, slug },
+  }));
+}
+
+const sectionId = Astro.params.section as NavSectionId;
+const slug = Astro.params.slug!;
+const match = findPage(sectionId, slug);
+
+if (!match) {
+  return Astro.redirect(`/${sectionId}`);
+}
+
+const { page, section } = match;
+---
+
+<BaseLayout title={page.title} description={page.description}>
+  <ContentPageTemplate sectionId={section.id} page={page} />
+</BaseLayout>

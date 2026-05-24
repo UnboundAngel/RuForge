@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SectionIndexTemplate from '../../components/SectionIndexTemplate.astro';
+import { getNavSection, type NavSectionId } from '../../lib/sitePages';
+
+export function getStaticPaths() {
+  return (['features', 'company', 'resources', 'help', 'docs'] as const).map((section) => ({
+    params: { section },
+  }));
+}
+
+const sectionId = Astro.params.section as NavSectionId;
+const section = getNavSection(sectionId);
+---
+
+<BaseLayout title={section.label} description={section.description}>
+  <SectionIndexTemplate section={section} />
+</BaseLayout>

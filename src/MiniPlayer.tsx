@@ -2552,7 +2552,7 @@ export default function MiniPlayer() {
               </AnimatePresence>
             </>
           ) : (           
-            <div className="w-full h-full overflow-y-auto pt-16 pb-12 px-6 scrollbar-none pointer-events-auto bg-stone-950/50">
+            <motion.div className="w-full h-full overflow-y-auto pt-16 pb-12 px-6 pointer-events-auto bg-stone-950/50">
               <div className="mb-4">
                 <div className="flex items-center space-x-3 mb-6">
                   <div className="w-8 h-8 rounded-xl bg-[color:var(--accent)]/10 flex items-center justify-center border border-[color:var(--accent)]/20">
@@ -2673,7 +2673,7 @@ export default function MiniPlayer() {
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
       </motion.div>
 

@@ -1,0 +1,102 @@
+---
+import PageHeader from './PageHeader.astro';
+import Icon from './Icon.astro';
+import type { NavSectionId, SitePage } from '../lib/sitePages';
+import { NAV_SECTIONS, pageHref } from '../lib/sitePages';
+import { SITE } from '../lib/site';
+
+interface Props {
+  sectionId: NavSectionId;
+  page: SitePage;
+}
+
+const { sectionId, page } = Astro.props;
+const section = NAV_SECTIONS.find((s) => s.id === sectionId)!;
+const sectionHref = `/${sectionId}`;
+const siblings = section.pages.filter((p) => !p.externalHref && p.slug !== page.slug);
+---
+
+<article class="rf-container space-y-10 pb-6">
+  <nav class="text-xs text-rf-text-muted" aria-label="Breadcrumb">
+    <ol class="flex flex-wrap items-center gap-2">
+      <li><a href="/" class="no-underline hover:text-rf-text">Home</a></li>
+      <li aria-hidden="true">/</li>
+      <li>
+        <a href={sectionHref} class="no-underline hover:text-rf-text">{section.label}</a>
+      </li>
+      <li aria-hidden="true">/</li>
+      <li class="text-rf-text">{page.title}</li>
+    </ol>
+  </nav>
+
+  <PageHeader title={page.title} description={page.description} icon="file" />
+
+  <p class="rf-badge rf-badge-todo w-fit">Documentation in progress</p>
+
+  <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_16rem]">
+    <div class="space-y-8">
+      {
+        page.outline.length > 0 ? (
+          page.outline.map((heading) => (
+            <section class="rounded-xl border border-rf-border/60 bg-rf-surface/50 px-6 py-6">
+              <h2 class="text-lg font-semibold text-rf-text">{heading}</h2>
+              <p class="mt-3 text-sm leading-relaxed text-rf-text-muted">
+                Full write-up for this section is coming soon. If you need help now, check{' '}
+                <a href="/help/troubleshooting" class="text-rf-accent">
+                  Troubleshooting
+                </a>{' '}
+                or ask on{' '}
+                <a href={SITE.discussions} class="text-rf-accent">
+                  GitHub Discussions
+                </a>
+                .
+              </p>
+            </section>
+          ))
+        ) : (
+          <section class="rounded-xl border border-rf-border/60 bg-rf-surface/50 px-6 py-6">
+            <p class="text-sm leading-relaxed text-rf-text-muted">
+              Content for this page is coming soon.
+            </p>
+          </section>
+        )
+      }
+    </div>
+
+  <aside class="space-y-6 lg:sticky lg:top-28 lg:self-start">
+      <div class="rounded-xl border border-rf-border/60 bg-rf-surface/60 px-5 py-5">
+        <h3 class="text-xs font-semibold tracking-widest text-rf-text-muted uppercase">
+          {section.label}
+        </h3>
+        <ul class="mt-4 space-y-2 text-sm">
+          {
+            siblings.slice(0, 8).map((item) => (
+              <li>
+                <a
+                  href={pageHref(sectionId, item.slug)}
+                  class="block no-underline text-rf-text-muted transition-colors hover:text-rf-text"
+                >
+                  {item.title}
+                </a>
+              </li>
+            ))
+          }
+          {
+            siblings.length > 8 && (
+              <li>
+                <a href={sectionHref} class="text-rf-accent no-underline">
+                  View all
+                </a>
+              </li>
+            )
+          }
+        </ul>
+      </div>
+
+      <a href="/download?start=1" class="rf-btn w-full justify-center no-underline">
+        <Icon name="download" size={16} class="text-rf-bg" />
+        Download RuForge
+      </a>
+    </aside>
+  </div>
+</article>
