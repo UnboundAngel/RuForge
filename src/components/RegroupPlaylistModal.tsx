@@ -193,7 +193,7 @@ export function RegroupPlaylistModal({
           </button>
         </div>
 
-        <div className="space-y-4 overflow-y-auto px-5 py-4 scrollbar-none">
+        <div className="space-y-4 overflow-y-auto px-5 py-4">
           <p className="text-[10px] leading-relaxed text-stone-500">
             Moves videos already in your download folder (flat at the root) into a
             playlist subfolder with numbered names. Paste the same playlist URL you
@@ -218,7 +218,7 @@ export function RegroupPlaylistModal({
             <p className="text-[10px] text-red-400/90">{error}</p>
           )}
           {videoInfo && rows.length > 0 && (
-            <ul className="max-h-48 space-y-1 overflow-y-auto scrollbar-none text-left">
+            <ul className="max-h-48 space-y-1 overflow-y-auto text-left">
               {rows.map((r) => (
                 <li
                   key={`${r.index}-${r.title}`}

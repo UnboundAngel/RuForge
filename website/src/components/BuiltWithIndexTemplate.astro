@@ -1,0 +1,54 @@
+---
+import PageHeader from './PageHeader.astro';
+import BuiltWithTechIcon from './BuiltWithTechIcon.astro';
+import { BUILT_WITH_PAGES, builtWithHref } from '../lib/builtWithPages';
+import { SITE } from '../lib/site';
+---
+
+<div class="rf-container space-y-10 pb-6">
+  <div class="space-y-10" transition:name="built-with-chrome">
+    <nav class="text-xs text-rf-text-muted" aria-label="Breadcrumb">
+      <ol class="flex flex-wrap items-center gap-2">
+        <li><a href="/" class="no-underline hover:text-rf-text">Home</a></li>
+        <li aria-hidden="true">/</li>
+        <li><a href="/docs" class="no-underline hover:text-rf-text">Docs</a></li>
+        <li aria-hidden="true">/</li>
+        <li class="text-rf-text">Built with</li>
+      </ol>
+    </nav>
+
+    <PageHeader
+      title="Built with"
+      description="Plain notes on how RuForge actually uses each tool in the stack. Same sixteen icons as the Docs mega-menu grid."
+    />
+  </div>
+
+  <div transition:name="built-with-main" transition:animate="none">
+    <ul class="grid gap-4 sm:grid-cols-2">
+      {
+        BUILT_WITH_PAGES.map((page) => (
+          <li>
+            <a href={builtWithHref(page.slug)} class="rf-link-card group h-full flex-col">
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rf-bg/60">
+                <BuiltWithTechIcon icon={page.icon} size="md" />
+              </span>
+              <span class="min-w-0 flex-1 space-y-1">
+                <span class="block text-base font-semibold text-rf-text group-hover:text-rf-accent">
+                  {page.title}
+                </span>
+                <span class="block text-sm leading-relaxed text-rf-text-muted">{page.lead}</span>
+              </span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+
+    <p class="mt-10 text-sm text-rf-text-muted">
+      Need settings or internals reference instead?
+      <a href="/docs/overview" class="text-rf-accent no-underline">Docs overview</a>
+      or
+      <a href={SITE.discussions} class="text-rf-accent no-underline">GitHub Discussions</a>.
+    </p>
+  </div>
+</div>

@@ -11,17 +11,9 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
 
   <div class="rf-container testimonials-section-inner">
     <header class="testimonials-section-header">
-      <p class="testimonials-section-eyebrow">
-        <span class="testimonials-section-eyebrow-dot" aria-hidden="true"></span>
-        Field notes
-      </p>
       <h2 id="testimonials-heading" class="testimonials-section-title">
-        People who actually use it
+        People who use it
       </h2>
-      <p class="testimonials-section-lead">
-        Two of us, a pile of notes, zero PR polish. Swap in your photos under
-        <code class="testimonials-section-code">public/testimonials/</code>.
-      </p>
     </header>
 
     <div class="testimonials-columns-mask">
@@ -74,49 +66,12 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
     text-align: center;
   }
 
-  .testimonials-section-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 0;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: rgb(201 184 122 / 0.75);
-  }
-
-  .testimonials-section-eyebrow-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: #edd79c;
-    opacity: 0.7;
-  }
-
   .testimonials-section-title {
-    margin: 1rem 0 0;
+    margin: 0;
     font-size: clamp(1.85rem, 4vw, 2.65rem);
     font-weight: 700;
     letter-spacing: -0.03em;
     line-height: 1.12;
-    color: #edd79c;
-  }
-
-  .testimonials-section-lead {
-    margin: 1rem auto 0;
-    max-width: 28rem;
-    font-size: 0.9375rem;
-    line-height: 1.65;
-    color: rgb(201 184 122 / 0.82);
-  }
-
-  .testimonials-section-code {
-    font-family: var(--font-mono);
-    font-size: 0.8em;
-    padding: 0.1em 0.35em;
-    border-radius: 0.25rem;
-    background: rgb(39 28 24 / 0.8);
     color: #edd79c;
   }
 
@@ -154,11 +109,17 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
   :global(.testimonials-column-track) {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    padding-bottom: 1.25rem;
     animation: testimonials-scroll var(--scroll-duration, 22s) linear infinite;
     animation-delay: var(--scroll-offset, 0s);
     will-change: transform;
+  }
+
+  :global(.testimonials-column-group) {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding-bottom: 1.25rem;
+    flex-shrink: 0;
   }
 
   :global(.testimonial-card) {
@@ -299,10 +260,10 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
 
   @keyframes testimonials-scroll {
     from {
-      transform: translateY(0);
+      transform: translate3d(0, 0, 0);
     }
     to {
-      transform: translateY(-50%);
+      transform: translate3d(0, -50%, 0);
     }
   }
 

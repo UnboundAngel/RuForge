@@ -12,6 +12,9 @@ export const SITE = {
     'https://repository-images.githubusercontent.com/1235101565/9467631f-98c4-4fac-b475-4c1020ec9868',
 } as const;
 
+/** In-site download flow (progress UI). Demo: `/download?download=demo` */
+export const DOWNLOAD_PAGE = '/download';
+
 export const LEGAL_LINKS = [
   { href: '/legal/privacy', title: 'Privacy Policy', file: 'PRIVACY.md' },
   { href: '/legal/terms', title: 'Terms of Use', file: 'TERMS.md' },

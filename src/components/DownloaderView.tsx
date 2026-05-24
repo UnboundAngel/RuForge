@@ -958,7 +958,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           )}
                         </motion.div>
                         {idleHero.isPlaylist && idleHero.playlistItems && (
-                          <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto scrollbar-none space-y-1.5 hidden min-[750px]:block">
+                          <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto space-y-1.5 hidden min-[750px]:block">
                             {idleHero.playlistItems.map((item, idx) => {
                               const rowKey = d.playlistItemKey(item, idx + 1);
                               const rowAudio = d.resolveAudioOnlyForPlaylistItem(

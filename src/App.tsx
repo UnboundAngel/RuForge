@@ -1178,7 +1178,7 @@ function App() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-none">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
             return (

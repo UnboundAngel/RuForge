@@ -1,0 +1,204 @@
+---
+import type { ImageMetadata } from 'astro';
+import { Image } from 'astro:assets';
+
+interface Props {
+  /** Seamless paper grain tile. Omit for CSS-only noise. */
+  grain?: ImageMetadata;
+  /** Soft forge glow (transparent WebP/PNG). Omit for CSS radial ember wash. */
+  heroEmber?: ImageMetadata;
+}
+
+const { grain, heroEmber } = Astro.props;
+const grainUrl = grain?.src;
+---
+
+<div class="landing-backdrop absolute inset-0 -z-20 overflow-hidden pointer-events-none select-none" aria-hidden="true">
+  <div class="absolute inset-0 backdrop-gradient"></div>
+
+  <div class="absolute top-[25%] bottom-[25%] inset-x-0 features-grid opacity-[0.015]"></div>
+
+  {
+    heroEmber ? (
+      <div class="hero-ember-image absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[2400px] h-[1000px] overflow-hidden opacity-[0.62] mix-blend-screen pointer-events-none">
+        <Image
+          src={heroEmber}
+          alt=""
+          class="w-full h-full object-cover"
+          widths={[768, 1200, 1920, 2400]}
+          sizes="100vw"
+          loading="eager"
+          decoding="async"
+        />
+      </div>
+    ) : (
+      <div class="hero-ember-css" aria-hidden="true"></div>
+    )
+  }
+
+  <div
+    class:list={['absolute inset-0 opacity-[0.055] mix-blend-soft-light grain-overlay', !grainUrl && 'grain-overlay--css']}
+    style={grainUrl ? `--grain-url: url(${grainUrl})` : undefined}
+  ></div>
+
+  <div class="absolute -top-40 left-1/2 h-[650px] w-[1100px] -translate-x-1/2 rounded-full bg-rf-accent/[0.055] blur-[150px] ambient-glow-1"></div>
+  <div class="absolute top-[22%] right-[-150px] h-[500px] w-[500px] rounded-full bg-rf-accent/[0.02] blur-[120px] ambient-glow-2"></div>
+  <div class="absolute top-[48%] left-[-200px] h-[600px] w-[600px] rounded-full bg-rf-accent/[0.018] blur-[140px] ambient-glow-3"></div>
+  <div class="absolute top-[72%] left-1/2 -translate-x-1/2 h-[500px] w-[950px] rounded-full bg-rf-accent/[0.045] blur-[130px] ambient-glow-4"></div>
+  <div class="absolute bottom-10 right-[-100px] h-[450px] w-[450px] rounded-full bg-rf-accent/[0.025] blur-[110px] ambient-glow-5"></div>
+</div>
+
+<style>
+  .backdrop-gradient {
+    background: linear-gradient(
+      to bottom,
+      #1d1613 0%,
+      #241b18 12%,
+      #1d1613 18%,
+      #181210 28%,
+      #271e1a 42%,
+      #1f1715 65%,
+      #18110f 78%,
+      #241a16 95%,
+      #1d1613 100%
+    );
+  }
+
+  .hero-ember-css {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: min(1200px, 100%);
+    height: min(900px, 85vh);
+    transform: translateX(-50%);
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse 85% 55% at 50% -5%,
+      rgb(237 215 156 / 0.12),
+      rgb(237 215 156 / 0.04) 42%,
+      transparent 68%
+    );
+  }
+
+  .grain-overlay {
+    background-image: var(--grain-url);
+    background-repeat: repeat;
+  }
+
+  .grain-overlay--css {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.045;
+  }
+
+  .features-grid {
+    background-image:
+      linear-gradient(to right, rgb(237 215 156 / 0.1) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(237 215 156 / 0.1) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  @keyframes float-glow-1 {
+    0% {
+      transform: translate(-50%, -40%) scale(1);
+      opacity: 0.055;
+    }
+    50% {
+      transform: translate(-48%, -43%) scale(1.08);
+      opacity: 0.085;
+    }
+    100% {
+      transform: translate(-50%, -40%) scale(1);
+      opacity: 0.055;
+    }
+  }
+
+  @keyframes float-glow-2 {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.02;
+    }
+    50% {
+      transform: translate(-20px, 15px) scale(1.06);
+      opacity: 0.035;
+    }
+    100% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.02;
+    }
+  }
+
+  @keyframes float-glow-3 {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.018;
+    }
+    50% {
+      transform: translate(15px, -15px) scale(1.05);
+      opacity: 0.03;
+    }
+    100% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.018;
+    }
+  }
+
+  @keyframes float-glow-4 {
+    0% {
+      transform: translate(-50%, -10px) scale(1);
+      opacity: 0.045;
+    }
+    50% {
+      transform: translate(-50%, 10px) scale(1.04);
+      opacity: 0.07;
+    }
+    100% {
+      transform: translate(-50%, -10px) scale(1);
+      opacity: 0.045;
+    }
+  }
+
+  @keyframes float-glow-5 {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.025;
+    }
+    50% {
+      transform: translate(-10px, -20px) scale(1.08);
+      opacity: 0.04;
+    }
+    100% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.025;
+    }
+  }
+
+  .ambient-glow-1 {
+    animation: float-glow-1 14s ease-in-out infinite;
+  }
+
+  .ambient-glow-2 {
+    animation: float-glow-2 18s ease-in-out infinite;
+  }
+
+  .ambient-glow-3 {
+    animation: float-glow-3 20s ease-in-out infinite;
+  }
+
+  .ambient-glow-4 {
+    animation: float-glow-4 16s ease-in-out infinite;
+  }
+
+  .ambient-glow-5 {
+    animation: float-glow-5 22s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ambient-glow-1,
+    .ambient-glow-2,
+    .ambient-glow-3,
+    .ambient-glow-4,
+    .ambient-glow-5 {
+      animation: none !important;
+    }
+  }
+</style>

@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.8 (unreleased)
 Last shipped to users: 0.1.7
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 Status: in progress
 
 ## Now
@@ -65,8 +65,8 @@ preview, duplicate badges before Download, files in numbered playlist folder (Me
 stack card), regroup flat downloads (Debugging tab, library match fix). General
 toggle reveals Debugging tab (regroup + cycle updater). Post-install What's New
 scroll/clamp; mini player large-mode video without blur wash; public site in
-`website/` with sketch tutorial hubs for download plus library, player, SponsorBlock,
-mini player, and settings. (see AGENTS.md Shipped log)
+`website/` with landing "What you actually get" feature rows (downloader, audio hero,
+chapters, SponsorBlock) plus header, hero, testimonials, highlight card; `/download` streams from `/releases/` when present, else browser download from GitHub; header nav triggers sized up; mega-menu frosted backdrop obscures page behind; Docs built-with icon pill tooltips (portaled, edge-clamped); mega-menu Resend-style inner swoosh on tab change; sixteen `/docs/built-with/*` tool pages with mega-menu links; built-with index/detail pages show per-tool tech icons on cards, headers, and sidebar; built-with pages render inline code pills and collapsible Shiki repo snippets (2 per tool); canonical `rf-scrollbar` slim accent scrollbars site-wide and in desktop app (no native arrow buttons); built-with tool pages use ClientRouter transitions (persisted sidebar, directional swoosh, reduced-motion fade); built-with repo snippet panels restyled as integrated dark code blocks with collapsed peek; header persist + frosted pill fix after ClientRouter regressions; built-with tool page copy rewrite with full repo snippet blocks (2-3 per tool); site audit pass (custom tooltips on code paths, scrollbars on overflow panels, viewport clamps, perf: idle header hydrate, WebP nav hero, memoized mega-menu). (see AGENTS.md Shipped log)
 
 ## Open P0 (blocks release)
 

@@ -1,0 +1,23 @@
+---
+import { parseInlineCode } from '../lib/inlineCode';
+
+interface Props {
+  text: string;
+  class?: string;
+}
+
+const { text, class: className } = Astro.props;
+const segments = parseInlineCode(text);
+---
+
+<span class:list={[className]}>
+  {
+    segments.map((segment) =>
+      segment.type === 'code' ? (
+        <code class="rf-inline-code">{segment.value}</code>
+      ) : (
+        segment.value
+      ),
+    )
+  }
+</span>

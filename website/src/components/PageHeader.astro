@@ -1,6 +1,7 @@
 ---
 import type { IconName } from '../lib/icons';
 import Icon from './Icon.astro';
+import InlineCodeText from './InlineCodeText.astro';
 
 interface Props {
   title: string;
@@ -9,17 +10,36 @@ interface Props {
 }
 
 const { title, description, icon } = Astro.props;
+const hasDescriptionSlot = Astro.slots.has('description');
 ---
 
 <header class="space-y-4 pb-4">
   <div class="flex items-center gap-3">
-    {icon && (
-      <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-rf-surface text-rf-accent">
-        <Icon name={icon} size={22} />
-      </span>
-    )}
+    {
+      Astro.slots.has('icon') ? (
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rf-surface">
+          <slot name="icon" />
+        </span>
+      ) : (
+        icon && (
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rf-surface text-rf-accent">
+            <Icon name={icon} size={22} />
+          </span>
+        )
+      )
+    }
     <h1 class="text-3xl font-semibold text-rf-text">{title}</h1>
   </div>
-  {description && <p class="max-w-2xl text-base leading-relaxed text-rf-text-muted">{description}</p>}
+  {
+    hasDescriptionSlot ? (
+      <slot name="description" />
+    ) : (
+      description && (
+        <p class="max-w-2xl text-base leading-relaxed text-rf-text-muted">
+          <InlineCodeText text={description} />
+        </p>
+      )
+    )
+  }
   <slot />
 </header>

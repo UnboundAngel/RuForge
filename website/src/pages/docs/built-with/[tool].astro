@@ -1,0 +1,30 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import BuiltWithPageTemplate from '../../../components/BuiltWithPageTemplate.astro';
+import {
+  findBuiltWithPage,
+  getBuiltWithNavContextForSlug,
+  getBuiltWithStaticPaths,
+} from '../../../lib/builtWithPages';
+
+export function getStaticPaths() {
+  return getBuiltWithStaticPaths().map(({ tool }) => ({
+    params: { tool },
+  }));
+}
+
+const slug = Astro.params.tool!;
+const page = findBuiltWithPage(slug);
+
+if (!page) {
+  return Astro.redirect('/docs/built-with');
+}
+---
+
+<BaseLayout
+  title={page.title}
+  description={page.lead}
+  builtWithNav={getBuiltWithNavContextForSlug(slug)}
+>
+  <BuiltWithPageTemplate page={page} />
+</BaseLayout>

@@ -1,30 +1,21 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import LandingBackdrop from '../components/LandingBackdrop.astro';
 import HeroCarousel from '../components/HeroCarousel.astro';
 import Icon from '../components/Icon.astro';
 import TestimonialsSection from '../components/TestimonialsSection.astro';
-import MotionDownloadButton from '../components/ui/MotionDownloadButton.astro';
 import HeroAnimatedTitle from '../components/HeroAnimatedTitle';
-import TutorialHubsGrid from '../components/TutorialHubsGrid.astro';
+import LandingFeaturesSection from '../components/LandingFeaturesSection.astro';
 import TechTickerIcon from '../components/TechTickerIcon.astro';
 import { techTickerItems } from '../lib/techTickerIcons';
 import { Image } from 'astro:assets';
 import highlightCoffee from '../assets/highlight-coffee-beans.webp';
-import { getCollection } from 'astro:content';
-import { SITE } from '../lib/site';
-
-const allReleases = await getCollection('releases');
-const latestRelease = allReleases.sort(
-  (a, b) => b.data.date.getTime() - a.data.date.getTime(),
-)[0];
+import landingGrain from '../assets/landing-grain.png';
 ---
 
-<BaseLayout>
+<BaseLayout flushTop>
   <div class="relative overflow-hidden min-h-screen flex flex-col justify-between">
-    {/* Premium Radial Accent Lights */}
-    <div class="absolute -top-40 left-1/2 -z-10 h-[600px] w-[1000px] -translate-x-1/2 rounded-full bg-rf-accent/[0.04] blur-[140px] pointer-events-none ambient-glow-1"></div>
-    <div class="absolute top-[600px] right-[-100px] -z-10 h-[450px] w-[450px] rounded-full bg-rf-accent/[0.015] blur-[100px] pointer-events-none ambient-glow-2"></div>
-    <div class="absolute bottom-40 left-[-200px] -z-10 h-[500px] w-[500px] rounded-full bg-rf-accent/[0.01] blur-[120px] pointer-events-none ambient-glow-3"></div>
+    <LandingBackdrop grain={landingGrain} />
 
     {/* Hero Section */}
     <section class="rf-container pt-16 pb-20 md:pt-24 md:pb-28 text-center relative">
@@ -36,18 +27,6 @@ const latestRelease = allReleases.sort(
         <p class="hero-subcopy max-w-xl mx-auto text-base sm:text-lg leading-relaxed text-rf-text-muted/90">
           A lightweight, local-first media collector. Streamlined yt-dlp downloading and fine-tuned offline playback with SponsorBlock, chapters, and custom subtitles.
         </p>
-
-        <div class="flex flex-wrap items-center justify-center gap-4">
-          <a href={SITE.releases} class="rf-btn shadow-lg shadow-rf-accent/5 hover:scale-[1.01]">
-            <Icon name="download" size={18} class="text-rf-bg" />
-            Download for Windows
-          </a>
-          <a href={SITE.github} class="rf-btn-ghost">
-            <Icon name="github" size={18} />
-            GitHub Source
-          </a>
-          <span class="rf-version rounded-lg bg-rf-surface/60 px-3 py-2 border border-rf-border">v{SITE.latestVersion}</span>
-        </div>
       </div>
 
       {/* 3D Slanted Carousel Container */}
@@ -67,8 +46,8 @@ const latestRelease = allReleases.sort(
       <div class="tech-ticker__rail relative w-full overflow-hidden">
         <div class="tech-ticker__fade tech-ticker__fade--left" aria-hidden="true"></div>
         <div class="tech-ticker__fade tech-ticker__fade--right" aria-hidden="true"></div>
-        <div class="flex gap-6 w-max animate-marquee">
-          <div class="tech-ticker__row flex shrink-0 items-center gap-6">
+        <div class="tech-ticker__marquee flex w-max animate-marquee">
+          <div class="tech-ticker__row flex shrink-0 items-center gap-6 pe-6">
             {
               techTickerItems.map((item) => (
                 <div class="tech-ticker__item group flex items-center gap-3 bg-rf-surface/20 hover:bg-rf-surface/35 px-5 py-2.5 rounded-xl border border-rf-border/40 hover:border-rf-border/60 transition-colors duration-300 cursor-default">
@@ -82,7 +61,7 @@ const latestRelease = allReleases.sort(
               ))
             }
           </div>
-          <div class="tech-ticker__row flex shrink-0 items-center gap-6" aria-hidden="true">
+          <div class="tech-ticker__row flex shrink-0 items-center gap-6 pe-6" aria-hidden="true">
             {
               techTickerItems.map((item) => (
                 <div class="tech-ticker__item group flex items-center gap-3 bg-rf-surface/20 hover:bg-rf-surface/35 px-5 py-2.5 rounded-xl border border-rf-border/40 hover:border-rf-border/60 transition-colors duration-300 cursor-default">
@@ -100,19 +79,7 @@ const latestRelease = allReleases.sort(
       </div>
     </section>
 
-    {/* Grid of Interactive Details Cards */}
-    <section class="rf-container py-24 md:py-32">
-      <div class="text-center max-w-2xl mx-auto mb-16 md:mb-20 space-y-4 scroll-reveal">
-        <h2 class="font-display text-3xl font-bold tracking-tight text-rf-text sm:text-4xl">
-          Everything you need. Offline.
-        </h2>
-        <p class="text-base text-rf-text-muted/90">
-          A fully integrated workflow engine that indexes your catalog on disk and protects your online data footprint.
-        </p>
-      </div>
-
-      <TutorialHubsGrid />
-    </section>
+    <LandingFeaturesSection />
 
     <TestimonialsSection />
 
@@ -146,35 +113,7 @@ const latestRelease = allReleases.sort(
             <p class="text-sm md:text-base leading-relaxed text-rf-text-muted/90">
               RuForge compiles direct Rust bindings with Tauri to deliver near-zero overhead. Your downloads run concurrently, SponsorBlock filters on the fly, and your library indexing is entirely local. No trackers, no accounts, no subscriptions.
             </p>
-
-            <div class="pt-4 flex flex-wrap items-center gap-4">
-              <MotionDownloadButton href={SITE.releases} />
-              <a href="/roadmap" class="rf-btn-ghost">
-                Interactive Roadmap
-              </a>
-            </div>
           </div>
-
-          {
-            latestRelease && (
-              <footer class="highlight-card-release mt-8 md:mt-10">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-8">
-                  <p class="min-w-0 text-sm leading-relaxed text-rf-text-muted/90">
-                    <span class="font-semibold text-rf-accent">v{latestRelease.data.version}</span>
-                    <span class="text-rf-text-muted/50" aria-hidden="true"> · </span>
-                    <span>{latestRelease.data.additions[0]}</span>
-                  </p>
-                  <a
-                    href="/changelog"
-                    class="highlight-card-release-link inline-flex items-center gap-1.5 text-sm font-medium text-rf-accent no-underline shrink-0 transition-opacity hover:opacity-90"
-                  >
-                    View changelog
-                    <Icon name="external" size={14} class="opacity-75" />
-                  </a>
-                </div>
-              </footer>
-            )
-          }
         </div>
       </div>
     </section>
@@ -244,13 +183,18 @@ const latestRelease = allReleases.sort(
     background: linear-gradient(270deg, #1d1613 20%, transparent);
   }
 
-  .tech-ticker:hover .animate-marquee {
+  /* Two identical rows, no gap between rows: pe-6 on each row matches internal gap-6 at the loop seam */
+  .tech-ticker__marquee {
+    will-change: transform;
+  }
+
+  .tech-ticker:hover .tech-ticker__marquee {
     animation-play-state: paused;
   }
 
   @keyframes marquee {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(-50%, 0, 0); }
   }
 
   .animate-marquee {
@@ -285,16 +229,6 @@ const latestRelease = allReleases.sort(
     pointer-events: none;
   }
 
-  .highlight-card .rf-btn-ghost {
-    background: rgb(29 22 19 / 0.35);
-    backdrop-filter: blur(6px);
-  }
-
-  .highlight-card-release-link:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-
   /* Interactive 3D Perspective Tilt on Screenshot Carousel */
   .carousel-3d-wrapper {
     transform: rotateX(5deg) translateY(-10px);
@@ -305,64 +239,6 @@ const latestRelease = allReleases.sort(
   .carousel-3d-wrapper:hover {
     transform: rotateX(0deg) translateY(0px) scale(1.015);
     border-color: rgba(237, 215, 156, 0.25);
-  }
-
-  /* Subtle CSS-only movement for background blurs */
-  @keyframes float-glow-1 {
-    0% {
-      transform: translate(-50%, -40%) scale(1);
-      opacity: 0.04;
-    }
-    50% {
-      transform: translate(-47%, -45%) scale(1.1);
-      opacity: 0.08;
-    }
-    100% {
-      transform: translate(-50%, -40%) scale(1);
-      opacity: 0.04;
-    }
-  }
-
-  @keyframes float-glow-2 {
-    0% {
-      transform: translate(0, 0) scale(1);
-      opacity: 0.015;
-    }
-    50% {
-      transform: translate(-15px, 25px) scale(1.08);
-      opacity: 0.03;
-    }
-    100% {
-      transform: translate(0, 0) scale(1);
-      opacity: 0.015;
-    }
-  }
-
-  @keyframes float-glow-3 {
-    0% {
-      transform: translate(0, 0) scale(1);
-      opacity: 0.01;
-    }
-    50% {
-      transform: translate(20px, -15px) scale(1.05);
-      opacity: 0.02;
-    }
-    100% {
-      transform: translate(0, 0) scale(1);
-      opacity: 0.01;
-    }
-  }
-
-  .ambient-glow-1 {
-    animation: float-glow-1 15s ease-in-out infinite;
-  }
-
-  .ambient-glow-2 {
-    animation: float-glow-2 18s ease-in-out infinite;
-  }
-
-  .ambient-glow-3 {
-    animation: float-glow-3 20s ease-in-out infinite;
   }
 
   /* Entrance animations */
@@ -454,37 +330,9 @@ const latestRelease = allReleases.sort(
     transform: translateY(0);
   }
 
-  /* Custom scrollbar for home page */
-  :global(.home-scrollbar) {
-    scrollbar-color: rgba(237, 215, 156, 0.2) #1D1613;
-    scrollbar-width: thin;
-  }
-
-  :global(.home-scrollbar::-webkit-scrollbar) {
-    width: 8px;
-    height: 8px;
-  }
-
-  :global(.home-scrollbar::-webkit-scrollbar-track) {
-    background: #1D1613;
-  }
-
-  :global(.home-scrollbar::-webkit-scrollbar-thumb) {
-    background: rgba(237, 215, 156, 0.2);
-    border-radius: 999px;
-    border: 2px solid #1D1613;
-    transition: background 0.3s ease;
-  }
-
-  :global(.home-scrollbar::-webkit-scrollbar-thumb:hover) {
-    background: rgba(237, 215, 156, 0.45);
-  }
 </style>
 
 <script>
-  // Add custom scrollbar class specifically for home page
-  document.documentElement.classList.add('home-scrollbar');
-
   // Card spotlight tracking
   function initCardSpotlights() {
     const cards = document.querySelectorAll<HTMLElement>('.feature-card, .spotlight-card');
