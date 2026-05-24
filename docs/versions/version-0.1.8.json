@@ -1,0 +1,82 @@
+{
+  "nodes": [
+    {
+      "id": "t-playlist-downloads",
+      "type": "task",
+      "label": "Playlist downloads and regroup",
+      "agent": "chad",
+      "details": [
+        "Playlist URL intake, per-row audio, duplicate preview, numbered subfolder stack cards, Settings regroup tool."
+      ],
+      "fileEdits": [
+        { "path": "src/playlistDownloadPlan.ts", "reason": "Playlist enqueue plan and folder naming." },
+        { "path": "src/components/downloader/useDownloaderView.ts", "reason": "Playlist batch download UX." },
+        { "path": "src/components/RegroupPlaylistModal.tsx", "reason": "Regroup flat playlist files into stack folder." }
+      ]
+    },
+    {
+      "id": "t-sponsorblock-scrub",
+      "type": "task",
+      "label": "SponsorBlock and scrubber polish",
+      "agent": "chad",
+      "details": [
+        "All API categories on fetch, color-coded scrub hover, sprite reload after Generate Previews."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/sponsorblock.rs", "reason": "Fetch all skip/chapter/POI categories." },
+        { "path": "src/components/player/ScrubHoverPreview.tsx", "reason": "Color-coded segment hover pill." },
+        { "path": "src/useScrubberThumbs.ts", "reason": "Sprite reload after preview generation." }
+      ]
+    },
+    {
+      "id": "t-settings-updates",
+      "type": "task",
+      "label": "Settings update checks",
+      "agent": "chad",
+      "details": [
+        "yt-dlp Check and Update in Downloads; Advanced Check auto-downloads RuForge; Debugging tab toggle."
+      ],
+      "fileEdits": [
+        { "path": "src/hooks/useYtdlpUpdate.ts", "reason": "Shared yt-dlp update check and install hook." },
+        { "path": "src/components/SettingsView.tsx", "reason": "Settings rows for yt-dlp and app updates." },
+        { "path": "src-tauri/src/commands/ytdlp_update.rs", "reason": "Force refresh on manual yt-dlp status check." }
+      ]
+    },
+    {
+      "id": "f-scrub-clip",
+      "type": "fix",
+      "label": "Scrub hover preview clipping",
+      "agent": "chad",
+      "details": [
+        "Simple seek bar no longer clips hover previews; chapter scrub path unchanged."
+      ],
+      "fileEdits": [
+        { "path": "src/components/PlayerView.tsx", "reason": "overflow-hidden only on track strip." }
+      ]
+    },
+    {
+      "id": "f-mini-blur",
+      "type": "fix",
+      "label": "Mini player large-mode blur wash",
+      "agent": "chad",
+      "details": [
+        "Video frame no longer washed by stacked blur when controls hide."
+      ],
+      "fileEdits": [
+        { "path": "src/MiniPlayer.tsx", "reason": "Unmount controls dock when hidden." }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-playlist-downloads" },
+    { "source": "t-playlist-downloads", "target": "ruforge" },
+    { "source": "chad", "target": "t-sponsorblock-scrub" },
+    { "source": "t-sponsorblock-scrub", "target": "ruforge" },
+    { "source": "chad", "target": "t-settings-updates" },
+    { "source": "t-settings-updates", "target": "ruforge" },
+    { "source": "chad", "target": "f-scrub-clip" },
+    { "source": "f-scrub-clip", "target": "ruforge" },
+    { "source": "chad", "target": "f-mini-blur" },
+    { "source": "f-mini-blur", "target": "ruforge" }
+  ]
+}

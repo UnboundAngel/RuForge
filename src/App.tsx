@@ -371,6 +371,7 @@ function App() {
   const setSidebarCollapsedByResize = useRuforgeStore((s) => s.setSidebarCollapsedByResize);
 
   const updateRef = useRef<Update | null>(null);
+  const handleInstallRestartRef = useRef<() => Promise<void>>(async () => {});
   const [updaterPhase, setUpdaterPhase] = useState<UpdaterPhase>("idle");
   const [updaterVersion, setUpdaterVersion] = useState<string | null>(null);
   const [, setUpdaterNotes] = useState("");
@@ -402,7 +403,8 @@ function App() {
       if (result.kind === "available") {
         applyAvailableUpdate(result.update);
         if (userInitiated) {
-          notify(`Update v${result.version} is available.`);
+          notify(`Update v${result.version} found. Downloading…`);
+          await handleInstallRestartRef.current();
         }
         return;
       }
@@ -455,6 +457,7 @@ function App() {
       );
     }
   }, [notify]);
+  handleInstallRestartRef.current = handleInstallRestart;
 
   const availableUpdatePayload = useMemo(() => {
     if (!updateRef.current) return null;
