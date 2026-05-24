@@ -762,42 +762,435 @@
     }
   }
 
-  /* Download flow (/download) */
+  /* Download page (/download) — Obsidian-style hero + App panel */
   .rf-dl-flow {
-    min-height: calc(100vh - 5rem);
+    display: flex;
+    justify-content: center;
+    min-height: calc(100vh - 12rem);
+    padding: 0 1.25rem 4rem;
+  }
+
+  .rf-dl-page {
+    width: 100%;
+    max-width: 42rem;
+    margin-inline: auto;
+  }
+
+  /* Hero: generous space below fixed header pill */
+  .rf-dl-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding-top: clamp(2.5rem, 8vh, 4.5rem);
+    padding-bottom: clamp(3rem, 10vh, 5rem);
+  }
+
+  /* Download hero mark (pattern from obsidian.md/download: card-shimmer + moving facet light) */
+  .rf-dl-hero-mark {
+    --rf-dl-mark-plate: #ab7f5e;
+    --spot-lx: 0;
+    --spot-ly: 0;
+    --mouse-x: 50%;
+    --mouse-y: 50%;
+    margin-bottom: 1.75rem;
+  }
+
+  .rf-dl-hero-mark-btn {
+    position: relative;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    appearance: none;
+    cursor: pointer;
+  }
+
+  .rf-dl-hero-mark-btn:disabled {
+    cursor: default;
+  }
+
+  .rf-dl-hero-mark-btn:focus-visible {
+    outline: 2px solid rgb(237 215 156 / 0.45);
+    outline-offset: 4px;
+    border-radius: 1.85rem;
+  }
+
+  .rf-dl-hero-mark-card {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 5rem 1.25rem 3rem;
+    padding: 1.125rem;
+    border-radius: 1.75rem;
+    background: #14100e;
+    box-shadow:
+      inset 0 1px 0 1px rgb(255 255 255 / 0.025),
+      0 1.5rem 3rem rgb(0 0 0 / 0.52),
+      0 0.35rem 0.85rem rgb(0 0 0 / 0.32);
+    transition:
+      transform 1s ease,
+      box-shadow 0.75s ease;
   }
 
-  .rf-dl-landing-min {
+  .rf-dl-hero-mark-card::after {
+    content: '';
+    position: absolute;
+    bottom: 15%;
+    left: 50%;
+    z-index: 1;
+    width: 45%;
+    height: 30%;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.5);
+    box-shadow: 0 0 50px 15px rgb(0 0 0 / 0.5);
+    transform: translateX(-50%);
+    transition: all 1.25s ease-in-out 0.1s;
+    pointer-events: none;
+  }
+
+  .rf-dl-logo-shimmer .rf-dl-hero-mark-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0.06;
+    transition: opacity 0.5s ease;
+    background: radial-gradient(
+      12rem circle at var(--mouse-x) var(--mouse-y),
+      rgb(255 255 255 / 0.08),
+      rgb(0 0 0 / 0.12) 55%
+    );
+    mix-blend-mode: normal;
+  }
+
+  .rf-dl-logo-shimmer:hover:not(:disabled) .rf-dl-hero-mark-card::before {
+    opacity: 1;
+  }
+
+  .rf-dl-logo-shimmer:hover:not(:disabled) .rf-dl-hero-mark-card {
+    transform: scale(1.04);
+    box-shadow:
+      inset 0 1px 1px 1px rgb(255 255 255 / 0.05),
+      0 1.35rem 2.25rem 0.65rem rgb(0 0 0 / 0.28);
+  }
+
+  .rf-dl-logo-shimmer:hover:not(:disabled) .rf-dl-hero-mark-card::after {
+    width: 55%;
+    height: 40%;
+    background: rgb(120 40 30 / 0.45);
+    box-shadow: 0 0 60px 50px rgb(120 40 30 / 0.28);
+  }
+
+  .rf-dl-hero-mark-noise {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0.34;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+    background-size: 140px 140px;
+  }
+
+  .rf-dl-hero-mark-stack {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 10.5rem;
+    height: 10.5rem;
+  }
+
+  .rf-dl-hero-mark-logo-wrap {
+    position: relative;
     width: 100%;
-    max-width: 28rem;
-    text-align: center;
+    height: 100%;
   }
 
-  .rf-dl-landing-title {
+  /* Facet-like highlights clipped to logo shape (PNG stand-in for Obsidian SVG gradients) */
+  .rf-dl-hero-mark-lit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    background:
+      radial-gradient(
+        3.25rem circle at calc(50% + var(--spot-lx) * 0.45%) calc(50% + var(--spot-ly) * 0.4%),
+        rgb(255 255 255 / 0.55) 0%,
+        transparent 72%
+      ),
+      radial-gradient(
+        2.75rem circle at calc(50% - var(--spot-lx) * 0.35%) calc(50% - var(--spot-ly) * 0.32%),
+        rgb(255 240 210 / 0.28) 0%,
+        transparent 70%
+      ),
+      radial-gradient(
+        2rem circle at calc(50% + var(--spot-lx) * 0.2%) calc(50% - var(--spot-ly) * 0.55%),
+        rgb(255 255 255 / 0.18) 0%,
+        transparent 68%
+      );
+    mix-blend-mode: soft-light;
+    transition: background-position 0.08s linear;
+  }
+
+  .rf-dl-hero-mark-plate {
+    position: absolute;
+    z-index: 0;
+    /* Sized to fill the logo’s transparent download cutout, not just the arrow */
+    width: 3.5rem;
+    height: 4rem;
+    border-radius: 0.35rem;
+    background: var(--rf-dl-mark-plate);
+  }
+
+  .rf-dl-hero-mark-logo {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 0.2rem 0.45rem rgb(0 0 0 / 0.38));
+  }
+
+  .rf-dl-hero-title {
+    margin: 0 0 1.75rem;
     font-family: var(--font-display, 'Cabinet Grotesk', system-ui, sans-serif);
+    font-size: clamp(2.125rem, 5vw, 2.75rem);
     font-weight: 700;
-    font-size: clamp(1.75rem, 4vw, 2.25rem);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
     color: var(--color-rf-text);
-    margin-bottom: 0.75rem;
   }
 
-  .rf-dl-landing-lead {
+  .rf-dl-hero-cta {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: min(100%, 20rem);
+    margin: 0;
+    padding: 0.9375rem 1.5rem;
+    border: 0;
+    border-radius: 0.625rem;
+    background: var(--color-rf-accent);
+    color: var(--color-rf-bg);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+    box-shadow: none;
+  }
+
+  .rf-dl-hero-cta:hover:not(:disabled) {
+    filter: brightness(1.05);
+  }
+
+  .rf-dl-hero-cta:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: none;
+  }
+
+  .rf-dl-hero-hint {
+    margin: 0.875rem 0 0;
+    max-width: 18rem;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: rgb(237 201 100 / 0.9);
+  }
+
+  .rf-dl-hero-meta {
+    margin: 1.125rem 0 0;
+    font-size: 0.8125rem;
+    color: rgb(201 184 122 / 0.42);
+  }
+
+  /* App panel */
+  .rf-dl-panel {
+    border-radius: 0.75rem;
+    border: 1px solid rgb(255 255 255 / 0.06);
+    background: rgb(22 16 14 / 0.65);
+    overflow: hidden;
+  }
+
+  .rf-dl-panel-title {
+    margin: 0;
+    padding: 1.125rem 1.5rem 0.375rem;
     font-size: 0.9375rem;
-    line-height: 1.6;
-    color: var(--color-rf-text-muted);
-    margin-bottom: 1.5rem;
+    font-weight: 500;
+    color: rgb(201 184 122 / 0.55);
   }
 
-  .rf-dl-landing-actions {
+  .rf-dl-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .rf-dl-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.25rem;
+    min-height: 3.25rem;
+    padding: 0.75rem 1.5rem;
+    border-top: 1px solid rgb(255 255 255 / 0.06);
+  }
+
+  .rf-dl-row-label {
+    flex-shrink: 0;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--color-rf-text);
+  }
+
+  .rf-dl-row-link {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-rf-accent);
+    cursor: pointer;
+    transition: color 0.15s ease;
+    box-shadow: none;
+  }
+
+  .rf-dl-row-link:hover {
+    color: var(--color-rf-text);
+  }
+
+  .rf-dl-row-link-icon {
+    opacity: 0.85;
+  }
+
+  .rf-dl-soon {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgb(237 201 100 / 0.92);
+  }
+
+  .rf-dl-row--linux {
+    align-items: flex-start;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .rf-dl-linux-options {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .rf-dl-format-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.625rem;
-    justify-content: center;
+    justify-content: flex-end;
+    gap: 0.625rem 1rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .rf-dl-format-list > li {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.125rem;
+  }
+
+  .rf-dl-format-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgb(201 184 122 / 0.38);
+    pointer-events: none;
+  }
+
+  .rf-dl-format-opt-icon {
+    opacity: 0.45;
+  }
+
+  .rf-dl-format-note {
+    font-size: 0.6875rem;
+    color: rgb(201 184 122 / 0.32);
+    white-space: nowrap;
+  }
+
+  .rf-dl-soon--linux {
+    font-size: 0.8125rem;
+  }
+
+  .rf-dl-github {
+    margin: 1.5rem 0 0;
+    text-align: center;
+    font-size: 0.8125rem;
+  }
+
+  .rf-dl-github a {
+    color: rgb(201 184 122 / 0.45);
+    text-decoration: none;
+  }
+
+  .rf-dl-github a:hover {
+    color: var(--color-rf-text-muted);
+    text-decoration: underline;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rf-dl-hero-mark-card {
+      transition: none;
+    }
+
+    .rf-dl-logo-shimmer .rf-dl-hero-mark-card::before {
+      opacity: 0;
+    }
+
+    .rf-dl-hero-mark-lit {
+      background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.2), transparent 65%);
+    }
+  }
+
+  @media (max-width: 540px) {
+    .rf-dl-row--linux {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
+    }
+
+    .rf-dl-linux-options {
+      align-items: flex-start;
+    }
+
+    .rf-dl-format-list {
+      justify-content: flex-start;
+    }
+
+    .rf-dl-format-list > li {
+      align-items: flex-start;
+    }
   }
 
   .rf-dl-btn-primary,

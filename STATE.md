@@ -57,7 +57,7 @@ Fixes:
 - Preview ffmpeg deadlock fix; delete cancels preview work.
 - Download hero clears on finish/remove; explorer bounds sync during sidebar resize.
 
-**0.1.8 unreleased:** Scrubber hover previews fixed (chapter scrub path, sprite reload after
+**0.1.8 unreleased:** `/download` Obsidian-style page (OS-detected hero CTA, platform panel, Linux format rows, macOS/Linux coming soon). Scrubber hover previews fixed (chapter scrub path, sprite reload after
 Generate Previews, `..info.json` duration for sprite sheets). SponsorBlock scrub/skip now fetches all categories (self-promo,
 intro, POI, chapters, etc.), not sponsor-only API default; stale sidecars refresh
 on play. Playlist downloader: playlist URLs from clipboard, per-video audio in
