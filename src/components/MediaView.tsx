@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music } from "lucide-react";
+import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music, FileText } from "lucide-react";
+import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import { isAudioOnlyPath } from "../mediaKind";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { askConfirm } from "./ConfirmDialog";
@@ -279,6 +280,10 @@ export const MediaView = ({
   const setGalleryExtractingPath = useRuforgeStore((s) => s.setGalleryExtractingPath);
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
 
+  const [showTranscriptMenu, setShowTranscriptMenu] = useState(false);
+
+  useEffect(() => { setShowTranscriptMenu(false); }, [activeMenu]);
+
   const handleDelete = async (file: MediaFile) => {
     setGalleryActiveMenu(null);
     const approved = await askConfirm({
@@ -409,11 +414,12 @@ export const MediaView = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -12 }}
       className="h-full flex flex-col"
-      onClick={() => setGalleryActiveMenu(null)}
+      onClick={() => { setGalleryActiveMenu(null); setShowTranscriptMenu(false); }}
       onContextMenu={(e) => {
         if ((e.target as HTMLElement).closest('.group')) return;
         e.preventDefault();
         setGalleryActiveMenu(null);
+        setShowTranscriptMenu(false);
       }}
     >
       {/* Header */}
@@ -524,6 +530,39 @@ export const MediaView = ({
                     <ImageIcon size={16} />
                     <span className="text-xs font-bold">Generate Previews</span>
                   </button>
+                  {file.subtitlePath && (
+                    <>
+                      <button
+                        onClick={() => setShowTranscriptMenu((s) => !s)}
+                        className="w-full px-3 py-2.5 flex items-center space-x-3 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"
+                      >
+                        <FileText size={16} />
+                        <span className="text-xs font-bold">Copy Transcript</span>
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {showTranscriptMenu && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                            className="relative px-2 pb-2 space-y-0.5 overflow-hidden"
+                          >
+                            <div className="absolute top-[10px] bottom-[10px] left-5 w-px bg-white/10 pointer-events-none" />
+                            {([["plain", "Plain text"], ["timestamped", "With timestamps"], ["markdown", "Markdown (with chapters)"]] as const).map(([variant, label]) => (
+                              <button
+                                key={variant}
+                                onClick={() => { void copyTranscriptForFile(file, variant as TranscriptVariant); setGalleryActiveMenu(null); setShowTranscriptMenu(false); }}
+                                className="w-full pl-6 pr-2 py-1.5 rounded-lg text-[10px] font-black text-left text-stone-500 hover:text-white transition-colors"
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </>
+                  )}
                   <div className="h-px bg-white/5 my-1 mx-2" />
                   <button 
                     onClick={() => handleDelete(file)}

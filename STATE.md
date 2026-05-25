@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.9 (unreleased)
 Last shipped to users: 0.1.8
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 Status: in progress
 
 ## Now
@@ -48,7 +48,7 @@ Fixes:
 - Mini player large mode: video no longer washed by stacked blur.
 - Playlist regroup matches by id, url, or title across internal and custom roots.
 
-**0.1.9 unreleased:** Downloader cookie fixes (None default, metadata retry without cookies on export failure, clearer errors). App and website icons use `public/RuForgeLogo.png`. `/download` hero loads SVGO-compressed `RuForgeLogo.svg` at runtime (not inlined); pointer-driven blade gradients. (see AGENTS.md Shipped log)
+**0.1.9 unreleased:** Getting Started docs pages fully written (Download and install, Your first download, Library folders, Glossary) with rich content system (steps, bullets, tips, notes, code, keyboard hints) and search indexing of real body text. Docs sidebar search is functional (React island, live filter over all pages and headings, keyboard nav, sig-color highlight, click-to-navigate). Docs link color replaced Obsidian purple with warm amber token (`--color-rf-docs-link`), persistent underline on page links, hover link-chain icon. Copy transcript menu visual polish (aligning button styles, icons, sub-options, container padding, and adding a vertical tree connecting line). Obsidian-style `/docs` section (left sidebar tree nav, 11 sections, 40+ pages, "On this page" right sidebar, prev/next nav, section card index). Six detailed `/features/*` pages (downloader, media-library, player, sponsorblock, mini-player, settings) with alternating screenshot/copy layout and card grid index. Redesigned download landing page (clickable title, auto-width hero button, and Obsidian-style vertical platform panel). Downloader cookie fixes (None default, metadata retry without cookies on export failure, clearer errors). App and website icons use `public/RuForgeLogo.png`. `/download` hero loads SVGO-compressed `RuForgeLogo.svg` at runtime (not inlined); pointer-driven blade gradients. (see AGENTS.md Shipped log)
 
 ## Open P0 (blocks release)
 
