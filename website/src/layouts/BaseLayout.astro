@@ -15,12 +15,24 @@ interface Props {
   flushTop?: boolean;
   /** Enables directional built-with page transitions and html data attrs. */
   builtWithNav?: BuiltWithNavContext;
+  /** Override the canonical URL for this page. Derived from Astro.url if omitted. */
+  canonicalUrl?: string;
+  /** JSON-LD structured data objects to inject into the page head. */
+  jsonLd?: object | object[];
 }
 
-const { title = SITE.name, description = SITE.description, flushTop = false, builtWithNav } =
-  Astro.props;
-const pageTitle = title === SITE.name ? title : `${title} · ${SITE.name}`;
+const {
+  title = SITE.name,
+  description = SITE.description,
+  flushTop = false,
+  builtWithNav,
+  canonicalUrl,
+  jsonLd,
+} = Astro.props;
+const pageTitle =
+  title === SITE.name || title.includes(SITE.name) ? title : `${title} · ${SITE.name}`;
 const builtWithMainTransition = builtWithNav !== undefined;
+const computedCanonical = canonicalUrl || new URL(Astro.url.pathname, Astro.site).href;
 ---
 
 <!doctype html>
@@ -36,13 +48,22 @@ const builtWithMainTransition = builtWithNav !== undefined;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    <link rel="canonical" href={computedCanonical} />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
+    <meta property="og:url" content={computedCanonical} />
     <meta property="og:image" content={SITE.ogImage} />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>{pageTitle}</title>
+    {jsonLd && (
+      Array.isArray(jsonLd)
+        ? jsonLd.map(schema => (
+            <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+          ))
+        : <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+    )}
     <ClientRouter />
   </head>
   <body class="flex min-h-screen flex-col">

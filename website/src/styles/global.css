@@ -1579,11 +1579,252 @@
     text-decoration: underline;
   }
 
+  /* ---- Progress ring (downloading phase) ---- */
+
+  .rf-dl-ring-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1rem auto 0.75rem;
+    width: 96px;
+    height: 96px;
+  }
+
+  .rf-dl-ring-svg {
+    display: block;
+  }
+
+  .rf-dl-ring-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-rf-text);
+    pointer-events: none;
+  }
+
+  /* ---- Flash confirmation (checkmark + saved text) ---- */
+
+  .rf-dl-flash {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1.5rem 2rem;
+    gap: 1rem;
+  }
+
+  .rf-dl-flash-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .rf-dl-checkmark-svg {
+    display: block;
+    width: 80px;
+    height: 80px;
+  }
+
+  .rf-dl-ring-active {
+    stroke: var(--color-rf-accent);
+  }
+
+  .rf-dl-checkmark-ring,
+  .rf-dl-checkmark-path {
+    stroke: #4caf50;
+  }
+
+  .rf-dl-checkmark-ring {
+    stroke-dasharray: 145;
+    stroke-dashoffset: 145;
+    transition: none;
+  }
+
+  .rf-dl-checkmark-ring--fill {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 0.5s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+
+  .rf-dl-checkmark-path {
+    stroke-dasharray: 40;
+    stroke-dashoffset: 40;
+    transition: none;
+  }
+
+  .rf-dl-checkmark-path--draw {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 0.4s cubic-bezier(0.65, 0, 0.35, 1) 0.4s;
+  }
+
+  .rf-dl-flash-text {
+    font-size: 0.8125rem;
+    color: var(--color-rf-text-muted);
+    text-align: center;
+  }
+
+  /* ---- Post-download (wider card for steps) ---- */
+
+  .rf-dl-modal--post {
+    max-width: 28rem;
+  }
+
+  .rf-dl-post {
+    padding: 2rem 2rem 1.5rem;
+  }
+
+  .rf-dl-post-eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #4caf50;
+    margin-bottom: 0.5rem;
+  }
+
+  .rf-dl-post-heading {
+    font-family: var(--font-display, 'Cabinet Grotesk', system-ui, sans-serif);
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-rf-text);
+    margin-bottom: 2rem;
+    line-height: 1.15;
+  }
+
+  /* ---- Vertical step timeline ---- */
+
+  .rf-dl-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 1.75rem;
+  }
+
+  .rf-dl-step {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    position: relative;
+    padding: 0.625rem 0;
+  }
+
+  .rf-dl-step-line {
+    position: absolute;
+    left: 13px;
+    top: calc(50% + 13px);
+    width: 2px;
+    height: calc(100% - 2px);
+    background: rgb(237 215 156 / 0.12);
+    z-index: 0;
+  }
+
+  .rf-dl-step-icon {
+    position: relative;
+    z-index: 1;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .rf-dl-step-icon--done {
+    background: #2e7d32;
+    color: #fff;
+    box-shadow: 0 0 0 4px var(--color-rf-bg);
+  }
+
+  .rf-dl-step-icon--current {
+    background: var(--color-rf-bg);
+    border: 2px solid var(--color-rf-text-muted);
+    color: var(--color-rf-text-muted);
+    box-shadow: 0 0 0 4px var(--color-rf-bg);
+  }
+
+  .rf-dl-step-icon--upcoming {
+    background: var(--color-rf-bg);
+    border: 2px solid rgb(237 215 156 / 0.15);
+    box-shadow: 0 0 0 4px var(--color-rf-bg);
+  }
+
+  .rf-dl-step-label {
+    flex: 1;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--color-rf-text);
+  }
+
+  .rf-dl-step-label--dim {
+    color: var(--color-rf-text-muted);
+    opacity: 0.6;
+  }
+
+  .rf-dl-step-badge {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .rf-dl-step-badge--done {
+    background: rgb(76 175 80 / 0.15);
+    color: #4caf50;
+  }
+
+  .rf-dl-step-badge--current {
+    background: rgb(237 215 156 / 0.12);
+    color: var(--color-rf-text-muted);
+  }
+
+  /* ---- CTA and footer links ---- */
+
+  .rf-dl-post-cta {
+    width: 100%;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+  }
+
+  .rf-dl-post-links {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .rf-dl-post-links a {
+    font-size: 0.75rem;
+    color: rgb(201 184 122 / 0.5);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .rf-dl-post-links a:hover {
+    color: var(--color-rf-text-muted);
+    text-decoration: underline;
+  }
+
+  .rf-dl-post-dot {
+    color: rgb(201 184 122 / 0.25);
+    font-size: 0.75rem;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .rf-dl-bar-fill,
     .rf-dl-btn-primary,
-    .rf-dl-btn-secondary {
-      transition: none;
+    .rf-dl-btn-secondary,
+    .rf-dl-checkmark-ring,
+    .rf-dl-checkmark-path {
+      transition: none !important;
     }
   }
 }

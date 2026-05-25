@@ -1,0 +1,40 @@
+# RuForge
+
+> RuForge is a free open-source desktop media library and yt-dlp frontend for Windows. Built with Tauri v2 and Rust, it downloads videos and audio from yt-dlp's 1000+ supported sites, stores them in a local library, and includes a full media player with chapter navigation, SponsorBlock integration, and a mini player. MIT licensed. No ads, no telemetry, no premium tier.
+
+RuForge uses yt-dlp as the download engine and FFmpeg for media processing. It ships as a signed Windows installer with an auto-updater. Linux is supported for local development; macOS is not yet supported as a release target.
+
+## Documentation
+
+- [Home](https://ruforge.app/): What RuForge is and who it is for
+- [Download](https://ruforge.app/download): Signed Windows installer
+- [Features](https://ruforge.app/features): Full feature index with screenshots
+- [Changelog](https://ruforge.app/changelog): Release notes and version history
+- [Roadmap](https://ruforge.app/roadmap): Public feature roadmap
+- [Docs](https://ruforge.app/docs): Getting started and reference
+
+## Feature pages
+
+- [Downloader](https://ruforge.app/features/downloader): Persistent download queue, playlists, audio-only mode
+- [Media library](https://ruforge.app/features/media-library): Local gallery with auto-scan and search
+- [Player](https://ruforge.app/features/player): Video and audio playback with chapter navigation
+- [SponsorBlock](https://ruforge.app/features/sponsorblock): Automatic sponsor segment skip on downloaded files
+- [Mini player](https://ruforge.app/features/mini-player): Compact floating player window
+- [Settings](https://ruforge.app/features/settings): Downloads, library paths, player behavior
+
+## Getting started guides
+
+- [Download and install](https://ruforge.app/docs/install): First-run setup
+- [Your first download](https://ruforge.app/docs/first-download): Paste a link, save a file
+- [Library folders](https://ruforge.app/docs/library-folders): Internal vault and download path
+- [Glossary](https://ruforge.app/docs/glossary): Terms used in the app
+
+## Source code
+
+- [Repository](https://github.com/UnboundAngel/RuForge): Source, releases, issues, and discussions
+- [License](https://github.com/UnboundAngel/RuForge/blob/main/LICENSE): MIT license terms
+
+## Optional
+
+- [Legal](https://ruforge.app/legal): Privacy policy and terms of service
+- [Built with](https://ruforge.app/docs/built-with): Open-source dependencies and how RuForge uses them

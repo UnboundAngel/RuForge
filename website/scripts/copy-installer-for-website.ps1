@@ -1,6 +1,6 @@
 # Copy the signed NSIS installer into website/public/releases/ for same-origin /download streaming.
 param(
-  [string]$Version = '0.1.7'
+  [string]$Version = '0.1.8'
 )
 
 $ErrorActionPreference = 'Stop'

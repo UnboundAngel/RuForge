@@ -11,9 +11,15 @@ import { techTickerItems } from '../lib/techTickerIcons';
 import { Image } from 'astro:assets';
 import highlightCoffee from '../assets/highlight-coffee-beans.webp';
 import landingGrain from '../assets/landing-grain.png';
+import { softwareApplicationSchema, organizationSchema } from '../lib/structuredData';
 ---
 
-<BaseLayout flushTop>
+<BaseLayout
+  title="RuForge: Open-source media library for Windows"
+  description="Free Tauri desktop app with yt-dlp downloads, SponsorBlock, chapter navigation, and a local media library. No ads, no telemetry."
+  flushTop
+  jsonLd={[softwareApplicationSchema(), organizationSchema()]}
+>
   <div class="relative overflow-hidden min-h-screen flex flex-col justify-between">
     <LandingBackdrop grain={landingGrain} />
 
