@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Music } from "lucide-react";
 import {
   acquireAnalyserGraph,
@@ -7,18 +7,8 @@ import {
   type AnalyserGraph,
 } from "../../audioAnalyserGraph";
 
-const BAR_COUNT = 90;
-const BAR_GAP = 3;
-const BAR_W_MAX = 4;
-const ATTACK = 0.4;
-const RELEASE = 0.12;
-const RETARGET_HZ = 18;
-/** Max bar half-height as a fraction of canvas half-height */
-const AMP_CAP = 0.5;
-const ENERGY_SCALE = 0.62;
-const TARGET_MAX = 0.88;
-
-const RAMP_STOPS = ["#9E7644", "#C4AD86", "#D48E4C", "#B05A38"] as const;
+/** Seconds per full revolution. */
+const SPIN_DURATION = 3;
 
 type Props = {
   coverSrc: string | null;
@@ -28,59 +18,82 @@ type Props = {
   isMuted: boolean;
 };
 
-type BarDef = {
-  rest: number;
-  excite: number;
-  phase: number;
-  freq: number;
-};
-
-function hashSeed(seed: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
+function VinylDisc({ coverSrc }: { coverSrc: string | null }) {
+  const grooves: React.ReactElement[] = [];
+  for (let i = 0; i < 28; i++) {
+    const r = 76 + i * 4.2;
+    if (r >= 194) break;
+    grooves.push(
+      <circle
+        key={i}
+        cx="200"
+        cy="200"
+        r={r}
+        fill="none"
+        stroke={i % 3 === 0 ? "rgba(55,55,55,0.35)" : "rgba(30,30,30,0.25)"}
+        strokeWidth="0.5"
+      />,
+    );
   }
-  return h >>> 0;
-}
 
-function seededUnit(seed: number, index: number): number {
-  const x = Math.sin(seed * 12.9898 + index * 78.233) * 43758.5453;
-  return x - Math.floor(x);
-}
+  return (
+    <svg
+      viewBox="0 0 400 400"
+      className="w-full h-full"
+      style={{ filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.5))" }}
+      aria-hidden
+    >
+      <defs>
+        {coverSrc && (
+          <clipPath id="rf-vinyl-label">
+            <circle cx="200" cy="200" r="50" />
+          </clipPath>
+        )}
+        <radialGradient id="rf-vinyl-sheen" cx="30%" cy="30%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.05)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+      </defs>
 
-function buildBarDefs(seedKey: string): BarDef[] {
-  const seed = hashSeed(seedKey);
-  return Array.from({ length: BAR_COUNT }, (_, i) => ({
-    rest: 0.07 + seededUnit(seed, i) * 0.06,
-    excite: 0.48 + seededUnit(seed, i + 50) * 0.32,
-    freq: 0.7 + seededUnit(seed, i + 100) * 1.4,
-    phase: seededUnit(seed, i + 150) * Math.PI * 2,
-  }));
-}
+      {/* Disc body */}
+      <circle cx="200" cy="200" r="198" fill="#0d0d0d" />
+      <circle cx="200" cy="200" r="196" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
 
-function rampColor(frac: number): string {
-  const t = Math.max(0, Math.min(1, frac));
-  const seg = t * (RAMP_STOPS.length - 1);
-  const i = Math.min(RAMP_STOPS.length - 2, Math.floor(seg));
-  const f = seg - i;
-  const a = RAMP_STOPS[i];
-  const b = RAMP_STOPS[i + 1];
-  const parse = (hex: string) => {
-    const n = parseInt(hex.slice(1), 16);
-    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
-  };
-  const c1 = parse(a);
-  const c2 = parse(b);
-  const r = Math.round(c1.r + (c2.r - c1.r) * f);
-  const g = Math.round(c1.g + (c2.g - c1.g) * f);
-  const bch = Math.round(c1.b + (c2.b - c1.b) * f);
-  return `rgb(${r},${g},${bch})`;
+      {grooves}
+
+      {/* Sheen */}
+      <circle cx="200" cy="200" r="195" fill="url(#rf-vinyl-sheen)" />
+
+      {/* Label ring */}
+      <circle cx="200" cy="200" r="54" fill="#1a1510" />
+      <circle cx="200" cy="200" r="53" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
+
+      {coverSrc ? (
+        <image
+          href={coverSrc}
+          x="150"
+          y="150"
+          width="100"
+          height="100"
+          clipPath="url(#rf-vinyl-label)"
+          preserveAspectRatio="xMidYMid slice"
+        />
+      ) : (
+        <circle cx="200" cy="200" r="50" fill="#221a12" />
+      )}
+
+      {/* Spindle hole */}
+      <circle cx="200" cy="200" r="7" fill="#000" />
+      <circle cx="200" cy="200" r="8.5" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" />
+    </svg>
+  );
 }
 
 /**
- * Audio-only hero: full-canvas symmetrical dancing equalizer (Whispers-style).
- * All bars always visible; loudness + per-bar random targets, not frequency bins.
+ * Audio-only hero: vinyl record + centered album art.
+ * The vinyl spins during playback (JS-driven RAF), freezes at current
+ * angle on pause, and slides partially behind the album art when paused.
+ * Audio analyser drives a subtle radial glow around the disc.
  */
 export function AudioHeroStage({
   coverSrc,
@@ -89,47 +102,34 @@ export function AudioHeroStage({
   isPaused,
   isMuted,
 }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const vinylRef = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<AnalyserGraph | null>(null);
-  const heightsRef = useRef<number[]>(new Array(BAR_COUNT).fill(0.12));
-  const targetsRef = useRef<number[]>(new Array(BAR_COUNT).fill(0.12));
-  const retargetTickRef = useRef(0);
   const rafRef = useRef<number | null>(null);
-
-  const barDefs = useMemo(() => buildBarDefs(connectKey), [connectKey]);
+  const rotationRef = useRef(0);
 
   useEffect(() => {
-    const defs = barDefs;
-    const heights = heightsRef.current;
-    const targets = targetsRef.current;
-    for (let i = 0; i < BAR_COUNT; i++) {
-      heights[i] = defs[i].rest;
-      targets[i] = defs[i].rest;
-    }
-    retargetTickRef.current = 0;
-  }, [connectKey, barDefs]);
+    rotationRef.current = 0;
+    if (vinylRef.current) vinylRef.current.style.transform = "rotate(0deg)";
+  }, [connectKey]);
 
   useEffect(() => {
     if (!audioEl) {
       graphRef.current = null;
-      return undefined;
+      return;
     }
-
     const attach = () => {
       const graph = acquireAnalyserGraph(audioEl);
       graphRef.current = graph;
       if (graph) void graph.ctx.resume();
     };
-
     const onPlaying = () => {
       if (!graphRef.current) attach();
       else void graphRef.current.ctx.resume();
     };
-
     audioEl.addEventListener("play", onPlaying);
     audioEl.addEventListener("playing", onPlaying);
     if (!audioEl.paused) onPlaying();
-
     return () => {
       audioEl.removeEventListener("play", onPlaying);
       audioEl.removeEventListener("playing", onPlaying);
@@ -145,77 +145,52 @@ export function AudioHeroStage({
   }, [connectKey, audioEl]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return undefined;
-
-    const heights = heightsRef.current;
-    const targets = targetsRef.current;
-    const defs = barDefs;
     let alive = true;
-    let sizeW = 0;
-    let sizeH = 0;
+    let lastTime = performance.now();
 
-    const draw = () => {
+    const tick = (now: number) => {
       if (!alive) return;
-      rafRef.current = requestAnimationFrame(draw);
-      const graph = graphRef.current;
-      if (graph?.ctx.state === "suspended") void graph.ctx.resume();
+      rafRef.current = requestAnimationFrame(tick);
 
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (!isPaused && vinylRef.current) {
+        rotationRef.current =
+          (rotationRef.current + dt * (360 / SPIN_DURATION)) % 360;
+        vinylRef.current.style.transform = `rotate(${rotationRef.current}deg)`;
+      }
+
+      const glow = glowRef.current;
+      if (!glow) return;
+      const graph = graphRef.current;
       const mediaPaused = audioEl?.paused ?? true;
-      const idle = mediaPaused || isPaused;
+
+      if (!graph || mediaPaused || isPaused) {
+        const cur = parseFloat(glow.dataset.energy || "0");
+        const next = cur * 0.92;
+        glow.dataset.energy = String(next);
+        glow.style.background = `radial-gradient(circle, rgba(158,118,68,${next * 0.3}) 0%, transparent 65%)`;
+        glow.style.opacity = next > 0.03 ? "1" : "0";
+        return;
+      }
+
       const volGain = audioEl && !isMuted ? audioEl.volume : 0;
       const gain = (isMuted ? 0.35 : 1) * (0.8 + volGain * 0.35);
-
-      const t = performance.now() / 1000;
-      const retargetSlot = Math.floor(t * RETARGET_HZ);
-
-      if (retargetSlot !== retargetTickRef.current) {
-        retargetTickRef.current = retargetSlot;
-        const energy = graph && !idle ? readSmoothedLoudness(graph, gain) : 0;
-
-        for (let i = 0; i < BAR_COUNT; i++) {
-          const d = defs[i];
-          if (idle) {
-            targets[i] =
-              d.rest + 0.04 * Math.sin(t * d.freq + d.phase);
-          } else {
-            const jitter = Math.random() * 0.5 + 0.5;
-            targets[i] = Math.min(
-              TARGET_MAX,
-              d.rest + energy * ENERGY_SCALE * d.excite * jitter,
-            );
-          }
-        }
-      }
-
-      for (let i = 0; i < BAR_COUNT; i++) {
-        const tgt = Math.max(defs[i].rest * 0.85, targets[i]);
-        const cur = heights[i];
-        const rate = tgt > cur ? ATTACK : RELEASE;
-        heights[i] = cur + (tgt - cur) * rate;
-      }
-
-      const parent = canvas.parentElement;
-      const cw = parent?.clientWidth ?? canvas.clientWidth;
-      const ch = parent?.clientHeight ?? canvas.clientHeight;
-      if (cw !== sizeW || ch !== sizeH) {
-        sizeW = cw;
-        sizeH = ch;
-      }
-      paintWaveform(canvas, sizeW, sizeH, heights, defs);
+      const energy = readSmoothedLoudness(graph, gain);
+      glow.dataset.energy = String(energy);
+      glow.style.background = `radial-gradient(circle, rgba(158,118,68,${energy * 0.3}) 0%, transparent 65%)`;
+      glow.style.opacity = energy > 0.03 ? "1" : "0";
     };
 
-    draw();
+    rafRef.current = requestAnimationFrame(tick);
     return () => {
       alive = false;
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [audioEl, isPaused, isMuted, connectKey, barDefs]);
+  }, [audioEl, isPaused, isMuted]);
 
-  const artSize = "min(42vmin, 480px, calc(100vw - 120px))";
+  const artSize = "min(38vmin, 420px, calc(100vw - 160px))";
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -239,103 +214,54 @@ export function AudioHeroStage({
         />
       )}
 
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full block"
-        aria-hidden
-      />
-
-      <div className="absolute inset-0 flex items-center justify-center px-4 z-10">
-        <div
-          data-audio-hero-art
-          className="shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/15 ring-1 ring-white/10 bg-black/40"
-          style={{ width: artSize, height: artSize }}
-        >
-          {coverSrc ? (
-            <img src={coverSrc} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="flex w-full h-full items-center justify-center bg-white/5">
-              <Music
-                className="w-24 h-24 text-[color:var(--accent)] opacity-35"
-                strokeWidth={1}
-                aria-hidden
-              />
+      <div className="absolute inset-0 flex items-center justify-center z-10">
+        <div className="relative" style={{ width: artSize, height: artSize }}>
+          {/* Vinyl disc */}
+          <div
+            className="absolute transition-all duration-700 ease-out"
+            style={{
+              width: "100%",
+              height: "100%",
+              top: "50%",
+              left: "-48%",
+              transform: `translateY(-50%) translateX(${isPaused ? "30%" : "0"})`,
+              opacity: isPaused ? 0.5 : 1,
+            }}
+          >
+            <div
+              ref={glowRef}
+              className="absolute inset-[-12%] rounded-full pointer-events-none"
+              data-energy="0"
+              style={{ transition: "opacity 0.3s" }}
+            />
+            <div ref={vinylRef} className="w-full h-full">
+              <VinylDisc coverSrc={coverSrc} />
             </div>
-          )}
+          </div>
+
+          {/* Album art */}
+          <div
+            data-audio-hero-art
+            className="relative z-10 w-full h-full rounded-2xl overflow-hidden shadow-2xl border border-white/15 ring-1 ring-white/10 bg-black/40"
+          >
+            {coverSrc ? (
+              <img
+                src={coverSrc}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="flex w-full h-full items-center justify-center bg-white/5">
+                <Music
+                  className="w-24 h-24 text-[color:var(--accent)] opacity-35"
+                  strokeWidth={1}
+                  aria-hidden
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
-}
-
-function paintWaveform(
-  canvas: HTMLCanvasElement,
-  cssWidth: number,
-  cssHeight: number,
-  heights: number[],
-  defs: BarDef[],
-): void {
-  const dpr = window.devicePixelRatio || 1;
-  const cw = Math.max(1, cssWidth);
-  const ch = Math.max(1, cssHeight);
-  const w = Math.floor(cw * dpr);
-  const h = Math.floor(ch * dpr);
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
-  }
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cw, ch);
-
-  const cy = ch / 2;
-  const maxHalf = (cy - 12) * AMP_CAP;
-  const totalGap = (BAR_COUNT - 1) * BAR_GAP;
-  const barW = Math.min(
-    BAR_W_MAX,
-    Math.max(2, (cw - totalGap) / BAR_COUNT),
-  );
-  const startX = (cw - (BAR_COUNT * barW + totalGap)) / 2;
-  const centerIdx = (BAR_COUNT - 1) / 2;
-  const centerFadeRadius = BAR_COUNT * 0.28;
-
-  const SEG_H = 3;
-  const SEG_GAP = 1;
-
-  for (let i = 0; i < BAR_COUNT; i++) {
-    const level = Math.max(
-      defs[i].rest * 0.9,
-      Math.min(TARGET_MAX, heights[i]),
-    );
-    const halfH = level * maxHalf;
-    const bx = startX + i * (barW + BAR_GAP);
-    const frac =
-      (level - defs[i].rest) / Math.max(0.01, TARGET_MAX - defs[i].rest);
-
-    const distCenter = Math.abs(i - centerIdx) / centerFadeRadius;
-    const centerDim =
-      distCenter < 1 ? 0.78 + distCenter * 0.22 : 1;
-    ctx.globalAlpha = (0.36 + frac * 0.34) * centerDim;
-
-    const maxSegs = Math.ceil(maxHalf / (SEG_H + SEG_GAP));
-    const numSegs = Math.round(halfH / (SEG_H + SEG_GAP));
-
-    for (let j = 0; j < numSegs; j++) {
-      const segFrac = j / Math.max(1, maxSegs - 1);
-      ctx.fillStyle = rampColor(segFrac);
-
-      const offset = SEG_GAP / 2 + j * (SEG_H + SEG_GAP);
-
-      // Top segment
-      ctx.fillRect(bx, cy - offset - SEG_H, barW, SEG_H);
-
-      // Bottom segment
-      ctx.fillRect(bx, cy + offset, barW, SEG_H);
-    }
-  }
-
-  ctx.globalAlpha = 1;
 }

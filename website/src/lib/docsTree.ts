@@ -55,10 +55,10 @@ export const DOCS_TREE: DocsSection[] = [
         slug: 'library-folders',
         title: 'Library folders',
         description:
-          'Internal download path, extra scan roots, and how the gallery discovers files.',
+          'Internal vault, your download path, and how the library discovers files.',
         outline: [
           'Download directory',
-          'Custom roots',
+          'Internal vault and download path',
           'Scan behavior',
           'Case and extensions',
         ],
