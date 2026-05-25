@@ -9,7 +9,6 @@ import {
 } from '../../lib/detectPlatform';
 import PlatformIcon from './PlatformIcon';
 import DownloadHeroMark from './DownloadHeroMark';
-import { Component as SilkBackground } from '../ui/silk-background-animation';
 
 type DownloadOwlHeroProps = {
   version: string;
@@ -35,11 +34,7 @@ export default function DownloadOwlHero({
   }, []);
 
   return (
-    <div className="relative flex w-full min-h-screen flex-col items-center justify-center overflow-hidden">
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <SilkBackground demoMode={false} variant="owl" />
-      </div>
-
+    <>
       <div className="relative z-10 flex items-center justify-center">
         <DownloadHeroMark
           onActivate={windowsReady ? onDownload : undefined}
@@ -81,6 +76,6 @@ export default function DownloadOwlHero({
           View releases on GitHub
         </a>
       </p>
-    </div>
+    </>
   );
 }

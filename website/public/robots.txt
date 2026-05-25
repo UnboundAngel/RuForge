@@ -1,0 +1,59 @@
+# AI search and citation crawlers (allowed)
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Cloudflare-AI-Search
+Allow: /
+
+# AI training crawlers (blocked)
+User-agent: GPTBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+User-agent: Meta-ExternalFetcher
+Disallow: /
+
+# Traditional search crawlers (allowed)
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Default
+User-agent: *
+Allow: /
+
+Sitemap: https://ruforge.app/sitemap-index.xml

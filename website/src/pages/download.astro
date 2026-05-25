@@ -7,6 +7,7 @@ import {
   installerFetchUrls,
   windowsInstallerFilename,
 } from '../lib/downloadRelease';
+import { softwareApplicationSchema } from '../lib/structuredData';
 
 const params = Astro.url.searchParams;
 const autoStart = params.get('start') === '1';
@@ -18,9 +19,10 @@ const directDownloadUrl = directInstallerDownloadUrl(version);
 ---
 
 <BaseLayout
-  title="Download RuForge"
-  description="Download RuForge for Windows. macOS and Linux builds are planned."
+  title="Download RuForge for Windows"
+  description="Free open-source media library and yt-dlp frontend. Signed Windows installer, auto-updater, no premium tier."
   flushTop
+  jsonLd={softwareApplicationSchema()}
 >
   <script is:inline>
     document.documentElement.classList.add('rf-dl-owl-page');

@@ -1,0 +1,280 @@
+/* =========================================================================
+   RuForge Design System — Colors & Type
+   Single source of CSS variables + typographic recipes used by every
+   preview card, slide, and UI kit in this project.
+
+   Two surfaces share this palette:
+     • Website  → `rf-*` tokens (warm dark "forge")
+     • Desktop app → `--bg / --surface / --accent` (related, slightly cooler)
+   Prefer the `rf-*` tokens for new design work unless the artifact
+   specifically mocks the in-app surface.
+   ========================================================================= */
+
+/* -------- Webfonts ------------------------------------------------------- */
+@font-face {
+  font-family: 'Cabinet Grotesk';
+  src: url('./fonts/CabinetGrotesk-Variable.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face { font-family: 'Satoshi'; src: url('./fonts/Satoshi-Light.otf') format('opentype'); font-weight: 300; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('./fonts/Satoshi-Regular.otf') format('opentype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('./fonts/Satoshi-Medium.otf') format('opentype'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('./fonts/Satoshi-Bold.otf') format('opentype'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Satoshi'; src: url('./fonts/Satoshi-Black.otf') format('opentype'); font-weight: 900; font-display: swap; }
+
+@font-face {
+  font-family: 'Patrick Hand';
+  src: url('./fonts/patrick-hand-latin-400-normal.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+/* -------- Tokens --------------------------------------------------------- */
+:root {
+  /* —— Website canonical palette (rf-* matches /website/src/styles/global.css) */
+  --rf-bg:           #1d1613;   /* page background — coffee-stained near-black */
+  --rf-surface:      #271c18;   /* cards, panels, header pill base */
+  --rf-surface-2:    #2c221e;   /* tutorial sketch cards / elevated on-paper */
+  --rf-text:         #edd79c;   /* primary copy, headings — sand gold */
+  --rf-text-muted:   #c9b87a;   /* body, secondary copy */
+  --rf-text-faint:   rgb(201 184 122 / 0.6);
+  --rf-accent:       #edd79c;   /* fill on buttons, links, highlights */
+  --rf-accent-rgb:   237 215 156;
+  --rf-border:       rgb(237 215 156 / 0.12);
+  --rf-border-strong:rgb(237 215 156 / 0.25);
+
+  /* —— Semantic / changelog / roadmap
+        Tuned so hue telegraphs meaning at a glance:
+        Add = saturated green (new), Done = teal-grey (settled),
+        Critical = red (urgent), High = orange (elevated). */
+  --rf-add:          #7fc66a;   --rf-add-bg:      rgb(127 198 106 / 0.14);
+  --rf-fix:          #d49a7a;   --rf-fix-bg:      rgb(212 154 122 / 0.12);
+  --rf-todo:         #e8c06a;   --rf-todo-bg:     rgb(232 192 106 / 0.10);
+  --rf-done:         #6f9994;   --rf-done-bg:     rgb(111 153 148 / 0.12);
+  --rf-critical:     #d9624d;   --rf-critical-bg: rgb(217  98  77 / 0.16);
+  --rf-high:         #e89446;   --rf-high-bg:     rgb(232 148  70 / 0.14);
+
+  /* —— Desktop-app surface (Tauri shell) — keep distinct from website */
+  --app-bg:          #1c1512;
+  --app-surface:     rgba(43, 30, 25, 0.7);
+  --app-surface-elv: rgba(56, 39, 32, 0.85);
+  --app-border:      rgba(212, 163, 115, 0.10);
+  --app-accent:      #EDCF9B;
+  --app-accent-glow: rgba(237, 207, 155, 0.28);
+  --app-text:        #fafaf9;
+  --app-text-muted:  #a8a29e;   /* tailwind stone-400 */
+  --app-text-faint:  #78716c;   /* tailwind stone-500 */
+
+  /* —— Code / syntax (Shiki ruforge theme) */
+  --code-bg:         #1a1412;
+  --code-text:       #edd79c;
+  --code-comment:    #8a7355;
+  --code-string:     #d4a373;
+  --code-keyword:    #c9956a;
+  --code-fn:         #e8c078;
+  --code-type:       #ddb86a;
+  --code-punct:      #c9b87a;
+
+  /* —— Type stack */
+  --font-sans:    'Satoshi', system-ui, 'Segoe UI', sans-serif;
+  --font-display: 'Cabinet Grotesk', 'Satoshi', system-ui, sans-serif;
+  --font-hand:    'Patrick Hand', cursive;
+  --font-mono:    ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Menlo, Consolas, monospace;
+  --font-app:     'Inter', system-ui, -apple-system, sans-serif;  /* desktop app only */
+
+  /* —— Radii (used by app + site) */
+  --radius-xs:    6px;
+  --radius-sm:    8px;
+  --radius-md:    12px;
+  --radius-lg:    16px;
+  --radius-xl:    20px;
+  --radius-2xl:   24px;
+  --radius-3xl:   28px;
+  --radius-pill:  999px;
+
+  /* —— Shadows — depth-first, dark drop shadows on dark surfaces.
+        Accent is used only at very low alpha for a faint warm kiss,
+        never as a visible halo. */
+  --shadow-pill: 0 10px 40px rgb(0 0 0 / 0.38),
+                 0 2px 10px  rgb(0 0 0 / 0.22),
+                 inset 0 1px 0 rgb(237 215 156 / 0.06);
+  --shadow-card: 0 8px 24px rgba(0,0,0,0.5);
+  /* Button hover — subtle elevation, no halo */
+  --shadow-glow: 0 6px 18px rgb(0 0 0 / 0.4),
+                 0 1px 2px  rgb(0 0 0 / 0.3);
+  /* Card / button big lift on hover (Spotify-style translateY-2) */
+  --shadow-glow-strong: 0 10px 28px rgb(0 0 0 / 0.5),
+                        0 2px 6px   rgb(0 0 0 / 0.35);
+
+  /* —— Motion */
+  --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spotify:   cubic-bezier(0.23, 1, 0.32, 1);
+  --dur-fast:   180ms;
+  --dur-base:   280ms;
+  --dur-slow:   600ms;
+  --dur-mega:   800ms;
+}
+
+/* -------- Base recipes --------------------------------------------------- */
+
+/* Default page chrome for any preview/card in this DS */
+.rf-page {
+  background: var(--rf-bg);
+  color: var(--rf-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: rgb(var(--rf-accent-rgb) / 0.25); color: var(--rf-text); }
+
+/* Headings — Cabinet Grotesk */
+.rf-h1 { font-family: var(--font-display); font-weight: 700; font-size: 56px; line-height: 1.05; letter-spacing: -0.02em; color: var(--rf-text); }
+.rf-h2 { font-family: var(--font-display); font-weight: 700; font-size: 36px; line-height: 1.15; letter-spacing: -0.015em; color: var(--rf-text); }
+.rf-h3 { font-family: var(--font-display); font-weight: 600; font-size: 24px; line-height: 1.25; color: var(--rf-text); }
+.rf-h4 { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.3;  color: var(--rf-text); }
+
+/* Display — the Patrick Hand hero variant (line one) gets the squiggle underline */
+.rf-display-hand {
+  font-family: var(--font-hand);
+  font-weight: 400;
+  font-size: 60px;
+  line-height: 1.1;
+  letter-spacing: -0.005em;
+  color: var(--rf-text);
+}
+
+/* Body */
+.rf-body     { font-family: var(--font-sans); font-weight: 400; font-size: 16px; line-height: 1.6; color: var(--rf-text-muted); }
+.rf-body-sm  { font-family: var(--font-sans); font-weight: 400; font-size: 14px; line-height: 1.55; color: var(--rf-text-muted); }
+.rf-body-lg  { font-family: var(--font-sans); font-weight: 400; font-size: 18px; line-height: 1.6; color: var(--rf-text-muted); }
+
+/* Eyebrows / nav (uppercase widely-tracked) */
+.rf-eyebrow      { font-family: var(--font-sans); font-weight: 600; font-size: 11px; line-height: 1; letter-spacing: 0.14em; text-transform: uppercase; color: var(--rf-text-muted); }
+.rf-eyebrow-tight{ font-family: var(--font-sans); font-weight: 900; font-size: 10px; letter-spacing: 0.2em;  text-transform: uppercase; color: var(--app-text-faint); }
+
+/* Mono — version pill, code, snippet */
+.rf-mono     { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; color: var(--rf-text-muted); }
+.rf-code     { font-family: var(--font-mono); font-size: 13px; color: var(--rf-text); background: var(--rf-surface); padding: 2px 6px; border-radius: var(--radius-xs); }
+
+/* Buttons */
+.rf-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 20px; border: 0; border-radius: var(--radius-md);
+  background: var(--rf-accent); color: var(--rf-bg);
+  font-family: var(--font-sans); font-weight: 500; font-size: 14px;
+  text-decoration: none; cursor: pointer;
+  transition: filter var(--dur-base) var(--ease-out-expo),
+              box-shadow var(--dur-base) var(--ease-out-expo),
+              transform 120ms var(--ease-out-expo);
+}
+.rf-btn:hover  { filter: brightness(1.03); box-shadow: var(--shadow-glow); }
+.rf-btn:active { transform: scale(0.98); }
+
+.rf-btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 16px; border-radius: var(--radius-md);
+  background: transparent; color: var(--rf-text);
+  border: 1px solid var(--rf-border);
+  font-family: var(--font-sans); font-weight: 500; font-size: 14px;
+  text-decoration: none; cursor: pointer;
+  transition: background-color var(--dur-base) var(--ease-out-expo),
+              border-color var(--dur-base) var(--ease-out-expo),
+              transform 120ms var(--ease-out-expo);
+}
+.rf-btn-ghost:hover  { background: rgb(39 28 24 / 0.65); border-color: rgb(var(--rf-accent-rgb) / 0.3); }
+.rf-btn-ghost:active { transform: scale(0.98); }
+
+/* ─── Shimmer modifier ─────────────────────────────────────────────
+   Add `.rf-btn-shimmer` to any button. A radial spotlight follows the
+   cursor inside the button using the `--mx` / `--my` CSS vars (set by
+   the tiny `rfShimmer.init()` script). On filled gold buttons the
+   spotlight is a brighter warm highlight; on ghost buttons it's a soft
+   accent wash on the dark surface.
+
+   Wire it up:
+     <button class="rf-btn rf-btn-shimmer">…</button>
+     <script>rfShimmer.init()</script>  // see preview/components-buttons.html
+*/
+.rf-btn-shimmer { position: relative; overflow: hidden; isolation: isolate; }
+.rf-btn-shimmer > * { position: relative; z-index: 2; }
+.rf-btn-shimmer::before {
+  content: "";
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(
+    140px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 245, 215, 0.38),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 220ms var(--ease-out-expo);
+  z-index: 1;
+}
+.rf-btn-shimmer:hover::before { opacity: 1; }
+/* Ghost variant — a warm wash, not a bright highlight (dark surface). */
+.rf-btn-ghost.rf-btn-shimmer::before {
+  background: radial-gradient(
+    140px circle at var(--mx, 50%) var(--my, 50%),
+    rgb(var(--rf-accent-rgb) / 0.18),
+    transparent 60%
+  );
+}
+
+/* Cards / surfaces */
+.rf-card    { background: var(--rf-surface); border-radius: var(--radius-xl); border: 1px solid var(--rf-border); }
+.rf-pill    { background: rgb(39 28 24 / 0.82); border: 1px solid var(--rf-border); border-radius: var(--radius-pill); backdrop-filter: blur(14px); box-shadow: var(--shadow-pill); }
+
+/* ─── Card border spotlight ────────────────────────────────────────
+   Add `.rf-card-spotlight` (alongside `.rf-card`) to make the card's
+   1px border brighten where the cursor is — feels like the cursor
+   interacts with the edge. Uses the same `--mx` / `--my` vars and
+   the same `rfShimmer.init()` script as `.rf-btn-shimmer`.
+*/
+.rf-card-spotlight { position: relative; }
+.rf-card-spotlight::before {
+  content: "";
+  position: absolute; inset: 0; border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(
+    180px circle at var(--mx, -200px) var(--my, -200px),
+    rgb(var(--rf-accent-rgb) / 0.55),
+    transparent 70%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+          mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms var(--ease-out-expo);
+  z-index: 1;
+}
+.rf-card-spotlight:hover::before { opacity: 1; }
+
+/* ─── Paper grain ──────────────────────────────────────────────────
+   `.rf-grain` paints an SVG fractal-noise tile at very low alpha. Use
+   it as a textured backdrop behind code blocks, hero copy, callout
+   cards — anywhere that benefits from a subtle warm "paper" feel.
+   Stack it over a solid `background` so the grain only modulates;
+   it's keyed to the sand-gold accent so it stays on-brand.
+*/
+.rf-grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.84 0 0 0 0 0.61 0 0 0 0.16 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-repeat: repeat;
+}
+
+/* Badges */
+.rf-badge      { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; font-size: 11px; font-weight: 500; border-radius: var(--radius-pill); }
+.rf-badge.add      { background: var(--rf-add-bg);      color: var(--rf-add); }
+.rf-badge.fix      { background: var(--rf-fix-bg);      color: var(--rf-fix); }
+.rf-badge.todo     { background: var(--rf-todo-bg);     color: var(--rf-todo); }
+.rf-badge.done     { background: var(--rf-done-bg);     color: var(--rf-done); }
+.rf-badge.critical { background: var(--rf-critical-bg); color: var(--rf-critical); }
+.rf-badge.high     { background: var(--rf-high-bg);     color: var(--rf-high); }

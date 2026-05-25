@@ -50,6 +50,65 @@ ships to users.
 
 **How to advise:** ground recommendations in **what RuForge already is** and what is **already solved well elsewhere** (generic browsers, dedicated players, Plex-like libraries). Avoid **feature creep** and "compete with X" pivots unless the maintainer explicitly widens scope. Longer roadmap, priorities, and out-of-scope list live in the **planning doc** linked below. Prefer that over inventing new product direction in chat.
 
+## Website SEO and AI discoverability (mandatory)
+
+The public website at `website/` is a marketing surface for a free open-source desktop YouTube downloader. The SEO and AI-discoverability rules below exist because the default playbook for "software product website" (SaaS funnels, comparison SEO grinding, EV code-signing cert pages, freemium teasers) doesn't fit RuForge and in some cases is actively harmful. Read this before suggesting or implementing any SEO, structured data, copy, or distribution changes.
+
+### Framing rules (user-facing copy)
+
+The product is positioned as: a free, open-source, local-first desktop media tool built on yt-dlp and FFmpeg. Not "the best YouTube downloader." Not "download YouTube videos easily."
+
+- Lead nouns on titles, meta descriptions, and hero copy: "open-source media library", "yt-dlp GUI", "Tauri desktop app", "local media library", "free media downloader". Never lead with "YouTube downloader" as the primary noun even though that is what people search for. The exposure is asymmetric: low organic upside (Google demotes the category as parasite SEO under the March 2026 Spam Update), real DMCA Section 1201 exposure if RIAA/BPI templates match your copy.
+- NEVER use this language anywhere on the public website, in JSON-LD descriptions, in meta tags, in README copy, or in release notes: "bypass", "rolling cipher", "circumvention", "DRM", "rip", "stream-rip", "unlock content", "any video any site". These map directly to RIAA/BPI DMCA takedown templates. Replace with: "download for offline viewing", "local media library", "personal archive", "yt-dlp frontend".
+- The implicit audience is yt-dlp CLI users who want a GUI, 4K Video Downloader refugees, r/DataHoarder / r/selfhosted users, and the Tauri/Rust crowd. Not casual "convert youtube to mp3" searchers. Copy reflects this.
+
+### Structured data rules
+
+- SoftwareApplication JSON-LD on `/` and `/download` is required. Required fields: `name`, `description`, `operatingSystem`, `applicationCategory: "MultimediaApplication"`, `softwareVersion`, `offers` with `price: "0"` and `priceCurrency: "USD"`, `publisher` Organization reference.
+- NEVER include `aggregateRating` in SoftwareApplication JSON-LD until there are real user reviews from a real source (AlternativeTo, GitHub Discussions). Fake or fabricated ratings trigger Google manual actions. The penalty is worse than not having the rich result.
+- Organization JSON-LD lives site-wide in `BaseLayout.astro`. BreadcrumbList JSON-LD lives on every docs page and feature page. FAQPage JSON-LD only on pages that have a real FAQ section with the same Q&A visible in HTML.
+
+### Code signing reality
+
+- Do NOT recommend purchasing an EV Authenticode certificate to bypass SmartScreen. Microsoft deprecated the EV-auto-bypass behavior. EV certs no longer guarantee a clean first install. Cost is $249-700/year for a benefit that no longer exists.
+- The current path is Azure Trusted Signing at approximately $9.99/month. SmartScreen reputation builds over install volume regardless of cert type. First-run warnings are unavoidable for any new publisher.
+- The `Build-signed-windows.bat` script uses minisign for updater signature verification, not Authenticode. The two are independent. Keep them independent.
+
+### Crawler and AI discoverability rules
+
+- `robots.txt` follows the citation-allowed / training-blocked split: allow `OAI-SearchBot`, `ChatGPT-User`, `PerplexityBot`, `ClaudeBot`, `Claude-User`, `Amazonbot`, `Applebot-Extended`. Disallow `GPTBot`, `Google-Extended`, `CCBot`, `Bytespider`, `Meta-ExternalAgent`, `Meta-ExternalFetcher`. Standard search crawlers (`Googlebot`, `Bingbot`) stay open.
+- `llms.txt` ships at the site root as a curated index. Frame it internally as cheap infrastructure, not as a citation lever. Independent measurement (Limy 2026, ALLMO 2026) shows no measured citation uplift from llms.txt across major AI assistants. Ship it anyway because the cost is 30 minutes and Anthropic/Perplexity/Cursor docs tooling consume it.
+- Submit to Bing Webmaster Tools FIRST, then Google Search Console. Bing's index feeds ChatGPT Search, Microsoft Copilot, You.com, Kagi, and Perplexity's fallback retrieval. Google Search Console is still required but is the lower-leverage first move for a brand-new domain.
+- IndexNow auto-ping on every deploy (Cloudflare Pages can trigger this via a Worker or a GitHub Action). Drops Bing indexing latency from weeks to hours.
+
+### Distribution and acquisition rules
+
+- The highest-ROI single moves for RuForge's audience (per verified May 2026 research):
+  1. AlternativeTo submission as a free alternative to 4K Video Downloader Plus. Provides the structured "X is a free alternative to Y" relationship data that LLMs ingest.
+  2. PR to `awesome-tauri`, `awesome-rust-desktop-apps`, and any `awesome-yt-dlp` lists that exist.
+  3. WinGet Releaser GitHub Action (powered by Komac) for automated winget manifest PRs on every release.
+  4. Reddit posts tailored per sub: r/DataHoarder (library/persistence angle), r/selfhosted (Tauri local-first angle), r/opensource (MIT license / no telemetry angle), r/rust (Tauri v2 build angle), r/youtubedl (yt-dlp GUI angle).
+  5. yt-dlp wiki "Frontends" PR.
+
+- Do NOT recommend or implement: Product Hunt as primary launch channel (lower ROI than Reddit niche subs for this category), Softpedia / FossHub / SourceForge directory submissions (declining AI citation value, malware-association risk after January 2026 fake-tools campaign), paid Google Ads on "youtube downloader" terms (DMCA-adjacent and zero-click compressed), comparison SEO pages targeting "youtube downloader windows" as the primary keyword (parasite SEO penalty exposure).
+
+### What ships in Phase 1 (when website SEO work is authorized)
+
+In order:
+1. `astro.config.mjs` `site` field + `@astrojs/sitemap` integration.
+2. `public/robots.txt` with the citation/training split.
+3. `public/_headers` with HSTS, CSP, Referrer-Policy, X-Content-Type-Options, X-Frame-Options.
+4. Canonical URL pattern in `BaseLayout.astro`.
+5. SoftwareApplication JSON-LD on `/` and `/download` (no `aggregateRating`).
+6. Organization JSON-LD site-wide.
+7. Unique `<title>` (under 60 chars) and `<meta description>` (under 155 chars) per page, framing per the rules above.
+8. `public/.well-known/security.txt`.
+9. Bing Webmaster Tools verification.
+10. Google Search Console verification.
+11. `public/llms.txt` (last, deliberately).
+
+Phase 2 work (distribution, content, README polish) is authorized separately.
+
 ## Planning & ideas (canonical doc)
 
 - **Shipped log (THIS FILE, bottom, `## Shipped log`):** the **first and mandatory** place every shipped change is recorded. One appended line per change, no format ceremony. This is the cheap, vague-input-proof capture surface. **If you change behavior, append here before you consider the task done.** See `## Shipped log` for the rule.
@@ -76,6 +135,105 @@ ships to users.
 - **`scripts/`** is for **intentional maintainer tooling** only (e.g. `build-signed-windows.ps1`, `create-desktop-shortcut.ps1`). Do not add agent-generated patch scripts there.
 - **Do not** run `git checkout` / `git restore` on individual source files to "fix" a bad edit when the user may have **uncommitted work**. That can wipe hours of local changes. If the file is broken, repair it forward; ask the user before any git operation that discards working-tree content.
 - If a large replace fails, **narrow the context** or read more of the file. Do not escalate to string-surgery scripts.
+
+## Code quality guardrails (mandatory)
+
+Three rules. Every agent, every edit. These exist because the default
+failure mode is code that works but reads like it was generated: narrated
+comments, 400-line files with everything inline, and styles buried inside
+logic. The rules below define boundaries so the agent never drifts there.
+
+### 1. Comments: zero narration
+
+Comments explain **why**, never **what**. If the code already says what is
+happening, a comment restating it is noise.
+
+**Banned patterns (delete on sight, never produce):**
+
+- `// Import X` / `// Define the function` / `// Return the result`
+- `// Set state to ...` / `// Handle the error` / `// Increment counter`
+- `// This function does X` when the function name already says X
+- Block headers like `/* ---- Rendering ---- */` unless separating 200+
+  line sections in a file that genuinely cannot be split
+- Commented-out code left behind "in case we need it." That is what git
+  history is for. Delete it.
+- AI-voice narration patterns: `// Now we need to ...`, `// Here we are doing ...`, `// First, let's ...`, `// Note that ...`, `// This elegantly ...`, `// Let me ...`. These read as AI-generated even when the action they describe is real. Delete them. If the comment's only function is to narrate the next line in conversational voice, it's noise.
+- Section-progress narration: `// Step 1: ...`, `// Now for the tricky part`, `// Putting it all together`. The code is the steps. The variable names are the labels.
+- Future-tense self-talk: `// We'll handle X below`, `// Going to refactor this later`. If there's a real TODO, write `// TODO:` with a specific actionable note. Otherwise delete.
+
+**Allowed (encouraged):**
+
+- Non-obvious constraints: `// WebView2 does not fire resize on drag; poll.`
+- Tradeoffs: `// Uses O(n^2) here because n < 20 and the simpler loop is
+  clearer than a map lookup.`
+- External references: `// See Tauri issue #4821 for the workaround.`
+- Intent that the signature cannot convey: `// Intentionally no await.
+  Fire-and-forget; errors logged in the handler.`
+
+**Test:** if you delete the comment and the code is equally clear, the
+comment should not exist.
+
+### 2. Component and function extraction
+
+Do not let a single file grow into a monolith. These thresholds are not
+suggestions.
+
+**Extract to its own file when ANY of these are true:**
+
+- A React component exceeds ~120 rendered lines (JSX return + hooks above
+  it). At that point it is its own unit and belongs in its own file.
+- A helper function is used by more than one file. Shared helpers live in
+  a `lib/` or `utils/` file, never copy-pasted.
+- A hook has its own state + effects and is not trivial (more than ~30
+  lines). Extract to `use<Name>.ts` next to or near its consumer.
+- An inline SVG or animation component exceeds ~40 lines. Give it a file.
+- You are about to add a fourth level of nesting inside JSX. That inner
+  tree is a component. Extract it.
+
+**Where extracted files go:**
+
+- Components: `components/<feature>/` or `components/ui/` (shared).
+- Hooks: next to the component that uses them, or `hooks/` if shared.
+- Helpers/utils: `lib/` for the website, `src/lib/` or relevant slice
+  directory for the desktop app.
+- Types: co-locate with the module that owns them. A shared `types.ts`
+  exists at the app root for cross-cutting types.
+
+**File naming:** `PascalCase.tsx` for components, `camelCase.ts` for
+non-component modules, `use<Name>.ts` for hooks. Match what already exists
+in the directory.
+
+### 3. Styles belong in stylesheets or Tailwind classes, not JS objects
+
+This project uses Tailwind v4 utility classes and CSS custom properties
+defined in `global.css` (desktop) or `website/src/styles/global.css`
+(website). Follow the existing pattern.
+
+**Rules:**
+
+- **Tailwind classes on the element.** That is the default. Use them.
+- **CSS custom properties (`--color-rf-*`, `--font-*`) for tokens.** Never
+  hardcode a hex color in JSX when a token exists. If a new token is
+  needed, add it to the relevant `global.css`, not as a JS constant.
+- **Inline `style={}` only for dynamic values** that Tailwind cannot
+  express: computed transforms, `clipPath`, data-driven widths, animation
+  keyframe progress. If the value is static, it belongs in a class.
+- **No `styled-components`, `css-in-js`, or `sx` props.** Not in this
+  project's stack. Do not introduce them.
+- **Scoped `.rf-*` classes for complex or reusable visual patterns.** The
+  download page uses `.rf-dl-*` classes. SponsorBlock uses `.rf-sb-*`. If
+  a pattern has more than 3-4 properties and is reused, give it a class in
+  the appropriate CSS file.
+
+### Nesting and complexity
+
+- **Maximum JSX nesting: 3 levels of authored wrappers.** If your return
+  has `<A><B><C><D>...</D></C></B></A>` where all four are local to the
+  same component, `D` (or `C+D`) should be its own component.
+- **Early returns over deep conditionals.** Guard-clause style: check the
+  bad case, return early, keep the happy path at the top indent level.
+- **No ternary chains.** One ternary is fine. A ternary inside a ternary
+  is unreadable. Use `if`/`else` or a lookup object.
 
 ## Stack
 
@@ -454,6 +612,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
    ```
 
    Upload the NSIS `.exe` (required for auto-update). MSI is optional. Do **not** attach `.sig` files. If the release already exists, use `gh release upload` or edit; do not duplicate tags. Release body can mirror the `updater.json` teaser and bullet lists (markdown). Installers stay out of git.
+
+   **WinGet manifest auto-update.** Once the WinGet Releaser GitHub Action is set up (one-time install per `https://github.com/vedantmgoyal9/winget-releaser`), it watches for new GitHub Releases on `UnboundAngel/RuForge` and automatically opens the winget manifest update PR against `microsoft/winget-pkgs` using Komac. No manual `wingetcreate` invocation needed per release. If the action is not yet installed, set it up before the next release. If a winget PR fails to auto-open for a release, that is a release blocker for the NEXT release, not a hard block on the current one.
 
 8. **Drain Shipped log → graph surfaces AND roll STATE.md (scoped, this
    step only).**
