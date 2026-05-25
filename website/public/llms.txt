@@ -1,6 +1,6 @@
 # RuForge
 
-> RuForge is a free open-source desktop media library and yt-dlp frontend for Windows. Built with Tauri v2 and Rust, it downloads videos and audio from yt-dlp's 1000+ supported sites, stores them in a local library, and includes a full media player with chapter navigation, SponsorBlock integration, and a mini player. MIT licensed. No ads, no telemetry, no premium tier.
+> RuForge is a free open-source desktop media library and yt-dlp frontend for Windows. Built with Tauri v2 and Rust, it downloads videos and audio from yt-dlp's 1000+ supported sites, stores them in a local library, and includes a full media player with chapter navigation, SponsorBlock integration, and a mini player. Apache-2.0 licensed. No ads, no telemetry, no premium tier.
 
 RuForge uses yt-dlp as the download engine and FFmpeg for media processing. It ships as a signed Windows installer with an auto-updater. Linux is supported for local development; macOS is not yet supported as a release target.
 
@@ -32,7 +32,7 @@ RuForge uses yt-dlp as the download engine and FFmpeg for media processing. It s
 ## Source code
 
 - [Repository](https://github.com/UnboundAngel/RuForge): Source, releases, issues, and discussions
-- [License](https://github.com/UnboundAngel/RuForge/blob/main/LICENSE): MIT license terms
+- [License](https://github.com/UnboundAngel/RuForge/blob/main/LICENSE): Apache-2.0 license terms
 
 ## Optional
 
