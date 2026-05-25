@@ -195,8 +195,8 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         slug: 'library-paths',
         title: 'Library folders',
-        description: 'Internal download path, extra scan roots, and how the gallery picks up files.',
-        outline: ['Download directory', 'Custom roots', 'Scan behavior', 'Case and extensions'],
+        description: 'Internal vault, your download path, and how the library discovers files.',
+        outline: ['Download directory', 'Internal vault and download path', 'Scan behavior', 'Case and extensions'],
       },
       {
         slug: 'cookies-ytdlp',

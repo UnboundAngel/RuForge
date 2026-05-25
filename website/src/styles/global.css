@@ -942,6 +942,38 @@
     margin-inline: auto;
   }
 
+  /* Download owl page: glassy scrollbar, no track, no arrow buttons */
+  html.rf-dl-owl-page,
+  html.rf-dl-owl-page body {
+    background: #120d0a !important;
+  }
+  html.rf-dl-owl-page {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(237 215 156 / 0.1) transparent;
+  }
+  html.rf-dl-owl-page::-webkit-scrollbar {
+    width: 6px;
+    background: transparent;
+  }
+  html.rf-dl-owl-page::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  html.rf-dl-owl-page::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  html.rf-dl-owl-page::-webkit-scrollbar-thumb {
+    background: rgb(237 215 156 / 0.1);
+    border-radius: 999px;
+  }
+  html.rf-dl-owl-page::-webkit-scrollbar-thumb:hover {
+    background: rgb(237 215 156 / 0.22);
+  }
+  html.rf-dl-owl-page::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   /* Hero: generous space below fixed header pill */
   .rf-dl-hero {
     display: flex;
@@ -996,8 +1028,8 @@
       0 1.5rem 3rem rgb(0 0 0 / 0.52),
       0 0.35rem 0.85rem rgb(0 0 0 / 0.32);
     transition:
-      transform 1s ease,
-      box-shadow 0.75s ease;
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
   }
 
   .rf-dl-hero-mark-card::after {
@@ -1012,7 +1044,7 @@
     background: rgb(0 0 0 / 0.5);
     box-shadow: 0 0 50px 15px rgb(0 0 0 / 0.5);
     transform: translateX(-50%);
-    transition: all 1.25s ease-in-out 0.1s;
+    transition: all 0.2s ease;
     pointer-events: none;
   }
 
@@ -1023,12 +1055,12 @@
     z-index: 0;
     border-radius: inherit;
     pointer-events: none;
-    opacity: 0.06;
-    transition: opacity 0.5s ease;
+    opacity: 0;
+    transition: opacity 0.2s ease;
     background: radial-gradient(
-      12rem circle at var(--mouse-x) var(--mouse-y),
-      rgb(255 255 255 / 0.08),
-      rgb(0 0 0 / 0.12) 55%
+      10rem circle at var(--mouse-x) var(--mouse-y),
+      rgb(237 215 156 / 0.06),
+      transparent 60%
     );
     mix-blend-mode: normal;
   }
@@ -1038,17 +1070,12 @@
   }
 
   .rf-dl-logo-shimmer:hover .rf-dl-hero-mark-card {
-    transform: scale(1.04);
-    box-shadow:
-      inset 0 1px 1px 1px rgb(255 255 255 / 0.05),
-      0 1.35rem 2.25rem 0.65rem rgb(0 0 0 / 0.28);
+    transform: scale(1.02);
   }
 
   .rf-dl-logo-shimmer:hover .rf-dl-hero-mark-card::after {
-    width: 55%;
-    height: 40%;
-    background: rgb(120 40 30 / 0.45);
-    box-shadow: 0 0 60px 50px rgb(120 40 30 / 0.28);
+    width: 50%;
+    height: 35%;
   }
 
   .rf-dl-hero-mark-noise {

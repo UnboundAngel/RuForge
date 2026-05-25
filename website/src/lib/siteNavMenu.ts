@@ -1,6 +1,4 @@
 import type { NavSectionId } from './sitePages';
-import downloadShot from '../assets/screenshots/02-download-downloading.webp';
-import libraryShot from '../assets/screenshots/04-library.webp';
 
 export type NavFeaturedVariant = 'portrait' | 'landscape' | 'hero';
 
@@ -11,10 +9,9 @@ export interface NavFeaturedItem {
   badge?: string;
   image: string;
   variant: NavFeaturedVariant;
+  /** Animated shadow overlay color for featured cards. */
+  shadowColor?: string;
 }
-
-/** Fixed height for every featured visual card; width varies by variant. */
-export const FEATURED_CARD_HEIGHT = '8.25rem';
 
 export interface NavMenuConfig {
   /** Slugs omitted from the text link columns (shown as featured cards instead). */
@@ -27,21 +24,37 @@ export interface NavMenuConfig {
 
 export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   features: {
-    featuredSlugs: ['downloader', 'media-library'],
+    featuredSlugs: ['downloader', 'media-library', 'explorer', 'player'],
     layout: 'links-featured-row',
-    panelClass: 'w-[48rem] min-h-[15.5rem]',
+    panelClass: 'w-[54rem] min-h-[15.5rem]',
     featured: [
       {
         slug: 'downloader',
-        title: 'YouTube downloader',
-        image: downloadShot.src,
-        variant: 'portrait',
+        title: 'Downloader',
+        image: '/tutorials/download2.png',
+        variant: 'hero',
+        shadowColor: 'rgba(160, 110, 60, 1)',
       },
       {
         slug: 'media-library',
-        title: 'Media library',
-        image: libraryShot.src,
-        variant: 'portrait',
+        title: 'Library',
+        image: '/tutorials/library.png',
+        variant: 'hero',
+        shadowColor: 'rgba(140, 100, 70, 1)',
+      },
+      {
+        slug: 'explorer',
+        title: 'Explorer',
+        image: '/tutorials/explorer.png',
+        variant: 'hero',
+        shadowColor: 'rgba(120, 90, 60, 1)',
+      },
+      {
+        slug: 'player',
+        title: 'Audio mode',
+        image: '/tutorials/music-mode.png',
+        variant: 'hero',
+        shadowColor: 'rgba(150, 115, 65, 1)',
       },
     ],
   },
@@ -56,6 +69,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
         subtitle: 'Local-first on Windows',
         image: '',
         variant: 'landscape',
+        shadowColor: 'rgba(180, 140, 80, 1)',
       },
       {
         slug: 'open-source',
@@ -63,6 +77,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
         subtitle: 'Apache-2.0 on GitHub',
         image: '',
         variant: 'landscape',
+        shadowColor: 'rgba(120, 90, 60, 1)',
       },
     ],
   },
@@ -76,8 +91,9 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
         title: 'Getting started',
         subtitle: 'Install and first download',
         badge: 'Start here',
-        image: downloadShot.src,
+        image: '/tutorials/resources.png',
         variant: 'hero',
+        shadowColor: 'rgba(170, 130, 70, 1)',
       },
     ],
   },
@@ -88,10 +104,11 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
     featured: [
       {
         slug: 'getting-started',
-        title: 'Getting started',
-        subtitle: 'Install, library paths, first video',
-        image: libraryShot.src,
+        title: 'Your library',
+        subtitle: 'Library paths, folders, first video',
+        image: '/tutorials/playlists.png',
         variant: 'hero',
+        shadowColor: 'rgba(150, 115, 65, 1)',
       },
     ],
   },

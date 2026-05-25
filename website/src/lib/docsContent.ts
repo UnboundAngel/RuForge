@@ -23,7 +23,19 @@ export interface DocsSectionContent {
   bullets?: string[];
   note?: string;
   tip?: string;
+  /** High-visibility warning callout (orange/red tint). */
+  warning?: string;
   codeBlock?: { lang?: string; code: string };
+  /** Table with header row (any column count). */
+  table?: { headers: string[]; rows: string[][] };
+  /** Side-by-side layout: paragraphs on the left, table + collapsible on the right. */
+  layout?: 'split';
+  /** Collapsible hover pill (label visible, content expands on hover). */
+  collapsible?: { label: string; content: string };
+  /** Filename (no path) of an image in assets/tutorials/docs/. Rendered as a figure. */
+  image?: string;
+  /** Render a named widget inline with the section heading. */
+  headingWidget?: 'spiral-loader';
 }
 
 export type DocsPageContent = Record<string, DocsSectionContent>;
@@ -93,6 +105,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
   /* ------------------------------------------------------------------ */
   'first-download': {
     'Paste a link': {
+      image: 'pastealink.png',
       paragraphs: [
         'Downloading a video is the main thing RuForge does, and it starts with a URL.',
       ],
@@ -102,11 +115,12 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
         'Paste the link. RuForge immediately starts fetching the video metadata: title, thumbnail, and estimated file size.',
       ],
       paragraphs2: [
-        'You will see the video title and thumbnail appear in the hero area within a few seconds. The size estimate shows how much space the download will take on disk.',
+        'You will see the video title and thumbnail appear in the <span class="docs-term" data-term="hero">hero</span> area within a few seconds. The size estimate shows how much space the download will take on disk.',
       ],
       tip: 'You can also drag and drop a link from your browser directly into the RuForge window.',
     },
     'Choose format': {
+      image: 'choose-format.png',
       paragraphs: [
         'Before you hit download, you can choose what format you want.',
       ],
@@ -119,31 +133,33 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
       ],
     },
     'Watch progress': {
+      image: 'watch-progress.png',
       paragraphs: [
-        'Once you start the download, the hero area turns into a live progress display.',
+        'Once you start the download, the <span class="docs-term" data-term="hero">hero</span> area turns into a live progress display.',
       ],
       bullets: [
         'A progress bar shows how far along the download is, with percentage markers at each end.',
         'Download speed and estimated time remaining appear below the bar.',
-        'If the video needs post-processing (like merging separate video and audio streams), the status changes to <strong>"Processing..."</strong> while ffmpeg handles the mux.',
+        'If the video needs post-processing (like merging separate video and audio streams), the status changes to <span class="docs-term" data-term="processing"><strong>"Processing..."</strong></span> while ffmpeg handles the mux.',
       ],
       paragraphs2: [
-        'You can keep using the app while downloads run. The floating queue drawer in the bottom-right corner shows all active and queued jobs. Click it to expand and see thumbnails, titles, and individual progress for each download.',
+        'You can keep using the app while downloads run. The floating <span class="docs-term" data-term="queue">queue</span> drawer in the bottom-right corner shows all active and queued <span class="docs-term" data-term="job">jobs</span>. Click it to expand and see thumbnails, titles, and individual progress for each download.',
       ],
     },
     'Find it in your library': {
+      image: 'find-in-library.png',
       paragraphs: [
         'When a download finishes, the file lands in your download folder and immediately shows up in the Media Library tab.',
       ],
       steps: [
         'Click <strong>Media Library</strong> in the left sidebar.',
-        'Your new download appears as a card with a thumbnail, title, and duration.',
-        'Click the card to open it in the player. That is it.',
+        'Your new download appears as a <span class="docs-term" data-term="card">card</span> with a thumbnail, title, and duration.',
+        'Click the card to open it in the <span class="docs-term" data-term="player">player</span>. That is it.',
       ],
       paragraphs2: [
-        'If you downloaded a playlist, the videos are grouped together as a stack card in the library. Click the stack to expand it and see individual items.',
+        'If you downloaded a playlist, the videos are grouped together as a <span class="docs-term" data-term="playlist collection">stack card</span> in the library. Click the stack to expand it and see individual items.',
       ],
-      tip: 'Downloaded files come with sidecar metadata (a <code>.info.json</code> file from yt-dlp). This is how RuForge knows the title, uploader, chapters, and source URL without re-fetching anything.',
+      tip: 'Downloaded files come with <span class="docs-term" data-term="sidecar">sidecar</span> metadata (a <span class="docs-term" data-term=".info.json"><code>.info.json</code></span> file from yt-dlp). This is how RuForge knows the title, uploader, chapters, and source URL without re-fetching anything.',
     },
   },
 
@@ -152,6 +168,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
   /* ------------------------------------------------------------------ */
   'library-folders': {
     'Download directory': {
+      image: 'download-directory.png',
       paragraphs: [
         'By default, RuForge saves everything to your Windows Downloads folder. You can change this at any time.',
       ],
@@ -164,27 +181,37 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
         'All future downloads go to whatever folder you choose here. Existing files stay where they are. The media library scans both the old and new locations, so nothing disappears from your library when you switch.',
       ],
     },
-    'Custom roots': {
+    'Internal vault and download path': {
+      image: 'internal-vault.png',
       paragraphs: [
-        'Besides your main download folder, you can point RuForge at additional folders on your computer. This is handy if you already have a collection of videos somewhere else, or if you keep downloads on a second drive.',
+        'RuForge stores files in two places. Both are scanned every time the library refreshes, so everything shows up in one combined view.',
       ],
-      steps: [
-        'Open <strong>Settings</strong> and go to the <strong>General</strong> tab.',
-        'Under <strong>Library roots</strong>, click <strong>Add folder</strong>.',
-        'Pick any folder on your machine. RuForge scans it for video and audio files and adds them to your library.',
+      bullets: [
+        '<strong>Internal vault</strong>: A folder RuForge manages automatically inside its own app data directory. When you choose <strong>Internal</strong> in the Downloads settings, new downloads land here.',
+        '<strong>Custom download path</strong>: Any folder you pick on your machine. When you choose <strong>Custom</strong> in the Downloads settings, new downloads go to this folder instead.',
       ],
       paragraphs2: [
-        'You can add as many custom roots as you want. Each one is scanned every time the library refreshes. Removing a root from the list does not delete any files; it just stops showing them in the library.',
+        'To switch between the two storage modes:',
+      ],
+      steps: [
+        'Open <strong>Settings</strong> from the left sidebar.',
+        'Go to the <strong>Downloads</strong> tab.',
+        'The <strong>Storage Target</strong> row has an <strong>Internal / Custom</strong> toggle. Pick the one you want.',
+        'If you chose Custom, click the folder path below to pick a specific directory.',
+      ],
+      paragraphs3: [
+        'Switching storage targets does not move or delete existing files. Your old downloads stay where they are and still appear in the library, because both locations are always scanned.',
       ],
     },
     'Scan behavior': {
+      headingWidget: 'spiral-loader',
       paragraphs: [
-        'RuForge scans your download directory and all custom roots for supported media files. Here is how the scan works:',
+        'RuForge scans both storage locations (<span class="docs-term" data-term="internal vault">internal vault</span> and your <span class="docs-term" data-term="download path">download path</span>) for supported media files. Here is how the scan works:',
       ],
       bullets: [
         'The scan runs automatically when the app starts and after every finished download.',
         'It looks for common video formats (MP4, MKV, WebM, AVI, MOV) and audio formats (M4A, MP3, OGG, FLAC, WAV).',
-        'For each file, it checks for a matching <code>.info.json</code> sidecar. If one exists, the library uses its title, thumbnail path, chapters, and source URL instead of guessing from the filename.',
+        'For each file, it checks for a matching <span class="docs-term" data-term=".info.json"><code>.info.json</code></span> <span class="docs-term" data-term="sidecar">sidecar</span>. If one exists, the library uses its title, thumbnail path, chapters, and source URL instead of guessing from the filename.',
         'Duplicate entries (same source ID or matching title from different scan passes) are merged so you do not see the same video twice.',
       ],
       paragraphs2: [
@@ -192,14 +219,23 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
       ],
     },
     'Case and extensions': {
+      layout: 'split',
       paragraphs: [
-        'File extensions are matched case-insensitively. A file named <code>Video.MP4</code> is treated the same as <code>video.mp4</code>. This matters because some devices (like iPhones) save files with uppercase extensions.',
+        'The library scanner normalizes every file extension to lowercase before checking it. <code>Video.MP4</code> is treated exactly the same as <code>video.mp4</code>.',
+        'This matters because iPhones, GoPros, and older cameras save files with uppercase extensions like <code>.MOV</code> or <code>.Mp4</code>. RuForge handles all of them.',
+        'Any casing variant of a recognized extension will match. <code>.MP4</code>, <code>.Mp4</code>, <code>.mP4</code> are all the same to the scanner.',
       ],
-      bullets: [
-        'The scan normalizes extensions before matching, so <code>.MP4</code>, <code>.Mp4</code>, and <code>.mp4</code> all register as valid video files.',
-        'If you have files with unusual containers (like <code>.ts</code> transport streams or <code>.3gp</code>), they may not appear in the library. RuForge focuses on the most common formats.',
-      ],
-      tip: 'If a file you expect to see is missing from the library, double-check its extension and make sure the folder it lives in is listed as a download directory or custom root.',
+      table: {
+        headers: ['Type', 'Recognized', 'Not recognized'],
+        rows: [
+          ['Video', '<code>.mp4</code> <code>.mkv</code> <code>.webm</code>', '<code>.avi</code> <code>.mov</code> <code>.ts</code> <code>.3gp</code> <code>.wmv</code>'],
+          ['Audio', '<code>.mp3</code> <code>.m4a</code> <code>.flac</code> <code>.opus</code> <code>.ogg</code>', '<code>.wav</code> <code>.aac</code> <code>.wma</code> <code>.aiff</code>'],
+        ],
+      },
+      collapsible: {
+        label: 'Why are some common formats not recognized?',
+        content: 'RuForge targets the formats YouTube and yt-dlp actually produce (<code>.mp4</code>, <code>.webm</code>, <code>.mkv</code>, <code>.m4a</code>, <code>.opus</code>). Containers like <code>.avi</code>, <code>.mov</code>, <code>.wav</code>, and <code>.ts</code> are rarely output by yt-dlp and would add scan overhead for minimal benefit. If a file you expect is missing from the library, check its extension.',
+      },
     },
   },
 
@@ -212,11 +248,11 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
         'These terms come up whenever you are downloading something.',
       ],
       bullets: [
-        '<strong>Job</strong>: A single download task. When you paste a URL and click download, that creates one job. A playlist creates one job per video.',
-        '<strong>Queue</strong>: The list of all active and pending jobs. Visible in the floating drawer in the bottom-right corner of the downloader.',
-        '<strong>Hero</strong>: The large progress area at the top of the downloader that shows the currently focused job (thumbnail, title, progress bar, speed, ETA).',
-        '<strong>Stall watchdog</strong>: A background timer that watches for jobs that stop making progress. If yt-dlp hangs (no new data for too long), the watchdog kills the process and marks the job as failed.',
-        '<strong>Processing</strong>: The phase after downloading finishes, when ffmpeg is merging video and audio streams or extracting audio. The queue row shows "Processing..." during this.',
+        '<span class="docs-term" data-term="job"><strong>Job</strong></span>: A single download task. When you paste a URL and click download, that creates one job. A playlist creates one job per video.',
+        '<span class="docs-term" data-term="queue"><strong>Queue</strong></span>: The list of all active and pending jobs. Visible in the floating drawer in the bottom-right corner of the downloader.',
+        '<span class="docs-term" data-term="hero"><strong>Hero</strong></span>: The large progress area at the top of the downloader that shows the currently focused job (thumbnail, title, progress bar, speed, ETA).',
+        '<span class="docs-term" data-term="stall watchdog"><strong>Stall watchdog</strong></span>: A background timer that watches for jobs that stop making progress. If yt-dlp hangs (no new data for too long), the watchdog kills the process and marks the job as failed.',
+        '<span class="docs-term" data-term="processing"><strong>Processing</strong></span>: The phase after downloading finishes, when ffmpeg is merging video and audio streams or extracting audio. The queue row shows "Processing..." during this.',
       ],
     },
     'Library and entries': {
@@ -224,11 +260,11 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
         'Your media library is the collection of files RuForge knows about.',
       ],
       bullets: [
-        '<strong>Entry</strong>: A single item in the library. Can be a standalone video/audio file or a playlist collection.',
-        '<strong>Playlist collection</strong>: A group of related files that were downloaded together as a playlist. Displayed as a stack card in the library.',
-        '<strong>Gallery</strong>: Another name for the media library grid. The terms are used interchangeably in the app.',
-        '<strong>Scan root</strong>: A folder that the library watches for media files. Your download directory is always a scan root. Custom roots are extra folders you add manually.',
-        '<strong>Card</strong>: The visual tile in the library grid showing a thumbnail, title, duration, and watch progress for a single file.',
+        '<span class="docs-term" data-term="entry"><strong>Entry</strong></span>: A single item in the library. Can be a standalone video/audio file or a playlist collection.',
+        '<span class="docs-term" data-term="playlist collection"><strong>Playlist collection</strong></span>: A group of related files that were downloaded together as a playlist. Displayed as a stack card in the library.',
+        '<span class="docs-term" data-term="gallery"><strong>Gallery</strong></span>: Another name for the media library grid. The terms are used interchangeably in the app.',
+        '<span class="docs-term" data-term="scan root"><strong>Scan root</strong></span>: A folder that the library watches for media files. RuForge scans two: the internal vault and your download path. Both are always included.',
+        '<span class="docs-term" data-term="card"><strong>Card</strong></span>: The visual tile in the library grid showing a thumbnail, title, duration, and watch progress for a single file.',
       ],
     },
     'Sidecars and metadata': {
@@ -236,11 +272,11 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
         'Sidecars are small companion files that live next to your downloaded videos.',
       ],
       bullets: [
-        '<strong>Sidecar</strong>: Any file that stores metadata about a downloaded video. The most important one is the <code>.info.json</code> file.',
-        '<strong>.info.json</strong>: Created by yt-dlp during download. Contains the video title, uploader, duration, chapters, thumbnail URL, source URL, and format details. RuForge reads this to populate library cards and player metadata.',
-        '<strong>.sponsorblock.json</strong>: A sidecar created by RuForge when SponsorBlock data is fetched for a video. Stores sponsor segments, chapters, and points of interest so they do not need to be re-fetched on every play.',
-        '<strong>Sprite sheet</strong>: A grid of thumbnail frames generated by ffmpeg after download. Used for hover previews on the player scrub bar. Stored next to the video file.',
-        '<strong>Poster</strong>: A single-frame thumbnail image generated by ffmpeg, used as the cover art for library cards when no yt-dlp thumbnail is available.',
+        '<span class="docs-term" data-term="sidecar"><strong>Sidecar</strong></span>: Any file that stores metadata about a downloaded video. The most important one is the <code>.info.json</code> file.',
+        '<span class="docs-term" data-term=".info.json"><strong>.info.json</strong></span>: Created by yt-dlp during download. Contains the video title, uploader, duration, chapters, thumbnail URL, source URL, and format details. RuForge reads this to populate library cards and player metadata.',
+        '<span class="docs-term" data-term=".sponsorblock.json"><strong>.sponsorblock.json</strong></span>: A sidecar created by RuForge when SponsorBlock data is fetched for a video. Stores sponsor segments, chapters, and points of interest so they do not need to be re-fetched on every play.',
+        '<span class="docs-term" data-term="sprite sheet"><strong>Sprite sheet</strong></span>: A grid of thumbnail frames generated by ffmpeg after download. Used for hover previews on the player scrub bar. Stored next to the video file.',
+        '<span class="docs-term" data-term="poster"><strong>Poster</strong></span>: A single-frame thumbnail image generated by ffmpeg, used as the cover art for library cards when no yt-dlp thumbnail is available.',
       ],
     },
     'Player and playback': {
@@ -248,12 +284,12 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
         'Terms related to watching your downloaded content.',
       ],
       bullets: [
-        '<strong>Player</strong>: The built-in video/audio player in the main window. Supports chapters, subtitles, keyboard shortcuts, and SponsorBlock overlays.',
-        '<strong>Mini player</strong>: A separate borderless window that floats on top of other apps. You can resize it from large (full controls) down to a tiny strip.',
-        '<strong>Control dock</strong>: The frosted bar at the bottom of the player with play/pause, volume, loop, and other controls.',
-        '<strong>Chapter scrubber</strong>: A segmented progress bar that divides the video into chapters (from yt-dlp metadata). Each segment is clickable and shows the chapter title on hover.',
-        '<strong>Auto-advance</strong>: When a video ends, the player automatically plays the next file. It first tries the next item in the current folder, then falls back to the next item in the library.',
-        '<strong>Scrub preview</strong>: Thumbnail images that appear when you hover over the progress bar, generated from ffmpeg sprite sheets.',
+        '<span class="docs-term" data-term="player"><strong>Player</strong></span>: The built-in video/audio player in the main window. Supports chapters, subtitles, keyboard shortcuts, and SponsorBlock overlays.',
+        '<span class="docs-term" data-term="mini player"><strong>Mini player</strong></span>: A separate borderless window that floats on top of other apps. You can resize it from large (full controls) down to a tiny strip.',
+        '<span class="docs-term" data-term="control dock"><strong>Control dock</strong></span>: The frosted bar at the bottom of the player with play/pause, volume, loop, and other controls.',
+        '<span class="docs-term" data-term="chapter scrubber"><strong>Chapter scrubber</strong></span>: A segmented progress bar that divides the video into chapters (from yt-dlp metadata). Each segment is clickable and shows the chapter title on hover.',
+        '<span class="docs-term" data-term="auto-advance"><strong>Auto-advance</strong></span>: When a video ends, the player automatically plays the next file. It first tries the next item in the current folder, then falls back to the next item in the library.',
+        '<span class="docs-term" data-term="scrub preview"><strong>Scrub preview</strong></span>: Thumbnail images that appear when you hover over the progress bar, generated from ffmpeg sprite sheets.',
       ],
     },
   },
