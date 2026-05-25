@@ -1,0 +1,197 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FeatureHubsGrid from '../../components/FeatureStackedCards';
+import type { FeatureHubEntry } from '../../components/FeatureStackedCards';
+
+const hubs: FeatureHubEntry[] = [
+  {
+    eyebrow: 'How downloading works',
+    href: '/features/downloader',
+    cards: [
+      {
+        imageSrc: '/tutorials/downloadstep1.png',
+        title: 'Paste the link',
+        description:
+          'Drop a YouTube URL into the downloader. RuForge reads title, duration, and format options immediately.',
+      },
+      {
+        imageSrc: '/tutorials/downloadstep2.png',
+        title: 'Pick your format',
+        description:
+          'Choose video or audio-only. Size estimates update live. Flip audio-only for real m4a extraction.',
+      },
+      {
+        imageSrc: '/tutorials/downloadstep3.png',
+        title: 'Queue and walk away',
+        description:
+          'Jobs land in the corner drawer. Stall watchdog kills hung jobs. Duplicates get caught before wasting bandwidth.',
+      },
+    ],
+  },
+  {
+    eyebrow: 'Media Library',
+    href: '/features/library',
+    cards: [
+      {
+        imageSrc: '/tutorials/medialibrarystep1.png',
+        title: 'Browse your catalog',
+        description:
+          'Scan folders, filter by type, and see watch progress on every card. Your library stays on disk with no account sync.',
+      },
+      {
+        imageSrc: '/tutorials/medialibrarystep2.png',
+        title: 'Playback thumbnails',
+        description:
+          'Progress bars paint on each card using stored playback position. Know what you watched at a glance.',
+      },
+      {
+        imageSrc: '/tutorials/medialibrarystep3.png',
+        title: 'Delete with confidence',
+        description:
+          'Remove files from disk and the index together. In-flight preview jobs cancel so deletes never block the UI.',
+      },
+    ],
+  },
+  {
+    eyebrow: 'Media Player',
+    href: '/features/player',
+    cards: [
+      {
+        imageSrc: '/tutorials/mediaplayerstep1.png',
+        title: 'Scrub to any moment',
+        description:
+          'Drag the seeker or hover the chapter bar to jump. Thumbnail previews line up with the playhead.',
+      },
+      {
+        imageSrc: '/tutorials/mediaplayerstep2.png',
+        title: 'Watch without flash',
+        description:
+          'Hardware-friendly playback with keyboard shortcuts, volume, and loop. Built for files you already own.',
+      },
+      {
+        imageSrc: '/tutorials/mediaplayerstep3.png',
+        title: 'See what plays next',
+        description:
+          'Folder queue and library order show the next file before you skip. Auto-advance respects your settings.',
+      },
+    ],
+  },
+  {
+    eyebrow: 'SponsorBlock',
+    href: '/features/sponsorblock',
+    cards: [
+      {
+        imageSrc: '/tutorials/sponsorstep1.png',
+        title: 'Skip in one tap',
+        description:
+          'When a segment starts, hit the skip control. RuForge learns your preferences per category over time.',
+      },
+      {
+        imageSrc: '/tutorials/sponsorstep2.png',
+        title: 'Segments on the bar',
+        description:
+          'Sponsor ranges and chapters paint on the scrubber with extension-aligned colors.',
+      },
+      {
+        imageSrc: '/tutorials/sponsorstep3.png',
+        title: 'Tune what gets skipped',
+        description:
+          'Toggle categories, intros, and music-offtopic in Playback settings. Hashes stay local.',
+      },
+    ],
+  },
+  {
+    eyebrow: 'Mini Player',
+    href: '/features/miniplayer',
+    cards: [
+      {
+        imageSrc: '/tutorials/miniplayerstep1.png',
+        title: 'Pop out from the title bar',
+        description:
+          'Detach playback into a borderless corner window using the mini player control in the top-right chrome.',
+      },
+      {
+        imageSrc: '/tutorials/miniplayerstep2.png',
+        title: 'Large mode with library',
+        description:
+          'Resize to the comfortable large layout and pick the next file from the bottom media row.',
+      },
+      {
+        imageSrc: '/tutorials/miniplayerstep3.png',
+        title: 'Shrink out of the way',
+        description:
+          'Drop to the smallest height for a marquee title and tight controls. Stays readable on your workspace.',
+      },
+    ],
+  },
+  {
+    eyebrow: 'Advanced Settings',
+    href: '/features/settings',
+    cards: [
+      {
+        imageSrc: '/tutorials/settingsstep1.png',
+        title: 'General preferences',
+        description:
+          'Set theme, accent, paths, and startup behavior. Everything persists locally for both windows.',
+      },
+      {
+        imageSrc: '/tutorials/settingsstep2.png',
+        title: 'Download behavior',
+        description:
+          'Parallel jobs, output folders, cookie sync, and automatic scrubber previews.',
+      },
+      {
+        imageSrc: '/tutorials/settingsstep3.png',
+        title: 'Playback controls',
+        description:
+          'Auto-advance, prefetch, SponsorBlock tree, and ReplayGain placeholders live under Playback.',
+      },
+    ],
+  },
+];
+---
+
+<BaseLayout title="Features" description="Everything RuForge does on your machine. Detailed feature pages for power users.">
+  <div class="features-index rf-container">
+    <header class="features-index__hero">
+      <h1 class="features-index__title">Everything you need. Offline.</h1>
+      <p class="features-index__desc">
+        A fully integrated workflow engine that indexes your catalog on disk and protects your online data footprint.
+      </p>
+    </header>
+
+    <FeatureHubsGrid client:load hubs={hubs} />
+  </div>
+</BaseLayout>
+
+<style>
+  .features-index {
+    padding-top: 1rem;
+    padding-bottom: 6rem;
+  }
+
+  .features-index__hero {
+    max-width: 36rem;
+    margin-inline: auto;
+    margin-bottom: 4.5rem;
+    text-align: center;
+  }
+
+  .features-index__title {
+    margin: 0 0 1rem;
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 5vw, 2.75rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--color-rf-text);
+  }
+
+  .features-index__desc {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--color-rf-text-muted);
+  }
+</style>

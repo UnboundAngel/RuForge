@@ -1,0 +1,69 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FeaturePageTemplate from '../../components/FeaturePageTemplate.astro';
+import type { FeatureSection } from '../../components/FeaturePageTemplate.astro';
+
+import sponsorStep1 from '../../assets/tutorials/sponsor/sponsorStep1.png';
+import sponsorStep2 from '../../assets/tutorials/sponsor/sponsorStep2.png';
+import sponsorScrub from '../../assets/tutorials/sponsor/sponsor-scrub.png';
+import sponsorStep3 from '../../assets/tutorials/sponsor/sponsorStep3.png';
+
+const sections: FeatureSection[] = [
+  {
+    heading: 'Privacy hash-based segment fetch',
+    body: 'On first play, RuForge hashes the video source_id and queries the SponsorBlock API with a prefix (not the full hash). The API returns matching segments for all categories: sponsor, intro, outro, self-promo, interaction, music_offtopic, chapter, and POI highlights.',
+    bullets: [
+      'SHA-256 prefix query (k-anonymity, server never sees the full video id)',
+      'Requests all skip/chapter/POI categories, not just sponsor-only',
+      'Segments cached in a .sponsorblock.json sidecar next to the video',
+      'Stale sidecars refresh on next play (no manual clear needed)',
+    ],
+    image: sponsorStep1,
+    imageAlt: 'SponsorBlock segments loaded for a video in RuForge',
+  },
+  {
+    heading: 'Skip button with learning',
+    body: 'When playback enters a skip-category segment, a colored skip button appears. Press it to jump to the end of the segment. Per-category adaptive learning tracks what you actually skip versus what you sit through. Categories you never skip eventually stop prompting.',
+    bullets: [
+      'Button fill color matches the segment category',
+      'Per-category skip ratio stored locally',
+      'Learning adapts over time: frequent skips auto-skip, infrequent ones keep the prompt',
+      'Master toggle in Settings > Playback (enabled by default)',
+    ],
+    image: sponsorStep2,
+    imageAlt: 'Skip button visible during a sponsor segment',
+  },
+  {
+    heading: 'Color-coded scrub bar overlay',
+    body: 'The scrub bar shows colored regions for every segment type. Colors match the official SponsorBlock browser extension palette. POI highlights appear as thin ticks. Chapter segments get their own distinct shade. The overlay renders on both the main player and mini player scrub bars.',
+    bullets: [
+      'Sponsor: #00d400, Self-promo: #ffff00, Interaction: #cc00ff',
+      'Chapter: #FFC83D, Music off-topic: #ff9900, POI highlight: #FF1684',
+      'Hover tooltip shows segment type name for each colored region',
+      'Overlay opacity 0.7 so underlying progress bar stays readable',
+    ],
+    image: sponsorScrub,
+    imageAlt: 'Scrub bar with color-coded SponsorBlock segment overlays',
+  },
+  {
+    heading: 'Settings tree',
+    body: 'Settings > Playback has a collapsible SponsorBlock tree. Toggle the master switch or drill into per-category controls. Each category shows its skip ratio and lets you force auto-skip, prompt-only, or disable. The SponsorBlock icon uses the bundled SVG from the official extension branding.',
+    bullets: [
+      'Master toggle: on/off for all SponsorBlock behavior',
+      'Per-category: auto-skip, manual prompt, or disabled',
+      'Skip ratio display: "Skipped 12/15 times" style counters',
+      'Categories: sponsor, selfpromo, interaction, intro, outro, music_offtopic, poi_highlight, chapter',
+    ],
+    image: sponsorStep3,
+    imageAlt: 'SponsorBlock settings tree with per-category toggles',
+  },
+];
+---
+
+<BaseLayout title="SponsorBlock" description="Skip sponsor segments on local files with privacy-first hash lookups, color-coded scrub bars, and per-category adaptive learning.">
+  <FeaturePageTemplate
+    title="SponsorBlock"
+    description="Privacy hash-based segment fetch, skip button with adaptive learning, color-coded scrub bar overlays matching the browser extension palette, and a per-category settings tree."
+    sections={sections}
+  />
+</BaseLayout>

@@ -1,0 +1,68 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FeaturePageTemplate from '../../components/FeaturePageTemplate.astro';
+import type { FeatureSection } from '../../components/FeaturePageTemplate.astro';
+
+import downloadStep1 from '../../assets/tutorials/download/downloadStep1.png';
+import downloadStep2 from '../../assets/tutorials/download/downloadStep2.png';
+import downloadStep3 from '../../assets/tutorials/download/downloadStep3.png';
+import download2 from '../../assets/tutorials/download/download2.png';
+
+const sections: FeatureSection[] = [
+  {
+    heading: 'Paste a URL and go',
+    body: 'Drop a YouTube link into the input and RuForge fetches metadata immediately. You see the title, thumbnail, and size estimates before anything downloads. The hero area shows a live progress bar with speed and ETA once a job starts.',
+    bullets: [
+      'Metadata fetch uses yt-dlp simulate (no partial download)',
+      'Size estimates differ for audio-only vs video (dual simulate)',
+      'Clipboard paste, drag-drop, and manual entry all work',
+    ],
+    image: downloadStep1,
+    imageAlt: 'RuForge downloader with URL pasted and metadata loaded',
+  },
+  {
+    heading: 'Playlist support',
+    body: 'Paste a playlist URL and every video appears as a row with its own toggle. Flip individual rows to audio-only, see per-row sizes, and check for duplicates before you commit. Downloads land in a numbered subfolder so file order matches playlist order.',
+    bullets: [
+      'Per-row audio/video toggle with individual size previews',
+      'Duplicate detection warns before you waste bandwidth',
+      'Output folder: PlaylistName/01 - Title.mp4, 02 - Title.mp4, etc.',
+      'Settings tool regroups flat files into playlist folders after the fact',
+    ],
+    image: downloadStep2,
+    imageAlt: 'RuForge playlist download with per-row controls',
+  },
+  {
+    heading: 'Queue and format control',
+    body: 'The floating queue drawer lives in the bottom-right corner. Thumbnails crossfade as jobs advance. Pause, resume, reorder, or replace a job without leaving the page. Format selection picks between video (best muxed) or audio-only (m4a extraction, not a re-encode).',
+    bullets: [
+      'Audio-only uses `-f bestaudio[ext=m4a]/bestaudio`, not video re-encode',
+      'Stall watchdog: if yt-dlp idles too long, kills the process and marks failed',
+      'Replace button re-downloads over an existing library file in place',
+      'Cookie/session support for age-restricted or members-only content',
+    ],
+    image: download2,
+    imageAlt: 'RuForge download queue drawer with active jobs',
+  },
+  {
+    heading: 'Post-download processing',
+    body: 'After a successful download, RuForge generates scrubber preview sprites (ffmpeg sprite sheets) so hover previews work immediately in the player. Duplicate outputs from yt-dlp (video-only + muxed for the same id) are cleaned up automatically.',
+    bullets: [
+      'Sprite generation runs in background (toggle off in Settings > Downloads)',
+      'Orphan .fNNN video-only leftovers removed after mux completes',
+      'Library scan picks up new files and deduplicates by source_id',
+      'Processing phase shows "Processing..." in queue row while ffmpeg works',
+    ],
+    image: downloadStep3,
+    imageAlt: 'RuForge download complete with processing indicator',
+  },
+];
+---
+
+<BaseLayout title="Downloader" description="Paste URLs, preview sizes, queue jobs, and save videos or audio with yt-dlp. Resumable queue with stall detection.">
+  <FeaturePageTemplate
+    title="Downloader"
+    description="Reliable YouTube downloads with real size estimates, playlist folders, audio extraction, and a queue that does not pretend hung jobs are fine."
+    sections={sections}
+  />
+</BaseLayout>

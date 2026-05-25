@@ -47,6 +47,7 @@ import { AudioHeroStage } from "./player/AudioHeroStage";
 import { SponsorBlockScrubOverlay } from "./player/SponsorBlockScrubOverlay";
 import { SponsorBlockSkipButton } from "./player/SponsorBlockSkipButton";
 import { useSponsorBlockPlayback } from "../hooks/useSponsorBlockPlayback";
+import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import type { SponsorBlockSkipCategory } from "../sponsorBlock";
 
 const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: string }) => {
@@ -188,9 +189,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([]);
   const subtitleBlobTracksRef = useRef<SubtitleTrack[]>([]);
+  const subtitleRawTracksRef = useRef<SubtitleTrack[]>([]);
   const [selectedSubtitleLang, setSelectedSubtitleLang] = useState("");
   const [isSubtitlesEnabled, setIsSubtitlesEnabled] = useState(false);
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
+  const [showTranscriptMenu, setShowTranscriptMenu] = useState(false);
 
   const ambientCanvasRef = useRef<HTMLCanvasElement>(null);
   const subtitleOverlayTextRef = useRef<HTMLDivElement>(null);
@@ -251,6 +254,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (audioOnly) {
       revokeSubtitleBlobSrcs(subtitleBlobTracksRef.current);
       subtitleBlobTracksRef.current = [];
+      subtitleRawTracksRef.current = [];
       setSubtitleTracks([]);
       setIsSubtitlesEnabled(false);
       setSelectedSubtitleLang("");
@@ -258,9 +262,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
     revokeSubtitleBlobSrcs(subtitleBlobTracksRef.current);
     subtitleBlobTracksRef.current = [];
+    subtitleRawTracksRef.current = [];
     let cancelled = false;
     fetchSubtitleTracks(file.path)
-      .then((raw) => subtitleTracksWithBlobSrc(raw))
+      .then((raw) => { subtitleRawTracksRef.current = raw; return subtitleTracksWithBlobSrc(raw); })
       .then((tracks) => {
         if (cancelled) {
           revokeSubtitleBlobSrcs(tracks);
@@ -1398,7 +1403,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                     <Tooltip text="More controls">
                       <button
                         type="button"
-                        onClick={() => { setShowPlayerMoreMenu((s) => !s); setShowSpeedMenu(false); }}
+                        onClick={() => { setShowPlayerMoreMenu((s) => !s); setShowSpeedMenu(false); setShowTranscriptMenu(false); }}
                         className={`${playerBarBtnClass} ${showPlayerMoreMenu || showPlaylist ? "bg-white/10" : ""}`}
                       >
                         <Ellipsis className="w-5 h-5" />
@@ -1465,6 +1470,47 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                           <button type="button" onClick={() => { handlePopOut(); setShowPlayerMoreMenu(false); }} className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white flex items-center gap-2">
                             <Icon icon="material-symbols:tab-unselected-sharp" className="w-4 h-4" /> Mini player
                           </button>
+                          {subtitleTracks.length > 0 && (
+                            <>
+                              <div className="my-1 border-t border-white/10" />
+                              <button
+                                type="button"
+                                onClick={() => setShowTranscriptMenu((s) => !s)}
+                                className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white flex items-center gap-2"
+                              >
+                                <Icon icon="tabler:file-text" className="w-4 h-4" /> Copy Transcript
+                              </button>
+                              <AnimatePresence initial={false}>
+                                {showTranscriptMenu && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2, ease: "easeOut" }}
+                                    className="relative px-2 pb-2 space-y-0.5 overflow-hidden"
+                                  >
+                                    <div className="absolute top-[10px] bottom-[10px] left-5 w-px bg-white/10 pointer-events-none" />
+                                    {([["plain", "Plain text"], ["timestamped", "With timestamps"], ["markdown", "Markdown (with chapters)"]] as const).map(([variant, label]) => (
+                                      <button
+                                        key={variant}
+                                        type="button"
+                                        onClick={() => {
+                                          const rawTrack = subtitleRawTracksRef.current.find((t) => t.lang === selectedSubtitleLang);
+                                          const trackPath = rawTrack?.src ?? file.subtitlePath ?? undefined;
+                                          void copyTranscriptForFile(file, variant as TranscriptVariant, trackPath);
+                                          setShowPlayerMoreMenu(false);
+                                          setShowTranscriptMenu(false);
+                                        }}
+                                        className="w-full pl-6 pr-2 py-1.5 rounded-lg text-[10px] font-black text-left text-stone-500 hover:text-white transition-colors"
+                                      >
+                                        {label}
+                                      </button>
+                                    ))}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </>
+                          )}
                           {!audioOnly && subtitleTracks.length > 0 && (
                             <>
                               <div className="my-1 border-t border-white/10" />
@@ -1491,34 +1537,42 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                               >
                                 <Icon icon="streamline-ultimate:subtitles" className="w-4 h-4" /> Subtitles
                               </button>
-                              {showSubtitleMenu && subtitleTracks.length > 1 && (
-                                <div className="px-2 pb-2 space-y-0.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => { setIsSubtitlesEnabled(false); onSubtitleToggle?.(false); setShowSubtitleMenu(false); }}
-                                    className={`w-full px-2 py-1.5 rounded-lg text-[10px] font-black text-left ${!isSubtitlesEnabled ? "bg-white/10 text-white" : "text-stone-500 hover:text-white"}`}
+                              <AnimatePresence initial={false}>
+                                {showSubtitleMenu && subtitleTracks.length > 1 && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2, ease: "easeOut" }}
+                                    className="px-2 pb-2 space-y-0.5 overflow-hidden"
                                   >
-                                    Off
-                                  </button>
-                                  {subtitleTracks.map((track) => (
                                     <button
-                                      key={track.lang + track.src}
                                       type="button"
-                                      onClick={() => {
-                                        setSelectedSubtitleLang(track.lang);
-                                        setIsSubtitlesEnabled(true);
-                                        void updateSetting("subtitlePreferredLang", track.lang);
-                                        onSubtitleToggle?.(true);
-                                        setShowSubtitleMenu(false);
-                                        setShowPlayerMoreMenu(false);
-                                      }}
-                                      className={`w-full px-2 py-1.5 rounded-lg text-[10px] font-black text-left truncate ${isSubtitlesEnabled && selectedSubtitleLang === track.lang ? "bg-white/10 text-white" : "text-stone-500 hover:text-white"}`}
+                                      onClick={() => { setIsSubtitlesEnabled(false); onSubtitleToggle?.(false); setShowSubtitleMenu(false); }}
+                                      className={`w-full px-2 py-1.5 rounded-lg text-[10px] font-black text-left ${!isSubtitlesEnabled ? "bg-white/10 text-white" : "text-stone-500 hover:text-white"}`}
                                     >
-                                      {track.label}
+                                      Off
                                     </button>
-                                  ))}
-                                </div>
-                              )}
+                                    {subtitleTracks.map((track) => (
+                                      <button
+                                        key={track.lang + track.src}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedSubtitleLang(track.lang);
+                                          setIsSubtitlesEnabled(true);
+                                          void updateSetting("subtitlePreferredLang", track.lang);
+                                          onSubtitleToggle?.(true);
+                                          setShowSubtitleMenu(false);
+                                          setShowPlayerMoreMenu(false);
+                                        }}
+                                        className={`w-full px-2 py-1.5 rounded-lg text-[10px] font-black text-left truncate ${isSubtitlesEnabled && selectedSubtitleLang === track.lang ? "bg-white/10 text-white" : "text-stone-500 hover:text-white"}`}
+                                      >
+                                        {track.label}
+                                      </button>
+                                    ))}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </>
                           )}
                         </motion.div>

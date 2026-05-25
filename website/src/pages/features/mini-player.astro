@@ -1,0 +1,56 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FeaturePageTemplate from '../../components/FeaturePageTemplate.astro';
+import type { FeatureSection } from '../../components/FeaturePageTemplate.astro';
+
+import miniStep1 from '../../assets/tutorials/mini/miniStep1.png';
+import miniStep2 from '../../assets/tutorials/mini/miniStep2.png';
+import miniStep3 from '../../assets/tutorials/mini/miniStep3.png';
+
+const sections: FeatureSection[] = [
+  {
+    heading: 'Pop-out window',
+    body: 'Click the mini player button and RuForge opens a second transparent Tauri window. The main window keeps running. Playback state syncs between windows via Tauri emit/listen events (not shared memory or Zustand). "Back to app" focuses the main window before closing mini.',
+    bullets: [
+      'Separate Tauri webview label: "mini" (main is "main")',
+      'Transparent undecorated window with clip-path rounded corners',
+      'Cross-window events: play-media, stop-playback, send-to-main, play-in-mini',
+      'Closing mini does not stop playback in main',
+    ],
+    image: miniStep1,
+    imageAlt: 'Mini player popped out next to the main RuForge window',
+  },
+  {
+    heading: 'Adaptive size layouts',
+    body: 'The mini window has five layout tiers based on height. Large mode (full controls and optional library strip). Compact mode below 180px (cover art background, centered cluster). Micro mode at 86-135px (marquee title, core controls). Tiny mode at 70-85px (title left, play/next right).',
+    bullets: [
+      'Large: full scrub bar, volume, loop, shuffle, SponsorBlock overlay',
+      'Compact: cover art fills background with gradient, centered play cluster',
+      'Micro (Size 2): loop and rewind hide below 250px/210px width',
+      'Tiny (Size 1): minimum 70px height, marquee title, two buttons only',
+    ],
+    image: miniStep2,
+    imageAlt: 'Mini player in compact layout with cover art background',
+  },
+  {
+    heading: 'Library browse and sync',
+    body: 'In large mode, a Video Library strip lets you browse and select files without going back to the main app. The window locks to 430x275 while browsing (no active file), then restores flexible resize when you pick something. All playback commands round-trip through Tauri events.',
+    bullets: [
+      'Library strip toggle hidden while browsing (shows full grid)',
+      'Pin button keeps mini always-on-top (hover reveal in compact/micro)',
+      'Cover art priority: local thumbnailPath, then ruforgePosterPath, then placeholder',
+      'Volume icon tiers and mute state match main player behavior',
+    ],
+    image: miniStep3,
+    imageAlt: 'Mini player large mode with library strip open',
+  },
+];
+---
+
+<BaseLayout title="Mini Player" description="Pop-out compact window with adaptive layouts, library browsing, and cross-window sync via Tauri events.">
+  <FeaturePageTemplate
+    title="Mini Player"
+    description="A separate always-on-top window with five responsive layout tiers, cover art backgrounds, library browsing, and real-time sync back to the main app."
+    sections={sections}
+  />
+</BaseLayout>

@@ -44,7 +44,18 @@ export default function DownloadLanding({
         />
 
         <h1 id="rf-dl-hero-title" className="rf-dl-hero-title">
-          {SITE.name}
+          {windowsReady ? (
+            <button
+              type="button"
+              className="rf-dl-hero-title-btn"
+              onClick={onDownload}
+              title="Download RuForge"
+            >
+              {SITE.name}
+            </button>
+          ) : (
+            SITE.name
+          )}
         </h1>
 
         <button
@@ -73,17 +84,21 @@ export default function DownloadLanding({
         </h2>
 
         <ul className="rf-dl-list">
-          <li className="rf-dl-row">
+          <li className="rf-dl-row rf-dl-row--active">
             <span className="rf-dl-row-label">Windows</span>
-            <button type="button" className="rf-dl-row-link" onClick={onDownload}>
-              <span>Universal</span>
-              <Download size={15} strokeWidth={2} aria-hidden className="rf-dl-row-link-icon" />
-            </button>
+            <div className="rf-dl-row-links">
+              <button type="button" className="rf-dl-row-link" onClick={onDownload}>
+                <Download size={16} strokeWidth={2} aria-hidden className="rf-dl-row-link-icon" />
+                <span>Universal</span>
+              </button>
+            </div>
           </li>
 
           <li className="rf-dl-row">
             <span className="rf-dl-row-label">macOS</span>
-            <span className="rf-dl-soon">{COMING_SOON}</span>
+            <div className="rf-dl-row-links">
+              <span className="rf-dl-soon">{COMING_SOON}</span>
+            </div>
           </li>
 
           <li className="rf-dl-row rf-dl-row--linux">
@@ -93,9 +108,8 @@ export default function DownloadLanding({
                 {LINUX_PACKAGE_ROWS.map((pkg) => (
                   <li key={pkg.id}>
                     <span className="rf-dl-format-opt" aria-disabled="true">
-                      <PlatformIcon icon={pkg.icon} size={15} label={pkg.label} />
-                      <span>{pkg.label}</span>
                       <Download size={14} strokeWidth={2} aria-hidden className="rf-dl-format-opt-icon" />
+                      <span>{pkg.label}</span>
                     </span>
                     {pkg.note ? <span className="rf-dl-format-note">{pkg.note}</span> : null}
                   </li>

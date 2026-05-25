@@ -1,0 +1,69 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FeaturePageTemplate from '../../components/FeaturePageTemplate.astro';
+import type { FeatureSection } from '../../components/FeaturePageTemplate.astro';
+
+import playerStep1 from '../../assets/tutorials/player/playerStep1.png';
+import playerChapters from '../../assets/tutorials/player/player-chapters.png';
+import playerAudioHero from '../../assets/tutorials/player/player-audio-hero.png';
+import playerStep3 from '../../assets/tutorials/player/playerStep3.png';
+
+const sections: FeatureSection[] = [
+  {
+    heading: 'Chapter scrubber',
+    body: 'If the video has chapters in its yt-dlp sidecar (.info.json), the scrub bar splits into labeled segment pills. Hover a segment to see the chapter title and a thumbnail frame pulled from the sprite sheet. Jump chapters with prev/next buttons or Shift+Arrow keys.',
+    bullets: [
+      'Chapters parsed from .info.json and normalized against video duration',
+      'CSS grid columns (fr units) so segments never overflow the bar',
+      'Long chapter titles use MarqueeText scroll instead of clipping',
+      'Chapter data stays local in the sidecar, no extra API calls needed',
+    ],
+    image: playerChapters,
+    imageAlt: 'RuForge player with chapter scrubber segments and hover preview',
+  },
+  {
+    heading: 'Scrubber previews and controls',
+    body: 'On download (or on demand), ffmpeg generates sprite sheets for hover thumbnails. Move your cursor over the scrub bar and see the exact frame at that position. The frosted control dock at the bottom holds play/pause, volume, loop, and secondary actions in a More menu.',
+    bullets: [
+      'Sprite sheets built by ffmpeg at configurable intervals',
+      'Global hover line tracks cursor position across simple and chapter bars',
+      'Auto-advance: next file in folder queue, then sorted library list',
+      'Keyboard: Space play/pause, arrows seek, M mute, F fullscreen',
+    ],
+    image: playerStep1,
+    imageAlt: 'Player controls dock with scrubber hover preview visible',
+  },
+  {
+    heading: 'Audio-only playback',
+    body: 'When you open an audio file, the video area becomes a full LED equalizer hero. 90 frequency bars react to the music via Web Audio AnalyserNode. Cover art fills the background with blur. Side waveforms animate alongside the bars.',
+    bullets: [
+      'Whispers-style full-canvas 90-bar dancer (loudness-driven, not frequency-mapped)',
+      'Adaptive visible row window tracks recent peak usage',
+      'captureStream() tap so bars follow actual playback in WebView2',
+      'Falls back to media-element source if captureStream reads silence',
+    ],
+    image: playerAudioHero,
+    imageAlt: 'Audio-only player with LED equalizer bars over album art',
+  },
+  {
+    heading: 'Subtitles and transitions',
+    body: 'Custom subtitle overlay renders VTT cues directly over the video element (native track stays hidden). The overlay is vertically draggable and clamped so captions never sit under the progress bar. Video transitions between files use an opacity dip without remounting the element.',
+    bullets: [
+      'VTT cue rendering with useSubtitleCueOverlay hook',
+      'Vertical drag position persists in localStorage',
+      'Layout clamps against scrub strip ref and player shell',
+      'No flash on auto-advance: opacity dip, not element remount',
+    ],
+    image: playerStep3,
+    imageAlt: 'Player with subtitle overlay positioned above controls',
+  },
+];
+---
+
+<BaseLayout title="Media Player" description="Watch local files with chapters, scrubber previews, audio equalizer, subtitles, and keyboard shortcuts.">
+  <FeaturePageTemplate
+    title="Media Player"
+    description="Chapter-aware scrubber, sprite hover previews, LED equalizer for audio, draggable subtitles, and smooth auto-advance between files."
+    sections={sections}
+  />
+</BaseLayout>

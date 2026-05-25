@@ -1,0 +1,172 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import DocsSidebar from '../../components/DocsSidebar.astro';
+import { DOCS_TREE } from '../../lib/docsTree';
+---
+
+<BaseLayout title="Docs" description="RuForge documentation. Guides, reference, and troubleshooting for every feature.">
+  <div class="docs-home-layout">
+    <DocsSidebar />
+
+    <div class="docs-home-content">
+      <h1 class="docs-home__title">RuForge Documentation</h1>
+      <p class="docs-home__desc">
+        Guides and reference for downloading, playing, and managing your local media library.
+        Pick a topic from the sidebar or start with Getting started below.
+      </p>
+
+      <div class="docs-home__grid">
+        {DOCS_TREE.map((section) => (
+          <div class="docs-home__card">
+            <h2 class="docs-home__card-title">{section.label}</h2>
+            <ul class="docs-home__card-list">
+              {section.pages.slice(0, 4).map((page) => (
+                <li>
+                  <a
+                    href={page.externalHref || `/docs/${page.slug}`}
+                    class="docs-home__card-link"
+                    target={page.externalHref?.startsWith('http') ? '_blank' : undefined}
+                  >
+                    {page.title}
+                  </a>
+                </li>
+              ))}
+              {section.pages.length > 4 && (
+                <li class="docs-home__card-more">
+                  +{section.pages.length - 4} more
+                </li>
+              )}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .docs-home-layout {
+    display: flex;
+    gap: 2rem;
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  .docs-home-content {
+    flex: 1;
+    min-width: 0;
+    padding-bottom: 4rem;
+  }
+
+  .docs-home__title {
+    margin: 0 0 0.75rem;
+    font-family: var(--font-display);
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--color-rf-text);
+  }
+
+  .docs-home__desc {
+    margin: 0 0 2.5rem;
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    color: var(--color-rf-text-muted);
+    max-width: 38rem;
+  }
+
+  .docs-home__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 1rem;
+  }
+
+  .docs-home__card {
+    padding: 1.125rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(237 215 156 / 0.08);
+    background: rgb(39 28 24 / 0.35);
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
+  }
+
+  .docs-home__card:hover {
+    border-color: rgb(237 215 156 / 0.16);
+    background: rgb(39 28 24 / 0.55);
+  }
+
+  .docs-home__card-title {
+    margin: 0 0 0.625rem;
+    font-family: var(--font-display);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-rf-text);
+  }
+
+  .docs-home__card-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .docs-home__card-link {
+    position: relative;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--color-rf-text-muted);
+    text-decoration: none;
+    transition: color 0.12s ease;
+  }
+
+  .docs-home__card-link::before {
+    content: '';
+    position: absolute;
+    left: -0.95em;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0.85em;
+    height: 0.85em;
+    border-radius: 2px;
+    background-color: var(--color-rf-bg);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d4a574' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E");
+    background-size: 78%;
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+
+  .docs-home__card-link:hover {
+    color: var(--color-rf-docs-link);
+    opacity: 1;
+  }
+
+  .docs-home__card-link:hover::before {
+    opacity: 1;
+  }
+
+  .docs-home__card-more {
+    font-size: 0.75rem;
+    color: var(--color-rf-text-muted);
+    opacity: 0.45;
+    margin-top: 0.125rem;
+  }
+
+  @media (max-width: 767px) {
+    .docs-home-layout {
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .docs-home__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

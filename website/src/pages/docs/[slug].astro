@@ -1,0 +1,22 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import DocsPageTemplate from '../../components/DocsPageTemplate.astro';
+import { allDocsSlugs, findDocsPage } from '../../lib/docsTree';
+
+export function getStaticPaths() {
+  return allDocsSlugs().map((slug) => ({ params: { slug } }));
+}
+
+const { slug } = Astro.params;
+const match = findDocsPage(slug!);
+
+if (!match) {
+  return Astro.redirect('/docs');
+}
+
+const { page } = match;
+---
+
+<BaseLayout title={page.title} description={page.description}>
+  <DocsPageTemplate page={page} />
+</BaseLayout>

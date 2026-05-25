@@ -1,0 +1,56 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FeaturePageTemplate from '../../components/FeaturePageTemplate.astro';
+import type { FeatureSection } from '../../components/FeaturePageTemplate.astro';
+
+import settingsStep1 from '../../assets/tutorials/settings/settingsStep1.png';
+import settingsStep2 from '../../assets/tutorials/settings/settingsStep2.png';
+import settingsStep3 from '../../assets/tutorials/settings/settingsStep3.png';
+
+const sections: FeatureSection[] = [
+  {
+    heading: 'General and appearance',
+    body: 'The General tab controls theme, accent color, and library paths. Default download path and internal data path are set here. A toggle at the bottom reveals the Debugging tab for power-user tools like playlist regroup and updater cycle.',
+    bullets: [
+      'Accent color picker (used across UI highlights and buttons)',
+      'Output path: where downloads land by default',
+      'Internal path: where sidecars, sprites, and SponsorBlock caches live',
+      'Toggle "Show Debugging tab" to access regroup and updater tools',
+    ],
+    image: settingsStep1,
+    imageAlt: 'RuForge Settings General tab with path configuration',
+  },
+  {
+    heading: 'Downloads tab',
+    body: 'Controls parallel job count, output folder overrides, and auto scrubber previews (ffmpeg sprite generation after download). The yt-dlp Check and Update button queries GitHub for the latest release and auto-installs a user-local copy if newer.',
+    bullets: [
+      'Auto scrubber previews: toggle ffmpeg sprite sheet generation on/off',
+      'yt-dlp update: checks GitHub releases, downloads to user-local path',
+      'Parallel jobs: how many downloads run concurrently (default 2)',
+      'Browser context for cookies: None (default), or path to cookie file',
+    ],
+    image: settingsStep2,
+    imageAlt: 'Settings Downloads tab with yt-dlp update and preview toggles',
+  },
+  {
+    heading: 'Playback and advanced',
+    body: 'Playback tab holds auto-advance (next file in queue), SponsorBlock tree (master toggle plus per-category controls), and prefetch settings. Advanced tab has the app update checker that auto-downloads RuForge when a newer version is available via the updater endpoint.',
+    bullets: [
+      'Auto-advance: play next in folder queue, then sorted library',
+      'SponsorBlock settings tree: master, per-category skip/prompt/disable',
+      'Advanced: Check for Updates button (compares against updater.json)',
+      'Debugging: playlist regroup tool, cycle updater for testing',
+    ],
+    image: settingsStep3,
+    imageAlt: 'Settings Playback tab with SponsorBlock category tree',
+  },
+];
+---
+
+<BaseLayout title="Settings" description="Configure downloads, playback, SponsorBlock categories, auto-updates, and power-user debugging tools.">
+  <FeaturePageTemplate
+    title="Settings"
+    description="General appearance and paths, download controls with yt-dlp auto-update, playback preferences with SponsorBlock tree, and advanced update/debugging tools."
+    sections={sections}
+  />
+</BaseLayout>
