@@ -26,7 +26,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   features: {
     featuredSlugs: ['downloader', 'media-library', 'explorer', 'player'],
     layout: 'links-featured-row',
-    panelClass: 'w-[54rem] min-h-[15.5rem]',
+    panelClass: 'w-[22rem] lg:w-[54rem] min-h-[15.5rem]',
     featured: [
       {
         slug: 'downloader',
@@ -61,7 +61,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   company: {
     featuredSlugs: ['about', 'open-source'],
     layout: 'links-featured-pair',
-    panelClass: 'w-[40rem] min-h-[17rem]',
+    panelClass: 'w-[22rem] lg:w-[40rem] min-h-[14rem] lg:min-h-[17rem]',
     featured: [
       {
         slug: 'about',
@@ -84,7 +84,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   resources: {
     featuredSlugs: ['getting-started'],
     layout: 'links-featured-single',
-    panelClass: 'w-[40rem] min-h-[14.5rem]',
+    panelClass: 'w-[22rem] lg:w-[40rem] min-h-[12rem] lg:min-h-[14.5rem]',
     featured: [
       {
         slug: 'getting-started',
@@ -100,7 +100,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   help: {
     featuredSlugs: [],
     layout: 'links-featured-single',
-    panelClass: 'w-[38rem] min-h-[14.5rem]',
+    panelClass: 'w-[22rem] lg:w-[38rem] min-h-[12rem] lg:min-h-[14.5rem]',
     featured: [
       {
         slug: 'getting-started',
@@ -115,7 +115,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   docs: {
     featuredSlugs: [],
     layout: 'links-icons',
-    panelClass: 'w-[42rem] min-h-[16rem]',
+    panelClass: 'w-[22rem] lg:w-[42rem] min-h-[12rem] lg:min-h-[16rem]',
     featured: [],
   },
 };

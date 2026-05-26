@@ -133,6 +133,14 @@
     opacity: 1 !important;
   }
 
+  .rf-mobile-nav-link {
+    opacity: 1 !important;
+  }
+
+  .rf-mobile-nav-link:hover {
+    opacity: 1 !important;
+  }
+
   .rf-mega-menu-link {
     @apply block rounded-md px-2.5 py-2.5 text-[0.9375rem] font-normal leading-6 text-rf-text-muted no-underline transition-colors duration-200 ease-out;
     opacity: 1 !important;

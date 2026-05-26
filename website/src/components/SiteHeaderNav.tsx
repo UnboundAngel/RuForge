@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useState, useCallback, useEffect } from 'react';
 import { NAV_SECTIONS, pageHref, type NavSectionId, type SitePage } from '../lib/sitePages';
 import {
   HELP_FEATURED_HREF,
@@ -236,15 +236,15 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
   const linkColumns = (
     <ul
       className={cn(
-        'grid min-w-0 content-start gap-y-1.5',
-        twoCols ? 'grid-cols-2 gap-x-5' : 'grid-cols-1',
+        'grid min-w-0 content-start gap-y-0.5 lg:gap-y-1.5',
+        twoCols ? 'grid-cols-1 lg:grid-cols-2 lg:gap-x-5' : 'grid-cols-1',
       )}
     >
       {linkPages.map((page: SitePage) => {
         const href = page.externalHref ?? pageHref(sectionId, page.slug);
         const external = Boolean(page.externalHref?.startsWith('http'));
         return (
-          <li key={page.slug} className="min-h-[2.75rem]">
+          <li key={page.slug} className="min-h-[2.25rem] lg:min-h-[2.75rem]">
             <MenuTextLink href={href} title={page.title} external={external} />
           </li>
         );
@@ -288,25 +288,178 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
   return (
     <div
       className={cn(
-        'rf-mega-menu grid shrink-0 items-stretch px-7 py-6',
+        'rf-mega-menu grid shrink-0 items-stretch px-5 py-5 lg:px-7 lg:py-6',
+        'max-w-[calc(100vw-3rem)]',
         config.layout === 'links-icons'
-          ? 'gap-x-10 grid-cols-[minmax(0,1.55fr)_minmax(10.5rem,13.25rem)]'
+          ? 'grid-cols-1 lg:gap-x-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(10.5rem,13.25rem)]'
           : config.layout === 'links-featured-row'
-            ? 'gap-x-6 grid-cols-[minmax(14rem,1fr)_minmax(0,1.2fr)]'
-            : 'gap-x-10 grid-cols-[minmax(0,1fr)_auto]',
+            ? 'grid-cols-1 lg:gap-x-6 lg:grid-cols-[minmax(14rem,1fr)_minmax(0,1.2fr)]'
+            : 'grid-cols-1 lg:gap-x-10 lg:grid-cols-[minmax(0,1fr)_auto]',
         config.panelClass,
       )}
     >
       {linkColumns}
-      {config.layout === 'links-icons' ? <DocsBuiltWithRail /> : featuredAside}
+      <div className="hidden lg:block">
+        {config.layout === 'links-icons' ? <DocsBuiltWithRail /> : featuredAside}
+      </div>
     </div>
   );
 });
 
+const SECTION_ICONS: Record<NavSectionId, React.ReactNode> = {
+  features: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
+  ),
+  company: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+  ),
+  resources: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" /></svg>
+  ),
+  help: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
+  ),
+  docs: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" /></svg>
+  ),
+};
+
+function MobileDrawerNav() {
+  const [open, setOpen] = useState(false);
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [open, close]);
+
+  return (
+    <div className="md:hidden flex items-center">
+      <button
+        type="button"
+        onClick={toggle}
+        className={cn(
+          'rf-mobile-nav-link inline-flex h-9 w-9 items-center justify-center rounded-full',
+          'text-rf-text-muted hover:text-rf-text hover:bg-[#edd79c]/[0.08] active:bg-[#edd79c]/[0.14] transition-all duration-150',
+          open && 'bg-[#edd79c]/[0.1] text-rf-text',
+        )}
+        aria-label={open ? 'Close menu' : 'Open menu'}
+        aria-expanded={open}
+      >
+        {open ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="18" x2="20" y2="18" />
+          </svg>
+        )}
+      </button>
+
+      {/* Backdrop */}
+      <div
+        className={cn(
+          'fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm transition-opacity duration-250',
+          open ? 'opacity-100' : 'opacity-0 pointer-events-none',
+        )}
+        onClick={close}
+        aria-hidden
+      />
+
+      {/* Drawer */}
+      <nav
+        className={cn(
+          'fixed top-0 left-0 z-[201] h-full w-[min(18rem,85vw)] overflow-y-auto',
+          'bg-[#1a1311]/[0.98] backdrop-blur-xl border-r border-[#edd79c]/[0.08]',
+          'shadow-[4px_0_24px_rgb(0_0_0/0.4)]',
+          'transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          open ? 'translate-x-0' : '-translate-x-full',
+        )}
+        aria-label="Main navigation"
+      >
+        <div className="px-5 pt-6 pb-4 border-b border-[#edd79c]/[0.06]">
+          <span className="text-[0.6875rem] font-bold tracking-[0.16em] uppercase text-rf-text-muted/50">
+            Navigation
+          </span>
+        </div>
+
+        <div className="px-3 py-3 space-y-1">
+          {NAV_SECTIONS.map((section) => (
+            <div key={section.id}>
+              <a
+                href={`/${section.id}`}
+                onClick={close}
+                className={cn(
+                  'rf-mobile-nav-link flex items-center gap-2.5 rounded-lg px-3 py-2',
+                  'text-[0.8125rem] font-semibold text-rf-text no-underline',
+                  'hover:bg-[#edd79c]/[0.06] active:bg-[#edd79c]/[0.1] transition-colors duration-150',
+                )}
+              >
+                <span className="flex items-center justify-center w-5 h-5 shrink-0 text-rf-text-muted/60">
+                  {SECTION_ICONS[section.id]}
+                </span>
+                {section.label}
+              </a>
+              <ul className="mt-0.5 mb-2 ml-[1.875rem] space-y-0.5">
+                {section.pages.slice(0, 6).map((page) => {
+                  const href = page.externalHref ?? pageHref(section.id, page.slug);
+                  const external = Boolean(page.externalHref?.startsWith('http'));
+                  return (
+                    <li key={page.slug}>
+                      <a
+                        href={href}
+                        onClick={close}
+                        className="rf-mobile-nav-link block rounded-md px-2.5 py-1.5 text-[0.75rem] text-rf-text-muted/70 no-underline hover:text-rf-text hover:bg-[#edd79c]/[0.05] transition-colors duration-150"
+                        {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                      >
+                        {page.title}
+                      </a>
+                    </li>
+                  );
+                })}
+                {section.pages.length > 6 && (
+                  <li>
+                    <a
+                      href={`/${section.id}`}
+                      onClick={close}
+                      className="rf-mobile-nav-link block rounded-md px-2.5 py-1.5 text-[0.6875rem] font-medium text-rf-accent/70 no-underline hover:text-rf-accent transition-colors duration-150"
+                    >
+                      View all {section.label.toLowerCase()}
+                    </a>
+                  </li>
+                )}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div className="px-5 py-4 mt-1 border-t border-[#edd79c]/[0.06] space-y-2">
+          <a href="/changelog" onClick={close} className="rf-mobile-nav-link flex items-center gap-2.5 rounded-lg px-1 py-1.5 text-[0.75rem] text-rf-text-muted/70 no-underline hover:text-rf-text transition-colors duration-150">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+            Changelog
+          </a>
+          <a href="/roadmap" onClick={close} className="rf-mobile-nav-link flex items-center gap-2.5 rounded-lg px-1 py-1.5 text-[0.75rem] text-rf-text-muted/70 no-underline hover:text-rf-text transition-colors duration-150">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z" /><path d="M9 3v15M15 6v15" /></svg>
+            Roadmap
+          </a>
+        </div>
+      </nav>
+    </div>
+  );
+}
+
 export default function SiteHeaderNav() {
   return (
     <>
-      <NavigationMenu className="hidden max-w-none flex-1 justify-center lg:flex">
+      <NavigationMenu className="hidden max-w-none flex-1 justify-center md:flex">
         <NavigationMenuList>
           {NAV_SECTIONS.map((section) => (
             <NavigationMenuItem key={section.id}>
@@ -319,40 +472,7 @@ export default function SiteHeaderNav() {
         </NavigationMenuList>
       </NavigationMenu>
 
-      <details className="site-header-mobile-menu relative lg:hidden">
-        <summary className="rf-header-nav-trigger inline-flex h-10 list-none cursor-pointer items-center justify-center rounded-full px-4 text-xs font-semibold tracking-[0.12em] uppercase [&::-webkit-details-marker]:hidden">
-          Menu
-        </summary>
-        <div className="rf-scrollbar absolute right-0 top-[calc(100%+0.5rem)] z-[60] max-h-[min(70vh,24rem)] w-[min(100vw-2rem,18rem)] overflow-y-auto rounded-xl border border-rf-border/80 bg-[#241a17]/98 p-2 shadow-[0_16px_48px_rgb(0_0_0/0.45)] backdrop-blur-md">
-          {NAV_SECTIONS.map((section) => (
-            <div key={section.id} className="mb-2 last:mb-0">
-              <a
-                href={`/${section.id}`}
-                className="block px-2 py-1.5 text-[0.625rem] font-semibold tracking-[0.14em] text-rf-text uppercase no-underline"
-              >
-                {section.label}
-              </a>
-              <ul className="space-y-1">
-                {section.pages.map((page) => {
-                  const href = page.externalHref ?? pageHref(section.id, page.slug);
-                  const external = Boolean(page.externalHref?.startsWith('http'));
-                  return (
-                    <li key={page.slug}>
-                      <a
-                        href={href}
-                        className="rf-mega-menu-link text-xs"
-                        {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                      >
-                        {page.title}
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </details>
+      <MobileDrawerNav />
     </>
   );
 }

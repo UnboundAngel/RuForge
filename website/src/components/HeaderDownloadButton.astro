@@ -31,7 +31,7 @@ import { DOWNLOAD_PAGE } from '../lib/site';
       </svg>
     </span>
   </span>
-  <span>Download</span>
+  <span class="header-download-btn__text">Download</span>
 </a>
 
 <script>
@@ -63,9 +63,10 @@ import { DOWNLOAD_PAGE } from '../lib/site';
   .header-download-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    flex-shrink: 0;
-    padding: 0.5rem 1rem;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
     border-radius: 9999px;
     background: var(--color-rf-accent);
     color: var(--color-rf-bg);
@@ -76,7 +77,17 @@ import { DOWNLOAD_PAGE } from '../lib/site';
     box-shadow: 0 4px 16px rgb(0 0 0 / 0.28);
     transition:
       filter 0.2s ease,
-      box-shadow 0.2s ease;
+      box-shadow 0.2s ease,
+      width 0.2s ease,
+      padding 0.2s ease;
+  }
+
+  @media (min-width: 520px) {
+    .header-download-btn {
+      width: auto;
+      height: auto;
+      padding: 0.5rem 1rem;
+    }
   }
 
   .header-download-btn:hover {
@@ -100,5 +111,16 @@ import { DOWNLOAD_PAGE } from '../lib/site';
 
   .header-download-btn__icon-os[hidden] {
     display: none;
+  }
+
+  .header-download-btn__text {
+    display: none;
+  }
+
+  @media (min-width: 520px) {
+    .header-download-btn__text {
+      display: inline;
+      margin-left: 0.5rem;
+    }
   }
 </style>

@@ -888,7 +888,8 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
   .docs-table-wrap {
     border-radius: 0.625rem;
     border: 1px solid rgb(237 215 156 / 0.1);
-    overflow: hidden;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .docs-table {
