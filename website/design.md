@@ -188,7 +188,7 @@ CSS classes in `global.css` `@layer components`:
 `LandingBackdrop.astro` layers:
 
 1. Multi-stop vertical gradient (`#1d1613` family)
-2. Optional paper grain tile (`src/assets/landing-grain.png`) at ~5.5% opacity
+2. Optional paper grain tile (`src/assets/landing-grain.webp`) at ~5.5% opacity
 3. CSS or image hero ember wash (gold radial at top)
 4. Five soft `bg-rf-accent/[0.02–0.055]` blurred orbs (ambient breathing)
 5. Optional features grid at 1.5% opacity
