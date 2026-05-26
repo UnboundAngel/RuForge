@@ -98,7 +98,9 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
   }
 
   :global(.testimonials-column) {
-    flex: 0 0 19.5rem;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 19.5rem;
     overflow: hidden;
   }
 
@@ -125,12 +127,19 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
   :global(.testimonial-card) {
     position: relative;
     width: 100%;
-    padding: 1.35rem 1.4rem 1.25rem;
-    border-radius: 1rem;
+    padding: 1rem 1.1rem 0.95rem;
+    border-radius: 0.875rem;
     border: 1px solid rgb(var(--rim-rgb, 237 215 156) / 0.42);
     background: #271c18;
     box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
     transition: border-color 0.25s ease, transform 0.25s ease;
+  }
+
+  @media (min-width: 640px) {
+    :global(.testimonial-card) {
+      padding: 1.35rem 1.4rem 1.25rem;
+      border-radius: 1rem;
+    }
   }
 
   :global(.testimonial-card:hover) {
@@ -166,8 +175,14 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
   :global(.testimonial-card-stars) {
     display: flex;
     gap: 0.15rem;
-    margin-bottom: 0.85rem;
+    margin-bottom: 0.6rem;
     color: rgb(237 215 156 / 0.55);
+  }
+
+  @media (min-width: 640px) {
+    :global(.testimonial-card-stars) {
+      margin-bottom: 0.85rem;
+    }
   }
 
   :global(.testimonial-card-quote) {
@@ -178,11 +193,18 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
 
   :global(.testimonial-card-quote p) {
     margin: 0;
-    font-size: 0.9375rem;
-    line-height: 1.62;
+    font-size: 0.8125rem;
+    line-height: 1.5;
     font-weight: 400;
     color: #edd79c;
     letter-spacing: -0.01em;
+  }
+
+  @media (min-width: 640px) {
+    :global(.testimonial-card-quote p) {
+      font-size: 0.9375rem;
+      line-height: 1.62;
+    }
   }
 
   :global(.testimonial-card-quote .quote-pause) {
@@ -195,16 +217,30 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-top: 1.15rem;
-    padding-top: 1rem;
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
     border-top: 1px solid rgb(237 215 156 / 0.08);
+  }
+
+  @media (min-width: 640px) {
+    :global(.testimonial-card-author) {
+      margin-top: 1.15rem;
+      padding-top: 1rem;
+    }
   }
 
   :global(.testimonial-card-avatar-wrap) {
     position: relative;
     flex-shrink: 0;
-    width: 2.75rem;
-    height: 2.75rem;
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  @media (min-width: 640px) {
+    :global(.testimonial-card-avatar-wrap) {
+      width: 2.75rem;
+      height: 2.75rem;
+    }
   }
 
   :global(.testimonial-card-avatar) {
