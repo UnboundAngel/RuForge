@@ -1,0 +1,51 @@
+---
+import MobileShell from '../../layouts/MobileShell.astro';
+import MobileHeader from '../../components/mobile/MobileHeader';
+import MobileFooter from '../../components/mobile/MobileFooter.astro';
+import ReleaseList from '../../components/ReleaseList.astro';
+import { getImage } from 'astro:assets';
+import ruforgeLogo from '../../assets/ruforge-logo.png';
+import { getCollection } from 'astro:content';
+import { SITE } from '../../lib/site';
+
+const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
+const releases = (await getCollection('releases')).sort(
+  (a, b) => b.data.date.getTime() - a.data.date.getTime(),
+);
+---
+
+<MobileShell title="RuForge changelog" description="Release notes and version history for the open-source desktop media library.">
+  <MobileHeader client:load logoSrc={logoImage.src} />
+
+  <main class="pt-20 pb-12 px-5 min-h-screen">
+    <div class="mb-8">
+      <a href="/m/" class="rf-m-btn inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text mb-4">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        Back
+      </a>
+      <h1 class="font-display text-2xl font-bold tracking-tight text-rf-text">Changelog</h1>
+      <p class="mt-2 text-sm text-rf-text-muted/80 leading-relaxed">
+        Newest releases first. Installers are on GitHub Releases.
+      </p>
+      <a
+        href={SITE.releases}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="rf-m-link inline-flex items-center gap-1.5 text-sm text-rf-accent font-medium no-underline mt-3"
+      >
+        GitHub Releases
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </a>
+    </div>
+
+    <ReleaseList releases={releases} compact />
+  </main>
+
+  <MobileFooter />
+</MobileShell>

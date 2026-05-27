@@ -1,0 +1,34 @@
+---
+import MobileShell from '../../../layouts/MobileShell.astro';
+import MobileHeader from '../../../components/mobile/MobileHeader';
+import MobileFooter from '../../../components/mobile/MobileFooter.astro';
+import MobileContentPage from '../../../components/mobile/MobileContentPage.astro';
+import { getImage } from 'astro:assets';
+import ruforgeLogo from '../../../assets/ruforge-logo.png';
+import { findPage, getStaticPagePaths, type NavSectionId } from '../../../lib/sitePages';
+
+export function getStaticPaths() {
+  return getStaticPagePaths().map(({ section, slug }) => ({
+    params: { section, slug },
+  }));
+}
+
+const sectionId = Astro.params.section as NavSectionId;
+const slug = Astro.params.slug!;
+const match = findPage(sectionId, slug);
+
+if (!match) {
+  return Astro.redirect(`/m/${sectionId}`);
+}
+
+const { page, section } = match;
+const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
+---
+
+<MobileShell title={page.title} description={page.description}>
+  <MobileHeader client:load logoSrc={logoImage.src} />
+  <main class="pt-20 pb-12 px-5 min-h-screen">
+    <MobileContentPage sectionId={section.id} page={page} />
+  </main>
+  <MobileFooter />
+</MobileShell>

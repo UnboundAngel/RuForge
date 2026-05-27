@@ -386,7 +386,7 @@
   }
 
   .rf-release-block {
-    @apply space-y-10 rounded-xl bg-rf-surface/50 px-6 py-8 sm:px-8 sm:py-10;
+    @apply space-y-10 rounded-xl bg-rf-surface/50 px-8 py-10;
   }
 
   /* Canonical slim scrollbar: accent thumb, no native arrow buttons. */
@@ -1833,6 +1833,105 @@
     .rf-dl-checkmark-ring,
     .rf-dl-checkmark-path {
       transition: none !important;
+    }
+  }
+
+  .rf-m-btn,
+  .rf-m-card,
+  .rf-m-link {
+    position: relative;
+    overflow: hidden;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .rf-m-btn {
+    transition: transform 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+  }
+
+  .rf-m-btn:active:not(:disabled) {
+    transform: scale(0.97);
+    filter: brightness(0.95);
+  }
+
+  .rf-m-btn:focus-visible {
+    outline: 2px solid var(--color-rf-accent);
+    outline-offset: 2px;
+  }
+
+  .rf-m-card {
+    transition: transform 150ms ease, border-color 200ms ease, box-shadow 200ms ease;
+  }
+
+  .rf-m-card:active:not(:disabled) {
+    transform: scale(0.985);
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.15);
+  }
+
+  .rf-m-card:focus-visible {
+    outline: 2px solid var(--color-rf-accent);
+    outline-offset: 2px;
+  }
+
+  .rf-m-link {
+    transition: background-color 100ms ease, transform 100ms ease;
+  }
+
+  .rf-m-link:active {
+    background-color: rgb(237 215 156 / 0.06);
+    transform: scale(0.99);
+  }
+
+  .rf-m-btn::after,
+  .rf-m-card::after,
+  .rf-m-link::after {
+    content: '';
+    position: absolute;
+    top: var(--ripple-y, 50%);
+    left: var(--ripple-x, 50%);
+    width: var(--ripple-d, 0);
+    height: var(--ripple-d, 0);
+    margin-top: calc(var(--ripple-d, 0) / -2);
+    margin-left: calc(var(--ripple-d, 0) / -2);
+    border-radius: 50%;
+    background: rgb(0 0 0 / 0.07);
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0);
+  }
+
+  .rf-m-btn.rf-ripple-active::after,
+  .rf-m-card.rf-ripple-active::after,
+  .rf-m-link.rf-ripple-active::after {
+    animation: rf-ripple-expand 500ms ease-out forwards;
+  }
+
+  @keyframes rf-ripple-expand {
+    0% {
+      transform: scale(0);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rf-m-btn,
+    .rf-m-card,
+    .rf-m-link {
+      transition: none !important;
+    }
+    .rf-m-btn:active:not(:disabled),
+    .rf-m-card:active:not(:disabled),
+    .rf-m-link:active {
+      transform: none !important;
+    }
+    .rf-m-btn::after,
+    .rf-m-card::after,
+    .rf-m-link::after {
+      display: none;
     }
   }
 }

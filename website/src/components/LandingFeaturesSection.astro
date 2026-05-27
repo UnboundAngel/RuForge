@@ -214,38 +214,4 @@ import { landingFeatureIntro, landingFeatureRows } from '../lib/landingFeatures'
     object-position: center top;
   }
 
-  @media (max-width: 767px) {
-    .landing-features {
-      padding-top: 5rem;
-      padding-bottom: 5rem;
-    }
-
-    .landing-features__intro {
-      margin-bottom: 3.5rem;
-    }
-
-    .landing-features__rows {
-      gap: 4.5rem;
-    }
-
-    .landing-features__row,
-    .landing-features__row--reverse {
-      grid-template-columns: 1fr;
-      row-gap: 2rem;
-    }
-
-    .landing-features__row--reverse .landing-features__copy,
-    .landing-features__row--reverse .landing-features__figure {
-      order: unset;
-    }
-
-    .landing-features__copy {
-      order: 1;
-      max-width: none;
-    }
-
-    .landing-features__figure {
-      order: 2;
-    }
-  }
 </style>

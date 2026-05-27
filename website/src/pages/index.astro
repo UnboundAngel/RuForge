@@ -24,19 +24,19 @@ import { softwareApplicationSchema, organizationSchema } from '../lib/structured
     <LandingBackdrop grain={landingGrain} />
 
     {/* Hero Section */}
-    <section class="rf-container pt-28 pb-20 sm:pt-32 md:pt-36 md:pb-28 text-center relative">
-      <div class="max-w-3xl mx-auto space-y-6 md:space-y-8 animate-fade-in">
+    <section class="rf-container pt-36 pb-28 text-center relative">
+      <div class="max-w-3xl mx-auto space-y-8 animate-fade-in">
         <div class="hero-title-wrap">
           <HeroAnimatedTitle client:load />
         </div>
 
-        <p class="hero-subcopy max-w-xl mx-auto text-base sm:text-lg leading-relaxed text-rf-text-muted/90">
+        <p class="hero-subcopy max-w-xl mx-auto text-lg leading-relaxed text-rf-text-muted/90">
           A lightweight, local-first media collector. Streamlined yt-dlp downloading and fine-tuned offline playback with SponsorBlock, chapters, and custom subtitles.
         </p>
       </div>
 
       {/* 3D Slanted Carousel Container */}
-      <div class="mt-20 md:mt-24 max-w-4xl mx-auto animate-slide-up" style="perspective: 2000px;">
+      <div class="mt-24 max-w-4xl mx-auto animate-slide-up" style="perspective: 2000px;">
         <div 
           class="relative p-1.5 bg-rf-surface/10 rounded-2xl shadow-3xl border border-rf-border/20 overflow-hidden group/carousel carousel-3d-wrapper"
         >
@@ -90,8 +90,8 @@ import { softwareApplicationSchema, organizationSchema } from '../lib/structured
     <TestimonialsSection />
 
     {/* High-Fidelity Rich Highlight Card at Bottom */}
-    <section class="rf-container pb-20 md:pb-24 scroll-reveal">
-      <div class="highlight-card relative overflow-hidden rounded-3xl p-8 md:p-14 border border-rf-border/40 group/highlight">
+    <section class="rf-container pb-24 scroll-reveal">
+      <div class="highlight-card relative overflow-hidden rounded-3xl p-14 border border-rf-border/40 group/highlight">
         <Image
           src={highlightCoffee}
           alt=""
@@ -106,17 +106,17 @@ import { softwareApplicationSchema, organizationSchema } from '../lib/structured
         <div class="highlight-card-scrim" aria-hidden="true"></div>
 
         <div class="relative z-10 flex flex-col">
-          <div class="max-w-2xl space-y-6 md:space-y-8">
+          <div class="max-w-2xl space-y-8">
             <div class="inline-flex items-center gap-2 rounded-full bg-rf-accent/10 px-4 py-1.5 border border-rf-accent/20">
               <Icon name="star" size={14} class="text-rf-accent" />
               <span class="text-xs font-semibold tracking-wider text-rf-accent uppercase">Always-on media freedom</span>
             </div>
 
-            <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-rf-text leading-[1.25]">
+            <h2 class="text-4xl font-bold tracking-tight text-rf-text leading-[1.25]">
               Designed for speed.<br />Engineered for local privacy.
             </h2>
 
-            <p class="text-sm md:text-base leading-relaxed text-rf-text-muted/90">
+            <p class="text-base leading-relaxed text-rf-text-muted/90">
               RuForge compiles direct Rust bindings with Tauri to deliver near-zero overhead. Your downloads run concurrently, SponsorBlock filters on the fly, and your library indexing is entirely local. No trackers, no accounts, no subscriptions.
             </p>
           </div>
@@ -249,21 +249,11 @@ import { softwareApplicationSchema, organizationSchema } from '../lib/structured
 
   /* Entrance animations */
   .hero-title-wrap {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.5rem;
   }
 
   .hero-subcopy {
-    margin-top: 0.5rem;
-  }
-
-  @media (min-width: 768px) {
-    .hero-title-wrap {
-      margin-bottom: 0.5rem;
-    }
-
-    .hero-subcopy {
-      margin-top: 0.75rem;
-    }
+    margin-top: 0.75rem;
   }
 
   .animate-fade-in {

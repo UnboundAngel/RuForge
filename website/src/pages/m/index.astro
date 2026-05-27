@@ -1,0 +1,94 @@
+---
+import MobileShell from '../../layouts/MobileShell.astro';
+import MobileHeader from '../../components/mobile/MobileHeader';
+import MobileTechCard from '../../components/mobile/MobileTechCard.astro';
+import MobileFeatureAccordion from '../../components/mobile/MobileFeatureAccordion';
+import MobileFooter from '../../components/mobile/MobileFooter.astro';
+import { AnimatedText } from '../../components/ui/animated-underline-text-one';
+import { Image, getImage } from 'astro:assets';
+import ruforgeLogo from '../../assets/ruforge-logo.png';
+import { landingFeatureRows, landingFeatureIntro } from '../../lib/landingFeatures';
+
+const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
+const featureImages = await Promise.all(
+  landingFeatureRows.map((row) => getImage({ src: row.image, width: 640 }))
+);
+
+const features = landingFeatureRows.map((row, i) => ({
+  id: row.id,
+  pill: row.pill,
+  headline: row.headline[0],
+  paragraph: row.paragraph,
+  bullets: [...row.bullets],
+  imageSrc: featureImages[i].src,
+  imageAlt: row.imageAlt,
+}));
+---
+
+<MobileShell
+  title="RuForge: Open-source media library for Windows"
+  description="Free Tauri desktop app with yt-dlp downloads, SponsorBlock, chapter navigation, and a local media library."
+>
+  <MobileHeader client:load logoSrc={logoImage.src} />
+
+  <main class="flex flex-col min-h-screen">
+    {/* Hero */}
+    <section class="pt-24 pb-10 px-5 text-center">
+      <div class="max-w-sm mx-auto space-y-5">
+        <div class="inline-block">
+          <AnimatedText
+            client:load
+            className="w-full mb-2"
+            textClassName="font-hand text-5xl font-bold tracking-tight text-rf-text leading-[1.1]"
+            underlineClassName="text-rf-accent"
+            underlinePath="M 0,10 Q 75,0 150,10 Q 225,20 300,10"
+            underlineHoverPath="M 0,10 Q 75,20 150,10 Q 225,0 300,10"
+            underlineDuration={1.5}
+          >
+            RuForge
+          </AnimatedText>
+        </div>
+        <p class="text-[15px] leading-relaxed text-rf-text-muted/85 max-w-xs mx-auto">
+          A lightweight, local-first media collector. Streamlined yt-dlp downloading and fine-tuned offline playback.
+        </p>
+        <a
+          href="/m/download"
+          class="rf-m-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rf-accent/15 border border-rf-accent/25 text-rf-accent text-sm font-semibold tracking-wide no-underline hover:bg-rf-accent/25"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+            <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+          </svg>
+          <span id="m-hero-cta-label">Download for Windows</span>
+        </a>
+      </div>
+    </section>
+
+    {/* Tech card */}
+    <MobileTechCard />
+
+    {/* Features accordion */}
+    <section class="px-5 py-8" aria-labelledby="m-features-heading">
+      <div class="mb-5 text-center">
+        <p class="text-[10px] font-semibold tracking-[0.18em] uppercase text-[#e8943a] mb-2">
+          {landingFeatureIntro.kicker}
+        </p>
+        <h2
+          id="m-features-heading"
+          class="font-display text-2xl font-bold tracking-tight text-rf-text leading-tight"
+        >
+          {landingFeatureIntro.headline[0]}
+        </h2>
+      </div>
+      <MobileFeatureAccordion client:visible features={features} />
+    </section>
+  </main>
+
+  <MobileFooter />
+
+  <script>
+    import { detectPlatform, downloadCtaLabel } from '../../lib/detectPlatform';
+    const label = document.getElementById('m-hero-cta-label');
+    if (label) label.textContent = downloadCtaLabel(detectPlatform());
+  </script>
+</MobileShell>

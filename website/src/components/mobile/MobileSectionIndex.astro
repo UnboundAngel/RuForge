@@ -1,0 +1,66 @@
+---
+import type { NavSection } from '../../lib/sitePages';
+import { pageHref } from '../../lib/sitePages';
+
+interface Props {
+  section: NavSection;
+}
+
+const { section } = Astro.props;
+---
+
+<div class="mb-8">
+  <a href="/m/" class="rf-m-btn inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text mb-4">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+    Back
+  </a>
+  <h1 class="font-display text-3xl font-bold tracking-tight text-rf-text">
+    {section.label}
+  </h1>
+  <p class="mt-2 text-sm text-rf-text-muted/80 leading-relaxed">
+    {section.description}
+  </p>
+</div>
+
+<ul class="space-y-1">
+  {section.pages.map((page) => {
+    const href = page.externalHref ?? `/m${pageHref(section.id, page.slug)}`;
+    const external = Boolean(page.externalHref?.startsWith('http'));
+    return (
+      <li>
+        <a
+          href={href}
+          class="rf-m-link group flex items-center justify-between gap-3 py-3.5 px-3 -mx-1 rounded-xl no-underline hover:bg-rf-surface/40"
+          {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+        >
+          <div class="min-w-0">
+            <p class="text-[15px] font-semibold text-rf-text group-hover:text-rf-accent transition-colors truncate">
+              {page.title}
+            </p>
+            <p class="text-xs text-rf-text-muted/70 leading-relaxed mt-0.5 line-clamp-2">
+              {page.description}
+            </p>
+          </div>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="shrink-0 text-rf-text-muted/40 group-hover:text-rf-accent transition-colors"
+          >
+            {external
+              ? <><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></>
+              : <path d="M9 18l6-6-6-6" />
+            }
+          </svg>
+        </a>
+      </li>
+    );
+  })}
+</ul>

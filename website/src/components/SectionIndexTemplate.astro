@@ -15,7 +15,7 @@ const entries = section.pages;
 <div class="rf-container space-y-10 pb-6">
   <PageHeader title={section.label} description={section.description} icon="map" />
 
-  <ul class="grid gap-4 sm:grid-cols-2">
+  <ul class="grid gap-4 grid-cols-2">
     {
       entries.map((item) => {
         const href = item.externalHref ?? pageHref(section.id, item.slug);

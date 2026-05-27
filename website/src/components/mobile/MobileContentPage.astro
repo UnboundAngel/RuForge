@@ -1,0 +1,91 @@
+---
+import type { NavSectionId, SitePage, NavSection } from '../../lib/sitePages';
+import { NAV_SECTIONS, pageHref } from '../../lib/sitePages';
+import { SITE } from '../../lib/site';
+
+interface Props {
+  sectionId: NavSectionId;
+  page: SitePage;
+}
+
+const { sectionId, page } = Astro.props;
+const section = NAV_SECTIONS.find((s) => s.id === sectionId)!;
+const siblings = section.pages.filter((p) => !p.externalHref && p.slug !== page.slug);
+---
+
+<div class="mb-6">
+  <a href={`/m/${sectionId}`} class="rf-m-btn inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text mb-4">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+    {section.label}
+  </a>
+
+  <nav class="text-xs text-rf-text-muted mb-3" aria-label="Breadcrumb">
+    <ol class="flex flex-wrap items-center gap-1.5">
+      <li><a href="/m/" class="no-underline hover:text-rf-text">Home</a></li>
+      <li aria-hidden="true">/</li>
+      <li><a href={`/m/${sectionId}`} class="no-underline hover:text-rf-text">{section.label}</a></li>
+      <li aria-hidden="true">/</li>
+      <li class="text-rf-text truncate max-w-[10rem]">{page.title}</li>
+    </ol>
+  </nav>
+
+  <h1 class="font-display text-2xl font-bold tracking-tight text-rf-text leading-tight">
+    {page.title}
+  </h1>
+  <p class="mt-2 text-sm text-rf-text-muted/80 leading-relaxed">
+    {page.description}
+  </p>
+</div>
+
+<div class="space-y-4">
+  {page.outline.length > 0 ? (
+    page.outline.map((heading) => (
+      <section class="rounded-xl border border-rf-border/30 bg-rf-surface/30 px-4 py-4">
+        <h2 class="text-base font-semibold text-rf-text">{heading}</h2>
+        <p class="mt-2 text-sm leading-relaxed text-rf-text-muted/70">
+          Full write-up coming soon. Check{' '}
+          <a href="/m/help/troubleshooting" class="text-rf-accent no-underline">Troubleshooting</a>{' '}
+          or ask on{' '}
+          <a href={SITE.discussions} class="text-rf-accent no-underline" target="_blank" rel="noopener noreferrer">
+            GitHub Discussions
+          </a>.
+        </p>
+      </section>
+    ))
+  ) : (
+    <section class="rounded-xl border border-rf-border/30 bg-rf-surface/30 px-4 py-4">
+      <p class="text-sm leading-relaxed text-rf-text-muted/70">
+        Content for this page is coming soon.
+      </p>
+    </section>
+  )}
+</div>
+
+{siblings.length > 0 && (
+  <div class="mt-8 rounded-xl border border-rf-border/20 bg-rf-surface/20 px-4 py-4">
+    <h3 class="text-xs font-semibold tracking-widest text-rf-text-muted uppercase mb-3">
+      More in {section.label}
+    </h3>
+    <ul class="space-y-1.5">
+      {siblings.slice(0, 6).map((item) => (
+        <li>
+          <a
+            href={`/m${pageHref(sectionId, item.slug)}`}
+            class="rf-m-link block text-sm text-rf-text-muted no-underline hover:text-rf-accent py-1"
+          >
+            {item.title}
+          </a>
+        </li>
+      ))}
+      {siblings.length > 6 && (
+        <li>
+          <a href={`/m/${sectionId}`} class="text-rf-accent no-underline text-sm">
+            View all
+          </a>
+        </li>
+      )}
+    </ul>
+  </div>
+)}

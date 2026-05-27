@@ -1,0 +1,35 @@
+---
+import TechTickerIcon from '../TechTickerIcon.astro';
+import { techTickerItems, type TechTickerIconId } from '../../lib/techTickerIcons';
+
+const shortLabels: Record<string, string> = {
+  'YouTube Downloader': 'YouTube',
+  'yt-dlp Engine': 'yt-dlp',
+  'SponsorBlock API': 'SponsorBlock',
+  'Tauri v2 Shell': 'Tauri v2',
+  'Rust Core': 'Rust',
+  'React 19 Core': 'React 19',
+  'FFmpeg Processing': 'FFmpeg',
+  'Zustand State Store': 'Zustand',
+};
+---
+
+<section class="px-5 py-6" aria-label="Built with">
+  <div class="rounded-2xl border border-rf-border/30 bg-rf-surface/25 p-5">
+    <p class="text-[10px] font-semibold tracking-[0.18em] uppercase text-rf-text-muted/60 mb-4">
+      Built with
+    </p>
+    <div class="grid grid-cols-2 gap-3">
+      {techTickerItems.map((item) => (
+        <div class="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-rf-surface/30 border border-rf-border/20">
+          <span class="flex shrink-0 items-center justify-center">
+            <TechTickerIcon icon={item.icon} />
+          </span>
+          <span class="text-[11px] font-semibold tracking-wide uppercase text-rf-text-muted/70 truncate">
+            {shortLabels[item.name] ?? item.name}
+          </span>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

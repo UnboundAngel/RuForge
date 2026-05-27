@@ -115,7 +115,7 @@ import { SITE } from '../lib/site';
   }
 
   .site-header-version {
-    display: none;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
@@ -128,12 +128,6 @@ import { SITE } from '../lib/site';
     line-height: 1.1;
     letter-spacing: 0.05em;
     color: var(--color-rf-text-muted);
-  }
-
-  @media (min-width: 1280px) {
-    .site-header-version {
-      display: inline-flex;
-    }
   }
 
   .site-header-nav-wrap {
@@ -151,13 +145,6 @@ import { SITE } from '../lib/site';
     align-items: center;
     gap: 0.25rem;
     flex-shrink: 0;
-    margin-left: auto;
-  }
-
-  @media (min-width: 768px) {
-    .site-header-actions {
-      margin-left: 0;
-    }
   }
 
   .site-header-github-slot {
@@ -216,16 +203,14 @@ import { SITE } from '../lib/site';
     height: 2.25rem;
   }
 
-  @media (min-width: 640px) {
-    .site-header-github:hover,
-    .site-header-github:focus-visible {
-      max-width: 11rem;
-    }
+  .site-header-github:hover,
+  .site-header-github:focus-visible {
+    max-width: 11rem;
+  }
 
-    .site-header-github:hover .site-header-github__label,
-    .site-header-github:focus-visible .site-header-github__label {
-      opacity: 1;
-    }
+  .site-header-github:hover .site-header-github__label,
+  .site-header-github:focus-visible .site-header-github__label {
+    opacity: 1;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -235,18 +220,6 @@ import { SITE } from '../lib/site';
 
     .site-header-github__label {
       transition: none;
-    }
-
-    @media (min-width: 640px) {
-      .site-header-github:hover,
-      .site-header-github:focus-visible {
-        max-width: 11rem;
-      }
-
-      .site-header-github:hover .site-header-github__label,
-      .site-header-github:focus-visible .site-header-github__label {
-        opacity: 1;
-      }
     }
   }
 

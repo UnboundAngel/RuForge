@@ -36,8 +36,8 @@ NavigationMenuList.displayName = NavigationMenuPrimitive.List.displayName;
 const NavigationMenuItem = NavigationMenuPrimitive.Item;
 
 const navigationMenuTriggerStyle = cn(
-  'rf-header-nav-trigger group inline-flex h-10 items-center justify-center px-2.5 lg:px-4',
-  'text-[0.6875rem] lg:text-xs font-semibold tracking-[0.08em] lg:tracking-[0.12em] uppercase',
+  'rf-header-nav-trigger group inline-flex h-10 items-center justify-center px-4',
+  'text-xs font-semibold tracking-[0.12em] uppercase',
   'hover:bg-transparent focus:bg-transparent data-[state=open]:bg-transparent',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-accent/30',
   'disabled:pointer-events-none disabled:opacity-50',
@@ -63,7 +63,7 @@ const NavigationMenuContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <NavigationMenuPrimitive.Content
     ref={ref}
-    className={cn('rf-nav-content left-0 top-0 w-full md:absolute md:w-auto', className)}
+    className={cn('rf-nav-content left-0 top-0 absolute w-auto', className)}
     {...props}
   />
 ));
@@ -80,7 +80,7 @@ const NavigationMenuViewport = React.forwardRef<
       ref={ref}
       className={cn(
         'rf-nav-viewport pointer-events-auto relative mt-1.5 overflow-hidden rounded-2xl',
-        'h-[var(--radix-navigation-menu-viewport-height)] w-full md:w-[var(--radix-navigation-menu-viewport-width)]',
+        'h-[var(--radix-navigation-menu-viewport-height)] w-[var(--radix-navigation-menu-viewport-width)]',
         className,
       )}
       {...props}

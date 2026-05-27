@@ -265,39 +265,4 @@ const { title, description, sections } = Astro.props;
     color: var(--color-rf-text);
   }
 
-  @media (max-width: 767px) {
-    .feature-page__hero {
-      margin-bottom: 3rem;
-    }
-
-    .feature-page__sections {
-      gap: 4rem;
-    }
-
-    .feature-page__row,
-    .feature-page__row--reverse {
-      grid-template-columns: 1fr;
-      row-gap: 1.5rem;
-    }
-
-    .feature-page__row--reverse .feature-page__copy,
-    .feature-page__row--reverse .feature-page__figure {
-      order: unset;
-    }
-
-    .feature-page__copy {
-      order: 1;
-      max-width: none;
-    }
-
-    .feature-page__figure {
-      order: 2;
-    }
-
-    .feature-page__footer {
-      flex-direction: column;
-      align-items: flex-start;
-      margin-top: 3.5rem;
-    }
-  }
 </style>
