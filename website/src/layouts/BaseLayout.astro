@@ -33,6 +33,7 @@ const pageTitle =
   title === SITE.name || title.includes(SITE.name) ? title : `${title} · ${SITE.name}`;
 const builtWithMainTransition = builtWithNav !== undefined;
 const computedCanonical = canonicalUrl || new URL(Astro.url.pathname, Astro.site).href;
+const mobileAlternateUrl = new URL('/m' + Astro.url.pathname, Astro.site).href;
 ---
 
 <!doctype html>
@@ -49,6 +50,7 @@ const computedCanonical = canonicalUrl || new URL(Astro.url.pathname, Astro.site
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <link rel="canonical" href={computedCanonical} />
+    <link rel="alternate" media="only screen and (max-width: 768px)" href={mobileAlternateUrl} />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={computedCanonical} />
