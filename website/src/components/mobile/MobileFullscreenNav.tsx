@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { mobileHref } from '../../lib/mobileHref';
 import { NAV_SECTIONS, pageHref, type NavSectionId } from '../../lib/sitePages';
 import { useHaptic } from './useHaptic';
 import { detectPlatform, downloadCtaLabel } from '../../lib/detectPlatform';
@@ -90,7 +91,7 @@ function NavSection({
           {subItems.map((page) => (
             <a
               key={page.slug}
-              href={page.externalHref ?? `/m${pageHref(section.id, page.slug)}`}
+              href={mobileHref(page.externalHref ?? pageHref(section.id, page.slug))}
               className="rf-m-link flex items-center gap-3 py-2.5 px-2 rounded-lg no-underline hover:bg-rf-surface/40 min-h-[40px]"
             >
               <span className="w-1 h-1 rounded-full bg-rf-text-muted/40 shrink-0" />

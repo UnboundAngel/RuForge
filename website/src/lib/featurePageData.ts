@@ -343,3 +343,7 @@ export function findFeaturePage(slug: string): FeaturePageDef | undefined {
 export function featurePageSlugs(): string[] {
   return FEATURE_PAGES.map((p) => p.slug);
 }
+
+export function featureDetailHref(slug: string): string {
+  return `/features/${slug}`;
+}

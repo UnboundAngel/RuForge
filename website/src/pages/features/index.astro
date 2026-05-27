@@ -2,11 +2,12 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import FeatureHubsGrid from '../../components/FeatureStackedCards';
 import type { FeatureHubEntry } from '../../components/FeatureStackedCards';
+import { featureDetailHref } from '../../lib/featurePageData';
 
 const hubs: FeatureHubEntry[] = [
   {
     eyebrow: 'How downloading works',
-    href: '/features/downloader',
+    href: featureDetailHref('downloader'),
     cards: [
       {
         imageSrc: '/tutorials/downloadstep1.webp',
@@ -30,7 +31,7 @@ const hubs: FeatureHubEntry[] = [
   },
   {
     eyebrow: 'Media Library',
-    href: '/features/library',
+    href: featureDetailHref('media-library'),
     cards: [
       {
         imageSrc: '/tutorials/medialibrarystep1.webp',
@@ -54,7 +55,7 @@ const hubs: FeatureHubEntry[] = [
   },
   {
     eyebrow: 'Media Player',
-    href: '/features/player',
+    href: featureDetailHref('player'),
     cards: [
       {
         imageSrc: '/tutorials/mediaplayerstep1.webp',
@@ -78,7 +79,7 @@ const hubs: FeatureHubEntry[] = [
   },
   {
     eyebrow: 'SponsorBlock',
-    href: '/features/sponsorblock',
+    href: featureDetailHref('sponsorblock'),
     cards: [
       {
         imageSrc: '/tutorials/sponsorstep1.webp',
@@ -102,7 +103,7 @@ const hubs: FeatureHubEntry[] = [
   },
   {
     eyebrow: 'Mini Player',
-    href: '/features/miniplayer',
+    href: featureDetailHref('mini-player'),
     cards: [
       {
         imageSrc: '/tutorials/miniplayerstep1.webp',
@@ -126,7 +127,7 @@ const hubs: FeatureHubEntry[] = [
   },
   {
     eyebrow: 'Advanced Settings',
-    href: '/features/settings',
+    href: featureDetailHref('settings'),
     cards: [
       {
         imageSrc: '/tutorials/settingsstep1.webp',
