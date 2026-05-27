@@ -27,6 +27,10 @@ const canonicalUrl = new URL(desktopPathname, SITE.url).href;
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/patrick-hand/webfonts/patrick-hand-latin-400-normal.woff2" />
     <title>{pageTitle}</title>
+    <script is:inline>
+      if (location.hostname.endsWith('.pages.dev'))
+        location.replace('https://ruforge.app' + location.pathname + location.search + location.hash);
+    </script>
   </head>
   <body class="flex min-h-screen flex-col bg-rf-bg text-rf-text antialiased font-sans">
     <slot />
