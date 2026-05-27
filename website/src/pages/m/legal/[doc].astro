@@ -1,0 +1,41 @@
+---
+import MobileShell from '../../../layouts/MobileShell.astro';
+import MobileHeader from '../../../components/mobile/MobileHeader';
+import MobileFooter from '../../../components/mobile/MobileFooter.astro';
+import { getImage } from 'astro:assets';
+import ruforgeLogo from '../../../assets/ruforge-logo.png';
+import { LEGAL_LINKS } from '../../../lib/site';
+import { renderLegalHtml } from '../../../lib/legal';
+
+export function getStaticPaths() {
+  return [
+    { params: { doc: 'privacy' }, props: { title: 'Privacy Policy', file: 'PRIVACY.md' } },
+    { params: { doc: 'terms' }, props: { title: 'Terms of Use', file: 'TERMS.md' } },
+    { params: { doc: 'notice' }, props: { title: 'Legal Notice', file: 'LEGAL.md' } },
+  ];
+}
+
+const { title, file } = Astro.props;
+const html = renderLegalHtml(file);
+const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
+---
+
+<MobileShell title={title} description={`${title} for RuForge.`}>
+  <MobileHeader client:load logoSrc={logoImage.src} />
+
+  <main class="pt-20 pb-12 px-5 min-h-screen">
+    <div class="mb-6">
+      <a href="/m/legal" class="rf-m-btn inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text mb-4">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        Legal
+      </a>
+      <h1 class="font-display text-2xl font-bold tracking-tight text-rf-text">{title}</h1>
+    </div>
+
+    <article class="rf-prose text-sm leading-relaxed text-rf-text-muted" set:html={html} />
+  </main>
+
+  <MobileFooter />
+</MobileShell>

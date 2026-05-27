@@ -1,0 +1,177 @@
+---
+import MobileShell from '../../layouts/MobileShell.astro';
+import MobileHeader from '../../components/mobile/MobileHeader';
+import MobileFooter from '../../components/mobile/MobileFooter.astro';
+import { getImage } from 'astro:assets';
+import ruforgeLogo from '../../assets/ruforge-logo.png';
+import { SITE } from '../../lib/site';
+import {
+  directInstallerDownloadUrl,
+  windowsInstallerFilename,
+  releaseNotesUrl,
+} from '../../lib/downloadRelease';
+import { softwareApplicationSchema } from '../../lib/structuredData';
+
+const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
+const version = SITE.latestVersion;
+const directUrl = directInstallerDownloadUrl(version);
+const filename = windowsInstallerFilename(version);
+const releaseUrl = releaseNotesUrl(version);
+---
+
+<MobileShell
+  title="Download RuForge for Windows"
+  description="Free open-source media library and yt-dlp frontend. Signed Windows installer, auto-updater, no premium tier."
+>
+  <script type="application/ld+json" set:html={JSON.stringify(softwareApplicationSchema())} />
+
+  <MobileHeader client:load logoSrc={logoImage.src} />
+
+  <main class="flex flex-col min-h-screen pt-20 pb-12 px-5">
+    <section class="text-center space-y-6 mb-10">
+      <div class="flex justify-center">
+        <img
+          src={logoImage.src}
+          alt="RuForge"
+          class="w-16 h-16 rounded-xl"
+          width={64}
+          height={64}
+        />
+      </div>
+
+      <div class="space-y-2">
+        <h1 class="font-display text-3xl font-bold tracking-tight text-rf-text">
+          Download RuForge
+        </h1>
+        <p class="text-sm text-rf-text-muted/80">
+          Free, open-source, local-first media library for Windows.
+        </p>
+      </div>
+
+      <a
+        id="dl-cta"
+        href={directUrl}
+        download={filename}
+        class="rf-m-btn inline-flex items-center justify-center gap-2.5 w-full max-w-xs mx-auto py-3.5 rounded-xl bg-rf-accent text-rf-bg text-sm font-bold tracking-wide no-underline hover:opacity-100 hover:brightness-105"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+          <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+        </svg>
+        <span id="dl-cta-label">Download for Windows</span>
+      </a>
+
+      <p class="text-xs text-rf-text-muted/60 font-mono">
+        v{version} · Windows 10+
+      </p>
+    </section>
+
+    <section class="rounded-2xl border border-rf-border/30 bg-rf-surface/30 overflow-hidden mb-8">
+      <div class="px-4 py-3 border-b border-rf-border/20">
+        <h2 class="text-sm font-bold text-rf-text">Platforms</h2>
+      </div>
+
+      <ul class="divide-y divide-rf-border/15">
+        <li class="flex items-center justify-between px-4 py-3.5">
+          <div class="flex items-center gap-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="text-rf-accent">
+              <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
+            </svg>
+            <span class="text-[15px] font-semibold text-rf-text">Windows</span>
+          </div>
+          <a
+            href={directUrl}
+            download={filename}
+            class="rf-m-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rf-accent/15 text-rf-accent text-xs font-semibold no-underline hover:bg-rf-accent/25"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+              <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+            </svg>
+            Universal
+          </a>
+        </li>
+        <li class="flex items-center justify-between px-4 py-3.5">
+          <div class="flex items-center gap-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="text-rf-text-muted/60">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+            <span class="text-[15px] font-medium text-rf-text-muted/70">macOS</span>
+          </div>
+          <span class="text-xs text-rf-text-muted/50 font-medium">Coming soon</span>
+        </li>
+        <li class="flex items-center justify-between px-4 py-3.5">
+          <div class="flex items-center gap-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="text-rf-text-muted/60">
+              <path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.868.134 1.703-.272 2.191-.574.3-.18.599-.429.867-.667.879-.199 1.975-.203 2.395-1.329a8.002 8.002 0 00.26-2.29v-.025c-.066-.199.015-.597-.04-.936l-.006-.024a.077.077 0 00.006-.02c0-.003.004-.006.005-.02.04-.267.058-.466-.005-.67a1.39 1.39 0 00-.2-.394c.4-.867.6-2.268.532-3.936-.068-1.868-.468-4.136-1.133-5.936-.332-.87-.734-1.533-1.267-2.07a2.74 2.74 0 00-.733-.466c.225-1.67.33-4.87-3.351-4.87l-.003-.003z"/>
+            </svg>
+            <span class="text-[15px] font-medium text-rf-text-muted/70">Linux</span>
+          </div>
+          <span class="text-xs text-rf-text-muted/50 font-medium">Coming soon</span>
+        </li>
+      </ul>
+    </section>
+
+    <div class="space-y-3 text-center">
+      <a
+        href={releaseUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="rf-m-link inline-flex items-center gap-1.5 text-sm text-rf-accent font-medium no-underline hover:underline"
+      >
+        Release notes
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </a>
+      <span class="mx-3 text-rf-text-muted/30">·</span>
+      <a
+        href={SITE.github}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="rf-m-link inline-flex items-center gap-1.5 text-sm text-rf-text-muted/70 font-medium no-underline hover:text-rf-accent"
+      >
+        GitHub
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </a>
+    </div>
+  </main>
+
+  <MobileFooter />
+
+  <script>
+    const cta = document.getElementById('dl-cta');
+    const label = document.getElementById('dl-cta-label');
+    if (cta && label) {
+      const ua = navigator.userAgent.toLowerCase();
+      const plat = ((navigator as any).userAgentData?.platform || navigator.platform || '').toLowerCase();
+      if (plat.includes('mac') || ua.includes('mac') || ua.includes('iphone') || ua.includes('ipad')) {
+        label.textContent = 'Download for macOS';
+        cta.removeAttribute('download');
+        cta.setAttribute('href', '#');
+        cta.classList.add('opacity-50', 'pointer-events-none');
+        const note = document.createElement('p');
+        note.className = 'text-xs text-rf-text-muted/60 mt-2';
+        note.textContent = 'macOS is not available yet. Use the Windows installer for now.';
+        cta.parentElement?.insertBefore(note, cta.nextSibling);
+      } else if (plat.includes('linux') || ua.includes('linux') || ua.includes('android')) {
+        label.textContent = 'Download for Linux';
+        cta.removeAttribute('download');
+        cta.setAttribute('href', '#');
+        cta.classList.add('opacity-50', 'pointer-events-none');
+        const note = document.createElement('p');
+        note.className = 'text-xs text-rf-text-muted/60 mt-2';
+        note.textContent = 'Linux builds are coming soon. Use the Windows installer for now.';
+        cta.parentElement?.insertBefore(note, cta.nextSibling);
+      }
+    }
+  </script>
+</MobileShell>

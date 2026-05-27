@@ -59,6 +59,7 @@ const computedCanonical = canonicalUrl || new URL(Astro.url.pathname, Astro.site
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/patrick-hand/webfonts/patrick-hand-latin-400-normal.woff2" />
     <title>{pageTitle}</title>
     {jsonLd && (
       Array.isArray(jsonLd)
@@ -68,6 +69,16 @@ const computedCanonical = canonicalUrl || new URL(Astro.url.pathname, Astro.site
         : <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
     )}
     <ClientRouter />
+    <script is:inline>
+      (function() {
+        var ua = navigator.userAgent;
+        if (/Googlebot|bingbot|Baiduspider|YandexBot|DuckDuckBot|Slurp|OAI-SearchBot|ChatGPT-User|PerplexityBot|ClaudeBot|Applebot/i.test(ua)) return;
+        if (!/Mobi|Android|iPhone|iPad|iPod/i.test(ua) || window.innerWidth >= 768) return;
+        var p = window.location.pathname.replace(/\/+$/, '') || '/';
+        if (p.startsWith('/m/') || p === '/m') return;
+        window.location.replace('/m' + p);
+      })();
+    </script>
   </head>
   <body class="flex min-h-screen flex-col">
     <div transition:persist="site-header">
@@ -75,8 +86,8 @@ const computedCanonical = canonicalUrl || new URL(Astro.url.pathname, Astro.site
     </div>
     <main
       class:list={[
-        'flex-1 pb-10 md:pb-14',
-        !flushTop && 'pt-20 md:pt-24',
+        'flex-1 pb-14',
+        !flushTop && 'pt-24',
       ]}
       transition:name="page-main"
       transition:animate={builtWithMainTransition ? 'none' : fade({ duration: '0.22s' })}

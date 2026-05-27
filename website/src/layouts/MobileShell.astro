@@ -1,0 +1,74 @@
+---
+import '../styles/global.css';
+import { SITE } from '../lib/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title = SITE.name, description = SITE.description } = Astro.props;
+const pageTitle =
+  title === SITE.name || title.includes(SITE.name) ? title : `${title} · ${SITE.name}`;
+
+const mobilePathname = Astro.url.pathname;
+const desktopPathname = mobilePathname.replace(/^\/m(?:\/|$)/, '/') || '/';
+const canonicalUrl = new URL(desktopPathname, SITE.url).href;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="robots" content="noindex,follow" />
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/patrick-hand/webfonts/patrick-hand-latin-400-normal.woff2" />
+    <title>{pageTitle}</title>
+  </head>
+  <body class="flex min-h-screen flex-col bg-rf-bg text-rf-text antialiased font-sans">
+    <slot />
+    <script>
+      let h: any = null;
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function fire(el: Element) {
+        if (!h) return;
+        if (el.closest('.rf-m-btn')) h.impact('light');
+        else if (el.closest('.rf-m-card')) h.selection();
+        else if (el.closest('.rf-m-link')) h.selection();
+      }
+
+      function ripple(target: HTMLElement, x: number, y: number) {
+        if (reducedMotion) return;
+        const rect = target.getBoundingClientRect();
+        const rx = x - rect.left;
+        const ry = y - rect.top;
+        const d = Math.max(rect.width, rect.height) * 2.5;
+        target.style.setProperty('--ripple-x', `${rx}px`);
+        target.style.setProperty('--ripple-y', `${ry}px`);
+        target.style.setProperty('--ripple-d', `${d}px`);
+        target.classList.remove('rf-ripple-active');
+        void target.offsetWidth;
+        target.classList.add('rf-ripple-active');
+        target.addEventListener('animationend', () => {
+          target.classList.remove('rf-ripple-active');
+        }, { once: true });
+      }
+
+      document.addEventListener('pointerdown', (e) => {
+        const t = e.target as Element;
+        const host = t.closest('.rf-m-btn,.rf-m-card,.rf-m-link') as HTMLElement | null;
+        if (!host) return;
+        ripple(host, e.clientX, e.clientY);
+        if (!h) {
+          import('@mxerf/tappt').then(({ haptic }) => { h = haptic; fire(t); });
+        } else {
+          fire(t);
+        }
+      }, { passive: true });
+    </script>
+  </body>
+</html>

@@ -29,12 +29,12 @@ const docMeta: Record<string, { icon: IconName; blurb: string }> = {
       icon="shield"
     />
 
-    <div class="grid gap-5 sm:grid-cols-3">
+    <div class="grid gap-5 grid-cols-3">
       {
         LEGAL_LINKS.map((doc) => {
           const meta = docMeta[doc.title];
           return (
-            <a href={doc.href} class="rf-link-card flex-col sm:flex-row">
+            <a href={doc.href} class="rf-link-card flex-row">
               <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-rf-bg/80 text-rf-accent">
                 <Icon name={meta.icon} size={22} />
               </span>

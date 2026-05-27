@@ -33,7 +33,7 @@ const siblings = section.pages.filter((p) => !p.externalHref && p.slug !== page.
 
   <p class="rf-badge rf-badge-todo w-fit">Documentation in progress</p>
 
-  <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_16rem]">
+  <div class="grid gap-10 grid-cols-[minmax(0,1fr)_16rem]">
     <div class="space-y-8">
       {
         page.outline.length > 0 ? (
@@ -63,7 +63,7 @@ const siblings = section.pages.filter((p) => !p.externalHref && p.slug !== page.
       }
     </div>
 
-  <aside class="space-y-6 lg:sticky lg:top-28 lg:self-start">
+  <aside class="space-y-6 sticky top-28 self-start">
       <div class="rounded-xl border border-rf-border/60 bg-rf-surface/60 px-5 py-5">
         <h3 class="text-xs font-semibold tracking-widest text-rf-text-muted uppercase">
           {section.label}

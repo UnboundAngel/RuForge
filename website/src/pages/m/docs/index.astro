@@ -1,0 +1,71 @@
+---
+import MobileShell from '../../../layouts/MobileShell.astro';
+import MobileHeader from '../../../components/mobile/MobileHeader';
+import MobileFooter from '../../../components/mobile/MobileFooter.astro';
+import { getImage } from 'astro:assets';
+import ruforgeLogo from '../../../assets/ruforge-logo.png';
+import { DOCS_TREE } from '../../../lib/docsTree';
+
+const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
+---
+
+<MobileShell title="RuForge documentation" description="Getting started, library folders, settings reference, and a glossary for the open-source media library.">
+  <MobileHeader client:load logoSrc={logoImage.src} />
+
+  <main class="pt-20 pb-12 px-5 min-h-screen">
+    <div class="mb-6">
+      <a href="/m/" class="rf-m-btn inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text mb-4">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        Back
+      </a>
+      <h1 class="font-display text-2xl font-bold tracking-tight text-rf-text">
+        RuForge Documentation
+      </h1>
+      <p class="mt-2 text-sm text-rf-text-muted/80 leading-relaxed">
+        Guides and reference for downloading, playing, and managing your local media library.
+      </p>
+    </div>
+
+    <div class="space-y-4">
+      {DOCS_TREE.map((section) => (
+        <div class="rounded-xl border border-rf-border/20 bg-rf-surface/20 px-4 py-3.5">
+          <h2 class="text-sm font-semibold text-rf-text mb-2">{section.label}</h2>
+          <ul class="space-y-1">
+            {section.pages.slice(0, 4).map((page) => (
+              <li>
+                <a
+                  href={page.externalHref || `/m/docs/${page.slug}`}
+                  class="rf-m-link block text-sm text-rf-text-muted/80 no-underline hover:text-rf-accent py-0.5"
+                  target={page.externalHref?.startsWith('http') ? '_blank' : undefined}
+                >
+                  {page.title}
+                </a>
+              </li>
+            ))}
+            {section.pages.length > 4 && (
+              <li class="text-xs text-rf-text-muted/40 pt-0.5">
+                +{section.pages.length - 4} more
+              </li>
+            )}
+          </ul>
+        </div>
+      ))}
+    </div>
+
+    <div class="mt-6">
+      <a href="/m/docs/built-with" class="rf-m-link rf-m-card flex items-center justify-between gap-3 px-4 py-3.5 rounded-xl border border-rf-border/20 bg-rf-surface/20 no-underline">
+        <div>
+          <p class="text-sm font-semibold text-rf-text">Built with</p>
+          <p class="text-xs text-rf-text-muted/70 mt-0.5">How RuForge uses each tool in the stack</p>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 text-rf-text-muted/40">
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      </a>
+    </div>
+  </main>
+
+  <MobileFooter />
+</MobileShell>

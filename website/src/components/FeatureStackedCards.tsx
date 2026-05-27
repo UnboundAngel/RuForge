@@ -137,7 +137,7 @@ export interface FeatureHubEntry {
 
 export default function FeatureHubsGrid({ hubs }: { hubs: FeatureHubEntry[] }) {
   return (
-    <div className="grid grid-cols-1 gap-16 md:grid-cols-2 lg:grid-cols-3 justify-items-center">
+    <div className="grid grid-cols-3 gap-16 justify-items-center">
       {hubs.map((hub) => (
         <FeatureCardStack
           key={hub.eyebrow}

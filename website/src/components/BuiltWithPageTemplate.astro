@@ -53,7 +53,7 @@ const resolvedSnippets = await Promise.all(
     </PageHeader>
   </div>
 
-  <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_16rem]">
+  <div class="grid gap-10 grid-cols-[minmax(0,1fr)_16rem]">
     <div class="space-y-6" transition:name="built-with-main" transition:animate="none">
       {
         page.paragraphs.map((paragraph) => (
@@ -107,7 +107,7 @@ const resolvedSnippets = await Promise.all(
     </div>
 
     <aside
-      class="space-y-6 lg:sticky lg:top-28 lg:self-start"
+      class="space-y-6 sticky top-28 self-start"
       transition:name="built-with-sidebar"
       transition:persist
       data-built-with-sidebar

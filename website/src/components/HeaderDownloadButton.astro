@@ -64,9 +64,9 @@ import { DOWNLOAD_PAGE } from '../lib/site';
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    padding: 0;
+    width: auto;
+    height: auto;
+    padding: 0.5rem 1rem;
     border-radius: 9999px;
     background: var(--color-rf-accent);
     color: var(--color-rf-bg);
@@ -77,17 +77,7 @@ import { DOWNLOAD_PAGE } from '../lib/site';
     box-shadow: 0 4px 16px rgb(0 0 0 / 0.28);
     transition:
       filter 0.2s ease,
-      box-shadow 0.2s ease,
-      width 0.2s ease,
-      padding 0.2s ease;
-  }
-
-  @media (min-width: 520px) {
-    .header-download-btn {
-      width: auto;
-      height: auto;
-      padding: 0.5rem 1rem;
-    }
+      box-shadow 0.2s ease;
   }
 
   .header-download-btn:hover {
@@ -114,13 +104,7 @@ import { DOWNLOAD_PAGE } from '../lib/site';
   }
 
   .header-download-btn__text {
-    display: none;
-  }
-
-  @media (min-width: 520px) {
-    .header-download-btn__text {
-      display: inline;
-      margin-left: 0.5rem;
-    }
+    display: inline;
+    margin-left: 0.5rem;
   }
 </style>

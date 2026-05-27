@@ -17,19 +17,15 @@ import { TESTIMONIAL_COLUMNS } from '../lib/testimonials';
     </header>
 
     <div class="testimonials-columns-mask">
-      {
-        TESTIMONIAL_COLUMNS.map((col) => (
-          <TestimonialsColumn
-            testimonials={col.items}
-            duration={col.duration}
-            offset={col.offset}
-            class:list={[
-              col.hideBelow === 'md' && 'hidden md:block',
-              col.hideBelow === 'lg' && 'hidden lg:block',
-            ]}
-          />
-        ))
-      }
+    {
+      TESTIMONIAL_COLUMNS.map((col) => (
+        <TestimonialsColumn
+          testimonials={col.items}
+          duration={col.duration}
+          offset={col.offset}
+        />
+      ))
+    }
     </div>
   </div>
 </section>

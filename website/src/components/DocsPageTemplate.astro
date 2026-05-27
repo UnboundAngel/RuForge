@@ -622,12 +622,6 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
     gap: 0.75rem;
   }
 
-  @media (max-width: 767px) {
-    .docs-split {
-      grid-template-columns: 1fr;
-      gap: 1.25rem;
-    }
-  }
 
   /* ---------- Collapsible click pill ---------- */
   .docs-collapsible {
@@ -1000,20 +994,4 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
     white-space: normal;
   }
 
-  @media (max-width: 767px) {
-    .docs-layout {
-      flex-direction: column;
-      gap: 0;
-    }
-
-    :global(.docs-sidebar) {
-      position: relative;
-      top: 0;
-      width: 100%;
-      max-height: none;
-      border-bottom: 1px solid rgb(237 215 156 / 0.08);
-      padding-bottom: 1rem;
-      margin-bottom: 2rem;
-    }
-  }
 </style>

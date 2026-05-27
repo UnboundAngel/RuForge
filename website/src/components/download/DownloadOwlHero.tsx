@@ -41,7 +41,7 @@ export default function DownloadOwlHero({
         />
       </div>
 
-      <h1 className="relative z-10 mt-6 text-center font-display text-4xl font-bold tracking-tight text-rf-text md:text-5xl">
+      <h1 className="relative z-10 mt-6 text-center font-display text-5xl font-bold tracking-tight text-rf-text">
         {SITE.name}
       </h1>
 
