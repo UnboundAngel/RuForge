@@ -1,6 +1,7 @@
 ---
 import type { NavSection } from '../../lib/sitePages';
 import { pageHref } from '../../lib/sitePages';
+import { mobileHref } from '../../lib/mobileHref';
 
 interface Props {
   section: NavSection;
@@ -26,7 +27,7 @@ const { section } = Astro.props;
 
 <ul class="space-y-1">
   {section.pages.map((page) => {
-    const href = page.externalHref ?? `/m${pageHref(section.id, page.slug)}`;
+    const href = mobileHref(page.externalHref ?? pageHref(section.id, page.slug));
     const external = Boolean(page.externalHref?.startsWith('http'));
     return (
       <li>
