@@ -8,15 +8,17 @@
 
 Shipping version: 0.1.9 (unreleased)
 Last shipped to users: 0.1.8
-Last updated: 2026-05-27
+Last updated: 2026-05-29
 Status: in progress
 
 ## Now
 
-0.1.8 is shipping: playlist downloads, SponsorBlock category fetch and scrub hover,
-Settings yt-dlp and app update checks, scrubber preview fixes, mini player large-mode
-clarity, plus the public website work already on main. Open P0 is empty; Authorize
-Cleanup (#8) works via the in-app modal (see Notes).
+0.1.9 unreleased on main: export Phase A landed (Rust bundler, full sidecar copy,
+per-run `RuForge Export <timestamp>/` folder, manifest v1 from localStorage, dev
+invoke only; no export UI). Export Phases B through D planned: panel and entry points,
+removable drive detection, cloud via webview. Plus website/mobile work and Copy
+Transcript polish already in tree. Open P0 is empty; Authorize Cleanup (#8) works
+via the in-app modal (see Notes).
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -48,7 +50,7 @@ Fixes:
 - Mini player large mode: video no longer washed by stacked blur.
 - Playlist regroup matches by id, url, or title across internal and custom roots.
 
-**0.1.9 unreleased:** Website link audit (Features hub media-library/mini-player hrefs, `mobileHref` for mobile nav, built-with docs link, legacy 301 redirects). `/m/` link and SEO fixes (footer/nav `/m/` paths, sitemap excludes `/m/`, desktop `rel="alternate"`); pages.dev preview redirect to ruforge.app. Full mobile shell coverage: 94 `/m/*` pages covering every desktop route. Three reusable mobile templates (MobileContentPage, MobileSectionIndex, MobileDocsPage), dynamic routes for docs, built-with, legal, section content, plus bespoke pages for features hub, 6 feature details, changelog, and roadmap. Universal BaseLayout mobile redirect (UA + viewport gate) replaces per-page scripts. MobileShell auto-injects canonical + noindex SEO tags. Shared `featurePageData.ts` for desktop/mobile feature pages. Earlier: mobile landing polish (overlay scroll fix, nav accordion, Material ripple, header cross-fade), `/m/download` page with OS-detect CTA, stripped mobile-collapse responsive logic, scaffolded desktop/mobile shell architecture, full website asset audit (22.9 MB to 8.3 MB), silk background animation, Getting Started docs, docs sidebar search, Obsidian-style `/docs`, six `/features/*` pages, redesigned download page, downloader cookie fixes. (see AGENTS.md Shipped log)
+**0.1.9 unreleased:** Export bundler Phase A (`export_media_bundle` / `cancel_export_bundle`: cross-volume sidecar bundle, timestamp subfolder, canonical dedup, skip-if-exists, manifest v1; dev hook only, no UI). Website link audit (Features hub media-library/mini-player hrefs, `mobileHref` for mobile nav, built-with docs link, legacy 301 redirects). `/m/` link and SEO fixes (footer/nav `/m/` paths, sitemap excludes `/m/`, desktop `rel="alternate"`); pages.dev preview redirect to ruforge.app. Full mobile shell coverage: 94 `/m/*` pages covering every desktop route. Three reusable mobile templates (MobileContentPage, MobileSectionIndex, MobileDocsPage), dynamic routes for docs, built-with, legal, section content, plus bespoke pages for features hub, 6 feature details, changelog, and roadmap. Universal BaseLayout mobile redirect (UA + viewport gate) replaces per-page scripts. MobileShell auto-injects canonical + noindex SEO tags. Shared `featurePageData.ts` for desktop/mobile feature pages. Earlier: mobile landing polish (overlay scroll fix, nav accordion, Material ripple, header cross-fade), `/m/download` page with OS-detect CTA, stripped mobile-collapse responsive logic, scaffolded desktop/mobile shell architecture, full website asset audit (22.9 MB to 8.3 MB), silk background animation, Getting Started docs, docs sidebar search, Obsidian-style `/docs`, six `/features/*` pages, redesigned download page, downloader cookie fixes. (see AGENTS.md Shipped log)
 
 ## Open P0 (blocks release)
 

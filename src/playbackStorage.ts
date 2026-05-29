@@ -30,6 +30,10 @@ function readFurthestSeconds(videoPath: string): number {
   return Number.isFinite(saved) && saved > 0 ? saved : 0;
 }
 
+export function readFurthestPlaybackSec(videoPath: string): number {
+  return readFurthestSeconds(videoPath);
+}
+
 export function readResumeSeconds(videoPath: string, durationSec: number): number {
   const furthest = readFurthestSeconds(videoPath);
   if (furthest <= 0.25) return 0;

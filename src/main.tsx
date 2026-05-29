@@ -20,6 +20,9 @@ if (import.meta.env.DEV && label === "main") {
   void import("./devScreenshotFrame").then(({ installDevScreenshotFrame }) => {
     installDevScreenshotFrame();
   });
+  void import("./devExportBundle").then(({ installDevExportBundleTest }) => {
+    installDevExportBundleTest();
+  });
 }
 
 const tree = label === "notify" ? <NotifyOverlayApp /> : <App />;
