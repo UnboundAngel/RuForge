@@ -18,6 +18,9 @@ use crate::app_state::AppConfig;
 use crate::commands::downloader::{
     get_video_info, pause_download_job, start_download_job, stop_all_active_download_jobs,
 };
+use crate::commands::export::{
+    cancel_export_bundle, export_media_bundle, ExportBundleState,
+};
 use crate::download_job_manager::DownloadJobManager;
 use crate::commands::ffprobe::probe_local_media_ffprobe;
 use crate::commands::gallery::{regroup_playlist_downloads, scan_gallery};
@@ -62,6 +65,7 @@ pub fn run() {
             minimize_to_tray: Mutex::new(true),
         })
         .manage(DownloadJobManager::default())
+        .manage(ExportBundleState::default())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -159,7 +163,9 @@ pub fn run() {
             push_background_notify,
             sync_notify_overlay_bounds,
             hide_notify_overlay_window,
-            notify_overlay_ready
+            notify_overlay_ready,
+            export_media_bundle,
+            cancel_export_bundle
         ])
         .run(context)
         .expect("error while running tauri application");
