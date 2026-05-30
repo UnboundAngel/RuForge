@@ -36,6 +36,11 @@ import { readPlaybackSpeed } from "../playbackSpeedStorage";
 import type { PlayInMiniPayload } from "../playerHandoff";
 import { writePlaybackPos } from "../playbackStorage";
 import { dedupeGalleryEntriesCombined } from "../galleryDedupe";
+import type {
+  ExportBundleProgressPayload,
+  ExportOutcome,
+  ExportPanelPreset,
+} from "../lib/exportTypes";
 
 export type {
   ActiveTab,
@@ -103,6 +108,12 @@ export interface RuforgeStore extends DownloadQueueSlice {
   playerResumeAt: number | null;
   cleanupModalOpen: boolean;
 
+  exportPanelOpen: boolean;
+  exportPanelPreset: ExportPanelPreset | null;
+  exportInFlight: boolean;
+  exportProgress: ExportBundleProgressPayload | null;
+  exportOutcome: ExportOutcome | null;
+
   setPlayingFile: (file: MediaFile | null) => void;
   clearPlayerResumeAt: () => void;
   setFolderAudioPlaylist: (files: MediaFile[]) => void;
@@ -129,6 +140,13 @@ export interface RuforgeStore extends DownloadQueueSlice {
   refreshStorageStats: () => Promise<void>;
   openAuthorizeCleanupModal: () => Promise<void>;
   closeAuthorizeCleanupModal: () => void;
+
+  openExportPanel: (preset: ExportPanelPreset) => void;
+  closeExportPanel: () => void;
+  setExportInFlight: (v: boolean) => void;
+  setExportProgress: (p: ExportBundleProgressPayload | null) => void;
+  setExportOutcome: (o: ExportOutcome | null) => void;
+  resetExportOutcome: () => void;
 
   setActiveTab: (tab: ActiveTab) => void;
   setSettingsTab: (tab: SettingsTab) => void;
@@ -247,6 +265,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
       isLooping: playerInitLoop,
       playerResumeAt: null,
       cleanupModalOpen: false,
+
+      exportPanelOpen: false,
+      exportPanelPreset: null,
+      exportInFlight: false,
+      exportProgress: null,
+      exportOutcome: null,
 
       setPlayingFile: (playingFile) => {
         const isLooping = playingFile ? readLoopForPath(playingFile.path) : false;
@@ -463,6 +487,25 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       closeAuthorizeCleanupModal: () => set({ cleanupModalOpen: false }),
+
+      openExportPanel: (preset) => {
+        const { exportInFlight } = get();
+        if (exportInFlight) {
+          set({ exportPanelOpen: true, exportPanelPreset: preset });
+          return;
+        }
+        set({
+          exportPanelOpen: true,
+          exportPanelPreset: preset,
+          exportOutcome: null,
+          exportProgress: null,
+        });
+      },
+      closeExportPanel: () => set({ exportPanelOpen: false }),
+      setExportInFlight: (exportInFlight) => set({ exportInFlight }),
+      setExportProgress: (exportProgress) => set({ exportProgress }),
+      setExportOutcome: (exportOutcome) => set({ exportOutcome }),
+      resetExportOutcome: () => set({ exportOutcome: null, exportProgress: null }),
 
       setActiveTab: (tab) => set({ activeTab: tab }),
       setSettingsTab: (tab) => set({ settingsTab: tab }),

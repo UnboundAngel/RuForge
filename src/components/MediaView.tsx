@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music, FileText } from "lucide-react";
+import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music, FileText, FolderOutput } from "lucide-react";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import { isAudioOnlyPath } from "../mediaKind";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -279,6 +279,7 @@ export const MediaView = ({
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
   const setGalleryExtractingPath = useRuforgeStore((s) => s.setGalleryExtractingPath);
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
+  const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
 
   const [showTranscriptMenu, setShowTranscriptMenu] = useState(false);
 
@@ -529,6 +530,16 @@ export const MediaView = ({
                   >
                     <ImageIcon size={16} />
                     <span className="text-xs font-bold">Generate Previews</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      openExportPanel({ paths: [file.path], label: file.name });
+                      setGalleryActiveMenu(null);
+                    }}
+                    className="w-full px-3 py-2.5 flex items-center space-x-3 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"
+                  >
+                    <FolderOutput size={16} />
+                    <span className="text-xs font-bold">Export</span>
                   </button>
                   {file.subtitlePath && (
                     <>
