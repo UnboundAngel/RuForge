@@ -36,7 +36,6 @@ import {
   type PostInstallPayload,
 } from "./updatePostInstall";
 import { Icon } from "@iconify/react";
-import logo from "./assets/neotubeIcon.png";
 import MiniPlayer from "./MiniPlayer";
 import { isAudioOnlyPath } from "./mediaKind";
 import { flattenGalleryScanToMediaFiles } from "./galleryScan";
@@ -49,25 +48,27 @@ import { SettingsView } from "./components/SettingsView";
 import { MediaView } from "./components/MediaView";
 import { AuthorizeCleanupModal } from "./components/AuthorizeCleanupModal";
 import { ExportBundleHost } from "./components/ExportBundleModal";
+import { useRemovableDrivesPoll } from "./hooks/useRemovableDrivesPoll";
+import { buildEntireLibraryExportPreset } from "./lib/exportSelection";
+import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
 import { ConfirmDialogHost } from "./components/ConfirmDialog";
 import type { SendToMainPayload } from "./playerHandoff";
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MediaFile } from "./types";
 import { readPlaybackSpeed } from "./playbackSpeedStorage";
 import {
-  Download,
   Settings,
   Search,
   CheckCircle2,
   X,
-  Youtube,
-  Database,
-  Trash2,
-  Globe,
   Loader2,
   AlertCircle,
   HardDrive,
 } from "lucide-react";
+import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
+import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
+import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
+import { useAltRadialNav } from "./hooks/useAltRadialNav";
 
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
 import {
@@ -90,20 +91,24 @@ import {
   type ExplorerBounds,
 } from "./explorerBoundsSync";
 
-const WindowControls = ({ 
+const WindowControls = ({
   onMiniPlayerToggle,
+  onExportUsbClick,
+  hasRemovableDrive,
   updaterPhase,
   updaterVersion,
   showExplorerQueueToolbar,
   storageBlocksNewDownloads,
   onUpdaterStatusClick,
-}: { 
-  onMiniPlayerToggle: () => void,
-  updaterPhase: UpdaterPhase,
-  updaterVersion: string | null,
-  showExplorerQueueToolbar: boolean,
-  storageBlocksNewDownloads: boolean,
-  onUpdaterStatusClick?: () => void,
+}: {
+  onMiniPlayerToggle: () => void;
+  onExportUsbClick: () => void;
+  hasRemovableDrive: boolean;
+  updaterPhase: UpdaterPhase;
+  updaterVersion: string | null;
+  showExplorerQueueToolbar: boolean;
+  storageBlocksNewDownloads: boolean;
+  onUpdaterStatusClick?: () => void;
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
@@ -143,6 +148,23 @@ const WindowControls = ({
       )}
 
       <TitlebarHoverButton
+        tooltip={
+          hasRemovableDrive
+            ? "Export to removable drive"
+            : "Export media bundle"
+        }
+        onClick={onExportUsbClick}
+      >
+        <Icon
+          icon={
+            hasRemovableDrive ? "tabler:device-usb-filled" : "tabler:device-usb"
+          }
+          width={18}
+          height={18}
+        />
+      </TitlebarHoverButton>
+
+      <TitlebarHoverButton
         tooltip="Launch Mini Player"
         onClick={onMiniPlayerToggle}
       >
@@ -175,80 +197,6 @@ const WindowControls = ({
   );
 };
 
-const StorageWidget = () => {
-  const stats = useRuforgeStore((s) => s.storageStats);
-  const limitGB = useRuforgeStore((s) => s.settings.storageLimitGB);
-  const onAuthorizeCleanup = useRuforgeStore((s) => s.openAuthorizeCleanupModal);
-  const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
-  const isExpanded = useRuforgeStore((s) => s.isSidebarExpanded);
-
-  if (!stats) return null;
-
-  const usedGB = stats.total_bytes / (1024 * 1024 * 1024);
-  const isManaged = saveToInternal;
-  const percentage = isManaged ? Math.min((usedGB / limitGB) * 100, 100) : Math.min(usedGB * 8, 100);
-  const isFull = isManaged && usedGB >= limitGB;
-  const isWarning = isManaged && usedGB >= limitGB * 0.8;
-
-  return (
-    <div className="px-5 mb-6 mt-auto flex-shrink-0">
-      <div className={`flex flex-col gap-3 ${!isExpanded ? 'items-center' : ''}`}>
-        <div className="flex flex-col items-center gap-1.5">
-          <Database size={isExpanded ? 12 : 20} className={isFull ? "text-[color:var(--accent)]" : "text-stone-600"} />
-          {isExpanded && (
-            <span className="text-[9px] font-black uppercase tracking-[0.3em] text-stone-500 whitespace-nowrap">
-              Storage
-            </span>
-          )}
-        </div>
-
-        {isExpanded && (
-          <div className="w-full space-y-3">
-            <div className="flex items-center gap-3">
-              <span className={`text-[9px] font-black tracking-widest ${isFull ? "text-[color:var(--accent)]" : "text-stone-600"} whitespace-nowrap`}>
-                {usedGB.toFixed(1)}G
-              </span>
-
-              <div className="h-1 flex-1 bg-white/[0.03] rounded-full overflow-hidden relative">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${percentage}%` }}
-                  className={`h-full rounded-full transition-colors duration-500 ${
-                    isFull ? "bg-[color:var(--accent)]" : isWarning ? "bg-[color:var(--accent)] opacity-50" : "bg-stone-700"
-                  }`}
-                />
-                {isFull && (
-                  <motion.div
-                    animate={{ opacity: [0.2, 0.5, 0.2] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className="absolute inset-0 bg-[color:var(--accent)] blur-sm"
-                  />
-                )}
-              </div>
-
-              <span className={`text-[9px] font-black tracking-widest ${isFull ? "text-[color:var(--accent)]" : "text-stone-600"} whitespace-nowrap`}>
-                {isManaged ? `${limitGB}G` : `${stats.file_count}`}
-              </span>
-            </div>
-
-            {isManaged && isFull && (
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={() => void onAuthorizeCleanup()}
-                className="flex w-full items-center justify-center gap-2 py-2 border border-[color-mix(in_srgb,var(--accent),transparent_80%)] hover:bg-[color-mix(in_srgb,var(--accent),transparent_92%)] rounded-xl text-[8px] font-black text-[color:var(--accent)] transition-all uppercase tracking-widest whitespace-nowrap"
-              >
-                <Trash2 size={10} />
-                Authorize Cleanup
-              </motion.button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 /** JSON string for `buildPostInstallPayload` — Settings debug updater cycle (structured What's New). */
 const MOCK_POST_INSTALL_JSON = JSON.stringify({
   notes: "Structured release notes (debug). Plain `updater.json` notes still render as one block.",
@@ -259,8 +207,7 @@ const MOCK_POST_INSTALL_JSON = JSON.stringify({
 function App() {
   const activeTab = useRuforgeStore((s) => s.activeTab);
   const setActiveTab = useRuforgeStore((s) => s.setActiveTab);
-  const isSidebarExpanded = useRuforgeStore((s) => s.isSidebarExpanded);
-  const toggleSidebar = useRuforgeStore((s) => s.toggleSidebar);
+  const navMode = useRuforgeStore((s) => s.navMode);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
   const settings = useRuforgeStore((s) => s.settings);
   const settingsTab = useRuforgeStore((s) => s.settingsTab);
@@ -282,19 +229,43 @@ function App() {
   /** 0 = bulge tabs flush on panel; 1 = tucked into the 40px title band (scrollable settings only). */
   const settingsTabMorph = useMotionValue(0);
   const settingsTabMorphY = useTransform(settingsTabMorph, [0, 1], [0, -40]);
-  const settingsTabMorphScale = useTransform(settingsTabMorph, [0, 1], [1, 0.94]);
-  const settingsTabShapeOpacity = useTransform(settingsTabMorph, [0, 0.35, 0.55], [1, 1, 0]);
   const [settingsMorphAmount, setSettingsMorphAmount] = useState(0);
   const [settingsScrollable, setSettingsScrollable] = useState(false);
   const settingsTabsDocked = settingsMorphAmount > 0.55;
-  const settingsTabShapeLayout = settingsMorphAmount < 0.02;
+  const settingsTabShapeLayout = !settingsTabsDocked;
   useMotionValueEvent(settingsTabMorph, "change", setSettingsMorphAmount);
-  const settingsTabDockLeft = isSidebarExpanded ? 264 : 104;
-  /** Sidebar width in px — explorer titlebar nav sits flush on this edge. */
-  const sidebarChromeLeft = isSidebarExpanded ? 240 : 80;
+  const settingsTabDockLeft = SIDEBAR_RAIL_PX + 48;
+  const sidebarChromeLeft = SIDEBAR_RAIL_PX;
   const notifications = useRuforgeStore((s) => s.notifications);
   const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const notify = useRuforgeStore((s) => s.notify);
+  const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
+  const { removableDrives, defaultRemovableDest } = useRemovableDrivesPoll();
+  const hasRemovableDrive = removableDrives.length > 0;
+
+  const handleExportUsbTitlebar = useCallback(async () => {
+    const { fetchEntries } = useRuforgeStore.getState();
+    let galleryEntries = useRuforgeStore.getState().entries;
+    if (galleryEntries.length === 0) {
+      await fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true });
+      galleryEntries = useRuforgeStore.getState().entries;
+    }
+    const preset = buildEntireLibraryExportPreset(galleryEntries);
+    const initialDestDir = await resolveExportDestForUsbOpen(defaultRemovableDest);
+    if (!preset) {
+      openExportPanel({
+        paths: [],
+        label: "Export",
+        initialDestDir,
+      });
+      notify("Library is empty. Scan or download first.", "warning");
+      return;
+    }
+    openExportPanel({
+      ...preset,
+      initialDestDir,
+    });
+  }, [defaultRemovableDest, openExportPanel, notify]);
   const downloaderDuplicateDialogOpen = useRuforgeStore((s) => s.downloaderDuplicateDialogOpen);
 
   const { bindRef: bindMainWindowUrlDrop, isDragOver: isMainUrlDropHover } = useUrlDropIntake({
@@ -331,6 +302,8 @@ function App() {
   const explorerWebviewHostRef = useRef<HTMLDivElement>(null);
   /** Windows: JS child webview handle. Linux: embedded via Rust + GTK overlay. */
   const explorerWebviewRef = useRef<Webview | null>(null);
+  /** True while the Webview constructor IPC is in flight (tauri://created not yet received). */
+  const explorerWebviewCreatingRef = useRef(false);
   const explorerLinuxEmbedRef = useRef(false);
   const explorerWebviewLabelRef = useRef(EMBEDDED_EXPLORER_WEBVIEW_LABEL);
   const prevActiveTabRef = useRef<ActiveTab>(activeTab);
@@ -369,7 +342,6 @@ function App() {
     (storageStats
       ? storageStats.total_bytes / (1024 * 1024 * 1024) >= settings.storageLimitGB
       : false);
-  const setSidebarCollapsedByResize = useRuforgeStore((s) => s.setSidebarCollapsedByResize);
 
   const updateRef = useRef<Update | null>(null);
   const handleInstallRestartRef = useRef<() => Promise<void>>(async () => {});
@@ -477,6 +449,7 @@ function App() {
   }, [settings.accentColor]);
 
   useEffect(() => {
+    if (!saveToInternal) return;
     void refreshStorageStats();
   }, [refreshStorageStats, outputDir, saveToInternal]);
 
@@ -621,6 +594,10 @@ function App() {
 
       const appWindow = getCurrentWindow();
       if (!explorerWebviewRef.current) {
+        // Bail if creation is already in flight; next sync will continue once ready.
+        if (explorerWebviewCreatingRef.current) return;
+        explorerWebviewCreatingRef.current = true;
+
         const dataDir = await appDataDir();
         const explorerDataPath = await join(dataDir, "explorer-data");
         const extraBrowserArgs = await invoke<string | null>(
@@ -640,17 +617,21 @@ function App() {
         });
 
         webview.once("tauri://created", () => {
+          explorerWebviewCreatingRef.current = false;
+          if (!active) return;
           explorerWebviewRef.current = webview;
-          if (active && activeTab === "explorer") {
+          if (activeTab === "explorer") {
             void maybeReloadExplorerOnEnter();
           }
         });
 
         webview.once("tauri://error", (e) => {
+          explorerWebviewCreatingRef.current = false;
           console.error("[RuForge] Explorer webview error", e);
+          // Schedule a retry so the next bounds pass can attempt re-creation.
+          explorerScheduleSyncRef.current?.();
         });
 
-        explorerWebviewRef.current = webview;
         return;
       }
 
@@ -741,6 +722,7 @@ function App() {
 
     return () => {
       active = false;
+      explorerWebviewCreatingRef.current = false;
       explorerScheduleSyncRef.current = null;
       cancelScheduledSync();
       window.removeEventListener("resize", scheduleSync);
@@ -757,7 +739,28 @@ function App() {
     if (!schedule) return;
     schedule();
     runExplorerLayoutTransitionFollowUp(schedule);
-  }, [activeTab, isSidebarExpanded]);
+  }, [activeTab]);
+
+  // Explorer host lives outside AnimatePresence; re-sync once the cutout node commits.
+  useEffect(() => {
+    if (activeTab !== "explorer" || postInstall) return;
+    let cancelled = false;
+    let frames = 0;
+    const tick = () => {
+      if (cancelled) return;
+      frames += 1;
+      if (explorerWebviewHostRef.current) {
+        explorerLastSyncedBoundsRef.current = null;
+        explorerScheduleSyncRef.current?.();
+        return;
+      }
+      if (frames < 90) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, postInstall]);
 
   const performUpdateCheckRef = useRef(performUpdateCheck);
   performUpdateCheckRef.current = performUpdateCheck;
@@ -777,18 +780,6 @@ function App() {
     const pending = consumePendingPostInstall();
     if (pending) setPostInstall(pending);
   }, []);
-
-  // Auto-collapse sidebar on narrow windows
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1100) {
-        setSidebarCollapsedByResize();
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    handleResize();
-    return () => window.removeEventListener("resize", handleResize);
-  }, [setSidebarCollapsedByResize]);
 
   // Detect mini player window
   useEffect(() => {
@@ -1051,29 +1042,51 @@ function App() {
     const morphPx = 72;
     let el = mainContentRef.current;
     let detach: (() => void) | undefined;
+    let resizeEndId: ReturnType<typeof setTimeout> | undefined;
+    let windowResizing = false;
 
     const bind = () => {
       detach?.();
       el = mainContentRef.current;
       if (!el) return;
 
-      const apply = () => {
+      const applyScrollable = () => {
         const scrollable = el!.scrollHeight > el!.clientHeight + 2;
         setSettingsScrollable(scrollable);
         if (!scrollable) {
           settingsTabMorph.set(0);
-          return;
+          return false;
         }
+        return true;
+      };
+
+      const applyMorph = () => {
+        if (!applyScrollable()) return;
+        if (windowResizing) return;
         settingsTabMorph.set(Math.min(1, el!.scrollTop / morphPx));
       };
 
-      apply();
-      el.addEventListener("scroll", apply, { passive: true });
-      const ro = new ResizeObserver(apply);
+      const onWindowResize = () => {
+        windowResizing = true;
+        if (resizeEndId !== undefined) clearTimeout(resizeEndId);
+        resizeEndId = setTimeout(() => {
+          windowResizing = false;
+          resizeEndId = undefined;
+          applyMorph();
+        }, 120);
+        applyScrollable();
+      };
+
+      applyMorph();
+      el.addEventListener("scroll", applyMorph, { passive: true });
+      const ro = new ResizeObserver(applyScrollable);
       ro.observe(el);
+      window.addEventListener("resize", onWindowResize);
       detach = () => {
-        el!.removeEventListener("scroll", apply);
+        el!.removeEventListener("scroll", applyMorph);
         ro.disconnect();
+        window.removeEventListener("resize", onWindowResize);
+        if (resizeEndId !== undefined) clearTimeout(resizeEndId);
       };
     };
 
@@ -1125,18 +1138,20 @@ function App() {
     }
   }, []);
 
-  if (isMini) return <MiniPlayer />;
+  const { open: radialNavOpen, anchor: radialNavAnchor } =
+    useAltRadialNav(!!postInstall);
 
-  const navItems = [
-    { id: "downloader" as ActiveTab, icon: Download, label: "Download" },
-    { id: "media" as ActiveTab, icon: Youtube, label: "Videos" },
-    { id: "explorer" as ActiveTab, icon: Globe, label: "Explorer" },
-    { id: "settings" as ActiveTab, icon: Settings, label: "System" },
-  ];
+  if (isMini) return <MiniPlayer />;
 
   return (
     <div className="h-screen w-screen bg-[#271C18] text-stone-50 font-sans flex overflow-hidden select-none relative">
-      
+
+      <RadialNavOverlay
+        open={radialNavOpen}
+        anchor={radialNavAnchor}
+        onNavigate={(tab) => setActiveTab(tab)}
+      />
+
       {showExplorerToolbar && (
         <ExplorerTitlebarNav
           left={sidebarChromeLeft}
@@ -1156,6 +1171,8 @@ function App() {
             playbackSpeed: readPlaybackSpeed(),
           });
         }}
+        onExportUsbClick={() => void handleExportUsbTitlebar()}
+        hasRemovableDrive={hasRemovableDrive}
         updaterPhase={updaterPhase}
         updaterVersion={updaterVersion}
         showExplorerQueueToolbar={showExplorerToolbar}
@@ -1165,111 +1182,26 @@ function App() {
 
       {/* Global Drag Region - Top strip except controls area */}
       <div
-        className={`fixed top-0 left-0 h-10 z-[50] ${showExplorerToolbar ? "right-[280px]" : "right-[200px]"}`}
+        className={`fixed top-0 left-0 h-10 z-[50] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
         data-tauri-drag-region
       />
 
-      {/* ── Sidebar ─────────────────────────────────────── */}
-      <div className={`${isSidebarExpanded ? 'w-[240px]' : 'w-[80px]'} flex-shrink-0 relative z-20 flex flex-col bg-transparent overflow-hidden transition-[width,opacity,filter] duration-500 ease-[0.23,1,0.32,1] ${postInstall ? 'opacity-30 grayscale-[50%] pointer-events-none' : ''}`}>
-        {/* Logo container */}
-        <div
-          className="h-[72px] flex min-w-0 flex-shrink-0 items-center px-5 cursor-default"
-          data-tauri-drag-region
-        >
-          <div className="pointer-events-none flex shrink-0 items-center gap-3">
-            <img src={logo} className="w-10 h-10 rounded-xl shadow-xl object-cover" alt="RuForge" />
-          </div>
-        </div>
+      <AppSidebarRail
+        activeTab={activeTab}
+        navMode={navMode}
+        disabled={!!postInstall}
+        onSelectTab={setActiveTab}
+      />
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
-          {navItems.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center ${isSidebarExpanded ? 'gap-4 px-3.5' : 'justify-center'} py-3.5 rounded-2xl transition-all duration-200 relative group overflow-hidden ${
-                  isActive
-                    ? "bg-[color-mix(in_srgb,var(--accent),transparent_88%)] text-[color:var(--accent)]"
-                    : "text-stone-500 hover:text-stone-200 hover:bg-white/[0.04]"
-                }`}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="navGlow"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-full"
-                    style={{ backgroundColor: "var(--accent)" }}
-                    transition={{ type: "spring", bounce: 0.25, duration: 0.4 }}
-                  />
-                )}
-                <item.icon
-                  size={18}
-                  className={`flex-shrink-0 ${isActive ? "text-[color:var(--accent)]" : "text-stone-600 group-hover:text-stone-300"}`}
-                />
-                <span
-                  className={`min-w-0 overflow-hidden font-black text-[10px] uppercase tracking-[0.2em] whitespace-nowrap transition-[max-width,opacity] duration-500 ease-[0.23,1,0.32,1] ${
-                    isSidebarExpanded ? "max-w-[9rem] opacity-100" : "max-w-0 opacity-0"
-                  }`}
-                  aria-hidden={!isSidebarExpanded}
-                >
-                  {item.label}
-                </span>
-                
-                {!isSidebarExpanded && !isActive && (
-                  <div className="absolute left-full ml-6 px-3 py-1.5 bg-stone-900 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-100 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap">
-                    {item.label}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Storage Manager */}
-        <StorageWidget />
-
-        {/* Sidebar Toggle at Bottom */}
-        <div className="mt-auto min-w-0 overflow-hidden p-4">
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            aria-label={isSidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-            className={`group/toggle flex h-11 w-full min-w-0 items-center overflow-hidden text-stone-500 transition-all active:scale-95 hover:text-[color:var(--accent)] ${
-              isSidebarExpanded ? "justify-start px-4" : "justify-center"
-            }`}
-          >
-            <motion.div
-              animate={{ rotate: isSidebarExpanded ? 0 : 180 }}
-              transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-              className="shrink-0"
-            >
-              <Icon icon="ic:twotone-subdirectory-arrow-left" fontSize={22} className="opacity-60 group-hover/toggle:opacity-100" />
-            </motion.div>
-
-            <span
-              className={`ml-4 min-w-0 overflow-hidden text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap transition-[max-width,opacity,margin] duration-500 ease-[0.23,1,0.32,1] ${
-                isSidebarExpanded ? "max-w-[6rem] opacity-100" : "max-w-0 opacity-0 ml-0"
-              }`}
-              aria-hidden={!isSidebarExpanded}
-            >
-              Collapse
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {/* ── Right Column ────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 pt-[40px] relative z-10">
+      {/* ── Right Column (tab chrome above recessed content field) ─ */}
+      <div className="rf-chrome-column flex-1 flex flex-col min-w-0 min-h-0 pt-[40px] relative bg-[#271C18]">
         
         {/* Settings / Gallery tab strip */}
         <AnimatePresence mode="wait">
           {(activeTab === "settings" && !postInstall) ? (
             <motion.div
               key="settings-tabs"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              initial={false}
               className={
                 settingsTabsDocked
                   ? "pointer-events-auto fixed top-0 z-[60] flex h-10 items-center"
@@ -1285,7 +1217,7 @@ function App() {
                 }
                 style={
                   !settingsTabsDocked && settingsScrollable
-                    ? { y: settingsTabMorphY, scale: settingsTabMorphScale }
+                    ? { y: settingsTabMorphY }
                     : undefined
                 }
               >
@@ -1324,11 +1256,9 @@ function App() {
                         }`}
                         style={{
                           clipPath: "inset(40px -100px -100px -100px)",
-                          opacity: settingsTabShapeOpacity,
                         }}
                         transition={{
                           layout: { type: "spring", bounce: 0.2, duration: 0.6 },
-                          opacity: { duration: 0.15 },
                         }}
                       >
                         <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
@@ -1458,7 +1388,19 @@ function App() {
         )}
 
         {/* ── Main Content ─────────────────────────────── */}
-        <div className="flex-1 relative bg-[#1D1613] rounded-tl-[32px] overflow-hidden shadow-[inset_6px_6px_24px_rgba(0,0,0,0.5)] z-0">
+        <div className="flex-1 relative z-0 bg-[#1D1613] rounded-tl-[32px] overflow-hidden rf-main-content-shell">
+          {activeTab === "explorer" && !postInstall ? (
+            <div
+              ref={explorerWebviewHostRef}
+              className="fixed z-[1] top-10 bottom-0 right-0 pointer-events-none"
+              style={{ left: sidebarChromeLeft }}
+              aria-hidden
+            />
+          ) : null}
+          <div
+            className="rf-main-content-vignette pointer-events-none absolute inset-0 z-[15] rounded-tl-[32px]"
+            aria-hidden
+          />
           <UpdaterMainOverlays
             phase={updaterPhase}
             version={updaterVersion}
@@ -1487,7 +1429,7 @@ function App() {
           ) : null}
           <main
             ref={assignMainScrollAndUrlDropRef}
-            className={`absolute inset-0 ${activeTab === "explorer" ? "overflow-hidden" : "overflow-y-auto"}`}
+            className={`absolute inset-0 min-h-full bg-[#1D1613] ${activeTab === "explorer" ? "overflow-hidden" : "overflow-y-auto"}`}
           >
             <AnimatePresence mode="wait">
               {activeTab === "downloader" && (
@@ -1498,23 +1440,7 @@ function App() {
                 />
               )}
               {activeTab === "explorer" && (
-                <div className="absolute inset-0 min-h-0 bg-[#1D1613] overflow-hidden">
-                  <div
-                    ref={explorerWebviewHostRef}
-                    className="fixed z-[1] top-10 bottom-0 right-0 pointer-events-none transition-[left] duration-500 ease-[0.23,1,0.32,1]"
-                    style={{ left: sidebarChromeLeft }}
-                    aria-hidden
-                  />
-                  {/* Shimmer Placeholder */}
-                  <div className="absolute inset-0 z-0 flex flex-col p-8 space-y-8 animate-pulse pointer-events-none">
-                    <div className="h-12 w-1/3 bg-white/5 rounded-2xl" />
-                    <div className="grid grid-cols-4 gap-6 flex-1">
-                      {[...Array(8)].map((_, i) => (
-                        <div key={i} className="aspect-video bg-white/5 rounded-[24px]" />
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <div key="explorer" className="absolute inset-0 min-h-0" aria-hidden />
               )}
               {activeTab === "media" && (
                 selectedPlaylist ? (
