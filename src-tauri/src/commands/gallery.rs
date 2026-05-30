@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::utils::{is_media_ext, primary_vtt_sidecar, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
+use crate::utils::{is_audio_only_ext, is_media_ext, primary_vtt_sidecar, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chapter {
@@ -31,6 +31,21 @@ pub struct MediaFile {
     pub source_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub playlist_index: Option<u32>,
+    /// Artist tag (ID3 TPE1 / Vorbis ARTIST). Populated for audio-only files only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artist: Option<String>,
+    /// Album name tag. Populated for audio-only files only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub album: Option<String>,
+    /// Album artist tag (ID3 TPE2 / Vorbis ALBUMARTIST).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub album_artist: Option<String>,
+    /// Track number from tags.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track_no: Option<u32>,
+    /// Path to extracted embedded cover art cached on disk.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embedded_cover_path: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -244,6 +259,95 @@ fn ytdlp_sidecar_metadata(
         .unwrap_or((0.0, None, None, None, None, None, None))
 }
 
+/// Music metadata container extracted from embedded tags + fallbacks.
+struct MusicMeta {
+    artist: Option<String>,
+    album: Option<String>,
+    album_artist: Option<String>,
+    track_no: Option<u32>,
+    embedded_cover_path: Option<String>,
+}
+
+/// Extract music metadata for audio-only files.
+/// Resolution order: embedded tags (lofty) -> yt-dlp .info.json -> filename heuristic.
+fn extract_music_meta(
+    file_path: &std::path::Path,
+    info_json_value: Option<&serde_json::Value>,
+    thumb_dir: &std::path::Path,
+    stem: &str,
+) -> MusicMeta {
+    use lofty::prelude::*;
+    use lofty::probe::Probe;
+
+    let mut artist: Option<String> = None;
+    let mut album: Option<String> = None;
+    let mut album_artist: Option<String> = None;
+    let mut track_no: Option<u32> = None;
+    let mut embedded_cover_path: Option<String> = None;
+
+    // Try reading embedded tags via lofty.
+    if let Ok(tagged) = Probe::open(file_path).and_then(|p| p.read()) {
+        if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {
+            use lofty::tag::Accessor;
+            if let Some(v) = tag.artist().map(|s| s.to_string()).filter(|s| !s.is_empty()) {
+                artist = Some(v);
+            }
+            if let Some(v) = tag.album().map(|s| s.to_string()).filter(|s| !s.is_empty()) {
+                album = Some(v);
+            }
+            if let Some(v) = tag.get_string(&lofty::tag::ItemKey::AlbumArtist).map(String::from).filter(|s| !s.is_empty()) {
+                album_artist = Some(v);
+            }
+            if let Some(n) = tag.track() {
+                track_no = Some(n);
+            }
+
+            // Extract embedded cover art: write to .ruforge_thumbs/{stem}/music_cover.jpg once.
+            if let Some(picture) = tag.pictures().first() {
+                let cover_path = thumb_dir.join(stem).join("music_cover.jpg");
+                if !cover_path.is_file() {
+                    if let Some(parent) = cover_path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    let _ = std::fs::write(&cover_path, picture.data());
+                }
+                if cover_path.is_file() {
+                    embedded_cover_path = Some(cover_path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    // Fill gaps from .info.json (uploader -> artist, channel -> album_artist).
+    if let Some(json) = info_json_value {
+        if artist.is_none() {
+            artist = json["artist"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from)
+                .or_else(|| json["uploader"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from))
+                .or_else(|| json["creator"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from));
+        }
+        if album.is_none() {
+            album = json["album"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from);
+        }
+        if album_artist.is_none() {
+            album_artist = json["album_artist"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from)
+                .or_else(|| json["channel"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from));
+        }
+    }
+
+    // Filename heuristic: "Artist - Title.ext" -> artist from stem prefix.
+    if artist.is_none() {
+        let stem_str = stem;
+        if let Some(dash_pos) = stem_str.find(" - ") {
+            let candidate = stem_str[..dash_pos].trim();
+            if !candidate.is_empty() {
+                artist = Some(candidate.to_string());
+            }
+        }
+    }
+
+    MusicMeta { artist, album, album_artist, track_no, embedded_cover_path }
+}
+
 fn leading_index_from_media_stem(stem: &str) -> Option<u32> {
     let trimmed = stem.trim();
     let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
@@ -346,6 +450,9 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
         let subtitle_path = primary_vtt_sidecar(parent, stem).map(|p| p.to_string_lossy().to_string());
 
         let sidecar = resolve_info_json_path(parent, stem);
+        let sidecar_json: Option<serde_json::Value> = sidecar.as_deref().and_then(|p| {
+            std::fs::read_to_string(p).ok().and_then(|s| serde_json::from_str(&s).ok())
+        });
         let (
             duration,
             chapters,
@@ -369,6 +476,16 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             Err(_) => 0,
         };
 
+        // Populate music metadata for audio-only files only (keeps video scan cost unchanged).
+        let (artist, album, album_artist, track_no, embedded_cover_path) =
+            if is_audio_only_ext(ext) {
+                let thumb_dir = parent.join(THUMB_DIR_NAME);
+                let mm = extract_music_meta(&path, sidecar_json.as_ref(), &thumb_dir, stem);
+                (mm.artist, mm.album, mm.album_artist, mm.track_no, mm.embedded_cover_path)
+            } else {
+                (None, None, None, None, None)
+            };
+
         files.push(MediaFile {
             name: display_name,
             path: path.to_string_lossy().to_string(),
@@ -383,6 +500,11 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             source_url,
             source_id,
             playlist_index,
+            artist,
+            album,
+            album_artist,
+            track_no,
+            embedded_cover_path,
         });
     }
     if files.len() >= 2 {
@@ -608,20 +730,17 @@ fn dedupe_gallery_entries(entries: Vec<GalleryEntry>) -> Vec<GalleryEntry> {
         .collect()
 }
 
-/// Remove a stray media file from a finished download (sidecars + RuForge thumb dir).
-pub(crate) fn remove_media_download_artifacts(media_path: &Path) {
+/// Sidecars and RuForge thumb dir for a media path (not the primary video file).
+pub(crate) fn remove_media_sidecar_artifacts(media_path: &Path) -> Vec<String> {
+    let mut warnings = Vec::new();
     let parent = match media_path.parent() {
         Some(p) => p,
-        None => return,
+        None => return warnings,
     };
     let stem = match media_path.file_stem().and_then(|s| s.to_str()) {
         Some(s) => s,
-        None => return,
+        None => return warnings,
     };
-
-    if media_path.is_file() {
-        let _ = std::fs::remove_file(media_path);
-    }
 
     for name in [
         format!("{stem}.jpg"),
@@ -632,20 +751,38 @@ pub(crate) fn remove_media_download_artifacts(media_path: &Path) {
     ] {
         let p = parent.join(&name);
         if p.is_file() {
-            let _ = std::fs::remove_file(&p);
+            if let Err(e) = std::fs::remove_file(&p) {
+                warnings.push(format!("{}: {e}", p.display()));
+            }
         }
     }
 
     if let Ok(vtts) = vtt_sidecars_for_stem(parent, stem) {
         for (p, _) in vtts {
-            let _ = std::fs::remove_file(&p);
+            if p.is_file() {
+                if let Err(e) = std::fs::remove_file(&p) {
+                    warnings.push(format!("{}: {e}", p.display()));
+                }
+            }
         }
     }
 
     let thumb_dir = parent.join(THUMB_DIR_NAME).join(stem);
     if thumb_dir.is_dir() {
-        let _ = std::fs::remove_dir_all(&thumb_dir);
+        if let Err(e) = std::fs::remove_dir_all(&thumb_dir) {
+            warnings.push(format!("{}: {e}", thumb_dir.display()));
+        }
     }
+
+    warnings
+}
+
+/// Remove a stray media file from a finished download (video + sidecars + thumb dir).
+pub(crate) fn remove_media_download_artifacts(media_path: &Path) {
+    if media_path.is_file() {
+        let _ = std::fs::remove_file(media_path);
+    }
+    let _ = remove_media_sidecar_artifacts(media_path);
 }
 
 fn collect_recent_media_paths(root: &Path, since: std::time::SystemTime) -> Vec<std::path::PathBuf> {
@@ -736,6 +873,11 @@ fn media_file_from_path_for_cleanup(path: &Path) -> Option<MediaFile> {
         source_url,
         source_id,
         playlist_index,
+        artist: None,
+        album: None,
+        album_artist: None,
+        track_no: None,
+        embedded_cover_path: None,
     })
 }
 
@@ -991,6 +1133,11 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         source_url,
         source_id,
         playlist_index,
+        artist: None,
+        album: None,
+        album_artist: None,
+        track_no: None,
+        embedded_cover_path: None,
     })
 }
 
@@ -1237,6 +1384,11 @@ mod tests {
             source_url: None,
             source_id: None,
             playlist_index: None,
+            artist: None,
+            album: None,
+            album_artist: None,
+            track_no: None,
+            embedded_cover_path: None,
         };
         let key = media_library_group_key(path, &file);
         assert!(key.starts_with("stem:"));
@@ -1260,6 +1412,11 @@ mod tests {
             source_url: None,
             source_id: Some("abc123".into()),
             playlist_index: None,
+            artist: None,
+            album: None,
+            album_artist: None,
+            track_no: None,
+            embedded_cover_path: None,
         };
         let intermediate = MediaFile {
             name: "My Video".into(),
@@ -1275,6 +1432,11 @@ mod tests {
             source_url: None,
             source_id: None,
             playlist_index: None,
+            artist: None,
+            album: None,
+            album_artist: None,
+            track_no: None,
+            embedded_cover_path: None,
         };
         let muxed_path = Path::new(&muxed.path);
         let inter_path = Path::new(&intermediate.path);

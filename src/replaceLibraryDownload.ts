@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { DuplicateDownloadChoice } from "./components/DuplicateDownloadDialog";
 import { clearPlaybackStateForDeletedPaths } from "./cleanupCandidates";
+import { deleteMediaAtPath } from "./deleteMedia";
 import { findLibraryDuplicate } from "./duplicateDownload";
 import { releasePlaybackBeforeDelete } from "./releasePlaybackBeforeDelete";
 import { useRuforgeStore } from "./store/ruforgeStore";
@@ -8,7 +8,7 @@ import { useRuforgeStore } from "./store/ruforgeStore";
 /** Remove the library row matched by URL when the user chose Replace. */
 export async function deleteLibraryFileForReplace(path: string): Promise<void> {
   await releasePlaybackBeforeDelete([path]);
-  await invoke("delete_media", { videoPath: path });
+  await deleteMediaAtPath(path);
   clearPlaybackStateForDeletedPaths([path]);
   await useRuforgeStore.getState().fetchEntries({ manageLoadingStart: false });
 }

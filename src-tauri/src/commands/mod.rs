@@ -1,11 +1,13 @@
 pub mod downloader;
 pub mod export;
+pub mod export_copy;
 pub mod explorer_embed;
 pub mod ffprobe;
 pub mod gallery;
 pub mod media;
 pub mod notify_overlay;
 pub mod player;
+pub mod removable_drives;
 pub mod settings;
 pub mod sponsorblock;
 pub mod system;

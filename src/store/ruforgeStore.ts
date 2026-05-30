@@ -7,6 +7,12 @@ import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { sanitizeVideoInfo } from "../components/downloader/downloaderFormat";
 import type { GalleryEntry, MediaFile, PlaylistCollection, ProgressPayload, VideoInfo } from "../types";
+import {
+  galleryScanRoots,
+  isDirInLibraryScanList,
+  normalizeScanDirKey,
+  writeLibraryScanDirsToLs,
+} from "../libraryScanDirs";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
 import {
   DEFAULT_SETTINGS,
@@ -17,8 +23,10 @@ import {
   readInitialPathsFromLs,
   readInitialPlayerLoopFromLs,
   readInitialPlayerVolumeFromLs,
+  nextNavMode,
   type ActiveTab,
   type GalleryFilter,
+  type NavMode,
   type RuforgeSettings,
   type SettingsTab,
 } from "./types";
@@ -45,6 +53,7 @@ import type {
 export type {
   ActiveTab,
   GalleryFilter,
+  NavMode,
   RuforgeSettings,
   SettingsTab,
 } from "./types";
@@ -62,7 +71,10 @@ export interface RuforgeStore extends DownloadQueueSlice {
   settings: RuforgeSettings;
   outputDir: string;
   saveToInternal: boolean;
+  /** Extra folders scanned for the library (internal vault is always included). */
+  libraryScanDirs: string[];
   isSidebarExpanded: boolean;
+  navMode: NavMode;
   storageStats: { total_bytes: number; file_count: number } | null;
 
   activeTab: ActiveTab;
@@ -134,9 +146,12 @@ export interface RuforgeStore extends DownloadQueueSlice {
   mergeHardwareAccelerationFromBackend: (hw: boolean) => void;
 
   setOutputDir: (dir: string) => void;
+  addLibraryScanDir: (dir: string) => void;
+  removeLibraryScanDir: (dir: string) => void;
   handleSetSaveToInternal: (val: boolean) => void;
   toggleSidebar: () => void;
   setSidebarCollapsedByResize: () => void;
+  cycleNavMode: () => void;
   refreshStorageStats: () => Promise<void>;
   openAuthorizeCleanupModal: () => Promise<void>;
   closeAuthorizeCleanupModal: () => void;
@@ -228,7 +243,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
       settings: DEFAULT_SETTINGS,
       outputDir: pathsInit.outputDir,
       saveToInternal: pathsInit.saveToInternal,
+      libraryScanDirs: pathsInit.libraryScanDirs,
       isSidebarExpanded: pathsInit.isSidebarExpanded,
+      navMode: pathsInit.navMode,
       storageStats: null,
 
       activeTab: "downloader",
@@ -415,6 +432,14 @@ export const useRuforgeStore = create<RuforgeStore>()(
           get().pumpDownloadQueue();
         }
 
+        if (
+          key === "downloadSubtitles" ||
+          key === "downloadSubtitleLangs" ||
+          key === "autoDownloadScrubberPreviews"
+        ) {
+          get().syncQueuedJobMediaOptionsFromSettings();
+        }
+
         if (key === "minimizeToTray") {
           await invoke("update_tray_config", { minimize: resolvedValue });
         }
@@ -450,6 +475,25 @@ export const useRuforgeStore = create<RuforgeStore>()(
         set({ outputDir: dir });
       },
 
+      addLibraryScanDir: (dir) => {
+        const trimmed = dir.trim();
+        if (!trimmed) return;
+        const { libraryScanDirs } = get();
+        if (isDirInLibraryScanList(trimmed, libraryScanDirs)) return;
+        const next = [...libraryScanDirs, trimmed];
+        writeLibraryScanDirsToLs(next);
+        set({ libraryScanDirs: next });
+        void get().fetchEntries({ manageLoadingStart: false });
+      },
+
+      removeLibraryScanDir: (dir) => {
+        const key = normalizeScanDirKey(dir);
+        const next = get().libraryScanDirs.filter((d) => normalizeScanDirKey(d) !== key);
+        writeLibraryScanDirsToLs(next);
+        set({ libraryScanDirs: next });
+        void get().fetchEntries({ manageLoadingStart: false });
+      },
+
       handleSetSaveToInternal: (val) => {
         set({ saveToInternal: val });
       },
@@ -464,6 +508,14 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       setSidebarCollapsedByResize: () => {
         set({ isSidebarExpanded: false });
+      },
+
+      cycleNavMode: () => {
+        set((s) => {
+          const next = nextNavMode(s.navMode);
+          localStorage.setItem("ruforge-nav-mode", next);
+          return { navMode: next };
+        });
       },
 
       refreshStorageStats: async () => {
@@ -588,11 +640,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const posterEpoch =
           opts?.posterEpoch ??
           (skipPosterBackfill ? galleryPosterEpoch : (++galleryPosterEpoch, galleryPosterEpoch));
-        const { outputDir, notify } = get();
+        const { libraryScanDirs, notify } = get();
         if (manageLoadingStart) set({ galleryLoading: true });
         let backfillList: MediaFile[] | null = null;
         try {
-          const dirs = [RUFORGE_INTERNAL_DIR, outputDir].filter((d) => d && d.trim() !== "");
+          const dirs = galleryScanRoots(libraryScanDirs);
           const scans = await Promise.all(dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d })));
           const combined = scans.flat();
           const unique = dedupeGalleryEntriesCombined(
@@ -652,6 +704,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
         settings: s.settings,
         outputDir: s.outputDir,
         saveToInternal: s.saveToInternal,
+        libraryScanDirs: s.libraryScanDirs,
       }),
       /** Must match `version` returned from `getItem` in `createRuforgePersistStorage` (both 0). */
       version: 0,

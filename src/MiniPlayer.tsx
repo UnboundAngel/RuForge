@@ -22,11 +22,8 @@ import {
   Layers,
 } from "lucide-react";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "./types";
-import {
-  DEFAULT_OUTPUT_DIR,
-  RUFORGE_INTERNAL_DIR,
-  hydratePlatformDefaultPaths,
-} from "./platformPaths";
+import { galleryScanRoots, readLibraryScanDirsFromLs } from "./libraryScanDirs";
+import { hydratePlatformDefaultPaths } from "./platformPaths";
 
 import { ScrubHoverPreview } from "./components/player/ScrubHoverPreview";
 import { useScrubberThumbs } from "./useScrubberThumbs";
@@ -747,9 +744,8 @@ export default function MiniPlayer() {
     subtitleTracks,
   });
 
-  const [outputDir] = useState(() => {
-    return localStorage.getItem("ruforge-output-dir") || DEFAULT_OUTPUT_DIR;
-  });
+  const [libraryScanDirs] = useState(() => readLibraryScanDirsFromLs());
+  const scanRootsKey = libraryScanDirs.join("\0");
 
   const groupEntriesByDate = (entries: GalleryEntry[]) => {
     const sorted = [...entries].sort((a, b) => {
@@ -792,8 +788,8 @@ export default function MiniPlayer() {
     const run = async () => {
       const posterEpoch = ++libraryPosterBackfillEpochRef.current;
       try {
-        const dirs = [RUFORGE_INTERNAL_DIR, outputDir].filter((d) => d && d.trim() !== "");
-        
+        const dirs = galleryScanRoots(libraryScanDirs);
+
         const scans = await Promise.all(
           dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d }))
         );
@@ -835,7 +831,7 @@ export default function MiniPlayer() {
       }
     };
     run();
-  }, [outputDir]);
+  }, [scanRootsKey]);
 
   useEffect(() => {
     const win = getCurrentWindow();

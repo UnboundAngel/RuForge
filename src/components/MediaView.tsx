@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music, FileText, FolderOutput } from "lucide-react";
+import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music, FileText, FolderOutput, Shuffle, FolderOpen } from "lucide-react";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import { isAudioOnlyPath } from "../mediaKind";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -9,6 +9,8 @@ import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { getPlaybackThumbnailBar, getWatchProgress, isVideoWatched } from "../playbackStorage";
 import { formatStorageSize } from "../formatStorageSize";
 import { clearPlaybackStateForDeletedPaths } from "../cleanupCandidates";
+import { deleteMediaAtPath } from "../deleteMedia";
+import { openInFileManager } from "../openInFileManager";
 import { releasePlaybackBeforeDelete } from "../releasePlaybackBeforeDelete";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { formatDuration } from "./downloader/downloaderFormat";
@@ -31,7 +33,15 @@ async function removeQueueJobsForSourceUrl(sourceUrl: string): Promise<void> {
   }
 }
 
-const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection, onClick: () => void }) => {
+const PlaylistStackCard = ({
+  playlist,
+  onClick,
+  onContextMenu,
+}: {
+  playlist: PlaylistCollection;
+  onClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+}) => {
   const [isHovered, setIsHovered] = useState(false);
   const mainThumbnail =
     playlist.stackThumbnailPath ||
@@ -44,6 +54,7 @@ const PlaylistStackCard = ({ playlist, onClick }: { playlist: PlaylistCollection
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
+      onContextMenu={onContextMenu}
     >
       <motion.div 
         animate={{ rotate: isHovered ? -4 : -2, y: isHovered ? -12 : -4, x: isHovered ? -8 : -2 }}
@@ -265,8 +276,7 @@ export const MediaView = ({
 }: {
   onPlaylistClick: (playlist: PlaylistCollection) => void;
 }) => {
-  const outputDir = useRuforgeStore((s) => s.outputDir);
-  const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const libraryScanDirs = useRuforgeStore((s) => s.libraryScanDirs);
   const gridDensity = useRuforgeStore((s) => s.settings.gridDensity);
   const searchQuery = useRuforgeStore((s) => s.searchValue);
   const filter = useRuforgeStore((s) => s.galleryFilter);
@@ -279,6 +289,7 @@ export const MediaView = ({
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
   const setGalleryExtractingPath = useRuforgeStore((s) => s.setGalleryExtractingPath);
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
+  const handlePlayPlaylist = useRuforgeStore((s) => s.handlePlayPlaylist);
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
 
   const [showTranscriptMenu, setShowTranscriptMenu] = useState(false);
@@ -303,13 +314,19 @@ export const MediaView = ({
     const deletingId = notify("Deleting…", "progress");
 
     try {
-      await invoke("delete_media", { videoPath: file.path });
+      const result = await deleteMediaAtPath(file.path);
       clearPlaybackStateForDeletedPaths([file.path]);
       const sourceUrl = file.sourceUrl?.trim();
       if (sourceUrl) {
         await removeQueueJobsForSourceUrl(sourceUrl);
       }
-      notify("Video deleted successfully.");
+      if (result.alreadyMissing && !result.removed) {
+        notify("Removed from library (file was already gone).");
+      } else if (result.removed) {
+        notify("Removed this file and its sidecars from disk.");
+      } else {
+        notify("Removed from library.");
+      }
       await fetchEntries();
     } catch (e) {
       console.error(e);
@@ -338,7 +355,7 @@ export const MediaView = ({
 
   useEffect(() => {
     void fetchEntries();
-  }, [fetchEntries, outputDir, saveToInternal]);
+  }, [fetchEntries, libraryScanDirs]);
 
   const groupEntriesByDate = (entries: GalleryEntry[]) => {
     const sorted = [...entries].sort((a, b) => {
@@ -466,10 +483,15 @@ export const MediaView = ({
                   {groupEntries.map((entry, i) => {
                     if (entry.kind === 'playlist') {
                       return (
-                        <PlaylistStackCard 
-                          key={entry.path} 
-                          playlist={entry} 
-                          onClick={() => onPlaylistClick(entry)} 
+                        <PlaylistStackCard
+                          key={entry.path}
+                          playlist={entry}
+                          onClick={() => onPlaylistClick(entry)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setGalleryActiveMenu({ path: entry.path, x: e.clientX, y: e.clientY });
+                          }}
                         />
                       );
                     }
@@ -507,8 +529,78 @@ export const MediaView = ({
             onClick={(e) => e.stopPropagation()}
           >
             {(() => {
-              const entry = entries.find(e => e.path === activeMenu.path);
-              if (!entry || entry.kind !== 'media') return null;
+              const entry = entries.find((e) => e.path === activeMenu.path);
+              if (!entry) return null;
+
+              if (entry.kind === "playlist") {
+                const playlist = entry;
+                return (
+                  <div className="p-1.5">
+                    <div className="px-3 py-2 border-b border-white/5 mb-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-stone-500 truncate">
+                        {playlist.title}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        onPlaylistClick(playlist);
+                        setGalleryActiveMenu(null);
+                      }}
+                      className="w-full px-3 py-2.5 flex items-center space-x-3 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[color-mix(in_srgb,var(--accent),transparent_88%)] flex items-center justify-center group-hover:bg-[color:var(--accent)] group-hover:text-stone-900 transition-all">
+                        <Layers size={14} />
+                      </div>
+                      <span className="text-xs font-bold">Open</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handlePlayPlaylist(playlist.items);
+                        setGalleryActiveMenu(null);
+                      }}
+                      className="w-full px-3 py-2.5 flex items-center space-x-3 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[color-mix(in_srgb,var(--accent),transparent_88%)] flex items-center justify-center group-hover:bg-[color:var(--accent)] group-hover:text-stone-900 transition-all">
+                        <Play size={14} fill="currentColor" />
+                      </div>
+                      <span className="text-xs font-bold">Play All</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handlePlayPlaylist(playlist.items, true);
+                        setGalleryActiveMenu(null);
+                      }}
+                      className="w-full px-3 py-2.5 flex items-center space-x-3 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"
+                    >
+                      <Shuffle size={16} />
+                      <span className="text-xs font-bold">Shuffle</span>
+                    </button>
+                    <div className="h-px bg-white/5 my-1 mx-2" />
+                    <button
+                      onClick={() => {
+                        openExportPanel({ paths: [playlist.path], label: playlist.title });
+                        setGalleryActiveMenu(null);
+                      }}
+                      className="w-full px-3 py-2.5 flex items-center space-x-3 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"
+                    >
+                      <FolderOutput size={16} />
+                      <span className="text-xs font-bold">Export</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        void openInFileManager(playlist.path);
+                        setGalleryActiveMenu(null);
+                      }}
+                      className="w-full px-3 py-2.5 flex items-center space-x-3 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"
+                    >
+                      <FolderOpen size={16} />
+                      <span className="text-xs font-bold">Open folder</span>
+                    </button>
+                  </div>
+                );
+              }
+
+              if (entry.kind !== "media") return null;
               const file = entry as MediaFile;
               return (
                 <div className="p-1.5">
@@ -574,6 +666,16 @@ export const MediaView = ({
                       </AnimatePresence>
                     </>
                   )}
+                  <button
+                    onClick={() => {
+                      void openInFileManager(file.path);
+                      setGalleryActiveMenu(null);
+                    }}
+                    className="w-full px-3 py-2.5 flex items-center space-x-3 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"
+                  >
+                    <FolderOpen size={16} />
+                    <span className="text-xs font-bold">Open folder</span>
+                  </button>
                   <div className="h-px bg-white/5 my-1 mx-2" />
                   <button 
                     onClick={() => handleDelete(file)}

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from "motion/react";
-import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, FolderOutput, ChevronDown, Database, Music, Bug, Captions, Layers, Minus, Plus, RefreshCw, Film } from 'lucide-react';
+import { ChevronDown, Minus, Plus, X } from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { DOWNLOAD_AUDIO_FORMAT_OPTIONS } from '../downloadFormat';
@@ -8,7 +8,8 @@ import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel, CUSTOM_CONCU
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from "@tauri-apps/api/event";
-import { useRuforgeStore } from '../store/ruforgeStore';
+import { normalizeScanDirKey } from '../libraryScanDirs';
+import { useRuforgeStore, RUFORGE_INTERNAL_DIR } from '../store/ruforgeStore';
 import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
 import { SettingsDescription } from './settings/settingsDescription';
 import { RegroupPlaylistModal } from './RegroupPlaylistModal';
@@ -16,13 +17,26 @@ import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
 
 interface SettingItemProps {
-  icon: React.ElementType;
   title: string;
   description: string;
   control?: React.ReactNode;
   active?: boolean;
   onClick?: () => void;
 }
+
+const SettingsSectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <h3 className="rf-settings-section-header">{children}</h3>
+);
+
+const SettingsSection: React.FC<{ title: string; children: React.ReactNode }> = ({
+  title,
+  children,
+}) => (
+  <section className="rf-settings-section">
+    <SettingsSectionHeader>{title}</SettingsSectionHeader>
+    <div className="rf-settings-section-body">{children}</div>
+  </section>
+);
 
 interface CustomSelectProps {
   value: string;
@@ -61,8 +75,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange })
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="absolute top-full left-0 right-0 z-50 bg-[#1D1613] border border-white/5 border-t-0 rounded-b-xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)]"
+            exit={{ opacity: 0, height: 0, pointerEvents: "none" }}
+            className="absolute top-full left-0 right-0 z-50 bg-[#1D1613] border border-white/5 border-t-0 rounded-b-xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)] pointer-events-auto"
           >
             {options.map((opt) => (
               <div
@@ -217,8 +231,8 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="absolute left-0 right-0 top-full z-50 overflow-hidden rounded-b-xl border border-t-0 border-white/5 bg-[#1D1613] shadow-[0_15px_30px_rgba(0,0,0,0.6)]"
+              exit={{ opacity: 0, height: 0, pointerEvents: "none" }}
+              className="absolute left-0 right-0 top-full z-50 overflow-hidden rounded-b-xl border border-t-0 border-white/5 bg-[#1D1613] shadow-[0_15px_30px_rgba(0,0,0,0.6)] pointer-events-auto"
             >
               {PRESET_ROWS.map((row) => {
                 const sel = preset === row.id;
@@ -307,59 +321,48 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
   );
 };
 
-const ToggleSlot: React.FC<{ active: boolean; onClick?: () => void }> = ({ active, onClick }) => (
-  <div 
+const ToggleSlot: React.FC<{
+  active: boolean;
+  onClick?: () => void;
+  /** Visual only: preference stored but inactive for current download mode. */
+  muted?: boolean;
+}> = ({ active, onClick, muted = false }) => (
+  <button
+    type="button"
     onClick={onClick}
     className={`w-12 h-6 rounded-full relative cursor-pointer transition-all duration-300 border border-white/[0.05] ${
-      active 
-      ? 'bg-[#2A1E1A] shadow-[0_2px_5px_rgba(0,0,0,0.5)]' 
-      : 'bg-[#1D1613] shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]'
-    }`}
+      active
+        ? "bg-[#2A1E1A] shadow-[0_2px_5px_rgba(0,0,0,0.5)]"
+        : "bg-[#1D1613] shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]"
+    } ${muted ? "opacity-45" : ""}`}
   >
-    <motion.div 
+    <motion.div
       animate={{ x: active ? 26 : 2 }}
       transition={{ type: "spring", stiffness: 600, damping: 35 }}
-      className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-colors duration-300 ${
-        active ? 'bg-[color:var(--accent)]' : 'bg-stone-700'
+      className={`pointer-events-none absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-colors duration-300 ${
+        active ? "bg-[color:var(--accent)]" : "bg-stone-700"
       }`}
     />
-  </div>
+  </button>
 );
 
-const FadingDivider = () => (
-  <div className="h-px w-full bg-gradient-to-r from-transparent via-[#EDD79C]/15 to-transparent my-1" />
-);
-
-const SettingItem: React.FC<SettingItemProps> = ({ icon: RowIcon, title, description, control, active, onClick }) => (
-  <div
-    onClick={onClick}
-    className={`group flex items-center justify-between p-6 rounded-[24px] transition-all duration-300 bg-transparent hover:bg-white/[0.02] ${
-      onClick ? "cursor-pointer" : "cursor-default"
-    }`}
-  >
-    <div className="flex items-start gap-5 min-w-0 flex-1">
-      <div
-        className={`w-12 h-12 flex items-center justify-center shrink-0 transition-all duration-300 ${
-          active ? "text-[color:var(--accent)]" : "text-stone-500"
-        }`}
-      >
-        <RowIcon className="w-6 h-6" />
-      </div>
-      <div className="min-w-0 flex-1 space-y-1">
-        <h4
-          className={`text-sm font-bold transition-colors duration-300 ${
-            active ? "text-stone-100" : "text-stone-300"
-          }`}
-        >
-          {title}
-        </h4>
-        <SettingsDescription description={description} className="max-w-[320px]" />
-      </div>
+const SettingItem: React.FC<SettingItemProps> = ({
+  title,
+  description,
+  control,
+  active = true,
+  onClick,
+}) => (
+  <div onClick={onClick} className={`group rf-settings-row ${onClick ? "cursor-pointer" : ""}`}>
+    <div className="rf-settings-row-label space-y-0.5">
+      <h4 className={active ? "text-stone-100" : "text-stone-400"}>{title}</h4>
+      <SettingsDescription description={description} className="max-w-md" />
     </div>
-
-    <div className="shrink-0 pl-4 self-center" onClick={(e) => e.stopPropagation()}>
-      {control}
-    </div>
+    {control ? (
+      <div className="rf-settings-row-control" onClick={(e) => e.stopPropagation()}>
+        {control}
+      </div>
+    ) : null}
   </div>
 );
 
@@ -368,6 +371,9 @@ export const SettingsView: React.FC = () => {
   const setSettingsTab = useRuforgeStore((s) => s.setSettingsTab);
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const libraryScanDirs = useRuforgeStore((s) => s.libraryScanDirs);
+  const addLibraryScanDir = useRuforgeStore((s) => s.addLibraryScanDir);
+  const removeLibraryScanDir = useRuforgeStore((s) => s.removeLibraryScanDir);
   const [regroupPlaylistOpen, setRegroupPlaylistOpen] = useState(false);
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
@@ -408,6 +414,22 @@ export const SettingsView: React.FC = () => {
     if (selected && typeof selected === 'string') {
       setOutputDir(selected);
     }
+  };
+
+  const handleAddLibraryScanFolder = async () => {
+    const selected = await open({ directory: true, multiple: false });
+    if (!selected || typeof selected !== "string") return;
+    const key = normalizeScanDirKey(selected);
+    if (key === normalizeScanDirKey(RUFORGE_INTERNAL_DIR)) {
+      notify("Internal vault is always scanned.", "info");
+      return;
+    }
+    if (libraryScanDirs.some((d) => normalizeScanDirKey(d) === key)) {
+      notify("That folder is already in the library scan list.", "info");
+      return;
+    }
+    addLibraryScanDir(selected);
+    notify("Folder added to library scan.");
   };
 
   const handleOpenExportPanel = () => {
@@ -474,175 +496,218 @@ export const SettingsView: React.FC = () => {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="p-10 max-w-3xl h-full pb-32 pt-20"
-    >
-      <div className="mb-8">
-        <h1 className="text-3xl font-black tracking-tight text-stone-50">Settings</h1>
+    <div className="rf-settings-shell w-full max-w-[min(100%,56rem)] min-h-full px-8 sm:px-10 pb-32 pt-20">
+      <div className="mb-10">
+        <h1 className="rf-settings-page-title">Settings</h1>
         <p className="text-stone-500 mt-1 text-sm font-medium">System configuration and preferences.</p>
       </div>
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-          className="space-y-4"
+          initial={false}
+          animate={{ opacity: 1 }}
+          className="space-y-0"
         >
           {activeTab === 'general' && (
             <div className="flex flex-col">
-              <SettingItem 
-                icon={Database}
-                title="Storage Limit"
-                description="Maximum space RuForge can use for internal media."
-                active={true}
-                control={
-                  <CustomSelect 
-                    value={`${settings.storageLimitGB}GB`}
-                    options={['10GB', '25GB', '50GB', '100GB', '250GB']}
-                    onChange={(val) => {
-                      const num = parseInt(val.replace('GB', ''));
-                      void updateSetting('storageLimitGB', num);
-                    }}
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem 
-                icon={Monitor}
-                title="Launch at Startup"
-                description="Automatically start RuForge when you log in to your computer."
-                active={settings.launchAtStartup}
-                control={
-                  <ToggleSlot 
-                    active={settings.launchAtStartup} 
-                    onClick={() => updateSetting('launchAtStartup', !settings.launchAtStartup)} 
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem 
-                icon={Monitor}
-                title="System Tray"
-                description="Minimize the app to the system tray instead of closing it."
-                active={settings.minimizeToTray}
-                control={
-                  <ToggleSlot 
-                    active={settings.minimizeToTray} 
-                    onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)} 
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={Bug}
-                title="Debugging settings"
-                description="Shows a Debugging tab with developer tools (group playlist files, cycle updater UI, and future debug actions)."
-                active={settings.showDebuggingSettings}
-                control={
-                  <ToggleSlot
-                    active={settings.showDebuggingSettings}
-                    onClick={() => {
-                      const next = !settings.showDebuggingSettings;
-                      void updateSetting('showDebuggingSettings', next);
-                      if (!next && useRuforgeStore.getState().settingsTab === 'debugging') {
-                        setSettingsTab('general');
-                      }
-                    }}
-                  />
-                }
-              />
+              <SettingsSection title="Storage">
+                <SettingItem
+                  title="Storage Limit"
+                  description="Maximum space RuForge can use for internal media."
+                  control={
+                    <CustomSelect
+                      value={`${settings.storageLimitGB}GB`}
+                      options={['10GB', '25GB', '50GB', '100GB', '250GB']}
+                      onChange={(val) => {
+                        const num = parseInt(val.replace('GB', ''));
+                        void updateSetting('storageLimitGB', num);
+                      }}
+                    />
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection title="System">
+                <SettingItem
+                  title="Launch at Startup"
+                  description="Automatically start RuForge when you log in to your computer."
+                  active={settings.launchAtStartup}
+                  control={
+                    <ToggleSlot
+                      active={settings.launchAtStartup}
+                      onClick={() => updateSetting('launchAtStartup', !settings.launchAtStartup)}
+                    />
+                  }
+                />
+                <SettingItem
+                  title="System Tray"
+                  description="Minimize the app to the system tray instead of closing it."
+                  active={settings.minimizeToTray}
+                  control={
+                    <ToggleSlot
+                      active={settings.minimizeToTray}
+                      onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)}
+                    />
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection title="Developer">
+                <SettingItem
+                  title="Debugging settings"
+                  description="Shows a Debugging tab with developer tools (group playlist files, cycle updater UI, and future debug actions)."
+                  active={settings.showDebuggingSettings}
+                  control={
+                    <ToggleSlot
+                      active={settings.showDebuggingSettings}
+                      onClick={() => {
+                        const next = !settings.showDebuggingSettings;
+                        void updateSetting('showDebuggingSettings', next);
+                        if (!next && useRuforgeStore.getState().settingsTab === 'debugging') {
+                          setSettingsTab('general');
+                        }
+                      }}
+                    />
+                  }
+                />
+              </SettingsSection>
             </div>
           )}
 
           {activeTab === 'downloads' && (
             <div className="flex flex-col">
-              <SettingItem 
-                icon={Database}
-                title="Storage Target"
-                description={saveToInternal ? "Saving to RuForge Internal Vault." : "Saving to Custom Download Path."}
-                active={true}
-                control={
-                  <div className="flex p-1 bg-[#1D1613] rounded-xl border border-white/5 relative">
-                    <button 
-                      onClick={() => handleSetSaveToInternal(true)}
-                      className={`relative px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-colors duration-300 z-10 ${
-                        saveToInternal ? 'text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
-                      }`}
+              <SettingsSection title="Location">
+                <SettingItem
+                  title="Storage Target"
+                  description={saveToInternal ? "Saving to RuForge Internal Vault." : "Saving to Custom Download Path."}
+                  control={
+                    <div className="flex p-1 bg-[#1D1613] rounded-xl border border-white/5 relative">
+                      <button
+                        onClick={() => handleSetSaveToInternal(true)}
+                        className={`relative px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-colors duration-300 z-10 ${
+                          saveToInternal ? 'text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
+                        }`}
+                      >
+                        {saveToInternal && (
+                          <motion.div
+                            layoutId="activeStorage"
+                            className="absolute inset-0 bg-[color:var(--accent)] rounded-lg z-0"
+                            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                          />
+                        )}
+                        <span className="relative z-10">INTERNAL</span>
+                      </button>
+                      <button
+                        onClick={() => handleSetSaveToInternal(false)}
+                        className={`relative px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-colors duration-300 z-10 ${
+                          !saveToInternal ? 'text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
+                        }`}
+                      >
+                        {!saveToInternal && (
+                          <motion.div
+                            layoutId="activeStorage"
+                            className="absolute inset-0 bg-[color:var(--accent)] rounded-lg z-0"
+                            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                          />
+                        )}
+                        <span className="relative z-10">CUSTOM</span>
+                      </button>
+                    </div>
+                  }
+                />
+                <SettingItem
+                  title="Download Path"
+                  description={
+                    saveToInternal
+                      ? `Used when Storage Target is CUSTOM (not used while INTERNAL is on). Current: ${outputDir}`
+                      : `New downloads save here. Current: ${outputDir}`
+                  }
+                  control={
+                    <button
+                      onClick={handlePickDirectory}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
                     >
-                      {saveToInternal && (
-                        <motion.div
-                          layoutId="activeStorage"
-                          className="absolute inset-0 bg-[color:var(--accent)] rounded-lg z-0"
-                          transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                        />
-                      )}
-                      <span className="relative z-10">INTERNAL</span>
+                      CHANGE DIRECTORY
                     </button>
-                    <button 
-                      onClick={() => handleSetSaveToInternal(false)}
-                      className={`relative px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-colors duration-300 z-10 ${
-                        !saveToInternal ? 'text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
-                      }`}
-                    >
-                      {!saveToInternal && (
-                        <motion.div
-                          layoutId="activeStorage"
-                          className="absolute inset-0 bg-[color:var(--accent)] rounded-lg z-0"
-                          transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                        />
-                      )}
-                      <span className="relative z-10">CUSTOM</span>
-                    </button>
-                  </div>
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={Music}
-                title="Download audio only"
-                description="Extract audio with yt-dlp (no video file). Thumbnail and metadata are still saved for the library player."
-                active={settings.downloadAudioOnly}
-                control={
-                  <ToggleSlot
-                    active={settings.downloadAudioOnly}
-                    onClick={() =>
-                      updateSetting('downloadAudioOnly', !settings.downloadAudioOnly)
-                    }
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={Music}
-                title="Remember queue audio choice"
-                description="When you toggle Audio (A) on a queue row, also update the default for new downloads."
-                active={settings.rememberAudioOnlyDefault}
-                control={
-                  <ToggleSlot
-                    active={settings.rememberAudioOnlyDefault}
-                    onClick={() =>
-                      updateSetting(
-                        "rememberAudioOnlyDefault",
-                        !settings.rememberAudioOnlyDefault,
-                      )
-                    }
-                  />
-                }
-              />
-              {settings.downloadAudioOnly && (
-                <>
-                  <FadingDivider />
+                  }
+                />
+                <SettingItem
+                  title="Library scan locations"
+                  description="Folders shown in Media. Internal vault is always included. Does not change where downloads save."
+                />
+                <SettingItem
+                  title="Internal vault"
+                  description={RUFORGE_INTERNAL_DIR || "Internal media folder"}
+                  control={
+                    <span className="text-[9px] font-black uppercase tracking-widest text-stone-600">
+                      Always on
+                    </span>
+                  }
+                />
+                {libraryScanDirs.map((dir) => (
                   <SettingItem
-                    icon={Music}
+                    key={dir}
+                    title="Scan folder"
+                    description={dir}
+                    control={
+                      <button
+                        type="button"
+                        onClick={() => removeLibraryScanDir(dir)}
+                        className="rounded-lg p-2 text-stone-500 hover:text-red-400 transition-colors"
+                        aria-label="Remove scan folder"
+                      >
+                        <X size={16} />
+                      </button>
+                    }
+                  />
+                ))}
+                <SettingItem
+                  title="Add library scan folder"
+                  description="Use for export drives or archives without routing new downloads there."
+                  control={
+                    <button
+                      type="button"
+                      onClick={() => void handleAddLibraryScanFolder()}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
+                    >
+                      ADD FOLDER
+                    </button>
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection title="Audio">
+                <SettingItem
+                  title="Download audio only"
+                  description="Extract audio with yt-dlp (no video file). Thumbnail and metadata are still saved for the library player."
+                  active={settings.downloadAudioOnly}
+                  control={
+                    <ToggleSlot
+                      active={settings.downloadAudioOnly}
+                      onClick={() =>
+                        updateSetting('downloadAudioOnly', !settings.downloadAudioOnly)
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Remember queue audio choice"
+                  description="When you toggle Audio (A) on a queue row, also update the default for new downloads."
+                  active={settings.rememberAudioOnlyDefault}
+                  control={
+                    <ToggleSlot
+                      active={settings.rememberAudioOnlyDefault}
+                      onClick={() =>
+                        updateSetting(
+                          "rememberAudioOnlyDefault",
+                          !settings.rememberAudioOnlyDefault,
+                        )
+                      }
+                    />
+                  }
+                />
+                {settings.downloadAudioOnly && (
+                  <SettingItem
                     title="Audio format"
                     description="Passed to yt-dlp --audio-format (requires ffmpeg for conversion)."
-                    active={true}
                     control={
                       <CustomSelect
                         value={(settings.downloadAudioFormat ?? 'm4a').toUpperCase()}
@@ -653,69 +718,67 @@ export const SettingsView: React.FC = () => {
                       />
                     }
                   />
-                </>
-              )}
-              <FadingDivider />
-              <SettingItem 
-                icon={Download}
-                title="Preferred Quality"
-                description={
-                  settings.downloadAudioOnly
-                    ? "Used when audio-only is off. Video quality is ignored while audio-only is enabled."
-                    : "Default video quality for new downloads."
-                }
-                active={!settings.downloadAudioOnly}
-                control={
-                  <CustomSelect 
-                    value={settings.preferredQuality}
-                    options={['4K (2160p)', '1080p (HD)', '720p', 'Best Available']}
-                    onChange={(val) => updateSetting('preferredQuality', val)}
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={Layers}
-                title="Concurrent downloads"
-                description={`How many yt-dlp jobs may run together (max ${MAX_CONCURRENT_DOWNLOADS_CAP}). Lower is safer for host rate limits.`}
-                active={true}
-                control={
-                  <MaxConcurrentDownloadsControl
-                    concurrency={settings.maxConcurrentDownloads}
-                    onConcurrencyChange={(n) => updateSetting('maxConcurrentDownloads', n)}
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={Captions}
-                title="Download Subtitles"
-                description={
-                  settings.downloadAudioOnly
-                    ? "Not used for audio-only downloads."
-                    : settings.downloadSubtitles
-                    ? `yt-dlp fetches: ${downloadSubtitleLangLabel(settings.downloadSubtitleLangs ?? "en.*")}. Player shows only sidecar files on disk.`
-                    : "Subtitle sidecars are not downloaded with new videos."
-                }
-                active={settings.downloadSubtitles && !settings.downloadAudioOnly}
-                control={
-                  <ToggleSlot
-                    active={settings.downloadSubtitles && !settings.downloadAudioOnly}
-                    onClick={() => {
-                      if (settings.downloadAudioOnly) return;
-                      updateSetting("downloadSubtitles", !settings.downloadSubtitles);
-                    }}
-                  />
-                }
-              />
-              {settings.downloadSubtitles && !settings.downloadAudioOnly && (
-                <>
-                  <FadingDivider />
+                )}
+              </SettingsSection>
+              <SettingsSection title="Video & Quality">
+                <SettingItem
+                  title="Preferred Quality"
+                  description={
+                    settings.downloadAudioOnly
+                      ? "Used when audio-only is off. Video quality is ignored while audio-only is enabled."
+                      : "Default video quality for new downloads."
+                  }
+                  active={!settings.downloadAudioOnly}
+                  control={
+                    <CustomSelect
+                      value={settings.preferredQuality}
+                      options={["4K (2160p)", "1080p (HD)", "720p", "Best Available"]}
+                      onChange={(val) => updateSetting("preferredQuality", val)}
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Concurrent downloads"
+                  description={`How many yt-dlp jobs may run together (max ${MAX_CONCURRENT_DOWNLOADS_CAP}). Lower is safer for host rate limits.`}
+                  control={
+                    <MaxConcurrentDownloadsControl
+                      concurrency={settings.maxConcurrentDownloads}
+                      onConcurrencyChange={(n) => updateSetting("maxConcurrentDownloads", n)}
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Download Subtitles"
+                  description={
+                    settings.downloadAudioOnly
+                      ? "Saved for video downloads. Not used while Download audio only is on."
+                      : settings.downloadSubtitles
+                      ? `yt-dlp fetches: ${downloadSubtitleLangLabel(settings.downloadSubtitleLangs ?? "en.*")}. Player shows only sidecar files on disk.`
+                      : "Subtitle sidecars are not downloaded with new videos."
+                  }
+                  active={settings.downloadSubtitles}
+                  onClick={() =>
+                    void updateSetting("downloadSubtitles", !settings.downloadSubtitles)
+                  }
+                  control={
+                    <ToggleSlot
+                      active={settings.downloadSubtitles}
+                      muted={settings.downloadAudioOnly}
+                      onClick={() =>
+                        void updateSetting("downloadSubtitles", !settings.downloadSubtitles)
+                      }
+                    />
+                  }
+                />
+                {settings.downloadSubtitles && (
                   <SettingItem
-                    icon={Captions}
                     title="Subtitle Languages"
-                    description="Passed to yt-dlp --sub-langs for manual and auto captions."
-                    active={true}
+                    description={
+                      settings.downloadAudioOnly
+                        ? "Applies when you download video (audio-only mode skips subs)."
+                        : "Passed to yt-dlp --sub-langs for manual and auto captions."
+                    }
+                    active={!settings.downloadAudioOnly}
                     control={
                       <CustomSelect
                         value={downloadSubtitleLangLabel(
@@ -732,292 +795,271 @@ export const SettingsView: React.FC = () => {
                       />
                     }
                   />
-                </>
-              )}
-              <FadingDivider />
-              <SettingItem
-                icon={Film}
-                title="Auto scrubber previews"
-                description={
-                  settings.downloadAudioOnly
-                    ? "Not used for audio-only downloads."
-                    : settings.autoDownloadScrubberPreviews
-                    ? "Sprite sheets for the player scrubber are built after each video download."
-                    : "Use Generate Previews in the library to build scrubber sprites manually."
-                }
-                active={settings.autoDownloadScrubberPreviews && !settings.downloadAudioOnly}
-                control={
-                  <ToggleSlot
-                    active={
-                      settings.autoDownloadScrubberPreviews && !settings.downloadAudioOnly
-                    }
-                    onClick={() => {
-                      if (settings.downloadAudioOnly) return;
-                      void updateSetting(
-                        "autoDownloadScrubberPreviews",
-                        !settings.autoDownloadScrubberPreviews,
-                      );
-                    }}
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={Download}
-                title="Skip Duplicates"
-                description="Automatically skip downloads when the video is already in your library."
-                active={settings.skipDuplicatesAutomatically}
-                control={
-                  <ToggleSlot
-                    active={settings.skipDuplicatesAutomatically}
-                    onClick={() =>
-                      updateSetting(
-                        "skipDuplicatesAutomatically",
-                        !settings.skipDuplicatesAutomatically,
-                      )
-                    }
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={RefreshCw}
-                title="YouTube downloader (yt-dlp)"
-                description={ytdlpVersionDescription}
-                active={!ytdlpBusy}
-                control={
-                  <motion.div layout className="flex flex-col items-end gap-2 min-w-[140px]">
-                    {typeof ytdlpPercent === "number" && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        className="w-full h-1 rounded-full bg-white/10 overflow-hidden"
+                )}
+                <SettingItem
+                  title="Auto scrubber previews"
+                  description={
+                    settings.downloadAudioOnly
+                      ? "Saved for video downloads. Not used while Download audio only is on."
+                      : settings.autoDownloadScrubberPreviews
+                      ? "Sprite sheets for the player scrubber are built after each video download."
+                      : "Use Generate Previews in the library to build scrubber sprites manually."
+                  }
+                  active={settings.autoDownloadScrubberPreviews}
+                  onClick={() =>
+                    void updateSetting(
+                      "autoDownloadScrubberPreviews",
+                      !settings.autoDownloadScrubberPreviews,
+                    )
+                  }
+                  control={
+                    <ToggleSlot
+                      active={settings.autoDownloadScrubberPreviews}
+                      muted={settings.downloadAudioOnly}
+                      onClick={() =>
+                        void updateSetting(
+                          "autoDownloadScrubberPreviews",
+                          !settings.autoDownloadScrubberPreviews,
+                        )
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Skip Duplicates"
+                  description="Automatically skip downloads when the video is already in your library."
+                  active={settings.skipDuplicatesAutomatically}
+                  control={
+                    <ToggleSlot
+                      active={settings.skipDuplicatesAutomatically}
+                      onClick={() =>
+                        updateSetting(
+                          "skipDuplicatesAutomatically",
+                          !settings.skipDuplicatesAutomatically,
+                        )
+                      }
+                    />
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection title="Updates">
+                <SettingItem
+                  title="YouTube downloader (yt-dlp)"
+                  description={ytdlpVersionDescription}
+                  active={!ytdlpBusy}
+                  control={
+                    <motion.div layout className="flex flex-col items-end gap-2 min-w-[140px]">
+                      {typeof ytdlpPercent === "number" && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          className="w-full h-1 rounded-full bg-white/10 overflow-hidden"
+                        >
+                          <div
+                            className="h-full bg-[color:var(--accent)] transition-[width] duration-200"
+                            style={{
+                              width: `${Math.min(100, Math.max(0, ytdlpPercent))}%`,
+                            }}
+                          />
+                        </motion.div>
+                      )}
+                      <button
+                        type="button"
+                        disabled={ytdlpBusy}
+                        onClick={() => void handleYtdlpCheckAndUpdate()}
+                        className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
                       >
-                        <div
-                          className="h-full bg-[color:var(--accent)] transition-[width] duration-200"
-                          style={{
-                            width: `${Math.min(100, Math.max(0, ytdlpPercent))}%`,
-                          }}
-                        />
-                      </motion.div>
-                    )}
+                        {ytdlpUpdating
+                          ? "UPDATING…"
+                          : ytdlpChecking
+                            ? "CHECKING…"
+                            : "CHECK & UPDATE"}
+                      </button>
+                    </motion.div>
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection title="Export">
+                <SettingItem
+                  title="Export media bundle"
+                  description="Copy library media and sidecars to a folder or removable drive."
+                  control={
                     <button
                       type="button"
-                      disabled={ytdlpBusy}
-                      onClick={() => void handleYtdlpCheckAndUpdate()}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                      onClick={handleOpenExportPanel}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
                     >
-                      {ytdlpUpdating
-                        ? "UPDATING…"
-                        : ytdlpChecking
-                          ? "CHECKING…"
-                          : "CHECK & UPDATE"}
+                      EXPORT
                     </button>
-                  </motion.div>
-                }
-              />
-              <FadingDivider />
-              <SettingItem 
-                icon={FolderOpen}
-                title="Download Path"
-                description={outputDir}
-                active={true}
-                control={
-                  <button 
-                    onClick={handlePickDirectory}
-                    className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
-                  >
-                    CHANGE DIRECTORY
-                  </button>
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={FolderOutput}
-                title="Export media bundle"
-                description="Copy library media and sidecars to a folder or removable drive."
-                active={true}
-                control={
-                  <button
-                    type="button"
-                    onClick={handleOpenExportPanel}
-                    className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
-                  >
-                    EXPORT
-                  </button>
-                }
-              />
+                  }
+                />
+              </SettingsSection>
             </div>
           )}
 
           {activeTab === 'playback' && (
             <div className="flex flex-col">
-              <SettingItem
-                icon={Music}
-                title="Auto-advance local audio"
-                description="When an mp3/m4a/flac track ends, plays the next one in alphabetical path order, same folder listing for the fullscreen player’s directory scan and the Mini Player strip."
-                active={settings.audioAutoAdvanceFolder !== false}
-                control={
-                  <ToggleSlot
-                    active={settings.audioAutoAdvanceFolder !== false}
-                    onClick={() =>
-                      updateSetting(
-                        'audioAutoAdvanceFolder',
-                        !(settings.audioAutoAdvanceFolder !== false),
-                      )
-                    }
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={Music}
-                title="Prefetch next audio"
-                description="Preloads the queued track in Chromium/WebView to reduce dead air. True gapless decode is not achievable with standalone HTML audio tags."
-                active={settings.audioPrefetchNext !== false}
-                control={
-                  <ToggleSlot
-                    active={settings.audioPrefetchNext !== false}
-                    onClick={() =>
-                      updateSetting('audioPrefetchNext', !(settings.audioPrefetchNext !== false))
-                    }
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={Shield}
-                title="ReplayGain / loudness normalization"
-                description="Skipped in WebView2: chaining MediaElement + Web Audio for stable LUFS normalization is brittle across formats/OS mixers: revisit with native output or ffmpeg filters."
-                active={false}
-                control={
-                  <span className="text-[9px] font-black uppercase tracking-widest text-stone-600 px-3">
-                    Not shipped
-                  </span>
-                }
-              />
-              <FadingDivider />
-              <SponsorBlockSettingsTree />
-              <FadingDivider />
+              <SettingsSection title="Playback">
+                <SettingItem
+                  title="Auto-advance local audio"
+                  description="When an mp3/m4a/flac track ends, plays the next one in alphabetical path order, same folder listing for the fullscreen player's directory scan and the Mini Player strip."
+                  active={settings.audioAutoAdvanceFolder !== false}
+                  control={
+                    <ToggleSlot
+                      active={settings.audioAutoAdvanceFolder !== false}
+                      onClick={() =>
+                        updateSetting(
+                          'audioAutoAdvanceFolder',
+                          !(settings.audioAutoAdvanceFolder !== false),
+                        )
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Prefetch next audio"
+                  description="Preloads the queued track in Chromium/WebView to reduce dead air. True gapless decode is not achievable with standalone HTML audio tags."
+                  active={settings.audioPrefetchNext !== false}
+                  control={
+                    <ToggleSlot
+                      active={settings.audioPrefetchNext !== false}
+                      onClick={() =>
+                        updateSetting('audioPrefetchNext', !(settings.audioPrefetchNext !== false))
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="ReplayGain / loudness normalization"
+                  description="Skipped in WebView2: chaining MediaElement + Web Audio for stable LUFS normalization is brittle across formats/OS mixers: revisit with native output or ffmpeg filters."
+                  active={false}
+                  control={
+                    <span className="text-[9px] font-black uppercase tracking-widest text-stone-600 px-3">
+                      Not shipped
+                    </span>
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection title="SponsorBlock">
+                <SponsorBlockSettingsTree />
+              </SettingsSection>
             </div>
           )}
 
           {activeTab === 'appearance' && (
             <div className="flex flex-col">
-              <SettingItem 
-                icon={Palette}
-                title="Accent Color"
-                description="Primary color for buttons and highlights."
-                active={true}
-                control={
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={accentInputRef}
-                      type="color"
-                      className="sr-only"
-                      aria-label="Pick accent color"
-                      value={
-                        typeof settings.accentColor === "string" && settings.accentColor.startsWith("#")
-                          ? settings.accentColor
-                          : "#EDCF9B"
-                      }
-                      onChange={(e) => updateSetting("accentColor", e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => accentInputRef.current?.click()}
-                      className="p-1.5 bg-[#1D1613] rounded-2xl shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] border border-white/5"
-                    >
-                      <div
-                        className="w-10 h-10 rounded-xl border-2 border-white/10 shadow-lg cursor-pointer active:scale-90 transition-transform"
-                        style={{ backgroundColor: settings.accentColor }}
+              <SettingsSection title="Theme">
+                <SettingItem
+                  title="Accent Color"
+                  description="Primary color for buttons and highlights."
+                  control={
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={accentInputRef}
+                        type="color"
+                        className="sr-only"
+                        aria-label="Pick accent color"
+                        value={
+                          typeof settings.accentColor === "string" && settings.accentColor.startsWith("#")
+                            ? settings.accentColor
+                            : "#EDCF9B"
+                        }
+                        onChange={(e) => updateSetting("accentColor", e.target.value)}
                       />
-                    </button>
-                  </div>
-                }
-              />
-              <FadingDivider />
-              <SettingItem 
-                icon={Palette}
-                title="Grid Density"
-                description="Control how many items appear in the gallery view."
-                active={true}
-                control={
-                  <div className="flex p-1.5 bg-[#1D1613] rounded-2xl shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] border border-white/5">
-                    {['Cozy', 'Default', 'Compact'].map(t => (
-                      <button 
-                        key={t} 
-                        onClick={() => updateSetting('gridDensity', t)}
-                        className={`relative px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-colors duration-300 ${
-                          settings.gridDensity === t ? 'text-[#1D1613]' : 'text-stone-600 hover:text-stone-400'
-                        }`}
+                      <button
+                        type="button"
+                        onClick={() => accentInputRef.current?.click()}
+                        className="p-1.5 bg-[#1D1613] rounded-2xl shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] border border-white/5"
                       >
-                        {settings.gridDensity === t && (
-                          <motion.div
-                            layoutId="activeDensity"
-                            className="absolute inset-0 bg-[color:var(--accent)] rounded-xl z-0"
-                            transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                          />
-                        )}
-                        <span className="relative z-10">{t.toUpperCase()}</span>
+                        <div
+                          className="w-10 h-10 rounded-xl border-2 border-white/10 shadow-lg cursor-pointer active:scale-90 transition-transform"
+                          style={{ backgroundColor: settings.accentColor }}
+                        />
                       </button>
-                    ))}
-                  </div>
-                }
-              />
+                    </div>
+                  }
+                />
+                <SettingItem
+                  title="Grid Density"
+                  description="Control how many items appear in the gallery view."
+                  control={
+                    <div className="flex p-1.5 bg-[#1D1613] rounded-2xl shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] border border-white/5">
+                      {['Cozy', 'Default', 'Compact'].map(t => (
+                        <button
+                          key={t}
+                          onClick={() => updateSetting('gridDensity', t)}
+                          className={`relative px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-colors duration-300 ${
+                            settings.gridDensity === t ? 'text-[#1D1613]' : 'text-stone-600 hover:text-stone-400'
+                          }`}
+                        >
+                          {settings.gridDensity === t && (
+                            <motion.div
+                              layoutId="activeDensity"
+                              className="absolute inset-0 bg-[color:var(--accent)] rounded-xl z-0"
+                              transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                            />
+                          )}
+                          <span className="relative z-10">{t.toUpperCase()}</span>
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
+              </SettingsSection>
             </div>
           )}
 
           {activeTab === 'advanced' && (
             <div className="flex flex-col">
-              <SettingItem 
-                icon={Shield}
-                title="Hardware Acceleration"
-                description="Lets WebView2 use GPU for page rendering and video playback. Turn off only for graphics glitches, this is not audio quality. Changing this restarts RuForge (Windows)."
-                active={settings.hardwareAcceleration}
-                control={
-                  <ToggleSlot 
-                    active={settings.hardwareAcceleration} 
-                    onClick={() => updateSetting('hardwareAcceleration', !settings.hardwareAcceleration)} 
-                  />
-                }
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={RefreshCw}
-                title="Check for updates"
-                description={
-                  appVersion
-                    ? `Installed v${appVersion}. Checks GitHub for a newer RuForge build and downloads it when available.`
-                    : "Checks GitHub for a newer RuForge build and downloads it when available."
-                }
-                active={!updateCheckBusy}
-                control={
-                  <button
-                    type="button"
-                    disabled={updateCheckBusy}
-                    onClick={() => void emit("ruforge-check-updater")}
-                    className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                  >
-                    {updateCheckBusy ? "CHECKING…" : "CHECK NOW"}
-                  </button>
-                }
-              />
-              <FadingDivider />
-              <SettingItem 
-                icon={Trash2}
-                title="Clear Cache"
-                description="Delete temporary files and thumbnail cache."
-                active={false}
-                control={
-                  <button 
-                    onClick={handleClearCache}
-                    className="px-5 py-2.5 text-red-400 bg-[#1D1613] hover:bg-red-500/10 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-red-400/20 active:scale-95"
-                  >
-                    PURGE SYSTEM CACHE
-                  </button>
-                }
-              />
+              <SettingsSection title="Performance">
+                <SettingItem
+                  title="Hardware Acceleration"
+                  description="Lets WebView2 use GPU for page rendering and video playback. Turn off only for graphics glitches, this is not audio quality. Changing this restarts RuForge (Windows)."
+                  active={settings.hardwareAcceleration}
+                  control={
+                    <ToggleSlot
+                      active={settings.hardwareAcceleration}
+                      onClick={() => updateSetting('hardwareAcceleration', !settings.hardwareAcceleration)}
+                    />
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection title="Updates">
+                <SettingItem
+                  title="Check for updates"
+                  description={
+                    appVersion
+                      ? `Installed v${appVersion}. Checks GitHub for a newer RuForge build and downloads it when available.`
+                      : "Checks GitHub for a newer RuForge build and downloads it when available."
+                  }
+                  active={!updateCheckBusy}
+                  control={
+                    <button
+                      type="button"
+                      disabled={updateCheckBusy}
+                      onClick={() => void emit("ruforge-check-updater")}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                    >
+                      {updateCheckBusy ? "CHECKING…" : "CHECK NOW"}
+                    </button>
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection title="Maintenance">
+                <SettingItem
+                  title="Clear Cache"
+                  description="Delete temporary files and thumbnail cache."
+                  active={false}
+                  control={
+                    <button
+                      onClick={handleClearCache}
+                      className="px-5 py-2.5 text-red-400 bg-[#1D1613] hover:bg-red-500/10 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-red-400/20 active:scale-95"
+                    >
+                      PURGE SYSTEM CACHE
+                    </button>
+                  }
+                />
+              </SettingsSection>
             </div>
           )}
 
@@ -1028,33 +1070,30 @@ export const SettingsView: React.FC = () => {
                 onClose={() => setRegroupPlaylistOpen(false)}
                 customOutputDir={outputDir}
               />
-              <SettingItem
-                icon={Layers}
-                title="Group playlist downloads"
-                description="Move flat playlist files into a numbered subfolder so Media shows one stack card."
-                active={true}
-                onClick={() => setRegroupPlaylistOpen(true)}
-              />
-              <FadingDivider />
-              <SettingItem
-                icon={Bug}
-                title="Cycle updater UI"
-                description="Step through Available, Downloading, Installing, and Post-Install updater phases."
-                active={true}
-                control={
-                  <button
-                    type="button"
-                    onClick={() => void emit("debug-cycle-updater")}
-                    className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                  >
-                    CYCLE PHASES
-                  </button>
-                }
-              />
+              <SettingsSection title="Debugging">
+                <SettingItem
+                  title="Group playlist downloads"
+                  description="Move flat playlist files into a numbered subfolder so Media shows one stack card."
+                  onClick={() => setRegroupPlaylistOpen(true)}
+                />
+                <SettingItem
+                  title="Cycle updater UI"
+                  description="Step through Available, Downloading, Installing, and Post-Install updater phases."
+                  control={
+                    <button
+                      type="button"
+                      onClick={() => void emit("debug-cycle-updater")}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                    >
+                      CYCLE PHASES
+                    </button>
+                  }
+                />
+              </SettingsSection>
             </div>
           )}
         </motion.div>
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 };

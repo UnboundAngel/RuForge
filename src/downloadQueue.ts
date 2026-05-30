@@ -199,7 +199,26 @@ export function patchDownloadJobOptionsForAudio(
       : ytdlpFormatFromPreferredQuality(settings.preferredQuality),
     subLangs: audioOnly ? "" : effectiveDownloadSubLangs(settings),
     audioFormat: normalizeDownloadAudioFormat(settings.downloadAudioFormat),
+    autoScrubberPreviews:
+      !audioOnly && settings.autoDownloadScrubberPreviews !== false,
   };
+}
+
+/** Refresh subtitle/scrubber opts on queued rows when Downloads settings change. */
+export function patchDownloadJobOptionsFromSettings(
+  options: DownloadJobOptions,
+  settings: RuforgeSettings,
+): DownloadJobOptions {
+  const subLangs = options.audioOnly ? "" : effectiveDownloadSubLangs(settings);
+  const autoScrubberPreviews =
+    !options.audioOnly && settings.autoDownloadScrubberPreviews !== false;
+  if (
+    options.subLangs === subLangs &&
+    options.autoScrubberPreviews === autoScrubberPreviews
+  ) {
+    return options;
+  }
+  return { ...options, subLangs, autoScrubberPreviews };
 }
 
 /** Cookie context for yt-dlp metadata simulate and download (matches `DownloadOptions`). */

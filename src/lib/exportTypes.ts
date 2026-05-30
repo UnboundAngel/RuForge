@@ -1,14 +1,20 @@
 export type ExportPanelPreset = {
   paths: string[];
   label?: string;
+  /** Optional parent folder pre-fill (USB button); ignored when path is missing. */
+  initialDestDir?: string;
 };
 
 export type ExportBundleProgressPayload = {
   phase: string;
   currentPath?: string;
+  /** Human-readable step, e.g. "Video · Ep1.mp4". */
+  detail?: string;
   fileIndex: number;
   fileTotal: number;
+  /** Video bytes only (live during chunked copy). */
   bytesCopied: number;
+  /** Sum of source video sizes. */
   bytesTotal?: number;
   percent?: number;
 };
@@ -17,7 +23,13 @@ export type ExportMediaBundleResult = {
   destDir: string;
   filesCopied: number;
   filesSkipped: number;
+  /** Matches progress fileTotal (planned write count). */
+  filesTotal: number;
+  /** filesCopied + filesSkipped; matches progress fileIndex when complete. */
+  filesProcessed: number;
   bytesCopied: number;
+  /** Preflight byte total; matches progress bytesTotal. */
+  bytesTotal: number;
   manifestPath?: string | null;
   cancelled: boolean;
   warnings: string[];

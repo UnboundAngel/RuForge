@@ -28,3 +28,14 @@ export function isAudioOnlyPath(filePath: string): boolean {
   if (dot < 0) return false;
   return AUDIO_ONLY_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
 }
+
+/**
+ * Best cover art path for a media file. Prefers embedded cover, then thumbnail, then poster.
+ */
+export function bestCoverPath(file: {
+  embeddedCoverPath?: string | null;
+  thumbnailPath?: string | null;
+  ruforgePosterPath?: string | null;
+}): string | null {
+  return file.embeddedCoverPath ?? file.thumbnailPath ?? file.ruforgePosterPath ?? null;
+}

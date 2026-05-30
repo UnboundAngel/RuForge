@@ -35,7 +35,7 @@ export const SettingsDescription: React.FC<SettingsDescriptionProps> = ({
   if (!long) {
     return (
       <p
-        className={`text-[11px] text-stone-500 leading-relaxed max-w-[340px] ${className}`}
+        className={`text-[11px] text-stone-500 leading-relaxed max-w-md ${className}`}
       >
         {trimmed}
       </p>
@@ -66,7 +66,7 @@ export const SettingsDescription: React.FC<SettingsDescriptionProps> = ({
         ) : null}
       </div>
       {open ? (
-        <p className="text-[11px] text-stone-500 leading-relaxed max-w-[340px] mt-1.5">
+        <p className="text-[11px] text-stone-500 leading-relaxed max-w-md mt-1.5">
           {trimmed}
         </p>
       ) : null}

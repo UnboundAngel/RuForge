@@ -111,11 +111,11 @@ export function summarizeExportSelection(
 export function formatExportPhaseLabel(phase: string): string {
   switch (phase) {
     case "preparing":
-      return "Preparing…";
+      return "Preparing";
     case "copying":
-      return "Copying files…";
+      return "Copying";
     case "writing_manifest":
-      return "Writing manifest…";
+      return "Finishing";
     case "done":
       return "Done";
     case "failed":
@@ -123,4 +123,13 @@ export function formatExportPhaseLabel(phase: string): string {
     default:
       return phase.replace(/_/g, " ");
   }
+}
+
+export function exportProgressHeadline(
+  phase: string,
+  detail?: string,
+): string {
+  const trimmed = detail?.trim();
+  if (trimmed) return trimmed;
+  return formatExportPhaseLabel(phase);
 }

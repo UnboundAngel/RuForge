@@ -14,6 +14,16 @@ export interface MediaFile {
   sourceId: string | null;
   /** yt-dlp `playlist_index` from sidecar when downloaded as part of a playlist. */
   playlistIndex?: number | null;
+  /** Artist tag (ID3/Vorbis/AAC). Audio-only files only. */
+  artist?: string | null;
+  /** Album name tag. Audio-only files only. */
+  album?: string | null;
+  /** Album artist tag (ID3 TPE2 / Vorbis ALBUMARTIST). */
+  albumArtist?: string | null;
+  /** Track number from tags. */
+  trackNo?: number | null;
+  /** Path to extracted embedded cover art cached on disk. */
+  embeddedCoverPath?: string | null;
 }
 
 export interface PlaylistCollection {

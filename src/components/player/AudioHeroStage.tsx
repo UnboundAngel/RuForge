@@ -16,6 +16,8 @@ type Props = {
   connectKey: string;
   isPaused: boolean;
   isMuted: boolean;
+  /** background = blurred cover only; foreground = vinyl + art; full = both (default). */
+  layer?: "full" | "background" | "foreground";
 };
 
 function VinylDisc({ coverSrc }: { coverSrc: string | null }) {
@@ -95,13 +97,41 @@ function VinylDisc({ coverSrc }: { coverSrc: string | null }) {
  * angle on pause, and slides partially behind the album art when paused.
  * Audio analyser drives a subtle radial glow around the disc.
  */
+function HeroBackground({ coverSrc }: { coverSrc: string | null }) {
+  if (coverSrc) {
+    return (
+      <>
+        <img
+          src={coverSrc}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover scale-110 blur-[64px] opacity-62 saturate-[1.08]"
+          aria-hidden
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/55"
+          aria-hidden
+        />
+      </>
+    );
+  }
+  return (
+    <div
+      className="absolute inset-0 bg-gradient-to-br from-stone-950 via-[#0c0a09] to-black"
+      aria-hidden
+    />
+  );
+}
+
 export function AudioHeroStage({
   coverSrc,
   audioEl,
   connectKey,
   isPaused,
   isMuted,
+  layer = "full",
 }: Props) {
+  const showBackground = layer === "full" || layer === "background";
+  const showForeground = layer === "full" || layer === "foreground";
   const vinylRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<AnalyserGraph | null>(null);
@@ -114,7 +144,7 @@ export function AudioHeroStage({
   }, [connectKey]);
 
   useEffect(() => {
-    if (!audioEl) {
+    if (!showForeground || !audioEl) {
       graphRef.current = null;
       return;
     }
@@ -136,15 +166,16 @@ export function AudioHeroStage({
       releaseAnalyserGraph(audioEl, false);
       graphRef.current = null;
     };
-  }, [audioEl, connectKey]);
+  }, [audioEl, connectKey, showForeground]);
 
   useEffect(() => {
     return () => {
-      if (audioEl) releaseAnalyserGraph(audioEl, true);
+      if (showForeground && audioEl) releaseAnalyserGraph(audioEl, true);
     };
-  }, [connectKey, audioEl]);
+  }, [connectKey, audioEl, showForeground]);
 
   useEffect(() => {
+    if (!showForeground) return;
     let alive = true;
     let lastTime = performance.now();
 
@@ -188,32 +219,15 @@ export function AudioHeroStage({
       alive = false;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [audioEl, isPaused, isMuted]);
+  }, [audioEl, isPaused, isMuted, showForeground]);
 
   const artSize = "min(38vmin, 420px, calc(100vw - 160px))";
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {coverSrc ? (
-        <>
-          <img
-            src={coverSrc}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover scale-110 blur-[64px] opacity-62 saturate-[1.08]"
-            aria-hidden
-          />
-          <div
-            className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/55"
-            aria-hidden
-          />
-        </>
-      ) : (
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-stone-950 via-[#0c0a09] to-black"
-          aria-hidden
-        />
-      )}
+      {showBackground && <HeroBackground coverSrc={coverSrc} />}
 
+      {showForeground && (
       <div className="absolute inset-0 flex items-center justify-center z-10">
         <div className="relative" style={{ width: artSize, height: artSize }}>
           {/* Vinyl disc */}
@@ -262,6 +276,7 @@ export function AudioHeroStage({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

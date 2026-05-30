@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { X, FolderOutput, Loader2 } from "lucide-react";
 import { useExportBundle } from "../hooks/useExportBundle";
 import {
+  exportProgressHeadline,
   formatExportPhaseLabel,
   summarizeExportSelection,
 } from "../lib/exportSelection";
+import { resolveExportInitialDestDir } from "../lib/exportDestResolve";
 import {
   readExportIncludeManifest,
-  readExportLastDestDir,
   writeExportIncludeManifest,
   writeExportLastDestDir,
 } from "../lib/exportTypes";
 import { formatStorageSize } from "../formatStorageSize";
+import { isDirInLibraryScanList } from "../libraryScanDirs";
 import { useRuforgeStore } from "../store/ruforgeStore";
 
 type ExportModalPhase = "configure" | "running" | "done" | "failed" | "cancelled";
@@ -105,6 +107,7 @@ function ExportConfigureBody({
 
 function ExportRunningBody({
   phase,
+  detail,
   currentPath,
   percent,
   bytesCopied,
@@ -113,6 +116,7 @@ function ExportRunningBody({
   fileTotal,
 }: {
   phase: string;
+  detail?: string;
   currentPath?: string;
   percent?: number;
   bytesCopied: number;
@@ -120,20 +124,37 @@ function ExportRunningBody({
   fileIndex: number;
   fileTotal: number;
 }) {
+  const headline = exportProgressHeadline(phase, detail);
+  const showPhaseEyebrow = Boolean(detail?.trim());
   const barPct =
     typeof percent === "number"
       ? Math.min(100, Math.max(0, percent))
-      : bytesTotal && bytesTotal > 0
-        ? Math.min(100, (bytesCopied / bytesTotal) * 100)
-        : fileTotal > 0
-          ? Math.min(100, (fileIndex / fileTotal) * 100)
-          : 0;
+      : fileTotal > 0
+        ? Math.min(100, (fileIndex / fileTotal) * 100)
+        : 0;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-stone-400">
-        <Loader2 size={16} className="animate-spin text-[color:var(--accent)]" />
-        <span className="text-xs font-bold">{formatExportPhaseLabel(phase)}</span>
+      <div className="flex gap-3">
+        <Loader2
+          size={18}
+          className="mt-0.5 shrink-0 animate-spin text-[color:var(--accent)]"
+        />
+        <div className="min-w-0 flex-1 space-y-1">
+          {showPhaseEyebrow ? (
+            <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">
+              {formatExportPhaseLabel(phase)}
+            </p>
+          ) : null}
+          <p className="truncate text-sm font-bold leading-snug text-stone-100">
+            {headline}
+          </p>
+          {currentPath && showPhaseEyebrow ? (
+            <p className="truncate font-mono text-[10px] text-stone-600">
+              {basename(currentPath)}
+            </p>
+          ) : null}
+        </div>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white/5">
         <div
@@ -145,15 +166,12 @@ function ExportRunningBody({
         <span>
           {fileTotal > 0 ? `${fileIndex} / ${fileTotal} files` : "Scanning…"}
         </span>
-        {bytesTotal ? (
-          <span>
-            {formatStorageSize(bytesCopied)} / {formatStorageSize(bytesTotal)}
+        {bytesTotal && bytesTotal > 0 ? (
+          <span title="Video size only">
+            Video {formatStorageSize(bytesCopied)} / {formatStorageSize(bytesTotal)}
           </span>
         ) : null}
       </div>
-      {currentPath ? (
-        <p className="truncate text-[10px] text-stone-600">{basename(currentPath)}</p>
-      ) : null}
     </div>
   );
 }
@@ -236,6 +254,9 @@ function ExportBundleDialog({
   const exportOutcome = useRuforgeStore((s) => s.exportOutcome);
   const entries = useRuforgeStore((s) => s.entries);
   const closeExportPanel = useRuforgeStore((s) => s.closeExportPanel);
+  const libraryScanDirs = useRuforgeStore((s) => s.libraryScanDirs);
+  const addLibraryScanDir = useRuforgeStore((s) => s.addLibraryScanDir);
+  const notify = useRuforgeStore((s) => s.notify);
 
   const [destDir, setDestDir] = useState("");
   const [includeManifest, setIncludeManifest] = useState(readExportIncludeManifest);
@@ -252,9 +273,26 @@ function ExportBundleDialog({
     if (!exportPanelOpen) return;
     setIncludeManifest(readExportIncludeManifest());
     if (!exportInFlight && !exportOutcome) {
-      setDestDir(readExportLastDestDir());
+      let cancelled = false;
+      void resolveExportInitialDestDir(exportPanelPreset?.initialDestDir).then(
+        (dir) => {
+          if (!cancelled) setDestDir(dir);
+        },
+      );
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [exportPanelOpen, exportInFlight, exportOutcome]);
+  }, [
+    exportPanelOpen,
+    exportInFlight,
+    exportOutcome,
+    exportPanelPreset?.initialDestDir,
+  ]);
+
+  const handleHide = useCallback(() => {
+    closeExportPanel();
+  }, [closeExportPanel]);
 
   const handleClose = useCallback(() => {
     if (phase === "running") return;
@@ -263,14 +301,18 @@ function ExportBundleDialog({
 
   useEffect(() => {
     if (!exportPanelOpen) return;
-    if (phase === "running") return;
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleClose();
+      if (e.key !== "Escape") return;
+      if (phase === "running") {
+        handleHide();
+        return;
+      }
+      handleClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [exportPanelOpen, phase, handleClose]);
+  }, [exportPanelOpen, phase, handleClose, handleHide]);
 
   const handleBrowse = useCallback(async () => {
     const picked = await pickDestDir();
@@ -293,6 +335,7 @@ function ExportBundleDialog({
   if (!exportPanelOpen) return null;
 
   const showCloseX = phase !== "running";
+  const showHide = phase === "running";
   const primaryLabel =
     phase === "done" || phase === "failed" || phase === "cancelled"
       ? "Close"
@@ -314,6 +357,12 @@ function ExportBundleDialog({
 
   const primaryDisabled =
     phase === "configure" && (!destDir.trim() || exportInFlight);
+
+  const exportDestParent = destDir.trim();
+  const showAddExportFolderToLibrary =
+    phase === "done" &&
+    exportDestParent.length > 0 &&
+    !isDirInLibraryScanList(exportDestParent, libraryScanDirs);
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
@@ -341,6 +390,14 @@ function ExportBundleDialog({
             >
               <X size={18} />
             </button>
+          ) : showHide ? (
+            <button
+              type="button"
+              onClick={handleHide}
+              className="rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-stone-400 hover:bg-white/5 hover:text-white"
+            >
+              Hide
+            </button>
           ) : (
             <div className="w-[26px]" />
           )}
@@ -361,6 +418,7 @@ function ExportBundleDialog({
           {phase === "running" ? (
             <ExportRunningBody
               phase={exportProgress?.phase ?? "preparing"}
+              detail={exportProgress?.detail}
               currentPath={exportProgress?.currentPath}
               percent={exportProgress?.percent}
               bytesCopied={exportProgress?.bytesCopied ?? 0}
@@ -388,13 +446,34 @@ function ExportBundleDialog({
               Cancel
             </button>
           ) : null}
+          {phase === "running" ? (
+            <button
+              type="button"
+              onClick={handleHide}
+              className="flex-1 rounded-xl border border-white/10 py-2.5 text-[10px] font-black uppercase tracking-[0.25em] text-stone-400 hover:bg-white/5"
+            >
+              Hide
+            </button>
+          ) : null}
+          {showAddExportFolderToLibrary ? (
+            <button
+              type="button"
+              onClick={() => {
+                addLibraryScanDir(exportDestParent);
+                notify("Export folder added to library scan.");
+              }}
+              className="flex-1 rounded-xl border border-white/10 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-stone-300 hover:bg-white/5"
+            >
+              Add folder to library
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={primaryDisabled}
             onClick={handlePrimary}
             className={`rounded-xl py-2.5 text-[10px] font-black uppercase tracking-[0.25em] disabled:opacity-40 ${
               phase === "running"
-                ? "flex-1 border border-white/10 text-stone-300"
+                ? "flex-1 border border-white/10 text-stone-300 hover:bg-white/5"
                 : phase === "configure"
                   ? "flex-1 bg-[color:var(--accent)] text-stone-950"
                   : "flex-1 bg-[color:var(--accent)] text-stone-950"
