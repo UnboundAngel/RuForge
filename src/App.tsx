@@ -48,6 +48,7 @@ import { PlayerView, type PlayerViewHandle } from "./components/PlayerView";
 import { SettingsView } from "./components/SettingsView";
 import { MediaView } from "./components/MediaView";
 import { AuthorizeCleanupModal } from "./components/AuthorizeCleanupModal";
+import { ExportBundleHost } from "./components/ExportBundleModal";
 import { ConfirmDialogHost } from "./components/ConfirmDialog";
 import type { SendToMainPayload } from "./playerHandoff";
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
@@ -1608,6 +1609,7 @@ function App() {
       />
 
       <AuthorizeCleanupModal />
+      <ExportBundleHost />
       <ConfirmDialogHost />
     </div>
   );
