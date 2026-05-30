@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from "motion/react";
-import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, ChevronDown, Database, Music, Bug, Captions, Layers, Minus, Plus, RefreshCw, Film } from 'lucide-react';
+import { Monitor, Download, Palette, Shield, Trash2, FolderOpen, FolderOutput, ChevronDown, Database, Music, Bug, Captions, Layers, Minus, Plus, RefreshCw, Film } from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { DOWNLOAD_AUDIO_FORMAT_OPTIONS } from '../downloadFormat';
@@ -13,6 +13,7 @@ import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
 import { SettingsDescription } from './settings/settingsDescription';
 import { RegroupPlaylistModal } from './RegroupPlaylistModal';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
+import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
 
 interface SettingItemProps {
   icon: React.ElementType;
@@ -373,6 +374,8 @@ export const SettingsView: React.FC = () => {
   const handleSetSaveToInternal = useRuforgeStore((s) => s.handleSetSaveToInternal);
   const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
   const notify = useRuforgeStore((s) => s.notify);
+  const entries = useRuforgeStore((s) => s.entries);
+  const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [updateCheckBusy, setUpdateCheckBusy] = useState(false);
   const {
@@ -405,6 +408,15 @@ export const SettingsView: React.FC = () => {
     if (selected && typeof selected === 'string') {
       setOutputDir(selected);
     }
+  };
+
+  const handleOpenExportPanel = () => {
+    const preset = buildEntireLibraryExportPreset(entries);
+    if (!preset) {
+      notify("Library is empty. Scan or download first.", "warning");
+      return;
+    }
+    openExportPanel(preset);
   };
 
   const handleClearCache = async () => {
@@ -816,6 +828,22 @@ export const SettingsView: React.FC = () => {
                     className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
                   >
                     CHANGE DIRECTORY
+                  </button>
+                }
+              />
+              <FadingDivider />
+              <SettingItem
+                icon={FolderOutput}
+                title="Export media bundle"
+                description="Copy library media and sidecars to a folder or removable drive."
+                active={true}
+                control={
+                  <button
+                    type="button"
+                    onClick={handleOpenExportPanel}
+                    className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
+                  >
+                    EXPORT
                   </button>
                 }
               />
