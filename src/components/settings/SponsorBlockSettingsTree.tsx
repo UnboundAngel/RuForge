@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown } from "lucide-react";
 import { useRuforgeStore } from "../../store/ruforgeStore";
-import { SponsorBlockIcon } from "../icons/SponsorBlockIcon";
 import type { RuforgeSettings } from "../../store/types";
 import {
   SPONSORBLOCK_SKIP_CATEGORIES,
@@ -15,12 +14,9 @@ import { SB_ATTRIBUTION_URL } from "../../sponsorBlockConstants";
 import { SettingsDescription } from "./settingsDescription";
 import { SponsorBlockCategoryModeSelect } from "./SponsorBlockCategoryModeSelect";
 
-const FadingDivider = () => (
-  <div className="h-px w-full bg-gradient-to-r from-transparent via-[#EDD79C]/15 to-transparent my-1" />
-);
-
 const ToggleSlot: React.FC<{ active: boolean; onClick?: () => void }> = ({ active, onClick }) => (
-  <div
+  <button
+    type="button"
     onClick={onClick}
     className={`w-12 h-6 rounded-full relative cursor-pointer transition-all duration-300 border border-white/[0.05] ${
       active
@@ -31,11 +27,11 @@ const ToggleSlot: React.FC<{ active: boolean; onClick?: () => void }> = ({ activ
     <motion.div
       animate={{ x: active ? 26 : 2 }}
       transition={{ type: "spring", stiffness: 600, damping: 35 }}
-      className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-colors duration-300 ${
+      className={`pointer-events-none absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-colors duration-300 ${
         active ? "bg-[color:var(--accent)]" : "bg-stone-700"
       }`}
     />
-  </div>
+  </button>
 );
 
 const CATEGORY_HINTS: Record<SponsorBlockSkipCategory, string> = {
@@ -58,11 +54,6 @@ function learnedBadgeIfInteresting(
   return null;
 }
 
-/** Aligns nested rows with SettingItem title column (icon slot + gap). */
-const NESTED_ICON_SPACER = (
-  <div className="w-12 h-12 shrink-0" aria-hidden />
-);
-
 type CategoryRowProps = {
   cat: SponsorBlockSkipCategory;
   settings: RuforgeSettings;
@@ -75,30 +66,19 @@ function SponsorBlockCategoryRow({ cat, settings, onModeChange, onResetLearning 
   const off = settings.sponsorBlockCategoryModes[cat] === "off";
 
   return (
-    <div className="group flex items-center justify-between p-6 rounded-[24px] transition-all duration-300 bg-transparent hover:bg-white/[0.02]">
-      <div className="flex items-start gap-5 min-w-0 flex-1">
-        {NESTED_ICON_SPACER}
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h4
-              className={`text-sm font-bold transition-colors ${
-                off ? "text-stone-400" : "text-stone-100"
-              }`}
-            >
-              {categoryLabel(cat)}
-            </h4>
-            {learned ? (
-              <span className="text-[9px] font-black uppercase tracking-widest text-[color:var(--accent)] px-2 py-0.5 rounded-md border border-[color-mix(in_srgb,var(--accent),transparent_70%)]">
-                {learned}
-              </span>
-            ) : null}
-          </div>
-          <p className="text-[11px] text-stone-500 leading-relaxed max-w-[320px]">
-            {CATEGORY_HINTS[cat]}
-          </p>
+    <div className="group rf-settings-row pl-6">
+      <div className="rf-settings-row-label space-y-0.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h4 className={off ? "text-stone-400" : "text-stone-100"}>{categoryLabel(cat)}</h4>
+          {learned ? (
+            <span className="text-[9px] font-black uppercase tracking-widest text-[color:var(--accent)] px-2 py-0.5 rounded-md border border-[color-mix(in_srgb,var(--accent),transparent_70%)]">
+              {learned}
+            </span>
+          ) : null}
         </div>
+        <p className="text-[11px] text-stone-500 leading-relaxed max-w-md">{CATEGORY_HINTS[cat]}</p>
       </div>
-      <div className="shrink-0 pl-4 flex flex-wrap items-center justify-end gap-2 self-center">
+      <div className="rf-settings-row-control flex flex-wrap items-center justify-end gap-2">
         <SponsorBlockCategoryModeSelect
           value={settings.sponsorBlockCategoryModes[cat]}
           onChange={onModeChange}
@@ -106,7 +86,7 @@ function SponsorBlockCategoryRow({ cat, settings, onModeChange, onResetLearning 
         <button
           type="button"
           onClick={onResetLearning}
-          className="px-3 py-2 rounded-xl text-[9px] font-black tracking-widest text-stone-500 border border-white/10 hover:bg-white/5 hover:text-stone-300 transition-colors"
+          className="px-3 py-2 rounded-xl text-[9px] font-black tracking-widest text-stone-500 border border-white/10 hover:text-stone-300 transition-colors"
         >
           Reset learning
         </button>
@@ -118,7 +98,7 @@ function SponsorBlockCategoryRow({ cat, settings, onModeChange, onResetLearning 
 export const SponsorBlockSettingsTree: React.FC = () => {
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
-  const [categoriesOpen, setCategoriesOpen] = useState(settings.sponsorBlockEnabled);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
 
   const showCategories = settings.sponsorBlockEnabled && categoriesOpen;
   const forceCloseDesc = !showCategories;
@@ -135,9 +115,7 @@ export const SponsorBlockSettingsTree: React.FC = () => {
   return (
     <>
       <div
-        className={`group flex items-center justify-between p-6 rounded-[24px] transition-all duration-300 bg-transparent hover:bg-white/[0.02] ${
-          settings.sponsorBlockEnabled ? "cursor-pointer" : ""
-        }`}
+        className={`group rf-settings-row ${settings.sponsorBlockEnabled ? "cursor-pointer" : ""}`}
         onClick={() => {
           if (settings.sponsorBlockEnabled) setCategoriesOpen((o) => !o);
         }}
@@ -150,58 +128,44 @@ export const SponsorBlockSettingsTree: React.FC = () => {
         role={settings.sponsorBlockEnabled ? "button" : undefined}
         tabIndex={settings.sponsorBlockEnabled ? 0 : undefined}
       >
-        <div className="flex items-start gap-5 min-w-0 flex-1">
-          <div
-            className={`w-12 h-12 flex items-center justify-center shrink-0 transition-all duration-300 ${
-              settings.sponsorBlockEnabled ? "opacity-100" : "opacity-50"
-            }`}
-          >
-            <SponsorBlockIcon />
-          </div>
-          <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex items-center gap-2">
-              <h4
-                className={`text-sm font-bold transition-colors duration-300 ${
-                  settings.sponsorBlockEnabled ? "text-stone-100" : "text-stone-300"
+        <div className="rf-settings-row-label space-y-0.5">
+          <div className="flex items-center gap-2">
+            <h4 className={settings.sponsorBlockEnabled ? "text-stone-100" : "text-stone-400"}>
+              SponsorBlock
+            </h4>
+            {settings.sponsorBlockEnabled ? (
+              <ChevronDown
+                className={`w-4 h-4 text-stone-500 transition-transform duration-200 ${
+                  categoriesOpen ? "rotate-180" : ""
                 }`}
-              >
-                SponsorBlock
-              </h4>
-              {settings.sponsorBlockEnabled ? (
-                <ChevronDown
-                  className={`w-4 h-4 text-stone-500 transition-transform duration-200 ${
-                    categoriesOpen ? "rotate-180" : ""
-                  }`}
-                />
-              ) : null}
-            </div>
-            <p className="text-[11px] text-stone-500 leading-relaxed max-w-[320px]">
-              Segment data from{" "}
-              <a
-                href={SB_ATTRIBUTION_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-stone-400"
-                onClick={(e) => e.stopPropagation()}
-              >
-                SponsorBlock contributors
-              </a>
-              . Licensed under the SponsorBlock database terms.
-            </p>
-            <SettingsDescription
-              description="Crowdsourced segments for sponsors and intros on downloaded YouTube videos. Cached beside each file via the privacy-preserving hash API."
-              forceClose={forceCloseDesc}
-            />
+              />
+            ) : null}
           </div>
+          <p className="text-[11px] text-stone-500 leading-relaxed max-w-md">
+            Segment data from{" "}
+            <a
+              href={SB_ATTRIBUTION_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-stone-400"
+              onClick={(e) => e.stopPropagation()}
+            >
+              SponsorBlock contributors
+            </a>
+            . Licensed under the SponsorBlock database terms.
+          </p>
+          <SettingsDescription
+            description="Crowdsourced segments for sponsors and intros on downloaded YouTube videos. Cached beside each file via the privacy-preserving hash API."
+            forceClose={forceCloseDesc}
+          />
         </div>
-        <div className="shrink-0 pl-4 self-center" onClick={(e) => e.stopPropagation()}>
+        <div className="rf-settings-row-control" onClick={(e) => e.stopPropagation()}>
           <ToggleSlot
             active={settings.sponsorBlockEnabled}
             onClick={() => {
               const next = !settings.sponsorBlockEnabled;
               void updateSetting("sponsorBlockEnabled", next);
-              if (next) setCategoriesOpen(true);
-              else setCategoriesOpen(false);
+              if (!next) setCategoriesOpen(false);
             }}
           />
         </div>
@@ -215,10 +179,11 @@ export const SponsorBlockSettingsTree: React.FC = () => {
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            {SPONSORBLOCK_SKIP_CATEGORIES.map((cat) => (
-              <React.Fragment key={cat}>
-                <FadingDivider />
+            <div className="rf-settings-tree-children">
+              <div className="rf-settings-tree-line" aria-hidden />
+              {SPONSORBLOCK_SKIP_CATEGORIES.map((cat) => (
                 <SponsorBlockCategoryRow
+                  key={cat}
                   cat={cat}
                   settings={settings}
                   onModeChange={(m) => {
@@ -229,8 +194,8 @@ export const SponsorBlockSettingsTree: React.FC = () => {
                     patchStats(cat, { appearances: 0, manualSkips: 0, undoSignals: 0 })
                   }
                 />
-              </React.Fragment>
-            ))}
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

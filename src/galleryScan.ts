@@ -35,6 +35,11 @@ export function mediaFileFromGalleryJson(o: Record<string, unknown>): MediaFile 
         : typeof o.playlist_index === "number"
           ? o.playlist_index
           : null,
+    artist: typeof o.artist === "string" ? o.artist : null,
+    album: typeof o.album === "string" ? o.album : null,
+    albumArtist: typeof o.albumArtist === "string" ? o.albumArtist : null,
+    trackNo: typeof o.trackNo === "number" ? o.trackNo : null,
+    embeddedCoverPath: typeof o.embeddedCoverPath === "string" ? o.embeddedCoverPath : null,
   };
 
   if (thumb != null && String(thumb) !== "") file.thumbnailPath = String(thumb);

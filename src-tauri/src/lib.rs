@@ -44,7 +44,10 @@ use crate::commands::settings::{
     get_hardware_acceleration_pref, get_storage_stats, open_windows_sound_settings,
     set_hardware_acceleration_pref, update_tray_config,
 };
-use crate::commands::system::open_external_url;
+use crate::commands::removable_drives::{
+    export_dest_dir_available, poll_removable_drives, RemovableDrivesState,
+};
+use crate::commands::system::{open_external_url, open_in_file_manager};
 use crate::commands::ytdlp_update::{
     download_ytdlp_update, get_ytdlp_update_status, warm_ytdlp_release_cache_spawn,
 };
@@ -66,6 +69,7 @@ pub fn run() {
         })
         .manage(DownloadJobManager::default())
         .manage(ExportBundleState::default())
+        .manage(RemovableDrivesState::default())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -156,6 +160,7 @@ pub fn run() {
             open_windows_sound_settings,
             probe_local_media_ffprobe,
             open_external_url,
+            open_in_file_manager,
             get_subtitle_tracks,
             read_local_subtitle_vtt,
             get_ytdlp_update_status,
@@ -165,7 +170,9 @@ pub fn run() {
             hide_notify_overlay_window,
             notify_overlay_ready,
             export_media_bundle,
-            cancel_export_bundle
+            cancel_export_bundle,
+            poll_removable_drives,
+            export_dest_dir_available
         ])
         .run(context)
         .expect("error while running tauri application");

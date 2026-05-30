@@ -9,12 +9,23 @@ import {
   mergeCategoryModes,
   mergeCategoryStats,
 } from "../sponsorBlock";
+import { readLibraryScanDirsFromLs } from "../libraryScanDirs";
 import {
   DEFAULT_OUTPUT_DIR,
   RUFORGE_INTERNAL_DIR,
 } from "../platformPaths";
 
 export type ActiveTab = "downloader" | "media" | "player" | "settings" | "explorer";
+
+/** Shell persona cycled from the radial menu center (logo / settings scope later). */
+export type NavMode = "default" | "movie" | "music";
+
+const NAV_MODE_ORDER: NavMode[] = ["default", "movie", "music"];
+
+export function nextNavMode(current: NavMode): NavMode {
+  const i = NAV_MODE_ORDER.indexOf(current);
+  return NAV_MODE_ORDER[(i + 1) % NAV_MODE_ORDER.length];
+}
 
 export type SettingsTab =
   | "general"
@@ -158,6 +169,8 @@ export function loadMergedSettings(): RuforgeSettings {
       ...merged,
       browserContext: normalizeBrowserContext(merged.browserContext),
       maxConcurrentDownloads: clampMaxConcurrentDownloads(merged.maxConcurrentDownloads),
+      downloadSubtitles: merged.downloadSubtitles !== false,
+      autoDownloadScrubberPreviews: merged.autoDownloadScrubberPreviews !== false,
       showDebuggingSettings: merged.showDebuggingSettings === true,
       sponsorBlockEnabled: merged.sponsorBlockEnabled === true,
       sponsorBlockCategoryModes: mergeCategoryModes(merged.sponsorBlockCategoryModes),
@@ -172,15 +185,25 @@ function readSidebarExpanded(): boolean {
   return localStorage.getItem("ruforge-sidebar-expanded") !== "false";
 }
 
+function readNavMode(): NavMode {
+  const raw = localStorage.getItem("ruforge-nav-mode");
+  if (raw === "movie" || raw === "music" || raw === "default") return raw;
+  return "default";
+}
+
 export function readInitialPathsFromLs(): {
   outputDir: string;
   saveToInternal: boolean;
+  libraryScanDirs: string[];
   isSidebarExpanded: boolean;
+  navMode: NavMode;
 } {
   return {
     outputDir: localStorage.getItem("ruforge-output-dir") || DEFAULT_OUTPUT_DIR,
     saveToInternal: localStorage.getItem("ruforge-save-internal") !== "false",
+    libraryScanDirs: readLibraryScanDirsFromLs(),
     isSidebarExpanded: readSidebarExpanded(),
+    navMode: readNavMode(),
   };
 }
 

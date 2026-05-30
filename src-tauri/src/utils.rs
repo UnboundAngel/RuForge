@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 pub const THUMB_DIR_NAME: &str = ".ruforge_thumbs";
 pub const POSTER_FILE: &str = "poster.jpg";
 pub const MEDIA_EXTS: &[&str] = &["mp4", "mkv", "webm", "mp3", "m4a", "flac", "opus", "ogg"];
+pub const AUDIO_ONLY_EXTS: &[&str] = &["mp3", "m4a", "flac", "opus", "ogg", "wav"];
 
 /// yt-dlp may write `{stem}.info.json` or the legacy `{stem}..info.json` double-dot sidecar.
 pub fn resolve_info_json_path(parent: &Path, stem: &str) -> Option<PathBuf> {
@@ -47,6 +48,11 @@ pub fn duration_from_ytdlp_info_json(video_path: &Path) -> f64 {
 #[inline]
 pub fn is_media_ext(ext: &str) -> bool {
     MEDIA_EXTS.contains(&ext)
+}
+
+#[inline]
+pub fn is_audio_only_ext(ext: &str) -> bool {
+    AUDIO_ONLY_EXTS.contains(&ext.to_ascii_lowercase().as_str())
 }
 
 /// Sidecar WebVTT next to a media file: `{stem}.vtt` (lang `und`) or `{stem}.{lang}.vtt`.

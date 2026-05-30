@@ -11,6 +11,7 @@ use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
 
+use crate::commands::gallery::remove_media_sidecar_artifacts;
 use crate::process_tree::kill_shell_child_tree;
 use crate::utils::{duration_from_ytdlp_info_json, POSTER_FILE, THUMB_DIR_NAME};
 
@@ -333,6 +334,46 @@ async fn wait_ffmpeg_slot_idle(video_path: &str, max_wait: Duration) {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteMediaResult {
+    pub removed: bool,
+    pub already_missing: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sidecar_warnings: Vec<String>,
+}
+
+fn delete_media_filesystem(video_path: &str) -> Result<DeleteMediaResult, String> {
+    let video_file_path = Path::new(video_path);
+    if video_file_path.parent().is_none() {
+        return Err("Invalid video path".into());
+    }
+
+    let mut removed = false;
+    let mut already_missing = false;
+
+    if video_file_path.exists() {
+        if !video_file_path.is_file() {
+            return Err(format!("Not a file: {video_path}"));
+        }
+        std::fs::remove_file(video_file_path).map_err(|e| e.to_string())?;
+        removed = true;
+    } else {
+        already_missing = true;
+    }
+
+    let sidecar_warnings = remove_media_sidecar_artifacts(video_file_path);
+    for warning in &sidecar_warnings {
+        log::warn!("[RuForge] delete sidecar: {warning}");
+    }
+
+    Ok(DeleteMediaResult {
+        removed,
+        already_missing,
+        sidecar_warnings,
+    })
+}
+
 #[tauri::command]
 pub async fn delete_media_batch(paths: Vec<String>) -> Result<u64, String> {
     let mut deleted_bytes: u64 = 0;
@@ -348,25 +389,10 @@ pub async fn delete_media_batch(paths: Vec<String>) -> Result<u64, String> {
 }
 
 #[tauri::command]
-pub async fn delete_media(video_path: String) -> Result<(), String> {
+pub async fn delete_media(video_path: String) -> Result<DeleteMediaResult, String> {
     cancel_ffmpeg_for_video(&video_path).await;
     wait_ffmpeg_slot_idle(&video_path, Duration::from_secs(2)).await;
-
-    let video_file_path = std::path::Path::new(&video_path);
-    let video_dir = video_file_path.parent().ok_or("Invalid video path")?;
-    let video_name = video_file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
-
-    let thumb_dir = video_dir.join(THUMB_DIR_NAME).join(video_name);
-
-    if video_file_path.exists() {
-        std::fs::remove_file(video_file_path).map_err(|e| e.to_string())?;
-    }
-
-    if thumb_dir.exists() {
-        std::fs::remove_dir_all(thumb_dir).map_err(|e| e.to_string())?;
-    }
-
-    Ok(())
+    delete_media_filesystem(&video_path)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -482,4 +508,50 @@ pub fn read_local_subtitle_vtt(path: String) -> Result<String, String> {
         ));
     }
     std::fs::read_to_string(&p).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod delete_media_tests {
+    use super::*;
+    use crate::utils::POSTER_FILE;
+
+    fn write_fixture(dir: &Path) -> PathBuf {
+        let media = dir.join("clip.mkv");
+        std::fs::write(&media, b"video-payload").unwrap();
+        std::fs::write(dir.join("clip.info.json"), br#"{"id":"x"}"#).unwrap();
+        std::fs::write(dir.join("clip.vtt"), b"WEBVTT\n").unwrap();
+        std::fs::write(dir.join("clip.jpg"), b"thumb").unwrap();
+        std::fs::write(dir.join("clip.sponsorblock.json"), br#"{"segments":[]}"#).unwrap();
+        let thumb_dir = dir.join(THUMB_DIR_NAME).join("clip");
+        std::fs::create_dir_all(&thumb_dir).unwrap();
+        std::fs::write(thumb_dir.join(POSTER_FILE), b"poster").unwrap();
+        media
+    }
+
+    #[test]
+    fn delete_media_removes_video_sidecars_and_thumbs() {
+        let dir = tempfile::tempdir().unwrap();
+        let media = write_fixture(dir.path());
+        let result = delete_media_filesystem(media.to_str().unwrap()).unwrap();
+        assert!(result.removed);
+        assert!(!result.already_missing);
+        assert!(!media.exists());
+        assert!(!dir.path().join("clip.info.json").exists());
+        assert!(!dir.path().join("clip.vtt").exists());
+        assert!(!dir.path().join("clip.jpg").exists());
+        assert!(!dir.path().join("clip.sponsorblock.json").exists());
+        assert!(!dir.path().join(THUMB_DIR_NAME).join("clip").exists());
+    }
+
+    #[test]
+    fn delete_media_already_missing_still_cleans_sidecars() {
+        let dir = tempfile::tempdir().unwrap();
+        let media = write_fixture(dir.path());
+        std::fs::remove_file(&media).unwrap();
+        let result = delete_media_filesystem(media.to_str().unwrap()).unwrap();
+        assert!(!result.removed);
+        assert!(result.already_missing);
+        assert!(!dir.path().join("clip.info.json").exists());
+        assert!(!dir.path().join(THUMB_DIR_NAME).join("clip").exists());
+    }
 }

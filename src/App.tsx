@@ -54,6 +54,7 @@ import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
 import { ConfirmDialogHost } from "./components/ConfirmDialog";
 import type { SendToMainPayload } from "./playerHandoff";
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
+import { MusicShell } from "./components/music/MusicShell";
 import { MediaFile } from "./types";
 import { readPlaybackSpeed } from "./playbackSpeedStorage";
 import {
@@ -1144,7 +1145,11 @@ function App() {
   if (isMini) return <MiniPlayer />;
 
   return (
-    <div className="h-screen w-screen bg-[#271C18] text-stone-50 font-sans flex overflow-hidden select-none relative">
+    <div
+      className="h-screen w-screen text-stone-50 font-sans flex overflow-hidden select-none relative"
+      style={{ background: navMode === "music" ? "var(--music-bg, #0f0f0f)" : "#271C18" }}
+      data-music-mode={navMode === "music" ? "true" : undefined}
+    >
 
       <RadialNavOverlay
         open={radialNavOpen}
@@ -1186,6 +1191,10 @@ function App() {
         data-tauri-drag-region
       />
 
+      {navMode === "music" ? (
+        <MusicShell />
+      ) : (
+      <>
       <AppSidebarRail
         activeTab={activeTab}
         navMode={navMode}
@@ -1527,6 +1536,8 @@ function App() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       <UpdaterFullWindowUpdate
         phase={updaterPhase}

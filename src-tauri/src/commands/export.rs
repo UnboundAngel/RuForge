@@ -8,6 +8,7 @@ use chrono::Local;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
+use crate::commands::export_copy::{self, FastCopyOptions};
 use crate::utils::{is_media_ext, vtt_sidecars_for_stem, THUMB_DIR_NAME};
 
 const EXPORT_SUBFOLDER_PREFIX: &str = "RuForge Export ";
@@ -52,11 +53,37 @@ pub struct ExportMediaBundleResult {
     pub dest_dir: String,
     pub files_copied: u32,
     pub files_skipped: u32,
+    /// Planned file write count (matches progress `fileTotal`).
+    pub files_total: u32,
+    /// `files_copied` + `files_skipped` (matches progress `fileIndex` at end).
+    pub files_processed: u32,
     pub bytes_copied: u64,
+    /// Preflight sum of source bytes (matches progress `bytesTotal`).
+    pub bytes_total: u64,
     pub manifest_path: Option<String>,
     pub cancelled: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+}
+
+fn export_result_from_ctx(
+    ctx: &ExportRunContext,
+    dest_dir: String,
+    manifest_path: Option<String>,
+    cancelled: bool,
+) -> ExportMediaBundleResult {
+    ExportMediaBundleResult {
+        dest_dir,
+        files_copied: ctx.files_copied,
+        files_skipped: ctx.files_skipped,
+        files_total: ctx.file_total,
+        files_processed: ctx.files_copied.saturating_add(ctx.files_skipped),
+        bytes_copied: ctx.bytes_copied,
+        bytes_total: ctx.bytes_total,
+        manifest_path,
+        cancelled,
+        warnings: ctx.warnings.clone(),
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -72,6 +99,8 @@ pub struct ExportBundleProgress {
     pub bytes_total: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub percent: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -106,11 +135,41 @@ struct ExportRunContext {
     file_total: u32,
     bytes_total: u64,
     bytes_copied: u64,
+    video_bytes_total: u64,
+    video_bytes_copied: u64,
+    active_video_size: u64,
+    active_video_done: u64,
     files_copied: u32,
     files_skipped: u32,
     warnings: Vec<String>,
     last_percent_bucket: Option<u32>,
+    last_emitted_file_index: Option<u32>,
+    last_emitted_path: Option<String>,
+    last_emitted_detail: Option<String>,
     completed_jobs: Vec<PlannedJob>,
+}
+
+fn export_progress_percent(ctx: &ExportRunContext, file_index: u32) -> Option<f32> {
+    if ctx.file_total == 0 {
+        return None;
+    }
+    let mut units = file_index as f64;
+    if ctx.active_video_size > 0 {
+        units += ctx.active_video_done as f64 / ctx.active_video_size as f64;
+    }
+    Some(((units / ctx.file_total as f64) * 100.0).min(100.0) as f32)
+}
+
+fn progress_video_bytes_copied(ctx: &ExportRunContext) -> u64 {
+    ctx.video_bytes_copied.saturating_add(ctx.active_video_done)
+}
+
+fn is_media_path(path: &Path) -> bool {
+    is_media_ext(
+        path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or(""),
+    )
 }
 
 fn strip_ytdlp_stream_suffix(stem: &str) -> &str {
@@ -423,6 +482,66 @@ fn thumb_dir_candidates(parent: &Path, stem: &str) -> Vec<PathBuf> {
         .collect()
 }
 
+fn count_dir_files(dir: &Path) -> u32 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut n = 0u32;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            n = n.saturating_add(count_dir_files(&path));
+        } else if path.is_file() {
+            n += 1;
+        }
+    }
+    n
+}
+
+fn dir_tree_bytes(dir: &Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut total = 0u64;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            total = total.saturating_add(dir_tree_bytes(&path));
+        } else if let Ok(m) = std::fs::metadata(&path) {
+            total = total.saturating_add(m.len());
+        }
+    }
+    total
+}
+
+fn count_write_targets_for_job(job: &PlannedJob) -> u32 {
+    let Some(parent) = job.src_media.parent() else {
+        return 1;
+    };
+    let Some(stem) = job.src_media.file_stem().and_then(|s| s.to_str()) else {
+        return 1;
+    };
+    let mut n = 1u32;
+    n += collect_sidecar_sources(parent, stem).len() as u32;
+    for thumb in thumb_dir_candidates(parent, stem) {
+        n = n.saturating_add(count_dir_files(&thumb));
+    }
+    n
+}
+
+fn sidecar_and_thumb_bytes(parent: &Path, stem: &str) -> u64 {
+    let mut total = 0u64;
+    for p in collect_sidecar_sources(parent, stem) {
+        if let Ok(m) = std::fs::metadata(&p) {
+            total = total.saturating_add(m.len());
+        }
+    }
+    for thumb in thumb_dir_candidates(parent, stem) {
+        total = total.saturating_add(dir_tree_bytes(&thumb));
+    }
+    total
+}
+
 #[cfg(target_os = "windows")]
 fn hide_thumb_root_if_new(thumb_root: &Path) {
     if thumb_root.is_dir() {
@@ -492,22 +611,153 @@ fn copy_file_skip_if_exists(
         {
             if src_meta.len() == dest_meta.len() {
                 ctx.files_skipped += 1;
+                let len = src_meta.len();
+                ctx.bytes_copied = ctx.bytes_copied.saturating_add(len);
+                if is_media_path(src) {
+                    ctx.video_bytes_copied = ctx.video_bytes_copied.saturating_add(len);
+                }
+                emit_progress_after_file(ctx, src);
                 return Ok(CopyOutcome::Skipped);
             }
         }
     }
 
     let bytes = std::fs::metadata(src).map(|m| m.len()).unwrap_or(0);
-    std::fs::copy(src, dest).map_err(|e| {
-        if is_destination_failure(&e) {
-            e.to_string()
-        } else {
-            format!("Copy {} -> {}: {}", src.display(), dest.display(), e)
-        }
-    })?;
+    emit_progress_before_copy(ctx, src);
+
+    if is_media_path(src) {
+        ctx.active_video_size = bytes;
+        ctx.active_video_done = 0;
+        let cancel = Arc::clone(&ctx.cancel);
+        let mut progress = VideoCopyProgress {
+            ctx,
+            src,
+            last_pct: None,
+        };
+        export_copy::fast_copy(
+            src,
+            dest,
+            FastCopyOptions::with_progress(
+                &cancel,
+                video_copy_bytes_cb,
+                &mut progress as *mut _ as *mut (),
+            ),
+        )?;
+        ctx.video_bytes_copied = ctx.video_bytes_copied.saturating_add(bytes);
+        ctx.active_video_size = 0;
+        ctx.active_video_done = 0;
+    } else {
+        export_copy::fast_copy(src, dest, FastCopyOptions::new(&ctx.cancel))?;
+    }
+
     ctx.files_copied += 1;
     ctx.bytes_copied = ctx.bytes_copied.saturating_add(bytes);
+    emit_progress_after_file(ctx, src);
     Ok(CopyOutcome::Copied)
+}
+
+unsafe fn video_copy_bytes_cb(transferred: u64, total: u64, userdata: *mut ()) {
+    if userdata.is_null() {
+        return;
+    }
+    let progress = &mut *(userdata as *mut VideoCopyProgress);
+    progress.on_bytes(transferred, total);
+}
+
+struct VideoCopyProgress<'a> {
+    ctx: &'a mut ExportRunContext,
+    src: &'a Path,
+    last_pct: Option<u64>,
+}
+
+impl VideoCopyProgress<'_> {
+    fn on_bytes(&mut self, done: u64, total: u64) {
+        self.ctx.active_video_done = done;
+        if total > 0 {
+            self.ctx.active_video_size = total;
+        }
+        let pct = if total > 0 {
+            (done * 100) / total
+        } else {
+            0
+        };
+        if self.last_pct == Some(pct) {
+            return;
+        }
+        self.last_pct = Some(pct);
+        let file_index = self
+            .ctx
+            .files_copied
+            .saturating_add(self.ctx.files_skipped);
+        emit_progress(
+            self.ctx,
+            "copying",
+            Some(self.src),
+            file_index,
+            Some(copy_step_detail(
+                self.src,
+                self.ctx.active_video_done,
+                self.ctx.active_video_size,
+            )),
+        );
+    }
+}
+
+fn path_display_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+fn copy_step_detail(src: &Path, video_done: u64, video_size: u64) -> String {
+    let name = path_display_name(src);
+    if name.eq_ignore_ascii_case("folder.jpg") {
+        return format!("Playlist cover · {name}");
+    }
+    if src
+        .components()
+        .any(|c| c.as_os_str() == std::ffi::OsStr::new(THUMB_DIR_NAME))
+    {
+        return format!("Preview sprite · {name}");
+    }
+    if is_media_path(src) {
+        if video_size > 0 && video_done > 0 && video_done < video_size {
+            let pct = ((video_done * 100) / video_size).min(99);
+            return format!("Video · {name} ({pct}%)");
+        }
+        return format!("Video · {name}");
+    }
+    format!("Sidecar · {name}")
+}
+
+fn emit_progress_before_copy(ctx: &mut ExportRunContext, src: &Path) {
+    let file_index = ctx.files_copied.saturating_add(ctx.files_skipped);
+    emit_progress(
+        ctx,
+        "copying",
+        Some(src),
+        file_index,
+        Some(copy_step_detail(
+            src,
+            ctx.active_video_done,
+            ctx.active_video_size,
+        )),
+    );
+}
+
+fn emit_progress_after_file(ctx: &mut ExportRunContext, current: &Path) {
+    let file_index = ctx.files_copied.saturating_add(ctx.files_skipped);
+    emit_progress(
+        ctx,
+        "copying",
+        Some(current),
+        file_index,
+        Some(copy_step_detail(
+            current,
+            ctx.active_video_done,
+            ctx.active_video_size,
+        )),
+    );
 }
 
 enum CopyOutcome {
@@ -515,22 +765,41 @@ enum CopyOutcome {
     Skipped,
 }
 
-fn emit_progress(ctx: &mut ExportRunContext, phase: &str, current: Option<&Path>, file_index: u32) {
-    let percent = if ctx.bytes_total > 0 {
-        Some(
-            ((ctx.bytes_copied as f64 / ctx.bytes_total as f64) * 100.0).min(100.0) as f32,
-        )
-    } else {
-        None
-    };
+fn emit_progress(
+    ctx: &mut ExportRunContext,
+    phase: &str,
+    current: Option<&Path>,
+    file_index: u32,
+    detail: Option<String>,
+) {
+    let percent = export_progress_percent(ctx, file_index);
+    let video_bytes_live = progress_video_bytes_copied(ctx);
 
-    if let Some(pct) = percent {
-        let bucket = (pct.floor() as u32).min(100) / 5;
-        if phase == "copying" {
+    if phase == "copying" {
+        let path_key = current.map(|p| p.to_string_lossy().to_string());
+        let advanced = match ctx.last_emitted_file_index {
+            Some(last) => file_index > last,
+            None => true,
+        };
+        let path_changed = path_key != ctx.last_emitted_path;
+        let detail_changed = detail != ctx.last_emitted_detail;
+        if advanced || path_changed || detail_changed {
+            ctx.last_emitted_file_index = Some(file_index);
+            ctx.last_emitted_path = path_key;
+            ctx.last_emitted_detail = detail.clone();
+            ctx.last_percent_bucket = None;
+        } else if let Some(pct) = percent {
+            let bucket = if ctx.active_video_size > 0 {
+                (pct.floor() as u32).min(100)
+            } else {
+                (pct.floor() as u32).min(100) / 5
+            };
             if ctx.last_percent_bucket == Some(bucket) {
                 return;
             }
             ctx.last_percent_bucket = Some(bucket);
+        } else {
+            return;
         }
     }
 
@@ -542,13 +811,14 @@ fn emit_progress(ctx: &mut ExportRunContext, phase: &str, current: Option<&Path>
                 current_path: current.map(|p| p.to_string_lossy().to_string()),
                 file_index,
                 file_total: ctx.file_total,
-                bytes_copied: ctx.bytes_copied,
-                bytes_total: if ctx.bytes_total > 0 {
-                    Some(ctx.bytes_total)
+                bytes_copied: video_bytes_live,
+                bytes_total: if ctx.video_bytes_total > 0 {
+                    Some(ctx.video_bytes_total)
                 } else {
                     None
                 },
                 percent,
+                detail,
             },
         );
     }
@@ -571,7 +841,17 @@ fn dest_stem(dest_media: &Path) -> String {
         .to_string()
 }
 
-fn copy_media_bundle_for_job(job: &PlannedJob, ctx: &mut ExportRunContext, file_index: u32) -> bool {
+fn copy_media_bundle_for_job(job: &PlannedJob, ctx: &mut ExportRunContext) -> bool {
+    let file_index = ctx.files_copied.saturating_add(ctx.files_skipped);
+    let video_name = path_display_name(&job.src_media);
+    emit_progress(
+        ctx,
+        "copying",
+        Some(&job.src_media),
+        file_index,
+        Some(format!("Bundling · {video_name}")),
+    );
+
     let src_parent = match job.src_media.parent() {
         Some(p) => p,
         None => {
@@ -590,21 +870,6 @@ fn copy_media_bundle_for_job(job: &PlannedJob, ctx: &mut ExportRunContext, file_
             return false;
         }
     };
-
-    emit_progress(ctx, "copying", Some(&job.src_media), file_index);
-
-    match copy_file_skip_if_exists(&job.src_media, &job.dest_media, ctx) {
-        Ok(CopyOutcome::Copied) | Ok(CopyOutcome::Skipped) => {}
-        Err(e) => {
-            if is_destination_failure_display(&e) {
-                ctx.warnings.push(e.clone());
-                return false;
-            }
-            ctx.warnings
-                .push(format!("Media {}: {}", job.src_media.display(), e));
-            return false;
-        }
-    }
 
     let dest_parent = job.dest_media.parent().unwrap_or_else(|| Path::new(""));
     let final_stem = dest_stem(&job.dest_media);
@@ -638,6 +903,22 @@ fn copy_media_bundle_for_job(job: &PlannedJob, ctx: &mut ExportRunContext, file_
             ctx.warnings.push(format!("Thumbs {}: {}", thumb_src.display(), msg));
         } else {
             hide_thumb_root_if_new(&thumb_root);
+        }
+    }
+
+    match copy_file_skip_if_exists(&job.src_media, &job.dest_media, ctx) {
+        Ok(CopyOutcome::Copied) | Ok(CopyOutcome::Skipped) => {}
+        Err(e) => {
+            if export_copy::is_export_cancelled_err(&e) {
+                return false;
+            }
+            if is_destination_failure_display(&e) {
+                ctx.warnings.push(e.clone());
+                return false;
+            }
+            ctx.warnings
+                .push(format!("Media {}: {}", job.src_media.display(), e));
+            return false;
         }
     }
 
@@ -694,15 +975,26 @@ fn preflight_bytes(jobs: &[PlannedJob], extras: &[(PathBuf, PathBuf)]) -> u64 {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("");
-            for p in collect_sidecar_sources(parent, stem) {
-                if let Ok(m) = std::fs::metadata(&p) {
-                    total = total.saturating_add(m.len());
-                }
-            }
+            total = total.saturating_add(sidecar_and_thumb_bytes(parent, stem));
         }
     }
     for (src, _) in extras {
         if let Ok(m) = std::fs::metadata(src) {
+            total = total.saturating_add(m.len());
+        }
+    }
+    total
+}
+
+fn preflight_file_total(jobs: &[PlannedJob], extras: &[(PathBuf, PathBuf)]) -> u32 {
+    let job_files: u32 = jobs.iter().map(count_write_targets_for_job).sum();
+    job_files.saturating_add(extras.len() as u32)
+}
+
+fn preflight_video_bytes(jobs: &[PlannedJob]) -> u64 {
+    let mut total = 0u64;
+    for job in jobs {
+        if let Ok(m) = std::fs::metadata(&job.src_media) {
             total = total.saturating_add(m.len());
         }
     }
@@ -801,8 +1093,36 @@ fn run_export_blocking(args: ExportBlockingArgs) -> Result<ExportMediaBundleResu
     let selections: Vec<PathBuf> = options.paths.iter().map(PathBuf::from).collect();
     let deduped = canonical_path_dedup(selections);
 
-    let mut warnings: Vec<String> = Vec::new();
-    let (raw_jobs, extras) = expand_selections(&deduped, &mut warnings);
+    let mut ctx = ExportRunContext {
+        app: app.clone(),
+        _bundle_root: bundle_root.clone(),
+        cancel,
+        file_total: 0,
+        bytes_total: 0,
+        bytes_copied: 0,
+        video_bytes_total: 0,
+        video_bytes_copied: 0,
+        active_video_size: 0,
+        active_video_done: 0,
+        files_copied: 0,
+        files_skipped: 0,
+        warnings: Vec::new(),
+        last_percent_bucket: None,
+        last_emitted_file_index: None,
+        last_emitted_path: None,
+        last_emitted_detail: None,
+        completed_jobs: Vec::new(),
+    };
+
+    emit_progress(
+        &mut ctx,
+        "preparing",
+        None,
+        0,
+        Some("Scanning selection…".to_string()),
+    );
+
+    let (raw_jobs, extras) = expand_selections(&deduped, &mut ctx.warnings);
 
     if raw_jobs.is_empty() {
         cleanup_bundle_root(&bundle_root);
@@ -817,24 +1137,28 @@ fn run_export_blocking(args: ExportBlockingArgs) -> Result<ExportMediaBundleResu
         .map(|e| (canonical_path_key(Path::new(&e.source_path)), e))
         .collect();
 
-    let file_total = planned.len() as u32 + extras.len() as u32;
+    let file_total = preflight_file_total(&planned, &extras);
     let bytes_total = preflight_bytes(&planned, &extras);
+    let video_bytes_total = preflight_video_bytes(&planned);
+    ctx.file_total = file_total;
+    ctx.bytes_total = bytes_total;
+    ctx.video_bytes_total = video_bytes_total;
 
-    let mut ctx = ExportRunContext {
-        app: app.clone(),
-        _bundle_root: bundle_root.clone(),
-        cancel,
-        file_total,
-        bytes_total,
-        bytes_copied: 0,
-        files_copied: 0,
-        files_skipped: 0,
-        warnings,
-        last_percent_bucket: None,
-        completed_jobs: Vec::new(),
-    };
+    emit_progress(
+        &mut ctx,
+        "preparing",
+        None,
+        0,
+        Some(format!("Counted {file_total} files to copy")),
+    );
 
-    emit_progress(&mut ctx, "preparing", None, 0);
+    emit_progress(
+        &mut ctx,
+        "copying",
+        None,
+        0,
+        Some(format!("Starting copy · {file_total} files")),
+    );
 
     let mut successful = 0u32;
     let mut dest_failed = false;
@@ -842,15 +1166,12 @@ fn run_export_blocking(args: ExportBlockingArgs) -> Result<ExportMediaBundleResu
     for extra in extras.iter() {
         if ctx.cancel.load(Ordering::SeqCst) {
             cleanup_bundle_root(&bundle_root);
-            return Ok(ExportMediaBundleResult {
-                dest_dir: bundle_root.to_string_lossy().to_string(),
-                files_copied: ctx.files_copied,
-                files_skipped: ctx.files_skipped,
-                bytes_copied: ctx.bytes_copied,
-                manifest_path: None,
-                cancelled: true,
-                warnings: ctx.warnings,
-            });
+            return Ok(export_result_from_ctx(
+                &ctx,
+                bundle_root.to_string_lossy().to_string(),
+                None,
+                true,
+            ));
         }
         let (src, rel) = extra;
         let dest = bundle_root.join(rel);
@@ -868,24 +1189,28 @@ fn run_export_blocking(args: ExportBlockingArgs) -> Result<ExportMediaBundleResu
         }
     }
 
-    for (idx, job) in planned.iter().enumerate() {
+    for job in planned.iter() {
         if ctx.cancel.load(Ordering::SeqCst) {
             cleanup_bundle_root(&bundle_root);
-            return Ok(ExportMediaBundleResult {
-                dest_dir: bundle_root.to_string_lossy().to_string(),
-                files_copied: ctx.files_copied,
-                files_skipped: ctx.files_skipped,
-                bytes_copied: ctx.bytes_copied,
-                manifest_path: None,
-                cancelled: true,
-                warnings: ctx.warnings,
-            });
+            return Ok(export_result_from_ctx(
+                &ctx,
+                bundle_root.to_string_lossy().to_string(),
+                None,
+                true,
+            ));
         }
 
-        let file_index = extras.len() as u32 + idx as u32 + 1;
-        if copy_media_bundle_for_job(job, &mut ctx, file_index) {
+        if copy_media_bundle_for_job(job, &mut ctx) {
             successful += 1;
             ctx.completed_jobs.push(job.clone());
+        } else if ctx.cancel.load(Ordering::SeqCst) {
+            cleanup_bundle_root(&bundle_root);
+            return Ok(export_result_from_ctx(
+                &ctx,
+                bundle_root.to_string_lossy().to_string(),
+                None,
+                true,
+            ));
         } else if ctx
             .warnings
             .last()
@@ -898,7 +1223,7 @@ fn run_export_blocking(args: ExportBlockingArgs) -> Result<ExportMediaBundleResu
 
     if dest_failed {
         cleanup_bundle_root(&bundle_root);
-        emit_progress(&mut ctx, "failed", None, file_total);
+        emit_progress(&mut ctx, "failed", None, file_total, None);
         let msg = ctx
             .warnings
             .last()
@@ -909,7 +1234,7 @@ fn run_export_blocking(args: ExportBlockingArgs) -> Result<ExportMediaBundleResu
 
     if successful == 0 {
         cleanup_bundle_root(&bundle_root);
-        emit_progress(&mut ctx, "failed", None, file_total);
+        emit_progress(&mut ctx, "failed", None, file_total, None);
         return Err(
             ctx.warnings
                 .first()
@@ -919,7 +1244,13 @@ fn run_export_blocking(args: ExportBlockingArgs) -> Result<ExportMediaBundleResu
     }
 
     let manifest_path = if options.include_manifest {
-        emit_progress(&mut ctx, "writing_manifest", None, file_total);
+        emit_progress(
+            &mut ctx,
+            "writing_manifest",
+            None,
+            file_total,
+            Some("Writing playback manifest…".to_string()),
+        );
         match write_manifest(
             &bundle_root,
             &app_version,
@@ -930,7 +1261,7 @@ fn run_export_blocking(args: ExportBlockingArgs) -> Result<ExportMediaBundleResu
             Err(e) => {
                 if is_destination_failure_display(&e) {
                     cleanup_bundle_root(&bundle_root);
-                    emit_progress(&mut ctx, "failed", None, file_total);
+                    emit_progress(&mut ctx, "failed", None, file_total, None);
                     return Err(e);
                 }
                 ctx.warnings.push(format!("Manifest: {e}"));
@@ -941,17 +1272,20 @@ fn run_export_blocking(args: ExportBlockingArgs) -> Result<ExportMediaBundleResu
         None
     };
 
-    emit_progress(&mut ctx, "done", None, file_total);
+    emit_progress(
+        &mut ctx,
+        "done",
+        None,
+        file_total,
+        Some("Export complete".to_string()),
+    );
 
-    Ok(ExportMediaBundleResult {
-        dest_dir: bundle_root.to_string_lossy().to_string(),
-        files_copied: ctx.files_copied,
-        files_skipped: ctx.files_skipped,
-        bytes_copied: ctx.bytes_copied,
+    Ok(export_result_from_ctx(
+        &ctx,
+        bundle_root.to_string_lossy().to_string(),
         manifest_path,
-        cancelled: false,
-        warnings: ctx.warnings,
-    })
+        false,
+    ))
 }
 
 #[tauri::command]
@@ -1079,10 +1413,17 @@ mod tests {
             file_total: 1,
             bytes_total: 0,
             bytes_copied: 0,
+            video_bytes_total: 0,
+            video_bytes_copied: 0,
+            active_video_size: 0,
+            active_video_done: 0,
             files_copied: 0,
             files_skipped: 0,
             warnings: vec![],
             last_percent_bucket: None,
+            last_emitted_file_index: None,
+            last_emitted_path: None,
+            last_emitted_detail: None,
             completed_jobs: vec![],
         };
         let dest_media = bundle.join("Ep1.mp4");
@@ -1141,6 +1482,125 @@ mod tests {
     }
 
     #[test]
+    fn preflight_file_total_matches_files_copied_on_rich_fixture() {
+        let src_root = tempfile::tempdir().unwrap();
+        let dest_parent = tempfile::tempdir().unwrap();
+        let media = setup_rich_media_fixture(src_root.path());
+
+        let selections = vec![media.clone()];
+        let deduped = canonical_path_dedup(selections);
+        let mut warnings = Vec::new();
+        let (raw_jobs, extras) = expand_selections(&deduped, &mut warnings);
+        let bundle_root = dest_parent.path().join("RuForge Export test");
+        let planned = plan_destination_jobs_v2(raw_jobs, &bundle_root);
+        let expected_total = preflight_file_total(&planned, &extras);
+        assert!(
+            expected_total > 1,
+            "fixture should include media, sidecars, and thumb files"
+        );
+
+        let result = run_export_blocking(ExportBlockingArgs {
+            app: None,
+            options: ExportMediaBundleOptions {
+                paths: vec![media.to_string_lossy().to_string()],
+                dest_dir: dest_parent.path().to_string_lossy().to_string(),
+                include_manifest: false,
+                playback_entries: vec![],
+            },
+            cancel: Arc::new(AtomicBool::new(false)),
+            app_version: "0.1.8".into(),
+        })
+        .expect("export");
+
+        assert_eq!(result.files_total, expected_total);
+        assert_eq!(result.files_copied, expected_total);
+        assert_eq!(result.files_processed, expected_total);
+        assert_eq!(result.files_skipped, 0);
+        assert!(result.bytes_total > 0);
+        assert_eq!(result.bytes_copied, result.bytes_total);
+    }
+
+    #[test]
+    fn skip_if_exists_advances_bytes_and_file_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src.bin");
+        let dest = dir.path().join("dest.bin");
+        std::fs::write(&src, b"0123456789").unwrap();
+        let mut ctx = ExportRunContext {
+            app: None,
+            _bundle_root: dir.path().to_path_buf(),
+            cancel: Arc::new(AtomicBool::new(false)),
+            file_total: 2,
+            bytes_total: 20,
+            bytes_copied: 0,
+            video_bytes_total: 0,
+            video_bytes_copied: 0,
+            active_video_size: 0,
+            active_video_done: 0,
+            files_copied: 0,
+            files_skipped: 0,
+            warnings: vec![],
+            last_percent_bucket: None,
+            last_emitted_file_index: None,
+            last_emitted_path: None,
+            last_emitted_detail: None,
+            completed_jobs: vec![],
+        };
+        copy_file_skip_if_exists(&src, &dest, &mut ctx).unwrap();
+        assert_eq!(ctx.files_copied, 1);
+        assert_eq!(ctx.bytes_copied, 10);
+        copy_file_skip_if_exists(&src, &dest, &mut ctx).unwrap();
+        assert_eq!(ctx.files_skipped, 1);
+        assert_eq!(ctx.files_copied, 1);
+        assert_eq!(ctx.bytes_copied, 20);
+        assert_eq!(
+            ctx.files_copied.saturating_add(ctx.files_skipped),
+            2
+        );
+    }
+
+    #[test]
+    fn reexport_skips_all_files_but_progress_units_complete() {
+        let src_root = tempfile::tempdir().unwrap();
+        let dest_parent = tempfile::tempdir().unwrap();
+        let media = setup_rich_media_fixture(src_root.path());
+        let options = ExportMediaBundleOptions {
+            paths: vec![media.to_string_lossy().to_string()],
+            dest_dir: dest_parent.path().to_string_lossy().to_string(),
+            include_manifest: false,
+            playback_entries: vec![],
+        };
+        let first = run_export_blocking(ExportBlockingArgs {
+            app: None,
+            options: options.clone(),
+            cancel: Arc::new(AtomicBool::new(false)),
+            app_version: "0.1.8".into(),
+        })
+        .expect("first export");
+        assert!(first.files_copied > 0);
+        assert_eq!(first.files_total, first.files_processed);
+        assert_eq!(first.files_copied, first.files_total);
+
+        let second = run_export_blocking(ExportBlockingArgs {
+            app: None,
+            options: ExportMediaBundleOptions {
+                paths: vec![media.to_string_lossy().to_string()],
+                dest_dir: first.dest_dir.clone(),
+                include_manifest: false,
+                playback_entries: vec![],
+            },
+            cancel: Arc::new(AtomicBool::new(false)),
+            app_version: "0.1.8".into(),
+        })
+        .expect("re-export");
+        assert_eq!(second.files_total, first.files_total);
+        assert_eq!(second.files_skipped, second.files_total);
+        assert_eq!(second.files_copied, 0);
+        assert_eq!(second.files_processed, second.files_total);
+        assert_eq!(second.bytes_copied, second.bytes_total);
+    }
+
+    #[test]
     fn skip_if_exists_counts_skipped_not_copied() {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("src.bin");
@@ -1153,10 +1613,17 @@ mod tests {
             file_total: 1,
             bytes_total: 0,
             bytes_copied: 0,
+            video_bytes_total: 0,
+            video_bytes_copied: 0,
+            active_video_size: 0,
+            active_video_done: 0,
             files_copied: 0,
             files_skipped: 0,
             warnings: vec![],
             last_percent_bucket: None,
+            last_emitted_file_index: None,
+            last_emitted_path: None,
+            last_emitted_detail: None,
             completed_jobs: vec![],
         };
         copy_file_skip_if_exists(&src, &dest, &mut ctx).unwrap();
@@ -1164,6 +1631,42 @@ mod tests {
         copy_file_skip_if_exists(&src, &dest, &mut ctx).unwrap();
         assert_eq!(ctx.files_skipped, 1);
         assert_eq!(ctx.files_copied, 1);
+    }
+
+    fn test_export_ctx(file_total: u32, file_index: u32, video_frac: f64) -> ExportRunContext {
+        let active_video_size = if video_frac > 0.0 { 100u64 } else { 0 };
+        let active_video_done = (video_frac * 100.0) as u64;
+        ExportRunContext {
+            app: None,
+            _bundle_root: PathBuf::new(),
+            cancel: Arc::new(AtomicBool::new(false)),
+            file_total,
+            bytes_total: 0,
+            bytes_copied: 0,
+            video_bytes_total: 0,
+            video_bytes_copied: 0,
+            active_video_size,
+            active_video_done,
+            files_copied: 0,
+            files_skipped: 0,
+            warnings: vec![],
+            last_percent_bucket: None,
+            last_emitted_file_index: None,
+            last_emitted_path: None,
+            last_emitted_detail: None,
+            completed_jobs: vec![],
+        }
+    }
+
+    #[test]
+    fn export_progress_percent_weights_files_and_inflight_video() {
+        let ctx = test_export_ctx(8, 7, 0.0);
+        assert_eq!(export_progress_percent(&ctx, 7), Some(87.5));
+        let mut in_flight = test_export_ctx(8, 7, 0.5);
+        assert_eq!(export_progress_percent(&in_flight, 7), Some(93.75));
+        in_flight.active_video_size = 0;
+        in_flight.active_video_done = 0;
+        assert_eq!(export_progress_percent(&in_flight, 8), Some(100.0));
     }
 
     #[test]

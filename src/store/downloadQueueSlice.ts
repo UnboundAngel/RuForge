@@ -12,6 +12,7 @@ import {
   LIBRARY_DUPLICATE_SKIP_MESSAGE,
   LIBRARY_DUPLICATE_SKIP_ROW_MS,
   patchDownloadJobOptionsForAudio,
+  patchDownloadJobOptionsFromSettings,
   persistDownloadJobs,
   toInvokeDownloadOptions,
   videoInfoToDownloadJobSnapshot,
@@ -310,6 +311,8 @@ export type DownloadQueueSlice = {
   skipDownloadJobAsLibraryDuplicate: (id: string) => void;
   reorderDownloadJobs: (fromIndex: number, toIndex: number) => void;
   setDownloadJobAudioOnly: (jobId: string, audioOnly: boolean) => void;
+  /** Queued/paused rows pick up subtitle + scrubber prefs from Settings. */
+  syncQueuedJobMediaOptionsFromSettings: () => void;
   applyDownloadProgress: (payload: ProgressPayload) => void;
   onDownloadJobFinished: (payload: DownloadJobFinishedPayload) => void;
   onDownloadJobPaused: (jobId: string) => void;
@@ -853,6 +856,23 @@ export const createDownloadQueueSlice: StateCreator<
       if (settings.rememberAudioOnlyDefault && settings.downloadAudioOnly !== audioOnly) {
         void get().updateSetting("downloadAudioOnly", audioOnly);
       }
+    },
+
+    syncQueuedJobMediaOptionsFromSettings: () => {
+      const settings = get().settings;
+      let changed = false;
+      set((s) => {
+        const downloadJobs = s.downloadJobs.map((j) => {
+          if (j.status !== "queued" && j.status !== "paused") return j;
+          const options = patchDownloadJobOptionsFromSettings(j.options, settings);
+          if (options === j.options) return j;
+          changed = true;
+          return { ...j, options };
+        });
+        if (!changed) return s;
+        persistDownloadJobs(downloadJobs);
+        return { downloadJobs };
+      });
     },
 
     applyDownloadProgress: (payload) => {

@@ -18,8 +18,7 @@ export type SettingsTreeRowProps = {
 export const SettingsTreeRow: React.FC<SettingsTreeRowProps> = ({
   title,
   description,
-  indentPx = 24,
-  leadingIcon,
+  indentPx = 12,
   subtitle,
   control,
   belowTitle,
@@ -37,42 +36,17 @@ export const SettingsTreeRow: React.FC<SettingsTreeRowProps> = ({
         onRowClick();
       }
     }}
-    className={`group flex items-start justify-between gap-4 py-4 pr-2 rounded-[20px] transition-colors ${
-      onRowClick ? "cursor-pointer hover:bg-white/[0.02]" : ""
-    }`}
+    className={`group rf-settings-row ${onRowClick ? "cursor-pointer" : ""}`}
     style={{ paddingLeft: indentPx }}
   >
-    <div className="flex items-start gap-5 min-w-0 flex-1">
-      {leadingIcon ? (
-        <div
-          className={`w-12 h-12 flex items-center justify-center shrink-0 transition-colors ${
-            active ? "text-[color:var(--accent)]" : "text-stone-500"
-          }`}
-        >
-          {leadingIcon}
-        </div>
-      ) : null}
-      <div className="flex flex-col min-w-0 flex-1 gap-1">
-        <h4
-          className={`text-sm font-bold transition-colors ${
-            active ? "text-stone-100" : "text-stone-400"
-          }`}
-        >
-          {title}
-        </h4>
-        {subtitle}
-        {belowTitle}
-        <SettingsDescription
-          description={description}
-          forceClose={forceCloseDescription}
-        />
-      </div>
+    <div className="rf-settings-row-label space-y-0.5">
+      <h4 className={active ? "text-stone-100" : "text-stone-400"}>{title}</h4>
+      {subtitle}
+      {belowTitle}
+      <SettingsDescription description={description} forceClose={forceCloseDescription} />
     </div>
     {control ? (
-      <div
-        className="flex items-center gap-2 shrink-0 self-center"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="rf-settings-row-control" onClick={(e) => e.stopPropagation()}>
         {control}
       </div>
     ) : null}
