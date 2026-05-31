@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::utils::{is_audio_only_ext, is_media_ext, primary_vtt_sidecar, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
+use crate::utils::{is_audio_only_ext, is_item_bucket, is_media_ext, is_playlist_bucket, primary_vtt_sidecar, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chapter {
@@ -733,47 +733,22 @@ fn dedupe_gallery_entries(entries: Vec<GalleryEntry>) -> Vec<GalleryEntry> {
 /// Sidecars and RuForge thumb dir for a media path (not the primary video file).
 pub(crate) fn remove_media_sidecar_artifacts(media_path: &Path) -> Vec<String> {
     let mut warnings = Vec::new();
-    let parent = match media_path.parent() {
-        Some(p) => p,
-        None => return warnings,
-    };
-    let stem = match media_path.file_stem().and_then(|s| s.to_str()) {
-        Some(s) => s,
-        None => return warnings,
-    };
-
-    for name in [
-        format!("{stem}.jpg"),
-        format!("{stem}.webp"),
-        format!("{stem}.info.json"),
-        format!("{stem}..info.json"),
-        format!("{stem}.sponsorblock.json"),
-    ] {
-        let p = parent.join(&name);
-        if p.is_file() {
-            if let Err(e) = std::fs::remove_file(&p) {
-                warnings.push(format!("{}: {e}", p.display()));
+    for path in crate::media_bundle::collect_deletion_paths(media_path) {
+        if path == media_path {
+            continue;
+        }
+        if !path.exists() {
+            continue;
+        }
+        if path.is_dir() {
+            if let Err(e) = std::fs::remove_dir_all(&path) {
+                warnings.push(format!("{}: {e}", path.display()));
             }
+        } else if let Err(e) = std::fs::remove_file(&path) {
+            warnings.push(format!("{}: {e}", path.display()));
         }
     }
-
-    if let Ok(vtts) = vtt_sidecars_for_stem(parent, stem) {
-        for (p, _) in vtts {
-            if p.is_file() {
-                if let Err(e) = std::fs::remove_file(&p) {
-                    warnings.push(format!("{}: {e}", p.display()));
-                }
-            }
-        }
-    }
-
-    let thumb_dir = parent.join(THUMB_DIR_NAME).join(stem);
-    if thumb_dir.is_dir() {
-        if let Err(e) = std::fs::remove_dir_all(&thumb_dir) {
-            warnings.push(format!("{}: {e}", thumb_dir.display()));
-        }
-    }
-
+    crate::media_bundle::prune_empty_dirs_after_media_delete(media_path);
     warnings
 }
 
@@ -783,6 +758,7 @@ pub(crate) fn remove_media_download_artifacts(media_path: &Path) {
         let _ = std::fs::remove_file(media_path);
     }
     let _ = remove_media_sidecar_artifacts(media_path);
+    crate::media_bundle::prune_empty_dirs_after_media_delete(media_path);
 }
 
 fn collect_recent_media_paths(root: &Path, since: std::time::SystemTime) -> Vec<std::path::PathBuf> {
@@ -1004,18 +980,12 @@ pub async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
     };
 
     let mut entries: Vec<std::path::PathBuf> = read_dir.filter_map(|e| e.ok().map(|e| e.path())).collect();
-
     entries.sort_by(|a, b| {
         a.file_name()
             .unwrap_or_default()
             .to_string_lossy()
             .to_lowercase()
-            .cmp(
-                &b.file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_lowercase(),
-            )
+            .cmp(&b.file_name().unwrap_or_default().to_string_lossy().to_lowercase())
     });
 
     for path in entries {
@@ -1031,36 +1001,133 @@ pub async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
                 out.push(GalleryEntry::Media { file: media });
             }
         } else if path.is_dir() {
-            let items = scan_media_recursive(&path, 0);
-            if items.is_empty() {
-                continue;
-            }
-
-            let combined_duration: f64 = items.iter().map(|m| m.duration).sum();
-            let folder_jpg = path.join("folder.jpg");
-            let stack_thumb = folder_jpg
-                .is_file()
-                .then(|| folder_jpg.to_string_lossy().to_string())
-                .or_else(|| {
-                    items
-                        .iter()
-                        .find_map(|it| it.ruforge_poster_path.clone().or_else(|| it.thumbnail_path.clone()))
+            if is_item_bucket(fname) {
+                // Videos / Music / Movies / Shows: each child dir = one item container.
+                out.extend(scan_item_bucket_dir(&path)?);
+            } else if is_playlist_bucket(fname) {
+                // Playlists: each child dir = one playlist entry.
+                out.extend(scan_playlist_bucket_dir(&path)?);
+            } else {
+                // Legacy flat layout: subdir with media becomes a playlist stack.
+                let items = scan_media_recursive(&path, 0);
+                if items.is_empty() {
+                    continue;
+                }
+                let combined_duration: f64 = items.iter().map(|m| m.duration).sum();
+                let folder_jpg = path.join("folder.jpg");
+                let stack_thumb = folder_jpg
+                    .is_file()
+                    .then(|| folder_jpg.to_string_lossy().to_string())
+                    .or_else(|| {
+                        items.iter().find_map(|it| {
+                            it.ruforge_poster_path.clone().or_else(|| it.thumbnail_path.clone())
+                        })
+                    });
+                out.push(GalleryEntry::Playlist {
+                    playlist: PlaylistCollection {
+                        title: fname.to_string(),
+                        path: path.to_string_lossy().to_string(),
+                        item_count: items.len() as u32,
+                        combined_duration,
+                        stack_thumbnail_path: stack_thumb,
+                        items,
+                    },
                 });
-
-            out.push(GalleryEntry::Playlist {
-                playlist: PlaylistCollection {
-                    title: fname.to_string(),
-                    path: path.to_string_lossy().to_string(),
-                    item_count: items.len() as u32,
-                    combined_duration,
-                    stack_thumbnail_path: stack_thumb,
-                    items,
-                },
-            });
+            }
         }
     }
 
     Ok(dedupe_gallery_entries(out))
+}
+
+fn sorted_dir_entries(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return vec![];
+    };
+    let mut entries: Vec<std::path::PathBuf> = rd.filter_map(|e| e.ok().map(|e| e.path())).collect();
+    entries.sort_by(|a, b| {
+        a.file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase()
+            .cmp(&b.file_name().unwrap_or_default().to_string_lossy().to_lowercase())
+    });
+    entries
+}
+
+fn build_playlist_entry(dir: &std::path::Path, name: &str) -> Option<GalleryEntry> {
+    let items = scan_media_recursive(dir, 0);
+    if items.is_empty() {
+        return None;
+    }
+    let combined_duration: f64 = items.iter().map(|m| m.duration).sum();
+    let folder_jpg = dir.join("folder.jpg");
+    let stack_thumb = folder_jpg
+        .is_file()
+        .then(|| folder_jpg.to_string_lossy().to_string())
+        .or_else(|| {
+            items.iter().find_map(|it| {
+                it.ruforge_poster_path.clone().or_else(|| it.thumbnail_path.clone())
+            })
+        });
+    Some(GalleryEntry::Playlist {
+        playlist: PlaylistCollection {
+            title: name.to_string(),
+            path: dir.to_string_lossy().to_string(),
+            item_count: items.len() as u32,
+            combined_duration,
+            stack_thumbnail_path: stack_thumb,
+            items,
+        },
+    })
+}
+
+/// Scan a Videos/Music/Movies/Shows bucket: each child dir = one item.
+/// Loose files at bucket root are emitted as flat Media entries.
+fn scan_item_bucket_dir(bucket_path: &std::path::Path) -> Result<Vec<GalleryEntry>, String> {
+    let mut out = Vec::new();
+    for entry in sorted_dir_entries(bucket_path) {
+        let fname = entry.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if gallery_skip_subdirectory(fname) {
+            continue;
+        }
+        if entry.is_file() {
+            let ext = entry.extension().and_then(|s| s.to_str()).unwrap_or("");
+            if is_media_ext(ext) {
+                let media = scan_media_file_direct(&entry)?;
+                out.push(GalleryEntry::Media { file: media });
+            }
+        } else if entry.is_dir() {
+            let items = scan_media_recursive(&entry, 0);
+            if items.is_empty() {
+                continue;
+            }
+            if items.len() == 1 {
+                out.push(GalleryEntry::Media { file: items.into_iter().next().unwrap() });
+            } else {
+                // Multiple files in one item folder: degrade gracefully to a small playlist.
+                if let Some(playlist) = build_playlist_entry(&entry, fname) {
+                    out.push(playlist);
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Scan a Playlists bucket: each child dir = one playlist entry.
+fn scan_playlist_bucket_dir(bucket_path: &std::path::Path) -> Result<Vec<GalleryEntry>, String> {
+    let mut out = Vec::new();
+    for playlist_path in sorted_dir_entries(bucket_path) {
+        let playlist_name = playlist_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if gallery_skip_subdirectory(playlist_name) || !playlist_path.is_dir() {
+            continue;
+        }
+        if let Some(entry) = build_playlist_entry(&playlist_path, playlist_name) {
+            out.push(entry);
+        }
+    }
+    Ok(out)
 }
 
 fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
@@ -1086,14 +1153,7 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         }
     };
 
-    let subtitle_path = {
-        let p = parent.join(format!("{}.vtt", stem));
-        if p.is_file() {
-            Some(p.to_string_lossy().to_string())
-        } else {
-            None
-        }
-    };
+    let subtitle_path = primary_vtt_sidecar(parent, stem).map(|p| p.to_string_lossy().to_string());
 
     let sidecar = resolve_info_json_path(parent, stem);
     let (
@@ -1232,43 +1292,53 @@ fn move_media_bundle(from_media: &Path, dest_media: &Path) -> Result<(), String>
         ));
     }
     let parent = from_media.parent().unwrap_or(Path::new("."));
-    let stem = from_media
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
+    let src_stem = from_media.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let dest_parent = dest_media.parent().unwrap_or(Path::new("."));
+    let dest_stem = dest_media.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+
     std::fs::rename(from_media, dest_media).map_err(|e| e.to_string())?;
-    for candidate in [stem, strip_ytdlp_stream_suffix(stem)] {
-        for ext in ["info.json", "jpg", "webp", "vtt"] {
-            let side = parent.join(format!("{}.{ext}", candidate));
+
+    // Move flat sidecars: all known extensions across both stem variants.
+    for candidate in [src_stem, strip_ytdlp_stream_suffix(src_stem)] {
+        for ext in ["info.json", "..info.json", "jpg", "webp", "sponsorblock.json", "comments.json"] {
+            let name = if ext == "..info.json" {
+                format!("{}..info.json", candidate)
+            } else {
+                format!("{}.{ext}", candidate)
+            };
+            let side = parent.join(&name);
             if side.is_file() {
-                let dest_side = dest_media
-                    .parent()
-                    .unwrap_or(Path::new("."))
-                    .join(format!(
-                        "{}.{}",
-                        dest_media
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or("file"),
-                        ext
-                    ));
+                let dest_name = if ext == "..info.json" {
+                    format!("{}..info.json", dest_stem)
+                } else {
+                    format!("{}.{ext}", dest_stem)
+                };
+                let dest_side = dest_parent.join(dest_name);
                 if !dest_side.exists() {
                     let _ = std::fs::rename(&side, &dest_side);
                 }
             }
         }
+
+        // Move all VTT sidecars (all language variants).
+        if let Ok(vtts) = vtt_sidecars_for_stem(parent, candidate) {
+            for (vtt_path, lang) in vtts {
+                let dest_vtt_name = if lang == "und" {
+                    format!("{dest_stem}.vtt")
+                } else {
+                    format!("{dest_stem}.{lang}.vtt")
+                };
+                let dest_vtt = dest_parent.join(dest_vtt_name);
+                if !dest_vtt.exists() {
+                    let _ = std::fs::rename(&vtt_path, &dest_vtt);
+                }
+            }
+        }
+
+        // Move .ruforge_thumbs/{stem}/ directory.
         let thumb_dir = parent.join(THUMB_DIR_NAME).join(candidate);
         if thumb_dir.is_dir() {
-            let dest_thumb = dest_media
-                .parent()
-                .unwrap_or(Path::new("."))
-                .join(THUMB_DIR_NAME)
-                .join(
-                    dest_media
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("file"),
-                );
+            let dest_thumb = dest_parent.join(THUMB_DIR_NAME).join(dest_stem);
             let _ = std::fs::create_dir_all(dest_thumb.parent().unwrap_or(Path::new(".")));
             if !dest_thumb.exists() {
                 let _ = std::fs::rename(&thumb_dir, &dest_thumb);

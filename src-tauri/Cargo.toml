@@ -41,6 +41,7 @@ futures-util = "0.3"
 sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 lofty = { version = "0.22", default-features = false }
+trash = "5"
 
 [dev-dependencies]
 tempfile = "3"
