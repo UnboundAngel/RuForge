@@ -14,6 +14,7 @@ import {
   musicTrackIdentityKey,
   normalizeAlbumShelfKey,
 } from "./musicShelfDedup";
+import { primaryArtist } from "./musicArtist";
 
 /** Seeded shuffle: stable for the session based on a random seed frozen on first render. */
 function seededShuffle<T>(items: T[], seed: number): T[] {
@@ -25,15 +26,6 @@ function seededShuffle<T>(items: T[], seed: number): T[] {
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
-}
-
-/**
- * Extract the primary (first) artist from a multi-artist string.
- * "Juice WRLD, Trippie Redd" → "Juice WRLD"
- * "Juice WRLD ft. Marshmello" → "Juice WRLD"
- */
-function primaryArtist(raw: string): string {
-  return raw.split(/,|&|\s+feat\.?\s+|\s+ft\.?\s+|\s+x\s+/i)[0].trim();
 }
 
 type TrackCardProps = {

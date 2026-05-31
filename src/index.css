@@ -592,7 +592,18 @@ html.ruforge-notify-root body {
 }
 
 .rf-music-panel-tab {
+  color: var(--music-text-muted);
+  border-bottom: 2px solid transparent;
   transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.rf-music-panel-tab[data-active="true"] {
+  color: #fff;
+  border-bottom-color: var(--music-accent);
+}
+
+.rf-music-panel-tab[data-active="false"]:hover {
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .rf-music-right-row {
@@ -669,7 +680,18 @@ html.ruforge-notify-root body {
 }
 
 .rf-music-history-toggle {
+  color: var(--music-text-muted);
+  background: transparent;
   transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.rf-music-history-toggle[data-active="true"] {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.rf-music-history-toggle[data-active="false"]:hover {
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .rf-music-right-switch {

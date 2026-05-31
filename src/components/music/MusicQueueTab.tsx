@@ -147,6 +147,7 @@ export function MusicQueueTab({
             <Reorder.Group
               axis="y"
               layoutScroll
+              initial={false}
               values={combinedPaths}
               onReorder={handleReorder}
               className="rf-music-queue-reorder flex flex-col"
@@ -201,8 +202,10 @@ function QueueReorderRow({
       value={path}
       dragListener={false}
       dragControls={dragControls}
+      initial={false}
       className="list-none"
       style={{ position: "relative", zIndex: 0 }}
+      transition={{ layout: { duration: 0 } }}
       whileDrag={{ zIndex: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.35)" }}
       dragTransition={{ power: 0.15, timeConstant: 100 }}
       onDragStart={() => onDragActiveChange(true)}

@@ -6,6 +6,7 @@ import { ListVideo, FolderOpen, User, Disc3 } from "lucide-react";
 import type { MediaFile } from "@/types";
 import { openInFileManager } from "@/openInFileManager";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { artistKeyFromFile } from "./musicArtist";
 
 export type MusicRowContextMenuState = {
   file: MediaFile;
@@ -49,7 +50,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
 
   const file = menu.file;
   const hasAlbum = !!(file.album?.trim());
-  const artistKey = (file.artist ?? file.albumArtist ?? "").trim().toLowerCase();
+  const artistKey = artistKeyFromFile(file);
   const albumKey = (file.album ?? "").trim().toLowerCase();
 
   const left = Math.min(menu.x, window.innerWidth - 220);

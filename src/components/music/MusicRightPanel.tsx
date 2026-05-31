@@ -239,89 +239,36 @@ export function MusicRightPanel({
 
 
         <div className="flex-1 min-h-0 overflow-hidden relative">
-
-          <div
-
-            className={activeTab === "queue" ? "absolute inset-0 flex flex-col" : "hidden"}
-
-            aria-hidden={activeTab !== "queue"}
-
-          >
-
+          <TabPanel active={activeTab === "queue"}>
             <MusicQueueTab
-
               playingFile={playingFile}
-
               effectivePlaylist={effectivePlaylist}
-
               playlistIndex={playlistIndex}
-
               manualQueue={manualQueue}
-
               queueSource={queueSource}
-
               onPlay={onPlay}
-
             />
-
-          </div>
-
-          <div
-
-            className={activeTab === "history" ? "absolute inset-0 flex flex-col" : "hidden"}
-
-            aria-hidden={activeTab !== "history"}
-
-          >
-
+          </TabPanel>
+          <TabPanel active={activeTab === "history"}>
             <MusicHistoryTab
-
               playingFile={playingFile}
-
               entries={historyEntries}
-
               onPlay={onPlay}
-
             />
-
-          </div>
-
+          </TabPanel>
           {showSegmentsTab && (
-
-            <div
-
-              className={
-
-                activeTab === "segments" ? "absolute inset-0 flex flex-col" : "hidden"
-
-              }
-
-              aria-hidden={activeTab !== "segments"}
-
-            >
-
+            <TabPanel active={activeTab === "segments"}>
               <MusicSegmentsTab
-
                 currentTime={currentTime}
-
                 duration={duration}
-
                 chapters={chapters}
-
                 sbSegments={sbSegments}
-
                 musicOnlySkip={musicOnlySkip}
-
                 onToggleMusicOnlySkip={onToggleMusicOnlySkip}
-
                 onSeek={onSeek}
-
               />
-
-            </div>
-
+            </TabPanel>
           )}
-
         </div>
 
       </div>
@@ -334,52 +281,49 @@ export function MusicRightPanel({
 
 
 
-function TabButton({
-
+function TabPanel({
   active,
-
-  onClick,
-
-  label,
-
+  children,
 }: {
-
   active: boolean;
-
-  onClick: () => void;
-
-  label: string;
-
+  children: React.ReactNode;
 }) {
-
   return (
-
-    <button
-
-      type="button"
-
-      onClick={onClick}
-
-      data-active={active ? "true" : "false"}
-
-      className="rf-music-panel-tab shrink-0 py-2 text-[13px] font-bold whitespace-nowrap border-b-2 border-transparent"
-
+    <motion.div
+      className="absolute inset-0 flex flex-col min-h-0"
+      initial={false}
+      animate={{ opacity: active ? 1 : 0 }}
+      transition={{ duration: 0.14, ease: "easeOut" }}
       style={{
-
-        color: active ? "#fff" : "var(--music-text-muted)",
-
-        borderColor: active ? "var(--music-accent)" : "transparent",
-
+        pointerEvents: active ? "auto" : "none",
+        visibility: active ? "visible" : "hidden",
       }}
-
+      aria-hidden={!active}
     >
-
-      {label}
-
-    </button>
-
+      {children}
+    </motion.div>
   );
+}
 
+function TabButton({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-active={active ? "true" : "false"}
+      className="rf-music-panel-tab shrink-0 py-2 text-[13px] font-bold whitespace-nowrap"
+    >
+      {label}
+    </button>
+  );
 }
 
 

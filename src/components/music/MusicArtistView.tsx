@@ -6,6 +6,7 @@ import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
+import { fileMatchesArtistKey, primaryArtist, rawArtistFromFile } from "./musicArtist";
 
 type AlbumCardProps = {
   album: string;
@@ -129,15 +130,16 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
 
   const tracks = useMemo(() => {
     const all = flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path));
-    return all.filter((t) => {
-      const a = (t.artist ?? t.albumArtist ?? "").trim().toLowerCase();
-      return a === artistKey.toLowerCase();
-    });
+    return all.filter((t) => fileMatchesArtistKey(t, artistKey));
   }, [entries, artistKey]);
 
   const displayName = useMemo(() => {
     const first = tracks[0];
-    return first ? (first.artist ?? first.albumArtist ?? artistKey) : artistKey;
+    if (first) {
+      const raw = rawArtistFromFile(first);
+      return raw ? primaryArtist(raw) : artistKey;
+    }
+    return artistKey;
   }, [tracks, artistKey]);
 
   const heroCover = useMemo(() => bestCoverPath(tracks[0] ?? {}), [tracks]);
