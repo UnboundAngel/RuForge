@@ -5,6 +5,8 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import type { MediaFile } from "@/types";
+import { primaryArtist } from "./musicArtist";
+import { normalizeAlbumShelfKey } from "./musicShelfDedup";
 import { cn } from "@/lib/utils";
 
 import { formatDuration } from "@/components/downloader/downloaderFormat";
@@ -174,11 +176,13 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
       const albumName = t.album ?? "";
       if (!albumName) continue;
       const artistRaw = t.albumArtist ?? t.artist ?? "";
-      const key = `${artistRaw.trim().toLowerCase()}::${albumName.trim().toLowerCase()}`;
+      const artistKey = primaryArtist(artistRaw).toLowerCase();
+      const albumKey = normalizeAlbumShelfKey(albumName);
+      const key = `${artistKey}::${albumKey}`;
       if (!map.has(key)) {
         map.set(key, {
-          albumKey: albumName.trim().toLowerCase(),
-          artistKey: artistRaw.trim().toLowerCase(),
+          albumKey,
+          artistKey,
           album: albumName,
           artist: artistRaw,
           cover: bestCoverPath(t),
@@ -195,8 +199,10 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
     for (const t of tracks) {
       const raw = t.artist ?? t.albumArtist ?? "";
       if (!raw) continue;
-      const key = raw.trim().toLowerCase();
-      if (!map.has(key)) map.set(key, { key, display: raw, tracks: [] });
+      const key = primaryArtist(raw).toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { key, display: primaryArtist(raw) || raw, tracks: [] });
+      }
       map.get(key)!.tracks.push(t);
     }
     return [...map.values()].sort((a, b) => a.display.localeCompare(b.display));

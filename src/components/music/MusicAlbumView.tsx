@@ -6,6 +6,8 @@ import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
+import { fileMatchesArtistKey, primaryArtist, rawArtistFromFile } from "./musicArtist";
+import { normalizeAlbumShelfKey } from "./musicShelfDedup";
 
 type TrackRowProps = {
   file: MediaFile;
@@ -61,8 +63,10 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
   const tracks = useMemo(() => {
     const all = flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path));
     const albumTracks = all.filter((t) => {
-      const a = (t.album ?? "").trim().toLowerCase();
-      return a === albumKey.toLowerCase();
+      if (!fileMatchesArtistKey(t, artistKey)) return false;
+      const album = t.album?.trim();
+      if (!album) return false;
+      return normalizeAlbumShelfKey(album) === albumKey.trim().toLowerCase();
     });
     return albumTracks.sort((a, b) => {
       const na = a.trackNo ?? 9999;
@@ -75,7 +79,11 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
   const displayAlbum = useMemo(() => tracks[0]?.album ?? albumKey, [tracks, albumKey]);
   const displayArtist = useMemo(() => {
     const first = tracks[0];
-    return first ? (first.albumArtist ?? first.artist ?? artistKey) : artistKey;
+    if (first) {
+      const raw = rawArtistFromFile(first);
+      return raw ? primaryArtist(raw) : artistKey;
+    }
+    return artistKey;
   }, [tracks, artistKey]);
 
   const cover = useMemo(() => bestCoverPath(tracks[0] ?? {}), [tracks]);

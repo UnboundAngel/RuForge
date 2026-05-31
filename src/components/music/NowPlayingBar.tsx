@@ -6,22 +6,13 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
-import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
+import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
 const barBtnClass =
   "flex h-8 w-8 shrink-0 items-center justify-center transition-opacity opacity-60 hover:opacity-100";
-
-
-function getArtist(file: MediaFile | null): string {
-  if (!file) return "";
-  if (file.artist) return file.artist;
-  if (file.albumArtist) return file.albumArtist;
-  if (file.name.includes(" - ")) return file.name.split(" - ")[0].trim();
-  return "";
-}
 
 type Props = {
   paused: boolean;
@@ -142,7 +133,8 @@ export function NowPlayingBar({
 
   const coverPath = playingFile ? bestCoverPath(playingFile) : null;
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
-  const artist = getArtist(playingFile);
+  const artist = playingFile ? rawArtistFromFile(playingFile) : "";
+  const artistNavKey = playingFile ? artistKeyFromFile(playingFile) : "";
   const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
 
   if (!playingFile) return null;
@@ -189,14 +181,14 @@ export function NowPlayingBar({
           )}
           <div className="min-w-0 flex-1" style={{ color: "var(--music-text-primary)" }}>
             <MarqueeText text={playingFile.name} className="text-sm font-medium leading-tight" layoutKey={playingFile.path} />
-            {artist && (
+            {artist && artistNavKey && (
               <button
                 type="button"
                 className="text-xs mt-0.5 hover:underline w-full text-left truncate block"
                 style={{ color: "var(--music-text-secondary)" }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  openMusicArtist(artist.trim().toLowerCase());
+                  openMusicArtist(artistNavKey);
                 }}
               >
                 {artist}

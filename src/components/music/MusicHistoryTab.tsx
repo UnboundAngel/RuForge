@@ -126,12 +126,9 @@ function ToggleBtn({
     <button
       type="button"
       onClick={onClick}
+      data-active={active ? "true" : "false"}
       className="rf-music-history-toggle px-4 py-1.5 rounded-full text-xs font-bold border-0 cursor-pointer"
-      style={{
-        background: active ? "rgba(255,255,255,0.12)" : "transparent",
-        color: active ? "#fff" : "var(--music-text-muted)",
-        outline: "none",
-      }}
+      style={{ outline: "none" }}
     >
       {children}
     </button>
