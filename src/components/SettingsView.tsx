@@ -13,6 +13,7 @@ import { useRuforgeStore, RUFORGE_INTERNAL_DIR } from '../store/ruforgeStore';
 import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
 import { SettingsDescription } from './settings/settingsDescription';
 import { RegroupPlaylistModal } from './RegroupPlaylistModal';
+import { MigrateLibraryModal } from './MigrateLibraryModal';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
 
@@ -375,6 +376,7 @@ export const SettingsView: React.FC = () => {
   const addLibraryScanDir = useRuforgeStore((s) => s.addLibraryScanDir);
   const removeLibraryScanDir = useRuforgeStore((s) => s.removeLibraryScanDir);
   const [regroupPlaylistOpen, setRegroupPlaylistOpen] = useState(false);
+  const [migrateLibraryOpen, setMigrateLibraryOpen] = useState(false);
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const handleSetSaveToInternal = useRuforgeStore((s) => s.handleSetSaveToInternal);
@@ -748,6 +750,28 @@ export const SettingsView: React.FC = () => {
                   }
                 />
                 <SettingItem
+                  title="Batch start delay"
+                  description={
+                    (settings.downloadJobStartDelayMs ?? 0) === 0
+                      ? "No delay between job starts in a batch. Enable to reduce rate-limiting risk for large music playlist grabs."
+                      : `${settings.downloadJobStartDelayMs} ms between each job start when batch-enqueueing (e.g. music playlists).`
+                  }
+                  control={
+                    <select
+                      value={settings.downloadJobStartDelayMs ?? 0}
+                      onChange={(e) => void updateSetting("downloadJobStartDelayMs", Number(e.target.value))}
+                      className="rf-select text-xs"
+                    >
+                      <option value={0}>Off</option>
+                      <option value={500}>0.5 s</option>
+                      <option value={1000}>1 s</option>
+                      <option value={2000}>2 s</option>
+                      <option value={3000}>3 s</option>
+                      <option value={5000}>5 s</option>
+                    </select>
+                  }
+                />
+                <SettingItem
                   title="Download Subtitles"
                   description={
                     settings.downloadAudioOnly
@@ -1070,7 +1094,17 @@ export const SettingsView: React.FC = () => {
                 onClose={() => setRegroupPlaylistOpen(false)}
                 customOutputDir={outputDir}
               />
+              <MigrateLibraryModal
+                open={migrateLibraryOpen}
+                onClose={() => setMigrateLibraryOpen(false)}
+                libraryRoot={RUFORGE_INTERNAL_DIR}
+              />
               <SettingsSection title="Debugging">
+                <SettingItem
+                  title="Migrate library layout"
+                  description="Reorganize the flat media root into Videos/, Music/, and Playlists/ bucket folders with per-item subfolders. Preview first, then confirm to move."
+                  onClick={() => setMigrateLibraryOpen(true)}
+                />
                 <SettingItem
                   title="Group playlist downloads"
                   description="Move flat playlist files into a numbered subfolder so Media shows one stack card."

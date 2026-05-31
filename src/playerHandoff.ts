@@ -7,6 +7,7 @@ export type PlayInMiniPayload = {
   playbackSpeed?: number;
   volume?: number;
   muted?: boolean;
+  navMode?: string;
 };
 
 export type SendToMainPayload = {

@@ -1179,6 +1179,19 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         })
         .unwrap_or_default();
 
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    let sidecar_json = sidecar
+        .as_deref()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+    let (artist, album, album_artist, track_no, embedded_cover_path) = if is_audio_only_ext(ext) {
+        let thumb_dir = parent.join(THUMB_DIR_NAME);
+        let mm = extract_music_meta(path, sidecar_json.as_ref(), &thumb_dir, stem);
+        (mm.artist, mm.album, mm.album_artist, mm.track_no, mm.embedded_cover_path)
+    } else {
+        (None, None, None, None, None)
+    };
+
     Ok(MediaFile {
         name: display_name,
         path: path.to_string_lossy().to_string(),
@@ -1193,11 +1206,11 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         source_url,
         source_id,
         playlist_index,
-        artist: None,
-        album: None,
-        album_artist: None,
-        track_no: None,
-        embedded_cover_path: None,
+        artist,
+        album,
+        album_artist,
+        track_no,
+        embedded_cover_path,
     })
 }
 

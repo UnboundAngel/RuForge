@@ -216,6 +216,48 @@ export function playlistItemWatchUrl(item: {
   return null;
 }
 
+function isMusicHost(host: string): boolean {
+  return host.replace(/^www\./i, "").toLowerCase() === "music.youtube.com";
+}
+
+/**
+ * Detect if `input` is a music.youtube.com browse URL (artist handle, channel, album, playlist).
+ * These are passed as-is to yt-dlp / `get_music_browse_info` rather than normalized to watch URLs.
+ */
+export function isMusicYouTubeUrl(input: string): boolean {
+  const url = parseYoutubeUrl(input);
+  if (!url || !isMusicHost(url.hostname)) return false;
+  const p = url.pathname;
+  return (
+    p.startsWith("/@") ||
+    p.startsWith("/channel/") ||
+    p.startsWith("/browse/") ||
+    /^\/playlist\/?$/i.test(p)
+  );
+}
+
+/**
+ * True when the URL is a music.youtube.com playlist (has `list=` param).
+ * These go to `get_playlist_items_page` directly without the browse step.
+ */
+export function isMusicYouTubePlaylistUrl(input: string): boolean {
+  const url = parseYoutubeUrl(input);
+  if (!url || !isMusicHost(url.hostname)) return false;
+  const list = url.searchParams.get("list");
+  return Boolean(list && YT_PLAYLIST_ID_RE.test(list));
+}
+
+/**
+ * Return the music.youtube.com URL as-is (cleaned of tracking params) for yt-dlp consumption.
+ * Returns null if not a music.youtube.com URL.
+ */
+export function canonicalMusicYouTubeUrl(input: string): string | null {
+  const url = parseYoutubeUrl(input);
+  if (!url || !isMusicHost(url.hostname)) return null;
+  stripTrackingParams(url);
+  return url.toString();
+}
+
 /** Match Rust `sanitize_playlist_folder_name` for download/regroup folder names. */
 export function sanitizePlaylistFolderName(raw: string): string {
   let s = raw.trim();

@@ -1191,6 +1191,15 @@ fn yt_dlp_effective_filename_template(
     user_template: &str,
     options: &DownloadOptions,
 ) -> String {
+    // Derive the item stem (filename without extension) from the user template.
+    // Handles the two canonical templates: "%(title)s.%(ext)s" and "%(title)s [%(id)s].%(ext)s".
+    let stem = user_template
+        .strip_suffix(".%(ext)s")
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("%(title)s");
+
+    // Explicit playlist batch job (per-item, frontend-driven).
     if let Some(folder) = options
         .playlist_output_folder
         .as_ref()
@@ -1198,45 +1207,39 @@ fn yt_dlp_effective_filename_template(
         .filter(|s| !s.is_empty())
     {
         let idx = options.playlist_index.unwrap_or(0);
-        let prefix = if idx > 0 {
-            format!("{:02} - ", idx)
+        let item_name = if idx > 0 {
+            format!("{:02} - {}", idx, stem)
         } else {
-            String::new()
+            stem.to_string()
         };
-        let trimmed = user_template.trim_start_matches(|c| c == '/' || c == '\\');
-        let inner = if trimmed.is_empty() {
-            format!("{}%(title)s.%(ext)s", prefix)
-        } else {
-            format!("{}{}", prefix, trimmed)
-        };
-        return format!("{}/{}", folder, inner);
+        // Playlists/{folder}/{NN - stem}/{NN - stem}.%(ext)s
+        return format!("Playlists/{}/{}/{}.%(ext)s", folder, item_name, item_name);
     }
 
-    match ytdlp_usable_playlist_entries(metadata_probe) {
-        Some(_) => {
-            let raw = metadata_probe
-                .get("playlist_title")
-                .and_then(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .or_else(|| {
-                    metadata_probe
-                        .get("title")
-                        .and_then(|v| v.as_str())
-                        .map(str::trim)
-                        .filter(|s| !s.is_empty())
-                })
-                .unwrap_or("playlist");
-            let folder = sanitize_playlist_folder_name(raw);
-            let trimmed = user_template.trim_start_matches(|c| c == '/' || c == '\\');
-            if trimmed.is_empty() {
-                format!("{}/%(title)s.%(ext)s", folder)
-            } else {
-                format!("{}/{}", folder, trimmed)
-            }
-        }
-        None => user_template.to_string(),
+    // Auto-detected playlist URL.
+    if ytdlp_usable_playlist_entries(metadata_probe).is_some() {
+        let raw = metadata_probe
+            .get("playlist_title")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                metadata_probe
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+            })
+            .unwrap_or("playlist");
+        let folder = sanitize_playlist_folder_name(raw);
+        // Playlists/{folder}/%(title)s/%(title)s.%(ext)s
+        return format!("Playlists/{}/{}/{}.%(ext)s", folder, stem, stem);
     }
+
+    // Single item: route to bucket based on audio_only flag.
+    let bucket = if options.audio_only { "Music" } else { "Videos" };
+    // {Bucket}/%(title)s/%(title)s.%(ext)s
+    format!("{}/{}/{}.%(ext)s", bucket, stem, stem)
 }
 
 fn normalize_ytdlp_audio_format(raw: &str) -> String {
@@ -1427,7 +1430,7 @@ pub async fn start_download_job(
     manager: State<'_, DownloadJobManager>,
     job_id: String,
     url: String,
-    options: DownloadOptions,
+    mut options: DownloadOptions,
     resume: bool,
 ) -> Result<(), String> {
     manager.try_claim_active_job(&job_id)?;
@@ -1442,9 +1445,18 @@ pub async fn start_download_job(
     let filename_template_eff =
         yt_dlp_effective_filename_template(&probe, &options.filename_template, &options);
 
-    if let Err(e) = std::fs::create_dir_all(&options.output_dir) {
+    let output_dir = options.output_dir.trim().to_string();
+    if output_dir.is_empty() {
         manager.release_claim_if_pending(&job_id)?;
-        return Err(format!("Failed to create output directory: {}", e));
+        return Err("Failed to create output directory: path is empty".into());
+    }
+    options.output_dir = output_dir.clone();
+    if let Err(e) = std::fs::create_dir_all(&output_dir) {
+        manager.release_claim_if_pending(&job_id)?;
+        return Err(format!(
+            "Failed to create output directory \"{}\": {}",
+            output_dir, e
+        ));
     }
 
     let args = match build_ytdlp_download_args(&app, &url, &options, &filename_template_eff, resume) {
@@ -1715,6 +1727,198 @@ pub async fn stop_all_active_download_jobs(
     manager: State<'_, DownloadJobManager>,
 ) -> Result<u32, String> {
     manager.stop_all_active_downloads()
+}
+
+// ---------- Music browse API ----------
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicPlaylistInfo {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub thumbnail: Option<String>,
+    pub track_count: Option<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicBrowseResult {
+    pub title: String,
+    pub thumbnail: Option<String>,
+    pub playlists: Vec<MusicPlaylistInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicTrackInfo {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub duration: Option<f64>,
+    pub thumbnail: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MusicPlaylistPage {
+    pub items: Vec<MusicTrackInfo>,
+    pub has_more: bool,
+    pub total: Option<u32>,
+    pub title: Option<String>,
+}
+
+fn best_thumbnail_url(entry: &serde_json::Value) -> Option<String> {
+    if let Some(thumbs) = entry["thumbnails"].as_array() {
+        // Prefer a medium-sized thumbnail (width ~226 or first with a URL).
+        if let Some(t) = thumbs.iter().rev().find(|t| t["url"].is_string()) {
+            return t["url"].as_str().map(String::from);
+        }
+    }
+    entry["thumbnail"].as_str().map(String::from)
+}
+
+/// Fetch artist/channel page and return child playlists/albums.
+/// Uses `yt-dlp --flat-playlist -J URL`.
+#[tauri::command]
+pub async fn get_music_browse_info(
+    app: AppHandle,
+    url: String,
+) -> Result<MusicBrowseResult, String> {
+    let output = ytdlp_shell_command(&app)?
+        .args(["--flat-playlist", "-J", "--no-warnings", url.as_str()])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).to_string();
+        return Err(format!("yt-dlp error: {}", err));
+    }
+
+    let root: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))?;
+
+    let title = root["title"].as_str().unwrap_or("").to_string();
+    let thumbnail = best_thumbnail_url(&root);
+
+    let mut playlists = Vec::new();
+    if let Some(entries) = root["entries"].as_array() {
+        for entry in entries {
+            let entry_type = entry["_type"].as_str().unwrap_or("");
+            // Include playlists and channels (skip individual tracks at top level for artist pages).
+            if entry_type == "playlist" || entry_type == "url_transparent" || entry_type == "channel" || !entry_type.is_empty() {
+                let id = entry["id"].as_str().unwrap_or("").to_string();
+                let playlist_title = entry["title"].as_str().unwrap_or("").to_string();
+                if id.is_empty() && playlist_title.is_empty() {
+                    continue;
+                }
+                let entry_url = entry["url"].as_str()
+                    .or_else(|| entry["webpage_url"].as_str())
+                    .map(String::from)
+                    .unwrap_or_else(|| {
+                        if id.starts_with("PL") || id.starts_with("OL") {
+                            format!("https://music.youtube.com/playlist?list={}", id)
+                        } else {
+                            format!("https://www.youtube.com/playlist?list={}", id)
+                        }
+                    });
+                let track_count = entry["playlist_count"].as_u64().map(|n| n as u32);
+                let thumb = best_thumbnail_url(entry);
+                playlists.push(MusicPlaylistInfo {
+                    id,
+                    title: playlist_title,
+                    url: entry_url,
+                    thumbnail: thumb,
+                    track_count,
+                });
+            }
+        }
+    }
+
+    Ok(MusicBrowseResult { title, thumbnail, playlists })
+}
+
+/// Fetch a page of tracks from a playlist URL.
+/// `offset` is 0-based; `limit` is the page size (default 10).
+#[tauri::command]
+pub async fn get_playlist_items_page(
+    app: AppHandle,
+    url: String,
+    offset: u32,
+    limit: u32,
+) -> Result<MusicPlaylistPage, String> {
+    let limit = limit.max(1).min(100);
+    let start = offset + 1;
+    let end = offset + limit;
+
+    let output = ytdlp_shell_command(&app)?
+        .args([
+            "--flat-playlist",
+            "-J",
+            "--no-warnings",
+            "--playlist-start",
+            &start.to_string(),
+            "--playlist-end",
+            &end.to_string(),
+            url.as_str(),
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).to_string();
+        return Err(format!("yt-dlp error: {}", err));
+    }
+
+    let root: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))?;
+
+    let total = root["playlist_count"].as_u64().map(|n| n as u32);
+
+    let mut items = Vec::new();
+    let entries = root["entries"].as_array().map(|v| v.as_slice()).unwrap_or_default();
+    for entry in entries {
+        let id = entry["id"].as_str().unwrap_or("").to_string();
+        let item_title = entry["title"].as_str().unwrap_or("").to_string();
+        let entry_url = entry["url"].as_str()
+            .or_else(|| entry["webpage_url"].as_str())
+            .map(String::from)
+            .unwrap_or_else(|| format!("https://www.youtube.com/watch?v={}", id));
+        let duration = entry["duration"].as_f64();
+        let thumb = best_thumbnail_url(entry);
+        let artist = entry["artist"].as_str()
+            .or_else(|| entry["uploader"].as_str())
+            .map(String::from);
+        let album = entry["album"].as_str().map(String::from);
+        items.push(MusicTrackInfo {
+            id,
+            title: item_title,
+            url: entry_url,
+            duration,
+            thumbnail: thumb,
+            artist,
+            album,
+        });
+    }
+
+    // has_more: if we got `limit` items, there might be more; confirm with total if available.
+    let has_more = match total {
+        Some(t) => (offset + items.len() as u32) < t,
+        None => items.len() as u32 == limit,
+    };
+
+    let title = root["title"].as_str().map(String::from);
+
+    Ok(MusicPlaylistPage {
+        items,
+        has_more,
+        total,
+        title,
+    })
 }
 
 #[cfg(test)]

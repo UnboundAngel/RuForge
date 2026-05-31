@@ -9,7 +9,19 @@ import {
 import { normalizeDurationSeconds } from "./components/downloader/downloaderFormat";
 import type { PlaylistItem, ProgressPayload, VideoInfo } from "./types";
 import type { RuforgeSettings } from "./store/types";
-import { effectiveDownloadSubLangs, normalizeBrowserContext } from "./store/types";
+import {
+  effectiveDownloadSubLangs,
+  normalizeBrowserContext,
+  RUFORGE_INTERNAL_DIR,
+} from "./store/types";
+
+/** Match main downloader: internal vault when saveToInternal is on, else custom path. */
+export function resolveDownloadOutputDir(
+  saveToInternal: boolean,
+  customOutputDir: string,
+): string {
+  return saveToInternal ? RUFORGE_INTERNAL_DIR : customOutputDir;
+}
 
 /** Snapshot from `get_video_info` at enqueue time; drives downloader hero while this job is active. */
 export interface DownloadJobMediaSnapshot {

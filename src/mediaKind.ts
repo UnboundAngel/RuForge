@@ -39,3 +39,14 @@ export function bestCoverPath(file: {
 }): string | null {
   return file.embeddedCoverPath ?? file.thumbnailPath ?? file.ruforgePosterPath ?? null;
 }
+
+/**
+ * True when the file has embedded square cover art (lofty extract).
+ * Use `object-cover` on the img when true, `object-contain` when false to avoid
+ * bad center-crops of 16:9 video thumbnails.
+ */
+export function hasSquareCover(file: {
+  embeddedCoverPath?: string | null;
+}): boolean {
+  return !!file.embeddedCoverPath;
+}

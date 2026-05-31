@@ -56,6 +56,7 @@ import { ConfirmDialogHost } from "./components/ConfirmDialog";
 import type { SendToMainPayload } from "./playerHandoff";
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
+import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
 import { MediaFile } from "./types";
 import {
   Settings,
@@ -88,6 +89,13 @@ import {
   getEmbeddedExplorerWebview,
 } from "./explorerWebviewLifecycle";
 import {
+  EXPLORER_PROFILE_PROBE_SCRIPT,
+  EXPLORER_YOUTUBE_PROFILE_EVENT,
+  MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT,
+  MUSIC_EXPLORE_WEBVIEW_LABEL,
+  type ExplorerYouTubeProfilePayload,
+} from "./explorerProfileScript";
+import {
   createExplorerBoundsRafScheduler,
   explorerBoundsEqual,
   readExplorerHostBounds,
@@ -116,6 +124,8 @@ const WindowControls = ({
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
+  const youtubeProfile = useRuforgeStore((s) => s.youtubeExplorerProfile);
+  const setActiveTabForProfile = useRuforgeStore((s) => s.setActiveTab);
 
   useEffect(() => {
     const updateMaximized = async () => {
@@ -168,6 +178,14 @@ const WindowControls = ({
             height={18}
           />
         </TitlebarHoverButton>
+      )}
+
+      {navMode !== "music" && youtubeProfile && (
+        <YouTubeProfileChip
+          size="sm"
+          className="w-9 h-10 flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity"
+          onClick={() => setActiveTabForProfile("explorer")}
+        />
       )}
 
       <div className="w-px h-4 bg-stone-500/20 mx-1" />
@@ -335,6 +353,7 @@ function App() {
   }, [setOutputDir]);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
+  const setYoutubeExplorerProfile = useRuforgeStore((s) => s.setYoutubeExplorerProfile);
   const lastExplorerUrlRef = useRef(lastExplorerUrl);
   lastExplorerUrlRef.current = lastExplorerUrl;
   const storageBlocksNewDownloads =
@@ -1017,7 +1036,86 @@ function App() {
       setLastExplorerUrl(event.payload);
     });
     return () => { unlisten.then(f => f()); };
-  }, []);
+  }, [setLastExplorerUrl]);
+
+  useEffect(() => {
+    const unlisten = listen<ExplorerYouTubeProfilePayload>(
+      EXPLORER_YOUTUBE_PROFILE_EVENT,
+      (event) => {
+        const payload = event.payload;
+        if (
+          payload &&
+          typeof payload.displayName === "string" &&
+          payload.displayName.trim()
+        ) {
+          setYoutubeExplorerProfile({
+            displayName: payload.displayName.trim(),
+            avatarUrl:
+              typeof payload.avatarUrl === "string" && payload.avatarUrl.trim()
+                ? payload.avatarUrl.trim()
+                : null,
+          });
+        } else {
+          setYoutubeExplorerProfile(null);
+        }
+      },
+    );
+    return () => { unlisten.then((f) => f()); };
+  }, [setYoutubeExplorerProfile]);
+
+  useEffect(() => {
+    if (postInstall) return;
+    let alive = true;
+    const probe = async () => {
+      try {
+        await invoke("eval_in_webview", {
+          label: explorerWebviewLabelRef.current,
+          script: EXPLORER_PROFILE_PROBE_SCRIPT,
+        });
+      } catch {
+        /* Explorer webview not mounted yet */
+      }
+      if (navMode !== "music") return;
+      try {
+        await invoke("eval_in_webview", {
+          label: MUSIC_EXPLORE_WEBVIEW_LABEL,
+          script: MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT,
+        });
+      } catch {
+        /* Music explore webview not mounted yet */
+      }
+    };
+    void probe();
+    const id = window.setInterval(() => {
+      if (alive) void probe();
+    }, 5000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [postInstall, navMode, activeTab]);
+
+  useEffect(() => {
+    if (navMode === "music" || postInstall) return;
+    void (async () => {
+      try {
+        await invoke("eval_in_webview", {
+          label: MUSIC_EXPLORE_WEBVIEW_LABEL,
+          script: EXPLORER_PAUSE_MEDIA_SCRIPT,
+        });
+      } catch {
+        /* not mounted */
+      }
+      const wv = await getEmbeddedExplorerWebview(MUSIC_EXPLORE_WEBVIEW_LABEL);
+      if (wv) {
+        try {
+          await wv.hide();
+        } catch {
+          /* ok */
+        }
+      }
+    })();
+  }, [navMode, postInstall]);
 
   useEffect(() => {
     if (activeTab !== "explorer" || postInstall) return;
@@ -1497,10 +1595,10 @@ function App() {
                   t === "error"
                     ? "bg-[#2c1818] text-stone-100 border border-red-900/35"
                     : t === "progress"
-                      ? "bg-[#271C18] text-stone-50 border border-stone-50/10"
+                      ? "bg-[#1e1812] text-stone-50 border border-stone-50/10"
                       : t === "warning"
-                        ? "bg-[#271C18] text-stone-50 border-2 border-dotted border-yellow-400/90"
-                        : "bg-[#271C18] text-stone-50 border border-stone-50/10";
+                        ? "bg-[#1e1812] text-stone-50 border-2 border-dotted border-yellow-400/90"
+                        : "bg-[#1e1812] text-stone-50 border border-stone-50/10";
                 const closeBtn =
                   t === "error"
                     ? "text-red-200/70 hover:text-red-100"
@@ -1510,35 +1608,39 @@ function App() {
                 return (
                 <motion.div
                   key={n.id}
-                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className={`${shell} px-3 py-2 rounded-xl shadow-lg flex items-center gap-2.5 pointer-events-auto min-w-0 w-full`}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  style={{ willChange: "opacity, transform" }}
+                  className="rounded-xl shadow-lg pointer-events-auto min-w-0 w-full overflow-hidden"
                 >
-                  {t === "error" ? (
-                    <AlertCircle className="text-red-400 w-4 h-4 flex-shrink-0" />
-                  ) : t === "progress" ? (
-                    <Loader2 className="text-[color:var(--accent)] w-4 h-4 flex-shrink-0 animate-spin" />
-                  ) : t === "warning" ? (
-                    <HardDrive className="text-yellow-400/95 w-4 h-4 flex-shrink-0" aria-hidden />
-                  ) : (
-                    <CheckCircle2 className="text-emerald-400 w-4 h-4 flex-shrink-0" />
-                  )}
+                  <div className={`${shell} px-3 py-2 flex items-center gap-2.5 min-w-0 w-full rounded-xl`}>
+                    {t === "error" ? (
+                      <AlertCircle className="text-red-400 w-4 h-4 flex-shrink-0" />
+                    ) : t === "progress" ? (
+                      <Loader2 className="text-[color:var(--accent)] w-4 h-4 flex-shrink-0 animate-spin" />
+                    ) : t === "warning" ? (
+                      <HardDrive className="text-yellow-400/95 w-4 h-4 flex-shrink-0" aria-hidden />
+                    ) : (
+                      <CheckCircle2 className="text-emerald-400 w-4 h-4 flex-shrink-0" />
+                    )}
 
-                  <div className="flex-1 flex flex-col min-w-0">
-                    <span className="text-xs font-semibold leading-snug">
-                      {n.message}
-                    </span>
+                    <div className="flex-1 flex flex-col min-w-0">
+                      <span className="text-xs font-semibold leading-snug">
+                        {n.message}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => dismissNotification(n.id)}
+                      className={`${closeBtn} transition-colors flex-shrink-0 self-start p-0.5 rounded`}
+                      aria-label="Dismiss"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => dismissNotification(n.id)}
-                    className={`${closeBtn} transition-colors flex-shrink-0 self-start p-0.5 rounded`}
-                    aria-label="Dismiss"
-                  >
-                    <X size={14} />
-                  </button>
                 </motion.div>
                 );
               })}

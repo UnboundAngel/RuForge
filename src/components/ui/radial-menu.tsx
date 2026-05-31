@@ -27,6 +27,8 @@ type RadialMenuProps = {
   outerRingWidth?: number;
   onSelect?: (item: RadialMenuItem) => void;
   onCenterClick?: () => void;
+  /** Called whenever the hovered wedge id changes (null = none). */
+  onHoveredItemChange?: (id: string | null) => void;
 };
 
 const menuTransition: Transition = {
@@ -124,6 +126,7 @@ export function RadialMenu({
   outerRingWidth = 12,
   onSelect,
   onCenterClick,
+  onHoveredItemChange,
 }: RadialMenuProps) {
   const palette = RADIAL_PALETTE[navMode];
   const radius = size / 2;
@@ -138,12 +141,39 @@ export function RadialMenu({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [modeFlashLabel, setModeFlashLabel] = useState<string | null>(null);
   const openedAtRef = useRef(0);
+  const onHoveredItemChangeRef = useRef(onHoveredItemChange);
+  onHoveredItemChangeRef.current = onHoveredItemChange;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  const hoveredIndexRef = useRef<number | null>(null);
 
-  const resetActive = () => setHoveredIndex(null);
+  const setHovered = (index: number | null) => {
+    setHoveredIndex(index);
+    hoveredIndexRef.current = index;
+    const id = index !== null ? (menuItems[index]?.id ?? null) : null;
+    onHoveredItemChangeRef.current?.(id);
+  };
+
+  const resetActive = () => setHovered(null);
+
+  // Fire selection for the hovered wedge when the menu closes (Alt release).
+  useEffect(() => {
+    if (open) return;
+    const idx = hoveredIndexRef.current;
+    if (idx !== null && menuItems[idx]) {
+      onSelectRef.current?.(menuItems[idx]);
+    }
+    hoveredIndexRef.current = null;
+    setHoveredIndex(null);
+  }, [open]);
 
   useEffect(() => {
     if (open) openedAtRef.current = performance.now();
   }, [open]);
+
+  useEffect(() => {
+    setHovered(null);
+  }, [navMode]);
 
   useEffect(() => {
     if (!modeFlashLabel) return;
@@ -209,12 +239,11 @@ export function RadialMenu({
                     onPointerEnter={(e) => {
                       if (e.pointerType !== "mouse") return;
                       if (!navIconHoverAllowed(openedAtRef.current)) return;
-                      setHoveredIndex(index);
+                      setHovered(index);
                     }}
                     onPointerLeave={() => {
-                      setHoveredIndex((cur) => (cur === index ? null : cur));
+                      if (hoveredIndex === index) setHovered(null);
                     }}
-                    onClick={() => onSelect?.(item)}
                   >
                     <path
                       d={slicePath(
@@ -245,16 +274,12 @@ export function RadialMenu({
                       height={iconBox}
                     >
                       <div
-                        className={`flex size-full items-center justify-center outline-none ${
-                          isActive
-                            ? "text-[color:var(--accent)]"
-                            : "text-stone-400"
-                        }`}
+                        className="flex size-full items-center justify-center outline-none"
+                        style={{ color: isActive ? palette.accent : palette.iconIdle }}
                       >
                         <RadialNavIcon
                           id={item.iconId}
                           size={iconSize}
-                          playing={wedgeHovered}
                         />
                       </div>
                     </foreignObject>
@@ -278,10 +303,12 @@ export function RadialMenu({
                 e.stopPropagation();
                 handleCenterClick();
               }}
-              className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full bg-[#1c1512] outline-none transition-transform hover:scale-[1.03] active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
+              className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full outline-none transition-transform hover:scale-[1.03] active:scale-[0.97] focus-visible:ring-2"
               style={{
                 width: centerRadius * 2,
                 height: centerRadius * 2,
+                backgroundColor: palette.centerFill,
+                ["--tw-ring-color" as string]: palette.accent,
               }}
               aria-label="Switch mode"
             >
@@ -293,7 +320,8 @@ export function RadialMenu({
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.2 }}
-                    className="px-2 text-center text-[11px] font-black uppercase leading-tight tracking-[0.12em] text-[color:var(--accent)]"
+                    className="px-2 text-center text-[11px] font-black uppercase leading-tight tracking-[0.12em]"
+                    style={{ color: palette.accent }}
                   >
                     {modeFlashLabel}
                   </motion.span>

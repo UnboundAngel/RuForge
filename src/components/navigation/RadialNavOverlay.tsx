@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
-import { RadialMenu, type RadialMenuItem } from "@/components/ui/radial-menu";
-
+import { RadialMenu } from "@/components/ui/radial-menu";
+import { radialMenuItemsForMode, radialNavActionForItem } from "@/lib/radialNavItems";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { ActiveTab } from "@/store/types";
 
@@ -10,53 +10,27 @@ type RadialNavOverlayProps = {
   onNavigate: (tab: ActiveTab) => void;
 };
 
-const MENU_ITEMS: RadialMenuItem[] = [
-  {
-    id: "downloader",
-    label: "Download",
-    iconId: "download",
-    hintPlacement: "top",
-  },
-  {
-    id: "media",
-    label: "Videos",
-    iconId: "videos",
-    hintPlacement: "right",
-  },
-  {
-    id: "explorer",
-    label: "YouTube",
-    iconId: "explorer",
-    hintPlacement: "bottom",
-  },
-  {
-    id: "settings",
-    label: "System",
-    iconId: "settings",
-    hintPlacement: "left",
-  },
-];
-
-const TAB_BY_ITEM: Record<string, ActiveTab> = {
-  downloader: "downloader",
-  media: "media",
-  explorer: "explorer",
-  settings: "settings",
-};
-
-export function RadialNavOverlay({
-  open,
-  anchor,
-  onNavigate,
-}: RadialNavOverlayProps) {
+export function RadialNavOverlay({ open, anchor, onNavigate }: RadialNavOverlayProps) {
   const navMode = useRuforgeStore((s) => s.navMode);
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
+  const setNavMode = useRuforgeStore((s) => s.setNavMode);
+  const setMusicView = useRuforgeStore((s) => s.setMusicView);
 
-  if (!open) return null;
+  const menuItems = radialMenuItemsForMode(navMode);
+
+  const handleSelect = (item: { id: string }) => {
+    const action = radialNavActionForItem(navMode, item.id);
+    if (!action) return;
+    if (action.kind === "tab") { onNavigate(action.tab); return; }
+    if (action.kind === "music") { setMusicView(action.view); return; }
+    setNavMode("default");
+    onNavigate("settings");
+  };
 
   return createPortal(
     <div
       className="fixed inset-0 z-[260] pointer-events-none"
+      style={{ display: open ? undefined : "none" }}
       role="dialog"
       aria-modal="false"
       aria-label="Quick navigation"
@@ -72,12 +46,9 @@ export function RadialNavOverlay({
         <RadialMenu
           open={open}
           navMode={navMode}
-          menuItems={MENU_ITEMS}
+          menuItems={menuItems}
           onCenterClick={() => cycleNavMode()}
-          onSelect={(item) => {
-            const tab = TAB_BY_ITEM[item.id];
-            if (tab) onNavigate(tab);
-          }}
+          onSelect={handleSelect}
         />
       </div>
     </div>,

@@ -33,37 +33,42 @@ pub struct StorageStats {
     pub file_count: u32,
 }
 
-#[tauri::command]
-pub async fn get_storage_stats(dir: String) -> Result<StorageStats, String> {
-    let mut total_bytes = 0;
-    let mut file_count = 0;
-
-    let path = std::path::Path::new(&dir);
-    if !path.exists() {
-        std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
-    }
-
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() {
-                    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-                    if is_media_ext(ext) {
-                        if let Ok(metadata) = std::fs::metadata(path) {
-                            total_bytes += metadata.len();
-                            file_count += 1;
-                        }
-                    }
+fn collect_media_stats_recursive(dir: &std::path::Path) -> (u64, u32) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return (0, 0);
+    };
+    let mut total_bytes = 0u64;
+    let mut file_count = 0u32;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if !fname.starts_with('.') {
+                let (b, c) = collect_media_stats_recursive(&path);
+                total_bytes = total_bytes.saturating_add(b);
+                file_count = file_count.saturating_add(c);
+            }
+        } else if path.is_file() {
+            let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            if is_media_ext(ext) {
+                if let Ok(metadata) = std::fs::metadata(&path) {
+                    total_bytes = total_bytes.saturating_add(metadata.len());
+                    file_count += 1;
                 }
             }
         }
     }
+    (total_bytes, file_count)
+}
 
-    Ok(StorageStats {
-        total_bytes,
-        file_count,
-    })
+#[tauri::command]
+pub async fn get_storage_stats(dir: String) -> Result<StorageStats, String> {
+    let path = std::path::Path::new(&dir);
+    if !path.exists() {
+        std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
+    }
+    let (total_bytes, file_count) = collect_media_stats_recursive(path);
+    Ok(StorageStats { total_bytes, file_count })
 }
 
 #[tauri::command]
@@ -82,32 +87,45 @@ pub async fn clear_ruforge_cache(app: AppHandle) -> Result<u32, String> {
     Ok(removed)
 }
 
-#[tauri::command]
-pub async fn authorize_cleanup(dir: String, target_free_bytes: u64) -> Result<u64, String> {
-    let mut files = vec![];
-    let paths = std::fs::read_dir(&dir).map_err(|e| e.to_string())?;
-
-    for path in paths {
-        let path = path.map_err(|e| e.to_string())?.path();
-        if path.is_file() {
+fn collect_media_files_for_cleanup(
+    dir: &std::path::Path,
+    out: &mut Vec<(std::path::PathBuf, u64, std::time::SystemTime)>,
+) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if !fname.starts_with('.') {
+                collect_media_files_for_cleanup(&path, out);
+            }
+        } else if path.is_file() {
             let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
             if is_media_ext(ext) {
-                let metadata = std::fs::metadata(&path).map_err(|e| e.to_string())?;
-                let created = metadata.created().unwrap_or(std::time::SystemTime::now());
-                files.push((path, metadata.len(), created));
+                if let Ok(metadata) = std::fs::metadata(&path) {
+                    let created = metadata.created().unwrap_or(std::time::SystemTime::now());
+                    out.push((path, metadata.len(), created));
+                }
             }
         }
     }
+}
 
+#[tauri::command]
+pub async fn authorize_cleanup(dir: String, target_free_bytes: u64) -> Result<u64, String> {
+    let mut files = vec![];
+    collect_media_files_for_cleanup(std::path::Path::new(&dir), &mut files);
     files.sort_by(|a, b| a.2.cmp(&b.2));
 
-    let mut deleted_bytes = 0;
+    let mut deleted_bytes = 0u64;
     for (path, size, _) in files {
         if deleted_bytes >= target_free_bytes {
             break;
         }
         if std::fs::remove_file(path).is_ok() {
-            deleted_bytes += size;
+            deleted_bytes = deleted_bytes.saturating_add(size);
         }
     }
 

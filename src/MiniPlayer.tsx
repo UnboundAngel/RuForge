@@ -45,7 +45,7 @@ import {
   readAutoDownloadScrubberPreviews,
 } from "./audioPlaybackPrefs";
 import { applyMediaOutputState } from "./applyMediaOutputState";
-import { chapterAtTime, normalizeChapters } from "./chapters";
+import { chapterAtTime, normalizeChapters, timeForScrubberClientX } from "./chapters";
 import { ChapterScrubber } from "./components/player/ChapterScrubber";
 import { SponsorBlockScrubOverlay } from "./components/player/SponsorBlockScrubOverlay";
 import { SponsorBlockSkipButton } from "./components/player/SponsorBlockSkipButton";
@@ -403,6 +403,14 @@ export default function MiniPlayer() {
   }, []);
 
   useEffect(() => {
+    // Transparent window requires transparent ancestors so clip-path corners show desktop.
+    document.documentElement.style.background = "transparent";
+    document.body.style.background = "transparent";
+    const root = document.getElementById("root");
+    if (root) root.style.background = "transparent";
+  }, []);
+
+  useEffect(() => {
     void hydratePlatformDefaultPaths();
   }, []);
 
@@ -528,6 +536,9 @@ export default function MiniPlayer() {
   }, [playingFile, isPaused]); // Added isPaused to ensure togglePlay is fresh
 
   const [isPinned, setIsPinned] = useState(() => localStorage.getItem("miniplayer-pinned") === "true");
+  const [miniNavMode, setMiniNavMode] = useState<string>(
+    () => localStorage.getItem("ruforge-nav-mode") ?? "default",
+  );
   const [library, setLibrary] = useState<GalleryEntry[]>([]);
   const libraryPosterBackfillEpochRef = useRef(0);
   const [isGalleryHovered, setIsGalleryHovered] = useState(false);
@@ -861,10 +872,17 @@ export default function MiniPlayer() {
     };
   }, []);
 
-  const handleMouseEnter = async () => {
+  const handleMouseEnter = () => {
     setIsHovering(true);
-    const win = getCurrentWindow();
-    await win.setFocus();
+    // Raise z-order without calling SetForegroundWindow, which sends a synthetic
+    // WM_MOUSELEAVE in WebView2 that clears isHovering and hides controls.
+    getCurrentWindow().setAlwaysOnTop(true).catch(console.error);
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovering(false);
+    // Restore to the user's explicit pin preference when the mouse exits.
+    getCurrentWindow().setAlwaysOnTop(isPinned).catch(console.error);
   };
 
   const applyMiniHandoff = (payload: PlayInMiniPayload) => {
@@ -998,6 +1016,7 @@ export default function MiniPlayer() {
         : 0;
       handoffPausedRef.current = payload.paused ?? false;
       setPlayingFile(payload.file);
+      if (payload.navMode) setMiniNavMode(payload.navMode);
       setIsLooping(readLoopForPath(payload.file.path));
       incrementViewCount(payload.file);
       void emit("stop-playback", "mini-player");
@@ -1084,6 +1103,43 @@ export default function MiniPlayer() {
     });
   };
 
+  const chapters = useMemo(() => {
+    if (!playingFile) return null;
+    const dur =
+      isFinite(duration) && duration > 0
+        ? duration
+        : playingFile.duration > 0
+          ? playingFile.duration
+          : 0;
+    return normalizeChapters(playingFile.chapters, dur);
+  }, [playingFile?.chapters, playingFile?.duration, duration]);
+
+  const resolveScrubTime = useCallback(
+    (clientX: number, bar: HTMLElement): number => {
+      const rect = bar.getBoundingClientRect();
+      const v = mediaRef.current;
+      if (rect.width <= 0 || !v || !isFinite(v.duration)) return 0;
+      const dur = duration > 0 ? duration : v.duration;
+      return timeForScrubberClientX(
+        chapters,
+        dur,
+        clientX,
+        rect.left,
+        rect.width,
+      );
+    },
+    [chapters, duration],
+  );
+
+  const applySeekTime = useCallback(
+    (t: number, opts?: { persist?: boolean }) => {
+      const v = mediaRef.current;
+      if (!v || !isFinite(v.duration) || v.duration <= 0) return;
+      applySeekRatio(t / v.duration, opts);
+    },
+    [applySeekRatio],
+  );
+
   const seekRatioFromClientX = (clientX: number, bar: HTMLElement) => {
     const rect = bar.getBoundingClientRect();
     if (rect.width <= 0) return 0;
@@ -1102,17 +1158,16 @@ export default function MiniPlayer() {
 
     const r0 = seekRatioFromClientX(e.clientX, bar);
     setHoverProgress(r0);
-    applySeekRatio(r0);
+    applySeekTime(resolveScrubTime(e.clientX, bar));
 
     const onMove = (ev: MouseEvent) => {
       const r = seekRatioFromClientX(ev.clientX, bar);
       setHoverProgress(r);
-      applySeekRatio(r);
+      applySeekTime(resolveScrubTime(ev.clientX, bar));
     };
 
     const onUp = (ev: MouseEvent) => {
-      const r = seekRatioFromClientX(ev.clientX, bar);
-      applySeekRatio(r, { persist: true });
+      applySeekTime(resolveScrubTime(ev.clientX, bar), { persist: true });
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
 
@@ -1132,17 +1187,6 @@ export default function MiniPlayer() {
   };
 
   const scrubBarProgressPct = scrubPreviewRatio !== null ? scrubPreviewRatio * 100 : progress;
-
-  const chapters = useMemo(() => {
-    if (!playingFile) return null;
-    const dur =
-      isFinite(duration) && duration > 0
-        ? duration
-        : playingFile.duration > 0
-          ? playingFile.duration
-          : 0;
-    return normalizeChapters(playingFile.chapters, dur);
-  }, [playingFile?.chapters, playingFile?.duration, duration]);
 
   const activeChapter = useMemo(
     () => (chapters ? chapterAtTime(chapters, currentTime) : null),
@@ -1334,6 +1378,8 @@ export default function MiniPlayer() {
     setPlayingFile(file);
     incrementViewCount(file);
     setIsMediaSelectorOpen(false);
+    // Tell main window mini has taken over so main audio stops.
+    void emit("stop-playback", "mini-player");
   };
 
   const returnToLibraryBrowse = () => {
@@ -1429,9 +1475,10 @@ export default function MiniPlayer() {
   return (
     <div 
       className={`h-screen w-screen bg-[#121212] overflow-hidden rounded-3xl select-none relative group/mini shadow-2xl outline-none ring-0 [clip-path:inset(0_round_1.5rem)] ${!isCursorVisible && !isPaused ? 'cursor-none' : ''} ${!controlsVisible ? 'controls-hidden' : ''}`}
+      data-music-mode={miniNavMode === "music" ? "true" : undefined}
       onWheel={handleWheel}
       onMouseEnter={handleMouseEnter}
-      onMouseLeave={() => setIsHovering(false)}
+      onMouseLeave={handleMouseLeave}
     >
 
       <AnimatePresence>
@@ -2548,7 +2595,7 @@ export default function MiniPlayer() {
               </AnimatePresence>
             </>
           ) : (           
-            <motion.div className="w-full h-full overflow-y-auto pt-16 pb-12 px-6 pointer-events-auto bg-stone-950/50">
+            <motion.div className="w-full h-full overflow-y-auto overflow-x-hidden pt-16 pb-12 px-6 pointer-events-auto bg-stone-950/50 rounded-3xl">
               <div className="mb-4">
                 <div className="flex items-center space-x-3 mb-6">
                   <div className="w-8 h-8 rounded-xl bg-[color:var(--accent)]/10 flex items-center justify-center border border-[color:var(--accent)]/20">
@@ -2572,7 +2619,7 @@ export default function MiniPlayer() {
                                   key={playlist.path}
                                   initial={{ opacity: 0, y: 20 }}
                                   animate={{ opacity: 1, y: 0 }}
-                                  whileHover={{ y: -4, scale: 1.02 }}
+                                  whileHover={{ y: -3 }}
                                   onClick={() => handleSelectMedia(playlist.items[0])}
                                   className="flex flex-col text-left group relative"
                                 >
@@ -2581,7 +2628,7 @@ export default function MiniPlayer() {
                                     <div className="absolute inset-0 bg-stone-800 rounded-2xl rotate-[2deg] scale-[0.98] opacity-60 translate-y-[-2px]" />
                                     <div className="absolute inset-0 rounded-2xl overflow-hidden bg-black z-10 border border-white/10">
                                       {mainThumbnail ? (
-                                        <img src={convertFileSrc(mainThumbnail)} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60" />
+                                        <img src={convertFileSrc(mainThumbnail)} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:opacity-80 transition-opacity duration-300 opacity-60" />
                                       ) : (
                                         <div className="absolute inset-0 flex items-center justify-center">
                                            <Layers className="w-8 h-8 text-stone-700 opacity-20" strokeWidth={1} />
@@ -2613,13 +2660,13 @@ export default function MiniPlayer() {
                                 key={file.path}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                whileHover={{ y: -4, scale: 1.02 }}
+                                whileHover={{ y: -3 }}
                                 onClick={() => handleSelectMedia(file)}
                                 className="flex flex-col text-left group relative"
                               >
                                 <div className="aspect-video w-full rounded-2xl overflow-hidden relative border border-white/5 bg-stone-900/50 mb-2 shadow-xl group-hover:border-[color:var(--accent)]/30 transition-all duration-300">
                                   {stillPoster ? (
-                                    <img src={convertFileSrc(stillPoster)} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                    <img src={convertFileSrc(stillPoster)} alt="" className="absolute inset-0 w-full h-full object-cover group-hover:opacity-80 transition-opacity duration-300" />
                                   ) : (
                                     <div className="absolute inset-0 flex items-center justify-center">
                                       <Video className="w-8 h-8 text-stone-700 opacity-20" strokeWidth={1} />

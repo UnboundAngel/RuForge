@@ -27,6 +27,20 @@ export function nextNavMode(current: NavMode): NavMode {
   return NAV_MODE_ORDER[(i + 1) % NAV_MODE_ORDER.length];
 }
 
+/** Music shell browse surface (Home / Explore / Library). */
+export type MusicView = "home" | "explore" | "library";
+
+/** Drill-down target inside Music mode (artist page or album page). */
+export type MusicDetail =
+  | { kind: "artist"; key: string }
+  | { kind: "album"; artistKey: string; key: string };
+
+/** Signed-in YouTube account read from the embedded Explorer session. */
+export type YouTubeExplorerProfile = {
+  displayName: string;
+  avatarUrl: string | null;
+};
+
 export type SettingsTab =
   | "general"
   | "downloads"
@@ -111,6 +125,11 @@ export interface RuforgeSettings {
   autoDownloadScrubberPreviews: boolean;
   /** Parallel yt-dlp jobs (`downloadQueueSlice.maxConcurrentDownloads` mirrors this). */
   maxConcurrentDownloads: number;
+  /**
+   * Delay in ms between consecutive download job starts in a batch (e.g. music playlist).
+   * 0 = disabled (default). Helps avoid rate-limiting on large multi-track grabs.
+   */
+  downloadJobStartDelayMs: number;
   /** When true, Settings shows the Debugging tab (group playlist, updater UI cycle, etc.). */
   showDebuggingSettings: boolean;
   /** Master SponsorBlock toggle (default false until feature ships). */
@@ -140,6 +159,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   skipDuplicatesAutomatically: false,
   autoDownloadScrubberPreviews: true,
   maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+  downloadJobStartDelayMs: 0,
   showDebuggingSettings: false,
   sponsorBlockEnabled: true,
   sponsorBlockCategoryModes: defaultCategoryModes(),

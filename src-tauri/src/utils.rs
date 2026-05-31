@@ -2,8 +2,62 @@ use std::path::{Path, PathBuf};
 
 pub const THUMB_DIR_NAME: &str = ".ruforge_thumbs";
 pub const POSTER_FILE: &str = "poster.jpg";
-pub const MEDIA_EXTS: &[&str] = &["mp4", "mkv", "webm", "mp3", "m4a", "flac", "opus", "ogg"];
+pub const MEDIA_EXTS: &[&str] = &["mp4", "mkv", "webm", "mp3", "m4a", "flac", "opus", "ogg", "wav"];
 pub const AUDIO_ONLY_EXTS: &[&str] = &["mp3", "m4a", "flac", "opus", "ogg", "wav"];
+
+/// Top-level bucket dirs that contain per-item subfolders (one media item per subfolder).
+pub const ITEM_BUCKET_NAMES: &[&str] = &["Videos", "Music", "Movies", "Shows"];
+/// Top-level bucket dir that contains per-playlist subfolders.
+pub const PLAYLIST_BUCKET_NAME: &str = "Playlists";
+/// All recognized top-level library bucket directory names.
+pub const ALL_BUCKET_NAMES: &[&str] = &["Videos", "Music", "Movies", "Shows", "Playlists", "Unsorted"];
+
+pub fn is_item_bucket(name: &str) -> bool {
+    ITEM_BUCKET_NAMES.iter().any(|&b| b.eq_ignore_ascii_case(name))
+}
+
+pub fn is_playlist_bucket(name: &str) -> bool {
+    name.eq_ignore_ascii_case(PLAYLIST_BUCKET_NAME)
+}
+
+pub fn is_any_bucket(name: &str) -> bool {
+    ALL_BUCKET_NAMES.iter().any(|&b| b.eq_ignore_ascii_case(name))
+}
+
+/// Shared sanitizer for item and playlist folder names.
+/// Replaces forbidden filesystem chars with space, collapses whitespace,
+/// strips trailing dots, caps at 150 chars. Falls back to "media".
+pub fn item_folder_name(raw: &str) -> String {
+    let s: String = raw
+        .trim()
+        .chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => ' ',
+            c if (c as u32) < 32 => ' ',
+            c => c,
+        })
+        .collect();
+    let mut s: String = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    while s.ends_with('.') {
+        s.pop();
+        let trimmed = s.trim_end().to_string();
+        s = trimmed;
+    }
+    let s = s.trim().to_string();
+    if s.is_empty() {
+        return "media".to_string();
+    }
+    if s.len() > 150 {
+        let mut end = 150;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        let truncated = s[..end].trim().to_string();
+        if truncated.is_empty() { "media".to_string() } else { truncated }
+    } else {
+        s
+    }
+}
 
 /// yt-dlp may write `{stem}.info.json` or the legacy `{stem}..info.json` double-dot sidecar.
 pub fn resolve_info_json_path(parent: &Path, stem: &str) -> Option<PathBuf> {

@@ -163,6 +163,167 @@ export function hoverPercentInChapter(
   return progressPercentInChapter(chapter, hoverGlobalPercent, durationSec);
 }
 
+/** Must match ChapterScrubber grid gap (Tailwind gap-[3px]). */
+export const CHAPTER_SCRUB_GAP_PX = 3;
+
+export type ChapterScrubSegmentLayout = {
+  leftPx: number;
+  widthPx: number;
+};
+
+function chapterSpanTotal(chapters: NormalizedChapter[], durationSec: number): number {
+  const fromChapters = chapters.reduce(
+    (sum, ch) => sum + Math.max(0, ch.end_time - ch.start_time),
+    0,
+  );
+  if (fromChapters > 0) return fromChapters;
+  return finitePositive(durationSec) ? durationSec : 0;
+}
+
+/** Pixel layout for each chapter pill; accounts for fixed inter-segment gaps. */
+export function chapterScrubSegmentLayouts(
+  chapters: NormalizedChapter[],
+  durationSec: number,
+  barWidthPx: number,
+  gapPx = CHAPTER_SCRUB_GAP_PX,
+): ChapterScrubSegmentLayout[] {
+  if (!chapters.length || barWidthPx <= 0) {
+    return chapters.map(() => ({ leftPx: 0, widthPx: 0 }));
+  }
+
+  const spanBase = chapterSpanTotal(chapters, durationSec);
+  const n = chapters.length;
+  const totalGap = Math.max(0, n - 1) * gapPx;
+  const contentWidth = Math.max(0, barWidthPx - totalGap);
+  const layouts: ChapterScrubSegmentLayout[] = [];
+  let cursor = 0;
+
+  for (let i = 0; i < n; i++) {
+    if (i > 0) cursor += gapPx;
+    const span = Math.max(0, chapters[i].end_time - chapters[i].start_time);
+    const widthPx = spanBase > 0 ? (span / spanBase) * contentWidth : 0;
+    layouts.push({ leftPx: cursor, widthPx });
+    cursor += widthPx;
+  }
+
+  return layouts;
+}
+
+/** Playhead / cursor position on the full scrubber width (0..100). */
+export function scrubberPercentForTime(
+  chapters: NormalizedChapter[],
+  durationSec: number,
+  timeSec: number,
+  barWidthPx: number,
+  gapPx = CHAPTER_SCRUB_GAP_PX,
+): number {
+  if (barWidthPx <= 0) {
+    return finitePositive(durationSec) && durationSec > 0
+      ? (timeSec / durationSec) * 100
+      : 0;
+  }
+
+  const at = chapterAtTime(chapters, timeSec);
+  if (!at) {
+    return finitePositive(durationSec) && durationSec > 0
+      ? (timeSec / durationSec) * 100
+      : 0;
+  }
+
+  const layouts = chapterScrubSegmentLayouts(
+    chapters,
+    durationSec,
+    barWidthPx,
+    gapPx,
+  );
+  const seg = layouts[at.index];
+  if (!seg) return 0;
+  const x = seg.leftPx + at.localProgress01 * seg.widthPx;
+  return (x / barWidthPx) * 100;
+}
+
+/** Inverse of scrubberPercentForTime for hover and seek. */
+export function timeForScrubberPercent(
+  chapters: NormalizedChapter[],
+  durationSec: number,
+  percent: number,
+  barWidthPx: number,
+  gapPx = CHAPTER_SCRUB_GAP_PX,
+): number {
+  if (barWidthPx <= 0 || !finitePositive(durationSec) || durationSec <= 0) {
+    return 0;
+  }
+
+  const x = (Math.min(100, Math.max(0, percent)) / 100) * barWidthPx;
+  const layouts = chapterScrubSegmentLayouts(
+    chapters,
+    durationSec,
+    barWidthPx,
+    gapPx,
+  );
+
+  for (let i = 0; i < chapters.length; i++) {
+    const seg = layouts[i];
+    const segEnd = seg.leftPx + seg.widthPx;
+    const inSegment =
+      i === chapters.length - 1 ? x >= seg.leftPx && x <= segEnd : x >= seg.leftPx && x < segEnd;
+    if (!inSegment) continue;
+
+    const ch = chapters[i];
+    const span = ch.end_time - ch.start_time;
+    const localX = Math.max(0, Math.min(seg.widthPx, x - seg.leftPx));
+    const localProgress = seg.widthPx > 0 ? localX / seg.widthPx : 0;
+    return ch.start_time + localProgress * span;
+  }
+
+  return durationSec;
+}
+
+export function timeForScrubberClientX(
+  chapters: NormalizedChapter[] | null,
+  durationSec: number,
+  clientX: number,
+  barLeft: number,
+  barWidth: number,
+  gapPx = CHAPTER_SCRUB_GAP_PX,
+): number {
+  if (barWidth <= 0) return 0;
+  const percent = ((clientX - barLeft) / barWidth) * 100;
+  if (chapters && chapters.length >= 2 && finitePositive(durationSec)) {
+    return timeForScrubberPercent(chapters, durationSec, percent, barWidth, gapPx);
+  }
+  return (percent / 100) * durationSec;
+}
+
+/** Hover wash width inside one chapter segment, aligned to cursor pixels. */
+export function hoverFillPercentInChapter(
+  chapterIndex: number,
+  chapters: NormalizedChapter[],
+  durationSec: number,
+  hoverGlobalPercent: number,
+  barWidthPx: number,
+  gapPx = CHAPTER_SCRUB_GAP_PX,
+): number {
+  const chapter = chapters[chapterIndex];
+  if (!chapter) return 0;
+
+  if (barWidthPx <= 0) {
+    return hoverPercentInChapter(chapter, hoverGlobalPercent, durationSec);
+  }
+
+  const hoverX = (hoverGlobalPercent / 100) * barWidthPx;
+  const layouts = chapterScrubSegmentLayouts(
+    chapters,
+    durationSec,
+    barWidthPx,
+    gapPx,
+  );
+  const seg = layouts[chapterIndex];
+  if (!seg || hoverX <= seg.leftPx) return 0;
+  if (hoverX >= seg.leftPx + seg.widthPx) return 100;
+  return ((hoverX - seg.leftPx) / seg.widthPx) * 100;
+}
+
 function progressPercentInChapter(
   chapter: NormalizedChapter,
   globalPercent: number,

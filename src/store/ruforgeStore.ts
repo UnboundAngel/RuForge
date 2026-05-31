@@ -26,9 +26,12 @@ import {
   nextNavMode,
   type ActiveTab,
   type GalleryFilter,
+  type MusicDetail,
+  type MusicView,
   type NavMode,
   type RuforgeSettings,
   type SettingsTab,
+  type YouTubeExplorerProfile,
 } from "./types";
 import {
   createRuforgePersistStorage,
@@ -53,9 +56,12 @@ import type {
 export type {
   ActiveTab,
   GalleryFilter,
+  MusicDetail,
+  MusicView,
   NavMode,
   RuforgeSettings,
   SettingsTab,
+  YouTubeExplorerProfile,
 } from "./types";
 export { RUFORGE_INTERNAL_DIR } from "./types";
 
@@ -75,6 +81,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   libraryScanDirs: string[];
   isSidebarExpanded: boolean;
   navMode: NavMode;
+  musicView: MusicView;
+  musicDetail: MusicDetail | null;
   storageStats: { total_bytes: number; file_count: number } | null;
 
   activeTab: ActiveTab;
@@ -84,6 +92,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   isSearchExpanded: boolean;
   searchValue: string;
   lastExplorerUrl: string;
+  /** Null when Explorer session is signed out or webview has not reported yet. */
+  youtubeExplorerProfile: YouTubeExplorerProfile | null;
 
   notifications: RuforgeNotification[];
 
@@ -152,6 +162,11 @@ export interface RuforgeStore extends DownloadQueueSlice {
   toggleSidebar: () => void;
   setSidebarCollapsedByResize: () => void;
   cycleNavMode: () => void;
+  setNavMode: (mode: NavMode) => void;
+  setMusicView: (view: MusicView) => void;
+  openMusicArtist: (key: string) => void;
+  openMusicAlbum: (artistKey: string, key: string) => void;
+  closeMusicDetail: () => void;
   refreshStorageStats: () => Promise<void>;
   openAuthorizeCleanupModal: () => Promise<void>;
   closeAuthorizeCleanupModal: () => void;
@@ -170,6 +185,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setIsSearchExpanded: (v: boolean | ((p: boolean) => boolean)) => void;
   setSearchValue: (v: string) => void;
   setLastExplorerUrl: (url: string) => void;
+  setYoutubeExplorerProfile: (profile: YouTubeExplorerProfile | null) => void;
 
   notify: (message: string, type?: RuforgeNotification["type"]) => number;
   dismissNotification: (id: number) => void;
@@ -246,6 +262,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
       libraryScanDirs: pathsInit.libraryScanDirs,
       isSidebarExpanded: pathsInit.isSidebarExpanded,
       navMode: pathsInit.navMode,
+      musicView: "home",
+      musicDetail: null,
       storageStats: null,
 
       activeTab: "downloader",
@@ -255,6 +273,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       isSearchExpanded: false,
       searchValue: "",
       lastExplorerUrl: "https://www.youtube.com",
+      youtubeExplorerProfile: null,
 
       notifications: [],
 
@@ -370,15 +389,15 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       handlePopOut: async (startTime, opts) => {
-        const { playingFile, activeTab, volume, isMuted } = get();
+        const { playingFile, activeTab, navMode, volume, isMuted } = get();
         const fileToHandoff = playingFile;
-        const wasInPlayer = activeTab === "player" && !!fileToHandoff;
+        const canHandoff = !!fileToHandoff && (activeTab === "player" || navMode === "music");
         const t = Math.max(0, startTime ?? 0);
         const paused = opts?.paused ?? false;
         const speed = opts?.playbackSpeed ?? readPlaybackSpeed();
         try {
           await invoke("open_mini_player");
-          if (wasInPlayer && fileToHandoff) {
+          if (canHandoff && fileToHandoff) {
             writePlaybackPos(fileToHandoff.path, t);
             const playInMiniPayload: PlayInMiniPayload = {
               file: fileToHandoff,
@@ -387,6 +406,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
               playbackSpeed: speed,
               volume,
               muted: isMuted,
+              navMode,
             };
             await emit("play-in-mini", playInMiniPayload);
             let unlistenFn: (() => void) | null = null;
@@ -405,7 +425,10 @@ export const useRuforgeStore = create<RuforgeStore>()(
                 unlistenFn = null;
               }
             }, 5000);
-            set({ playingFile: null, activeTab: "media" });
+            set({
+              playingFile: null,
+              ...(navMode !== "music" ? { activeTab: "media" } : {}),
+            });
           }
         } catch (e) {
           console.error(e);
@@ -514,9 +537,19 @@ export const useRuforgeStore = create<RuforgeStore>()(
         set((s) => {
           const next = nextNavMode(s.navMode);
           localStorage.setItem("ruforge-nav-mode", next);
-          return { navMode: next };
+          return { navMode: next, musicDetail: null };
         });
       },
+
+      setNavMode: (mode) => {
+        localStorage.setItem("ruforge-nav-mode", mode);
+        set({ navMode: mode, musicDetail: null });
+      },
+
+      setMusicView: (view) => set({ musicView: view, musicDetail: null }),
+      openMusicArtist: (key) => set({ musicDetail: { kind: "artist", key } }),
+      openMusicAlbum: (artistKey, key) => set({ musicDetail: { kind: "album", artistKey, key } }),
+      closeMusicDetail: () => set({ musicDetail: null }),
 
       refreshStorageStats: async () => {
         const { saveToInternal, outputDir } = get();
@@ -569,6 +602,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
         })),
       setSearchValue: (v) => set({ searchValue: v }),
       setLastExplorerUrl: (url) => set({ lastExplorerUrl: url }),
+      setYoutubeExplorerProfile: (youtubeExplorerProfile) => set({ youtubeExplorerProfile }),
 
       notify: (message, type = "info") => {
         const id = Date.now() + Math.floor(Math.random() * 1000);
