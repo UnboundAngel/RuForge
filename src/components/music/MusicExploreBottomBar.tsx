@@ -12,6 +12,8 @@ import {
   isMusicYouTubePlaylistUrl,
   isMusicYouTubeUrl,
   canonicalMusicYouTubeUrl,
+  resolveMusicExplorePasteUrl,
+  isMusicExplorePasteUrl,
 } from "@/youtubeUrl";
 import { invoke } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
@@ -27,6 +29,7 @@ function getStripMode(url: string): StripMode {
 }
 
 type Props = {
+  shellBlack?: boolean;
   currentUrl: string;
   pasteMode: boolean;
   onPickTracks: () => void;
@@ -37,6 +40,7 @@ type Props = {
 };
 
 export function MusicExploreBottomBar({
+  shellBlack = false,
   currentUrl,
   pasteMode,
   onPickTracks,
@@ -74,11 +78,10 @@ export function MusicExploreBottomBar({
       try {
         const text = await navigator.clipboard.readText();
         if (cancelled) return;
-        const canonical = canonicalMusicYouTubeUrl(text.trim());
-        if (canonical) {
-          setPasteInputValue(canonical);
+        const resolved = resolveMusicExplorePasteUrl(text.trim());
+        if (resolved) {
+          setPasteInputValue(resolved);
           setPasteChecking(false);
-          onPasteUrlReady(canonical);
           return;
         }
       } catch {
@@ -94,9 +97,10 @@ export function MusicExploreBottomBar({
   }, [pasteMode]);
 
   const submitPasteUrl = () => {
-    const canonical = canonicalMusicYouTubeUrl(pasteInputValue.trim());
-    if (!canonical) return;
-    onPasteUrlReady(canonical);
+    const resolved = resolveMusicExplorePasteUrl(pasteInputValue.trim());
+    if (!resolved) return;
+    onPasteUrlReady(resolved);
+    setPasteInputValue("");
   };
 
   const downloadAll = async () => {
@@ -148,11 +152,11 @@ export function MusicExploreBottomBar({
 
   return (
     <div
-      className="shrink-0 w-full flex items-center gap-0.5 px-2 overflow-x-auto"
+      className="flex w-full min-w-0 items-center gap-0.5 px-2 overflow-x-auto shrink-0"
       style={{
         height: "var(--music-explore-bar-height)",
         color: "var(--music-text-secondary)",
-        background: "var(--music-surface)",
+        background: shellBlack ? "var(--music-bg)" : "var(--music-surface)",
         borderBottomRightRadius: "var(--music-panel-radius)",
       }}
     >
@@ -215,7 +219,7 @@ export function MusicExploreBottomBar({
               </div>
               <button
                 type="submit"
-                disabled={!canonicalMusicYouTubeUrl(pasteInputValue.trim())}
+                disabled={!isMusicExplorePasteUrl(pasteInputValue.trim())}
                 className={cn(
                   btn,
                   "disabled:opacity-40 disabled:cursor-default",

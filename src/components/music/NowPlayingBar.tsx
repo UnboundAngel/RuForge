@@ -44,6 +44,9 @@ type Props = {
   onPauseForScrub: () => boolean;
   onResumeAfterScrub: (wasPlaying: boolean) => void;
   onToggleExpand: () => void;
+  /** Right panel toggle: omit to hide the button. */
+  rightPanelOpen?: boolean;
+  onToggleRightPanel?: () => void;
 };
 
 export function NowPlayingBar({
@@ -67,6 +70,8 @@ export function NowPlayingBar({
   onPauseForScrub,
   onResumeAfterScrub,
   onToggleExpand,
+  rightPanelOpen,
+  onToggleRightPanel,
 }: Props) {
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const volume = useRuforgeStore((s) => s.volume);
@@ -147,23 +152,30 @@ export function NowPlayingBar({
       className="shrink-0"
       style={{
         height: "var(--music-nowplaying-height)",
-        background: "var(--music-bg)",
+        background: expanded ? "var(--music-bg)" : "var(--music-surface)",
       }}
       onWheel={handleVolumeWheel}
     >
       <div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1fr)] items-center gap-x-4 px-4">
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
           onClick={onToggleExpand}
-          className="flex items-center gap-3 min-w-0 text-left"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onToggleExpand();
+            }
+          }}
+          className="flex items-center gap-3 min-w-0 text-left cursor-pointer"
           aria-label={expanded ? "Collapse player" : "Expand player"}
         >
           {coverSrc ? (
             <img
               src={coverSrc}
               alt=""
-              className="w-12 h-12 shrink-0 object-cover"
-              style={{ borderRadius: "var(--music-card-radius)" }}
+              className="w-12 h-12 shrink-0 object-contain"
+              style={{ borderRadius: "var(--music-card-radius)", background: "var(--music-surface-raised)" }}
             />
           ) : (
             <div
@@ -191,7 +203,7 @@ export function NowPlayingBar({
               </button>
             )}
           </div>
-        </button>
+        </div>
 
         <div className="flex flex-col items-center justify-center gap-1.5 min-w-0">
           <div className="flex items-center gap-1.5 sm:gap-2">
@@ -378,6 +390,19 @@ export function NowPlayingBar({
           >
             <Icon icon="material-symbols:ad-group-outline" width={16} />
           </button>
+
+          {onToggleRightPanel && (
+            <button
+              type="button"
+              onClick={onToggleRightPanel}
+              className={cn(barBtnClass)}
+              style={{ color: rightPanelOpen ? "var(--music-accent)" : "var(--music-text-primary)" }}
+              aria-label={rightPanelOpen ? "Close queue panel" : "Open queue panel"}
+              title={rightPanelOpen ? "Close queue panel" : "Open queue panel"}
+            >
+              <Icon icon="material-symbols:queue-music-rounded" width={16} />
+            </button>
+          )}
 
           <button
             type="button"

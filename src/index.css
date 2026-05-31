@@ -353,7 +353,8 @@ html.ruforge-notify-root body {
 
 /* Music mode palette - applied to the full app shell in music mode. */
 [data-music-mode="true"] {
-  --music-bg: #000000;
+  --music-bg: #0f0f0f;
+  --music-shell-chrome: #0f0f0f;
   --music-surface: #121212;
   --music-surface-raised: #1a1a1a;
   --music-border: rgba(255, 255, 255, 0.08);
@@ -366,15 +367,24 @@ html.ruforge-notify-root body {
   --music-sidebar-collapsed-width: 56px;
   --music-nav-width: var(--music-sidebar-width);
   --music-nav-width-collapsed: var(--music-sidebar-collapsed-width);
+  --music-right-panel-width: 272px;
   --music-nowplaying-height: 90px;
   --music-bottom-idle: 12px;
   --music-panel-radius: 12px;
   --music-shell-gap: 8px;
   --music-explore-bar-height: 44px;
 
-  --bg: #000000;
+  --bg: #0f0f0f;
   /* Pull the global accent token to music red so all existing hover:text-[var(--accent)] surfaces get it for free. */
   --accent: #ff0033;
+}
+
+/* Immersive player (vinyl + full cover): pure black frame matches expanded hero. */
+[data-music-mode="true"][data-music-player-expanded="true"],
+[data-music-player-expanded="true"] {
+  --music-bg: #000000;
+  --music-shell-chrome: #000000;
+  --bg: #000000;
 }
 
 [data-music-mode="true"] .rf-scrollbar,
@@ -573,4 +583,101 @@ html.ruforge-notify-root body {
   position: relative;
   z-index: 20;
 }
+
+/* ── Music Right Sidebar ─────────────────────────────── */
+.rf-music-right-panel {
+  border-top-right-radius: var(--music-panel-radius);
+  border-bottom-right-radius: var(--music-panel-radius);
+  overflow: hidden;
+}
+
+.rf-music-panel-tab {
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.rf-music-right-row {
+  margin-left: 4px;
+  margin-right: 4px;
+  border-radius: 4px;
+  transition: background-color 0.12s ease;
+}
+
+.rf-music-right-row[data-active="false"]:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.rf-music-right-row-title {
+  color: var(--music-text-primary);
+}
+
+.rf-music-right-row[data-active="false"]:hover .rf-music-right-row-title {
+  color: var(--music-text-primary);
+}
+
+.rf-music-right-row-title[data-active="true"] {
+  color: var(--music-accent);
+}
+
+.rf-music-row-menu {
+  transition: opacity 0.12s ease, background-color 0.12s ease;
+}
+
+.rf-music-row-menu:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.rf-music-queue-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--music-surface);
+  transition: box-shadow 0.15s ease;
+}
+
+.rf-music-right-panel[data-shell-frame="true"] .rf-music-queue-sticky {
+  background: var(--music-bg);
+}
+
+.rf-music-queue-sticky[data-scrolled="true"] {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45);
+}
+
+.rf-music-queue-grip {
+  opacity: 0;
+  cursor: default;
+  touch-action: none;
+  transition: opacity 0.12s ease;
+}
+
+.rf-music-right-row:hover .rf-music-queue-grip {
+  opacity: 0.45;
+}
+
+.rf-music-queue-reorder[data-dragging="true"] .rf-music-right-row {
+  transition: none;
+  cursor: default;
+}
+
+.rf-music-queue-reorder[data-dragging="true"] .rf-music-right-row[data-active="false"]:hover {
+  background-color: transparent;
+}
+
+.rf-music-queue-reorder[data-dragging="true"] .rf-music-queue-grip,
+.rf-music-queue-reorder[data-dragging="true"] .rf-music-row-menu {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rf-music-history-toggle {
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.rf-music-right-switch {
+  transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rf-music-right-switch-thumb {
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 

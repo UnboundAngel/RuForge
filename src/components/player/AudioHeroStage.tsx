@@ -18,6 +18,7 @@ type Props = {
   isMuted: boolean;
   /** background = blurred cover only; foreground = vinyl + art; full = both (default). */
   layer?: "full" | "background" | "foreground";
+  onTogglePlay?: () => void;
 };
 
 function VinylDisc({ coverSrc }: { coverSrc: string | null }) {
@@ -41,8 +42,7 @@ function VinylDisc({ coverSrc }: { coverSrc: string | null }) {
   return (
     <svg
       viewBox="0 0 400 400"
-      className="w-full h-full"
-      style={{ filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.5))" }}
+      className="h-full w-full"
       aria-hidden
     >
       <defs>
@@ -129,6 +129,7 @@ export function AudioHeroStage({
   isPaused,
   isMuted,
   layer = "full",
+  onTogglePlay,
 }: Props) {
   const showBackground = layer === "full" || layer === "background";
   const showForeground = layer === "full" || layer === "foreground";
@@ -193,9 +194,10 @@ export function AudioHeroStage({
       }
 
       const glow = glowRef.current;
-      if (!glow) return;
+      if (!glow || !audioEl) return;
+
       const graph = graphRef.current;
-      const mediaPaused = audioEl?.paused ?? true;
+      const mediaPaused = audioEl.paused;
 
       if (!graph || mediaPaused || isPaused) {
         const cur = parseFloat(glow.dataset.energy || "0");
@@ -206,7 +208,7 @@ export function AudioHeroStage({
         return;
       }
 
-      const volGain = audioEl && !isMuted ? audioEl.volume : 0;
+      const volGain = !isMuted ? audioEl.volume : 0;
       const gain = (isMuted ? 0.35 : 1) * (0.8 + volGain * 0.35);
       const energy = readSmoothedLoudness(graph, gain);
       glow.dataset.energy = String(energy);
@@ -228,11 +230,10 @@ export function AudioHeroStage({
       {showBackground && <HeroBackground coverSrc={coverSrc} />}
 
       {showForeground && (
-      <div className="absolute inset-0 flex items-center justify-center z-10">
+      <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
         <div className="relative" style={{ width: artSize, height: artSize }}>
-          {/* Vinyl disc */}
           <div
-            className="absolute transition-all duration-700 ease-out"
+            className="absolute z-0 transition-all duration-700 ease-out pointer-events-none"
             style={{
               width: "100%",
               height: "100%",
@@ -241,6 +242,7 @@ export function AudioHeroStage({
               transform: `translateY(-50%) translateX(${isPaused ? "30%" : "0"})`,
               opacity: isPaused ? 0.5 : 1,
             }}
+            aria-hidden
           >
             <div
               ref={glowRef}
@@ -248,32 +250,57 @@ export function AudioHeroStage({
               data-energy="0"
               style={{ transition: "opacity 0.3s" }}
             />
-            <div ref={vinylRef} className="w-full h-full">
+            <div ref={vinylRef} className="h-full w-full rounded-full overflow-hidden">
               <VinylDisc coverSrc={coverSrc} />
             </div>
           </div>
 
-          {/* Album art */}
-          <div
-            data-audio-hero-art
-            className="relative z-10 w-full h-full rounded-2xl overflow-hidden shadow-2xl border border-white/15 ring-1 ring-white/10 bg-black/40"
-          >
-            {coverSrc ? (
-              <img
-                src={coverSrc}
-                alt=""
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="flex w-full h-full items-center justify-center bg-white/5">
-                <Music
-                  className="w-24 h-24 text-[color:var(--accent)] opacity-35"
-                  strokeWidth={1}
-                  aria-hidden
+          {onTogglePlay ? (
+            <button
+              type="button"
+              onClick={onTogglePlay}
+              data-audio-hero-art
+              className="relative z-10 block h-full w-full cursor-pointer rounded-2xl overflow-hidden border border-white/15 bg-black p-0 text-left shadow-2xl ring-1 ring-white/10 pointer-events-auto"
+              aria-label={isPaused ? "Play" : "Pause"}
+            >
+              {coverSrc ? (
+                <img
+                  src={coverSrc}
+                  alt=""
+                  className="block h-full w-full object-cover"
                 />
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-white/5">
+                  <Music
+                    className="w-24 h-24 text-[color:var(--accent)] opacity-35"
+                    strokeWidth={1}
+                    aria-hidden
+                  />
+                </div>
+              )}
+            </button>
+          ) : (
+            <div
+              data-audio-hero-art
+              className="relative z-10 h-full w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl ring-1 ring-white/10"
+            >
+              {coverSrc ? (
+                <img
+                  src={coverSrc}
+                  alt=""
+                  className="block h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-white/5">
+                  <Music
+                    className="w-24 h-24 text-[color:var(--accent)] opacity-35"
+                    strokeWidth={1}
+                    aria-hidden
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       )}

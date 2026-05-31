@@ -195,23 +195,23 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
           <img
             src={heroCoverSrc}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             style={{ filter: "blur(32px) brightness(0.45)", transform: "scale(1.1)" }}
           />
         )}
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 pointer-events-none"
           style={{ background: "linear-gradient(to bottom, transparent 40%, var(--music-surface) 100%)" }}
         />
         <button
           type="button"
           onClick={onBack}
-          className="absolute top-3 left-3 flex items-center gap-1.5 text-sm opacity-70 hover:opacity-100 transition-opacity z-10"
+          className="absolute top-3 left-3 z-20 flex items-center gap-1.5 text-sm opacity-70 hover:opacity-100 transition-opacity"
           style={{ color: "var(--music-text-primary)" }}
         >
           <ChevronLeft size={16} /> Back
         </button>
-        <div className="absolute bottom-4 left-5 z-10">
+        <div className="absolute bottom-4 left-5 z-10 pointer-events-none">
           <h1 className="text-2xl font-bold" style={{ color: "var(--music-text-primary)" }}>{displayName}</h1>
           <p className="text-sm mt-1" style={{ color: "var(--music-text-secondary)" }}>
             {tracks.length} {tracks.length === 1 ? "song" : "songs"}
