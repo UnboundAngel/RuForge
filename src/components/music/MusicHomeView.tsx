@@ -7,6 +7,13 @@ import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { readFurthestPlaybackSec } from "@/playbackStorage";
 import type { MediaFile } from "@/types";
 import { MusicProfileChip } from "./MusicProfileChip";
+import { MusicHomeSkeleton } from "./MusicHomeSkeleton";
+import {
+  dedupeMusicTracks,
+  diversifyTracksByArtist,
+  musicTrackIdentityKey,
+  normalizeAlbumShelfKey,
+} from "./musicShelfDedup";
 
 /** Seeded shuffle: stable for the session based on a random seed frozen on first render. */
 function seededShuffle<T>(items: T[], seed: number): T[] {
@@ -307,9 +314,10 @@ type Props = {
 
 export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) {
   const entries = useRuforgeStore((s) => s.entries);
+  const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
   const sessionSeedRef = useRef(Math.floor(Math.random() * 0xffffffff));
 
-  const [activeFilter, setActiveFilter] = useState<"all" | "relax" | "focus" | "energize">("all");
+  const [activeFilter, setActiveFilter] = useState<"all" | "relax" | "focus">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const tracks = useMemo(
@@ -335,10 +343,6 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
         if (activeFilter === "focus") {
           const focusWords = ["jazz", "ambience", "study", "work", "beats", "homework", "coffee shop", "focus", "piano", "instrumental"];
           return focusWords.some(w => name.includes(w) || artist.includes(w) || album.includes(w));
-        }
-        if (activeFilter === "energize") {
-          const energizeWords = ["juice", "blood", "autograph", "metal", "rap", "rock", "heavy", "reverse", "energetic", "workout", "drum"];
-          return energizeWords.some(w => name.includes(w) || artist.includes(w) || album.includes(w));
         }
         return true;
       });
@@ -367,15 +371,16 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
 
     const albumMap = new Map<string, Extract<RecentItem, { kind: "album" }>>();
     const looseTracks: MediaFile[] = [];
+    const seenLoose = new Set<string>();
 
     for (const t of filteredTracks) {
       if (t.album && t.album.trim()) {
         const artistRaw = t.albumArtist ?? t.artist ?? "";
-        const key = `${primaryArtist(artistRaw).toLowerCase()}::${t.album.trim().toLowerCase()}`;
+        const key = `${primaryArtist(artistRaw).toLowerCase()}::${normalizeAlbumShelfKey(t.album)}`;
         if (!albumMap.has(key)) {
           albumMap.set(key, {
             kind: "album",
-            albumKey: t.album.trim().toLowerCase(),
+            albumKey: normalizeAlbumShelfKey(t.album),
             artistKey: primaryArtist(artistRaw).toLowerCase(),
             album: t.album,
             artist: primaryArtist(artistRaw) || artistRaw,
@@ -393,6 +398,9 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
           if (c) entry.cover = c;
         }
       } else {
+        const looseKey = musicTrackIdentityKey(t, primaryArtist);
+        if (seenLoose.has(looseKey)) continue;
+        seenLoose.add(looseKey);
         looseTracks.push(t);
       }
     }
@@ -404,7 +412,36 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
     for (const a of sortedAlbums) items.push(a);
     for (const t of sortedLoose) items.push({ kind: "track", file: t });
 
-    return items.slice(0, 12);
+    const artistKeyFor = (item: RecentItem): string =>
+      item.kind === "album"
+        ? item.artistKey
+        : primaryArtist(item.file.artist ?? item.file.albumArtist ?? "").toLowerCase();
+
+    const counts = new Map<string, number>();
+    const picked: RecentItem[] = [];
+    const pickedKeys = new Set<string>();
+
+    for (const item of items) {
+      if (picked.length >= 12) break;
+      const ak = artistKeyFor(item);
+      const n = counts.get(ak) ?? 0;
+      if (n >= 2) continue;
+      counts.set(ak, n + 1);
+      picked.push(item);
+      pickedKeys.add(item.kind === "album" ? `album:${item.artistKey}::${item.albumKey}` : item.file.path);
+    }
+
+    if (picked.length < 12) {
+      for (const item of items) {
+        if (picked.length >= 12) break;
+        const id = item.kind === "album" ? `album:${item.artistKey}::${item.albumKey}` : item.file.path;
+        if (pickedKeys.has(id)) continue;
+        picked.push(item);
+        pickedKeys.add(id);
+      }
+    }
+
+    return picked;
   }, [filteredTracks]);
 
   // Quick picks: most-listened tracks first (by furthest playback seconds as a proxy),
@@ -416,16 +453,24 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
       .sort((a, b) => b.secs - a.secs)
       .map((x) => x.file);
 
-    if (withHistory.length >= 6) {
-      return withHistory.slice(0, 12);
-    }
-    // Not enough history — seeded shuffle, bias away from unplayed tracks
-    const playedPaths = new Set(withHistory.map((f) => f.path));
-    const rest = seededShuffle(
-      filteredTracks.filter((f) => !playedPaths.has(f.path)),
-      sessionSeedRef.current,
+    const pool =
+      withHistory.length >= 6
+        ? withHistory
+        : (() => {
+            const playedPaths = new Set(withHistory.map((f) => f.path));
+            const rest = seededShuffle(
+              filteredTracks.filter((f) => !playedPaths.has(f.path)),
+              sessionSeedRef.current,
+            );
+            return [...withHistory, ...rest];
+          })();
+
+    return diversifyTracksByArtist(
+      dedupeMusicTracks(pool, primaryArtist),
+      2,
+      12,
+      primaryArtist,
     );
-    return [...withHistory, ...rest].slice(0, 12);
   }, [filteredTracks]);
 
   // Quick picks columns: split 12 items into 3 columns (up to 4 rows per column)
@@ -440,10 +485,12 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
 
   // Rediscover: random older items (bottom half by created date), different seed.
   const rediscover = useMemo(() => {
-    if (filteredTracks.length < 6) return [];
-    const sorted = [...filteredTracks].sort((a, b) => a.created - b.created);
+    const unique = dedupeMusicTracks(filteredTracks, primaryArtist);
+    if (unique.length < 6) return [];
+    const sorted = [...unique].sort((a, b) => a.created - b.created);
     const older = sorted.slice(0, Math.ceil(sorted.length / 2));
-    return seededShuffle(older, sessionSeedRef.current ^ 0xdeadbeef).slice(0, 12);
+    const shuffled = seededShuffle(older, sessionSeedRef.current ^ 0xdeadbeef);
+    return diversifyTracksByArtist(shuffled, 1, 12, primaryArtist);
   }, [filteredTracks]);
 
   // Albums: dedup by (primaryArtistKey + albumKey). Display artist is the primary artist only.
@@ -454,10 +501,10 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
       if (!albumName) continue;
       const artistRaw = t.albumArtist ?? t.artist ?? "";
       const primary = primaryArtist(artistRaw);
-      const key = `${primary.toLowerCase()}::${albumName.trim().toLowerCase()}`;
+      const key = `${primary.toLowerCase()}::${normalizeAlbumShelfKey(albumName)}`;
       if (!seen.has(key)) {
         seen.set(key, {
-          albumKey: albumName.trim().toLowerCase(),
+          albumKey: normalizeAlbumShelfKey(albumName),
           artistKey: primary.toLowerCase(),
           album: albumName,
           artist: primary || artistRaw,
@@ -488,6 +535,10 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
     return [...map.values()].sort((a, b) => b.trackCount - a.trackCount).slice(0, 12);
   }, [filteredTracks]);
 
+  if (galleryLoading && tracks.length === 0) {
+    return <MusicHomeSkeleton />;
+  }
+
   if (tracks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4" style={{ color: "var(--music-text-muted)" }}>
@@ -505,11 +556,11 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
   return (
     <div
       className="relative w-full h-full overflow-y-auto overflow-x-hidden rf-scrollbar min-h-0"
-      style={{ scrollbarColor: "var(--music-border) transparent", background: "var(--music-bg)" }}
+      style={{ scrollbarColor: "var(--music-border) transparent", background: "var(--music-surface)" }}
     >
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between pl-8 pr-8 bg-transparent">
-        <div className="flex items-center gap-2">
-          {(["all", "relax", "focus", "energize"] as const).map((filter) => (
+      <header className="sticky top-0 z-40 flex h-16 items-center gap-3 pl-8 pr-8 bg-transparent min-w-0">
+        <div className="flex items-center gap-2 shrink-0">
+          {(["all", "relax", "focus"] as const).map((filter) => (
             <button
               key={filter}
               type="button"
@@ -537,9 +588,9 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
           ))}
         </div>
 
-        <div className="absolute left-1/2 -translate-x-1/2 w-full max-w-xs md:max-w-sm lg:max-w-md flex items-center justify-center pointer-events-none">
+        <div className="flex-1 min-w-0 flex justify-center px-2">
           <div
-            className="relative w-full pointer-events-auto rounded-full overflow-hidden"
+            className="relative w-full max-w-md rounded-full overflow-hidden"
             style={{
               background: "rgba(255, 255, 255, 0.1)",
               backdropFilter: "blur(20px)",

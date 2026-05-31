@@ -5,21 +5,23 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { Webview } from "@tauri-apps/api/webview";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
-import { MusicNav, musicFrameStyle, musicContentStyle } from "./MusicNav";
+import { MusicNav } from "./MusicNav";
 import { MusicHomeView } from "./MusicHomeView";
 import { MusicExploreView } from "./MusicExploreView";
 import { MusicLibraryView } from "./MusicLibraryView";
 import { MusicArtistView } from "./MusicArtistView";
 import { MusicAlbumView } from "./MusicAlbumView";
 import { MusicExploreBottomBar } from "./MusicExploreBottomBar";
+import { MusicNavBackCell } from "./MusicNavBackCell";
 import { MusicExploreDownloadPanel } from "./MusicExploreDownloadPanel";
+import {
+  ExploreDownloadDockChip,
+  type CollapsedCelebrate,
+} from "./MusicExploreDownloadCollapsed";
 import { NowPlayingBar } from "./NowPlayingBar";
 import { useMusicPlayback } from "./useMusicPlayback";
 import { AudioHeroStage } from "@/components/player/AudioHeroStage";
-import { HoverMarqueeText } from "./HoverMarqueeText";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
-import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
 import {
@@ -39,8 +41,12 @@ import {
   runExplorerLayoutTransitionFollowUp,
   type ExplorerBounds,
 } from "@/explorerBoundsSync";
-import type { Chapter, MediaFile } from "@/types";
+import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
+import { MusicRightPanel, type RightPanelTab } from "./MusicRightPanel";
+import { useSponsorBlockPlayback } from "@/hooks/useSponsorBlockPlayback";
+import { recordPlay, getRecentHistory, type PlayHistoryEntry } from "./musicPlayHistory";
+import { readMusicOnlySkip, writeMusicOnlySkip } from "./musicOnlySkipStorage";
 
 const MUSIC_EXPLORE_URL = "https://music.youtube.com";
 
@@ -51,138 +57,18 @@ const sidebarEase = [0.4, 0, 0.2, 1] as const;
 const SIDEBAR_FULL = "var(--music-sidebar-width)";
 const SIDEBAR_COLLAPSED = "var(--music-sidebar-collapsed-width)";
 
-type ChaptersSidebarProps = {
-  chapters: Chapter[];
-  currentTime: number;
-  collapsed: boolean;
-  shellFrame: boolean;
-  onSeek: (t: number) => void;
-  onToggleCollapse: () => void;
-};
-
-function ChaptersSidebar({
-  chapters,
-  currentTime,
-  collapsed,
-  shellFrame,
-  onSeek,
-  onToggleCollapse,
-}: ChaptersSidebarProps) {
-  let activeIdx = -1;
-  for (let i = 0; i < chapters.length; i++) {
-    if (currentTime >= chapters[i].start_time) activeIdx = i;
-  }
-
-  return (
-    <motion.aside
-      className="h-full shrink-0 overflow-hidden flex justify-end"
-      initial={false}
-      animate={{ width: collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_FULL }}
-      transition={{ duration: 0.22, ease: sidebarEase }}
-      style={shellFrame ? musicFrameStyle : musicContentStyle}
-    >
-      <div className="relative h-full w-[var(--music-sidebar-width)] shrink-0 overflow-hidden">
-        <motion.div
-          className="absolute inset-0 flex flex-col overflow-hidden"
-          initial={false}
-          animate={{ opacity: collapsed ? 0 : 1, x: collapsed ? 12 : 0 }}
-          transition={{ duration: 0.2, ease: sidebarEase }}
-          style={{ pointerEvents: collapsed ? "none" : "auto" }}
-        >
-          <div className="flex items-center justify-between px-4 h-12 shrink-0">
-            <span
-              className="text-xs font-semibold uppercase tracking-widest"
-              style={{ color: "var(--music-text-muted)" }}
-            >
-              Chapters
-            </span>
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              className="w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity shrink-0"
-              style={{ color: "var(--music-text-secondary)" }}
-              aria-label="Collapse chapters"
-            >
-              <PanelRightClose size={16} />
-            </button>
-          </div>
-          <div className="flex flex-col py-1 flex-1 min-h-0 overflow-x-hidden overflow-y-auto rf-scrollbar">
-            {chapters.map((ch, i) => {
-              const isActive = i === activeIdx;
-              return (
-              <button
-                key={`${ch.start_time}-${ch.title}`}
-                type="button"
-                onClick={() => onSeek(ch.start_time)}
-                data-active={isActive ? "true" : "false"}
-                className="rf-music-chapter-row flex items-start gap-3 px-4 py-2.5 text-left min-w-0 w-full"
-                style={{
-                  background: isActive ? "rgba(255,255,255,0.06)" : "transparent",
-                }}
-              >
-                  <span
-                    className="text-[10px] font-mono tabular-nums shrink-0 mt-0.5"
-                    style={{ color: isActive ? "var(--music-accent)" : "var(--music-text-muted)" }}
-                  >
-                    {formatDuration(ch.start_time)}
-                  </span>
-                <div
-                  className="flex-1 min-w-0"
-                  data-chapter-title
-                  data-active={isActive ? "true" : "false"}
-                >
-                    <HoverMarqueeText
-                      text={ch.title}
-                      layoutKey={i}
-                      className="text-sm leading-snug"
-                    />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        <motion.div
-          className="absolute inset-0 flex flex-col items-end py-3 gap-2 pr-3"
-          initial={false}
-          animate={{ opacity: collapsed ? 1 : 0 }}
-          transition={{ duration: 0.2, ease: sidebarEase }}
-          style={{ pointerEvents: collapsed ? "auto" : "none" }}
-        >
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="w-8 h-8 flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity shrink-0"
-            style={{ color: "var(--music-text-secondary)" }}
-            aria-label="Expand chapters"
-            title="Expand chapters"
-          >
-            <PanelRightOpen size={16} />
-          </button>
-          <span
-            className="text-[10px] font-semibold uppercase tracking-widest [writing-mode:vertical-rl] rotate-180 select-none pointer-events-none"
-            style={{ color: "var(--music-text-muted)" }}
-            aria-hidden
-          >
-            Chapters
-          </span>
-        </motion.div>
-      </div>
-    </motion.aside>
-  );
-}
-
 type ExpandedOverlayProps = {
   coverSrc: string | null;
   isPaused: boolean;
   isMuted: boolean;
+  onTogglePlay: () => void;
 };
 
 function ExpandedOverlay({
   coverSrc,
   isPaused,
   isMuted,
+  onTogglePlay,
 }: ExpandedOverlayProps) {
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const artist = playingFile?.artist ?? playingFile?.albumArtist
@@ -197,6 +83,7 @@ function ExpandedOverlay({
         isPaused={isPaused}
         isMuted={isMuted}
         layer="foreground"
+        onTogglePlay={onTogglePlay}
       />
       <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-1 z-20 px-6 max-w-lg mx-auto w-full">
         <MarqueeText
@@ -220,12 +107,25 @@ export function MusicShell() {
   const setMusicView = useRuforgeStore((s) => s.setMusicView);
   const [playerExpanded, setPlayerExpanded] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
-  const [chaptersCollapsed, setChaptersCollapsed] = useState(false);
   const [currentMusicExploreUrl, setCurrentMusicExploreUrl] = useState("");
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<"pick" | "paste">("pick");
   const [pasteUrl, setPasteUrl] = useState("");
+  const [dockMinimized, setDockMinimized] = useState(false);
+  const [dockCelebrating, setDockCelebrating] = useState<CollapsedCelebrate | null>(null);
 
+  // Right panel state
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("queue");
+  const [musicOnlySkip, setMusicOnlySkipState] = useState(() => readMusicOnlySkip());
+  const [historyEntries, setHistoryEntries] = useState<PlayHistoryEntry[]>(() => getRecentHistory());
+
+  const toggleMusicOnlySkip = useCallback(() => {
+    setMusicOnlySkipState((prev) => {
+      writeMusicOnlySkip(!prev);
+      return !prev;
+    });
+  }, []);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playback = useMusicPlayback(audioRef);
 
@@ -248,6 +148,7 @@ export function MusicShell() {
     }
   }, []);
 
+  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
   const musicDetail = useRuforgeStore((s) => s.musicDetail);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
@@ -258,6 +159,51 @@ export function MusicShell() {
   const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
   const setPlayingFile = useRuforgeStore((s) => s.setPlayingFile);
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
+  const settings = useRuforgeStore((s) => s.settings);
+  const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
+  const handlePlayFolderNeighbor = useRuforgeStore((s) => s.handlePlayFolderNeighbor);
+  const sbPlayback = useSponsorBlockPlayback({
+    file: playingFile ?? ({ path: "", sourceId: null } as unknown as MediaFile),
+    currentTime: playback.currentTime,
+    enabled: !!playingFile && settings.sponsorBlockEnabled,
+    settings,
+    seekTo: playback.seek,
+    onManualSkip: () => {},
+    onAppearance: () => {},
+    onDemoteUndo: () => {},
+  });
+
+  // Music-only skip: auto-seek past music_offtopic segments when toggle is on
+  const musicOnlySkippedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!musicOnlySkip) return;
+    if (!playingFile) return;
+    const ct = playback.currentTime;
+    for (const seg of sbPlayback.segments) {
+      if (seg.category !== "music_offtopic") continue;
+      if (seg.actionType !== "skip") continue;
+      const [start, end] = seg.segment;
+      if (ct >= start && ct < end - 0.25) {
+        const key = seg.UUID || `${start}-${end}`;
+        if (musicOnlySkippedRef.current.has(key)) continue;
+        musicOnlySkippedRef.current.add(key);
+        playback.seek(end);
+        return;
+      }
+    }
+  }, [musicOnlySkip, playback.currentTime, sbPlayback.segments, playingFile, playback.seek]);
+
+  // Reset music-only-skip seen-set when track changes
+  useEffect(() => {
+    musicOnlySkippedRef.current.clear();
+  }, [playingFile?.path]);
+
+  // Record play history whenever the playing file changes
+  useEffect(() => {
+    if (!playingFile) return;
+    recordPlay(playingFile);
+    setHistoryEntries(getRecentHistory());
+  }, [playingFile?.path]);
 
   const isPasteMode = panelMode === "paste";
   const showExploreStrip = activeView === "explore" && !musicDetail && !playerExpanded;
@@ -269,7 +215,7 @@ export function MusicShell() {
   }, [fetchEntries]);
 
   useEffect(() => {
-    if (playerExpanded) setChaptersCollapsed(false);
+    if (playerExpanded && rightPanelTab === "segments") setRightPanelTab("queue");
   }, [playerExpanded, playingFile?.path]);
 
   const resyncExploreWebview = useCallback(() => {
@@ -284,6 +230,7 @@ export function MusicShell() {
     setPanelOpen(false);
     setPanelMode("pick");
     setPasteUrl("");
+    setDockMinimized(false);
     resyncExploreWebview();
   }, [resyncExploreWebview]);
 
@@ -525,16 +472,64 @@ export function MusicShell() {
   const coverPath = playingFile ? bestCoverPath(playingFile) : null;
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
   const chapters = playingFile?.chapters ?? null;
-  const showChaptersRail = !!playingFile && playback.hasChapters;
-  const shellFrame = !!playingFile;
+  const hasChaptersForPanel = !!(chapters && chapters.length >= 2);
+  const hasSbSegmentsForPanel = sbPlayback.segments.some((s) => s.actionType === "skip");
+  const showSegmentsTab = hasChaptersForPanel || hasSbSegmentsForPanel;
+  const shellBlack = playerExpanded;
 
   const leftSlotWidth = navCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_FULL;
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const el = e.target;
+      if (
+        el instanceof HTMLInputElement
+        || el instanceof HTMLTextAreaElement
+        || (el instanceof HTMLElement && el.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      if (e.ctrlKey && !e.altKey && !e.metaKey && key === "b") {
+        e.preventDefault();
+        e.stopPropagation();
+        setNavCollapsed((c) => !c);
+        resyncExploreWebview();
+        return;
+      }
+
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+
+      if (key === "1") {
+        e.preventDefault();
+        e.stopPropagation();
+        setMusicView("home");
+        return;
+      }
+      if (key === "2") {
+        e.preventDefault();
+        e.stopPropagation();
+        setMusicView("explore");
+        return;
+      }
+      if (key === "3") {
+        e.preventDefault();
+        e.stopPropagation();
+        setMusicView("library");
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [resyncExploreWebview, setMusicView]);
 
   return (
     <div
       className="relative flex flex-col flex-1 min-w-0 min-h-0 pt-10 overflow-hidden"
+      data-music-player-expanded={shellBlack ? "true" : undefined}
       style={{
-        background: "var(--music-bg)",
+        background: shellBlack ? "#000000" : "var(--music-shell-chrome)",
         color: "var(--music-text-primary)",
       }}
     >
@@ -543,50 +538,78 @@ export function MusicShell() {
       <div
         className="relative z-[3] flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden"
         style={{
-          gap: "var(--music-shell-gap)",
           paddingTop: "var(--music-shell-gap)",
           paddingLeft: "var(--music-shell-gap)",
           paddingRight: "var(--music-shell-gap)",
         }}
       >
+        {/* Main row: sidebar + content + chapters. No gap when Explore strip active. */}
         <div
-          className="flex flex-1 min-h-0 min-w-0 overflow-hidden"
+          className="flex flex-1 min-h-0 min-w-0 basis-0 overflow-hidden"
           style={{ gap: showExploreStrip ? 0 : "var(--music-shell-gap)" }}
         >
-          {/* Sidebar: full column height (nav + boot bar band on Explore) */}
+          {/* Left L-column: nav + Back share one surface; bottom row aligns with Explore boot bar. */}
           <div
-            className="shrink-0 h-full transition-[width] duration-150 overflow-hidden"
-            style={{ width: leftSlotWidth }}
+            className="flex flex-col shrink-0 min-h-0 overflow-hidden transition-[width] duration-200 ease-out"
+            style={{
+              width: leftSlotWidth,
+              background: shellBlack ? "var(--music-bg)" : "var(--music-surface)",
+              borderRadius: "var(--music-panel-radius) 0 0 var(--music-panel-radius)",
+            }}
           >
-            <MusicNav
-              activeView={activeView}
-              onSelect={setMusicView}
-              onBack={handleBack}
+            <div className="flex-1 min-h-0 basis-0 overflow-hidden">
+              <MusicNav
+                activeView={activeView}
+                onSelect={setMusicView}
+                collapsed={navCollapsed}
+                onToggleCollapse={() => {
+                  setNavCollapsed((c) => !c);
+                  resyncExploreWebview();
+                }}
+                shellFrame={shellBlack}
+                sideColumn
+                inLeftStack
+                footerSlot={
+                  dockMinimized ? (
+                    <ExploreDownloadDockChip
+                      downloadJobs={downloadJobs}
+                      celebrating={dockCelebrating}
+                      onClick={() => {
+                        setDockMinimized(false);
+                        if (!panelOpen) setPanelOpen(true);
+                      }}
+                    />
+                  ) : undefined
+                }
+                panelSlot={
+                  showExplorePanel ? (
+                    <MusicExploreDownloadPanel
+                      url={isPasteMode ? pasteUrl : currentMusicExploreUrl}
+                      pasteMode={isPasteMode}
+                      collapsed={navCollapsed}
+                      dockMinimized={dockMinimized}
+                      onClose={closeExplorePanel}
+                      onMinimize={() => setDockMinimized(true)}
+                      onCelebratingChange={setDockCelebrating}
+                    />
+                  ) : undefined
+                }
+              />
+            </div>
+            <MusicNavBackCell
               collapsed={navCollapsed}
-              onToggleCollapse={() => {
-                setNavCollapsed((c) => !c);
-                resyncExploreWebview();
-              }}
-              shellFrame={shellFrame}
-              sideColumn={showExploreStrip}
-              panelSlot={
-                showExplorePanel ? (
-                  <MusicExploreDownloadPanel
-                    url={isPasteMode ? pasteUrl : currentMusicExploreUrl}
-                    pasteMode={isPasteMode}
-                    onClose={closeExplorePanel}
-                  />
-                ) : undefined
-              }
+              shellBlack={shellBlack}
+              inLeftStack
+              onBack={handleBack}
             />
           </div>
 
-          {/* Content column: webview/views + Explore boot bar as one right panel */}
-          <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+          {/* Right: main panel + Explore boot bar (bottom row aligns with Back on the left). */}
+          <div className="flex flex-col flex-1 min-w-0 min-h-0 basis-0 overflow-hidden">
             <div
               className={cn(
-                "relative flex flex-1 overflow-hidden min-w-0 min-h-0",
-                !playerExpanded && "rf-scrollbar overflow-y-auto",
+                "relative flex-1 min-h-0 basis-0 overflow-hidden min-w-0",
+                !playerExpanded && activeView !== "explore" && "rf-scrollbar overflow-y-auto",
               )}
               style={{
                 background: playerExpanded ? "transparent" : "var(--music-surface)",
@@ -627,6 +650,7 @@ export function MusicShell() {
                       coverSrc={coverSrc}
                       isPaused={playback.paused}
                       isMuted={isMuted}
+                      onTogglePlay={playback.togglePlay}
                     />
                   ) : musicDetail?.kind === "artist" ? (
                     <motion.div key={`artist-${musicDetail.key}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0">
@@ -671,9 +695,9 @@ export function MusicShell() {
                 </AnimatePresence>
               </div>
             </div>
-
             {showExploreStrip && (
               <MusicExploreBottomBar
+                shellBlack={shellBlack}
                 currentUrl={currentMusicExploreUrl}
                 pasteMode={isPasteMode}
                 onPickTracks={() => {
@@ -690,6 +714,7 @@ export function MusicShell() {
                   setPanelMode("pick");
                   setPasteUrl("");
                   setPanelOpen(false);
+                  setDockMinimized(false);
                   resyncExploreWebview();
                 }}
                 onPasteUrlReady={(url) => {
@@ -701,16 +726,31 @@ export function MusicShell() {
             )}
           </div>
 
-          {showChaptersRail && (
-            <ChaptersSidebar
-              chapters={chapters!}
-              currentTime={playback.currentTime}
-              collapsed={chaptersCollapsed}
-              shellFrame={shellFrame}
-              onSeek={playback.seek}
-              onToggleCollapse={() => setChaptersCollapsed((c) => !c)}
-            />
-          )}
+          {showSegmentsTab && !rightPanelOpen && rightPanelTab !== "segments" ? null : null}
+          <MusicRightPanel
+            open={rightPanelOpen}
+            onClose={() => setRightPanelOpen(false)}
+            activeTab={rightPanelTab}
+            onTabChange={(t) => {
+              setRightPanelTab(t);
+              if (!rightPanelOpen) setRightPanelOpen(true);
+            }}
+            shellFrame={shellBlack}
+            playingFile={playingFile}
+            currentTime={playback.currentTime}
+            duration={playback.duration}
+            effectivePlaylist={playback.effectivePlaylist}
+            playlistIndex={playback.playlistIndex}
+            manualQueue={playback.manualQueue}
+            folderAudioPlaylist={folderAudioPlaylist}
+            onSeek={playback.seek}
+            onPlay={(file) => handlePlayFolderNeighbor(file)}
+            historyEntries={historyEntries}
+            chapters={chapters}
+            sbSegments={sbPlayback.segments}
+            musicOnlySkip={musicOnlySkip}
+            onToggleMusicOnlySkip={toggleMusicOnlySkip}
+          />
         </div>
       </div>
 
@@ -755,6 +795,8 @@ export function MusicShell() {
                 onPauseForScrub={playback.pauseForScrub}
                 onResumeAfterScrub={playback.resumeAfterScrub}
                 onToggleExpand={handleToggleExpand}
+                rightPanelOpen={rightPanelOpen}
+                onToggleRightPanel={() => setRightPanelOpen((p) => !p)}
               />
             </motion.div>
           )}

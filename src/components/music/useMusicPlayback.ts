@@ -28,6 +28,13 @@ import { readPlaybackSpeed, writePlaybackSpeed } from "@/playbackSpeedStorage";
 
 import { useRuforgeStore } from "@/store/ruforgeStore";
 
+import {
+  hasMusicNextTrack,
+  hasMusicPrevTrack,
+  resolveMusicNextTrack,
+  resolveMusicPrevTrack,
+} from "./musicAdvanceQueue";
+
 
 
 type PlaybackState = {
@@ -68,6 +75,18 @@ type PlaybackState = {
 
   isDraggingRef: React.MutableRefObject<boolean>;
 
+  /** The ordered list driving playback (folder, library, or singleton). */
+  effectivePlaylist: import("@/types").MediaFile[];
+
+  /** Index of playingFile in effectivePlaylist (-1 when not found). */
+  playlistIndex: number;
+
+  /** Paths waiting to play before the effectivePlaylist continues. */
+  manualQueue: string[];
+
+  /** True when currently-playing track came from the manual queue. */
+  playingFromManualQueue: boolean;
+
 };
 
 
@@ -93,6 +112,16 @@ export function useMusicPlayback(
   const isLooping = useRuforgeStore((s) => s.isLooping);
 
   const handlePlayFolderNeighbor = useRuforgeStore((s) => s.handlePlayFolderNeighbor);
+
+  const manualQueue = useRuforgeStore((s) => s.manualQueue);
+
+  const playingFromManualQueue = useRuforgeStore((s) => s.playingFromManualQueue);
+
+  const manualQueueContextIndex = useRuforgeStore((s) => s.manualQueueContextIndex);
+
+  const applyManualQueueAdvance = useRuforgeStore((s) => s.applyManualQueueAdvance);
+
+  const clearManualQueuePlayingState = useRuforgeStore((s) => s.clearManualQueuePlayingState);
 
 
 
@@ -412,13 +441,22 @@ export function useMusicPlayback(
 
     }
 
-    if (playlistIndex > 0) {
+    const prev = resolveMusicPrevTrack({
+      manualQueue,
+      effectivePlaylist,
+      playlistIndex,
+      playingFromManualQueue,
+      manualQueueContextIndex,
+    });
 
-      handlePlayFolderNeighbor(effectivePlaylist[playlistIndex - 1]);
-
+    if (prev) {
+      if (playingFromManualQueue) {
+        clearManualQueuePlayingState();
+      }
+      handlePlayFolderNeighbor(prev);
     }
 
-  }, [playingFile, playlistIndex, effectivePlaylist, handlePlayFolderNeighbor, audioRef]);
+  }, [playingFile, playlistIndex, effectivePlaylist, manualQueue, playingFromManualQueue, manualQueueContextIndex, handlePlayFolderNeighbor, clearManualQueuePlayingState, audioRef]);
 
 
 
@@ -426,13 +464,31 @@ export function useMusicPlayback(
 
     if (!playingFile) return;
 
-    if (playlistIndex >= 0 && playlistIndex < effectivePlaylist.length - 1) {
+    const advanceState = {
+      manualQueue,
+      effectivePlaylist,
+      playlistIndex,
+      playingFromManualQueue,
+      manualQueueContextIndex,
+    };
 
-      handlePlayFolderNeighbor(effectivePlaylist[playlistIndex + 1]);
+    const resolveFromLibrary = (path: string): import("@/types").MediaFile | null => {
+      return effectivePlaylist.find((f) => f.path === path) ?? null;
+    };
 
+    const result = resolveMusicNextTrack(advanceState, resolveFromLibrary);
+
+    if (!result) return;
+
+    if (result.playingFromManualQueue) {
+      applyManualQueueAdvance(result.manualQueueContextIndex);
+    } else {
+      clearManualQueuePlayingState();
     }
 
-  }, [playingFile, playlistIndex, effectivePlaylist, handlePlayFolderNeighbor]);
+    handlePlayFolderNeighbor(result.file);
+
+  }, [playingFile, playlistIndex, effectivePlaylist, manualQueue, playingFromManualQueue, manualQueueContextIndex, handlePlayFolderNeighbor, applyManualQueueAdvance, clearManualQueuePlayingState]);
 
 
 
@@ -472,17 +528,32 @@ export function useMusicPlayback(
 
     if (isLooping || !playingFile) return;
 
-    if (playlistIndex >= 0 && playlistIndex < effectivePlaylist.length - 1) {
+    const advanceState = {
+      manualQueue,
+      effectivePlaylist,
+      playlistIndex,
+      playingFromManualQueue,
+      manualQueueContextIndex,
+    };
 
-      handlePlayFolderNeighbor(effectivePlaylist[playlistIndex + 1]);
+    const resolveFromPlaylist = (path: string): import("@/types").MediaFile | null =>
+      effectivePlaylist.find((f) => f.path === path) ?? null;
 
+    const result = resolveMusicNextTrack(advanceState, resolveFromPlaylist);
+
+    if (result) {
+      if (result.playingFromManualQueue) {
+        applyManualQueueAdvance(result.manualQueueContextIndex);
+      } else {
+        clearManualQueuePlayingState();
+      }
+      handlePlayFolderNeighbor(result.file);
     } else {
-
+      clearManualQueuePlayingState();
       setPaused(true);
-
     }
 
-  }, [isLooping, playingFile, playlistIndex, effectivePlaylist, handlePlayFolderNeighbor]);
+  }, [isLooping, playingFile, playlistIndex, effectivePlaylist, manualQueue, playingFromManualQueue, manualQueueContextIndex, handlePlayFolderNeighbor, applyManualQueueAdvance, clearManualQueuePlayingState]);
 
 
 
@@ -570,13 +641,26 @@ export function useMusicPlayback(
 
     jumpNextChapter,
 
-    hasPrevInQueue: playlistIndex > 0,
+    hasPrevInQueue: hasMusicPrevTrack(
+      { manualQueue, effectivePlaylist, playlistIndex, playingFromManualQueue, manualQueueContextIndex },
+      0,
+    ),
 
-    hasNextInQueue: playlistIndex >= 0 && playlistIndex < effectivePlaylist.length - 1,
+    hasNextInQueue: hasMusicNextTrack({
+      manualQueue, effectivePlaylist, playlistIndex, playingFromManualQueue, manualQueueContextIndex,
+    }),
 
     hasChapters: !!(chapters && chapters.length >= 2),
 
     isDraggingRef,
+
+    effectivePlaylist,
+
+    playlistIndex,
+
+    manualQueue,
+
+    playingFromManualQueue,
 
   };
 

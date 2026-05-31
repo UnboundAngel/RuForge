@@ -104,24 +104,24 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
           <img
             src={coverSrc}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             style={{ filter: "blur(40px) brightness(0.35)", transform: "scale(1.15)" }}
           />
         )}
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 pointer-events-none"
           style={{ background: "linear-gradient(to bottom, transparent 30%, var(--music-surface) 100%)" }}
         />
         <button
           type="button"
           onClick={onBack}
-          className="absolute top-3 left-3 flex items-center gap-1.5 text-sm opacity-70 hover:opacity-100 transition-opacity z-10"
+          className="absolute top-3 left-3 z-20 flex items-center gap-1.5 text-sm opacity-70 hover:opacity-100 transition-opacity"
           style={{ color: "var(--music-text-primary)" }}
         >
           <ChevronLeft size={16} /> Back
         </button>
 
-        <div className="relative z-10 flex items-end gap-5 px-5 pb-5 pt-12">
+        <div className="relative z-10 flex items-end gap-5 px-5 pb-5 pt-12 pointer-events-none [&_button]:pointer-events-auto">
           {coverSrc ? (
             <img
               src={coverSrc}

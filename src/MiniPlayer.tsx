@@ -1634,14 +1634,18 @@ export default function MiniPlayer() {
           <>
             {/* If in small or compact mode, show the image on the full background fading to the right */}
             {(isSmallMode || isCompactMode) && (
-              <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-                <img
-                  src={convertFileSrc(coverArtSrc)}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-                {/* Smooth gradient fade to black */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/40 via-30% to-black to-60%" />
+              <div className="absolute inset-0 flex overflow-hidden pointer-events-none z-0">
+                <div
+                  className="h-full shrink-0 overflow-hidden bg-black"
+                  style={{ width: isCompactMode ? 84 : 144 }}
+                >
+                  <img
+                    src={convertFileSrc(coverArtSrc)}
+                    alt=""
+                    className="h-full w-full object-contain object-left"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 bg-gradient-to-r from-black/25 via-black/55 to-black" />
               </div>
             )}
 
@@ -1856,7 +1860,11 @@ export default function MiniPlayer() {
                     <img
                       src={convertFileSrc(coverArtSrc)}
                       alt=""
-                      className={isLargeMode ? "max-h-[min(50vh,420px)] max-w-[min(88vw,420px)] rounded-2xl border border-white/10 object-contain shadow-2xl" : "w-full h-full object-cover"}
+                      className={
+                        isLargeMode
+                          ? "max-h-[min(50vh,420px)] w-full max-w-[min(88vw,420px)] rounded-2xl border border-white/10 object-contain shadow-2xl"
+                          : "h-full w-full object-contain"
+                      }
                     />
                   ) : (
                     <Music

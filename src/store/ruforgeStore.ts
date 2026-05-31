@@ -123,6 +123,18 @@ export interface RuforgeStore extends DownloadQueueSlice {
   /** Main-window player; `volume` / `isLooping` mirror flat LS keys read by MiniPlayer. */
   playingFile: MediaFile | null;
   folderAudioPlaylist: MediaFile[];
+  /**
+   * Manual queue paths (FIFO). Drained before effectivePlaylist advances.
+   * Paths only — resolved to MediaFile on playback by useMusicPlayback.
+   */
+  manualQueue: string[];
+  /** True when the currently-playing track came from manualQueue (not effectivePlaylist). */
+  playingFromManualQueue: boolean;
+  /**
+   * effectivePlaylist index captured when a manual-queue track started playing.
+   * Used by skipPrev so "prev" goes back into the real playlist, not the manual item.
+   */
+  manualQueueContextIndex: number | null;
   volume: number;
   isMuted: boolean;
   isLooping: boolean;
@@ -139,6 +151,24 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setPlayingFile: (file: MediaFile | null) => void;
   clearPlayerResumeAt: () => void;
   setFolderAudioPlaylist: (files: MediaFile[]) => void;
+  /** Append a path to the manual queue (deduped; ignored if already present). */
+  enqueueManualQueue: (path: string) => void;
+  /** Remove a single path from the manual queue. */
+  removeManualQueue: (path: string) => void;
+  /** Replace manual queue order (e.g. drag-reorder); dedupes while preserving order. */
+  setManualQueueOrder: (paths: string[]) => void;
+  /** Empty the manual queue entirely. */
+  clearManualQueue: () => void;
+  /**
+   * Called by useMusicPlayback when a manual-queue item starts playing.
+   * Shifts the path off the front of the queue and stores the context index.
+   */
+  applyManualQueueAdvance: (contextIndex: number | null) => void;
+  /**
+   * Called by useMusicPlayback when the track playing from the manual queue
+   * is cleared (playback ends without a next track, or user picks something else).
+   */
+  clearManualQueuePlayingState: () => void;
   setVolume: (v: number) => void;
   setMuted: (muted: boolean) => void;
   setLooping: (loop: boolean) => void;
@@ -296,6 +326,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       playingFile: null,
       folderAudioPlaylist: [],
+      manualQueue: [],
+      playingFromManualQueue: false,
+      manualQueueContextIndex: null,
       volume: playerInitVolume,
       isMuted: false,
       isLooping: playerInitLoop,
@@ -314,6 +347,36 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
       clearPlayerResumeAt: () => set({ playerResumeAt: null }),
       setFolderAudioPlaylist: (folderAudioPlaylist) => set({ folderAudioPlaylist }),
+
+      enqueueManualQueue: (path) => {
+        const { manualQueue } = get();
+        if (manualQueue.includes(path)) return;
+        set({ manualQueue: [...manualQueue, path] });
+      },
+      removeManualQueue: (path) => {
+        set((s) => ({ manualQueue: s.manualQueue.filter((p) => p !== path) }));
+      },
+      setManualQueueOrder: (paths) => {
+        const seen = new Set<string>();
+        const deduped: string[] = [];
+        for (const p of paths) {
+          if (seen.has(p)) continue;
+          seen.add(p);
+          deduped.push(p);
+        }
+        set({ manualQueue: deduped });
+      },
+      clearManualQueue: () => set({ manualQueue: [] }),
+      applyManualQueueAdvance: (contextIndex) => {
+        set((s) => ({
+          manualQueue: s.manualQueue.slice(1),
+          playingFromManualQueue: true,
+          manualQueueContextIndex: contextIndex,
+        }));
+      },
+      clearManualQueuePlayingState: () => {
+        set({ playingFromManualQueue: false, manualQueueContextIndex: null });
+      },
 
       setVolume: (volume) => {
         localStorage.setItem(LS_MINI_VOLUME, volume.toString());

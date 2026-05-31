@@ -221,7 +221,7 @@ function isMusicHost(host: string): boolean {
 }
 
 /**
- * Detect if `input` is a music.youtube.com browse URL (artist handle, channel, album, playlist).
+ * Detect if `input` is a music.youtube.com browse URL (artist handle, channel, album page).
  * These are passed as-is to yt-dlp / `get_music_browse_info` rather than normalized to watch URLs.
  */
 export function isMusicYouTubeUrl(input: string): boolean {
@@ -234,6 +234,63 @@ export function isMusicYouTubeUrl(input: string): boolean {
     p.startsWith("/browse/") ||
     /^\/playlist\/?$/i.test(p)
   );
+}
+
+/**
+ * True for music.youtube.com `/watch?v=` with a valid video id and no `list=` param.
+ * Watch URLs with `list=` are playlists and handled by `isMusicYouTubePlaylistUrl`.
+ */
+export function isMusicYouTubeWatchUrl(input: string): boolean {
+  const url = parseYoutubeUrl(input);
+  if (!url || !isMusicHost(url.hostname)) return false;
+  if (!/^\/watch\/?$/i.test(url.pathname)) return false;
+  if (url.searchParams.get("list")) return false;
+  return extractYouTubeVideoId(input) !== null;
+}
+
+export type MusicExploreUrlKind = "playlist" | "browse" | "watch";
+
+/** Route Music Explore paste / sidebar fetch by URL shape. */
+export function classifyMusicExploreUrl(input: string): MusicExploreUrlKind | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  if (isMusicYouTubePlaylistUrl(trimmed)) return "playlist";
+  if (extractYouTubePlaylistId(trimmed)) return "playlist";
+  if (isMusicYouTubeUrl(trimmed)) return "browse";
+  if (isMusicYouTubeWatchUrl(trimmed)) return "watch";
+
+  const url = parseYoutubeUrl(trimmed);
+  if (!url || !isYoutubeHost(url.hostname)) return null;
+  if (extractYouTubeVideoId(trimmed)) return "watch";
+
+  return null;
+}
+
+/** True when Music Explore paste / auto-detect should accept the URL. */
+export function isMusicExplorePasteUrl(input: string): boolean {
+  return classifyMusicExploreUrl(input) !== null;
+}
+
+/**
+ * Normalize a pasted Explore URL for fetch or download.
+ * Watch links become canonical youtube.com watch URLs; browse/playlist stay on music.youtube.com when applicable.
+ */
+export function resolveMusicExplorePasteUrl(input: string): string | null {
+  const kind = classifyMusicExploreUrl(input);
+  if (!kind) return null;
+
+  if (kind === "watch") {
+    return canonicalYouTubeWatchUrl(input);
+  }
+
+  if (kind === "playlist") {
+    const music = canonicalMusicYouTubeUrl(input);
+    if (music) return music;
+    return canonicalYouTubePlaylistUrl(input);
+  }
+
+  return canonicalMusicYouTubeUrl(input);
 }
 
 /**

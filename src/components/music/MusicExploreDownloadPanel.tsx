@@ -1,10 +1,9 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronLeft, Download, Loader, Loader2, X } from "lucide-react";
+import { Download, Loader, Loader2, X } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { DownloadJob } from "@/downloadQueue";
-import { youtubeUrlsMatch } from "@/youtubeUrl";
 import {
   countActivePlaylistDownloads,
   isActiveMusicExploreDownloadUi,
@@ -16,13 +15,21 @@ import {
   buildDownloadJobOptions,
   patchDownloadJobOptionsForAudio,
   resolveDownloadOutputDir,
+  cookieContextFromSettings,
 } from "@/downloadQueue";
 import {
   sanitizePlaylistFolderName,
   isMusicYouTubePlaylistUrl,
   canonicalMusicYouTubeUrl,
   isMusicYouTubeUrl,
+  classifyMusicExploreUrl,
+  resolveMusicExplorePasteUrl,
+  extractYouTubeVideoId,
+  canonicalYouTubeWatchUrl,
+  youtubeUrlsMatch,
 } from "@/youtubeUrl";
+import { fetchVideoInfoWithTimeout } from "@/downloadVideoInfoFetch";
+import { ytdlpVideoFormatForMetadata } from "@/downloadFormat";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import {
   musicTrackKey,
@@ -32,6 +39,10 @@ import {
   type MusicPlaylistPage,
   type MusicTrackInfo,
 } from "@/lib/musicExploreTracks";
+import {
+  MusicExploreDownloadCollapsed,
+  type CollapsedCelebrate,
+} from "./MusicExploreDownloadCollapsed";
 import { cn } from "@/lib/utils";
 
 type Phase =
@@ -219,10 +230,25 @@ type Props = {
   /** The current browse URL (ignored in paste mode). */
   url: string;
   pasteMode?: boolean;
+  collapsed?: boolean;
+  dockMinimized?: boolean;
   onClose: () => void;
+  onMinimize?: () => void;
+  /** Synced for dock chip success ring when panel UI is minimized away. */
+  onCelebratingChange?: (track: CollapsedCelebrate | null) => void;
 };
 
-export function MusicExploreDownloadPanel({ url, pasteMode = false, onClose }: Props) {
+const COLLAPSED_CELEBRATE_MS = 1400;
+
+export function MusicExploreDownloadPanel({
+  url,
+  pasteMode = false,
+  collapsed = false,
+  dockMinimized = false,
+  onClose,
+  onMinimize,
+  onCelebratingChange,
+}: Props) {
   const settings = useRuforgeStore((s) => s.settings);
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
@@ -236,6 +262,71 @@ export function MusicExploreDownloadPanel({ url, pasteMode = false, onClose }: P
   const abortRef = useRef<AbortController | null>(null);
   const lastClickIndexRef = useRef<number | null>(null);
   const prevDownloadJobsRef = useRef<DownloadJob[]>(downloadJobs);
+  const pendingCelebrationsRef = useRef<CollapsedCelebrate[]>([]);
+  const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [celebrating, setCelebrating] = useState<CollapsedCelebrate | null>(null);
+
+  const removeCompletedFromPlaylist = useCallback((completedUrls: string[]) => {
+    if (completedUrls.length === 0) return;
+    setPhase((p) => {
+      if (p.kind !== "playlist") return p;
+      const items = p.items.filter(
+        (t) => !completedUrls.some((u) => youtubeUrlsMatch(t.url, u)),
+      );
+      return {
+        ...p,
+        items,
+        visibleCount: Math.min(p.visibleCount, items.length),
+      };
+    });
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const url of completedUrls) {
+        for (const k of prev) {
+          if (k === url || youtubeUrlsMatch(k, url)) next.delete(k);
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const processNextCelebration = useCallback(() => {
+    if (celebrateTimerRef.current) return;
+    const next = pendingCelebrationsRef.current.shift();
+    if (!next) {
+      setCelebrating(null);
+      return;
+    }
+    setCelebrating(next);
+    celebrateTimerRef.current = setTimeout(() => {
+      celebrateTimerRef.current = null;
+      removeCompletedFromPlaylist([next.url]);
+      setCelebrating(null);
+      processNextCelebration();
+    }, COLLAPSED_CELEBRATE_MS);
+  }, [removeCompletedFromPlaylist]);
+
+  const enqueueCelebrations = useCallback(
+    (tracks: CollapsedCelebrate[]) => {
+      if (tracks.length === 0) return;
+      pendingCelebrationsRef.current.push(...tracks);
+      if (!celebrateTimerRef.current) {
+        processNextCelebration();
+      }
+    },
+    [processNextCelebration],
+  );
+
+  useEffect(() => {
+    onCelebratingChange?.(celebrating);
+  }, [celebrating, onCelebratingChange]);
+
+  useEffect(() => {
+    return () => {
+      if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current);
+      onCelebratingChange?.(null);
+    };
+  }, [onCelebratingChange]);
 
   const buildAudioOpts = useCallback(() => {
     const dir = resolveDownloadOutputDir(saveToInternal, outputDir);
@@ -258,8 +349,20 @@ export function MusicExploreDownloadPanel({ url, pasteMode = false, onClose }: P
   }, [buildAudioOpts, enqueueDownload, releaseHeldDownloadJobs, pumpDownloadQueue]);
 
   const doLoad = useCallback(async (rawUrl: string) => {
-    const canonical = canonicalMusicYouTubeUrl(rawUrl) ?? rawUrl.trim();
+    const canonical =
+      resolveMusicExplorePasteUrl(rawUrl) ??
+      canonicalMusicYouTubeUrl(rawUrl) ??
+      rawUrl.trim();
     if (!canonical) return;
+
+    const kind = classifyMusicExploreUrl(canonical) ?? classifyMusicExploreUrl(rawUrl);
+    if (!kind) {
+      setPhase({
+        kind: "error",
+        message: "Paste a music.youtube.com artist, album, playlist, or track URL.",
+      });
+      return;
+    }
 
     abortRef.current?.abort();
     const ac = new AbortController();
@@ -270,7 +373,7 @@ export function MusicExploreDownloadPanel({ url, pasteMode = false, onClose }: P
     lastClickIndexRef.current = null;
 
     try {
-      if (isMusicYouTubePlaylistUrl(canonical)) {
+      if (kind === "playlist" || isMusicYouTubePlaylistUrl(canonical)) {
         const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
           url: canonical, offset: 0, limit: 15,
         });
@@ -296,18 +399,73 @@ export function MusicExploreDownloadPanel({ url, pasteMode = false, onClose }: P
         }
         return;
       }
-      if (isMusicYouTubeUrl(canonical)) {
+
+      if (kind === "watch") {
+        const watchUrl = canonicalYouTubeWatchUrl(canonical) ?? canonical;
+        const videoId = extractYouTubeVideoId(watchUrl);
+        if (!videoId) {
+          setPhase({ kind: "error", message: "Could not read a track id from that URL." });
+          return;
+        }
+
+        let track: MusicTrackInfo = {
+          id: videoId,
+          title: videoId,
+          url: watchUrl,
+          duration: null,
+          thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+          artist: null,
+          album: null,
+        };
+
+        try {
+          const videoFormat = ytdlpVideoFormatForMetadata(settings.preferredQuality);
+          const info = await fetchVideoInfoWithTimeout(watchUrl, videoFormat, true, {
+            ...cookieContextFromSettings(settings),
+          });
+          if (ac.signal.aborted) return;
+          track = {
+            id: videoId,
+            title: info.title?.trim() || videoId,
+            url: watchUrl,
+            duration: info.duration > 0 ? info.duration : null,
+            thumbnail: info.thumbnail || track.thumbnail,
+            artist: info.uploader || info.channel || null,
+            album: null,
+          };
+        } catch {
+          if (ac.signal.aborted) return;
+        }
+
+        setPhase({
+          kind: "playlist",
+          playlistTitle: track.title,
+          playlistUrl: watchUrl,
+          items: [track],
+          visibleCount: 1,
+          hasMore: false,
+          total: 1,
+          loadingMore: false,
+        });
+        return;
+      }
+
+      if (kind === "browse" || isMusicYouTubeUrl(canonical)) {
         const result = await invoke<MusicBrowseResult>("get_music_browse_info", { url: canonical });
         if (ac.signal.aborted) return;
         setPhase({ kind: "browse", result, url: canonical });
         return;
       }
-      setPhase({ kind: "error", message: "Paste a music.youtube.com artist, album, or playlist URL." });
+
+      setPhase({
+        kind: "error",
+        message: "Paste a music.youtube.com artist, album, playlist, or track URL.",
+      });
     } catch (e) {
       if (ac.signal.aborted) return;
       setPhase({ kind: "error", message: String(e) });
     }
-  }, []);
+  }, [settings]);
 
   const openPlaylist = useCallback(async (pl: MusicPlaylistInfo) => {
     abortRef.current?.abort();
@@ -409,13 +567,14 @@ export function MusicExploreDownloadPanel({ url, pasteMode = false, onClose }: P
     lastClickIndexRef.current = index;
   }, [phase]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const prev = prevDownloadJobsRef.current;
     prevDownloadJobsRef.current = downloadJobs;
 
     if (phase.kind !== "playlist") return;
 
     const completedUrls: string[] = [];
+    const completedTracks: CollapsedCelebrate[] = [];
     for (const track of phase.items) {
       const trackUrl = track.url;
       const hadActive = prev.some(
@@ -429,39 +588,43 @@ export function MusicExploreDownloadPanel({ url, pasteMode = false, onClose }: P
       );
       if (hadActive && !hasActive && !hasFailed) {
         completedUrls.push(trackUrl);
+        completedTracks.push({
+          url: trackUrl,
+          title: track.title,
+          thumbnail: track.thumbnail,
+        });
       }
     }
 
     if (completedUrls.length === 0) return;
 
-    setPhase((p) => {
-      if (p.kind !== "playlist") return p;
-      const items = p.items.filter(
-        (t) => !completedUrls.some((u) => youtubeUrlsMatch(t.url, u)),
-      );
-      return {
-        ...p,
-        items,
-        visibleCount: Math.min(p.visibleCount, items.length),
-      };
-    });
-    setSelected((prev) => {
-      const next = new Set(prev);
-      for (const url of completedUrls) {
-        for (const k of prev) {
-          if (k === url || youtubeUrlsMatch(k, url)) next.delete(k);
-        }
-      }
-      return next;
-    });
-  }, [downloadJobs, phase]);
+    if (collapsed || dockMinimized) {
+      enqueueCelebrations(completedTracks);
+      return;
+    }
 
-  // Load when url prop is set (covers both paste mode and normal browse mode).
+    removeCompletedFromPlaylist(completedUrls);
+  }, [
+    downloadJobs,
+    phase,
+    collapsed,
+    dockMinimized,
+    enqueueCelebrations,
+    removeCompletedFromPlaylist,
+  ]);
+
   useEffect(() => {
-    if (!url) return;
+    if (pasteMode && !url.trim()) {
+      abortRef.current?.abort();
+      setPhase({ kind: "idle" });
+      setSelected(new Set());
+      lastClickIndexRef.current = null;
+      return;
+    }
+    if (!url.trim()) return;
     void doLoad(url);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url]);
+  }, [url, pasteMode]);
 
   const selectedTracks =
     phase.kind === "playlist"
@@ -475,6 +638,26 @@ export function MusicExploreDownloadPanel({ url, pasteMode = false, onClose }: P
     return countActivePlaylistDownloads(downloadJobs, phase.items);
   }, [phase, downloadJobs]);
 
+  if (collapsed) {
+    if (dockMinimized) return null;
+    const playlistItems = phase.kind === "playlist" ? phase.items : [];
+    return (
+      <div
+        className="flex flex-col flex-1 min-h-0 h-full justify-end overflow-hidden"
+        style={{ background: "var(--music-surface)", color: "var(--music-text-primary)" }}
+      >
+        <MusicExploreDownloadCollapsed
+          items={playlistItems}
+          downloadJobs={downloadJobs}
+          celebrating={celebrating}
+          loading={phase.kind === "loading" || phase.kind === "idle"}
+          playlistBatch={phase.kind === "playlist" && playlistItems.length > 1}
+          onMinimize={onMinimize}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex flex-col h-full min-h-0"
@@ -485,27 +668,6 @@ export function MusicExploreDownloadPanel({ url, pasteMode = false, onClose }: P
         className="shrink-0 flex items-center gap-2 px-3 py-2.5"
         style={{ borderBottom: "1px solid var(--music-border)" }}
       >
-        {phase.kind === "playlist" && !pasteMode && (
-          <button
-            type="button"
-            onClick={() => void doLoad(url)}
-            className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
-            style={{ color: "var(--music-text-secondary)" }}
-          >
-            <ChevronLeft size={15} />
-          </button>
-        )}
-        {phase.kind === "playlist" && pasteMode && (
-          <button
-            type="button"
-            onClick={() => { if (url) void doLoad(url); }}
-            className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
-            style={{ color: "var(--music-text-secondary)" }}
-          >
-            <ChevronLeft size={15} />
-          </button>
-        )}
-
         <div className="flex-1 min-w-0">
           {isLoading ? (
             <div className="flex items-center gap-2">

@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import logo from "@/assets/neotubeIcon.png";
 import { Icon } from "@iconify/react";
-import { Home, Library, ChevronLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Home, Library, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import type { MusicView } from "@/store/types";
@@ -38,40 +38,57 @@ export const musicPanelStyle = musicContentStyle;
 /** @deprecated use musicFrameStyle */
 export const musicSidebarGlassStyle = musicFrameStyle;
 
+const NAV_SHORTCUT_LABELS: Record<MusicView, string> = {
+  home: "Alt+1",
+  explore: "Alt+2",
+  library: "Alt+3",
+};
+
 type Props = {
   activeView: MusicView;
   onSelect: (view: MusicView) => void;
-  onBack: () => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
   shellFrame?: boolean;
-  /** Explore: left column spans content + boot bar; round top-left and bottom-left only. */
+  /**
+   * Stacked left column: nav gets top-left radius only; MusicNavBackCell below owns bottom-left.
+   */
   sideColumn?: boolean;
+  /** Nav sits inside the shared left L-column shell (no own fill/radius). */
+  inLeftStack?: boolean;
   panelSlot?: ReactNode;
+  /** Rendered above Back button (e.g. minimized download dock chip). */
+  footerSlot?: ReactNode;
 };
 
 export function MusicNav({
   activeView,
   onSelect,
-  onBack,
   collapsed,
   onToggleCollapse,
   shellFrame = false,
   sideColumn = false,
+  inLeftStack = false,
   panelSlot,
+  footerSlot,
 }: Props) {
   const baseStyle = shellFrame ? musicFrameStyle : musicContentStyle;
-  const borderRadius = sideColumn
-    ? "var(--music-panel-radius) 0 var(--music-panel-radius) var(--music-panel-radius)"
-    : baseStyle.borderRadius;
-  return (
-    <nav
-      className="flex flex-col h-full overflow-hidden transition-[width] duration-150"
-      style={{
+  const borderRadius = inLeftStack
+    ? 0
+    : sideColumn
+      ? "var(--music-panel-radius) 0 0 0"
+      : baseStyle.borderRadius;
+  const navStyle: CSSProperties = inLeftStack
+    ? { width: "100%", background: "transparent", borderRadius: 0 }
+    : {
         width: collapsed ? "var(--music-sidebar-collapsed-width)" : "var(--music-sidebar-width)",
         ...baseStyle,
         borderRadius,
-      }}
+      };
+  return (
+    <nav
+      className="flex flex-col h-full overflow-hidden transition-[width] duration-200 ease-out"
+      style={navStyle}
     >
       <div
         className={cn(
@@ -98,7 +115,8 @@ export function MusicNav({
               onClick={onToggleCollapse}
               className="shrink-0 w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
               style={{ color: "var(--music-text-secondary)" }}
-              aria-label="Collapse navigation"
+              aria-label="Collapse navigation (Ctrl+B)"
+              title="Collapse navigation (Ctrl+B)"
             >
               <PanelLeftClose size={16} />
             </button>
@@ -113,7 +131,8 @@ export function MusicNav({
             onClick={onToggleCollapse}
             className="w-8 h-8 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
             style={{ color: "var(--music-text-secondary)" }}
-            aria-label="Expand navigation"
+            aria-label="Expand navigation (Ctrl+B)"
+            title="Expand navigation (Ctrl+B)"
           >
             <PanelLeftOpen size={16} />
           </button>
@@ -128,7 +147,7 @@ export function MusicNav({
               key={item.id}
               type="button"
               onClick={() => onSelect(item.id)}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? `${item.label} (${NAV_SHORTCUT_LABELS[item.id]})` : undefined}
               data-active={active ? "true" : "false"}
               data-ytm={item.ytm ? "true" : undefined}
               className={cn(
@@ -158,20 +177,11 @@ export function MusicNav({
         <div className="flex-1 min-h-0" />
       )}
 
-      <div className={cn("shrink-0 pb-3", collapsed ? "px-1.5 flex justify-center" : "px-2")}>
-        <button
-          type="button"
-          onClick={onBack}
-          title={collapsed ? "Back to RuForge" : undefined}
-          className={cn(
-            "rf-music-back-btn flex items-center text-sm text-left",
-            collapsed ? "justify-center w-10 h-10" : "gap-3 px-3 py-2.5 w-full",
-          )}
-        >
-          <ChevronLeft size={16} />
-          {!collapsed && "Back to RuForge"}
-        </button>
-      </div>
+      {footerSlot ? (
+        <div className={cn("shrink-0 pb-2 mt-auto", collapsed ? "px-1.5 flex justify-center" : "px-2")}>
+          {footerSlot}
+        </div>
+      ) : null}
     </nav>
   );
 }
