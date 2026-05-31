@@ -17,6 +17,7 @@ use tauri_plugin_updater::UpdaterExt;
 
 use crate::app_state::AppConfig;
 use crate::commands::downloader::{
+    get_music_browse_info, get_playlist_items_page,
     get_video_info, pause_download_job, start_download_job, stop_all_active_download_jobs,
 };
 use crate::commands::export::{
@@ -137,6 +138,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tray_front_debug,
             get_video_info,
+            get_music_browse_info,
+            get_playlist_items_page,
             start_download_job,
             pause_download_job,
             stop_all_active_download_jobs,

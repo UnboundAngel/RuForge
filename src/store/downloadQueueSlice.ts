@@ -1061,8 +1061,12 @@ export const createDownloadQueueSlice: StateCreator<
         for (const id of skippedIds) {
           scheduleSkippedJobRemoval(get, id);
         }
-        for (const st of starts) {
-          startHydratedDownloadJob(st.id, st.url, st.resume);
+        const startDelayMs = get().settings.downloadJobStartDelayMs ?? 0;
+        for (let i = 0; i < starts.length; i++) {
+          if (i > 0 && startDelayMs > 0) {
+            await new Promise<void>((r) => setTimeout(r, startDelayMs));
+          }
+          startHydratedDownloadJob(starts[i].id, starts[i].url, starts[i].resume);
         }
       })();
     },

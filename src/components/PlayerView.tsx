@@ -41,6 +41,7 @@ import {
   nextChapterIndex,
   normalizeChapters,
   prevChapterIndex,
+  timeForScrubberClientX,
 } from "../chapters";
 import { ChapterScrubber } from "./player/ChapterScrubber";
 import { AudioHeroStage } from "./player/AudioHeroStage";
@@ -543,23 +544,32 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
   }, []);
 
-  const applyScrubPosition = useCallback(
-    (pos: number, opts?: { persist?: boolean }) => {
+  const applyScrubTime = useCallback(
+    (t: number, opts?: { persist?: boolean }) => {
       const vid = mediaRef.current;
       if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
-      const ratio = Math.min(1, Math.max(0, pos));
-      const t = ratio * vid.duration;
+      const clamped = Math.min(vid.duration, Math.max(0, t));
+      const ratio = clamped / vid.duration;
       isUserSeekingRef.current = true;
       setScrubDragPercent(ratio * 100);
-      setCurrentTime(t);
+      setCurrentTime(clamped);
       setProgress(ratio * 100);
-      vid.currentTime = t;
+      vid.currentTime = clamped;
       if (opts?.persist) {
-        writePlaybackPos(file.path, t, vid.duration);
+        writePlaybackPos(file.path, clamped, vid.duration);
         lastPlaybackPersistRef.current = Date.now();
       }
     },
     [file.path],
+  );
+
+  const applyScrubPosition = useCallback(
+    (pos: number, opts?: { persist?: boolean }) => {
+      const vid = mediaRef.current;
+      if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
+      applyScrubTime(pos * vid.duration, opts);
+    },
+    [applyScrubTime],
   );
 
   const chapters = useMemo(() => {
@@ -778,11 +788,22 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   };
 
   // Scrubber drag
-  const getScrubPosition = (e: { clientX: number }): number => {
-    const rect = scrubberRef.current?.getBoundingClientRect();
-    if (!rect) return 0;
-    return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-  };
+  const resolveScrubTime = useCallback(
+    (e: { clientX: number }): number => {
+      const rect = scrubberRef.current?.getBoundingClientRect();
+      const vid = mediaRef.current;
+      if (!rect || rect.width <= 0 || !vid || !isFinite(vid.duration)) return 0;
+      const dur = duration > 0 ? duration : vid.duration;
+      return timeForScrubberClientX(
+        chapters,
+        dur,
+        e.clientX,
+        rect.left,
+        rect.width,
+      );
+    },
+    [chapters, duration],
+  );
 
   const handleScrubMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -795,15 +816,14 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
 
     setIsScrubbing(true);
-    const pos0 = getScrubPosition(e);
-    applyScrubPosition(pos0);
+    applyScrubTime(resolveScrubTime(e));
 
     const onMove = (ev: MouseEvent) => {
-      applyScrubPosition(getScrubPosition(ev));
+      applyScrubTime(resolveScrubTime(ev));
     };
 
     const onUp = (ev: MouseEvent) => {
-      applyScrubPosition(getScrubPosition(ev), { persist: true });
+      applyScrubTime(resolveScrubTime(ev), { persist: true });
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
 
@@ -1467,9 +1487,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                           >
                             <Layers className="w-4 h-4" /> Up next
                           </button>
-                          <button type="button" onClick={() => { handlePopOut(); setShowPlayerMoreMenu(false); }} className="w-full px-3 py-2 text-left text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white flex items-center gap-2">
-                            <Icon icon="material-symbols:tab-unselected-sharp" className="w-4 h-4" /> Mini player
-                          </button>
                           {subtitleTracks.length > 0 && (
                             <>
                               <div className="my-1 border-t border-white/10" />
@@ -1579,12 +1596,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                       )}
                     </AnimatePresence>
                   </div>
+                  <Tooltip text="Mini player">
+                    <button type="button" onClick={handlePopOut} className={playerBarBtnClass}>
+                      <Icon icon="material-symbols:ad-group-outline" className="w-4 h-4" />
+                    </button>
+                  </Tooltip>
                   <Tooltip text={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
                     <button type="button" onClick={toggleFullscreen} className={playerBarBtnClass}>
                       {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                     </button>
-                  </Tooltip>
-                </div>
+                  </Tooltip>                </div>
               </div>
             </div>
           </motion.div>

@@ -76,6 +76,7 @@ export function NowPlayingBar({
   const setMuted = useRuforgeStore((s) => s.setMuted);
   const setLooping = useRuforgeStore((s) => s.setLooping);
   const handlePopOut = useRuforgeStore((s) => s.handlePopOut);
+  const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [morePanel, setMorePanel] = useState<"main" | "speed">("main");
@@ -177,9 +178,17 @@ export function NowPlayingBar({
           <div className="min-w-0 flex-1" style={{ color: "var(--music-text-primary)" }}>
             <MarqueeText text={playingFile.name} className="text-sm font-medium leading-tight" layoutKey={playingFile.path} />
             {artist && (
-              <div style={{ color: "var(--music-text-secondary)" }}>
-                <MarqueeText text={artist} className="text-xs mt-0.5" layoutKey={`${playingFile.path}-artist`} />
-              </div>
+              <button
+                type="button"
+                className="text-xs mt-0.5 hover:underline w-full text-left truncate block"
+                style={{ color: "var(--music-text-secondary)" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openMusicArtist(artist.trim().toLowerCase());
+                }}
+              >
+                {artist}
+              </button>
             )}
           </div>
         </button>
@@ -323,14 +332,6 @@ export function NowPlayingBar({
                           <span className="tabular-nums opacity-70">{playbackSpeed}×</span>
                           <ChevronRight size={14} data-more-icon className="opacity-70" />
                         </button>
-                        <MoreMenuItem
-                          icon="material-symbols:tab-unselected-sharp"
-                          label="Mini player"
-                          onClick={() => {
-                            void handlePopOut(currentTime, { paused, playbackSpeed });
-                            setShowMoreMenu(false);
-                          }}
-                        />
                       </motion.div>
                     ) : (
                       <motion.div
@@ -367,6 +368,16 @@ export function NowPlayingBar({
               )}
             </AnimatePresence>
           </div>
+
+          <button
+            type="button"
+            onClick={() => void handlePopOut(currentTime, { paused, playbackSpeed })}
+            className={cn(barBtnClass)}
+            style={{ color: "var(--music-text-primary)" }}
+            aria-label="Mini player"
+          >
+            <Icon icon="material-symbols:ad-group-outline" width={16} />
+          </button>
 
           <button
             type="button"

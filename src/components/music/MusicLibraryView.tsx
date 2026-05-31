@@ -36,20 +36,20 @@ function SongRow({ file, index, isPlaying, onClick }: SongRowProps) {
         <span className="hidden group-hover/row:inline"><Play size={14} fill="currentColor" /></span>
       </div>
       {coverSrc ? (
-        <img src={coverSrc} alt="" className="w-9 h-9 rounded shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
+        <img src={coverSrc} alt="" className="w-11 h-11 rounded shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
       ) : (
         <div
-          className="w-9 h-9 rounded shrink-0 flex items-center justify-center"
+          className="w-11 h-11 rounded shrink-0 flex items-center justify-center"
           style={{ borderRadius: "var(--music-card-radius)", background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
           </svg>
         </div>
       )}
       <div className="flex-1 min-w-0">
         <div
-          className="text-sm font-medium truncate"
+          className="text-sm font-bold truncate"
           style={{ color: isPlaying ? "var(--music-accent)" : "var(--music-text-primary)" }}
         >
           {file.name}
@@ -89,19 +89,19 @@ function AlbumRow({ album, artist, cover, trackCount, onClick }: AlbumRowProps) 
       onMouseLeave={(e) => (e.currentTarget.style.background = "")}
     >
       {coverSrc ? (
-        <img src={coverSrc} alt="" className="w-12 h-12 rounded shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
+        <img src={coverSrc} alt="" className="w-14 h-14 rounded shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
       ) : (
         <div
-          className="w-12 h-12 rounded shrink-0 flex items-center justify-center"
+          className="w-14 h-14 rounded shrink-0 flex items-center justify-center"
           style={{ borderRadius: "var(--music-card-radius)", background: "var(--music-surface)", color: "var(--music-text-muted)" }}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
           </svg>
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate" style={{ color: "var(--music-text-primary)" }}>{album}</div>
+        <div className="text-sm font-bold truncate" style={{ color: "var(--music-text-primary)" }}>{album}</div>
         <div className="text-xs mt-0.5" style={{ color: "var(--music-text-secondary)" }}>
           {artist && `${artist} · `}{trackCount} {trackCount === 1 ? "song" : "songs"}
         </div>
@@ -132,13 +132,13 @@ function ArtistRow({ artist, trackCount, onClick }: ArtistRowProps) {
       onMouseLeave={(e) => (e.currentTarget.style.background = "")}
     >
       <div
-        className="w-12 h-12 rounded-full shrink-0 flex items-center justify-center text-sm font-semibold"
+        className="w-14 h-14 rounded-full shrink-0 flex items-center justify-center text-lg font-bold"
         style={{ background: "var(--music-surface-raised)", color: "var(--music-text-secondary)" }}
       >
         {artist.charAt(0).toUpperCase()}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate" style={{ color: "var(--music-text-primary)" }}>{artist}</div>
+        <div className="text-sm font-bold truncate" style={{ color: "var(--music-text-primary)" }}>{artist}</div>
         <div className="text-xs mt-0.5" style={{ color: "var(--music-text-secondary)" }}>
           {trackCount} {trackCount === 1 ? "song" : "songs"}
         </div>
@@ -149,9 +149,11 @@ function ArtistRow({ artist, trackCount, onClick }: ArtistRowProps) {
 
 type Props = {
   onPlayFile: (file: MediaFile, playlist: MediaFile[]) => void;
+  onOpenArtist: (artistKey: string) => void;
+  onOpenAlbum: (artistKey: string, albumKey: string) => void;
 };
 
-export function MusicLibraryView({ onPlayFile }: Props) {
+export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) {
   const entries = useRuforgeStore((s) => s.entries);
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const [activeTab, setActiveTab] = useState<LibTab>("songs");
@@ -167,31 +169,37 @@ export function MusicLibraryView({ onPlayFile }: Props) {
   );
 
   const albums = useMemo(() => {
-    const map = new Map<string, { album: string; artist: string; cover: string | null; tracks: MediaFile[] }>();
+    const map = new Map<string, { albumKey: string; artistKey: string; album: string; artist: string; cover: string | null; tracks: MediaFile[] }>();
     for (const t of tracks) {
       const albumName = t.album ?? "";
-      const key = albumName || `__no_album__${t.path}`;
+      if (!albumName) continue;
+      const artistRaw = t.albumArtist ?? t.artist ?? "";
+      const key = `${artistRaw.trim().toLowerCase()}::${albumName.trim().toLowerCase()}`;
       if (!map.has(key)) {
-        map.set(key, { album: albumName, artist: t.albumArtist ?? t.artist ?? "", cover: bestCoverPath(t), tracks: [] });
+        map.set(key, {
+          albumKey: albumName.trim().toLowerCase(),
+          artistKey: artistRaw.trim().toLowerCase(),
+          album: albumName,
+          artist: artistRaw,
+          cover: bestCoverPath(t),
+          tracks: [],
+        });
       }
       map.get(key)!.tracks.push(t);
     }
-    return [...map.values()]
-      .filter((a) => a.album)
-      .sort((a, b) => a.album.localeCompare(b.album));
+    return [...map.values()].sort((a, b) => a.album.localeCompare(b.album));
   }, [tracks]);
 
   const artists = useMemo(() => {
-    const map = new Map<string, MediaFile[]>();
+    const map = new Map<string, { key: string; display: string; tracks: MediaFile[] }>();
     for (const t of tracks) {
-      const a = t.artist ?? t.albumArtist ?? "";
-      if (!a) continue;
-      if (!map.has(a)) map.set(a, []);
-      map.get(a)!.push(t);
+      const raw = t.artist ?? t.albumArtist ?? "";
+      if (!raw) continue;
+      const key = raw.trim().toLowerCase();
+      if (!map.has(key)) map.set(key, { key, display: raw, tracks: [] });
+      map.get(key)!.tracks.push(t);
     }
-    return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([artist, ts]) => ({ artist, tracks: ts }));
+    return [...map.values()].sort((a, b) => a.display.localeCompare(b.display));
   }, [tracks]);
 
   const tabs: { id: LibTab; label: string }[] = [
@@ -257,12 +265,12 @@ export function MusicLibraryView({ onPlayFile }: Props) {
             )}
             {albums.map((a) => (
               <AlbumRow
-                key={a.album}
+                key={`${a.artistKey}::${a.albumKey}`}
                 album={a.album}
                 artist={a.artist}
                 cover={a.cover}
                 trackCount={a.tracks.length}
-                onClick={() => onPlayFile(a.tracks[0], a.tracks)}
+                onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
               />
             ))}
           </div>
@@ -277,10 +285,10 @@ export function MusicLibraryView({ onPlayFile }: Props) {
             )}
             {artists.map((a) => (
               <ArtistRow
-                key={a.artist}
-                artist={a.artist}
+                key={a.key}
+                artist={a.display}
                 trackCount={a.tracks.length}
-                onClick={() => onPlayFile(a.tracks[0], a.tracks)}
+                onClick={() => onOpenArtist(a.key)}
               />
             ))}
           </div>

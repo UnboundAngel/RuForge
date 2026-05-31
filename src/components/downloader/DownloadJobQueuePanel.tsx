@@ -131,10 +131,13 @@ export const MarqueeText = ({
   text,
   className = "",
   layoutKey,
+  centered = false,
 }: {
   text: string;
   className?: string;
   layoutKey?: boolean | number | string;
+  /** Center the text when it fits without scrolling. */
+  centered?: boolean;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
@@ -158,7 +161,10 @@ export const MarqueeText = ({
 
   return (
     <div ref={containerRef} className={`${className} overflow-hidden whitespace-nowrap`}>
-      <div className={`flex w-max ${shouldMarquee ? "animate-marquee" : ""}`}>
+      <div
+        className={`flex w-max ${shouldMarquee ? "animate-marquee" : ""}`}
+        style={centered && !shouldMarquee ? { margin: "0 auto" } : undefined}
+      >
         <span ref={textRef} className={shouldMarquee ? "pr-12" : ""}>{text}</span>
         {shouldMarquee && <span className="pr-12">{text}</span>}
       </div>

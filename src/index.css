@@ -327,32 +327,6 @@ html.ruforge-notify-root body {
   letter-spacing: 0.02em;
 }
 
-/* line-md SMIL is paused in freezeLineMdIcon.ts; CSS alone is not enough */
-.rf-nav-icon-static svg,
-.rf-nav-icon-static svg * {
-  animation: none !important;
-}
-
-/* Remounted on hover so built-in line-md SVG runs once per hover */
-.rf-nav-icon-hover-play svg,
-.rf-nav-icon-hover-play svg * {
-  animation-iteration-count: 1 !important;
-}
-
-@keyframes rf-nav-icon-material-once {
-  0% {
-    opacity: 0.55;
-    transform: scale(0.9);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.rf-nav-icon-material-once {
-  animation: rf-nav-icon-material-once 0.45s ease-out forwards;
-}
 
 .rf-sidebar {
   z-index: 40;
@@ -396,7 +370,7 @@ html.ruforge-notify-root body {
   --music-bottom-idle: 12px;
   --music-panel-radius: 12px;
   --music-shell-gap: 8px;
-  --music-card-radius: 4px;
+  --music-explore-bar-height: 44px;
 
   --bg: #000000;
   /* Pull the global accent token to music red so all existing hover:text-[var(--accent)] surfaces get it for free. */
@@ -416,6 +390,12 @@ html.ruforge-notify-root body {
 [data-music-mode="true"] .rf-scrollbar::-webkit-scrollbar-thumb:hover,
 [data-music-mode="true"] .rf-scrollbar *::-webkit-scrollbar-thumb:hover {
   background: var(--music-accent);
+}
+
+.rf-music-explore-track-row:focus,
+.rf-music-explore-track-row:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .rf-music-nav-item {
@@ -442,6 +422,14 @@ html.ruforge-notify-root body {
 
 .rf-music-nav-item:not([data-active="true"]):hover [data-nav-icon] {
   color: var(--music-text-primary);
+}
+
+.rf-music-nav-item-ytm[data-active="true"] [data-nav-icon] {
+  color: var(--music-accent);
+}
+
+.rf-music-nav-item-ytm:not([data-active="true"]):hover [data-nav-icon] {
+  color: var(--music-accent);
 }
 
 .rf-music-back-btn {
@@ -509,6 +497,7 @@ html.ruforge-notify-root body {
 .rf-music-more-row[data-selected="true"] [data-more-icon] {
   color: var(--music-accent);
 }
+
 
 .rf-sidebar-nav-item {
   gap: var(--rf-nav-item-gap);

@@ -1,9 +1,10 @@
-import { useState } from "react";
 import logo from "@/assets/neotubeIcon.png";
 import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
 import { StorageGlyph } from "@/components/navigation/StorageGlyph";
+import { YouTubeProfileChip } from "@/components/music/YouTubeProfileChip";
+import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { ActiveTab } from "@/store/types";
 import type { NavMode } from "@/store/types";
 
@@ -33,7 +34,7 @@ export function AppSidebarRail({
   disabled,
   onSelectTab,
 }: AppSidebarRailProps) {
-  const [hoveredIcon, setHoveredIcon] = useState<RadialNavIconId | null>(null);
+  const youtubeProfile = useRuforgeStore((s) => s.youtubeExplorerProfile);
 
   return (
     <div
@@ -59,11 +60,6 @@ export function AppSidebarRail({
               key={item.id}
               type="button"
               onClick={() => onSelectTab(item.id)}
-              onPointerEnter={(e) => {
-                if (e.pointerType !== "mouse") return;
-                setHoveredIcon(item.iconId);
-              }}
-              onPointerLeave={() => setHoveredIcon(null)}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
               className={cn(
@@ -79,11 +75,7 @@ export function AppSidebarRail({
                   aria-hidden
                 />
               ) : null}
-              <RadialNavIcon
-                id={item.iconId}
-                size={20}
-                playing={hoveredIcon === item.iconId}
-              />
+              <RadialNavIcon id={item.iconId} size={20} />
               <span className="rf-rail-tooltip absolute left-[calc(100%+10px)] top-1/2 z-[280] -translate-y-1/2 opacity-0 group-hover/rail:opacity-100">
                 {item.label}
               </span>
@@ -93,6 +85,13 @@ export function AppSidebarRail({
       </nav>
 
       <div className="flex shrink-0 flex-col items-center gap-3 pb-4">
+        {navMode !== "music" && youtubeProfile && (
+          <YouTubeProfileChip
+            size="sm"
+            onClick={() => onSelectTab("explorer")}
+            className="opacity-80 hover:opacity-100 transition-opacity"
+          />
+        )}
         <StorageGlyph />
       </div>
     </div>

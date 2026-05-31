@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import {
   bufferedPercentInChapter,
-  chapterAtHoverPercent,
   chapterAtTime,
   chapterGridTemplateColumns,
-  hoverPercentInChapter,
+  hoverFillPercentInChapter,
+  scrubberPercentForTime,
+  timeForScrubberPercent,
   type NormalizedChapter,
 } from "../../chapters";
 import { ScrubHoverPreview } from "./ScrubHoverPreview";
@@ -48,18 +49,37 @@ export function ChapterScrubber({
   onMouseLeave,
   overlay,
 }: ChapterScrubberProps) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [barWidthPx, setBarWidthPx] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+
+    const syncWidth = () => {
+      setBarWidthPx(el.getBoundingClientRect().width);
+    };
+    syncWidth();
+
+    const ro = new ResizeObserver(syncWidth);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const gridCols = useMemo(
     () => chapterGridTemplateColumns(chapters, duration),
     [chapters, duration],
   );
-  const hoverChapter =
-    hoverPercent !== null && isFinite(duration) && duration > 0
-      ? chapterAtHoverPercent(chapters, duration, hoverPercent)
-      : null;
   const hoverTimeSec =
     hoverPercent !== null && isFinite(duration) && duration > 0
-      ? (hoverPercent / 100) * duration
+      ? barWidthPx > 0
+        ? timeForScrubberPercent(chapters, duration, hoverPercent, barWidthPx)
+        : (hoverPercent / 100) * duration
       : 0;
+  const hoverChapter =
+    hoverPercent !== null && isFinite(duration) && duration > 0
+      ? chapterAtTime(chapters, hoverTimeSec)
+      : null;
   const at = useMemo(
     () => chapterAtTime(chapters, currentTime),
     [chapters, currentTime],
@@ -71,9 +91,14 @@ export function ChapterScrubber({
     ? BASE_TRACK_H * HOVER_SCALE
     : BASE_TRACK_H;
   const knobCenterFromBottom = trackVisualH / 2;
+  const playheadPercent =
+    barWidthPx > 0
+      ? scrubberPercentForTime(chapters, duration, currentTime, barWidthPx)
+      : playedPercent;
 
   return (
     <div
+      ref={trackRef}
       className="w-full min-w-0 max-w-full relative overflow-visible"
       style={{ height: isHovering ? BASE_TRACK_H * HOVER_SCALE : BASE_TRACK_H }}
       onMouseDown={onMouseDown}
@@ -96,7 +121,13 @@ export function ChapterScrubber({
           );
           const localHover =
             isHovering && hoverPercent !== null
-              ? hoverPercentInChapter(ch, hoverPercent, duration)
+              ? hoverFillPercentInChapter(
+                  i,
+                  chapters,
+                  duration,
+                  hoverPercent,
+                  barWidthPx,
+                )
               : 0;
           const isHoveredChapter = isHovering && i === activeHoverIndex;
 
@@ -232,7 +263,7 @@ export function ChapterScrubber({
           isHovering || isScrubbing ? "opacity-100" : "opacity-0"
         }`}
         style={{
-          left: `${playedPercent}%`,
+          left: `${playheadPercent}%`,
           bottom: knobCenterFromBottom,
           transform: "translate(-50%, 50%)",
         }}
