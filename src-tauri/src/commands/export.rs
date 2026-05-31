@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::commands::export_copy::{self, FastCopyOptions};
-use crate::utils::{is_media_ext, vtt_sidecars_for_stem, THUMB_DIR_NAME};
+use crate::media_bundle::{
+    collect_sidecar_sources, thumb_dir_candidates,
+};
+use crate::utils::{is_media_ext, THUMB_DIR_NAME};
 
 const EXPORT_SUBFOLDER_PREFIX: &str = "RuForge Export ";
 const MANIFEST_FILENAME: &str = "ruforge-export-manifest.json";
@@ -170,32 +173,6 @@ fn is_media_path(path: &Path) -> bool {
             .and_then(|e| e.to_str())
             .unwrap_or(""),
     )
-}
-
-fn strip_ytdlp_stream_suffix(stem: &str) -> &str {
-    let Some(dot_f) = stem.rfind(".f") else {
-        return stem;
-    };
-    let tail = &stem[dot_f + 2..];
-    if tail.is_empty() {
-        return stem;
-    }
-    if tail
-        .chars()
-        .all(|c| c.is_ascii_digit() || c == '-' || c == '.')
-    {
-        return &stem[..dot_f];
-    }
-    stem
-}
-
-fn stem_candidates(stem: &str) -> Vec<&str> {
-    let stripped = strip_ytdlp_stream_suffix(stem);
-    if stripped == stem {
-        vec![stem]
-    } else {
-        vec![stem, stripped]
-    }
 }
 
 fn gallery_skip_subdirectory(folder_name: &str) -> bool {
@@ -441,45 +418,6 @@ fn plan_destination_jobs_v2(jobs: Vec<MediaCopyJob>, bundle_root: &Path) -> Vec<
 
     fix_collision_resolution(&mut tentative, bundle_root);
     tentative.into_iter().map(|(p, _)| p).collect()
-}
-
-fn collect_sidecar_sources(parent: &Path, stem: &str) -> Vec<PathBuf> {
-    let mut paths: Vec<PathBuf> = Vec::new();
-    let mut seen: HashSet<PathBuf> = HashSet::new();
-
-    for candidate in stem_candidates(stem) {
-        for name in [
-            format!("{candidate}.jpg"),
-            format!("{candidate}.webp"),
-            format!("{candidate}.info.json"),
-            format!("{candidate}..info.json"),
-            format!("{candidate}.sponsorblock.json"),
-            format!("{candidate}.comments.json"),
-        ] {
-            let p = parent.join(&name);
-            if p.is_file() && seen.insert(p.clone()) {
-                paths.push(p);
-            }
-        }
-    }
-
-    if let Ok(vtts) = vtt_sidecars_for_stem(parent, stem) {
-        for (p, _) in vtts {
-            if seen.insert(p.clone()) {
-                paths.push(p);
-            }
-        }
-    }
-
-    paths
-}
-
-fn thumb_dir_candidates(parent: &Path, stem: &str) -> Vec<PathBuf> {
-    stem_candidates(stem)
-        .into_iter()
-        .map(|s| parent.join(THUMB_DIR_NAME).join(s))
-        .filter(|p| p.is_dir())
-        .collect()
 }
 
 fn count_dir_files(dir: &Path) -> u32 {

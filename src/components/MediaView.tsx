@@ -300,7 +300,7 @@ export const MediaView = ({
     setGalleryActiveMenu(null);
     const approved = await askConfirm({
       title: "Delete video",
-      message: `Are you sure you want to delete this video? This action cannot be undone.`,
+      message: `Move this item to the system Recycle Bin? You can restore it from Recently Deleted while it stays in the bin.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       itemPreview: file.thumbnailPath ?? file.ruforgePosterPath,
@@ -323,7 +323,7 @@ export const MediaView = ({
       if (result.alreadyMissing && !result.removed) {
         notify("Removed from library (file was already gone).");
       } else if (result.removed) {
-        notify("Removed this file and its sidecars from disk.");
+        notify("Moved to Recycle Bin. Restore from Recently Deleted if needed.");
       } else {
         notify("Removed from library.");
       }

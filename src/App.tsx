@@ -47,6 +47,7 @@ import { PlayerView, type PlayerViewHandle } from "./components/PlayerView";
 import { SettingsView } from "./components/SettingsView";
 import { MediaView } from "./components/MediaView";
 import { AuthorizeCleanupModal } from "./components/AuthorizeCleanupModal";
+import { RecentlyDeletedModal } from "./components/RecentlyDeletedModal";
 import { ExportBundleHost } from "./components/ExportBundleModal";
 import { useRemovableDrivesPoll } from "./hooks/useRemovableDrivesPoll";
 import { buildEntireLibraryExportPreset } from "./lib/exportSelection";
@@ -56,10 +57,10 @@ import type { SendToMainPayload } from "./playerHandoff";
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { MediaFile } from "./types";
-import { readPlaybackSpeed } from "./playbackSpeedStorage";
 import {
   Settings,
   Search,
+  Trash2,
   CheckCircle2,
   X,
   Loader2,
@@ -82,7 +83,9 @@ import { setMainWindowFocused } from "./appWindowFocus";
 import {
   EMBEDDED_EXPLORER_WEBVIEW_LABEL,
   EXPLORER_PAUSE_MEDIA_SCRIPT,
+  ensureEmbeddedExplorerWebview,
   explorerNavigateOrReloadScript,
+  getEmbeddedExplorerWebview,
 } from "./explorerWebviewLifecycle";
 import {
   createExplorerBoundsRafScheduler,
@@ -93,18 +96,18 @@ import {
 } from "./explorerBoundsSync";
 
 const WindowControls = ({
-  onMiniPlayerToggle,
   onExportUsbClick,
   hasRemovableDrive,
+  navMode,
   updaterPhase,
   updaterVersion,
   showExplorerQueueToolbar,
   storageBlocksNewDownloads,
   onUpdaterStatusClick,
 }: {
-  onMiniPlayerToggle: () => void;
   onExportUsbClick: () => void;
   hasRemovableDrive: boolean;
+  navMode: string;
   updaterPhase: UpdaterPhase;
   updaterVersion: string | null;
   showExplorerQueueToolbar: boolean;
@@ -148,29 +151,24 @@ const WindowControls = ({
         />
       )}
 
-      <TitlebarHoverButton
-        tooltip={
-          hasRemovableDrive
-            ? "Export to removable drive"
-            : "Export media bundle"
-        }
-        onClick={onExportUsbClick}
-      >
-        <Icon
-          icon={
-            hasRemovableDrive ? "tabler:device-usb-filled" : "tabler:device-usb"
+      {navMode !== "music" && (
+        <TitlebarHoverButton
+          tooltip={
+            hasRemovableDrive
+              ? "Export to removable drive"
+              : "Export media bundle"
           }
-          width={18}
-          height={18}
-        />
-      </TitlebarHoverButton>
-
-      <TitlebarHoverButton
-        tooltip="Launch Mini Player"
-        onClick={onMiniPlayerToggle}
-      >
-        <Icon icon="material-symbols:ad-group-outline" width={18} height={18} />
-      </TitlebarHoverButton>
+          onClick={onExportUsbClick}
+        >
+          <Icon
+            icon={
+              hasRemovableDrive ? "tabler:device-usb-filled" : "tabler:device-usb"
+            }
+            width={18}
+            height={18}
+          />
+        </TitlebarHoverButton>
+      )}
 
       <div className="w-px h-4 bg-stone-500/20 mx-1" />
 
@@ -226,6 +224,7 @@ function App() {
   const searchValue = useRuforgeStore((s) => s.searchValue);
   const setSearchValue = useRuforgeStore((s) => s.setSearchValue);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [recentlyDeletedOpen, setRecentlyDeletedOpen] = useState(false);
   const mainContentRef = useRef<HTMLElement>(null);
   /** 0 = bulge tabs flush on panel; 1 = tucked into the 40px title band (scrollable settings only). */
   const settingsTabMorph = useMotionValue(0);
@@ -595,43 +594,41 @@ function App() {
 
       const appWindow = getCurrentWindow();
       if (!explorerWebviewRef.current) {
-        // Bail if creation is already in flight; next sync will continue once ready.
         if (explorerWebviewCreatingRef.current) return;
         explorerWebviewCreatingRef.current = true;
 
-        const dataDir = await appDataDir();
-        const explorerDataPath = await join(dataDir, "explorer-data");
-        const extraBrowserArgs = await invoke<string | null>(
-          "get_hardware_acceleration_browser_args",
-        );
+        try {
+          const dataDir = await appDataDir();
+          const explorerDataPath = await join(dataDir, "explorer-data");
+          const extraBrowserArgs = await invoke<string | null>(
+            "get_hardware_acceleration_browser_args",
+          );
 
-        const webview = new Webview(appWindow, "explorer-view", {
-          url: "https://www.youtube.com",
-          x: finalX,
-          y: finalY,
-          width: finalW,
-          height: finalH,
-          dataDirectory: explorerDataPath,
-          userAgent:
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          ...(extraBrowserArgs ? { additionalBrowserArgs: extraBrowserArgs } : {}),
-        });
+          const webview = await ensureEmbeddedExplorerWebview({
+            window: appWindow,
+            label: explorerWebviewLabelRef.current,
+            url: "https://www.youtube.com",
+            x: finalX,
+            y: finalY,
+            width: finalW,
+            height: finalH,
+            dataDirectory: explorerDataPath,
+            userAgent:
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            additionalBrowserArgs: extraBrowserArgs,
+          });
 
-        webview.once("tauri://created", () => {
           explorerWebviewCreatingRef.current = false;
           if (!active) return;
           explorerWebviewRef.current = webview;
           if (activeTab === "explorer") {
             void maybeReloadExplorerOnEnter();
           }
-        });
-
-        webview.once("tauri://error", (e) => {
+        } catch (e) {
           explorerWebviewCreatingRef.current = false;
           console.error("[RuForge] Explorer webview error", e);
-          // Schedule a retry so the next bounds pass can attempt re-creation.
           explorerScheduleSyncRef.current?.();
-        });
+        }
 
         return;
       }
@@ -774,6 +771,10 @@ function App() {
     void invoke<string>("embedded_explorer_webview_label").then((label) => {
       explorerWebviewLabelRef.current = label;
       explorerLinuxEmbedRef.current = label !== EMBEDDED_EXPLORER_WEBVIEW_LABEL;
+      if (explorerLinuxEmbedRef.current) return;
+      void getEmbeddedExplorerWebview(label).then((webview) => {
+        if (webview) explorerWebviewRef.current = webview;
+      });
     });
   }, []);
 
@@ -984,12 +985,17 @@ function App() {
       if (isAlreadyQueued) return;
 
       try {
-        const dir = await dirname(playingFile.path);
-        const scannedRaw = await invoke("scan_gallery", { dir });
+        const itemDir = await dirname(playingFile.path);
+        const bucketDir = await dirname(itemDir);
+        const bucketName = bucketDir.split(/[\\/]/).pop()?.toLowerCase() ?? "";
+        const BUCKET_NAMES = ["videos", "music", "movies", "shows", "playlists"];
+        // Under the bucketed layout, scan the bucket dir so siblings from other item folders are found.
+        // Under the legacy flat layout, scan the immediate parent.
+        const scanDir = BUCKET_NAMES.includes(bucketName) ? bucketDir : itemDir;
+        const scannedRaw = await invoke("scan_gallery", { dir: scanDir });
         if (cancel) return;
         const scanned = flattenGalleryScanToMediaFiles(scannedRaw);
         
-        // Populate neighbor queue from the same folder, matching the current media type (audio or video)
         const isAudio = isAudioOnlyPath(playingFile.path);
         const neighbors = scanned
           .filter((f) => isAudioOnlyPath(f.path) === isAudio)
@@ -1168,16 +1174,9 @@ function App() {
 
       {/* Window Controls */}
       <WindowControls
-        onMiniPlayerToggle={() => {
-          const st = useRuforgeStore.getState();
-          const inPlayer = st.activeTab === "player";
-          void st.handlePopOut(inPlayer ? (playerViewRef.current?.getCurrentTime() ?? 0) : undefined, {
-            paused: inPlayer ? (playerViewRef.current?.getIsPaused() ?? true) : true,
-            playbackSpeed: readPlaybackSpeed(),
-          });
-        }}
         onExportUsbClick={() => void handleExportUsbTitlebar()}
         hasRemovableDrive={hasRemovableDrive}
+        navMode={navMode}
         updaterPhase={updaterPhase}
         updaterVersion={updaterVersion}
         showExplorerQueueToolbar={showExplorerToolbar}
@@ -1348,6 +1347,17 @@ function App() {
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
               </div>
 
+              <button
+                type="button"
+                id="recently-deleted-btn"
+                onClick={() => setRecentlyDeletedOpen(true)}
+                className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex-shrink-0 h-[34px]"
+                aria-label="Recently deleted"
+                title="Recently deleted"
+              >
+                <Trash2 size={16} />
+              </button>
+
               <AnimatePresence>
                 {isSearchExpanded && (
                   <motion.div
@@ -1355,7 +1365,7 @@ function App() {
                     animate={{ width: 240, opacity: 1 }}
                     exit={{ width: 0, opacity: 0 }}
                     transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                    className="overflow-hidden h-[34px] flex items-center relative z-10"
+                    className="overflow-hidden h-[34px] flex items-center relative z-10 flex-shrink-0"
                   >
                     <div className="w-[240px] pr-5">
                       <input
@@ -1381,13 +1391,13 @@ function App() {
                 <button
                   id="search-toggle-btn"
                   onClick={() => setIsSearchExpanded((p) => !p)}
-                  className={`transition-colors relative z-10 ${isSearchExpanded ? "text-stone-50" : "text-stone-400 hover:text-stone-50"}`}
+                  className={`transition-colors relative z-10 flex-shrink-0 ${isSearchExpanded ? "text-stone-50" : "text-stone-400 hover:text-stone-50"}`}
                 >
                   <Search size={16} />
                 </button>
                 <button
                   onClick={() => setActiveTab("settings")}
-                  className="text-stone-400 hover:text-stone-50 transition-colors relative z-10"
+                  className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex-shrink-0"
                 >
                   <Settings size={16} />
                 </button>
@@ -1546,6 +1556,10 @@ function App() {
       />
 
       <AuthorizeCleanupModal />
+      <RecentlyDeletedModal
+        open={recentlyDeletedOpen}
+        onClose={() => setRecentlyDeletedOpen(false)}
+      />
       <ExportBundleHost />
       <ConfirmDialogHost />
     </div>

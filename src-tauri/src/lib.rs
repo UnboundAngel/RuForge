@@ -4,6 +4,7 @@ mod download_job_manager;
 mod process_tree;
 mod hardware_acceleration;
 mod tray;
+mod media_bundle;
 mod utils;
 mod ytdlp_binary;
 #[cfg(windows)]
@@ -24,10 +25,14 @@ use crate::commands::export::{
 use crate::download_job_manager::DownloadJobManager;
 use crate::commands::ffprobe::probe_local_media_ffprobe;
 use crate::commands::gallery::{regroup_playlist_downloads, scan_gallery};
+use crate::commands::migrate::migrate_library_layout;
 use crate::commands::sponsorblock::ensure_sponsorblock_segments;
 use crate::commands::media::{
     delete_media, delete_media_batch, ensure_poster_if_missing, extract_frames, get_subtitle_tracks,
     read_local_subtitle_vtt,
+};
+use crate::commands::recently_deleted::{
+    list_recently_deleted, remove_recently_deleted_entry, restore_recently_deleted,
 };
 use crate::commands::notify_overlay::{
     hide_notify_overlay_window, notify_overlay_ready, push_background_notify, sync_notify_overlay_bounds,
@@ -172,7 +177,11 @@ pub fn run() {
             export_media_bundle,
             cancel_export_bundle,
             poll_removable_drives,
-            export_dest_dir_available
+            export_dest_dir_available,
+            migrate_library_layout,
+            list_recently_deleted,
+            restore_recently_deleted,
+            remove_recently_deleted_entry
         ])
         .run(context)
         .expect("error while running tauri application");

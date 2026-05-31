@@ -11,7 +11,8 @@ use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
 
-use crate::commands::gallery::remove_media_sidecar_artifacts;
+use crate::commands::recently_deleted::append_manifest_entry;
+use crate::media_bundle::{collect_deletion_paths, prune_empty_dirs_after_media_delete};
 use crate::process_tree::kill_shell_child_tree;
 use crate::utils::{duration_from_ytdlp_info_json, POSTER_FILE, THUMB_DIR_NAME};
 
@@ -343,39 +344,65 @@ pub struct DeleteMediaResult {
     pub sidecar_warnings: Vec<String>,
 }
 
-fn delete_media_filesystem(video_path: &str) -> Result<DeleteMediaResult, String> {
+fn delete_title_from_path(video_path: &Path) -> String {
+    video_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.replace('_', " "))
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "Media".to_string())
+}
+
+fn trash_paths(paths: &[PathBuf]) -> Vec<String> {
+    let mut warnings = Vec::new();
+    for path in paths {
+        if !path.exists() {
+            continue;
+        }
+        if let Err(e) = trash::delete(path) {
+            warnings.push(format!("{}: {e}", path.display()));
+        }
+    }
+    warnings
+}
+
+fn delete_media_filesystem(app: &AppHandle, video_path: &str) -> Result<DeleteMediaResult, String> {
     let video_file_path = Path::new(video_path);
     if video_file_path.parent().is_none() {
         return Err("Invalid video path".into());
     }
 
-    let mut removed = false;
-    let mut already_missing = false;
+    let had_media = video_file_path.is_file();
+    let already_missing = !had_media;
 
-    if video_file_path.exists() {
-        if !video_file_path.is_file() {
-            return Err(format!("Not a file: {video_path}"));
-        }
-        std::fs::remove_file(video_file_path).map_err(|e| e.to_string())?;
-        removed = true;
-    } else {
-        already_missing = true;
+    let paths = collect_deletion_paths(video_file_path);
+    let trashed_files: Vec<String> = paths
+        .iter()
+        .filter(|p| p.exists())
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+
+    let sidecar_warnings = trash_paths(&paths);
+    for warning in &sidecar_warnings {
+        log::warn!("[RuForge] delete trash: {warning}");
     }
 
-    let sidecar_warnings = remove_media_sidecar_artifacts(video_file_path);
-    for warning in &sidecar_warnings {
-        log::warn!("[RuForge] delete sidecar: {warning}");
+    prune_empty_dirs_after_media_delete(video_file_path);
+
+    if !trashed_files.is_empty() {
+        let title = delete_title_from_path(video_file_path);
+        let _ = append_manifest_entry(app, &title, video_path, trashed_files);
     }
 
     Ok(DeleteMediaResult {
-        removed,
+        removed: had_media,
         already_missing,
         sidecar_warnings,
     })
 }
 
 #[tauri::command]
-pub async fn delete_media_batch(paths: Vec<String>) -> Result<u64, String> {
+pub async fn delete_media_batch(app: AppHandle, paths: Vec<String>) -> Result<u64, String> {
     let mut deleted_bytes: u64 = 0;
     for video_path in paths {
         if let Ok(meta) = std::fs::metadata(&video_path) {
@@ -383,16 +410,19 @@ pub async fn delete_media_batch(paths: Vec<String>) -> Result<u64, String> {
                 deleted_bytes = deleted_bytes.saturating_add(meta.len());
             }
         }
-        delete_media(video_path).await?;
+        delete_media(app.clone(), video_path).await?;
     }
     Ok(deleted_bytes)
 }
 
 #[tauri::command]
-pub async fn delete_media(video_path: String) -> Result<DeleteMediaResult, String> {
+pub async fn delete_media(
+    app: AppHandle,
+    video_path: String,
+) -> Result<DeleteMediaResult, String> {
     cancel_ffmpeg_for_video(&video_path).await;
     wait_ffmpeg_slot_idle(&video_path, Duration::from_secs(2)).await;
-    delete_media_filesystem(&video_path)
+    delete_media_filesystem(&app, &video_path)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -513,45 +543,65 @@ pub fn read_local_subtitle_vtt(path: String) -> Result<String, String> {
 #[cfg(test)]
 mod delete_media_tests {
     use super::*;
+    use crate::media_bundle::collect_deletion_paths;
     use crate::utils::POSTER_FILE;
 
     fn write_fixture(dir: &Path) -> PathBuf {
-        let media = dir.join("clip.mkv");
+        let item_dir = dir.join("Videos").join("My Clip");
+        std::fs::create_dir_all(&item_dir).unwrap();
+        let media = item_dir.join("clip.mkv");
         std::fs::write(&media, b"video-payload").unwrap();
-        std::fs::write(dir.join("clip.info.json"), br#"{"id":"x"}"#).unwrap();
-        std::fs::write(dir.join("clip.vtt"), b"WEBVTT\n").unwrap();
-        std::fs::write(dir.join("clip.jpg"), b"thumb").unwrap();
-        std::fs::write(dir.join("clip.sponsorblock.json"), br#"{"segments":[]}"#).unwrap();
-        let thumb_dir = dir.join(THUMB_DIR_NAME).join("clip");
+        std::fs::write(item_dir.join("clip.info.json"), br#"{"id":"x"}"#).unwrap();
+        std::fs::write(item_dir.join("clip.vtt"), b"WEBVTT\n").unwrap();
+        std::fs::write(item_dir.join("clip.jpg"), b"thumb").unwrap();
+        std::fs::write(item_dir.join("clip.sponsorblock.json"), br#"{"segments":[]}"#).unwrap();
+        std::fs::write(item_dir.join("clip.comments.json"), br#"{"comments":[]}"#).unwrap();
+        let thumb_dir = item_dir.join(THUMB_DIR_NAME).join("clip");
         std::fs::create_dir_all(&thumb_dir).unwrap();
         std::fs::write(thumb_dir.join(POSTER_FILE), b"poster").unwrap();
         media
     }
 
     #[test]
-    fn delete_media_removes_video_sidecars_and_thumbs() {
+    fn collect_deletion_paths_includes_full_sidecar_set() {
         let dir = tempfile::tempdir().unwrap();
         let media = write_fixture(dir.path());
-        let result = delete_media_filesystem(media.to_str().unwrap()).unwrap();
-        assert!(result.removed);
-        assert!(!result.already_missing);
-        assert!(!media.exists());
-        assert!(!dir.path().join("clip.info.json").exists());
-        assert!(!dir.path().join("clip.vtt").exists());
-        assert!(!dir.path().join("clip.jpg").exists());
-        assert!(!dir.path().join("clip.sponsorblock.json").exists());
-        assert!(!dir.path().join(THUMB_DIR_NAME).join("clip").exists());
+        let paths = collect_deletion_paths(&media);
+        assert!(paths.iter().any(|p| p.ends_with("clip.comments.json")));
+        assert!(paths.iter().any(|p| p.ends_with(POSTER_FILE)));
     }
 
     #[test]
-    fn delete_media_already_missing_still_cleans_sidecars() {
+    fn delete_media_trashes_video_sidecars_and_prunes_empty_dirs() {
         let dir = tempfile::tempdir().unwrap();
         let media = write_fixture(dir.path());
+        let item_dir = media.parent().unwrap();
+        let paths = collect_deletion_paths(&media);
+        let warnings = trash_paths(&paths);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        prune_empty_dirs_after_media_delete(&media);
+        assert!(!media.exists());
+        assert!(!item_dir.join("clip.info.json").exists());
+        assert!(!item_dir.join("clip.vtt").exists());
+        assert!(!item_dir.join("clip.jpg").exists());
+        assert!(!item_dir.join("clip.sponsorblock.json").exists());
+        assert!(!item_dir.join("clip.comments.json").exists());
+        assert!(!item_dir.join(THUMB_DIR_NAME).exists());
+        assert!(!item_dir.exists());
+    }
+
+    #[test]
+    fn delete_media_already_missing_still_trashes_sidecars() {
+        let dir = tempfile::tempdir().unwrap();
+        let media = write_fixture(dir.path());
+        let item_dir = media.parent().unwrap();
         std::fs::remove_file(&media).unwrap();
-        let result = delete_media_filesystem(media.to_str().unwrap()).unwrap();
-        assert!(!result.removed);
-        assert!(result.already_missing);
-        assert!(!dir.path().join("clip.info.json").exists());
-        assert!(!dir.path().join(THUMB_DIR_NAME).join("clip").exists());
+        let paths = collect_deletion_paths(&media);
+        let warnings = trash_paths(&paths);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        prune_empty_dirs_after_media_delete(&media);
+        assert!(!item_dir.join("clip.info.json").exists());
+        assert!(!item_dir.join(THUMB_DIR_NAME).exists());
+        assert!(!item_dir.exists());
     }
 }
