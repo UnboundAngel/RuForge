@@ -1797,11 +1797,15 @@ pub async fn get_music_browse_info(
     app: AppHandle,
     url: String,
 ) -> Result<MusicBrowseResult, String> {
-    let output = ytdlp_shell_command(&app)?
-        .args(["--flat-playlist", "-J", "--no-warnings", url.as_str()])
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(90),
+        ytdlp_shell_command(&app)?
+            .args(["--flat-playlist", "-J", "--no-warnings", url.as_str()])
+            .output(),
+    )
+    .await
+    .map_err(|_| "yt-dlp browse timed out after 90s".to_string())?
+    .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr).to_string();
@@ -1859,25 +1863,39 @@ pub async fn get_playlist_items_page(
     url: String,
     offset: u32,
     limit: u32,
+    browser_cookies: Option<String>,
+    cookie_file: Option<String>,
 ) -> Result<MusicPlaylistPage, String> {
     let limit = limit.max(1).min(100);
     let start = offset + 1;
     let end = offset + limit;
 
-    let output = ytdlp_shell_command(&app)?
-        .args([
-            "--flat-playlist",
-            "-J",
-            "--no-warnings",
-            "--playlist-start",
-            &start.to_string(),
-            "--playlist-end",
-            &end.to_string(),
-            url.as_str(),
-        ])
-        .output()
-        .await
-        .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+    let mut args: Vec<String> = vec![
+        "--flat-playlist".into(),
+        "-J".into(),
+        "--no-warnings".into(),
+        "--playlist-start".into(),
+        start.to_string(),
+        "--playlist-end".into(),
+        end.to_string(),
+    ];
+    ytdlp_push_cookie_cli_args(
+        &app,
+        &mut args,
+        cookie_file.as_deref(),
+        browser_cookies.as_deref(),
+    )?;
+    args.push(url);
+
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(90),
+        ytdlp_shell_command(&app)?
+            .args(&args)
+            .output(),
+    )
+    .await
+    .map_err(|_| "yt-dlp playlist page timed out after 90s".to_string())?
+    .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr).to_string();

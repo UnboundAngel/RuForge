@@ -47,7 +47,8 @@ use crate::commands::explorer_embed::{
     set_embedded_explorer_visible,
 };
 use crate::commands::player::{
-    eval_in_webview, get_embedded_explorer_webview_url, open_mini_player, open_youtube_explorer,
+    eval_in_webview, get_embedded_explorer_webview_url, open_mini_player, open_music_mini_player,
+    open_youtube_explorer,
 };
 use crate::commands::settings::{
     authorize_cleanup, clear_ruforge_cache, get_hardware_acceleration_browser_args,
@@ -157,6 +158,7 @@ pub fn run() {
             read_artist_meta_sidecar,
             ensure_artist_meta_sidecar,
             open_mini_player,
+            open_music_mini_player,
             open_youtube_explorer,
             get_embedded_explorer_webview_url,
             update_tray_config,

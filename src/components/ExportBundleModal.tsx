@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { X, FolderOutput, Loader2 } from "lucide-react";
+import { FolderOutput, Loader2 } from "lucide-react";
 import { useExportBundle } from "../hooks/useExportBundle";
 import {
   exportProgressHeadline,
@@ -15,6 +15,14 @@ import {
 import { formatStorageSize } from "../formatStorageSize";
 import { isDirInLibraryScanList } from "../libraryScanDirs";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import {
+  SettingsModalBtnGhost,
+  SettingsModalBtnPrimary,
+  SettingsModalBtnSecondary,
+  SettingsModalEyebrow,
+  SettingsModalShell,
+  SettingsModalSurface,
+} from "./settings/SettingsModalShell";
 
 type ExportModalPhase = "configure" | "running" | "done" | "failed" | "cancelled";
 
@@ -57,47 +65,39 @@ function ExportConfigureBody({
   if (sidecars.hasPreviews) sidecarParts.push("previews");
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-3">
-        <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">
-          Selection
-        </p>
-        <p className="mt-1 truncate text-sm font-bold text-stone-100">{summaryTitle}</p>
-        <p className="mt-1 text-[10px] text-stone-500">
+    <div className="space-y-5">
+      <SettingsModalSurface className="space-y-1">
+        <SettingsModalEyebrow>Selection</SettingsModalEyebrow>
+        <p className="truncate text-sm font-semibold text-stone-100">{summaryTitle}</p>
+        <p className="text-[11px] text-stone-500">
           {fileCount} file{fileCount === 1 ? "" : "s"}
           {sidecarParts.length > 0 ? ` · includes ${sidecarParts.join(", ")}` : ""}
         </p>
-      </div>
+      </SettingsModalSurface>
 
       <div className="space-y-2">
-        <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">
-          Destination folder
-        </p>
+        <SettingsModalEyebrow>Destination folder</SettingsModalEyebrow>
         <div className="flex gap-2">
-          <div className="min-w-0 flex-1 truncate rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-[11px] text-stone-300">
+          <div className="min-w-0 flex-1 truncate rounded-[var(--radius-input)] bg-[#261d18] px-3 py-2.5 text-[12px] text-stone-300">
             {destDir || "Pick a folder…"}
           </div>
-          <button
-            type="button"
-            onClick={onBrowse}
-            className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
-          >
+          <SettingsModalBtnGhost onClick={onBrowse} className="shrink-0 px-4">
             Browse
-          </button>
+          </SettingsModalBtnGhost>
         </div>
-        <p className="text-[10px] leading-relaxed text-stone-600">
+        <p className="text-[11px] leading-relaxed text-stone-500">
           RuForge creates a timestamped subfolder inside the destination.
         </p>
       </div>
 
-      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/5 px-3 py-2.5 hover:bg-white/[0.02]">
+      <label className="flex cursor-pointer items-center gap-3 rounded-[var(--radius-input)] bg-[#261d18] px-3 py-2.5">
         <input
           type="checkbox"
           checked={includeManifest}
           onChange={(e) => onIncludeManifestChange(e.target.checked)}
-          className="h-4 w-4 rounded border-white/20 bg-black/40 accent-[color:var(--accent)]"
+          className="h-4 w-4 rounded accent-[color:var(--accent)]"
         />
-        <span className="text-xs font-bold text-stone-300">
+        <span className="text-[13px] font-medium text-stone-300">
           Include playback manifest
         </span>
       </label>
@@ -142,27 +142,25 @@ function ExportRunningBody({
         />
         <div className="min-w-0 flex-1 space-y-1">
           {showPhaseEyebrow ? (
-            <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">
-              {formatExportPhaseLabel(phase)}
-            </p>
+            <SettingsModalEyebrow>{formatExportPhaseLabel(phase)}</SettingsModalEyebrow>
           ) : null}
-          <p className="truncate text-sm font-bold leading-snug text-stone-100">
+          <p className="truncate text-sm font-semibold leading-snug text-stone-100">
             {headline}
           </p>
           {currentPath && showPhaseEyebrow ? (
-            <p className="truncate font-mono text-[10px] text-stone-600">
+            <p className="truncate font-mono text-[10px] text-stone-500">
               {basename(currentPath)}
             </p>
           ) : null}
         </div>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-white/5">
+      <div className="h-1 overflow-hidden rounded-full bg-[#261d18]">
         <div
           className="h-full bg-[color:var(--accent)] transition-[width] duration-300"
           style={{ width: `${barPct}%` }}
         />
       </div>
-      <div className="flex justify-between text-[10px] text-stone-500">
+      <div className="flex justify-between text-[11px] text-stone-500">
         <span>
           {fileTotal > 0 ? `${fileIndex} / ${fileTotal} files` : "Scanning…"}
         </span>
@@ -194,7 +192,7 @@ function ExportOutcomeBody({
 }) {
   if (phase === "cancelled") {
     return (
-      <p className="text-xs leading-relaxed text-stone-400">
+      <p className="text-[13px] leading-relaxed text-stone-400">
         Export cancelled. The partial bundle folder was removed.
       </p>
     );
@@ -203,9 +201,9 @@ function ExportOutcomeBody({
   if (phase === "failed") {
     return (
       <div className="space-y-3">
-        <p className="text-xs text-red-400/90">{error || "Export failed."}</p>
+        <p className="text-[13px] text-red-400/90">{error || "Export failed."}</p>
         {result?.warnings?.length ? (
-          <ul className="max-h-32 space-y-1 overflow-y-auto text-[10px] text-stone-500">
+          <ul className="max-h-32 space-y-1 overflow-y-auto text-[11px] text-stone-500 rf-scrollbar">
             {result.warnings.map((w) => (
               <li key={w}>{w}</li>
             ))}
@@ -216,23 +214,25 @@ function ExportOutcomeBody({
   }
 
   return (
-    <div className="space-y-3 text-xs text-stone-300">
+    <div className="space-y-3 text-[13px] text-stone-300">
       <p>
         Exported to{" "}
-        <span className="font-mono text-[10px] text-stone-400">{result?.destDir}</span>
+        <span className="font-mono text-[11px] text-stone-500">{result?.destDir}</span>
       </p>
-      <p className="text-[10px] text-stone-500">
+      <p className="text-[11px] text-stone-500">
         {result?.filesCopied ?? 0} copied
-        {(result?.filesSkipped ?? 0) > 0 ? ` · ${result?.filesSkipped} skipped (already present)` : ""}
+        {(result?.filesSkipped ?? 0) > 0
+          ? ` · ${result?.filesSkipped} skipped (already present)`
+          : ""}
         {result?.bytesCopied ? ` · ${formatStorageSize(result.bytesCopied)}` : ""}
       </p>
       {result?.manifestPath ? (
-        <p className="text-[10px] text-stone-500">
+        <p className="text-[11px] text-stone-500">
           Manifest: {basename(result.manifestPath)}
         </p>
       ) : null}
       {result?.warnings?.length ? (
-        <ul className="max-h-32 space-y-1 overflow-y-auto text-[10px] text-amber-500/80">
+        <ul className="max-h-32 space-y-1 overflow-y-auto text-[11px] text-amber-400/85 rf-scrollbar">
           {result.warnings.map((w) => (
             <li key={w}>{w}</li>
           ))}
@@ -332,10 +332,6 @@ function ExportBundleDialog({
     void startExport({ paths, destDir, includeManifest });
   }, [paths, destDir, includeManifest, exportInFlight, startExport]);
 
-  if (!exportPanelOpen) return null;
-
-  const showCloseX = phase !== "running";
-  const showHide = phase === "running";
   const primaryLabel =
     phase === "done" || phase === "failed" || phase === "cancelled"
       ? "Close"
@@ -364,126 +360,77 @@ function ExportBundleDialog({
     exportDestParent.length > 0 &&
     !isDirInLibraryScanList(exportDestParent, libraryScanDirs);
 
+  const footer = (
+    <>
+      {phase === "configure" ? (
+        <SettingsModalBtnSecondary onClick={handleClose}>Cancel</SettingsModalBtnSecondary>
+      ) : null}
+      {phase === "running" ? (
+        <SettingsModalBtnSecondary onClick={handleHide}>Hide</SettingsModalBtnSecondary>
+      ) : null}
+      {showAddExportFolderToLibrary ? (
+        <SettingsModalBtnGhost
+          onClick={() => {
+            addLibraryScanDir(exportDestParent);
+            notify("Export folder added to library scan.");
+          }}
+        >
+          Add folder to library
+        </SettingsModalBtnGhost>
+      ) : null}
+      {phase === "running" ? (
+        <SettingsModalBtnGhost onClick={handlePrimary}>Cancel export</SettingsModalBtnGhost>
+      ) : (
+        <SettingsModalBtnPrimary disabled={primaryDisabled} onClick={handlePrimary}>
+          {primaryLabel}
+        </SettingsModalBtnPrimary>
+      )}
+    </>
+  );
+
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div
-        role="dialog"
-        aria-labelledby="export-bundle-title"
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1D1613] shadow-2xl"
-      >
-        <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <FolderOutput size={16} className="text-[color:var(--accent)]" />
-            <h2
-              id="export-bundle-title"
-              className="text-sm font-black uppercase tracking-[0.2em] text-white"
-            >
-              Export bundle
-            </h2>
-          </div>
-          {showCloseX ? (
-            <button
-              type="button"
-              onClick={handleClose}
-              className="rounded-lg p-1 text-stone-500 hover:bg-white/5 hover:text-white"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-          ) : showHide ? (
-            <button
-              type="button"
-              onClick={handleHide}
-              className="rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-widest text-stone-400 hover:bg-white/5 hover:text-white"
-            >
-              Hide
-            </button>
-          ) : (
-            <div className="w-[26px]" />
-          )}
-        </div>
-
-        <div className="overflow-y-auto px-5 py-4">
-          {phase === "configure" ? (
-            <ExportConfigureBody
-              summaryTitle={summary.title}
-              fileCount={summary.fileCount}
-              sidecars={summary.sidecars}
-              destDir={destDir}
-              includeManifest={includeManifest}
-              onBrowse={() => void handleBrowse()}
-              onIncludeManifestChange={handleIncludeManifestChange}
-            />
-          ) : null}
-          {phase === "running" ? (
-            <ExportRunningBody
-              phase={exportProgress?.phase ?? "preparing"}
-              detail={exportProgress?.detail}
-              currentPath={exportProgress?.currentPath}
-              percent={exportProgress?.percent}
-              bytesCopied={exportProgress?.bytesCopied ?? 0}
-              bytesTotal={exportProgress?.bytesTotal}
-              fileIndex={exportProgress?.fileIndex ?? 0}
-              fileTotal={exportProgress?.fileTotal ?? 0}
-            />
-          ) : null}
-          {phase === "done" || phase === "failed" || phase === "cancelled" ? (
-            <ExportOutcomeBody
-              phase={phase}
-              result={exportOutcome?.result}
-              error={exportOutcome?.error}
-            />
-          ) : null}
-        </div>
-
-        <div className="flex gap-2 border-t border-white/5 px-5 py-4">
-          {phase === "configure" ? (
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 rounded-xl border border-white/10 py-2.5 text-[10px] font-black uppercase tracking-[0.25em] text-stone-400"
-            >
-              Cancel
-            </button>
-          ) : null}
-          {phase === "running" ? (
-            <button
-              type="button"
-              onClick={handleHide}
-              className="flex-1 rounded-xl border border-white/10 py-2.5 text-[10px] font-black uppercase tracking-[0.25em] text-stone-400 hover:bg-white/5"
-            >
-              Hide
-            </button>
-          ) : null}
-          {showAddExportFolderToLibrary ? (
-            <button
-              type="button"
-              onClick={() => {
-                addLibraryScanDir(exportDestParent);
-                notify("Export folder added to library scan.");
-              }}
-              className="flex-1 rounded-xl border border-white/10 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-stone-300 hover:bg-white/5"
-            >
-              Add folder to library
-            </button>
-          ) : null}
-          <button
-            type="button"
-            disabled={primaryDisabled}
-            onClick={handlePrimary}
-            className={`rounded-xl py-2.5 text-[10px] font-black uppercase tracking-[0.25em] disabled:opacity-40 ${
-              phase === "running"
-                ? "flex-1 border border-white/10 text-stone-300 hover:bg-white/5"
-                : phase === "configure"
-                  ? "flex-1 bg-[color:var(--accent)] text-stone-950"
-                  : "flex-1 bg-[color:var(--accent)] text-stone-950"
-            }`}
-          >
-            {primaryLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+    <SettingsModalShell
+      open={exportPanelOpen}
+      onClose={phase === "running" ? handleHide : handleClose}
+      disableDismiss={phase === "running"}
+      titleId="export-bundle-title"
+      title="Export bundle"
+      icon={FolderOutput}
+      description="Copy library media and sidecars to a folder or removable drive."
+      zIndexClass="z-[200]"
+      footer={footer}
+    >
+      {phase === "configure" ? (
+        <ExportConfigureBody
+          summaryTitle={summary.title}
+          fileCount={summary.fileCount}
+          sidecars={summary.sidecars}
+          destDir={destDir}
+          includeManifest={includeManifest}
+          onBrowse={() => void handleBrowse()}
+          onIncludeManifestChange={handleIncludeManifestChange}
+        />
+      ) : null}
+      {phase === "running" ? (
+        <ExportRunningBody
+          phase={exportProgress?.phase ?? "preparing"}
+          detail={exportProgress?.detail}
+          currentPath={exportProgress?.currentPath}
+          percent={exportProgress?.percent}
+          bytesCopied={exportProgress?.bytesCopied ?? 0}
+          bytesTotal={exportProgress?.bytesTotal}
+          fileIndex={exportProgress?.fileIndex ?? 0}
+          fileTotal={exportProgress?.fileTotal ?? 0}
+        />
+      ) : null}
+      {phase === "done" || phase === "failed" || phase === "cancelled" ? (
+        <ExportOutcomeBody
+          phase={phase}
+          result={exportOutcome?.result}
+          error={exportOutcome?.error}
+        />
+      ) : null}
+    </SettingsModalShell>
   );
 }
 

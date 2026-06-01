@@ -40,10 +40,16 @@ import {
   type MusicTrackInfo,
 } from "@/lib/musicExploreTracks";
 import {
+  getCachedMusicExplorePlaylist,
+  patchCachedMusicExplorePlaylistItems,
+  setCachedMusicExplorePlaylist,
+} from "@/lib/musicExplorePlaylistCache";
+import {
   MusicExploreDownloadCollapsed,
   type CollapsedCelebrate,
 } from "./MusicExploreDownloadCollapsed";
 import { cn } from "@/lib/utils";
+import { useScrollEdgeState } from "@/hooks/useScrollEdgeState";
 
 type Phase =
   | { kind: "idle" }
@@ -55,6 +61,8 @@ type Phase =
       playlistTitle: string;
       playlistUrl: string;
       items: MusicTrackInfo[];
+      /** Total items fetched from the backend so far (does not decrease when items are removed after completion). */
+      fetchedCount: number;
       visibleCount: number;
       hasMore: boolean;
       total: number | null;
@@ -229,7 +237,6 @@ function PlaylistCard({
 type Props = {
   /** The current browse URL (ignored in paste mode). */
   url: string;
-  pasteMode?: boolean;
   collapsed?: boolean;
   dockMinimized?: boolean;
   onClose: () => void;
@@ -238,11 +245,12 @@ type Props = {
   onCelebratingChange?: (track: CollapsedCelebrate | null) => void;
 };
 
-const COLLAPSED_CELEBRATE_MS = 1400;
+const COLLAPSED_CELEBRATE_MS = 2100;
+/** Tracks fetched in one yt-dlp call on first open (batched, not one-by-one). */
+const INITIAL_PLAYLIST_BATCH = 50;
 
 export function MusicExploreDownloadPanel({
   url,
-  pasteMode = false,
   collapsed = false,
   dockMinimized = false,
   onClose,
@@ -273,6 +281,12 @@ export function MusicExploreDownloadPanel({
       const items = p.items.filter(
         (t) => !completedUrls.some((u) => youtubeUrlsMatch(t.url, u)),
       );
+      patchCachedMusicExplorePlaylistItems(
+        p.playlistUrl,
+        items,
+        p.hasMore,
+        p.total,
+      );
       return {
         ...p,
         items,
@@ -290,6 +304,9 @@ export function MusicExploreDownloadPanel({
     });
   }, []);
 
+  // Stable ref so the setTimeout callback always calls the latest version of
+  // processNextCelebration even when removeCompletedFromPlaylist changes identity.
+  const processNextCelebrationRef = useRef<() => void>(() => {});
   const processNextCelebration = useCallback(() => {
     if (celebrateTimerRef.current) return;
     const next = pendingCelebrationsRef.current.shift();
@@ -302,9 +319,10 @@ export function MusicExploreDownloadPanel({
       celebrateTimerRef.current = null;
       removeCompletedFromPlaylist([next.url]);
       setCelebrating(null);
-      processNextCelebration();
+      processNextCelebrationRef.current();
     }, COLLAPSED_CELEBRATE_MS);
   }, [removeCompletedFromPlaylist]);
+  processNextCelebrationRef.current = processNextCelebration;
 
   const enqueueCelebrations = useCallback(
     (tracks: CollapsedCelebrate[]) => {
@@ -317,7 +335,7 @@ export function MusicExploreDownloadPanel({
     [processNextCelebration],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onCelebratingChange?.(celebrating);
   }, [celebrating, onCelebratingChange]);
 
@@ -348,6 +366,38 @@ export function MusicExploreDownloadPanel({
     pumpDownloadQueue();
   }, [buildAudioOpts, enqueueDownload, releaseHeldDownloadJobs, pumpDownloadQueue]);
 
+  const applyPlaylistPhase = useCallback((
+    playlistTitle: string,
+    playlistUrl: string,
+    page: MusicPlaylistPage,
+    fromCache = false,
+  ) => {
+    const entry = {
+      playlistTitle,
+      playlistUrl,
+      items: page.items,
+      hasMore: page.hasMore,
+      total: page.total,
+    };
+    if (!fromCache) {
+      setCachedMusicExplorePlaylist(playlistUrl, entry);
+    }
+    setPhase({
+      kind: "playlist",
+      playlistTitle,
+      playlistUrl,
+      items: page.items,
+      fetchedCount: page.items.length,
+      visibleCount: page.items.length,
+      hasMore: page.hasMore,
+      total: page.total,
+      loadingMore: false,
+    });
+  }, []);
+
+  // Destructure only the settings fields that affect doLoad so unrelated setting changes
+  // (theme, volume, etc.) don't trigger a panel reload via the [url, doLoad] effect.
+  const { preferredQuality, browserContext, cookieFile } = settings;
   const doLoad = useCallback(async (rawUrl: string) => {
     const canonical =
       resolveMusicExplorePasteUrl(rawUrl) ??
@@ -368,6 +418,26 @@ export function MusicExploreDownloadPanel({
     const ac = new AbortController();
     abortRef.current = ac;
 
+    if (kind === "playlist" || isMusicYouTubePlaylistUrl(canonical)) {
+      const cached = getCachedMusicExplorePlaylist(canonical);
+      if (cached) {
+        if (ac.signal.aborted) return;
+        setSelected(new Set());
+        lastClickIndexRef.current = null;
+        applyPlaylistPhase(
+          cached.playlistTitle,
+          cached.playlistUrl,
+          {
+            items: cached.items,
+            hasMore: cached.hasMore,
+            total: cached.total,
+          },
+          true,
+        );
+        return;
+      }
+    }
+
     setPhase({ kind: "loading", url: canonical });
     setSelected(new Set());
     lastClickIndexRef.current = null;
@@ -375,28 +445,18 @@ export function MusicExploreDownloadPanel({
     try {
       if (kind === "playlist" || isMusicYouTubePlaylistUrl(canonical)) {
         const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
-          url: canonical, offset: 0, limit: 15,
+          url: canonical,
+          offset: 0,
+          limit: INITIAL_PLAYLIST_BATCH,
+          browserCookies: browserContext ?? null,
+          cookieFile: cookieFile ?? null,
         });
         if (ac.signal.aborted) return;
-        setPhase({
-          kind: "playlist",
-          playlistTitle: playlistFolderTitle(page.title, canonical),
-          playlistUrl: canonical,
-          items: page.items,
-          visibleCount: 0,
-          hasMore: page.hasMore,
-          total: page.total,
-          loadingMore: false,
-        });
-        // Stagger reveal: increment visibleCount one by one
-        for (let i = 0; i <= page.items.length; i++) {
-          if (ac.signal.aborted) return;
-          const count = i;
-          setPhase((p) =>
-            p.kind === "playlist" ? { ...p, visibleCount: count } : p,
-          );
-          if (i < page.items.length) await sleep(40);
-        }
+        applyPlaylistPhase(
+          playlistFolderTitle(page.title, canonical),
+          canonical,
+          page,
+        );
         return;
       }
 
@@ -442,6 +502,7 @@ export function MusicExploreDownloadPanel({
           playlistTitle: track.title,
           playlistUrl: watchUrl,
           items: [track],
+          fetchedCount: 1,
           visibleCount: 1,
           hasMore: false,
           total: 1,
@@ -465,12 +526,31 @@ export function MusicExploreDownloadPanel({
       if (ac.signal.aborted) return;
       setPhase({ kind: "error", message: String(e) });
     }
-  }, [settings]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyPlaylistPhase, preferredQuality, browserContext, cookieFile]);
 
   const openPlaylist = useCallback(async (pl: MusicPlaylistInfo) => {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
+
+    const cached = getCachedMusicExplorePlaylist(pl.url);
+    if (cached) {
+      if (ac.signal.aborted) return;
+      setSelected(new Set());
+      lastClickIndexRef.current = null;
+      applyPlaylistPhase(
+        cached.playlistTitle,
+        cached.playlistUrl,
+        {
+          items: cached.items,
+          hasMore: cached.hasMore,
+          total: cached.total,
+        },
+        true,
+      );
+      return;
+    }
 
     setPhase({ kind: "loading", url: pl.url });
     setSelected(new Set());
@@ -478,62 +558,68 @@ export function MusicExploreDownloadPanel({
 
     try {
       const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
-        url: pl.url, offset: 0, limit: 15,
+        url: pl.url,
+        offset: 0,
+        limit: INITIAL_PLAYLIST_BATCH,
+        browserCookies: browserContext ?? null,
+        cookieFile: cookieFile ?? null,
       });
       if (ac.signal.aborted) return;
       const title = playlistFolderTitle(page.title ?? pl.title, pl.url);
-      setPhase({
-        kind: "playlist",
-        playlistTitle: title,
-        playlistUrl: pl.url,
-        items: page.items,
-        visibleCount: 0,
-        hasMore: page.hasMore,
-        total: page.total,
-        loadingMore: false,
-      });
-      for (let i = 0; i <= page.items.length; i++) {
-        if (ac.signal.aborted) return;
-        const count = i;
-        setPhase((p) => p.kind === "playlist" ? { ...p, visibleCount: count } : p);
-        if (i < page.items.length) await sleep(40);
-      }
+      applyPlaylistPhase(title, pl.url, page);
     } catch (e) {
       if (ac.signal.aborted) return;
       setPhase({ kind: "error", message: String(e) });
     }
-  }, []);
+  }, [applyPlaylistPhase, browserContext, cookieFile]);
 
   const loadAllRemaining = useCallback(async () => {
     if (phase.kind !== "playlist" || phase.loadingMore) return;
-    const { playlistUrl, items } = phase;
+    const { playlistUrl, playlistTitle, fetchedCount, total: startTotal } = phase;
     setPhase((p) => p.kind === "playlist" ? { ...p, loadingMore: true } : p);
     try {
-      let allItems = [...items];
+      // Use fetchedCount (not items.length) as the starting offset so that items
+      // already downloaded and removed from the UI don't cause position gaps on the backend.
+      const newItems: MusicTrackInfo[] = [];
       let hasMore = true;
-      let total = phase.total;
+      let total = startTotal;
       while (hasMore) {
         const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
-          url: playlistUrl, offset: allItems.length, limit: 100,
+          url: playlistUrl, offset: fetchedCount + newItems.length, limit: 100,
+          browserCookies: browserContext ?? null,
+          cookieFile: cookieFile ?? null,
         });
-        allItems = [...allItems, ...page.items];
+        newItems.push(...page.items);
         hasMore = page.hasMore;
         total = page.total ?? total;
         if (page.items.length === 0) break;
       }
-      const prevLen = items.length;
-      setPhase((p) => p.kind === "playlist" ? {
-        ...p, items: allItems, visibleCount: prevLen, hasMore: false, total, loadingMore: false,
-      } : p);
-      for (let i = prevLen; i <= allItems.length; i++) {
-        const count = i;
-        setPhase((p) => p.kind === "playlist" ? { ...p, visibleCount: count } : p);
-        if (i < allItems.length) await sleep(25);
-      }
+      const allFetched = fetchedCount + newItems.length;
+      setPhase((p) => {
+        if (p.kind !== "playlist") return p;
+        const allItems = [...p.items, ...newItems];
+        // Write cache inside the functional update so p.items is always current
+        setCachedMusicExplorePlaylist(playlistUrl, {
+          playlistTitle,
+          playlistUrl,
+          items: allItems,
+          hasMore: false,
+          total,
+        });
+        return {
+          ...p,
+          items: allItems,
+          fetchedCount: allFetched,
+          visibleCount: allItems.length,
+          hasMore: false,
+          total,
+          loadingMore: false,
+        };
+      });
     } catch {
       setPhase((p) => p.kind === "playlist" ? { ...p, loadingMore: false } : p);
     }
-  }, [phase]);
+  }, [phase, browserContext, cookieFile]);
 
   const handleRowClick = useCallback((index: number, key: string, shiftKey: boolean) => {
     if (phase.kind !== "playlist") return;
@@ -614,17 +700,15 @@ export function MusicExploreDownloadPanel({
   ]);
 
   useEffect(() => {
-    if (pasteMode && !url.trim()) {
+    if (!url.trim()) {
       abortRef.current?.abort();
       setPhase({ kind: "idle" });
       setSelected(new Set());
       lastClickIndexRef.current = null;
       return;
     }
-    if (!url.trim()) return;
     void doLoad(url);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, pasteMode]);
+  }, [url, doLoad]);
 
   const selectedTracks =
     phase.kind === "playlist"
@@ -638,12 +722,18 @@ export function MusicExploreDownloadPanel({
     return countActivePlaylistDownloads(downloadJobs, phase.items);
   }, [phase, downloadJobs]);
 
+  const {
+    scrollRef: contentScrollRef,
+    edges: contentScrollEdges,
+    onScroll: onContentScroll,
+  } = useScrollEdgeState([phase, collapsed, dockMinimized]);
+
   if (collapsed) {
     if (dockMinimized) return null;
     const playlistItems = phase.kind === "playlist" ? phase.items : [];
     return (
       <div
-        className="flex flex-col flex-1 min-h-0 h-full justify-end overflow-hidden"
+        className="flex flex-col flex-1 min-h-0 w-full"
         style={{ background: "var(--music-surface)", color: "var(--music-text-primary)" }}
       >
         <MusicExploreDownloadCollapsed
@@ -660,7 +750,7 @@ export function MusicExploreDownloadPanel({
 
   return (
     <div
-      className="flex flex-col h-full min-h-0"
+      className="flex flex-col flex-1 min-h-0 min-w-0 w-full"
       style={{ background: "var(--music-surface)", color: "var(--music-text-primary)" }}
     >
       {/* Header */}
@@ -743,10 +833,21 @@ export function MusicExploreDownloadPanel({
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto rf-scrollbar px-2 py-1.5">
+      <div
+        className="rf-scroll-edge-wrap flex-1 min-h-0"
+        data-scroll-top={contentScrollEdges.top ? "true" : undefined}
+        data-scroll-bottom={contentScrollEdges.bottom ? "true" : undefined}
+      >
+        <div
+          ref={contentScrollRef}
+          onScroll={onContentScroll}
+          className="h-full overflow-y-auto rf-scrollbar px-2 py-1.5"
+        >
         {phase.kind === "idle" && (
-          <div className="flex items-center justify-center h-full">
-            <Loader size={16} className="animate-spin" style={{ color: "var(--music-accent)" }} />
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-4">
+            <p className="text-[11px]" style={{ color: "var(--music-text-muted)" }}>
+              Browse to a playlist or paste a link to get started.
+            </p>
           </div>
         )}
 
@@ -787,7 +888,7 @@ export function MusicExploreDownloadPanel({
                     index={i}
                     selected={selected.has(key)}
                     downloadUi={downloadUi}
-                    animDelay={0}
+                    animDelay={Math.min(i * 0.025, 0.35)}
                     onRowClick={(shift) => handleRowClick(i, key, shift)}
                     onDownload={() => enqueueTracks([track], phase.playlistTitle)}
                   />
@@ -828,11 +929,8 @@ export function MusicExploreDownloadPanel({
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   );
-}
-
-function sleep(ms: number) {
-  return new Promise<void>((res) => setTimeout(res, ms));
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { X, Trash2, RotateCcw, Loader2 } from "lucide-react";
+import { Archive, Loader2, Undo2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   listRecentlyDeleted,
   restoreRecentlyDeleted,
@@ -8,11 +8,14 @@ import {
   type RecentlyDeletedEntry,
 } from "../lib/recentlyDeleted";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import { SettingsModalShell } from "./settings/SettingsModalShell";
 
 type Props = {
   open: boolean;
   onClose: () => void;
 };
+
+type BusyKind = "restore" | "forget";
 
 function formatDeletedAt(iso: string): string {
   const d = new Date(iso);
@@ -31,13 +34,18 @@ export function RecentlyDeletedModal({ open, onClose }: Props) {
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
   const [entries, setEntries] = useState<RecentlyDeletedEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [busy, setBusy] = useState<{ id: string; kind: BusyKind } | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const list = await listRecentlyDeleted();
       setEntries(list);
+      setSelectedId((prev) => {
+        if (prev && list.some((e) => e.id === prev)) return prev;
+        return list[0]?.id ?? null;
+      });
     } catch (e) {
       console.error(e);
       notify("Could not load Recently Deleted.", "error");
@@ -48,17 +56,37 @@ export function RecentlyDeletedModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (open) void refresh();
+    else {
+      setSelectedId(null);
+      setBusy(null);
+    }
   }, [open, refresh]);
 
+  const selected = entries.find((e) => e.id === selectedId) ?? null;
+  const recoverableCount = entries.filter((e) => e.recoverable).length;
+  const isBusy = busy !== null;
+
+  const pickNextSelection = (list: RecentlyDeletedEntry[], removedId: string) => {
+    if (list.length === 0) return null;
+    const idx = list.findIndex((e) => e.id === removedId);
+    const next = list[idx] ?? list[idx - 1] ?? list[0];
+    return next?.id ?? null;
+  };
+
   const handleRestore = async (entry: RecentlyDeletedEntry) => {
-    if (!entry.recoverable || busyId) return;
-    setBusyId(entry.id);
+    if (!entry.recoverable || isBusy) return;
+    setBusy({ id: entry.id, kind: "restore" });
     try {
       const result = await restoreRecentlyDeleted(entry.id);
       if (result.restored) {
+        await new Promise((r) => setTimeout(r, 380));
+        setEntries((prev) => {
+          const next = prev.filter((e) => e.id !== entry.id);
+          setSelectedId(pickNextSelection(next, entry.id));
+          return next;
+        });
         notify("Restored to your library.");
-        await fetchEntries();
-        await refresh();
+        void fetchEntries();
       } else if (!result.recoverable) {
         notify("Files are no longer in the system Recycle Bin.", "warning");
         await refresh();
@@ -69,131 +97,202 @@ export function RecentlyDeletedModal({ open, onClose }: Props) {
       console.error(e);
       notify("Restore failed.", "error");
     } finally {
-      setBusyId(null);
+      setBusy(null);
     }
   };
 
   const handleDismiss = async (entry: RecentlyDeletedEntry) => {
-    if (busyId) return;
-    setBusyId(entry.id);
+    if (isBusy) return;
+    setBusy({ id: entry.id, kind: "forget" });
     try {
       await removeRecentlyDeletedEntry(entry.id);
-      await refresh();
+      setEntries((prev) => {
+        const next = prev.filter((e) => e.id !== entry.id);
+        setSelectedId(pickNextSelection(next, entry.id));
+        return next;
+      });
     } catch (e) {
       console.error(e);
       notify("Could not remove entry.", "error");
     } finally {
-      setBusyId(null);
+      setBusy(null);
     }
   };
 
-  return (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          className="fixed inset-0 z-[120] flex items-center justify-center p-6"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+  const footer =
+    selected && entries.length > 0 ? (
+      <div className="flex w-full flex-wrap items-center justify-end gap-3">
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={() => void handleDismiss(selected)}
+          className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500 transition-[color,font-weight] duration-200 hover:font-bold hover:text-stone-200 disabled:pointer-events-none disabled:opacity-40"
         >
+          {busy?.id === selected.id && busy.kind === "forget" ? (
+            <span className="inline-flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              Forgetting…
+            </span>
+          ) : (
+            "Forget"
+          )}
+        </button>
+        {selected.recoverable ? (
           <button
             type="button"
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            aria-label="Close"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            className="relative z-10 w-full max-w-lg max-h-[min(70vh,520px)] flex flex-col rounded-3xl border border-stone-50/10 bg-[#1D1613] shadow-2xl overflow-hidden"
+            disabled={isBusy}
+            onClick={() => void handleRestore(selected)}
+            className="inline-flex items-center gap-2 rounded-[var(--radius-input)] bg-[color:var(--accent)] px-5 py-2.5 text-[11px] font-black uppercase tracking-[0.12em] text-[#1D1613] transition-[transform,opacity,filter] duration-200 hover:opacity-95 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40"
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-stone-50/5 shrink-0">
-              <div className="flex items-center gap-2">
-                <Trash2 size={18} className="text-stone-400" />
-                <h2 className="text-sm font-bold uppercase tracking-widest text-stone-200">
-                  Recently Deleted
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-stone-500 hover:text-stone-200 transition-colors p-1"
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
-            </div>
+            {busy?.id === selected.id && busy.kind === "restore" ? (
+              <>
+                <Loader2 size={15} className="animate-spin" />
+                Recovering…
+              </>
+            ) : (
+              <>
+                <Undo2 size={15} strokeWidth={2.75} aria-hidden />
+                Restore
+              </>
+            )}
+          </button>
+        ) : null}
+      </div>
+    ) : undefined;
 
-            <p className="px-5 py-3 text-xs text-stone-500 border-b border-stone-50/5 shrink-0">
-              Items moved to the system Recycle Bin. Restore puts files back in your library folder.
-            </p>
+  return (
+    <SettingsModalShell
+      open={open}
+      onClose={onClose}
+      titleId="recently-deleted-title"
+      eyebrow="Recovery vault"
+      icon={Archive}
+      title="Recently discarded"
+      description="Select an item, then restore it to your library or forget the record here."
+      zIndexClass="z-[120]"
+      maxWidthClass="max-w-lg"
+      disableDismiss={isBusy}
+      footer={footer}
+    >
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-stone-500">
+          <Loader2 size={22} className="animate-spin" aria-label="Loading" />
+        </div>
+      ) : entries.length === 0 ? (
+        <div className="rounded-[var(--radius-input)] bg-[#261d18] py-10 text-center">
+          <Archive size={22} className="mx-auto text-stone-600" strokeWidth={1.5} />
+          <p className="mt-4 text-sm font-medium text-stone-300">Nothing discarded</p>
+          <p className="mt-2 text-[12px] leading-relaxed text-stone-500">
+            Deleted media will appear here until you restore it or clear the list.
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+            {entries.length} {entries.length === 1 ? "item" : "items"}
+            <span className="text-stone-600"> · </span>
+            <span className="text-[color:var(--accent)]">
+              {recoverableCount} recoverable
+            </span>
+          </p>
 
-            <div className="flex-1 overflow-y-auto px-3 py-2 min-h-0">
-              {loading ? (
-                <div className="flex items-center justify-center py-16 text-stone-500">
-                  <Loader2 size={24} className="animate-spin" />
-                </div>
-              ) : entries.length === 0 ? (
-                <p className="text-center text-sm text-stone-500 py-16">Nothing here yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {entries.map((entry) => {
-                    const busy = busyId === entry.id;
-                    return (
-                      <li
-                        key={entry.id}
-                        className="flex items-center gap-3 rounded-2xl bg-black/20 border border-stone-50/5 px-4 py-3"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-stone-100 truncate">
-                            {entry.title}
-                          </p>
-                          <p className="text-[11px] text-stone-500 mt-0.5">
-                            {formatDeletedAt(entry.deletedAt)}
-                            {" · "}
-                            {entry.files.length} file{entry.files.length === 1 ? "" : "s"}
-                          </p>
-                          {!entry.recoverable ? (
-                            <p className="text-[11px] text-amber-600/90 mt-1">
-                              Unrecoverable (Recycle Bin emptied)
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {entry.recoverable ? (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => void handleRestore(entry)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[color:var(--accent)] text-[#110D0B] hover:opacity-90 disabled:opacity-50 transition-opacity"
-                            >
-                              {busy ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <RotateCcw size={14} />
-                              )}
-                              Restore
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void handleDismiss(entry)}
-                            className="px-2 py-1.5 text-xs text-stone-500 hover:text-stone-300 disabled:opacity-50"
+          <ul className="space-y-2" role="listbox" aria-label="Discarded items">
+            <AnimatePresence mode="popLayout">
+              {entries.map((entry) => {
+                const isSelected = entry.id === selectedId;
+                const isRecoverable = entry.recoverable;
+                const rowBusy = busy?.id === entry.id;
+                const restoring = rowBusy && busy?.kind === "restore";
+
+                return (
+                  <motion.li
+                    key={entry.id}
+                    layout
+                    role="option"
+                    aria-selected={isSelected}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{
+                      opacity: restoring ? 0.85 : 1,
+                      y: 0,
+                      scale: restoring ? 0.98 : 1,
+                    }}
+                    exit={{
+                      opacity: 0,
+                      x: 28,
+                      scale: 0.96,
+                      transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+                    }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <button
+                      type="button"
+                      disabled={isBusy && !rowBusy}
+                      onClick={() => setSelectedId(entry.id)}
+                      className={`group relative w-full rounded-[var(--radius-input)] px-4 py-3.5 text-left transition-[background-color,box-shadow] duration-200 disabled:pointer-events-none ${
+                        isSelected
+                          ? "bg-[#2e241f] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent),transparent_55%)]"
+                          : "bg-[#261d18] hover:bg-[#2a211c]"
+                      } ${!isRecoverable ? "opacity-60" : ""}`}
+                    >
+                      {restoring ? (
+                        <motion.div
+                          className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 rounded-[inherit] bg-[#261d18]/90"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.15 }}
+                        >
+                          <motion.span
+                            animate={{ rotate: [0, -28, 0] }}
+                            transition={{
+                              duration: 0.9,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                            }}
                           >
-                            Remove
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+                            <Undo2
+                              size={18}
+                              strokeWidth={2.5}
+                              className="text-[color:var(--accent)]"
+                            />
+                          </motion.span>
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-stone-300">
+                            Recovering…
+                          </span>
+                        </motion.div>
+                      ) : null}
+
+                      <div className="min-w-0 pr-2">
+                        <p
+                          className={`text-sm font-semibold leading-snug truncate transition-colors duration-200 ${
+                            isSelected
+                              ? "text-stone-50 group-hover:text-stone-50"
+                              : isRecoverable
+                                ? "text-stone-200 group-hover:text-stone-50"
+                                : "text-stone-400"
+                          }`}
+                        >
+                          {entry.title}
+                        </p>
+                        <p className="mt-1 text-[11px] text-stone-500">
+                          {formatDeletedAt(entry.deletedAt)}
+                          <span className="text-stone-600"> · </span>
+                          {entry.files.length} file
+                          {entry.files.length === 1 ? "" : "s"}
+                        </p>
+                        {!isRecoverable ? (
+                          <p className="mt-1.5 text-[11px] font-medium text-stone-500">
+                            Permanently discarded
+                          </p>
+                        ) : null}
+                      </div>
+                    </button>
+                  </motion.li>
+                );
+              })}
+            </AnimatePresence>
+          </ul>
+        </>
+      )}
+    </SettingsModalShell>
   );
 }

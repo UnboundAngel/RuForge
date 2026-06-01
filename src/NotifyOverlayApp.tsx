@@ -74,10 +74,10 @@ function NotifyCard({
 
   const accent =
     item.kind === "error"
-      ? "border-rose-500/35"
+      ? "border-rose-400/30"
       : item.kind === "warning"
-        ? "border-amber-400/35"
-        : "border-stone-400/15";
+        ? "border-amber-300/35"
+        : "border-white/10";
 
   return (
     <motion.article
@@ -102,7 +102,7 @@ function NotifyCard({
           onDismiss(item.id);
         }
       }}
-      className={`w-full cursor-pointer select-none rounded-2xl border bg-[#271C18] px-3.5 py-3 ${accent}`}
+      className={`rf-notify-card w-full cursor-pointer select-none rounded-2xl border px-3.5 py-3 ${accent}`}
     >
       <div className="flex gap-3">
         <img src={logo} alt="" className="mt-0.5 h-9 w-9 shrink-0 rounded-lg object-cover" />
@@ -192,7 +192,7 @@ export default function NotifyOverlayApp() {
   }, []);
 
   return (
-    <div className="h-full w-full overflow-hidden bg-transparent p-3">
+    <div className="h-full w-full overflow-hidden p-3">
       <div ref={stackRef} className="flex w-[356px] flex-col gap-2.5">
         <AnimatePresence mode="popLayout" onExitComplete={onExitComplete}>
           {items.map((item) => (

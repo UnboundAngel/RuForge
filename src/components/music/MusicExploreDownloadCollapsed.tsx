@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, ChevronDown, ChevronUp, Music2 } from "lucide-react";
 import type { DownloadJob } from "@/downloadQueue";
@@ -18,8 +18,14 @@ export type CollapsedCelebrate = {
 };
 
 const STROKE = 2;
+const ORB_RING_OUTSET = 4;
 const ORB_SIZE = 32;
 const ORB_GAP = 8;
+const CHIP_SIZE = 36;
+const CHIP_THUMB = 28;
+const SIDEBAR_MS = 200;
+const SUCCESS_REVEAL_MS = 420;
+const CHIP_EXIT_MS = 320;
 
 function OrbRing({
   pct,
@@ -58,7 +64,7 @@ function OrbRing({
         strokeDasharray={indeterminate ? `${circ * 0.28} ${circ * 0.72}` : circ}
         strokeDashoffset={indeterminate ? 0 : offset}
         transform={`rotate(-90 ${ringSz / 2} ${ringSz / 2})`}
-        className="transition-[stroke-dashoffset] duration-300 ease-out"
+        className="rf-dock-chip-progress-stroke"
       />
     </svg>
   );
@@ -82,6 +88,89 @@ function jobForTrack(jobs: DownloadJob[], trackUrl: string): DownloadJob | undef
   );
 }
 
+function TrackThumb({
+  thumbnail,
+  title,
+  size,
+}: {
+  thumbnail: string | null;
+  title: string;
+  size: number;
+}) {
+  return (
+    <div
+      className="relative shrink-0 overflow-hidden rounded-full"
+      style={{ width: size, height: size }}
+    >
+      {thumbnail ? (
+        <img src={thumbnail} alt={title} className="w-full h-full object-cover" />
+      ) : (
+        <div
+          className="w-full h-full flex items-center justify-center"
+          style={{ background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
+        >
+          <Music2 size={Math.round(size * 0.4)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PillProgressBorder({
+  pct,
+  indeterminate,
+  success,
+}: {
+  pct: number;
+  indeterminate?: boolean;
+  success?: boolean;
+}) {
+  const stroke = success ? "#22c55e" : "var(--music-accent)";
+  const track = success ? "rgb(34 197 94 / 0.2)" : "rgb(255 255 255 / 0.12)";
+  const clamped = Math.min(100, Math.max(0, pct));
+  const dash = indeterminate ? "28 72" : `${clamped} ${100 - clamped}`;
+
+  return (
+    <svg
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <rect
+        x={STROKE / 2}
+        y={STROKE / 2}
+        width={`calc(100% - ${STROKE}px)`}
+        height={`calc(100% - ${STROKE}px)`}
+        rx={CHIP_SIZE / 2}
+        ry={CHIP_SIZE / 2}
+        fill="none"
+        stroke={track}
+        strokeWidth={STROKE}
+        vectorEffect="non-scaling-stroke"
+      />
+      <rect
+        x={STROKE / 2}
+        y={STROKE / 2}
+        width={`calc(100% - ${STROKE}px)`}
+        height={`calc(100% - ${STROKE}px)`}
+        rx={CHIP_SIZE / 2}
+        ry={CHIP_SIZE / 2}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        pathLength={100}
+        strokeDasharray={dash}
+        vectorEffect="non-scaling-stroke"
+        className={cn(
+          "rf-dock-chip-progress-stroke",
+          indeterminate && "rf-dock-pill-indeterminate-stroke",
+        )}
+      />
+    </svg>
+  );
+}
+
 function TrackOrb({
   thumbnail,
   title,
@@ -97,39 +186,34 @@ function TrackOrb({
   success?: boolean;
   size: number;
 }) {
+  const frame = size + ORB_RING_OUTSET * 2;
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <div className="absolute inset-0 overflow-hidden rounded-full">
-        {thumbnail ? (
-          <img src={thumbnail} alt={title} className="w-full h-full object-cover" />
-        ) : (
-          <div
-            className="w-full h-full flex items-center justify-center"
-            style={{ background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
+    <div
+      className="relative shrink-0 overflow-visible flex items-center justify-center"
+      style={{ width: frame, height: frame }}
+    >
+      <div className="relative" style={{ width: size, height: size }}>
+        <TrackThumb thumbnail={thumbnail} title={title} size={size} />
+
+        <OrbRing pct={pct} indeterminate={indeterminate} success={success} orbSize={size} />
+
+        {success && (
+          <motion.div
+            key="success"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: "spring", stiffness: 380, damping: 22 }}
+            className="absolute inset-0 flex items-center justify-center rounded-full pointer-events-none z-[1]"
+            style={{ background: "rgb(0 0 0 / 0.5)" }}
           >
-            <Music2 size={Math.round(size * 0.4)} />
-          </div>
+            <Check
+              size={Math.round(size * 0.38)}
+              strokeWidth={2.5}
+              style={{ color: "#22c55e" }}
+            />
+          </motion.div>
         )}
       </div>
-
-      <OrbRing pct={pct} indeterminate={indeterminate} success={success} orbSize={size} />
-
-      {success && (
-        <motion.div
-          key="success"
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: "spring", stiffness: 380, damping: 22 }}
-          className="absolute inset-0 flex items-center justify-center rounded-full pointer-events-none"
-          style={{ background: "rgb(0 0 0 / 0.5)" }}
-        >
-          <Check
-            size={Math.round(size * 0.38)}
-            strokeWidth={2.5}
-            style={{ color: "#22c55e" }}
-          />
-        </motion.div>
-      )}
     </div>
   );
 }
@@ -242,9 +326,9 @@ export function MusicExploreDownloadCollapsed({
   }, [visibleItems.length]);
 
   return (
-    <div className="flex flex-1 flex-col min-h-0 justify-end items-center overflow-hidden">
+    <div className="flex flex-1 flex-col min-h-0 items-center">
       <div
-        className="flex flex-col items-center w-full min-h-0 justify-end pb-1 px-1.5"
+        className="flex flex-col items-center w-full min-h-0 flex-1 overflow-y-auto rf-scrollbar justify-end p-1.5"
         style={{ gap: ORB_GAP }}
       >
         {onMinimize && (
@@ -281,14 +365,16 @@ export function MusicExploreDownloadCollapsed({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 14, scale: 0.82 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="relative shrink-0"
-              style={{ width: ORB_SIZE, height: ORB_SIZE }}
+              className="relative shrink-0 overflow-visible flex items-center justify-center"
+              style={{ width: ORB_SIZE + ORB_RING_OUTSET * 2, height: ORB_SIZE + ORB_RING_OUTSET * 2 }}
             >
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{ background: "var(--music-surface-raised)" }}
-              />
-              <OrbRing pct={0} indeterminate orbSize={ORB_SIZE} />
+              <div className="relative" style={{ width: ORB_SIZE, height: ORB_SIZE }}>
+                <div
+                  className="absolute inset-0 rounded-full"
+                  style={{ background: "var(--music-surface-raised)" }}
+                />
+                <OrbRing pct={0} indeterminate orbSize={ORB_SIZE} />
+              </div>
             </motion.div>
           ) : (
             stackTracks.map((track, index) => {
@@ -363,11 +449,10 @@ export function MusicExploreDownloadCollapsed({
   );
 }
 
-const CHIP_SIZE = 36;
-
 type DockChipProps = {
   downloadJobs: DownloadJob[];
   celebrating?: CollapsedCelebrate | null;
+  navCollapsed?: boolean;
   onClick: () => void;
 };
 
@@ -375,77 +460,224 @@ type DockChipProps = {
 export function ExploreDownloadDockChip({
   downloadJobs,
   celebrating = null,
+  navCollapsed = false,
   onClick,
 }: DockChipProps) {
   const activeJobs = downloadJobs.filter(
-    (j) => j.status === "queued" || j.status === "downloading",
+    (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
   );
   const count = activeJobs.length;
-
-  if (celebrating) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className="rf-music-tooltip-anchor relative hover:opacity-90 transition-opacity"
-        style={{ width: CHIP_SIZE, height: CHIP_SIZE }}
-        aria-label="Download complete. Click to expand."
-        data-tooltip="Expand downloads"
-      >
-        <TrackOrb
-          key={`dock-${celebrating.url}-success`}
-          thumbnail={celebrating.thumbnail}
-          title={celebrating.title}
-          pct={100}
-          success
-          size={CHIP_SIZE}
-        />
-      </button>
-    );
-  }
-
-  if (count === 0) return null;
-
   const activeJob =
-    activeJobs.find((j) => j.status === "downloading") ?? activeJobs[0];
-  const thumbnail = activeJob?.metadata?.thumbnail ?? null;
-  const pct = activeJob?.progress?.percentage ?? 0;
+    activeJobs.find((j) => j.status === "downloading") ??
+    activeJobs.find((j) => j.status === "queued") ??
+    activeJobs[0];
+
+  const hasWork = count > 0 || !!celebrating;
+  const [present, setPresent] = useState(hasWork);
+  const [fadingOut, setFadingOut] = useState(false);
+  const [displayPct, setDisplayPct] = useState(0);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const lastPctRef = useRef(0);
+
+  const title =
+    celebrating?.title ?? activeJob?.metadata?.title ?? "Downloading";
+  const thumbnail =
+    celebrating?.thumbnail ?? activeJob?.metadata?.thumbnail ?? null;
+
+  useEffect(() => {
+    if (hasWork) {
+      setPresent(true);
+      setFadingOut(false);
+      return;
+    }
+    if (!present) return;
+    setFadingOut(true);
+    const t = window.setTimeout(() => {
+      setPresent(false);
+      setFadingOut(false);
+      setDisplayPct(0);
+      setShowSuccess(false);
+      lastPctRef.current = 0;
+    }, CHIP_EXIT_MS);
+    return () => window.clearTimeout(t);
+  }, [hasWork, present]);
+
+  useEffect(() => {
+    if (celebrating) return;
+    if (!activeJob) return;
+    const pct = Math.min(100, Math.max(0, activeJob.progress?.percentage ?? 0));
+    lastPctRef.current = pct;
+    setShowSuccess(false);
+    setDisplayPct(pct);
+  }, [
+    celebrating,
+    activeJob?.id,
+    activeJob?.status,
+    activeJob?.progress?.percentage,
+  ]);
+
+  useEffect(() => {
+    if (!celebrating) {
+      setShowSuccess(false);
+      return;
+    }
+
+    setShowSuccess(false);
+    setDisplayPct(lastPctRef.current);
+
+    const fillTimer = window.setTimeout(() => {
+      lastPctRef.current = 100;
+      setDisplayPct(100);
+    }, 48);
+
+    const revealTimer = window.setTimeout(() => {
+      setShowSuccess(true);
+    }, SUCCESS_REVEAL_MS + 48);
+
+    return () => {
+      window.clearTimeout(fillTimer);
+      window.clearTimeout(revealTimer);
+    };
+  }, [celebrating?.url]);
+
+  const successVisual = showSuccess;
+
   const indeterminate =
-    pct < 100 &&
+    !successVisual &&
+    !celebrating &&
     !!activeJob &&
-    (activeJob.status === "queued" ||
-      activeJob.status === "paused" ||
-      (activeJob.status === "downloading" &&
-        !jobHasDownloadTransferStarted(activeJob)));
+    (displayPct < 100 &&
+      (activeJob.status === "queued" ||
+        activeJob.status === "paused" ||
+        (activeJob.status === "downloading" &&
+          !jobHasDownloadTransferStarted(activeJob))));
+
+  if (!present) return null;
+
+  const ariaLabel = successVisual || celebrating
+    ? "Download complete. Click to expand."
+    : `${count} download${count !== 1 ? "s" : ""} in progress. Click to expand.`;
 
   return (
     <button
       type="button"
       onClick={onClick}
-        className="rf-music-tooltip-anchor relative hover:opacity-90 transition-opacity"
-      style={{ width: CHIP_SIZE, height: CHIP_SIZE }}
-      aria-label={`${count} download${count !== 1 ? "s" : ""} in progress. Click to expand.`}
-        data-tooltip="Expand downloads"
+      className={cn(
+        "rf-dock-chip rf-music-tooltip-anchor relative flex items-center rounded-full",
+        navCollapsed ? "overflow-visible justify-center gap-0 px-0 w-11" : "overflow-hidden w-full gap-2 pl-1 pr-2.5",
+        "transition-[width,padding,gap,opacity,transform] ease-out hover:opacity-90",
+        fadingOut ? "opacity-0 scale-[0.96]" : "opacity-100 scale-100",
+      )}
+      style={{
+        height: navCollapsed ? CHIP_SIZE + ORB_RING_OUTSET * 2 : CHIP_SIZE,
+        minWidth: navCollapsed ? CHIP_SIZE + ORB_RING_OUTSET * 2 : CHIP_SIZE,
+        transitionDuration: `${SIDEBAR_MS}ms`,
+        background: "var(--music-surface-raised)",
+        color: "var(--music-text-primary)",
+      }}
+      aria-label={ariaLabel}
+      data-tooltip={navCollapsed ? "Expand downloads" : undefined}
     >
-      <TrackOrb
-        key={`dock-${activeJob?.id ?? "active"}-${activeJob?.status ?? "idle"}`}
-        thumbnail={thumbnail}
-        title={activeJob?.metadata?.title ?? "Downloading"}
-        pct={pct}
-        indeterminate={indeterminate}
-        size={CHIP_SIZE}
-      />
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 transition-opacity ease-out",
+          navCollapsed ? "opacity-0" : "opacity-100",
+        )}
+        style={{ transitionDuration: `${SIDEBAR_MS}ms` }}
+        aria-hidden={navCollapsed}
+      >
+        <PillProgressBorder
+          pct={displayPct}
+          indeterminate={indeterminate}
+          success={successVisual}
+        />
+      </div>
+
+      <div
+        className={cn(
+          "relative shrink-0 flex items-center justify-center overflow-visible transition-[width,height] ease-out",
+        )}
+        style={{
+          width: navCollapsed ? CHIP_SIZE + ORB_RING_OUTSET * 2 : CHIP_THUMB,
+          height: navCollapsed ? CHIP_SIZE + ORB_RING_OUTSET * 2 : CHIP_THUMB,
+          transitionDuration: `${SIDEBAR_MS}ms`,
+        }}
+      >
+        <div
+          className="relative"
+          style={{
+            width: navCollapsed ? CHIP_SIZE : CHIP_THUMB,
+            height: navCollapsed ? CHIP_SIZE : CHIP_THUMB,
+          }}
+        >
+          <TrackThumb
+            thumbnail={thumbnail}
+            title={title}
+            size={navCollapsed ? CHIP_SIZE : CHIP_THUMB}
+          />
+
+          <div
+            className={cn(
+              "pointer-events-none absolute inset-0 transition-opacity ease-out",
+              navCollapsed ? "opacity-100" : "opacity-0",
+            )}
+            style={{ transitionDuration: `${SIDEBAR_MS}ms` }}
+            aria-hidden={!navCollapsed}
+          >
+            <OrbRing
+              pct={displayPct}
+              indeterminate={indeterminate}
+              success={successVisual}
+              orbSize={CHIP_SIZE}
+            />
+          </div>
+
+          <AnimatePresence>
+            {successVisual && (
+              <motion.div
+                key={`success-${celebrating?.url ?? "done"}`}
+                initial={{ opacity: 0, scale: 0.55 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.85 }}
+                transition={{ type: "spring", stiffness: 340, damping: 24 }}
+                className="absolute inset-0 z-[1] flex items-center justify-center rounded-full pointer-events-none"
+                style={{ background: "rgb(0 0 0 / 0.5)" }}
+              >
+                <Check
+                  size={navCollapsed ? 14 : 12}
+                  strokeWidth={2.5}
+                  style={{ color: "#22c55e" }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {navCollapsed && !successVisual && count > 1 && (
+            <span
+              className="absolute inset-0 z-[1] flex items-center justify-center rounded-full pointer-events-none"
+              style={{ background: "rgb(0 0 0 / 0.42)" }}
+            >
+              <span
+                className="text-[10px] font-bold tabular-nums leading-none select-none"
+                style={{ color: "#fff", textShadow: "0 1px 3px rgb(0 0 0 / 0.9)" }}
+              >
+                {count > 99 ? "99+" : count}
+              </span>
+            </span>
+          )}
+        </div>
+      </div>
 
       <span
-        className="absolute inset-0 flex items-center justify-center rounded-full pointer-events-none"
-        style={{ background: "rgb(0 0 0 / 0.42)" }}
+        className={cn(
+          "relative z-[1] truncate text-left text-[11px] font-medium leading-none whitespace-nowrap overflow-hidden",
+          "transition-[max-width,opacity,flex] ease-out",
+          navCollapsed ? "max-w-0 opacity-0 flex-[0_0_0px]" : "max-w-full opacity-100 flex-1 min-w-0 pr-0.5",
+        )}
+        style={{ transitionDuration: `${SIDEBAR_MS}ms` }}
+        aria-hidden={navCollapsed}
       >
-        <span
-          className="text-[10px] font-bold tabular-nums leading-none select-none"
-          style={{ color: "#fff", textShadow: "0 1px 3px rgb(0 0 0 / 0.9)" }}
-        >
-          {count > 99 ? "99+" : count}
-        </span>
+        {title}
       </span>
     </button>
   );

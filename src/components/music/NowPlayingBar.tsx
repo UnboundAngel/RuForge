@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { ChevronLeft, ChevronRight, Ellipsis, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
 import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
+import { MusicVolumeControl } from "./MusicVolumeControl";
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
@@ -76,6 +77,7 @@ export function NowPlayingBar({
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [morePanel, setMorePanel] = useState<"main" | "speed">("main");
+  const [volumeInteractTick, setVolumeInteractTick] = useState(0);
   const utilitiesRef = useRef<HTMLDivElement>(null);
   const scrubTrackRef = useRef<HTMLDivElement>(null);
 
@@ -125,6 +127,7 @@ export function NowPlayingBar({
     const next = Math.max(0, Math.min(1, volume + step));
     setVolume(next);
     if (isMuted && next > 0) setMuted(false);
+    setVolumeInteractTick((t) => t + 1);
   }, [volume, isMuted, setVolume, setMuted]);
 
   const toggleLoop = useCallback(() => {
@@ -277,16 +280,13 @@ export function NowPlayingBar({
             <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={16} height={16} />
           </button>
 
-          <button
-            type="button"
-            onClick={() => setMuted(!isMuted)}
-            className={cn(barBtnClass)}
-            style={{ color: "var(--music-text-primary)" }}
-            aria-label={isMuted ? "Unmute" : "Mute"}
-          >
-            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-          </button>
-          <VolumeSlider volume={volume} isMuted={isMuted} onVolume={setVolume} onMuted={setMuted} />
+          <MusicVolumeControl
+            volume={volume}
+            isMuted={isMuted}
+            onVolume={setVolume}
+            onMuted={setMuted}
+            interactTick={volumeInteractTick}
+          />
 
           <div className="relative">
             <button
@@ -431,59 +431,5 @@ function MoreMenuItem({
       </span>
       {label}
     </button>
-  );
-}
-
-function VolumeSlider({
-  volume,
-  isMuted,
-  onVolume,
-  onMuted,
-}: {
-  volume: number;
-  isMuted: boolean;
-  onVolume: (v: number) => void;
-  onMuted: (m: boolean) => void;
-}) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
-  const pct = isMuted ? 0 : volume * 100;
-
-  const seekToFraction = useCallback((clientX: number) => {
-    const track = trackRef.current;
-    if (!track) return;
-    const rect = track.getBoundingClientRect();
-    const v = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    onVolume(v);
-    if (isMuted && v > 0) onMuted(false);
-  }, [isMuted, onVolume, onMuted]);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isDragging.current = true;
-    seekToFraction(e.clientX);
-    const onMove = (ev: MouseEvent) => { if (isDragging.current) seekToFraction(ev.clientX); };
-    const onUp = (ev: MouseEvent) => {
-      isDragging.current = false;
-      seekToFraction(ev.clientX);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }, [seekToFraction]);
-
-  return (
-    <div
-      ref={trackRef}
-      className="relative w-20 h-1 rounded-full cursor-pointer shrink-0"
-      style={{ background: "rgba(255,255,255,0.2)" }}
-      onMouseDown={handleMouseDown}
-    >
-      <div
-        className="absolute inset-y-0 left-0 rounded-full pointer-events-none"
-        style={{ width: `${pct}%`, background: "var(--music-text-secondary)" }}
-      />
-    </div>
   );
 }

@@ -16,6 +16,14 @@ import {
 } from "./musicShelfDedup";
 import { primaryArtist } from "./musicArtist";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { MusicHomeSearchEmpty } from "./MusicHomeSearchEmpty";
+
+type MusicHomeViewProps = {
+  onPlayFile: (file: MediaFile, playlist?: MediaFile[]) => void;
+  onOpenArtist: (artistKey: string) => void;
+  onOpenAlbum: (artistKey: string, albumKey: string) => void;
+  onSearchYoutubeMusic?: (query: string) => void;
+};
 
 /** Seeded shuffle: stable for the session based on a random seed frozen on first render. */
 function seededShuffle<T>(items: T[], seed: number): T[] {
@@ -315,13 +323,12 @@ function ScrollShelf({ title, children }: ScrollShelfProps) {
   );
 }
 
-type Props = {
-  onPlayFile: (file: MediaFile, playlist: MediaFile[]) => void;
-  onOpenArtist: (artistKey: string) => void;
-  onOpenAlbum: (artistKey: string, albumKey: string) => void;
-};
-
-export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) {
+export function MusicHomeView({
+  onPlayFile,
+  onOpenArtist,
+  onOpenAlbum,
+  onSearchYoutubeMusic,
+}: MusicHomeViewProps) {
   const entries = useRuforgeStore((s) => s.entries);
   const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
   const sessionSeedRef = useRef(Math.floor(Math.random() * 0xffffffff));
@@ -639,25 +646,15 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
       </header>
 
       {filteredTracks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-3 text-center px-12 text-[var(--music-text-muted)]">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.3 }}>
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <p className="text-sm font-medium" style={{ color: "var(--music-text-secondary)" }}>No matches found</p>
-            <p className="text-xs">Try adjusting your filters or search query.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveFilter("all");
-                setSearchQuery("");
-              }}
-              className="mt-2 px-4 py-1.5 rounded-full text-xs font-semibold border transition-colors hover:bg-white/10"
-              style={{ borderColor: "var(--music-border)", color: "var(--music-text-primary)" }}
-            >
-              Clear filters
-            </button>
-          </div>
+          <MusicHomeSearchEmpty
+            searchQuery={searchQuery}
+            activeFilter={activeFilter}
+            onClear={() => {
+              setActiveFilter("all");
+              setSearchQuery("");
+            }}
+            onSearchYoutubeMusic={onSearchYoutubeMusic}
+          />
         ) : (
           <div className="flex flex-col gap-12 pl-12 pr-12 pt-8 pb-16 max-w-[1300px] mx-auto w-full">
             {/* Quick picks — most listened or suggested */}

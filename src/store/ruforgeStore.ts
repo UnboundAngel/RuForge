@@ -44,9 +44,13 @@ import {
 } from "./downloadQueueSlice";
 import { readLoopForPath, writeLoopForPath } from "../playbackLoopStorage";
 import { readPlaybackSpeed } from "../playbackSpeedStorage";
-import type { PlayInMiniPayload } from "../playerHandoff";
+import type { PlayInMiniPayload, PlayInMusicMiniPayload } from "../playerHandoff";
 import { writePlaybackPos } from "../playbackStorage";
 import { dedupeGalleryEntriesCombined } from "../galleryDedupe";
+import {
+  buildMusicEffectivePlaylist,
+  musicEffectivePlaylistIndex,
+} from "../lib/musicHandoffQueue";
 import type {
   ExportBundleProgressPayload,
   ExportOutcome,
@@ -140,6 +144,12 @@ export interface RuforgeStore extends DownloadQueueSlice {
   isLooping: boolean;
   /** One-shot resume position (seconds) after mini → main handoff. */
   playerResumeAt: number | null;
+  /** One-shot resume after music-mini → main handoff. */
+  musicPlayerResume: {
+    currentTime: number;
+    paused: boolean;
+    playbackSpeed: number;
+  } | null;
   cleanupModalOpen: boolean;
 
   exportPanelOpen: boolean;
@@ -150,6 +160,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
 
   setPlayingFile: (file: MediaFile | null) => void;
   clearPlayerResumeAt: () => void;
+  clearMusicPlayerResume: () => void;
   setFolderAudioPlaylist: (files: MediaFile[]) => void;
   /** Append a path to the manual queue (deduped; ignored if already present). */
   enqueueManualQueue: (path: string) => void;
@@ -181,6 +192,10 @@ export interface RuforgeStore extends DownloadQueueSlice {
     startTime?: number,
     opts?: { paused?: boolean; playbackSpeed?: number },
   ) => Promise<void>;
+  handlePopOutMusic: (
+    startTime?: number,
+    opts?: { paused?: boolean; playbackSpeed?: number },
+  ) => Promise<void>;
 
   updateSetting: (key: keyof RuforgeSettings, value: RuforgeSettings[keyof RuforgeSettings]) => Promise<void>;
   mergeHardwareAccelerationFromBackend: (hw: boolean) => void;
@@ -196,6 +211,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setMusicView: (view: MusicView) => void;
   openMusicArtist: (key: string) => void;
   openMusicAlbum: (artistKey: string, key: string) => void;
+  openMusicSong: (path: string) => void;
   closeMusicDetail: () => void;
   refreshStorageStats: () => Promise<void>;
   openAuthorizeCleanupModal: () => Promise<void>;
@@ -333,6 +349,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       isMuted: false,
       isLooping: playerInitLoop,
       playerResumeAt: null,
+      musicPlayerResume: null,
       cleanupModalOpen: false,
 
       exportPanelOpen: false,
@@ -346,6 +363,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
         set({ playingFile, isLooping });
       },
       clearPlayerResumeAt: () => set({ playerResumeAt: null }),
+      clearMusicPlayerResume: () => set({ musicPlayerResume: null }),
       setFolderAudioPlaylist: (folderAudioPlaylist) => set({ folderAudioPlaylist }),
 
       enqueueManualQueue: (path) => {
@@ -452,6 +470,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       handlePopOut: async (startTime, opts) => {
+        if (get().navMode === "music") {
+          return get().handlePopOutMusic(startTime, opts);
+        }
         const { playingFile, activeTab, navMode, volume, isMuted } = get();
         const fileToHandoff = playingFile;
         const canHandoff = !!fileToHandoff && (activeTab === "player" || navMode === "music");
@@ -493,6 +514,77 @@ export const useRuforgeStore = create<RuforgeStore>()(
               ...(navMode !== "music" ? { activeTab: "media" } : {}),
             });
           }
+        } catch (e) {
+          console.error(e);
+        }
+      },
+
+      handlePopOutMusic: async (startTime, opts) => {
+        const {
+          playingFile,
+          volume,
+          isMuted,
+          isLooping,
+          entries,
+          folderAudioPlaylist,
+          manualQueue,
+          playingFromManualQueue,
+          manualQueueContextIndex,
+        } = get();
+        const fileToHandoff = playingFile;
+        if (!fileToHandoff) return;
+        const t = Math.max(0, startTime ?? 0);
+        const paused = opts?.paused ?? false;
+        const speed = opts?.playbackSpeed ?? readPlaybackSpeed();
+
+        const queueSnapshot = buildMusicEffectivePlaylist(
+          fileToHandoff,
+          folderAudioPlaylist,
+          entries,
+        );
+        const foundIndex = musicEffectivePlaylistIndex(queueSnapshot, fileToHandoff);
+        const queueIndex = playingFromManualQueue
+          ? (manualQueueContextIndex ?? (foundIndex >= 0 ? foundIndex : 0))
+          : foundIndex >= 0
+            ? foundIndex
+            : 0;
+
+        const payload: PlayInMusicMiniPayload = {
+          file: fileToHandoff,
+          startTime: t,
+          paused,
+          playbackSpeed: speed,
+          volume,
+          muted: isMuted,
+          queueSnapshot,
+          queueIndex,
+          isLooping,
+          manualQueue: [...manualQueue],
+          playingFromManualQueue,
+          manualQueueContextIndex,
+        };
+
+        try {
+          writePlaybackPos(fileToHandoff.path, t);
+          set({ playingFile: null });
+          await invoke("open_music_mini_player");
+          await emitTo("music-mini", "play-in-music-mini", payload);
+          let unlistenFn: (() => void) | null = null;
+          listen("music-mini-ready", () => {
+            void emitTo("music-mini", "play-in-music-mini", payload);
+            if (unlistenFn) {
+              unlistenFn();
+              unlistenFn = null;
+            }
+          }).then((f) => {
+            unlistenFn = f;
+          });
+          setTimeout(() => {
+            if (unlistenFn) {
+              unlistenFn();
+              unlistenFn = null;
+            }
+          }, 5000);
         } catch (e) {
           console.error(e);
         }
@@ -612,6 +704,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       setMusicView: (view) => set({ musicView: view, musicDetail: null }),
       openMusicArtist: (key) => set({ musicDetail: { kind: "artist", key } }),
       openMusicAlbum: (artistKey, key) => set({ musicDetail: { kind: "album", artistKey, key } }),
+      openMusicSong: (path) => set({ musicDetail: { kind: "song", path } }),
       closeMusicDetail: () => set({ musicDetail: null }),
 
       refreshStorageStats: async () => {
@@ -817,7 +910,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
           const mc = clampMaxConcurrentDownloads(state.settings.maxConcurrentDownloads);
           useRuforgeStore.setState({
             maxConcurrentDownloads: mc,
-            settings: { ...state.settings, maxConcurrentDownloads: mc },
+            settings: {
+              ...DEFAULT_SETTINGS,
+              ...state.settings,
+              maxConcurrentDownloads: mc,
+              autoDownloadPlayingSongs: state.settings.autoDownloadPlayingSongs !== false,
+            },
           });
           void (async () => {
             await invoke("update_tray_config", { minimize: state.settings.minimizeToTray });

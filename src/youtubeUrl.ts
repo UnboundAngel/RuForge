@@ -315,6 +315,15 @@ export function canonicalMusicYouTubeUrl(input: string): string | null {
   return url.toString();
 }
 
+/** Build a music.youtube.com search URL for the embedded Explore webview. */
+export function youtubeMusicSearchUrl(query: string): string | null {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+  const url = new URL("https://music.youtube.com/search");
+  url.searchParams.set("q", trimmed);
+  return url.toString();
+}
+
 /** Match Rust `sanitize_playlist_folder_name` for download/regroup folder names. */
 export function sanitizePlaylistFolderName(raw: string): string {
   let s = raw.trim();

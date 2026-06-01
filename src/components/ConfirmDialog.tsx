@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Trash2 } from "lucide-react";
+import {
+  SettingsModalBtnPrimary,
+  SettingsModalBtnSecondary,
+  SettingsModalShell,
+  SettingsModalSurface,
+} from "./settings/SettingsModalShell";
 
 export type ConfirmDialogOptions = {
   title: string;
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  itemPreview?: string | null; // Optional path/URL to a thumbnail
-  itemMeta?: string;    // Optional specs text (e.g. "1.2 GB • 10:24")
+  itemPreview?: string | null;
+  itemMeta?: string;
 };
 
 type PendingConfirm = ConfirmDialogOptions & {
@@ -42,74 +47,54 @@ function ConfirmDialogView({
   const cancelLabel = pending.cancelLabel ?? "Cancel";
 
   return (
-    <div className="fixed inset-0 z-[300] pointer-events-none flex items-end justify-end p-10">
-      <motion.div
-        initial={{ opacity: 0, x: 100, scale: 0.9 }}
-        animate={{ opacity: 1, x: 0, scale: 1 }}
-        exit={{ opacity: 0, x: 100, scale: 0.9 }}
-        transition={{ type: "spring", duration: 0.6, bounce: 0.2 }}
-        className="rf-confirm-panel bg-[#1D1613]/95 backdrop-blur-xl border border-white/10 rounded-[32px] overflow-hidden w-[340px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] pointer-events-auto"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rf-confirm-title"
-        aria-describedby="rf-confirm-message"
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onCancel();
-        }}
-      >
-        {/* Toast-Style Header - Slightly shorter aspect */}
-        {pending.itemPreview && (
-          <div className="relative aspect-video w-full bg-[#110D0B] overflow-hidden">
-            <img 
-              src={convertFileSrc(pending.itemPreview)} 
-              alt="" 
-              className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-110"
+    <SettingsModalShell
+      open
+      onClose={onCancel}
+      titleId="rf-confirm-title"
+      title={pending.title}
+      description={pending.message}
+      eyebrow={null}
+      zIndexClass="z-[320]"
+      maxWidthClass="max-w-md"
+      footer={
+        <>
+          <SettingsModalBtnSecondary onClick={onCancel}>{cancelLabel}</SettingsModalBtnSecondary>
+          <SettingsModalBtnPrimary
+            onClick={onConfirm}
+            className="bg-red-500/90 text-stone-100 hover:brightness-110"
+          >
+            {confirmLabel}
+          </SettingsModalBtnPrimary>
+        </>
+      }
+    >
+      {pending.itemPreview ? (
+        <div className="space-y-3">
+          <div className="relative aspect-video w-full overflow-hidden rounded-[var(--radius-input)] bg-[#110D0B]">
+            <img
+              src={convertFileSrc(pending.itemPreview)}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover opacity-40 blur-2xl scale-110"
+              aria-hidden
             />
-            <img 
-              src={convertFileSrc(pending.itemPreview)} 
-              alt="" 
-              className="relative w-full h-full object-cover opacity-80"
+            <img
+              src={convertFileSrc(pending.itemPreview)}
+              alt=""
+              className="relative h-full w-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#1D1613] via-transparent to-transparent" />
           </div>
-        )}
-
-        <div className="relative">
-          {/* Red dotted border for the action area - higher visibility */}
-          <div className="absolute inset-0 border-2 border-dotted border-red-500/80 rounded-b-[32px] border-t-0 pointer-events-none" />
-
-          <div className="p-8 pt-4 relative">
-            <div className="space-y-1.5 mb-8">
-              <h2 id="rf-confirm-title" className="text-stone-100 text-lg font-bold tracking-tight">
-                {pending.title}
-              </h2>
-              <p id="rf-confirm-message" className="text-stone-500 text-[12px] leading-relaxed">
-                {pending.message}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <button 
-                type="button" 
-                className="text-[10px] font-black uppercase tracking-widest text-stone-600 hover:text-stone-200 transition-colors cursor-pointer" 
-                onClick={onCancel}
-              >
-                {cancelLabel}
-              </button>
-              <button 
-                type="button" 
-                className="text-[10px] font-black uppercase tracking-widest text-stone-600 hover:text-red-400 transition-colors cursor-pointer flex items-center gap-2 group" 
-                onClick={onConfirm}
-              >
-                <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
-                {confirmLabel}
-              </button>
-            </div>
-          </div>
+          {pending.itemMeta ? (
+            <SettingsModalSurface>
+              <p className="text-[11px] text-stone-500">{pending.itemMeta}</p>
+            </SettingsModalSurface>
+          ) : null}
         </div>
-
-      </motion.div>
-    </div>
+      ) : pending.itemMeta ? (
+        <SettingsModalSurface>
+          <p className="text-[11px] text-stone-500">{pending.itemMeta}</p>
+        </SettingsModalSurface>
+      ) : null}
+    </SettingsModalShell>
   );
 }
 
@@ -136,14 +121,14 @@ export function ConfirmDialogHost() {
 
   return (
     <AnimatePresence>
-      {pending && (
-        <ConfirmDialogView 
+      {pending ? (
+        <ConfirmDialogView
           key="confirm-dialog"
-          pending={pending} 
-          onConfirm={onConfirm} 
-          onCancel={onCancel} 
+          pending={pending}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
         />
-      )}
+      ) : null}
     </AnimatePresence>
   );
 }

@@ -61,7 +61,7 @@ const CleanupItem = memo(({
 
         {/* Selected State Indicator (Top Right) */}
         <div className={`absolute top-3 right-3 transition-all duration-300 ${checked ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 -rotate-45 pointer-events-none'}`}>
-          <div className="w-10 h-10 rounded-full bg-[color:var(--accent)] text-[#110D0B] flex items-center justify-center shadow-2xl">
+          <div className="w-10 h-10 rounded-full bg-[color:var(--accent)] text-[#110D0B] flex items-center justify-center">
             <Trash2 size={18} strokeWidth={2.5} />
           </div>
         </div>
@@ -76,7 +76,7 @@ const CleanupItem = memo(({
         {/* Progress Bar (Flush with bottom) */}
         {c.watchProgressPct > 0 && (
           <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/5">
-            <div className="h-full bg-[color:var(--accent)] shadow-[0_0_10px_var(--accent-glow)]" style={{ width: `${c.watchProgressPct}%` }} />
+            <div className="h-full bg-[color:var(--accent)]" style={{ width: `${c.watchProgressPct}%` }} />
           </div>
         )}
       </div>
@@ -267,17 +267,20 @@ export function AuthorizeCleanupModal() {
           aria-modal="true"
         >
           {/* Combined Slim Header & Drag Region */}
-          <div 
-            className="h-16 w-full flex-shrink-0 flex items-center justify-between px-10 border-b border-white/5 pointer-events-auto bg-black/20"
+          <div
+            className={`h-16 w-full flex-shrink-0 flex items-center justify-between px-10 pointer-events-auto bg-[#1D1613] transition-shadow duration-200 ${scrolled ? "shadow-[0_8px_24px_rgba(0,0,0,0.35)]" : ""}`}
             data-tauri-drag-region
           >
-            <div className="flex items-center gap-8 pointer-events-none">
-              <h2 className="text-[11px] font-black uppercase tracking-[0.4em] text-stone-200">
-                Internal Storage
-              </h2>
-              
-              <div className="h-4 w-px bg-white/10" />
-              
+            <div className="flex items-center gap-10 pointer-events-none">
+              <div className="space-y-0.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+                  Storage
+                </p>
+                <h2 className="text-sm font-semibold text-stone-100">
+                  Free internal space
+                </h2>
+              </div>
+
               <LayoutGroup id="cleanup-filters">
                 <div className="flex items-center gap-1 pointer-events-auto">
                   {(
@@ -312,7 +315,7 @@ export function AuthorizeCleanupModal() {
             <div className="flex items-center gap-8 pointer-events-auto">
               <div className="flex flex-col items-end gap-1.5">
                 <div className="flex items-center gap-3">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-stone-600">Goal Progress</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Goal progress</span>
                   {bytesNeeded === null ? (
                     <Loader2 size={10} className="animate-spin text-stone-700" />
                   ) : (
@@ -345,13 +348,12 @@ export function AuthorizeCleanupModal() {
           {/* Main Content Area */}
           <div className="flex-1 overflow-hidden flex flex-col relative">
             {/* Minimal Toolbar (Hides on Scroll) */}
-            <motion.div 
-              animate={{ 
+            <motion.div
+              animate={{
                 height: scrolled ? 0 : 48,
                 opacity: scrolled ? 0 : 1,
-                borderBottomWidth: scrolled ? 0 : 1
               }}
-              className="flex items-center justify-between px-10 bg-white/[0.02] border-b border-white/5 relative z-10 overflow-hidden"
+              className="flex items-center justify-between px-10 bg-[#261d18]/40 relative z-10 overflow-hidden"
             >
               <button
                 onClick={toggleSelectAll}
@@ -391,10 +393,10 @@ export function AuthorizeCleanupModal() {
           </div>
 
           {/* Slim Integrated Footer */}
-          <div className="h-24 w-full flex-shrink-0 flex items-center justify-between px-12 border-t border-white/5 bg-gradient-to-b from-transparent to-black/60 backdrop-blur-xl relative z-20">
+          <div className="h-24 w-full flex-shrink-0 flex items-center justify-between px-12 bg-[#1D1613] relative z-20 mt-2">
             <div className="flex items-center gap-14">
               <div className="flex flex-col gap-1">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-stone-600">Selection</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Selection</span>
                 <div className="flex items-baseline gap-3">
                   <p className="text-2xl font-black text-stone-100">
                     {selected.size} items
@@ -406,13 +408,13 @@ export function AuthorizeCleanupModal() {
               </div>
 
               {showDeselectWarning && shortfall > 0 && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="flex items-center gap-3 px-5 py-2.5 bg-amber-500/[0.03] border border-amber-500/10 rounded-2xl"
+                  className="flex items-center gap-3 rounded-[var(--radius-input)] bg-amber-500/10 px-5 py-2.5"
                 >
-                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-500/60">
-                    Need {formatBytes(shortfall)} more
+                  <span className="text-[11px] font-medium text-amber-400/90">
+                    Need {formatBytes(shortfall)} more to reach the goal.
                   </span>
                 </motion.div>
               )}
@@ -428,9 +430,9 @@ export function AuthorizeCleanupModal() {
               <button
                 disabled={busy || selected.size === 0}
                 onClick={() => void handleConfirm()}
-                className={`h-12 px-10 rounded-full text-[10px] font-black uppercase tracking-0.4em transition-all shadow-xl ${busy || selected.size === 0 ? 'bg-stone-800 text-stone-600 opacity-30 cursor-not-allowed' : 'bg-[color:var(--accent)] text-[#110D0B] active:scale-95'}`}
+                className={`h-12 px-10 rounded-[var(--radius-input)] text-[10px] font-black uppercase tracking-[0.2em] transition-all ${busy || selected.size === 0 ? "bg-stone-800 text-stone-600 opacity-30 cursor-not-allowed" : "bg-[color:var(--accent)] text-[#110D0B] active:scale-[0.98]"}`}
               >
-                {busy ? "Deleting…" : "Delete Selected"}
+                {busy ? "Deleting…" : "Delete selected"}
               </button>
             </div>
           </div>

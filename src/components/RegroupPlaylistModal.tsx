@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { X, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 import { fetchVideoInfoWithTimeout } from "../downloadVideoInfoFetch";
 import { cookieContextFromSettings } from "../downloadQueue";
 import { formatApproxFileSize } from "./downloader/downloaderFormat";
@@ -11,6 +11,14 @@ import {
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR } from "../store/ruforgeStore";
 import { extractYouTubeVideoId, sanitizePlaylistFolderName } from "../youtubeUrl";
 import type { GalleryEntry, PlaylistItem, VideoInfo } from "../types";
+import {
+  SettingsModalBtnGhost,
+  SettingsModalBtnPrimary,
+  SettingsModalBtnSecondary,
+  SettingsModalShell,
+  SettingsModalSurface,
+  SettingsModalTextInput,
+} from "./settings/SettingsModalShell";
 
 type RegroupRow = {
   index: number;
@@ -81,7 +89,7 @@ export function RegroupPlaylistModal({
   const loadPreview = useCallback(async () => {
     const trimmed = url.trim();
     if (!trimmed.startsWith("http")) {
-      setError("Paste a YouTube playlist URL.");
+      setError("Enter a valid YouTube playlist URL.");
       return;
     }
     setLoading(true);
@@ -99,7 +107,7 @@ export function RegroupPlaylistModal({
         cookieContextFromSettings(settings),
       );
       if (!info.isPlaylist || !info.playlistItems?.length) {
-        setError("That URL is not a playlist with videos.");
+        setError("URL is not a playlist with videos.");
         return;
       }
       const built: RegroupRow[] = info.playlistItems.map((item: PlaylistItem, i: number) => {
@@ -162,104 +170,73 @@ export function RegroupPlaylistModal({
     }
   }, [videoInfo, rows, searchRoots, fetchEntries, notify, onClose]);
 
-  if (!open) return null;
-
   const matchCount = rows.filter((r) => r.flatAtRoot && r.matchedPath && r.sourceId).length;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div
-        role="dialog"
-        aria-labelledby="regroup-playlist-title"
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1D1613] shadow-2xl"
-      >
-        <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Layers size={16} className="text-[color:var(--accent)]" />
-            <h2
-              id="regroup-playlist-title"
-              className="text-sm font-black uppercase tracking-[0.2em] text-white"
-            >
-              Group playlist files
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-stone-500 hover:bg-white/5 hover:text-white"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="space-y-4 overflow-y-auto px-5 py-4">
-          <p className="text-[10px] leading-relaxed text-stone-500">
-            Moves videos already in your download folder (flat at the root) into a
-            playlist subfolder with numbered names. Paste the same playlist URL you
-            used when downloading. Scans internal vault and your custom download path.
-          </p>
-          <input
-            type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.youtube.com/playlist?list=..."
-            className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-xs text-stone-200 outline-none focus:border-[color:var(--accent)]/40"
-          />
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => void loadPreview()}
-            className="w-full rounded-xl bg-white/5 py-2.5 text-[10px] font-black uppercase tracking-[0.3em] text-stone-300 hover:bg-white/10 disabled:opacity-50"
-          >
-            {loading ? "Loading…" : "Preview matches"}
-          </button>
-          {error && (
-            <p className="text-[10px] text-red-400/90">{error}</p>
-          )}
-          {videoInfo && rows.length > 0 && (
-            <ul className="max-h-48 space-y-1 overflow-y-auto text-left">
-              {rows.map((r) => (
-                <li
-                  key={`${r.index}-${r.title}`}
-                  className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[10px] text-stone-400"
-                >
-                  <span className="min-w-0 truncate font-bold uppercase tracking-wide text-stone-500">
-                    {r.index}. {r.title}
-                  </span>
-                  <span className="shrink-0 font-mono text-[9px] text-right">
-                    {!r.inLibrary
-                      ? "not in library"
-                      : !r.flatAtRoot
-                        ? "in subfolder"
-                        : r.matchedSize
-                          ? `~${formatApproxFileSize(r.matchedSize)}`
-                          : "matched"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="flex gap-2 border-t border-white/5 px-5 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-xl border border-white/10 py-2.5 text-[10px] font-black uppercase tracking-[0.25em] text-stone-400"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
+    <SettingsModalShell
+      open={open}
+      onClose={onClose}
+      titleId="regroup-playlist-title"
+      title="Group playlist downloads"
+      icon={Layers}
+      description="Moves videos stored flat at the download root into a numbered playlist subfolder. Paste the playlist URL used when downloading. Scans the internal vault and your custom download path."
+      zIndexClass="z-[200]"
+      disableDismiss={loading || grouping}
+      footer={
+        <>
+          <SettingsModalBtnSecondary onClick={onClose}>Cancel</SettingsModalBtnSecondary>
+          <SettingsModalBtnPrimary
             disabled={grouping || matchCount === 0}
             onClick={() => void handleGroup()}
-            className="flex-1 rounded-xl bg-[color:var(--accent)] py-2.5 text-[10px] font-black uppercase tracking-[0.25em] text-stone-950 disabled:opacity-40"
           >
-            {grouping ? "Grouping…" : `Group ${matchCount} file(s)`}
-          </button>
-        </div>
+            {grouping ? "Grouping…" : `Group ${matchCount} file${matchCount === 1 ? "" : "s"}`}
+          </SettingsModalBtnPrimary>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <SettingsModalTextInput
+          value={url}
+          onChange={setUrl}
+          placeholder="https://www.youtube.com/playlist?list=..."
+          disabled={loading || grouping}
+        />
+        <SettingsModalBtnGhost
+          disabled={loading}
+          onClick={() => void loadPreview()}
+          className="w-full"
+        >
+          {loading ? "Loading…" : "Preview matches"}
+        </SettingsModalBtnGhost>
+        {error ? (
+          <p className="text-[12px] leading-relaxed text-red-400/90" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {videoInfo && rows.length > 0 ? (
+          <SettingsModalSurface className="max-h-52 overflow-y-auto rf-scrollbar space-y-2">
+            {rows.map((r) => (
+              <div
+                key={`${r.index}-${r.title}`}
+                className="flex items-center justify-between gap-3 text-[11px]"
+              >
+                <span className="min-w-0 truncate font-medium text-stone-300">
+                  {r.index}. {r.title}
+                </span>
+                <span className="shrink-0 text-stone-500">
+                  {!r.inLibrary
+                    ? "Not in library"
+                    : !r.flatAtRoot
+                      ? "In subfolder"
+                      : r.matchedSize
+                        ? `~${formatApproxFileSize(r.matchedSize)}`
+                        : "Matched"}
+                </span>
+              </div>
+            ))}
+          </SettingsModalSurface>
+        ) : null}
       </div>
-    </div>
+    </SettingsModalShell>
   );
 }

@@ -28,7 +28,7 @@ type Props = {
 };
 
 const ROW =
-  "flex items-center gap-[9px] w-full px-3 h-9 text-[13px] text-[#c0c0c0] hover:text-white hover:bg-white/[0.07] rounded-xl border-0 outline-none text-left cursor-pointer transition-colors duration-100";
+  "flex items-center gap-[9px] w-full px-3 h-9 text-[13px] text-[#c0c0c0] hover:text-white hover:bg-white/[0.07] border-0 outline-none text-left cursor-pointer transition-colors duration-100";
 
 export function MusicRowContextMenu({ menu, onClose }: Props) {
   const enqueueManualQueue = useRuforgeStore((s) => s.enqueueManualQueue);
@@ -159,7 +159,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
       exit={{ opacity: 0, scale: 0.94, y: -5 }}
       transition={{ duration: 0.1, ease: "easeOut" }}
       style={{ position: "fixed", left, top, zIndex: 9999 }}
-      className="w-52 bg-[#0f0f0f] border border-white/[0.11] rounded-[18px] shadow-2xl py-1.5 overflow-hidden"
+      className="w-52 bg-[#0f0f0f] border border-white/[0.11] rounded-[18px] shadow-2xl overflow-hidden"
       onClick={(e) => e.stopPropagation()}
     >
       {rows}

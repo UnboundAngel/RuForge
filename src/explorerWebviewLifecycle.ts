@@ -12,6 +12,12 @@ export function explorerNavigateOrReloadScript(url: string): string {
   return `(function(){try{var t=${encoded};if(location.href!==t)location.href=t;else location.reload();}catch(e){}})();`;
 }
 
+/** Always navigate (used when switching YTM search from Home). */
+export function explorerForceNavigateScript(url: string): string {
+  const encoded = JSON.stringify(url);
+  return `(function(){try{var t=${encoded};if(location.href===t)return;location.assign(t);}catch(e){try{location.href=${encoded};}catch(e2){}}})();`;
+}
+
 function explorerAlreadyExistsError(payload: unknown): boolean {
   if (typeof payload === "string") {
     return payload.includes("already exists");
