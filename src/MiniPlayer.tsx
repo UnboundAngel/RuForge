@@ -1627,37 +1627,33 @@ export default function MiniPlayer() {
       <motion.div 
         animate={{ bottom: showGallery ? 112 : 0 }}
         transition={{ type: "spring", damping: 30, stiffness: 200 }}
-        className="absolute inset-0 z-10 pointer-events-none flex flex-col items-center justify-center bg-black"
+        className={`absolute inset-0 z-10 pointer-events-none flex flex-col items-center justify-center ${miniNavMode === "music" ? "bg-[var(--music-bg)]" : "bg-black"}`}
       >
         {/* Cover art backdrop: audio-only and layouts where video is not shown (not large-mode video). */}
         {playingFile && coverArtSrc && (playingAudioOnly || isSmallMode || isCompactMode) && (
           <>
-            {/* If in small or compact mode, show the image on the full background fading to the right */}
+            {/* Small / compact: full-bleed art with horizontal fade into the chrome (no letterboxed brick). */}
             {(isSmallMode || isCompactMode) && (
-              <div className="absolute inset-0 flex overflow-hidden pointer-events-none z-0">
-                <div
-                  className="h-full shrink-0 overflow-hidden bg-black"
-                  style={{ width: isCompactMode ? 84 : 144 }}
-                >
-                  <img
-                    src={convertFileSrc(coverArtSrc)}
-                    alt=""
-                    className="h-full w-full object-contain object-left"
-                  />
-                </div>
-                <div className="min-w-0 flex-1 bg-gradient-to-r from-black/25 via-black/55 to-black" />
+              <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                <img
+                  src={convertFileSrc(coverArtSrc)}
+                  alt=""
+                  className="h-full w-full object-cover object-left"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/40 via-30% to-black to-60%" />
               </div>
             )}
 
-            {/* Large-mode blurred backdrop is audio-only (video uses a plain surface). */}
+            {/* Large audio: cover fills the frame; controls sit on a bottom scrim (no letterboxed card). */}
             {isLargeMode && playingAudioOnly && (
               <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
                 <img
                   src={convertFileSrc(coverArtSrc)}
                   alt=""
-                  className="w-full h-full object-cover opacity-35 blur-[12px] scale-105"
+                  className="h-full w-full object-cover object-center"
                 />
-                <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/90 to-black" />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/35 via-black/55 to-black/95" />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-black/25 to-black/70" />
               </div>
             )}
           </>
@@ -1833,16 +1829,10 @@ export default function MiniPlayer() {
                   </div>
                 </div>
               )}
-              {playingAudioOnly && (
+              {playingAudioOnly && isLargeMode && (
                 <button
                   type="button"
-                  className={`${
-                    isCompactMode 
-                      ? "hidden"
-                      : isSmallMode
-                      ? "hidden"
-                      : "absolute inset-0 z-20 flex cursor-pointer pointer-events-auto items-center justify-center bg-gradient-to-b from-stone-950 to-black p-8"
-                  } transition-all duration-500`}
+                  className="absolute inset-0 z-20 cursor-pointer pointer-events-auto bg-transparent"
                   onClick={togglePlay}
                   onAuxClick={(e) => {
                     if (e.button === 1 && mediaRef.current) {
@@ -1855,25 +1845,8 @@ export default function MiniPlayer() {
                       volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
                     }
                   }}
-                >
-                  {coverArtSrc ? (
-                    <img
-                      src={convertFileSrc(coverArtSrc)}
-                      alt=""
-                      className={
-                        isLargeMode
-                          ? "max-h-[min(50vh,420px)] w-full max-w-[min(88vw,420px)] rounded-2xl border border-white/10 object-contain shadow-2xl"
-                          : "h-full w-full object-contain"
-                      }
-                    />
-                  ) : (
-                    <Music
-                      className={isLargeMode ? "w-24 h-24 text-[color:var(--accent)] opacity-35" : "w-10 h-10 text-[color:var(--accent)] opacity-40"}
-                      strokeWidth={isLargeMode ? 1 : 1.25}
-                      aria-hidden
-                    />
-                  )}
-                </button>
+                  aria-label={isPaused ? "Play" : "Pause"}
+                />
               )}
 
               <AnimatePresence mode="wait">
@@ -2116,7 +2089,7 @@ export default function MiniPlayer() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 12 }}
                     transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="absolute inset-0 pl-36 pr-8 flex flex-col justify-center pointer-events-none"
+                    className="absolute inset-0 pl-[min(42%,9.5rem)] pr-6 flex flex-col justify-center pointer-events-none"
                   >
                      <div className="flex items-center justify-between mb-2">
                         <div className="min-w-0 flex-1 mr-4">
@@ -2188,8 +2161,7 @@ export default function MiniPlayer() {
                       transition={{ duration: 0.25, ease: "easeOut" }}
                       className="absolute left-0 right-0 h-14 flex items-center justify-between px-3 z-10 pointer-events-none"
                     >
-                      {/* Spacer to push text past the sharp part of the cover art */}
-                      <div className="w-[84px] shrink-0" />
+                      <div className="w-[min(38%,5.25rem)] shrink-0" />
                       {/* Text Info: Title and Artist */}
                       <div className="flex-1 min-w-0 flex flex-col justify-center pointer-events-auto">
                         <MarqueeText text={getTrackTitle(playingFile)} className="text-[12px] font-bold text-stone-100 leading-tight" />

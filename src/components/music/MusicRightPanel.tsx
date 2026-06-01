@@ -176,9 +176,9 @@ export function MusicRightPanel({
 
       >
 
-        <div className="shrink-0 flex items-center justify-between px-4 h-11 gap-1">
+        <div className="shrink-0 flex items-center justify-between px-3 h-10 gap-2">
 
-          <div className="flex items-center gap-4 overflow-hidden min-w-0">
+          <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1">
 
             <TabButton
 
@@ -196,7 +196,7 @@ export function MusicRightPanel({
 
               onClick={() => onTabChange("history")}
 
-              label="Recently played"
+              label="Recent"
 
             />
 
@@ -319,7 +319,7 @@ function TabButton({
       type="button"
       onClick={onClick}
       data-active={active ? "true" : "false"}
-      className="rf-music-panel-tab shrink-0 py-2 text-[13px] font-bold whitespace-nowrap"
+      className="rf-music-panel-tab shrink-0 py-2 text-[12px] font-bold whitespace-nowrap"
     >
       {label}
     </button>
@@ -350,13 +350,13 @@ export function MusicRightPanelToggle({
 
       onClick={onToggle}
 
-      className="w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100"
+      className="rf-music-tooltip-anchor w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100"
 
       style={{ color: "var(--music-text-secondary)" }}
 
       aria-label={open ? "Close right panel" : "Open right panel"}
 
-      title={open ? "Close right panel" : "Open right panel"}
+      data-tooltip={open ? "Close right panel" : "Open right panel"}
 
     >
 

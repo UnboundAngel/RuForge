@@ -30,10 +30,11 @@ export function nextNavMode(current: NavMode): NavMode {
 /** Music shell browse surface (Home / Explore / Library). */
 export type MusicView = "home" | "explore" | "library";
 
-/** Drill-down target inside Music mode (artist page or album page). */
+/** Drill-down target inside Music mode (artist, album, or song page). */
 export type MusicDetail =
   | { kind: "artist"; key: string }
-  | { kind: "album"; artistKey: string; key: string };
+  | { kind: "album"; artistKey: string; key: string }
+  | { kind: "song"; path: string };
 
 /** Signed-in YouTube account read from the embedded Explorer session. */
 export type YouTubeExplorerProfile = {

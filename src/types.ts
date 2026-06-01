@@ -24,6 +24,18 @@ export interface MediaFile {
   trackNo?: number | null;
   /** Path to extracted embedded cover art cached on disk. */
   embeddedCoverPath?: string | null;
+  /** Canonical artist from musicmeta sidecar (tags > MB > YouTube > filename). */
+  canonicalArtist?: string | null;
+  /** Canonical album from musicmeta sidecar. */
+  canonicalAlbum?: string | null;
+  /** Canonical title from musicmeta sidecar (YouTube noise stripped). */
+  canonicalTitle?: string | null;
+  /** Release year from MusicBrainz when a confident match was found. */
+  year?: number | null;
+  /** MusicBrainz release MBID when match confidence >= 90. */
+  mbReleaseId?: string | null;
+  /** MusicBrainz match score 0-100. Present only when a lookup matched. */
+  matchConfidence?: number | null;
 }
 
 export interface PlaylistCollection {

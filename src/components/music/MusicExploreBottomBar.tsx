@@ -173,8 +173,8 @@ export function MusicExploreBottomBar({
             <button
               type="button"
               onClick={onDeactivatePaste}
-              title="Cancel"
-              className={cn(btn, "gap-1")}
+              className={cn(btn, "gap-1 rf-music-tooltip-anchor")}
+              data-tooltip="Cancel"
             >
               <X size={14} />
               <span>Cancel</span>
@@ -244,8 +244,8 @@ export function MusicExploreBottomBar({
                 <button
                   type="button"
                   onClick={() => void downloadAll()}
-                  title="Download all"
-                  className={btn}
+                  className={cn(btn, "rf-music-tooltip-anchor")}
+                  data-tooltip="Download all"
                   style={{ color: "var(--music-text-primary)" }}
                 >
                   <Download size={15} style={{ color: "var(--music-accent)" }} />
@@ -254,8 +254,8 @@ export function MusicExploreBottomBar({
                 <button
                   type="button"
                   onClick={onPickTracks}
-                  title="Pick tracks"
-                  className={btn}
+                  className={cn(btn, "rf-music-tooltip-anchor")}
+                  data-tooltip="Pick tracks"
                 >
                   <ListMusic size={15} />
                   <span>Pick tracks</span>
@@ -267,8 +267,8 @@ export function MusicExploreBottomBar({
               <button
                 type="button"
                 onClick={onPickTracks}
-                title="Browse playlists"
-                className={btn}
+                className={cn(btn, "rf-music-tooltip-anchor")}
+                data-tooltip="Browse playlists"
               >
                 <ListMusic size={15} />
                 <span>Browse playlists</span>
@@ -278,8 +278,8 @@ export function MusicExploreBottomBar({
             <button
               type="button"
               onClick={onActivatePaste}
-              title="Paste link"
-              className={btn}
+              className={cn(btn, "rf-music-tooltip-anchor")}
+              data-tooltip="Paste link"
             >
               <Link2 size={15} />
               <span>Paste link</span>
@@ -288,8 +288,8 @@ export function MusicExploreBottomBar({
             <button
               type="button"
               onClick={onReload}
-              title="Reload page"
-              className={btn}
+              className={cn(btn, "rf-music-tooltip-anchor")}
+              data-tooltip="Reload page"
             >
               <RefreshCw size={15} />
               <span>Reload</span>
@@ -299,8 +299,8 @@ export function MusicExploreBottomBar({
               <button
                 type="button"
                 onClick={() => void copyUrl()}
-                title="Copy page URL"
-                className={cn(btn, "ml-auto")}
+                className={cn(btn, "ml-auto rf-music-tooltip-anchor")}
+                data-tooltip="Copy page URL"
               >
                 <Copy size={15} />
                 <span>Copy URL</span>

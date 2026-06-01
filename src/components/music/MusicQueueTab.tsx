@@ -134,9 +134,9 @@ export function MusicQueueTab({
               file={playingFile}
               active
               draggable={false}
-              menuOpen={menu?.file.path === playingFile.path}
+              menuOpen={menu?.context.kind === "song" && menu.context.file.path === playingFile.path}
               onPlay={onPlay}
-              onContextMenu={(f, x, y) => setMenu({ file: f, x, y })}
+              onContextMenu={(f, x, y) => setMenu({ context: { kind: "song", file: f }, x, y })}
             />
           </div>
         )}
@@ -162,9 +162,9 @@ export function MusicQueueTab({
                     path={path}
                     file={file}
                     active={playingFile?.path === path}
-                    menuOpen={menu?.file.path === path}
+                    menuOpen={menu?.context.kind === "song" && menu.context.file.path === path}
                     onPlay={onPlay}
-                    onContextMenu={(f, x, y) => setMenu({ file: f, x, y })}
+                    onContextMenu={(f, x, y) => setMenu({ context: { kind: "song", file: f }, x, y })}
                     onDragActiveChange={setQueueDragging}
                   />
                 );

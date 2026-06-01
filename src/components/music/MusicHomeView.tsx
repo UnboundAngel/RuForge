@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Play, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Play, Search, X, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
@@ -15,6 +15,7 @@ import {
   normalizeAlbumShelfKey,
 } from "./musicShelfDedup";
 import { primaryArtist } from "./musicArtist";
+import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 
 /** Seeded shuffle: stable for the session based on a random seed frozen on first render. */
 function seededShuffle<T>(items: T[], seed: number): T[] {
@@ -31,32 +32,33 @@ function seededShuffle<T>(items: T[], seed: number): T[] {
 type TrackCardProps = {
   file: MediaFile;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  menuOpen?: boolean;
 };
 
 /** Quick picks: neutral rows, uniform subtle gradient (not per-track color coding). */
-function QuickPickRow({ file, onClick }: TrackCardProps) {
+function QuickPickRow({ file, onClick, onContextMenu, menuOpen }: TrackCardProps) {
   const cover = bestCoverPath(file);
   const coverSrc = cover ? convertFileSrc(cover) : null;
-  const square = hasSquareCover(file);
   const artist = file.artist ?? file.albumArtist ?? (file.name.includes(" - ") ? file.name.split(" - ")[0].trim() : "Unknown Artist");
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group/row flex items-center gap-4 rounded-lg px-3 py-2.5 text-left w-full min-h-[4.5rem] transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.99]"
+    <div
+      className="group/row relative flex items-center gap-4 rounded-lg px-3 py-2.5 w-full min-h-[4.5rem] transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.99] cursor-pointer"
       style={{
         background: "linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.02) 100%)",
         color: "var(--music-text-primary)",
       }}
+      onClick={onClick}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
     >
-      <div className="relative w-16 h-16 shrink-0 rounded-md overflow-hidden shadow-md bg-stone-950 transition-transform duration-200 group-hover/row:scale-[1.03]">
+      <div className="relative w-16 h-16 shrink-0 rounded-md overflow-hidden bg-stone-950 transition-transform duration-200 group-hover/row:scale-[1.03]">
         {coverSrc ? (
           <img
             src={coverSrc}
             alt=""
             className="w-full h-full"
-            style={{ objectFit: square ? "cover" : "contain" }}
+            style={{ objectFit: "cover" }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-white/50">
@@ -77,7 +79,18 @@ function QuickPickRow({ file, onClick }: TrackCardProps) {
           {artist}
         </div>
       </div>
-    </button>
+      {onContextMenu && (
+        <button
+          type="button"
+          className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border-0 bg-transparent transition-opacity duration-100 ${menuOpen ? "opacity-100" : "opacity-0 group-hover/row:opacity-100"}`}
+          style={{ color: "var(--music-text-muted)" }}
+          onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
+          aria-label="More options"
+        >
+          <MoreHorizontal size={15} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -87,43 +100,45 @@ type MusicCardProps = {
   cover: string | null;
   isSquare: boolean;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 };
 
 /** 
  * Beautiful vertical card for Albums / Tracks horizontal scroll shelves.
  * Simulates a physical vinyl record sliding out of the cover sleeve and spinning on hover.
  */
-function MusicCard({ title, subtitle, cover, isSquare, onClick }: MusicCardProps) {
+function MusicCard({ title, subtitle, cover, onClick, onContextMenu }: MusicCardProps) {
   const coverSrc = cover ? convertFileSrc(cover) : null;
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
       className="flex flex-col gap-3 text-left group/card shrink-0 w-36 md:w-40 transition-all duration-300 relative hover:z-25"
     >
       <div className="relative w-32 h-32 md:w-36 md:h-36 shrink-0 z-10">
-        <div className="absolute top-0.5 bottom-0.5 right-0.5 aspect-square rounded-full bg-neutral-950 border border-neutral-800 shadow-xl transition-all duration-500 ease-out translate-x-0 group-hover/card:translate-x-6 group-hover/card:rotate-[180deg] z-0 flex items-center justify-center">
+        <div className="absolute top-0.5 bottom-0.5 right-0.5 aspect-square rounded-full bg-neutral-950 border border-neutral-800 transition-all duration-500 ease-out translate-x-0 group-hover/card:translate-x-6 group-hover/card:rotate-[180deg] z-0 flex items-center justify-center">
           <div className="absolute inset-2 rounded-full border border-neutral-900/60" />
           <div className="absolute inset-4 rounded-full border border-neutral-900/60" />
           <div className="absolute inset-6 rounded-full border border-neutral-900/60" />
           <div className="absolute inset-8 rounded-full border border-neutral-900/60" />
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-stone-900 border border-neutral-850 flex items-center justify-center relative shadow-md">
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-stone-900 border border-neutral-850 flex items-center justify-center relative">
             {coverSrc ? (
               <img src={coverSrc} alt="" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-neutral-800" />
             )}
-            <div className="absolute w-2.5 h-2.5 rounded-full bg-black border border-stone-900 shadow-inner z-10" />
+            <div className="absolute w-2.5 h-2.5 rounded-full bg-black border border-stone-900 z-10" />
           </div>
         </div>
 
-        <div className="relative z-10 w-full h-full rounded-xl overflow-hidden shadow-md bg-stone-950 border border-white/5 transition-all duration-300 ease-out group-hover/card:-translate-x-2 group-hover/card:scale-[0.97] group-hover/card:rotate-[-2deg]">
+        <div className="relative z-10 w-full h-full rounded-xl overflow-hidden bg-stone-950 border border-white/5 transition-all duration-300 ease-out group-hover/card:-translate-x-2 group-hover/card:scale-[0.97] group-hover/card:rotate-[-2deg]">
           {coverSrc ? (
             <img
               src={coverSrc}
               alt=""
               className="w-full h-full"
-              style={{ objectFit: isSquare ? "cover" : "contain" }}
+              style={{ objectFit: "cover" }}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-[var(--music-text-muted)]">
@@ -134,7 +149,7 @@ function MusicCard({ title, subtitle, cover, isSquare, onClick }: MusicCardProps
           )}
           <div className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 z-20">
             <div
-              className="w-11 h-11 rounded-full flex items-center justify-center shadow-lg"
+              className="w-11 h-11 rounded-full flex items-center justify-center"
               style={{ background: "var(--music-accent)" }}
             >
               <Play size={18} className="text-white fill-white ml-0.5" />
@@ -162,15 +177,17 @@ type ArtistPillProps = {
   trackCount: number;
   cover: string | null;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 };
 
 /** Circular artist avatars — profile-style, subtle hover only. */
-function ArtistPill({ artist, trackCount, cover, onClick }: ArtistPillProps) {
+function ArtistPill({ artist, trackCount, cover, onClick, onContextMenu }: ArtistPillProps) {
   const coverSrc = cover ? convertFileSrc(cover) : null;
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
       className="flex flex-col items-center gap-3 p-1.5 rounded-xl text-center shrink-0 w-24 md:w-28 group/artist"
     >
       <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full shrink-0 transition-transform duration-200 group-hover/artist:scale-105">
@@ -262,7 +279,7 @@ function ScrollShelf({ title, children }: ScrollShelfProps) {
               type="button"
               onClick={() => scroll("left")}
               disabled={!canScrollLeft}
-              className="w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed shadow-sm"
+              className="w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
               style={{
                 borderColor: canScrollLeft ? "rgba(255, 255, 255, 0.25)" : "rgba(255, 255, 255, 0.05)",
                 background: canScrollLeft ? "rgba(255, 255, 255, 0.08)" : "transparent",
@@ -275,7 +292,7 @@ function ScrollShelf({ title, children }: ScrollShelfProps) {
               type="button"
               onClick={() => scroll("right")}
               disabled={!canScrollRight}
-              className="w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed shadow-sm"
+              className="w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
               style={{
                 borderColor: canScrollRight ? "rgba(255, 255, 255, 0.25)" : "rgba(255, 255, 255, 0.05)",
                 background: canScrollRight ? "rgba(255, 255, 255, 0.08)" : "transparent",
@@ -311,6 +328,7 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
 
   const [activeFilter, setActiveFilter] = useState<"all" | "relax" | "focus">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
 
   const tracks = useMemo(
     () => flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path)),
@@ -366,15 +384,17 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
     const seenLoose = new Set<string>();
 
     for (const t of filteredTracks) {
-      if (t.album && t.album.trim()) {
-        const artistRaw = t.albumArtist ?? t.artist ?? "";
-        const key = `${primaryArtist(artistRaw).toLowerCase()}::${normalizeAlbumShelfKey(t.album)}`;
+      const tAlbum = (t.canonicalAlbum ?? t.album)?.trim();
+      if (tAlbum) {
+        const artistRaw = t.canonicalArtist?.trim() || t.albumArtist || t.artist || "";
+        const albumKey = normalizeAlbumShelfKey(tAlbum);
+        const key = `${primaryArtist(artistRaw).toLowerCase()}::${albumKey}`;
         if (!albumMap.has(key)) {
           albumMap.set(key, {
             kind: "album",
-            albumKey: normalizeAlbumShelfKey(t.album),
+            albumKey,
             artistKey: primaryArtist(artistRaw).toLowerCase(),
-            album: t.album,
+            album: tAlbum,
             artist: primaryArtist(artistRaw) || artistRaw,
             cover: bestCoverPath(t),
             isSquare: hasSquareCover(t),
@@ -489,14 +509,15 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
   const albums = useMemo(() => {
     const seen = new Map<string, { albumKey: string; artistKey: string; album: string; artist: string; cover: string | null; isSquare: boolean; tracks: MediaFile[] }>();
     for (const t of filteredTracks) {
-      const albumName = t.album ?? "";
+      const albumName = (t.canonicalAlbum ?? t.album)?.trim() ?? "";
       if (!albumName) continue;
-      const artistRaw = t.albumArtist ?? t.artist ?? "";
+      const artistRaw = t.canonicalArtist?.trim() || t.albumArtist || t.artist || "";
       const primary = primaryArtist(artistRaw);
-      const key = `${primary.toLowerCase()}::${normalizeAlbumShelfKey(albumName)}`;
+      const albumKey = normalizeAlbumShelfKey(albumName);
+      const key = `${primary.toLowerCase()}::${albumKey}`;
       if (!seen.has(key)) {
         seen.set(key, {
-          albumKey: normalizeAlbumShelfKey(albumName),
+          albumKey,
           artistKey: primary.toLowerCase(),
           album: albumName,
           artist: primary || artistRaw,
@@ -587,7 +608,6 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
               background: "rgba(255, 255, 255, 0.1)",
               backdropFilter: "blur(20px)",
               WebkitBackdropFilter: "blur(20px)",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.25)",
             }}
           >
             <input
@@ -652,7 +672,18 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
                   {quickPicksColumns.map((col, colIdx) => (
                     <div key={colIdx} className="flex flex-col gap-3">
                       {col.map((file) => (
-                        <QuickPickRow key={file.path} file={file} onClick={() => onPlayFile(file, quickPicks)} />
+                        <QuickPickRow
+                          key={file.path}
+                          file={file}
+                          onClick={() => onPlayFile(file, quickPicks)}
+                          menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
+                          onContextMenu={(e) => setMenu({
+                            context: { kind: "song", file },
+                            x: e.clientX,
+                            y: e.clientY,
+                            onPlay: () => onPlayFile(file, quickPicks),
+                          })}
+                        />
                       ))}
                     </div>
                   ))}
@@ -670,6 +701,17 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
                     trackCount={a.trackCount}
                     cover={a.cover}
                     onClick={() => onOpenArtist(a.key)}
+                    onContextMenu={(e) => {
+                      const artistTracks = filteredTracks.filter(
+                        (t) => primaryArtist(t.artist ?? t.albumArtist ?? "").toLowerCase() === a.key,
+                      );
+                      setMenu({
+                        context: { kind: "artist", artistKey: a.key, displayName: a.display },
+                        x: e.clientX,
+                        y: e.clientY,
+                        onPlay: artistTracks.length > 0 ? () => onPlayFile(artistTracks[0], artistTracks) : undefined,
+                      });
+                    }}
                   />
                 ))}
               </ScrollShelf>
@@ -686,6 +728,12 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
                     cover={a.cover}
                     isSquare={a.isSquare}
                     onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
+                    onContextMenu={(e) => setMenu({
+                      context: { kind: "album", artistKey: a.artistKey, albumKey: a.albumKey, displayName: a.album, artistName: a.artist },
+                      x: e.clientX,
+                      y: e.clientY,
+                      onPlay: a.tracks.length > 0 ? () => onPlayFile(a.tracks[0], a.tracks) : undefined,
+                    })}
                   />
                 ))}
               </ScrollShelf>
@@ -704,6 +752,12 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
                         cover={item.cover}
                         isSquare={item.isSquare}
                         onClick={() => onOpenAlbum(item.artistKey, item.albumKey)}
+                        onContextMenu={(e) => setMenu({
+                          context: { kind: "album", artistKey: item.artistKey, albumKey: item.albumKey, displayName: item.album, artistName: item.artist },
+                          x: e.clientX,
+                          y: e.clientY,
+                          onPlay: item.tracks.length > 0 ? () => onPlayFile(item.tracks[0], item.tracks) : undefined,
+                        })}
                       />
                     );
                   }
@@ -717,6 +771,12 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
                       cover={bestCoverPath(file)}
                       isSquare={hasSquareCover(file)}
                       onClick={() => onPlayFile(file, [file])}
+                      onContextMenu={(e) => setMenu({
+                        context: { kind: "song", file },
+                        x: e.clientX,
+                        y: e.clientY,
+                        onPlay: () => onPlayFile(file, [file]),
+                      })}
                     />
                   );
                 })}
@@ -736,6 +796,12 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
                       cover={bestCoverPath(file)}
                       isSquare={hasSquareCover(file)}
                       onClick={() => onPlayFile(file, rediscover)}
+                      onContextMenu={(e) => setMenu({
+                        context: { kind: "song", file },
+                        x: e.clientX,
+                        y: e.clientY,
+                        onPlay: () => onPlayFile(file, rediscover),
+                      })}
                     />
                   );
                 })}
@@ -743,6 +809,7 @@ export function MusicHomeView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) 
             )}
           </div>
         )}
+      <MusicRowContextMenu menu={menu} onClose={() => setMenu(null)} />
     </div>
   );
 }

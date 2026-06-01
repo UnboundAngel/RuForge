@@ -1,0 +1,49 @@
+---
+description: Media and card layout spec for Angel design style. Use when building gallery, player, music shelves, posters, or thumbnail rows.
+globs: "{src,website}/**/*.{tsx,css,astro}"
+alwaysApply: false
+---
+
+# Media & cards — full spec
+
+Media apps (RuForge, anything with posters/thumbnails/album art) live and die on card treatment. This is the detailed version of `design-style` §9.
+
+## Card type → aspect ratio → meaning
+
+| Context | Aspect | Why |
+|---|---|---|
+| Hero / featured | full-bleed 16:9 or 21:9 cinematic | the title's atmosphere fills the screen |
+| Top-10 / poster grid / "browse" | **2:3 portrait poster** | poster art is the content; art = the card |
+| Continue-watching / in-progress | **16:9 landscape thumbnail** | it's a resume frame/scene, wider, not a poster |
+| Album / square art | **1:1 square** | matches the source art; never force to another ratio |
+
+The ratio itself tells the user what kind of thing they're looking at. A portrait card and a landscape card in the same view = two different content types. Use that.
+
+## Image rules (hard)
+- `object-fit: cover` always. Crop overflow. Never letterbox/pad onto a solid color.
+- The frame's aspect ratio matches the intended display ratio so cover-crop looks intentional.
+- Round corners with `--r-media` (16–20px).
+- Optional bottom scrim (`linear-gradient(transparent, rgba(0,0,0,0.7))`) when text sits over the art, for legibility.
+- Hover: subtle `transform: scale(1.03)` + optional brightness lift. Fast (`--dur-fast`), eased. No glow.
+
+## Positional info (learned conventions — don't reinvent)
+- **Resume/duration timestamp:** bottom-right of the thumbnail, small pill or plain text on a tiny scrim. Every user knows to look bottom-right.
+- **Rank badge** (TOP 01): top-left corner, small accent-colored tag.
+- **Progress bar** (partially watched): thin bar pinned to the very bottom edge of the thumbnail, accent fill.
+- **Metadata line** (rating · year · type): UNDER the card, dot-separated, `--text-muted`. The rating star/number can carry the accent.
+
+## Section structure
+- Header: short title, optionally a **left accent bar** (small vertical tick in the accent color, Cineby `| Continue watching` style).
+- Horizontal scroll row of cards with consistent gap (`--space-4`).
+- **Scroll affordance:** left/right arrow on a soft radial shadow that fades into the app background (same hue, darkened). Reads as atmosphere pointing the way, NOT a solid button chip. Appears on hover of the row.
+- **Section differentiation:** if two rows carry different value, vary card size or art treatment. Don't clone the same row three times with different titles.
+
+## Nav / chrome blur
+- **Nav bar:** solid (or transparent-over-hero-media, then solid once scrolled). NOT frosted glass.
+- **Search bar, floating overlays, command palettes:** glassy — `backdrop-filter: blur(...)` + translucent fill. This is where glass belongs.
+- Decide blur by element role. Never blanket-glass the whole UI.
+
+## Texture
+- **Grain:** subtle noise on large flat surfaces to kill gradient banding (very low opacity overlay).
+- **Hero gradient/mesh:** a soft gradient or mesh behind hero content; long bottom scrim so content fades up out of the art (Cineby hero pattern).
+- Keep both subtle — texture is seasoning, not the meal.

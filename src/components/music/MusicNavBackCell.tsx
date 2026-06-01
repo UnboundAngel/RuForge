@@ -25,11 +25,12 @@ export function MusicNavBackCell({ collapsed, shellBlack, inLeftStack = false, o
       <button
         type="button"
         onClick={onBack}
-        title={collapsed ? "Back to RuForge" : "Back to RuForge (Ctrl+B toggles nav)"}
         className={cn(
           "rf-music-back-btn flex items-center h-8 text-sm text-left transition-all duration-200 ease-out overflow-hidden",
           collapsed ? "justify-center w-full px-0" : "gap-2 px-3 w-full min-w-0",
+          "rf-music-tooltip-anchor",
         )}
+        data-tooltip={collapsed ? "Back to RuForge" : "Back to RuForge (Ctrl+B toggles nav)"}
       >
         <ChevronLeft size={16} className="shrink-0" />
         <span

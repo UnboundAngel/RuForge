@@ -12,8 +12,9 @@ function artistFromPathOrStem(stem: string): string {
   return "";
 }
 
-/** Artist string from tags, else "Artist - Title" in name or file path. */
+/** Artist string resolved via canonical sidecar first, then tags, then filename heuristic. */
 export function rawArtistFromFile(file: MediaFile): string {
+  if (file.canonicalArtist?.trim()) return file.canonicalArtist.trim();
   if (file.artist?.trim()) return file.artist.trim();
   if (file.albumArtist?.trim()) return file.albumArtist.trim();
   const fromName = artistFromPathOrStem(file.name);

@@ -46,6 +46,24 @@ pub struct MediaFile {
     /// Path to extracted embedded cover art cached on disk.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub embedded_cover_path: Option<String>,
+    /// Canonical artist resolved by musicmeta enrichment (tags > MB > YouTube > filename).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canonical_artist: Option<String>,
+    /// Canonical album resolved by musicmeta enrichment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canonical_album: Option<String>,
+    /// Canonical title resolved by musicmeta enrichment (YouTube noise stripped).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canonical_title: Option<String>,
+    /// Release year from MusicBrainz when a confident match was found.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<u32>,
+    /// MusicBrainz release MBID when match confidence >= 90.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mb_release_id: Option<String>,
+    /// MusicBrainz match score (0-100). Present only when a lookup was attempted and matched.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_confidence: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -107,6 +125,42 @@ fn resolve_info_json_path(parent: &std::path::Path, stem: &str) -> Option<std::p
         }
     }
     None
+}
+
+/// Canonical identity fields from a `{stem}.musicmeta.json` sidecar.
+struct CanonicalMeta {
+    artist: Option<String>,
+    album: Option<String>,
+    title: Option<String>,
+    year: Option<u32>,
+    mb_release_id: Option<String>,
+    match_confidence: Option<u32>,
+}
+
+fn read_canonical_meta(parent: &std::path::Path, stem: &str) -> CanonicalMeta {
+    let empty = CanonicalMeta {
+        artist: None,
+        album: None,
+        title: None,
+        year: None,
+        mb_release_id: None,
+        match_confidence: None,
+    };
+    let sidecar = parent.join(format!("{stem}.musicmeta.json"));
+    if !sidecar.is_file() {
+        return empty;
+    }
+    let Ok(content) = std::fs::read_to_string(&sidecar) else { return empty; };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) else { return empty; };
+
+    CanonicalMeta {
+        artist: json["canonicalArtist"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from),
+        album: json["canonicalAlbum"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from),
+        title: json["canonicalTitle"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from),
+        year: json["year"].as_u64().map(|y| y as u32),
+        mb_release_id: json["mbReleaseId"].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from),
+        match_confidence: json["matchConfidence"].as_u64().map(|c| c as u32),
+    }
 }
 
 fn normalize_group_title(raw: &str) -> String {
@@ -486,6 +540,12 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
                 (None, None, None, None, None)
             };
 
+        let canonical = if is_audio_only_ext(ext) {
+            read_canonical_meta(&parent, stem)
+        } else {
+            CanonicalMeta { artist: None, album: None, title: None, year: None, mb_release_id: None, match_confidence: None }
+        };
+
         files.push(MediaFile {
             name: display_name,
             path: path.to_string_lossy().to_string(),
@@ -505,6 +565,12 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             album_artist,
             track_no,
             embedded_cover_path,
+            canonical_artist: canonical.artist,
+            canonical_album: canonical.album,
+            canonical_title: canonical.title,
+            year: canonical.year,
+            mb_release_id: canonical.mb_release_id,
+            match_confidence: canonical.match_confidence,
         });
     }
     if files.len() >= 2 {
@@ -854,6 +920,12 @@ fn media_file_from_path_for_cleanup(path: &Path) -> Option<MediaFile> {
         album_artist: None,
         track_no: None,
         embedded_cover_path: None,
+        canonical_artist: None,
+        canonical_album: None,
+        canonical_title: None,
+        year: None,
+        mb_release_id: None,
+        match_confidence: None,
     })
 }
 
@@ -1192,6 +1264,12 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         (None, None, None, None, None)
     };
 
+    let canonical = if is_audio_only_ext(ext) {
+        read_canonical_meta(parent, stem)
+    } else {
+        CanonicalMeta { artist: None, album: None, title: None, year: None, mb_release_id: None, match_confidence: None }
+    };
+
     Ok(MediaFile {
         name: display_name,
         path: path.to_string_lossy().to_string(),
@@ -1211,6 +1289,12 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         album_artist,
         track_no,
         embedded_cover_path,
+        canonical_artist: canonical.artist,
+        canonical_album: canonical.album,
+        canonical_title: canonical.title,
+        year: canonical.year,
+        mb_release_id: canonical.mb_release_id,
+        match_confidence: canonical.match_confidence,
     })
 }
 
@@ -1472,6 +1556,12 @@ mod tests {
             album_artist: None,
             track_no: None,
             embedded_cover_path: None,
+            canonical_artist: None,
+            canonical_album: None,
+            canonical_title: None,
+            year: None,
+            mb_release_id: None,
+            match_confidence: None,
         };
         let key = media_library_group_key(path, &file);
         assert!(key.starts_with("stem:"));
@@ -1500,6 +1590,12 @@ mod tests {
             album_artist: None,
             track_no: None,
             embedded_cover_path: None,
+            canonical_artist: None,
+            canonical_album: None,
+            canonical_title: None,
+            year: None,
+            mb_release_id: None,
+            match_confidence: None,
         };
         let intermediate = MediaFile {
             name: "My Video".into(),
@@ -1520,6 +1616,12 @@ mod tests {
             album_artist: None,
             track_no: None,
             embedded_cover_path: None,
+            canonical_artist: None,
+            canonical_album: None,
+            canonical_title: None,
+            year: None,
+            mb_release_id: None,
+            match_confidence: None,
         };
         let muxed_path = Path::new(&muxed.path);
         let inter_path = Path::new(&intermediate.path);

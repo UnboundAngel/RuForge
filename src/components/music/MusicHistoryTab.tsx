@@ -95,12 +95,12 @@ export function MusicHistoryTab({ playingFile, entries, onPlay }: Props) {
                 entry={entry}
                 file={file}
                 active={isPlaying}
-                menuOpen={menu?.file.path === file?.path}
+                menuOpen={menu?.context.kind === "song" && menu.context.file.path === file?.path}
                 showCount={toggle === "most-played"}
                 onPlay={() => file && onPlay(file)}
                 onContextMenu={(x, y) => {
                   if (!file) return;
-                  setMenu({ file, x, y });
+                  setMenu({ context: { kind: "song", file }, x, y });
                 }}
               />
             );

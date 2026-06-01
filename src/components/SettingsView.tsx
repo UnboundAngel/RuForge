@@ -14,6 +14,8 @@ import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
 import { SettingsDescription } from './settings/settingsDescription';
 import { RegroupPlaylistModal } from './RegroupPlaylistModal';
 import { MigrateLibraryModal } from './MigrateLibraryModal';
+import { MusicMetaBackfillModal } from './MusicMetaBackfillModal';
+import { galleryScanRoots } from '../libraryScanDirs';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
 
@@ -377,6 +379,7 @@ export const SettingsView: React.FC = () => {
   const removeLibraryScanDir = useRuforgeStore((s) => s.removeLibraryScanDir);
   const [regroupPlaylistOpen, setRegroupPlaylistOpen] = useState(false);
   const [migrateLibraryOpen, setMigrateLibraryOpen] = useState(false);
+  const [musicMetaBackfillOpen, setMusicMetaBackfillOpen] = useState(false);
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const handleSetSaveToInternal = useRuforgeStore((s) => s.handleSetSaveToInternal);
@@ -1099,7 +1102,17 @@ export const SettingsView: React.FC = () => {
                 onClose={() => setMigrateLibraryOpen(false)}
                 libraryRoot={RUFORGE_INTERNAL_DIR}
               />
+              <MusicMetaBackfillModal
+                open={musicMetaBackfillOpen}
+                onClose={() => setMusicMetaBackfillOpen(false)}
+                roots={galleryScanRoots(libraryScanDirs)}
+              />
               <SettingsSection title="Debugging">
+                <SettingItem
+                  title="Enrich music metadata"
+                  description="Scan library audio files and write canonical identity sidecars from embedded tags, MusicBrainz matches, and YouTube snapshot data."
+                  onClick={() => setMusicMetaBackfillOpen(true)}
+                />
                 <SettingItem
                   title="Migrate library layout"
                   description="Reorganize the flat media root into Videos/, Music/, and Playlists/ bucket folders with per-item subfolders. Preview first, then confirm to move."

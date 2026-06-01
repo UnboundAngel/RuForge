@@ -1,0 +1,49 @@
+---
+description: Angel design style anti-patterns. Rejected UI failures to avoid when styling or reviewing interface work.
+globs: "{src,website}/**/*.{tsx,css,astro}"
+alwaysApply: false
+---
+
+# Anti-patterns — what NOT to do
+
+These are real failures pulled from generated UI Angel rejected. If your output resembles any of these, it's wrong.
+
+## 1. The divider-heavy list (the #1 generic-AI tell)
+Stacking list items with a `border-bottom` or `divide-y` line between each. Looks like a settings menu from 2014.
+- **Instead:** spacing rhythm → tonal surface per item → highlight block for the active row only.
+
+## 2. The letterboxed media blob (RuForge Music album row)
+A square album cover crammed into the wrong aspect ratio, padded with black side-bars, sitting on a black card. It reads as a muddy dark smear. Worst offender.
+- **Instead:** `object-fit: cover`, crop to fill the frame, round the corners. Art fills its container edge to edge. If you must show the whole non-cropped image, the *frame* matches the art's aspect ratio. Never bars.
+
+## 3. Everything-looks-the-same sections
+"Albums", "Recently added", "Rediscover" rendered as three pixel-identical rows of identical cards. Tells the user nothing about what matters.
+- **Instead:** sameness signals equal value. Differentiate sections that carry different weight by card size, art treatment, or density.
+
+## 4. Decorative glow
+Neon edges, colored box-shadow halos, "make it pop" outer glow. Reads cheap and dated.
+- **Instead:** depth from tonal layers. If something needs to lift, a soft functional shadow. Never a glow.
+
+## 5. Shadow on every card by default
+Drop shadows sprayed on every surface "for depth." Flattens into noise and signals nothing.
+- **Instead:** tonal contrast for normal depth. Shadow ONLY to signal floating media or scroll-state.
+
+## 6. The flat low-contrast dark card (the current Cursor default)
+A single dark card on a barely-different dark background, faint text, no layering, dividers inside. No tonal hierarchy, nothing floats, nothing reads as primary.
+- **Instead:** a real tonal ramp (surface-0 → surface-3), characterful type, weight/color hierarchy, spacing-based separation.
+
+## 7. Inter on a flat white card
+The default generated look: system-ui or Inter, pure `#fff` card, pure `#000` text, hard divider lines.
+- **Instead:** characterful sans (Satoshi/General Sans), a tonal hue base (not pure white), weight + muted-color hierarchy.
+
+## 8. Corporate empty-state cheer
+"Oops! Looks like there's nothing here yet! 🎉🎉" on a screen that should have voice, OR a jokey tone on a settings screen that should be precise.
+- **Instead:** voice by surface. Casual-human on empty states ("dang.. nothing here yet"), plain-precise on functional screens.
+
+## 9. Reinvented info placement
+Putting the duration timestamp top-left, the rating in a weird spot, rank badges floating randomly. Forces the user to re-learn the layout.
+- **Instead:** learned conventions. Duration bottom-right, rank top-left, metadata in a dot-separated line under the card.
+
+## 10. Animating layout properties
+Transitioning `width`/`height`/`top`/`left`/`margin` → janky, laggy, drops frames.
+- **Instead:** `transform` and `opacity` only.

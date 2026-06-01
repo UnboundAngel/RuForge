@@ -11,6 +11,7 @@ use crate::ytdlp_binary::ytdlp_shell_command;
 
 use crate::commands::gallery::cleanup_orphan_downloads_under;
 use crate::commands::media::extract_frames;
+use crate::commands::musicmeta::{enrich_music_meta_path, find_recent_audio_files};
 use crate::utils::is_media_ext;
 
 /// Where yt-dlp wrote files for this job: playlist subfolder if template has a fixed prefix, else output root.
@@ -1646,6 +1647,15 @@ pub async fn start_download_job(
                                 diag_root.clone(),
                                 download_started_at,
                             );
+                        }
+                        if options.audio_only {
+                            let enrich_root = diag_root.clone();
+                            let enrich_since = download_started_at;
+                            tauri::async_runtime::spawn(async move {
+                                for audio_path in find_recent_audio_files(&enrich_root, enrich_since) {
+                                    enrich_music_meta_path(&audio_path, false).await;
+                                }
+                            });
                         }
                         let _ = app.emit(
                             "download-job-finished",

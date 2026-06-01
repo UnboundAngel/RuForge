@@ -113,10 +113,10 @@ export function MusicNav({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="shrink-0 w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
+              className="rf-music-tooltip-anchor shrink-0 w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
               style={{ color: "var(--music-text-secondary)" }}
               aria-label="Collapse navigation (Ctrl+B)"
-              title="Collapse navigation (Ctrl+B)"
+              data-tooltip="Collapse navigation (Ctrl+B)"
             >
               <PanelLeftClose size={16} />
             </button>
@@ -129,10 +129,10 @@ export function MusicNav({
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="w-8 h-8 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
+            className="rf-music-tooltip-anchor w-8 h-8 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
             style={{ color: "var(--music-text-secondary)" }}
             aria-label="Expand navigation (Ctrl+B)"
-            title="Expand navigation (Ctrl+B)"
+            data-tooltip="Expand navigation (Ctrl+B)"
           >
             <PanelLeftOpen size={16} />
           </button>
@@ -147,14 +147,16 @@ export function MusicNav({
               key={item.id}
               type="button"
               onClick={() => onSelect(item.id)}
-              title={collapsed ? `${item.label} (${NAV_SHORTCUT_LABELS[item.id]})` : undefined}
               data-active={active ? "true" : "false"}
               data-ytm={item.ytm ? "true" : undefined}
               className={cn(
                 "rf-music-nav-item relative flex items-center text-sm font-medium text-left",
                 item.ytm && "rf-music-nav-item-ytm",
-                collapsed ? "justify-center w-10 h-10 p-0" : "gap-3 px-3 py-2.5 w-full",
+                collapsed
+                  ? "rf-music-tooltip-anchor justify-center w-10 h-10 p-0"
+                  : "gap-3 px-3 py-2.5 w-full",
               )}
+              data-tooltip={collapsed ? `${item.label} (${NAV_SHORTCUT_LABELS[item.id]})` : undefined}
             >
               {active && !collapsed && (
                 <span
