@@ -166,8 +166,8 @@ export function NowPlayingBar({
             <img
               src={coverSrc}
               alt=""
-              className="w-12 h-12 shrink-0 object-contain"
-              style={{ borderRadius: "var(--music-card-radius)", background: "var(--music-surface-raised)" }}
+              className="w-12 h-12 shrink-0 object-cover"
+              style={{ borderRadius: "var(--music-card-radius)" }}
             />
           ) : (
             <div
@@ -387,10 +387,10 @@ export function NowPlayingBar({
             <button
               type="button"
               onClick={onToggleRightPanel}
-              className={cn(barBtnClass)}
+              className={cn(barBtnClass, "rf-music-tooltip-anchor")}
               style={{ color: rightPanelOpen ? "var(--music-accent)" : "var(--music-text-primary)" }}
               aria-label={rightPanelOpen ? "Close queue panel" : "Open queue panel"}
-              title={rightPanelOpen ? "Close queue panel" : "Open queue panel"}
+              data-tooltip={rightPanelOpen ? "Close queue panel" : "Open queue panel"}
             >
               <Icon icon="material-symbols:queue-music-rounded" width={16} />
             </button>

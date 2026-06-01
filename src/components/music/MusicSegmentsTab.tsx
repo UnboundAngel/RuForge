@@ -60,7 +60,6 @@ export function MusicSegmentsTab({
       {/* Music-only toggle */}
       <div
         className="shrink-0 flex items-center justify-between px-4 py-3 select-none"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
       >
         <div>
           <p className="text-[13px] font-semibold tracking-wide" style={{ color: "var(--music-text-primary)" }}>
@@ -81,7 +80,7 @@ export function MusicSegmentsTab({
           role="switch"
         >
           <span
-            className="absolute top-[2px] left-[2px] w-[16px] h-[16px] rounded-full bg-white transition-transform duration-200 ease-out shadow-sm"
+            className="absolute top-[2px] left-[2px] w-[16px] h-[16px] rounded-full bg-white transition-transform duration-200 ease-out"
             style={{ transform: musicOnlySkip ? "translateX(16px)" : "translateX(0px)" }}
           />
         </button>

@@ -1,0 +1,209 @@
+---
+description: Angel's house design system for any UI an agent builds. Use whenever generating, styling, refactoring, or reviewing user-facing interface so output matches Angel's aesthetic instead of generic flat AI defaults. Covers RuForge, Finch, and new projects. Not for pure backend or non-visual logic.
+globs: "{src,website}/**/*.{tsx,css,astro}"
+alwaysApply: true
+---
+
+# Angel's Design Style
+
+This rule encodes a specific taste. The goal: UI that reads **premium, characterful, and disciplined**. Never flat, never divider-heavy, never generic Inter-on-a-white-card. If you follow these rules, the first render should already feel right.
+
+## The one-paragraph identity
+
+Depth comes from **tonal layering**, not shadows or glows. Things are separated by **space**, not lines. Corners are **round and tiered**. Color is **meaningful and per-project**, never decorative. Media **fills its frame and breaks the grid**. It never sits letterboxed on a black blob. Type hierarchy runs on **weight and muted color** with one big hero and tiny uppercase labels. Motion is **fast and physical**. Empty states **talk like a person**; settings screens **talk like a manual**. Every visual choice signals something. Sameness means equal value, a shadow means "this floats or scrolled under that," a card's shape means what kind of thing it is.
+
+The triangulation of references: **Spotify + Apple Music + Cineby** (media, tonal layers, escaping art, functional scroll shadows) × **Arc + Family/Phantom** (soft, characterful personality) × **Vercel/Geist + Claude/ChatGPT** (restraint and discipline so it never tips into toy-like).
+
+---
+
+## NON-NEGOTIABLES (the stuff that kills the generic look)
+
+These are the rules that matter most. Break these and the output is wrong.
+
+1. **No divider lines. Ever.** No `border-bottom` between list items, no `<hr>`, no dotted separators, no `divide-y`. Separate with spacing first, tonal surfaces second, a highlight block for the active item only.
+2. **No glows.** No colored `box-shadow` halos, no `drop-shadow` glow, no neon edges. Glow is banned outright.
+3. **Shadows are functional only.** A shadow appears to *signal* something: this element floats, or content has scrolled under a sticky header. Never a default decoration on every card. When used: soft, thin, low-opacity, same hue family as the background.
+4. **Never letterbox media on a black background.** Images fill their frame with `object-fit: cover` and crop. If the aspect ratio mismatches, crop. Never pad with bars. A muddy dark blob with black side-bars is the single worst anti-pattern (see `design-style-anti-patterns` rule).
+5. **Depth = tonal layers, not effects.** Darkest background → lighter surface → lighter nested surface → lightest interactive element. Build the "popping out of a pocket" feel with stacked tonal contrast.
+6. **Don't default to Inter/system-ui on a flat white card.** Use a characterful sans and a real tonal theme picked for the app's purpose.
+7. **Sameness is a statement.** Two sections look identical ONLY if they hold equal value. Don't render "Albums", "Recently added", and "Rediscover" pixel-identical. Differentiate by card size, art treatment, or density.
+
+---
+
+## 1. Corner rounding — tiered
+
+Radius scales with the element's size and role. Bigger container = rounder.
+
+| Element | Radius token | Value |
+|---|---|---|
+| Outer container / page section card | `--r-outer` | `20–24px` |
+| Inner / nested card | `--r-card` | `14–16px` |
+| Media & art | `--r-media` | `16–20px` |
+| Buttons (actions), chips, tags, toggles, status pills | `--r-pill` | `999px` (full capsule) |
+| **Primary CTA button** | `--r-cta` | `12px` (soft rect — deliberately NOT a pill) |
+
+The primary CTA being a soft rectangle while everything else is a pill is intentional. It gives the main action visual weight and stops it blending into the capsule chrome.
+
+**Do:** nest radii (outer rounder than inner). **Don't:** one uniform radius on everything.
+
+---
+
+## 2. Depth — tonal layering
+
+Build a tonal ramp per theme. Each step up the stack is one shade lighter (dark themes) or one shade more contrasted (light themes).
+
+```
+--surface-0   /* page background — darkest / base */
+--surface-1   /* primary card sitting on the page */
+--surface-2   /* nested card inside a card */
+--surface-3   /* interactive element on top (pill, input) */
+```
+
+Depth is the *contrast between these layers*. No shadow needed for a normal card.
+
+**Functional shadow — when it IS allowed:**
+- **Floating / escaping media** that needs to read as lifted off the surface.
+- **Scroll-state signaling** — a sticky header/nav casts a thin soft shadow ONCE content scrolls under it (the Spotify sidebar pattern). Before scroll: no shadow.
+- **Carousel scroll affordance** — the left/right scroll arrow on a horizontal row sits on a soft *radial* shadow that fades into the app background (same hue, darkened). It reads as atmosphere/depth pointing the way, NOT a solid button chip. This is the textbook example of shadow-as-signal.
+
+Shadow spec when used: large blur, low opacity (`0.2–0.4`), tight or zero spread, color = background hue darkened. Example: `box-shadow: 0 8px 24px rgba(0,0,0,0.35)`.
+
+**Banned:** glow of any kind, hard drop shadows, shadow on every card by default.
+
+---
+
+## 3. Separation — the divider killer
+
+Reach for these IN ORDER:
+
+1. **Spacing rhythm (first choice).** Consistent gaps + proximity grouping. Most lists need nothing more than good spacing.
+2. **Tonal surface (second choice).** If spacing isn't enough structure, give each item its own soft `--surface-1` card with a gap between.
+3. **Highlight block (active state ONLY).** The selected/active/distinct row gets a filled rounded rectangle behind it (`--surface-2` or a tinted fill). The rest sit on bare background. Never use this for baseline grouping.
+
+**Banned:** `border-bottom`, `<hr>`, `divide-y`, dotted/dashed separators, any stroke used purely to chop content apart.
+
+---
+
+## 4. Color — per-project, meaningful
+
+The rule defines a *system*; each project fills in the values. Never hardcode one global palette.
+
+### The per-project color contract (fill this in at the start of any project)
+
+```
+THEME MODE:    dark | light          (task-driven — see below)
+BASE HUE:      <tonal color, not pure black/white>
+ACCENT:        <one accent — CTAs, active state, focus>
+COLOR MODE:    MONOCHROME | CODED
+```
+
+**Theme is task-driven, never a fixed default:**
+- **Media / long-session apps → dark.** Optimize for long watches/listens in dark rooms (RuForge, Cineby).
+- **Informational / productivity tools → light.** Optimize for attention and reading.
+- **"Light" and "dark" are NOT pure black/white.** Pick a *tonal hue* fitting the context and references. RuForge Music = red (kinship with YouTube Music). RuForge Home = warm brown (cozy/fuzzy). RuForge Movies = purple/cinematic. The base surface carries the hue.
+
+**Two color modes:**
+- **MONOCHROME:** neutral tonal base + one accent. Accent carries CTA, active, focus. Color is rare and intentional. (Spotify, Vercel, the cashback/vinyl refs.)
+- **CODED:** neutral base, but each *category or data type* gets a consistent semantic color (Sales=blue, Revenue=purple, Costs=red; or per-category tinted icon chips). A category's color NEVER changes across the app. Color = meaning.
+
+**Always, both modes:** gradient and saturation appear ONLY on media or hero backdrops (the shoe gradient, a cinematic hero scrim). Never on chrome. No decorative color.
+
+See `design-style-ruforge-tokens` rule for a fully filled-in example contract (the espresso/sand-gold + red music theme).
+
+---
+
+## 5. Spacing density — two presets
+
+Define a 4px-base spacing ramp and pick a preset per surface.
+
+```
+--space-1: 4px   --space-2: 8px   --space-3: 12px
+--space-4: 16px  --space-5: 24px  --space-6: 32px  --space-8: 48px
+```
+
+- **`compact` (default for functional UI):** queues, lists, settings, sidebars, EQ, data. Tight, efficient, more content per screen. Clean and rhythmic, never cramped. Compact density comes from a disciplined small spacing scale, NOT from cramming + dividers.
+- **`airy` (hero / marketing / empty):** landing surfaces, empty states, showcase cards, onboarding. Generous padding, big gaps, content floats. This is where breathing room earns its keep.
+
+Pick per surface. A download queue is `compact`; its empty state is `airy`.
+
+---
+
+## 6. Typography — 3-part system
+
+```
+--font-display: "Satoshi", "General Sans", "Cabinet Grotesk", system-ui, sans-serif;
+--font-body:    "Satoshi", "General Sans", system-ui, sans-serif;
+```
+
+Characterful sans, not Inter-by-default. Three tiers working together:
+
+1. **Hero** — ONE big size jump per surface. The single title that anchors the screen. (Cineby "BACKROOMS", the shoe title.)
+2. **Weight + muted-color contrast** — the everyday workhorse. Bold/bright title + regular/muted subtext, sizes staying close. The muted-subtext color is load-bearing. Define it as a token (`--text-muted`), not a random opacity.
+3. **Tiny uppercase tracked labels** — metadata, eyebrows, category markers. Small, letter-spaced (`tracking-wide`), muted. (`PRICE`, `FALCONER`, section labels.)
+
+```
+--text-strong:  /* bright — titles */
+--text-default: /* normal body */
+--text-muted:   /* dimmed — subtext, metadata */
+```
+
+Dot-separated metadata lines (`8.5 · 2019 · TV Show`) use `--text-muted`.
+
+---
+
+## 7. Motion — fast & physical
+
+```
+--dur-fast:   150ms;
+--dur-base:   220ms;
+--ease-out:   cubic-bezier(0.16, 1, 0.3, 1);   /* default */
+--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* signature only */
+```
+
+- **Default:** fast, eased micro-interactions. Hover = subtle lift or tint shift. Press = `transform: scale(0.97)`. Panels/accordions ease open. Everything feels responsive, nothing flashy.
+- **Spring reserved for signature moments** — voice orb, toggles, success checkmark morph, hero/escaping-media entrance. Where the motion *is* the personality.
+- **Perf rule (hard):** animate `transform` and `opacity` ONLY. Never animate `width`, `height`, `top`, `left`, `margin`. That is the literal cause of laggy UI. Use `transform: scale/translate`.
+- **Respect `prefers-reduced-motion`:** kill non-essential motion when requested.
+
+---
+
+## 8. Empty states & voice — register by surface
+
+Pick the voice from the surface type. Don't use one tone everywhere.
+
+- **Functional / informational screens** (settings, config, advanced, forms): **precise, plain, zero personality.** Clarity wins. No jokes in a settings panel.
+- **Empty states / user-facing moments:** **humanized, casual, lived-in.** Lowercase-casual real talk. e.g. `"dang.. looks like nothing's here yet"`. Never corporate "Oops! Looks like there's nothing here! 🎉" energy. Always point at the next action.
+
+**Visual weight of an empty state (mood/screen-dependent):**
+- **On a card:** art + text at *equal weight* (neither dominates — like the shoe card balances image and copy).
+- **Elsewhere:** small icon, text-only, or a tiny animated element depending on the screen's weight. Judgment call. NEVER a giant illustration dominating a functional screen.
+
+---
+
+## 9. Media & cards — spatial meaning (critical for media apps)
+
+This is where most generic UI fails. Read the `design-style-media-cards` rule for the full spec. The essentials:
+
+- **Card aspect ratio communicates content type.** Don't make everything the same rectangle.
+  - **Hero / Top-10 / poster contexts → full poster art, ~2:3 portrait.** The art *is* the card, edge-to-edge.
+  - **Continue-watching / in-progress → 16:9 landscape thumbnail.** Wider because it's a resume frame/scene, not a poster.
+- **Always round image corners.** Optionally fade/scrim the bottom for text legibility over art.
+- **Images fill their frame** (`object-fit: cover`, crop the overflow). NEVER letterbox onto black.
+- **Positional info uses learned conventions** — put info where users already expect it:
+  - Resume/duration timestamp → **bottom-right** of the thumbnail.
+  - Rank badge (TOP 01) → **top-left**.
+  - Rating · year · type → dot-separated `--text-muted` line **under** the card.
+- **Section headers** can use a short accent bar to the left of the title (the Cineby `| Continue watching` red tick).
+- **Nav bars: solid** (transparent-over-media is fine, but not frosted). **Search bars / floating overlays: glassy** (backdrop blur). Pick blur by element role. Never blanket-glass.
+- **Surface texture:** subtle grain on large surfaces (kills gradient banding) + gradient mesh/scrim on hero backdrops. Both are welcome; keep them subtle.
+
+---
+
+## How to apply
+
+1. **Set the project contract first** — theme mode, base hue, accent, color mode (§4). Write it down before generating components.
+2. **Define tokens** — radius, surface ramp, spacing, type, motion. Put them in CSS variables / Tailwind theme so they're reused, not re-guessed per component.
+3. **Build with the non-negotiables in front of you** — no dividers, no glow, functional shadow only, no letterboxed media, tonal depth, characterful type.
+4. **Self-check before delivering** against the `design-style-checklist` rule. If any item fails, fix it before showing the user.
+
+When in doubt, ask: *"What does this visual choice signal?"* If the answer is "nothing, it just looks busy", remove it.

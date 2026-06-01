@@ -28,6 +28,10 @@ use crate::commands::ffprobe::probe_local_media_ffprobe;
 use crate::commands::gallery::{regroup_playlist_downloads, scan_gallery};
 use crate::commands::migrate::migrate_library_layout;
 use crate::commands::sponsorblock::ensure_sponsorblock_segments;
+use crate::commands::musicmeta::{
+    backfill_music_meta, ensure_artist_meta_sidecar, ensure_music_meta, get_artist_info,
+    read_artist_meta_sidecar, read_music_meta,
+};
 use crate::commands::media::{
     delete_media, delete_media_batch, ensure_poster_if_missing, extract_frames, get_subtitle_tracks,
     read_local_subtitle_vtt,
@@ -146,6 +150,12 @@ pub fn run() {
             scan_gallery,
             regroup_playlist_downloads,
             ensure_sponsorblock_segments,
+            ensure_music_meta,
+            read_music_meta,
+            backfill_music_meta,
+            get_artist_info,
+            read_artist_meta_sidecar,
+            ensure_artist_meta_sidecar,
             open_mini_player,
             open_youtube_explorer,
             get_embedded_explorer_webview_url,

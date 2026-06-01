@@ -29,7 +29,7 @@ export function normalizeAlbumShelfKey(album: string): string {
 }
 
 /**
- * Stable identity for shelf dedup: YouTube id when known, else primary artist + title.
+ * Stable identity for shelf dedup: YouTube id when known, else canonical/tag artist + canonical/display title.
  */
 export function musicTrackIdentityKey(
   file: MediaFile,
@@ -44,9 +44,10 @@ export function musicTrackIdentityKey(
     return `url:${url.toLowerCase()}`;
   }
   const stem = fileStem(file);
-  const titleRaw = file.name?.trim() && file.name.trim() !== stem ? file.name : stem;
+  const titleRaw = file.canonicalTitle?.trim()
+    || (file.name?.trim() && file.name.trim() !== stem ? file.name : stem);
   const title = normalizeToken(titleRaw);
-  const artistRaw = file.artist ?? file.albumArtist ?? "";
+  const artistRaw = file.canonicalArtist?.trim() || file.artist || file.albumArtist || "";
   const artist = artistRaw ? primaryArtist(artistRaw).toLowerCase() : "";
   return `song:${artist}|${title}`;
 }
@@ -68,8 +69,13 @@ export function dedupeMusicTracks(
 }
 
 function artistShelfKey(file: MediaFile, primaryArtist: (raw: string) => string): string {
-  const raw = file.artist ?? file.albumArtist ?? "";
+  const raw = file.canonicalArtist?.trim() || file.artist || file.albumArtist || "";
   return raw ? primaryArtist(raw).toLowerCase() : "_unknown";
+}
+
+/** Album dedup key for shelf grouping. Prefers canonical album from sidecar. */
+export function albumKeyFromFile(file: MediaFile): string {
+  return normalizeAlbumShelfKey(file.canonicalAlbum ?? file.album ?? "");
 }
 
 /**

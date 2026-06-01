@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Play } from "lucide-react";
+import { Play, MoreHorizontal } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
@@ -8,8 +8,8 @@ import type { MediaFile } from "@/types";
 import { primaryArtist } from "./musicArtist";
 import { normalizeAlbumShelfKey } from "./musicShelfDedup";
 import { cn } from "@/lib/utils";
-
 import { formatDuration } from "@/components/downloader/downloaderFormat";
+import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 
 type LibTab = "songs" | "albums" | "artists";
 
@@ -18,20 +18,22 @@ type SongRowProps = {
   index: number;
   isPlaying: boolean;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  menuOpen?: boolean;
 };
 
-function SongRow({ file, index, isPlaying, onClick }: SongRowProps) {
+function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: SongRowProps) {
   const cover = bestCoverPath(file);
   const coverSrc = cover ? convertFileSrc(cover) : null;
   const artist = file.artist ?? file.albumArtist ?? (file.name.includes(" - ") ? file.name.split(" - ")[0].trim() : "");
 
   return (
-    <button
-      type="button"
+    <div
+      className="group/row flex items-center gap-3 px-4 py-2 rounded w-full transition-colors cursor-pointer"
+      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--music-surface-raised)")}
+      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
       onClick={onClick}
-      className="group/row flex items-center gap-3 px-4 py-2 rounded w-full text-left transition-colors"
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--music-surface-raised)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
     >
       <div className="w-8 text-right text-sm shrink-0" style={{ color: isPlaying ? "var(--music-accent)" : "var(--music-text-muted)" }}>
         <span className="group-hover/row:hidden">{isPlaying ? "♪" : index + 1}</span>
@@ -68,7 +70,18 @@ function SongRow({ file, index, isPlaying, onClick }: SongRowProps) {
       <div className="text-xs shrink-0 w-12 text-right" style={{ color: "var(--music-text-muted)" }}>
         {formatDuration(file.duration)}
       </div>
-    </button>
+      {onContextMenu && (
+        <button
+          type="button"
+          className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border-0 bg-transparent transition-opacity duration-100 ${menuOpen ? "opacity-100" : "opacity-0 group-hover/row:opacity-100"}`}
+          style={{ color: "var(--music-text-muted)" }}
+          onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
+          aria-label="More options"
+        >
+          <MoreHorizontal size={15} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -78,14 +91,16 @@ type AlbumRowProps = {
   cover: string | null;
   trackCount: number;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 };
 
-function AlbumRow({ album, artist, cover, trackCount, onClick }: AlbumRowProps) {
+function AlbumRow({ album, artist, cover, trackCount, onClick, onContextMenu }: AlbumRowProps) {
   const coverSrc = cover ? convertFileSrc(cover) : null;
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
       className="group/album flex items-center gap-4 px-4 py-3 rounded w-full text-left transition-colors"
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--music-surface-raised)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "")}
@@ -122,13 +137,15 @@ type ArtistRowProps = {
   artist: string;
   trackCount: number;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 };
 
-function ArtistRow({ artist, trackCount, onClick }: ArtistRowProps) {
+function ArtistRow({ artist, trackCount, onClick, onContextMenu }: ArtistRowProps) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
       className="group/artist flex items-center gap-4 px-4 py-3 rounded w-full text-left transition-colors"
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--music-surface-raised)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "")}
@@ -159,6 +176,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
   const entries = useRuforgeStore((s) => s.entries);
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const [activeTab, setActiveTab] = useState<LibTab>("songs");
+  const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
 
   const tracks = useMemo(
     () => flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path)),
@@ -173,9 +191,9 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
   const albums = useMemo(() => {
     const map = new Map<string, { albumKey: string; artistKey: string; album: string; artist: string; cover: string | null; tracks: MediaFile[] }>();
     for (const t of tracks) {
-      const albumName = t.album ?? "";
+      const albumName = (t.canonicalAlbum ?? t.album)?.trim() ?? "";
       if (!albumName) continue;
-      const artistRaw = t.albumArtist ?? t.artist ?? "";
+      const artistRaw = t.canonicalArtist?.trim() || t.albumArtist || t.artist || "";
       const artistKey = primaryArtist(artistRaw).toLowerCase();
       const albumKey = normalizeAlbumShelfKey(albumName);
       const key = `${artistKey}::${albumKey}`;
@@ -218,8 +236,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
     <div className="flex flex-col h-full">
       {/* Tab strip */}
       <div
-        className="flex items-center gap-1 px-6 py-3 shrink-0 border-b"
-        style={{ borderColor: "var(--music-border)" }}
+        className="flex items-center gap-1 px-6 py-3 shrink-0"
       >
         {tabs.map((t) => (
           <button
@@ -257,6 +274,13 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                 index={i}
                 isPlaying={playingFile?.path === file.path}
                 onClick={() => onPlayFile(file, sortedTracks)}
+                menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
+                onContextMenu={(e) => setMenu({
+                  context: { kind: "song", file },
+                  x: e.clientX,
+                  y: e.clientY,
+                  onPlay: () => onPlayFile(file, sortedTracks),
+                })}
               />
             ))}
           </div>
@@ -277,6 +301,12 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                 cover={a.cover}
                 trackCount={a.tracks.length}
                 onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
+                onContextMenu={(e) => setMenu({
+                  context: { kind: "album", artistKey: a.artistKey, albumKey: a.albumKey, displayName: a.album, artistName: a.artist },
+                  x: e.clientX,
+                  y: e.clientY,
+                  onPlay: a.tracks.length > 0 ? () => onPlayFile(a.tracks[0], a.tracks) : undefined,
+                })}
               />
             ))}
           </div>
@@ -295,11 +325,18 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                 artist={a.display}
                 trackCount={a.tracks.length}
                 onClick={() => onOpenArtist(a.key)}
+                onContextMenu={(e) => setMenu({
+                  context: { kind: "artist", artistKey: a.key, displayName: a.display },
+                  x: e.clientX,
+                  y: e.clientY,
+                  onPlay: a.tracks.length > 0 ? () => onPlayFile(a.tracks[0], a.tracks) : undefined,
+                })}
               />
             ))}
           </div>
         )}
       </div>
+      <MusicRowContextMenu menu={menu} onClose={() => setMenu(null)} />
     </div>
   );
 }

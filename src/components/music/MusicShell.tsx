@@ -11,6 +11,7 @@ import { MusicExploreView } from "./MusicExploreView";
 import { MusicLibraryView } from "./MusicLibraryView";
 import { MusicArtistView } from "./MusicArtistView";
 import { MusicAlbumView } from "./MusicAlbumView";
+import { MusicTrackView } from "./MusicTrackView";
 import { MusicExploreBottomBar } from "./MusicExploreBottomBar";
 import { MusicNavBackCell } from "./MusicNavBackCell";
 import { MusicExploreDownloadPanel } from "./MusicExploreDownloadPanel";
@@ -668,6 +669,16 @@ export function MusicShell() {
                         albumKey={musicDetail.key}
                         onPlayFile={handlePlayFile}
                         onOpenArtist={openMusicArtist}
+                        onBack={closeMusicDetail}
+                      />
+                    </motion.div>
+                  ) : musicDetail?.kind === "song" ? (
+                    <motion.div key={`song-${musicDetail.path}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0">
+                      <MusicTrackView
+                        path={musicDetail.path}
+                        onPlayFile={handlePlayFile}
+                        onOpenArtist={openMusicArtist}
+                        onOpenAlbum={openMusicAlbum}
                         onBack={closeMusicDetail}
                       />
                     </motion.div>

@@ -170,11 +170,11 @@ function TrackRow({
         onClick={(e) => { e.stopPropagation(); onDownload(); }}
         disabled={downloading}
         className={cn(
-          "shrink-0 w-5 h-5 rounded flex items-center justify-center transition-opacity disabled:opacity-40 outline-none focus:outline-none",
+          "rf-music-tooltip-anchor shrink-0 w-5 h-5 rounded flex items-center justify-center transition-opacity disabled:opacity-40 outline-none focus:outline-none",
           downloading ? "opacity-100" : "opacity-0 group-hover:opacity-60 hover:!opacity-100",
         )}
         style={{ color: "var(--music-text-primary)" }}
-        title={downloading ? "Downloading" : "Download"}
+        data-tooltip={downloading ? "Downloading" : "Download"}
       >
         {downloading ? (
           <Loader2 size={11} className="animate-spin" style={{ color: "var(--music-accent)" }} />
@@ -666,7 +666,6 @@ export function MusicExploreDownloadPanel({
       {/* Header */}
       <div
         className="shrink-0 flex items-center gap-2 px-3 py-2.5"
-        style={{ borderBottom: "1px solid var(--music-border)" }}
       >
         <div className="flex-1 min-w-0">
           {isLoading ? (
@@ -723,9 +722,9 @@ export function MusicExploreDownloadPanel({
             <button
               type="button"
               onClick={() => enqueueTracks(phase.items, phase.playlistTitle)}
-              className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold border hover:bg-white/10 transition-colors"
+              className="rf-music-tooltip-anchor flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold border hover:bg-white/10 transition-colors"
               style={{ borderColor: "var(--music-border)", color: "var(--music-text-primary)" }}
-              title="Download all loaded tracks"
+              data-tooltip="Download all loaded tracks"
             >
               <Download size={10} />
               All

@@ -1,0 +1,56 @@
+---
+description: RuForge filled-in color contract example for Angel design style. Use when theming RuForge Home, Music, or Movies surfaces.
+globs: "{src,website}/**/*.{tsx,css,astro}"
+alwaysApply: false
+---
+
+# RuForge — filled-in color contract (worked example)
+
+A concrete, filled-in version of the per-project contract from `design-style` §4. Use this as the pattern for how to fill in a new project. NOT as a global default to copy blindly.
+
+RuForge is a media app, so it's **dark** (long watches in dark rooms), and each section carries its own **tonal hue**.
+
+## RuForge Home — warm/cozy (espresso + sand-gold)
+```
+THEME MODE:  dark
+BASE HUE:    warm espresso brown
+ACCENT:      sand-gold
+COLOR MODE:  MONOCHROME (accent carries action/active)
+
+--surface-0: #1c1512;   /* espresso base */
+--surface-1: #261d18;
+--surface-2: #322620;
+--surface-3: #3e2f27;
+--accent:    #EDCF9B;   /* sand-gold */
+--text-strong:  #f5ede4;
+--text-default: #d8cabb;
+--text-muted:   #9a8a7a;
+```
+
+## RuForge Music — red (YouTube Music kinship)
+```
+THEME MODE:  dark
+BASE HUE:    near-black with a faint red lean
+ACCENT:      red
+COLOR MODE:  MONOCHROME
+
+--surface-0: #0e0a0a;
+--surface-1: #181111;
+--surface-2: #221717;
+--accent:    #e53935;   /* tune to match the music-app red */
+```
+Album art: 1:1 square, `object-fit: cover`, rounded. NEVER letterboxed on black (this is the named anti-pattern from this exact screen).
+
+## RuForge Movies — purple / cinematic (planned)
+```
+THEME MODE:  dark
+BASE HUE:    deep cinematic charcoal-violet
+ACCENT:      purple
+COLOR MODE:  MONOCHROME
+```
+Lean into the Cineby cinematic-hero model: full-bleed hero art, long bottom scrim, solid transparent nav, poster (2:3) cards for browse rows, 16:9 thumbnails for continue-watching.
+
+## Notes
+- Hue lives in the surface ramp, not just the accent. "Dark" here means warm-dark or red-dark, not pure `#000`.
+- One accent per section. Music's red ≠ Home's gold; they're different surfaces of the same app, each themed to its job.
+- Values above are starting points; tune against the real references for each section.

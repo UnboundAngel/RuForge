@@ -251,10 +251,10 @@ export function MusicExploreDownloadCollapsed({
           <button
             type="button"
             onClick={onMinimize}
-            className="flex items-center justify-center w-6 h-4 opacity-30 hover:opacity-80 transition-opacity shrink-0"
+            className="rf-music-tooltip-anchor flex items-center justify-center w-6 h-4 opacity-30 hover:opacity-80 transition-opacity shrink-0"
             style={{ color: "var(--music-text-secondary)" }}
             aria-label="Minimize downloads to dock"
-            title="Minimize"
+            data-tooltip="Minimize"
           >
             <ChevronDown size={11} />
           </button>
@@ -264,10 +264,10 @@ export function MusicExploreDownloadCollapsed({
           <button
             type="button"
             onClick={collapseStack}
-            className="flex items-center justify-center w-6 h-4 opacity-30 hover:opacity-80 transition-opacity shrink-0"
+            className="rf-music-tooltip-anchor flex items-center justify-center w-6 h-4 opacity-30 hover:opacity-80 transition-opacity shrink-0"
             style={{ color: "var(--music-text-secondary)" }}
             aria-label="Collapse download stack"
-            title="Collapse"
+            data-tooltip="Collapse"
           >
             <ChevronUp size={11} />
           </button>
@@ -387,10 +387,10 @@ export function ExploreDownloadDockChip({
       <button
         type="button"
         onClick={onClick}
-        className="relative hover:opacity-90 transition-opacity"
+        className="rf-music-tooltip-anchor relative hover:opacity-90 transition-opacity"
         style={{ width: CHIP_SIZE, height: CHIP_SIZE }}
         aria-label="Download complete. Click to expand."
-        title="Expand downloads"
+        data-tooltip="Expand downloads"
       >
         <TrackOrb
           key={`dock-${celebrating.url}-success`}
@@ -422,10 +422,10 @@ export function ExploreDownloadDockChip({
     <button
       type="button"
       onClick={onClick}
-      className="relative hover:opacity-90 transition-opacity"
+        className="rf-music-tooltip-anchor relative hover:opacity-90 transition-opacity"
       style={{ width: CHIP_SIZE, height: CHIP_SIZE }}
       aria-label={`${count} download${count !== 1 ? "s" : ""} in progress. Click to expand.`}
-      title="Expand downloads"
+        data-tooltip="Expand downloads"
     >
       <TrackOrb
         key={`dock-${activeJob?.id ?? "active"}-${activeJob?.status ?? "idle"}`}

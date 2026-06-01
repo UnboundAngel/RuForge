@@ -35,8 +35,10 @@ src-tauri/target/
 # Local-only Tauri signing helper (optional one-line password for scripts/build-signed-windows.ps1)
 .tauri-signing-password
 
-# IDE / local plans
-.cursor/
+# IDE / local plans (shared agent rules are tracked under .cursor/rules/)
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 
 # Removed bundled browser extension (do not re-add)
 src-tauri/extensions/ublock/

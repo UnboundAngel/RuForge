@@ -38,8 +38,8 @@ export function YouTubeProfileChip({ className, size = "md", onClick }: Props) {
       <button
         type="button"
         onClick={onClick}
-        className={className}
-        title={`Signed in as ${profile.displayName}`}
+        className={`rf-music-tooltip-anchor ${className ?? ""}`}
+        data-tooltip={`Signed in as ${profile.displayName}`}
         aria-label={profile.displayName}
       >
         {inner}
@@ -48,7 +48,7 @@ export function YouTubeProfileChip({ className, size = "md", onClick }: Props) {
   }
 
   return (
-    <div className={className} title={profile.displayName} aria-label={profile.displayName}>
+    <div className={`rf-music-tooltip-anchor ${className ?? ""}`} data-tooltip={profile.displayName} aria-label={profile.displayName}>
       {inner}
     </div>
   );

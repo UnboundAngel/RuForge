@@ -1,0 +1,39 @@
+---
+description: Pre-delivery UI checklist for Angel design style. Run before showing any styled interface.
+globs: "{src,website}/**/*.{tsx,css,astro}"
+alwaysApply: false
+---
+
+# Pre-delivery checklist
+
+Run this before showing any UI to Angel. If any line fails, fix it first.
+
+## Non-negotiables
+- [ ] Zero divider lines (`border-bottom`, `<hr>`, `divide-y`, dotted/dashed separators). Separation is spacing / tonal surface / active-highlight only.
+- [ ] Zero glow (no colored box-shadow halos, no neon edges, no "pop" glow).
+- [ ] Every shadow present is functional (floating media, scroll-state, or carousel arrow affordance). No default-decoration shadows.
+- [ ] No media is letterboxed/padded onto a solid background. All art is `object-fit: cover`, cropped, rounded.
+- [ ] Depth reads through a tonal surface ramp (surface-0 → surface-3), not effects.
+- [ ] Characterful sans in use (Satoshi/General Sans/Cabinet), not Inter/system-ui default.
+- [ ] Base is a tonal hue, not pure `#000`/`#fff`.
+
+## System
+- [ ] Radius is tiered (outer rounder than nested; pills on chips/actions; soft-rect on primary CTA).
+- [ ] Color contract set: theme mode matches task (media=dark, info=light), one accent, mode = MONOCHROME or CODED.
+- [ ] Gradient/saturation only on media/hero, never chrome.
+- [ ] Spacing preset chosen per surface (compact for tools, airy for hero/empty), from a 4px ramp.
+- [ ] Type hierarchy uses weight + muted color (not just size); one hero; tiny uppercase labels for metadata.
+- [ ] Motion uses transform/opacity only; fast+eased default; spring only on signature moments; reduced-motion respected.
+
+## Media (if applicable)
+- [ ] Card aspect ratio matches content type (poster 2:3 vs resume 16:9 vs square 1:1).
+- [ ] Positional info follows convention (duration bottom-right, rank top-left, metadata dot-line under card).
+- [ ] Sections that differ in value look different (no clone rows).
+- [ ] Nav solid; search/overlay glassy. Blur picked by element role.
+
+## Voice
+- [ ] Empty states are casual-human and point at the next action.
+- [ ] Functional/settings screens are precise and plain (no jokes).
+
+## The gut check
+- [ ] For every non-obvious visual element, you can answer: "what does this signal?" If the answer is "nothing," remove it.
