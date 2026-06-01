@@ -123,6 +123,10 @@ export function useMusicPlayback(
 
   const clearManualQueuePlayingState = useRuforgeStore((s) => s.clearManualQueuePlayingState);
 
+  const musicPlayerResume = useRuforgeStore((s) => s.musicPlayerResume);
+
+  const clearMusicPlayerResume = useRuforgeStore((s) => s.clearMusicPlayerResume);
+
 
 
   const [paused, setPaused] = useState(true);
@@ -203,7 +207,7 @@ export function useMusicPlayback(
 
   useEffect(() => {
 
-    void emitTo("mini", "stop-playback", "main-app").catch(() => null);
+    void emitTo("music-mini", "stop-music-mini-playback", "main-app").catch(() => null);
 
     return () => {
 
@@ -289,19 +293,45 @@ export function useMusicPlayback(
 
     el.playbackRate = playbackSpeed;
 
-
+    const resume = musicPlayerResume;
 
     if (needsLoad) {
 
-      void el.play()
+      if (resume) {
 
-        .then(() => setPaused(false))
+        clearMusicPlayerResume();
 
-        .catch(() => setPaused(true));
+        el.currentTime = Math.max(0, resume.currentTime);
+
+        el.playbackRate = resume.playbackSpeed;
+
+        if (!resume.paused) {
+
+          void el.play()
+
+            .then(() => setPaused(false))
+
+            .catch(() => setPaused(true));
+
+        } else {
+
+          setPaused(true);
+
+        }
+
+      } else {
+
+        void el.play()
+
+          .then(() => setPaused(false))
+
+          .catch(() => setPaused(true));
+
+      }
 
     }
 
-  }, [playingFile?.path, audioRef]);
+  }, [playingFile?.path, audioRef, musicPlayerResume, clearMusicPlayerResume, volume, isMuted, isLooping, playbackSpeed]);
 
 
 

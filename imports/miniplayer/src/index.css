@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #dc2626; /* red-600 */
+}
+
+@layer base {
+  body {
+    background-color: #f9fafb;
+    color: #111827;
+    font-family: inherit;
+  }
+}
+
+@keyframes cover-in {
+  from {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes cover-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes ti-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--dx));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ti-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(var(--dx));
+  }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 8s linear infinite;
+}
+
+.fade-edges {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+}
+
+.cover-enter { animation: cover-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.cover-exit { animation: cover-out 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.ti-enter { animation: ti-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.ti-exit { animation: ti-out 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+@keyframes play-pulse {
+  0% {
+    transform: scale(1) rotate(0deg);
+    border-radius: 5px;
+  }
+  50% {
+    transform: scale(0.8) rotate(90deg);
+    border-radius: 8px;
+  }
+  100% {
+    transform: scale(1) rotate(180deg);
+    border-radius: 5px;
+  }
+}
+
+.animate-play-pulse {
+  animation: play-pulse 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+

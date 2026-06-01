@@ -28,13 +28,30 @@ import { bestCoverPath } from "@/mediaKind";
 import {
   ensureEmbeddedExplorerWebview,
   EXPLORER_PAUSE_MEDIA_SCRIPT,
+  explorerForceNavigateScript,
   getEmbeddedExplorerWebview,
 } from "@/explorerWebviewLifecycle";
+import { youtubeMusicSearchUrl, extractYouTubeVideoId } from "@/youtubeUrl";
 import {
   MUSIC_EXPLORE_INIT_SCRIPT,
+  MUSIC_EXPLORE_NOW_PLAYING_EVENT,
+  MUSIC_EXPLORE_NOW_PLAYING_INSTALL,
+  MUSIC_EXPLORE_PAGE_CONTEXT_EVENT,
+  MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL,
   MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT,
   MUSIC_EXPLORE_WEBVIEW_LABEL,
 } from "@/explorerProfileScript";
+import {
+  classifyMusicExplorePageFromUrl,
+  mergeMusicExplorePageContext,
+  type MusicExplorePageContext,
+  type MusicExplorePageContextPayload,
+} from "@/lib/musicExplorePageContext";
+import {
+  buildDownloadJobOptions,
+  patchDownloadJobOptionsForAudio,
+  resolveDownloadOutputDir,
+} from "@/downloadQueue";
 import {
   readExplorerHostBounds,
   explorerBoundsEqual,
@@ -109,11 +126,15 @@ export function MusicShell() {
   const [playerExpanded, setPlayerExpanded] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [currentMusicExploreUrl, setCurrentMusicExploreUrl] = useState("");
+  const [musicExplorePageContext, setMusicExplorePageContext] = useState<MusicExplorePageContext>(
+    () => classifyMusicExplorePageFromUrl(""),
+  );
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<"pick" | "paste">("pick");
   const [pasteUrl, setPasteUrl] = useState("");
   const [dockMinimized, setDockMinimized] = useState(false);
   const [dockCelebrating, setDockCelebrating] = useState<CollapsedCelebrate | null>(null);
+  const [dockPanelSession, setDockPanelSession] = useState(false);
 
   // Right panel state
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
@@ -135,7 +156,29 @@ export function MusicShell() {
   const musicExploreCreatingRef = useRef(false);
   const musicExploreLastBoundsRef = useRef<ExplorerBounds | null>(null);
   const musicExploreScheduleRef = useRef<(() => void) | null>(null);
+  const musicExploreNavigatePendingRef = useRef<string | null>(null);
+  const runPendingMusicExploreNavigateRef = useRef<() => Promise<void>>(async () => {});
   const prevExploreWebviewActiveRef = useRef(false);
+  /** Session-level dedup: videoIds already auto-queued this session. */
+  const autoQueuedVideoIdsRef = useRef<Set<string>>(new Set());
+
+  runPendingMusicExploreNavigateRef.current = async () => {
+    const url = musicExploreNavigatePendingRef.current;
+    if (!url) return;
+    const wv =
+      musicExploreWebviewRef.current
+      ?? (await getEmbeddedExplorerWebview(MUSIC_EXPLORE_WEBVIEW_LABEL));
+    if (!wv) return;
+    try {
+      await invoke("eval_in_webview", {
+        label: MUSIC_EXPLORE_WEBVIEW_LABEL,
+        script: explorerForceNavigateScript(url),
+      });
+      musicExploreNavigatePendingRef.current = null;
+    } catch {
+      /* webview hidden or still attaching */
+    }
+  };
 
   const assignWebviewHostRef = useCallback((el: HTMLDivElement | null) => {
     webviewHostRef.current = el;
@@ -150,6 +193,7 @@ export function MusicShell() {
   }, []);
 
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
+  const prevAutoQueueJobsRef = useRef(downloadJobs);
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
   const musicDetail = useRuforgeStore((s) => s.musicDetail);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
@@ -210,6 +254,36 @@ export function MusicShell() {
   const showExploreStrip = activeView === "explore" && !musicDetail && !playerExpanded;
   const showExplorePanel = activeView === "explore" && panelOpen;
   const exploreWebviewActive = showExploreStrip;
+  const hasActiveDownloadJobs = downloadJobs.some(
+    (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+  );
+  const explorePanelDockMode = dockMinimized || !showExplorePanel;
+
+  useEffect(() => {
+    if (explorePanelDockMode && hasActiveDownloadJobs) {
+      setDockPanelSession(true);
+      return;
+    }
+    if (!hasActiveDownloadJobs && !dockCelebrating && dockPanelSession) {
+      const t = window.setTimeout(() => setDockPanelSession(false), 2400);
+      return () => window.clearTimeout(t);
+    }
+  }, [
+    explorePanelDockMode,
+    hasActiveDownloadJobs,
+    dockCelebrating,
+    dockPanelSession,
+  ]);
+
+  const keepExplorePanelMounted =
+    showExplorePanel ||
+    hasActiveDownloadJobs ||
+    dockCelebrating != null ||
+    (explorePanelDockMode && dockPanelSession);
+  const showDownloadDockChip =
+    dockCelebrating != null ||
+    hasActiveDownloadJobs ||
+    explorePanelDockMode;
 
   useEffect(() => {
     void fetchEntries();
@@ -235,6 +309,13 @@ export function MusicShell() {
     resyncExploreWebview();
   }, [resyncExploreWebview]);
 
+  // Freeze the panel URL when it is hidden so navigation in the webview does not trigger
+  // unnecessary doLoad calls inside MusicExploreDownloadPanel while it is off-screen.
+  const panelUrlRef = useRef(pasteUrl.trim() || currentMusicExploreUrl);
+  const currentPanelUrl = pasteUrl.trim() || currentMusicExploreUrl;
+  if (showExplorePanel) panelUrlRef.current = currentPanelUrl;
+  const explorePanelUrl = showExplorePanel ? currentPanelUrl : panelUrlRef.current;
+
   useEffect(() => {
     void getEmbeddedExplorerWebview(MUSIC_EXPLORE_WEBVIEW_LABEL).then((webview) => {
       if (webview) musicExploreWebviewRef.current = webview;
@@ -246,7 +327,15 @@ export function MusicShell() {
     let unlistenFn: (() => void) | undefined;
     void listen<string>(MUSIC_EXPLORE_URL_EVENT, (ev) => {
       if (!alive) return;
-      setCurrentMusicExploreUrl(ev.payload ?? "");
+      const url = ev.payload ?? "";
+      setCurrentMusicExploreUrl(url);
+      // Only seed a URL-based context when the URL actually changed; the richer
+      // page-context event (which carries kind/playlistUrl/pageTitle) takes precedence
+      // and must not be overwritten when both events arrive for the same URL.
+      setMusicExplorePageContext((prev) => {
+        if (prev.url === url) return prev;
+        return classifyMusicExplorePageFromUrl(url);
+      });
     }).then((fn) => {
       if (!alive) {
         fn();
@@ -258,6 +347,91 @@ export function MusicShell() {
       alive = false;
       unlistenFn?.();
     };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    let unlistenFn: (() => void) | undefined;
+    void listen<MusicExplorePageContextPayload>(MUSIC_EXPLORE_PAGE_CONTEXT_EVENT, (ev) => {
+      if (!alive) return;
+      const payload = ev.payload;
+      if (!payload?.url) return;
+      setCurrentMusicExploreUrl(payload.url);
+      setMusicExplorePageContext(mergeMusicExplorePageContext(payload.url, payload));
+    }).then((fn) => {
+      if (!alive) {
+        fn();
+        return;
+      }
+      unlistenFn = fn;
+    });
+    return () => {
+      alive = false;
+      unlistenFn?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    let unlistenFn: (() => void) | undefined;
+    void listen<{ videoId: string; title?: string | null }>(
+      MUSIC_EXPLORE_NOW_PLAYING_EVENT,
+      (ev) => {
+        if (!alive) return;
+        const { videoId, title } = ev.payload ?? {};
+        if (!videoId) return;
+
+        const store = useRuforgeStore.getState();
+        if (store.settings.autoDownloadPlayingSongs === false) return;
+
+        if (autoQueuedVideoIdsRef.current.has(videoId)) return;
+        autoQueuedVideoIdsRef.current.add(videoId);
+
+        const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        const dir = resolveDownloadOutputDir(store.saveToInternal, store.outputDir);
+        const base = buildDownloadJobOptions(store.settings, dir);
+        const opts = patchDownloadJobOptionsForAudio(base, true, store.settings);
+
+        store.enqueueDownload(
+          watchUrl,
+          opts,
+          { title: title ?? undefined, approval: "auto" },
+        );
+        store.releaseHeldDownloadJobs();
+        store.pumpDownloadQueue();
+        setDockMinimized(false);
+        setDockPanelSession(true);
+      },
+    ).then((fn) => {
+      if (!alive) {
+        fn();
+        return;
+      }
+      unlistenFn = fn;
+    });
+    return () => {
+      alive = false;
+      unlistenFn?.();
+    };
+  }, []);
+
+  // Prune autoQueuedVideoIdsRef when a job is removed so the same song can be re-downloaded.
+  useEffect(() => {
+    const prev = prevAutoQueueJobsRef.current;
+    prevAutoQueueJobsRef.current = downloadJobs;
+    for (const job of prev) {
+      if (!downloadJobs.some((j) => j.id === job.id)) {
+        const videoId = extractYouTubeVideoId(job.url);
+        if (videoId) autoQueuedVideoIdsRef.current.delete(videoId);
+      }
+    }
+  }, [downloadJobs]);
+
+  const handlePasteUrlReady = useCallback((url: string) => {
+    setPasteUrl(url);
+    setPanelMode("pick");
+    setPanelOpen(true);
+    setNavCollapsed(false);
   }, []);
 
   useEffect(() => {
@@ -318,6 +492,19 @@ export function MusicShell() {
       } catch { /* not mounted */ }
     };
 
+    const injectMusicExploreBridge = async () => {
+      try {
+        await invoke("eval_in_webview", {
+          label: MUSIC_EXPLORE_WEBVIEW_LABEL,
+          script: MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL,
+        });
+        await invoke("eval_in_webview", {
+          label: MUSIC_EXPLORE_WEBVIEW_LABEL,
+          script: MUSIC_EXPLORE_NOW_PLAYING_INSTALL,
+        });
+      } catch { /* webview not ready */ }
+    };
+
     const applyMusicExploreBounds = async (bounds: ExplorerBounds) => {
       if (!musicExploreWebviewRef.current) {
         if (musicExploreCreatingRef.current) return;
@@ -329,10 +516,11 @@ export function MusicShell() {
             "get_hardware_acceleration_browser_args",
           );
           const appWindow = getCurrentWindow();
+          const pendingStartUrl = musicExploreNavigatePendingRef.current;
           const webview = await ensureEmbeddedExplorerWebview({
             window: appWindow,
             label: MUSIC_EXPLORE_WEBVIEW_LABEL,
-            url: MUSIC_EXPLORE_URL,
+            url: pendingStartUrl ?? MUSIC_EXPLORE_URL,
             x: bounds.x,
             y: bounds.y,
             width: bounds.width,
@@ -344,6 +532,9 @@ export function MusicShell() {
           });
           if (!active) return;
           musicExploreWebviewRef.current = webview;
+          if (pendingStartUrl) {
+            musicExploreNavigatePendingRef.current = null;
+          }
           try {
             await invoke("eval_in_webview", {
               label: MUSIC_EXPLORE_WEBVIEW_LABEL,
@@ -353,6 +544,7 @@ export function MusicShell() {
               label: MUSIC_EXPLORE_WEBVIEW_LABEL,
               script: MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT,
             });
+            await injectMusicExploreBridge();
           } catch { /* bridge injected lazily */ }
         } catch (e) {
           musicExploreLastBoundsRef.current = null;
@@ -371,6 +563,7 @@ export function MusicShell() {
         wv.setPosition(new LogicalPosition(bounds.x, bounds.y)),
         wv.setSize(new LogicalSize(bounds.width, bounds.height)),
       ]);
+      await injectMusicExploreBridge();
     };
 
     const syncWebview = async () => {
@@ -395,11 +588,20 @@ export function MusicShell() {
 
       const bounds = readExplorerHostBounds(host);
       if (!bounds) return;
-      if (explorerBoundsEqual(bounds, musicExploreLastBoundsRef.current)) return;
+      const pendingNavigate = musicExploreNavigatePendingRef.current;
+      if (
+        !pendingNavigate
+        && explorerBoundsEqual(bounds, musicExploreLastBoundsRef.current)
+      ) {
+        return;
+      }
       musicExploreLastBoundsRef.current = bounds;
 
       try {
         await applyMusicExploreBounds(bounds);
+        if (musicExploreNavigatePendingRef.current) {
+          await runPendingMusicExploreNavigateRef.current();
+        }
       } catch (e) {
         musicExploreLastBoundsRef.current = null;
         console.error("[RuForge] Music explore bounds sync failed", e);
@@ -446,8 +648,8 @@ export function MusicShell() {
     };
   }, [exploreWebviewActive]);
 
-  const handlePlayFile = useCallback((file: MediaFile, playlist: MediaFile[]) => {
-    setFolderAudioPlaylist(playlist);
+  const handlePlayFile = useCallback((file: MediaFile, playlist?: MediaFile[]) => {
+    setFolderAudioPlaylist(playlist ?? []);
     setPlayingFile(file);
   }, [setFolderAudioPlaylist, setPlayingFile]);
 
@@ -469,6 +671,37 @@ export function MusicShell() {
       /* webview not mounted */
     }
   }, []);
+
+  const schedulePendingMusicExploreNavigate = useCallback(() => {
+    void runPendingMusicExploreNavigateRef.current();
+    runExplorerLayoutTransitionFollowUp(
+      () => { void runPendingMusicExploreNavigateRef.current(); },
+      400,
+    );
+    runExplorerLayoutTransitionFollowUp(
+      () => { void runPendingMusicExploreNavigateRef.current(); },
+      900,
+    );
+  }, []);
+
+  const handleSearchYoutubeMusic = useCallback(
+    (query: string) => {
+      const url = youtubeMusicSearchUrl(query);
+      if (!url) return;
+      musicExploreNavigatePendingRef.current = url;
+      musicExploreLastBoundsRef.current = null;
+      setMusicView("explore");
+      resyncExploreWebview();
+      schedulePendingMusicExploreNavigate();
+    },
+    [setMusicView, resyncExploreWebview, schedulePendingMusicExploreNavigate],
+  );
+
+  useEffect(() => {
+    if (activeView !== "explore" || !exploreWebviewActive) return;
+    if (!musicExploreNavigatePendingRef.current) return;
+    schedulePendingMusicExploreNavigate();
+  }, [activeView, exploreWebviewActive, schedulePendingMusicExploreNavigate]);
 
   const coverPath = playingFile ? bestCoverPath(playingFile) : null;
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
@@ -571,28 +804,31 @@ export function MusicShell() {
                 sideColumn
                 inLeftStack
                 footerSlot={
-                  dockMinimized ? (
+                  showDownloadDockChip ? (
                     <ExploreDownloadDockChip
                       downloadJobs={downloadJobs}
                       celebrating={dockCelebrating}
+                      navCollapsed={navCollapsed}
                       onClick={() => {
                         setDockMinimized(false);
+                        if (activeView !== "explore") setMusicView("explore");
                         if (!panelOpen) setPanelOpen(true);
                       }}
                     />
                   ) : undefined
                 }
                 panelSlot={
-                  showExplorePanel ? (
-                    <MusicExploreDownloadPanel
-                      url={isPasteMode ? pasteUrl : currentMusicExploreUrl}
-                      pasteMode={isPasteMode}
-                      collapsed={navCollapsed}
-                      dockMinimized={dockMinimized}
-                      onClose={closeExplorePanel}
-                      onMinimize={() => setDockMinimized(true)}
-                      onCelebratingChange={setDockCelebrating}
-                    />
+                  keepExplorePanelMounted ? (
+                    <div className={cn("flex flex-1 min-h-0 flex-col", !showExplorePanel && "hidden")}>
+                      <MusicExploreDownloadPanel
+                        url={explorePanelUrl}
+                        collapsed={navCollapsed}
+                        dockMinimized={explorePanelDockMode}
+                        onClose={closeExplorePanel}
+                        onMinimize={() => setDockMinimized(true)}
+                        onCelebratingChange={setDockCelebrating}
+                      />
+                    </div>
                   ) : undefined
                 }
               />
@@ -688,6 +924,7 @@ export function MusicShell() {
                         onPlayFile={handlePlayFile}
                         onOpenArtist={openMusicArtist}
                         onOpenAlbum={openMusicAlbum}
+                        onSearchYoutubeMusic={handleSearchYoutubeMusic}
                       />
                     </motion.div>
                   ) : activeView === "explore" ? (
@@ -710,8 +947,10 @@ export function MusicShell() {
               <MusicExploreBottomBar
                 shellBlack={shellBlack}
                 currentUrl={currentMusicExploreUrl}
+                pageContext={musicExplorePageContext}
                 pasteMode={isPasteMode}
                 onPickTracks={() => {
+                  setPasteUrl("");
                   setPanelMode("pick");
                   setPanelOpen(true);
                 }}
@@ -728,10 +967,7 @@ export function MusicShell() {
                   setDockMinimized(false);
                   resyncExploreWebview();
                 }}
-                onPasteUrlReady={(url) => {
-                  setPasteUrl(url);
-                  setPanelOpen(true);
-                }}
+                onPasteUrlReady={handlePasteUrlReady}
                 onReload={() => void handleReloadExplore()}
               />
             )}

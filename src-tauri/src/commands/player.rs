@@ -21,10 +21,10 @@ pub fn get_embedded_explorer_webview_url(app: AppHandle) -> Result<String, Strin
 
 #[tauri::command]
 pub async fn eval_in_webview(app: AppHandle, label: String, script: String) -> Result<(), String> {
-    if let Some(webview) = app.get_webview(&label) {
-        webview.eval(&script).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    let webview = app
+        .get_webview(&label)
+        .ok_or_else(|| format!("Webview '{label}' is not active."))?;
+    webview.eval(&script).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -51,6 +51,37 @@ pub async fn open_mini_player(app: AppHandle) -> Result<(), String> {
     }
 
     let _window = mini_builder.build().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_music_mini_player(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("music-mini") {
+        window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    let prefs = HardwareAccelerationDisk::load(&app.config().identifier);
+
+    let mut builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        "music-mini",
+        tauri::WebviewUrl::App("index.html".into()),
+    )
+    .title("RuForge Music")
+    .inner_size(400.0, 515.0)
+    .min_inner_size(400.0, 515.0)
+    .max_inner_size(400.0, 515.0)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .shadow(false);
+
+    if let Some(browser_args) = prefs.webview_additional_browser_args() {
+        builder = builder.additional_browser_args(&browser_args);
+    }
+
+    let _window = builder.build().map_err(|e| e.to_string())?;
     Ok(())
 }
 

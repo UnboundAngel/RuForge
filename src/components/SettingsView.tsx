@@ -112,6 +112,19 @@ function concurrentDownloadPresetId(concurrency: number): ConcurrentDownloadPres
   return "custom";
 }
 
+const BATCH_START_DELAY_OPTIONS: ReadonlyArray<{ label: string; ms: number }> = [
+  { label: "Off", ms: 0 },
+  { label: "0.5 s", ms: 500 },
+  { label: "1 s", ms: 1000 },
+  { label: "2 s", ms: 2000 },
+  { label: "3 s", ms: 3000 },
+  { label: "5 s", ms: 5000 },
+];
+
+function batchStartDelayLabel(ms: number): string {
+  return BATCH_START_DELAY_OPTIONS.find((o) => o.ms === ms)?.label ?? "Off";
+}
+
 function concurrentDownloadTriggerTitle(
   concurrency: number,
   preset: ConcurrentDownloadPresetId,
@@ -760,18 +773,14 @@ export const SettingsView: React.FC = () => {
                       : `${settings.downloadJobStartDelayMs} ms between each job start when batch-enqueueing (e.g. music playlists).`
                   }
                   control={
-                    <select
-                      value={settings.downloadJobStartDelayMs ?? 0}
-                      onChange={(e) => void updateSetting("downloadJobStartDelayMs", Number(e.target.value))}
-                      className="rf-select text-xs"
-                    >
-                      <option value={0}>Off</option>
-                      <option value={500}>0.5 s</option>
-                      <option value={1000}>1 s</option>
-                      <option value={2000}>2 s</option>
-                      <option value={3000}>3 s</option>
-                      <option value={5000}>5 s</option>
-                    </select>
+                    <CustomSelect
+                      value={batchStartDelayLabel(settings.downloadJobStartDelayMs ?? 0)}
+                      options={BATCH_START_DELAY_OPTIONS.map((o) => o.label)}
+                      onChange={(label) => {
+                        const option = BATCH_START_DELAY_OPTIONS.find((o) => o.label === label);
+                        if (option) void updateSetting("downloadJobStartDelayMs", option.ms);
+                      }}
+                    />
                   }
                 />
                 <SettingItem
@@ -863,6 +872,22 @@ export const SettingsView: React.FC = () => {
                         updateSetting(
                           "skipDuplicatesAutomatically",
                           !settings.skipDuplicatesAutomatically,
+                        )
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Auto-save Playing Songs"
+                  description="When browsing YouTube Music, automatically queue an audio download the moment you play a song — no copy-paste needed. Toggle anytime from the Music bar."
+                  active={settings.autoDownloadPlayingSongs}
+                  control={
+                    <ToggleSlot
+                      active={settings.autoDownloadPlayingSongs}
+                      onClick={() =>
+                        updateSetting(
+                          "autoDownloadPlayingSongs",
+                          !settings.autoDownloadPlayingSongs,
                         )
                       }
                     />
@@ -1108,6 +1133,21 @@ export const SettingsView: React.FC = () => {
                 roots={galleryScanRoots(libraryScanDirs)}
               />
               <SettingsSection title="Debugging">
+                <SettingItem
+                  title="Hide songs from main library"
+                  description="Keep audio downloads and music playlists in Music mode only. The main Video Library shows movies and videos."
+                  control={
+                    <ToggleSlot
+                      active={settings.hideAudioFromMainLibrary !== false}
+                      onClick={() =>
+                        void updateSetting(
+                          "hideAudioFromMainLibrary",
+                          settings.hideAudioFromMainLibrary === false,
+                        )
+                      }
+                    />
+                  }
+                />
                 <SettingItem
                   title="Enrich music metadata"
                   description="Scan library audio files and write canonical identity sidecars from embedded tags, MusicBrainz matches, and YouTube snapshot data."

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music, FileText, FolderOutput, Shuffle, FolderOpen } from "lucide-react";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
@@ -13,6 +13,7 @@ import { deleteMediaAtPath } from "../deleteMedia";
 import { openInFileManager } from "../openInFileManager";
 import { releasePlaybackBeforeDelete } from "../releasePlaybackBeforeDelete";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import { filterMainLibraryEntries } from "../mainLibraryFilter";
 import { formatDuration } from "./downloader/downloaderFormat";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 
@@ -283,6 +284,9 @@ export const MediaView = ({
   const notify = useRuforgeStore((s) => s.notify);
   const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const entries = useRuforgeStore((s) => s.entries);
+  const hideAudioFromMainLibrary = useRuforgeStore(
+    (s) => s.settings.hideAudioFromMainLibrary !== false,
+  );
   const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
   const activeMenu = useRuforgeStore((s) => s.activeMenu);
   const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
@@ -293,6 +297,11 @@ export const MediaView = ({
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
 
   const [showTranscriptMenu, setShowTranscriptMenu] = useState(false);
+
+  const libraryEntries = useMemo(
+    () => filterMainLibraryEntries(entries, hideAudioFromMainLibrary),
+    [entries, hideAudioFromMainLibrary],
+  );
 
   useEffect(() => { setShowTranscriptMenu(false); }, [activeMenu]);
 
@@ -401,7 +410,7 @@ export const MediaView = ({
         ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8"
         : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-12";
 
-  const filteredEntries = entries.filter((entry) => {
+  const filteredEntries = libraryEntries.filter((entry) => {
     const title = entry.kind === 'media' ? entry.name : entry.title;
     const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
@@ -529,7 +538,7 @@ export const MediaView = ({
             onClick={(e) => e.stopPropagation()}
           >
             {(() => {
-              const entry = entries.find((e) => e.path === activeMenu.path);
+              const entry = libraryEntries.find((e) => e.path === activeMenu.path);
               if (!entry) return null;
 
               if (entry.kind === "playlist") {

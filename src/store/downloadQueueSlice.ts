@@ -635,8 +635,9 @@ export const createDownloadQueueSlice: StateCreator<
         try {
           await invoke("pause_download_job", { jobId: id });
         } catch (e) {
-          console.error("[RuForge] pause_download_job failed", e);
-          return;
+          // Backend kill failed (process may already be gone). Still force UI
+          // out of "downloading" so the job doesn't appear permanently stuck.
+          console.error("[RuForge] pause_download_job failed — forcing paused state", e);
         }
         set((s) => {
           const downloadJobs = s.downloadJobs.map((j) =>

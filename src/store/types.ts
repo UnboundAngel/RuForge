@@ -133,10 +133,20 @@ export interface RuforgeSettings {
   downloadJobStartDelayMs: number;
   /** When true, Settings shows the Debugging tab (group playlist, updater UI cycle, etc.). */
   showDebuggingSettings: boolean;
+  /**
+   * When true, audio files and all-audio playlists are hidden from the main Video Library.
+   * Songs remain visible in Music mode regardless of download source.
+   */
+  hideAudioFromMainLibrary: boolean;
   /** Master SponsorBlock toggle (default false until feature ships). */
   sponsorBlockEnabled: boolean;
   sponsorBlockCategoryModes: Record<SponsorBlockSkipCategory, SponsorBlockCategoryMode>;
   sponsorBlockCategoryStats: Record<SponsorBlockSkipCategory, SponsorBlockCategoryStats>;
+  /**
+   * When true, playing a song in the YouTube Music webview automatically queues
+   * an audio-only download for that track (silently, no prompts).
+   */
+  autoDownloadPlayingSongs: boolean;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -162,9 +172,11 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
   downloadJobStartDelayMs: 0,
   showDebuggingSettings: false,
+  hideAudioFromMainLibrary: true,
   sponsorBlockEnabled: true,
   sponsorBlockCategoryModes: defaultCategoryModes(),
   sponsorBlockCategoryStats: defaultCategoryStats(),
+  autoDownloadPlayingSongs: true,
 };
 
 /** Hidden legacy default was `"chrome"` (not in downloader UI). Treat as no cookie source. */
@@ -192,7 +204,9 @@ export function loadMergedSettings(): RuforgeSettings {
       maxConcurrentDownloads: clampMaxConcurrentDownloads(merged.maxConcurrentDownloads),
       downloadSubtitles: merged.downloadSubtitles !== false,
       autoDownloadScrubberPreviews: merged.autoDownloadScrubberPreviews !== false,
+      autoDownloadPlayingSongs: merged.autoDownloadPlayingSongs !== false,
       showDebuggingSettings: merged.showDebuggingSettings === true,
+      hideAudioFromMainLibrary: merged.hideAudioFromMainLibrary !== false,
       sponsorBlockEnabled: merged.sponsorBlockEnabled === true,
       sponsorBlockCategoryModes: mergeCategoryModes(merged.sponsorBlockCategoryModes),
       sponsorBlockCategoryStats: mergeCategoryStats(merged.sponsorBlockCategoryStats),

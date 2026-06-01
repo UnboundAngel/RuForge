@@ -129,6 +129,202 @@ function explorerProfileProbeInner(): string {
 export const EXPLORER_PROFILE_PROBE_SCRIPT = `(function(){${explorerProfileProbeInner()}})();`;
 export const MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT = `(function(){${musicProfileProbeInner()}})();`;
 
+/** Emitted by the injected script when the active YTM track changes. */
+export const MUSIC_EXPLORE_NOW_PLAYING_EVENT = "music-explore-now-playing";
+
+/** Emitted on navigation with page kind, title, and playlist URL hints for the bottom bar. */
+export const MUSIC_EXPLORE_PAGE_CONTEXT_EVENT = "music-explore-page-context";
+
+/** Page-context probe — safe to re-inject whenever the explore webview is shown. */
+export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
+  if (!window.__TAURI__ || !window.__TAURI__.event) return;
+  function readPageContext() {
+    var href = window.location.href;
+    var path = (window.location.pathname || "/").replace(/\\/+$/, "") || "/";
+    var kind = "other";
+    var pageTitle = null;
+    var playlistUrl = null;
+    var isPlaylistPage = false;
+
+    if (path === "" || path === "/") kind = "home";
+    else if (path.indexOf("/search") === 0) kind = "search";
+    else if (path.indexOf("/library") === 0) kind = "library";
+    else if (path.indexOf("/watch") === 0) {
+      var listParam = new URLSearchParams(window.location.search).get("list");
+      if (listParam) {
+        kind = "playlist";
+        playlistUrl = "https://music.youtube.com/playlist?list=" + listParam;
+        isPlaylistPage = true;
+      } else kind = "watch";
+    }
+    else if (path.indexOf("/playlist") === 0) {
+      kind = "playlist";
+      isPlaylistPage = true;
+      if (/[?&]list=/.test(window.location.search)) playlistUrl = href.split("#")[0];
+    }
+    else if (path.indexOf("/channel") === 0) kind = "channel";
+    else if (path.indexOf("/@") === 0) kind = "artist";
+    else if (path.indexOf("/browse") === 0) kind = "browse";
+
+    try {
+      var header = document.querySelector("ytmusic-detail-header-renderer");
+      if (header) {
+        var titleEl = header.querySelector(".title, h2, yt-formatted-string.title");
+        if (titleEl) pageTitle = (titleEl.textContent || "").trim() || null;
+        var subEl = header.querySelector(".subtitle, .second-subtitle");
+        var sub = subEl ? (subEl.textContent || "").toLowerCase() : "";
+        if (sub.indexOf("playlist") >= 0) {
+          kind = "playlist";
+          isPlaylistPage = true;
+        } else if (sub.indexOf("album") >= 0 && kind === "browse") kind = "album";
+        else if (sub.indexOf("artist") >= 0 && kind === "browse") kind = "artist";
+      }
+    } catch (e) {}
+
+    try {
+      if (document.querySelector('[page-type="MUSIC_PAGE_TYPE_PLAYLIST"], ytmusic-playlist-header-renderer')) {
+        kind = "playlist";
+        isPlaylistPage = true;
+      }
+    } catch (e) {}
+
+    if (kind === "other") {
+      try {
+        var plLinks = document.querySelectorAll('a[href*="list="]');
+        for (var i = 0; i < plLinks.length; i++) {
+          var lh = plLinks[i].href || "";
+          var lm = lh.match(/[?&]list=([^&]+)/);
+          if (lm && lm[1] && lm[1].length > 10) {
+            kind = "playlist";
+            isPlaylistPage = true;
+            playlistUrl = "https://music.youtube.com/playlist?list=" + lm[1];
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+
+    return {
+      url: href,
+      kind: kind,
+      pageTitle: pageTitle,
+      playlistUrl: playlistUrl,
+      isPlaylistPage: isPlaylistPage
+    };
+  }
+  function emitPageContext() {
+    if (!window.__TAURI__ || !window.__TAURI__.event) return;
+    try {
+      var ctx = readPageContext();
+      var key = ctx.kind + "|" + ctx.url + "|" + (ctx.playlistUrl || "") + "|" + (ctx.pageTitle || "");
+      if (window.__rf_last_ctx === key) return;
+      window.__rf_last_ctx = key;
+      window.__TAURI__.event.emit("music-explore-page-context", ctx);
+    } catch (e) {}
+  }
+  window.__rf_emitPageContext = emitPageContext;
+  if (!window.__rf_ctx_ready) {
+    window.__rf_ctx_ready = true;
+    window.addEventListener("yt-navigate-finish", function(){ window.__rf_emitPageContext(); });
+  }
+  window.__rf_emitPageContext();
+})();`;
+
+/** Now-playing probe — safe to re-inject whenever the explore webview is shown. */
+export const MUSIC_EXPLORE_NOW_PLAYING_INSTALL = `(function(){
+  if (!window.__TAURI__ || !window.__TAURI__.event) return;
+  window.__rf_last_vid = window.__rf_last_vid || null;
+  function readNowPlaying() {
+    var videoId = null, title = null, artist = null;
+    try {
+      var player = document.getElementById("movie_player");
+      if (player) {
+        var adShowing = player.classList.contains("ad-showing")
+          || player.classList.contains("ad-interrupting")
+          || !!document.querySelector(".ytp-ad-player-overlay-interrupt, .ytp-ad-preview-container");
+        if (adShowing) {
+          window.__rf_last_vid = null;
+          return { videoId: null, title: null, artist: null };
+        }
+        if (typeof player.getVideoData === "function") {
+          var data = player.getVideoData();
+          if (data && data.video_id) {
+            videoId = data.video_id;
+            title = data.title || null;
+            artist = data.author || null;
+          }
+        }
+      }
+    } catch (e) {}
+    if (!videoId) {
+      try {
+        var links = document.querySelectorAll('ytmusic-player-bar a[href*="watch"], ytmusic-player-bar a[href*="v="]');
+        for (var i = 0; i < links.length; i++) {
+          var lm = (links[i].href || "").match(/[?&]v=([A-Za-z0-9_-]{11})/);
+          if (lm) { videoId = lm[1]; break; }
+        }
+      } catch (e) {}
+    }
+    if (!videoId) {
+      try {
+        var page = document.querySelector("ytmusic-player-page");
+        var resp = page && (page.playerResponse || page.data);
+        if (resp && resp.videoDetails && resp.videoDetails.videoId) {
+          videoId = resp.videoDetails.videoId;
+          title = resp.videoDetails.title || null;
+          artist = resp.videoDetails.author || null;
+        }
+      } catch (e) {}
+    }
+    if (videoId && !title) {
+      try {
+        var titleEl = document.querySelector("ytmusic-player-bar .title, ytmusic-player-bar .byline");
+        if (titleEl) title = (titleEl.textContent || "").trim() || null;
+      } catch (e) {}
+    }
+    if (!videoId) {
+      var um = window.location.href.match(/[?&]v=([A-Za-z0-9_-]{11})/);
+      if (um) videoId = um[1];
+    }
+    return { videoId: videoId, title: title, artist: artist };
+  }
+  function emitNowPlayingWith(np) {
+    if (!window.__TAURI__ || !window.__TAURI__.event) return;
+    try {
+      if (!np.videoId) return;
+      if (window.__rf_last_vid === np.videoId) return;
+      window.__rf_last_vid = np.videoId;
+      window.__TAURI__.event.emit("music-explore-now-playing", np);
+    } catch (e) {}
+  }
+  function emitNowPlaying() {
+    try { emitNowPlayingWith(readNowPlaying()); } catch (e) {}
+  }
+  function tryEmitNowPlaying(retries) {
+    var np = readNowPlaying();
+    if (!np.videoId && retries > 0) {
+      setTimeout(function(){ tryEmitNowPlaying(retries - 1); }, 800);
+      return;
+    }
+    if (np.videoId) emitNowPlayingWith(np);
+  }
+  window.__rf_emitNowPlaying = emitNowPlaying;
+  if (!window.__rf_np_ready) {
+    window.__rf_np_ready = true;
+    window.addEventListener("yt-navigate-finish", function(){
+      window.__rf_last_vid = null;
+      window.__rf_emitNowPlaying();
+    });
+    window.addEventListener("yt-player-updated", function(){
+      setTimeout(function(){ window.__rf_emitNowPlaying(); }, 100);
+    });
+    document.addEventListener("play", function(){
+      setTimeout(function(){ tryEmitNowPlaying(2); }, 400);
+    }, true);
+  }
+  window.__rf_emitNowPlaying();
+})();`;
+
 /** Injected into music-explore-view: URL bridge + profile re-probe on navigation. */
 export const MUSIC_EXPLORE_INIT_SCRIPT = `(function(){
   if (window.__rf_mu__) return;
@@ -139,7 +335,12 @@ export const MUSIC_EXPLORE_INIT_SCRIPT = `(function(){
     }
   }
   function probeProfile() {${musicProfileProbeInner()}}
-  function tick() { emitUrl(); probeProfile(); }
+  function tick() {
+    emitUrl();
+    probeProfile();
+    if (window.__rf_emitNowPlaying) window.__rf_emitNowPlaying();
+    if (window.__rf_emitPageContext) window.__rf_emitPageContext();
+  }
   tick();
   window.addEventListener("yt-navigate-finish", tick);
   setInterval(tick, 2000);

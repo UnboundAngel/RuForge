@@ -5,6 +5,7 @@
   "windows": [
     "main",
     "mini",
+    "music-mini",
     "explorer",
     "explorer-surface",
     "notify"

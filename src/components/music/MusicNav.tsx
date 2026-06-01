@@ -180,7 +180,12 @@ export function MusicNav({
       )}
 
       {footerSlot ? (
-        <div className={cn("shrink-0 pb-2 mt-auto", collapsed ? "px-1.5 flex justify-center" : "px-2")}>
+        <div
+          className={cn(
+            "shrink-0 pb-2 mt-auto",
+            collapsed ? "px-1.5 flex justify-center" : "px-2 w-full",
+          )}
+        >
           {footerSlot}
         </div>
       ) : null}

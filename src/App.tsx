@@ -37,6 +37,7 @@ import {
 } from "./updatePostInstall";
 import { Icon } from "@iconify/react";
 import MiniPlayer from "./MiniPlayer";
+import MusicMiniPlayer from "./components/music-mini/MusicMiniPlayer";
 import { isAudioOnlyPath } from "./mediaKind";
 import { flattenGalleryScanToMediaFiles } from "./galleryScan";
 import { ExplorerWatchQueueButton } from "./components/ExplorerWatchQueueButton";
@@ -53,7 +54,7 @@ import { useRemovableDrivesPoll } from "./hooks/useRemovableDrivesPoll";
 import { buildEntireLibraryExportPreset } from "./lib/exportSelection";
 import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
 import { ConfirmDialogHost } from "./components/ConfirmDialog";
-import type { SendToMainPayload } from "./playerHandoff";
+import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff";
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
@@ -236,7 +237,7 @@ function App() {
   const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
   const selectedPlaylist = useRuforgeStore((s) => s.selectedPlaylist);
   const setSelectedPlaylist = useRuforgeStore((s) => s.setSelectedPlaylist);
-  const [isMini, setIsMini] = useState(false);
+  const [miniKind, setMiniKind] = useState<"video" | "music" | null>(null);
   const isSearchExpanded = useRuforgeStore((s) => s.isSearchExpanded);
   const setIsSearchExpanded = useRuforgeStore((s) => s.setIsSearchExpanded);
   const searchValue = useRuforgeStore((s) => s.searchValue);
@@ -251,6 +252,9 @@ function App() {
   const [settingsScrollable, setSettingsScrollable] = useState(false);
   const settingsTabsDocked = settingsMorphAmount > 0.55;
   const settingsTabShapeLayout = !settingsTabsDocked;
+  /** Bulge + corner fillets only at scroll rest; hide during morph/dock so curves don't bleed over content. */
+  const showSettingsTabBulge =
+    !settingsTabsDocked && settingsMorphAmount < 0.02;
   useMotionValueEvent(settingsTabMorph, "change", setSettingsMorphAmount);
   const settingsTabDockLeft = SIDEBAR_RAIL_PX + 48;
   const sidebarChromeLeft = SIDEBAR_RAIL_PX;
@@ -807,7 +811,8 @@ function App() {
     const checkWindow = async () => {
       try {
         const win = getCurrentWindow();
-        if (win.label === "mini") setIsMini(true);
+        if (win.label === "mini") setMiniKind("video");
+        else if (win.label === "music-mini") setMiniKind("music");
       } catch (e) {
         console.error("Window detection failed", e);
       }
@@ -916,7 +921,7 @@ function App() {
     };
   }, []);
 
-  // Send-to-main handoff from miniplayer
+  // Send-to-main handoff from video miniplayer
   useEffect(() => {
     const unlistenHandoff = listen<SendToMainPayload | MediaFile>("send-to-main", async (event) => {
       const raw = event.payload;
@@ -944,6 +949,38 @@ function App() {
     });
     return () => {
       unlistenHandoff.then((f) => f());
+    };
+  }, []);
+
+  // Send-to-music-main handoff from music miniplayer
+  useEffect(() => {
+    const unlisten = listen<SendToMusicMainPayload>("send-to-music-main", async (event) => {
+      const payload = event.payload;
+      const st = useRuforgeStore.getState();
+      if (typeof payload.volume === "number") st.setVolume(payload.volume);
+      if (typeof payload.muted === "boolean") st.setMuted(payload.muted);
+      st.setPlayingFile(payload.file);
+      useRuforgeStore.setState({
+        musicPlayerResume: {
+          currentTime: Math.max(0, payload.currentTime),
+          paused: payload.paused,
+          playbackSpeed: payload.playbackSpeed ?? 1,
+        },
+        ...(payload.manualQueue !== undefined ? { manualQueue: payload.manualQueue } : {}),
+        ...(payload.playingFromManualQueue !== undefined
+          ? { playingFromManualQueue: payload.playingFromManualQueue }
+          : {}),
+        ...(payload.manualQueueContextIndex !== undefined
+          ? { manualQueueContextIndex: payload.manualQueueContextIndex }
+          : {}),
+        ...(typeof payload.isLooping === "boolean" ? { isLooping: payload.isLooping } : {}),
+      });
+      const main = await WebviewWindow.getByLabel("main");
+      await main?.setFocus().catch(() => {});
+      window.setTimeout(() => void main?.setFocus().catch(() => {}), 120);
+    });
+    return () => {
+      unlisten.then((f) => f());
     };
   }, []);
 
@@ -1246,7 +1283,8 @@ function App() {
   const { open: radialNavOpen, anchor: radialNavAnchor } =
     useAltRadialNav(!!postInstall);
 
-  if (isMini) return <MiniPlayer />;
+  if (miniKind === "video") return <MiniPlayer />;
+  if (miniKind === "music") return <MusicMiniPlayer />;
 
   return (
     <div
@@ -1308,10 +1346,19 @@ function App() {
             <motion.div
               key="settings-tabs"
               initial={false}
+              className="contents"
+            >
+            {settingsMorphAmount > 0 && !settingsTabsDocked ? (
+              <div
+                className="pointer-events-none absolute top-0 left-0 right-0 z-[25] h-10 bg-[#271C18]"
+                aria-hidden
+              />
+            ) : null}
+            <div
               className={
                 settingsTabsDocked
-                  ? "pointer-events-auto fixed top-0 z-[60] flex h-10 items-center"
-                  : "pointer-events-none absolute left-6 top-0 z-20 flex h-[80px] items-start"
+                  ? "pointer-events-auto fixed top-0 z-[30] flex h-10 items-center overflow-hidden"
+                  : "pointer-events-none absolute left-6 top-0 z-[30] flex h-[80px] items-start"
               }
               style={settingsTabsDocked ? { left: settingsTabDockLeft } : undefined}
             >
@@ -1357,22 +1404,32 @@ function App() {
                       <motion.div
                         layoutId={settingsTabShapeLayout ? "settingsTabShape" : undefined}
                         layout={settingsTabShapeLayout}
-                        className={`pointer-events-none absolute inset-0 z-0 bg-[#271C18] rounded-b-[24px] ${
-                          settingsTabsDocked ? "" : "shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+                        className={`pointer-events-none absolute inset-0 z-0 bg-[#271C18] ${
+                          settingsTabsDocked
+                            ? "rounded-b-xl"
+                            : showSettingsTabBulge
+                              ? "rounded-b-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+                              : "rounded-b-[24px]"
                         }`}
-                        style={{
-                          clipPath: "inset(40px -100px -100px -100px)",
-                        }}
+                        style={
+                          showSettingsTabBulge
+                            ? { clipPath: "inset(40px -100px -100px -100px)" }
+                            : undefined
+                        }
                         transition={{
                           layout: { type: "spring", bounce: 0.2, duration: 0.6 },
                         }}
                       >
-                        <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
-                        </div>
-                        <div className="absolute right-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
-                        </div>
+                        {showSettingsTabBulge ? (
+                          <>
+                            <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
+                            </div>
+                            <div className="absolute right-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
+                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
+                            </div>
+                          </>
+                        ) : null}
                       </motion.div>
                     )}
                     <span
@@ -1388,6 +1445,7 @@ function App() {
                 );
               })}
               </motion.div>
+            </div>
             </motion.div>
           ) : (activeTab === "media" && !selectedPlaylist && !postInstall) ? (
             <motion.div
@@ -1445,53 +1503,52 @@ function App() {
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
               </div>
 
-              <button
-                type="button"
-                id="recently-deleted-btn"
-                onClick={() => setRecentlyDeletedOpen(true)}
-                className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex-shrink-0 h-[34px]"
-                aria-label="Recently deleted"
-                title="Recently deleted"
-              >
-                <Trash2 size={16} />
-              </button>
-
-              <AnimatePresence>
-                {isSearchExpanded && (
-                  <motion.div
-                    initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: 240, opacity: 1 }}
-                    exit={{ width: 0, opacity: 0 }}
-                    transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                    className="overflow-hidden h-[34px] flex items-center relative z-10 flex-shrink-0"
-                  >
-                    <div className="w-[240px] pr-5">
-                      <input
-                        ref={searchInputRef}
-                        className="w-full bg-black/20 border border-stone-50/5 rounded-full px-4 py-1.5 text-xs text-stone-50 placeholder-stone-500 outline-none focus:border-[color-mix(in_srgb,var(--accent),transparent_50%)] transition-colors"
-                        placeholder="Search library..."
-                        value={searchValue}
-                        onChange={(e) => setSearchValue(e.target.value)}
-                        onBlur={(e) => {
-                          if (e.relatedTarget?.id === "search-toggle-btn") return;
-                          if (!e.target.value) setIsSearchExpanded(false);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape") setIsSearchExpanded(false);
-                        }}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
               <div className="flex items-center gap-5 h-[34px] flex-shrink-0">
+                <AnimatePresence>
+                  {isSearchExpanded && (
+                    <motion.div
+                      initial={{ width: 0, opacity: 0 }}
+                      animate={{ width: 240, opacity: 1 }}
+                      exit={{ width: 0, opacity: 0 }}
+                      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                      className="overflow-hidden h-[34px] flex items-center relative z-10 flex-shrink-0"
+                    >
+                      <div className="w-[240px] pr-5">
+                        <input
+                          ref={searchInputRef}
+                          className="w-full bg-black/20 border border-stone-50/5 rounded-full px-4 py-1.5 text-xs text-stone-50 placeholder-stone-500 outline-none focus:border-[color-mix(in_srgb,var(--accent),transparent_50%)] transition-colors"
+                          placeholder="Search library..."
+                          value={searchValue}
+                          onChange={(e) => setSearchValue(e.target.value)}
+                          onBlur={(e) => {
+                            if (e.relatedTarget?.id === "search-toggle-btn") return;
+                            if (!e.target.value) setIsSearchExpanded(false);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") setIsSearchExpanded(false);
+                          }}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <button
                   id="search-toggle-btn"
                   onClick={() => setIsSearchExpanded((p) => !p)}
                   className={`transition-colors relative z-10 flex-shrink-0 ${isSearchExpanded ? "text-stone-50" : "text-stone-400 hover:text-stone-50"}`}
                 >
                   <Search size={16} />
+                </button>
+                <button
+                  type="button"
+                  id="recently-deleted-btn"
+                  onClick={() => setRecentlyDeletedOpen(true)}
+                  className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex-shrink-0"
+                  aria-label="Recently deleted"
+                  title="Recently deleted"
+                >
+                  <Trash2 size={16} />
                 </button>
                 <button
                   onClick={() => setActiveTab("settings")}
@@ -1593,12 +1650,12 @@ function App() {
                 const t = n.type ?? "info";
                 const shell =
                   t === "error"
-                    ? "bg-[#2c1818] text-stone-100 border border-red-900/35"
+                    ? "rf-notify-card text-stone-100 border border-rose-400/30"
                     : t === "progress"
-                      ? "bg-[#1e1812] text-stone-50 border border-stone-50/10"
+                      ? "rf-notify-card text-stone-50 border border-white/10"
                       : t === "warning"
-                        ? "bg-[#1e1812] text-stone-50 border-2 border-dotted border-yellow-400/90"
-                        : "bg-[#1e1812] text-stone-50 border border-stone-50/10";
+                        ? "rf-notify-card text-stone-50 border-2 border-dotted border-amber-300/70"
+                        : "rf-notify-card text-stone-50 border border-white/10";
                 const closeBtn =
                   t === "error"
                     ? "text-red-200/70 hover:text-red-100"
@@ -1613,7 +1670,7 @@ function App() {
                   exit={{ opacity: 0, y: 4 }}
                   transition={{ duration: 0.18, ease: "easeOut" }}
                   style={{ willChange: "opacity, transform" }}
-                  className="rounded-xl shadow-lg pointer-events-auto min-w-0 w-full overflow-hidden"
+                  className="rounded-xl pointer-events-auto min-w-0 w-full overflow-hidden"
                 >
                   <div className={`${shell} px-3 py-2 flex items-center gap-2.5 min-w-0 w-full rounded-xl`}>
                     {t === "error" ? (

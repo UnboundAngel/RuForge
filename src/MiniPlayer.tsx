@@ -39,6 +39,7 @@ import { useVideoAmbientBackdrop } from "./useVideoAmbientBackdrop";
 import type { PlayInMiniPayload, SendToMainPayload } from "./playerHandoff";
 import { ensurePostersForFiles, filesMissingPoster } from "./posterBackfill";
 import { isAudioOnlyPath } from "./mediaKind";
+import { filterMainLibraryEntries } from "./mainLibraryFilter";
 import {
   readAudioAutoAdvanceFolder,
   readAudioPrefetchNext,
@@ -757,6 +758,11 @@ export default function MiniPlayer() {
 
   const [libraryScanDirs] = useState(() => readLibraryScanDirsFromLs());
   const scanRootsKey = libraryScanDirs.join("\0");
+
+  const videoLibraryEntries = useMemo(
+    () => filterMainLibraryEntries(library, settings.hideAudioFromMainLibrary !== false),
+    [library, settings.hideAudioFromMainLibrary],
+  );
 
   const groupEntriesByDate = (entries: GalleryEntry[]) => {
     const sorted = [...entries].sort((a, b) => {
@@ -2584,9 +2590,9 @@ export default function MiniPlayer() {
                   <h2 className="text-[11px] font-black text-white uppercase tracking-[0.3em]">Video Library</h2>
                 </div>
                 
-                {library.length > 0 ? (
+                {videoLibraryEntries.length > 0 ? (
                   <div className="space-y-8">
-                    {Object.entries(groupEntriesByDate(library)).map(([date, entries]) => (
+                    {Object.entries(groupEntriesByDate(videoLibraryEntries)).map(([date, entries]) => (
                       <div key={date} className="space-y-4">
                         <h3 className="text-[9px] font-black text-stone-500 uppercase tracking-[0.2em] px-1 border-l-2 border-[color:var(--accent)]/30 ml-1 pl-2">{date}</h3>
                         <div className="grid grid-cols-2 gap-4">
@@ -2720,7 +2726,7 @@ export default function MiniPlayer() {
            className="w-full h-28 glass-elevated border-t border-white/5 flex flex-col overflow-hidden shadow-2xl pointer-events-auto relative z-10"
         >
            <div className="h-28 overflow-x-auto overflow-y-hidden scrollbar-none px-4 py-4 flex items-center space-x-3 pointer-events-auto">
-            {[...library].sort((a, b) => {
+            {[...videoLibraryEntries].sort((a, b) => {
               const timeA = a.kind === 'media' ? a.created : (a.items[0]?.created || 0);
               const timeB = b.kind === 'media' ? b.created : (b.items[0]?.created || 0);
               return timeB - timeA;
@@ -2779,7 +2785,7 @@ export default function MiniPlayer() {
                 </button>
               );
             })}
-            {library.length === 0 && (
+            {videoLibraryEntries.length === 0 && (
               <p className="text-[8px] text-stone-600 font-bold uppercase tracking-widest w-full text-center">Library Empty</p>
             )}
          </div>

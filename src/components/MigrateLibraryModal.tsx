@@ -1,6 +1,15 @@
 import { useState, useCallback } from "react";
+import { FolderTree } from "lucide-react";
 import { migrateLibraryLayout, remapMigrationLocalStorage, type MigrateResult } from "../lib/migrateLibrary";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import {
+  SettingsModalBtnGhost,
+  SettingsModalBtnPrimary,
+  SettingsModalBtnSecondary,
+  SettingsModalEyebrow,
+  SettingsModalShell,
+  SettingsModalSurface,
+} from "./settings/SettingsModalShell";
 
 interface Props {
   open: boolean;
@@ -9,6 +18,13 @@ interface Props {
 }
 
 type Phase = "idle" | "previewing" | "confirming" | "running" | "done" | "error";
+
+const bucketTone: Record<string, string> = {
+  Videos: "text-stone-300",
+  Music: "text-red-400/90",
+  Playlists: "text-amber-400/90",
+  Unsorted: "text-stone-500",
+};
 
 export const MigrateLibraryModal = ({ open, onClose, libraryRoot }: Props) => {
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
@@ -60,160 +76,128 @@ export const MigrateLibraryModal = ({ open, onClose, libraryRoot }: Props) => {
     }
   }, [libraryRoot, stopPlayback, fetchEntries]);
 
-  if (!open) return null;
-
-  const bucketColors: Record<string, string> = {
-    Videos: "text-stone-300",
-    Music: "text-red-400",
-    Playlists: "text-amber-400",
-    Unsorted: "text-stone-500",
-  };
+  const footer = (() => {
+    if (phase === "idle" || phase === "error") {
+      return (
+        <>
+          <SettingsModalBtnSecondary onClick={handleClose}>Cancel</SettingsModalBtnSecondary>
+          <SettingsModalBtnGhost onClick={() => void runPreview()}>Preview</SettingsModalBtnGhost>
+        </>
+      );
+    }
+    if (phase === "confirming" && preview) {
+      return (
+        <>
+          <SettingsModalBtnSecondary onClick={handleClose}>Cancel</SettingsModalBtnSecondary>
+          {preview.moves.length > 0 ? (
+            <SettingsModalBtnPrimary onClick={() => void runMigration()}>
+              Migrate {preview.moves.length} items
+            </SettingsModalBtnPrimary>
+          ) : (
+            <SettingsModalBtnGhost onClick={handleClose}>Close</SettingsModalBtnGhost>
+          )}
+        </>
+      );
+    }
+    if (phase === "done") {
+      return (
+        <SettingsModalBtnPrimary onClick={handleClose}>Done</SettingsModalBtnPrimary>
+      );
+    }
+    return (
+      <span className="px-2 py-2 text-[11px] text-stone-500">Working…</span>
+    );
+  })();
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1C1512] border border-stone-700 rounded-2xl w-full max-w-lg mx-4 overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
-        <div className="px-6 pt-5 pb-4 border-b border-stone-800">
-          <h2 className="text-sm font-bold text-stone-100 tracking-wide">Migrate library layout</h2>
-          <p className="text-[11px] text-stone-500 mt-1">
-            Reorganizes the flat media root into Videos/, Music/, and Playlists/ bucket folders with per-item subfolders.
+    <SettingsModalShell
+      open={open}
+      onClose={handleClose}
+      disableDismiss={phase === "previewing" || phase === "running"}
+      titleId="migrate-library-title"
+      title="Migrate library layout"
+      icon={FolderTree}
+      description="Reorganizes the flat media root into Videos/, Music/, and Playlists/ bucket folders with per-item subfolders."
+      footer={footer}
+    >
+      {phase === "idle" && (
+        <p className="text-[13px] leading-relaxed text-stone-400">
+          Run a preview to list every move before files are relocated. Progress and watch state are preserved after migration.
+        </p>
+      )}
+
+      {(phase === "previewing" || phase === "running") && (
+        <p className="text-[13px] text-stone-400 animate-pulse">
+          {phase === "previewing" ? "Scanning library…" : "Moving files…"}
+        </p>
+      )}
+
+      {phase === "confirming" && preview && (
+        <div className="space-y-4">
+          <p className="text-[13px] text-stone-400">
+            <span className="font-semibold text-stone-200">{preview.moves.length}</span>{" "}
+            items will be moved.
+            {preview.warnings.length > 0 ? (
+              <span className="ml-2 text-amber-400/90">
+                {preview.warnings.length} warnings.
+              </span>
+            ) : null}
+          </p>
+          {preview.moves.length > 0 && (
+            <SettingsModalSurface className="max-h-48 space-y-2 overflow-y-auto rf-scrollbar">
+              {preview.moves.map((m, i) => (
+                <div key={i} className="flex items-start gap-2 text-[11px]">
+                  <span
+                    className={`shrink-0 font-semibold ${bucketTone[m.bucket] ?? "text-stone-400"}`}
+                  >
+                    {m.bucket}
+                  </span>
+                  <span className="min-w-0 truncate text-stone-500" title={m.oldMediaPath}>
+                    {m.oldMediaPath.split(/[\\/]/).pop()}
+                  </span>
+                </div>
+              ))}
+            </SettingsModalSurface>
+          )}
+          {preview.warnings.length > 0 && (
+            <div className="space-y-2">
+              <SettingsModalEyebrow>Warnings</SettingsModalEyebrow>
+              <ul className="space-y-1 text-[11px] leading-relaxed text-amber-400/85">
+                {preview.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {phase === "done" && result && (
+        <div className="space-y-4">
+          <p className="text-[13px] font-semibold text-green-400/90">
+            Migration complete. {result.moves.length} items moved.
+          </p>
+          {result.warnings.length > 0 && (
+            <div className="space-y-2">
+              <SettingsModalEyebrow>Warnings</SettingsModalEyebrow>
+              <ul className="space-y-1 text-[11px] text-amber-400/85">
+                {result.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="text-[12px] text-stone-500">
+            Library re-scan triggered. Progress and watch state preserved.
           </p>
         </div>
+      )}
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-          {phase === "idle" && (
-            <p className="text-[12px] text-stone-400">
-              This moves all 295 items into a structured layout. Run a preview first to see exactly what will change before committing.
-            </p>
-          )}
-
-          {phase === "previewing" && (
-            <p className="text-[12px] text-stone-400 animate-pulse">Scanning library...</p>
-          )}
-
-          {phase === "running" && (
-            <p className="text-[12px] text-stone-400 animate-pulse">Moving files...</p>
-          )}
-
-          {phase === "confirming" && preview && (
-            <div className="space-y-3">
-              <p className="text-[11px] text-stone-400">
-                <span className="text-stone-200 font-semibold">{preview.moves.length}</span> items will be moved.
-                {preview.warnings.length > 0 && (
-                  <span className="text-amber-400 ml-2">{preview.warnings.length} warnings.</span>
-                )}
-              </p>
-              {preview.moves.length > 0 && (
-                <div className="bg-stone-900/60 rounded-xl p-3 space-y-1 max-h-48 overflow-y-auto">
-                  {preview.moves.map((m, i) => (
-                    <div key={i} className="flex items-start gap-2 text-[10px]">
-                      <span className={`shrink-0 font-semibold ${bucketColors[m.bucket] ?? "text-stone-400"}`}>
-                        {m.bucket}
-                      </span>
-                      <span className="text-stone-500 truncate" title={m.oldMediaPath}>
-                        {m.oldMediaPath.split(/[\\/]/).pop()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {preview.warnings.length > 0 && (
-                <details className="text-[10px] text-amber-500">
-                  <summary className="cursor-pointer">Warnings</summary>
-                  <ul className="mt-1 space-y-0.5 pl-3">
-                    {preview.warnings.map((w, i) => <li key={i}>{w}</li>)}
-                  </ul>
-                </details>
-              )}
-            </div>
-          )}
-
-          {phase === "done" && result && (
-            <div className="space-y-2">
-              <p className="text-[12px] text-green-400 font-semibold">
-                Migration complete. {result.moves.length} items moved.
-              </p>
-              {result.warnings.length > 0 && (
-                <details className="text-[10px] text-amber-500">
-                  <summary className="cursor-pointer">{result.warnings.length} warnings</summary>
-                  <ul className="mt-1 space-y-0.5 pl-3">
-                    {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
-                  </ul>
-                </details>
-              )}
-              <p className="text-[11px] text-stone-500">Library re-scan triggered. Progress/watch state has been preserved.</p>
-            </div>
-          )}
-
-          {phase === "error" && error && (
-            <p className="text-[12px] text-red-400">{error}</p>
-          )}
-        </div>
-
-        <div className="px-6 py-4 border-t border-stone-800 flex justify-end gap-3">
-          {(phase === "idle" || phase === "error") && (
-            <>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="px-4 py-2 text-[10px] font-bold tracking-widest text-stone-400 hover:text-stone-200 transition-colors"
-              >
-                CANCEL
-              </button>
-              <button
-                type="button"
-                onClick={runPreview}
-                className="px-5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl text-[10px] font-black tracking-widest transition-all border border-stone-700 active:scale-95"
-              >
-                PREVIEW
-              </button>
-            </>
-          )}
-
-          {phase === "confirming" && preview && (
-            <>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="px-4 py-2 text-[10px] font-bold tracking-widest text-stone-400 hover:text-stone-200 transition-colors"
-              >
-                CANCEL
-              </button>
-              {preview.moves.length > 0 && (
-                <button
-                  type="button"
-                  onClick={runMigration}
-                  className="px-5 py-2 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                >
-                  MIGRATE {preview.moves.length} ITEMS
-                </button>
-              )}
-              {preview.moves.length === 0 && (
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="px-5 py-2 bg-stone-800 text-stone-400 rounded-xl text-[10px] font-black tracking-widest border border-stone-700"
-                >
-                  NOTHING TO DO
-                </button>
-              )}
-            </>
-          )}
-
-          {phase === "done" && (
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl text-[10px] font-black tracking-widest transition-all border border-stone-700 active:scale-95"
-            >
-              DONE
-            </button>
-          )}
-
-          {(phase === "previewing" || phase === "running") && (
-            <span className="text-[10px] text-stone-500 py-2">Working...</span>
-          )}
-        </div>
-      </div>
-    </div>
+      {phase === "error" && error && (
+        <p className="text-[13px] text-red-400/90" role="alert">
+          {error}
+        </p>
+      )}
+    </SettingsModalShell>
   );
 };

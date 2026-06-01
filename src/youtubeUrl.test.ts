@@ -6,6 +6,7 @@ import {
   isMusicYouTubeUrl,
   isMusicYouTubeWatchUrl,
   resolveMusicExplorePasteUrl,
+  youtubeMusicSearchUrl,
 } from "./youtubeUrl";
 
 const TRACK =
@@ -57,5 +58,12 @@ describe("Music Explore URL helpers", () => {
   it("rejects non-YouTube URLs", () => {
     expect(classifyMusicExploreUrl("https://example.com/watch?v=Gao3xSDSibk")).toBeNull();
     expect(isMusicExplorePasteUrl("not a url")).toBe(false);
+  });
+
+  it("builds music.youtube.com search URLs", () => {
+    expect(youtubeMusicSearchUrl("  lofi beats  ")).toBe(
+      "https://music.youtube.com/search?q=lofi+beats",
+    );
+    expect(youtubeMusicSearchUrl("   ")).toBeNull();
   });
 });
