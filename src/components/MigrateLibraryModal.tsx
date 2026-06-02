@@ -69,7 +69,7 @@ export const MigrateLibraryModal = ({ open, onClose, libraryRoot }: Props) => {
       remapMigrationLocalStorage(res.moves);
       setResult(res);
       setPhase("done");
-      void fetchEntries();
+      void fetchEntries({ sweepDuplicates: true });
     } catch (e) {
       setError(String(e));
       setPhase("error");

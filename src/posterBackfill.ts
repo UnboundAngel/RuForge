@@ -1,11 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
+import { isAudioOnlyPath } from "./mediaKind";
 import type { MediaFile } from "./types";
 
 const CONCURRENCY = 2;
 
-/** Videos with neither yt-dlp art nor `poster.jpg` yet (typical legacy downloads). */
+/** Videos with neither yt-dlp art, embedded cover, nor `poster.jpg` yet (typical legacy downloads). */
 export function filesMissingPoster(files: MediaFile[]): MediaFile[] {
-  return files.filter((f) => !f.thumbnailPath && !f.ruforgePosterPath);
+  return files.filter(
+    (f) =>
+      !isAudioOnlyPath(f.path) &&
+      !f.thumbnailPath &&
+      !f.ruforgePosterPath &&
+      !f.embeddedCoverPath,
+  );
 }
 
 /** Run lightweight ffmpeg poster extraction, a few files at a time. */

@@ -118,6 +118,11 @@ export interface RuforgeStore extends DownloadQueueSlice {
 
   /** Gallery slice (not persisted). Library list matches `MediaView` / `scan_gallery` shape. */
   entries: GalleryEntry[];
+  /**
+   * Scan roots already passed through `sweep_library_download_duplicates` this app session.
+   * Not persisted: each launch may run one full dedupe sweep per root on first `fetchEntries`.
+   */
+  galleryDedupeSweptRoots: string[];
   /** Bumps when `entries` is replaced from a successful on-disk gallery scan (`fetchEntries`). */
   libraryScanRevision: number;
   galleryLoading: boolean;
@@ -259,8 +264,10 @@ export interface RuforgeStore extends DownloadQueueSlice {
     manageLoadingStart?: boolean;
     skipPosterBackfill?: boolean;
     posterEpoch?: number;
+    /** Full-tree duplicate download cleanup before scan (e.g. after library migration). */
+    sweepDuplicates?: boolean;
   }) => Promise<void>;
-  invalidateEntries: (opts?: { silent?: boolean }) => Promise<void>;
+  invalidateEntries: (opts?: { silent?: boolean; sweepDuplicates?: boolean }) => Promise<void>;
   setGalleryActiveMenu: (menu: GalleryContextMenuState) => void;
   setGalleryExtractingPath: (path: string | null) => void;
 }
@@ -335,6 +342,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       isFocused: false,
 
       entries: [],
+      galleryDedupeSweptRoots: [],
       libraryScanRevision: 0,
       galleryLoading: true,
       extractingByPath: {},
@@ -360,6 +368,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       setPlayingFile: (playingFile) => {
         const isLooping = playingFile ? readLoopForPath(playingFile.path) : false;
+        if (playingFile && get().navMode === "music") {
+          void emitTo("music-mini", "stop-music-mini-playback", "main-app").catch(() => null);
+        }
         set({ playingFile, isLooping });
       },
       clearPlayerResumeAt: () => set({ playerResumeAt: null }),
@@ -845,6 +856,20 @@ export const useRuforgeStore = create<RuforgeStore>()(
         let backfillList: MediaFile[] | null = null;
         try {
           const dirs = galleryScanRoots(libraryScanDirs);
+          const forceSweep = opts?.sweepDuplicates === true;
+          const sweptSet = new Set(get().galleryDedupeSweptRoots);
+          let sweptRootsUpdated = false;
+          for (const dir of dirs) {
+            const key = normalizeScanDirKey(dir);
+            if (forceSweep || !sweptSet.has(key)) {
+              await invoke("sweep_library_download_duplicates", { dir });
+              sweptSet.add(key);
+              sweptRootsUpdated = true;
+            }
+          }
+          if (sweptRootsUpdated) {
+            set({ galleryDedupeSweptRoots: Array.from(sweptSet) });
+          }
           const scans = await Promise.all(dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d })));
           const combined = scans.flat();
           const unique = dedupeGalleryEntriesCombined(
@@ -888,7 +913,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       invalidateEntries: async (opts) => {
         if (!opts?.silent) set({ galleryLoading: true });
-        await get().fetchEntries({ manageLoadingStart: false, skipPosterBackfill: false });
+        await get().fetchEntries({
+          manageLoadingStart: false,
+          skipPosterBackfill: false,
+          sweepDuplicates: opts?.sweepDuplicates,
+        });
       },
 
       setGalleryActiveMenu: (activeMenu) => set({ activeMenu }),
