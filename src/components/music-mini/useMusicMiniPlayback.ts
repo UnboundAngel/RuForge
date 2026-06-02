@@ -42,9 +42,18 @@ function writeStoredVolume(v: number) {
   }
 }
 
-function coverSrcFor(file: MediaFile): string | null {
+export function coverSrcFor(file: MediaFile): string | null {
   const p = bestCoverPath(file);
   return p ? convertFileSrc(p) : null;
+}
+
+const LAYER_PRUNE_MS = 760;
+
+/** Drop exited crossfade layers; keep the layer for `keepId`, or the newest layer if stale. */
+function pruneCoverLayers(prev: CoverLayer[], keepId: number): CoverLayer[] {
+  const kept = prev.find((l) => l.id === keepId);
+  if (kept) return [kept];
+  return prev.length > 0 ? [prev[prev.length - 1]!] : prev;
 }
 
 function beginAtTime(
@@ -105,6 +114,7 @@ export function useMusicMiniPlayback() {
   const [muted, setMuted] = useState(false);
   const [layers, setLayers] = useState<CoverLayer[]>([]);
   const layerIdRef = useRef(0);
+  const layerPruneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedPathRef = useRef<string | null>(null);
 
   const advanceState: MusicAdvanceState = {
@@ -145,10 +155,16 @@ export function useMusicMiniPlayback() {
         setPlaylistIndex(advance.playlistIndex);
       }
       const id = layerIdRef.current++;
-      setLayers((prev) => [...prev, { id, file, coverSrc: coverSrcFor(file), dir }]);
-      const t = window.setTimeout(() => {
-        setLayers((prev) => prev.filter((l) => l.id === id));
-      }, 760);
+      const coverSrc = coverSrcFor(file);
+      if (layerPruneTimerRef.current) {
+        clearTimeout(layerPruneTimerRef.current);
+        layerPruneTimerRef.current = null;
+      }
+      setLayers((prev) => [...prev, { id, file, coverSrc, dir }]);
+      layerPruneTimerRef.current = window.setTimeout(() => {
+        setLayers((prev) => pruneCoverLayers(prev, id));
+        layerPruneTimerRef.current = null;
+      }, LAYER_PRUNE_MS);
 
       const path = file.path;
       const needsLoad = loadedPathRef.current !== path;
@@ -174,8 +190,6 @@ export function useMusicMiniPlayback() {
 
       if (el.readyState >= 1) applyStart();
       else el.addEventListener("loadedmetadata", applyStart, { once: true });
-
-      return () => window.clearTimeout(t);
     },
     [volume, muted, isLooping],
   );
@@ -209,6 +223,13 @@ export function useMusicMiniPlayback() {
     [loadFile],
   );
 
+  useEffect(() => () => {
+    if (layerPruneTimerRef.current) {
+      clearTimeout(layerPruneTimerRef.current);
+      layerPruneTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     void emit("music-mini-ready");
     const unlistenPlay = listen<PlayInMusicMiniPayload>("play-in-music-mini", (e) => {
@@ -223,6 +244,11 @@ export function useMusicMiniPlayback() {
       }
       loadedPathRef.current = null;
       setPlayingFile(null);
+      setLayers([]);
+      if (layerPruneTimerRef.current) {
+        clearTimeout(layerPruneTimerRef.current);
+        layerPruneTimerRef.current = null;
+      }
       setEffectivePlaylist([]);
       setPlaylistIndex(0);
       setManualQueue([]);

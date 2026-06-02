@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, ListMusic, RefreshCw, Link2, Copy, X, ArrowRight, Loader2, CloudDownload } from "lucide-react";
+import { Download, ListMusic, RefreshCw, Link2, Copy, X, ArrowRight, Loader2, CloudDownload, Check, CheckCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import {
@@ -18,6 +18,10 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
 import { playlistFolderTitle, type MusicPlaylistPage } from "@/lib/musicExploreTracks";
+import {
+  MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION,
+  throttleMusicExplorePageFetch,
+} from "@/lib/ytdlpPageFetchThrottle";
 import type { MusicExplorePageContext } from "@/lib/musicExplorePageContext";
 
 type Props = {
@@ -47,6 +51,80 @@ function pageKindLabel(kind: MusicExplorePageContext["kind"]): string {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Ripple button
+// ---------------------------------------------------------------------------
+
+type RippleDot = { id: number; x: number; y: number; r: number };
+
+function RippleBtn({
+  className,
+  style,
+  children,
+  onMouseDown,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const [ripples, setRipples] = useState<RippleDot[]>([]);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const r = Math.hypot(rect.width, rect.height);
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const id = performance.now() + Math.random();
+      setRipples((prev) => [...prev, { id, x, y, r }]);
+      setTimeout(() => setRipples((prev) => prev.filter((rp) => rp.id !== id)), 780);
+      (onMouseDown as React.MouseEventHandler<HTMLButtonElement> | undefined)?.(e);
+    },
+    [onMouseDown],
+  );
+
+  return (
+    <button
+      className={cn("relative overflow-hidden", className)}
+      style={style}
+      onMouseDown={handleMouseDown}
+      {...rest}
+    >
+      {/* Ripple layers — rendered first so content paints above via relative z-10 */}
+      {ripples.map((rp) => (
+        <motion.span
+          key={rp.id}
+          aria-hidden
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: [0, 0.92, 1.18], opacity: [0.48, 0.34, 0] }}
+          transition={{
+            duration: 0.72,
+            ease: [0.22, 1, 0.36, 1],
+            times: [0, 0.32, 1],
+          }}
+          style={{
+            position: "absolute",
+            left: rp.x - rp.r,
+            top: rp.y - rp.r,
+            width: rp.r * 2,
+            height: rp.r * 2,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.32)",
+            boxShadow: "0 0 0 1px rgba(255,255,255,0.06)",
+            pointerEvents: "none",
+            zIndex: 0,
+            willChange: "transform, opacity",
+          }}
+        />
+      ))}
+      <span className="relative z-10 flex items-center gap-1.5">
+        {children}
+      </span>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function MusicExploreBottomBar({
   shellBlack = false,
   currentUrl,
@@ -65,16 +143,46 @@ export function MusicExploreBottomBar({
   const enqueueDownload = useRuforgeStore((s) => s.enqueueDownload);
   const releaseHeldDownloadJobs = useRuforgeStore((s) => s.releaseHeldDownloadJobs);
   const pumpDownloadQueue = useRuforgeStore((s) => s.pumpDownloadQueue);
-  const queueActive = useRuforgeStore((s) =>
-    s.downloadJobs.filter(
-      (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
-    ).length,
-  );
+  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
+  const queueActive = downloadJobs.filter(
+    (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+  ).length;
 
   const [pasteInputValue, setPasteInputValue] = useState("");
   const [pasteChecking, setPasteChecking] = useState(false);
   const [downloadingPlaylist, setDownloadingPlaylist] = useState(false);
+  const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Track which playlist URLs were queued this session + folder name for queue matching.
+  const downloadedUrlsRef = useRef(new Set<string>());
+  const playlistFolderByCanonicalRef = useRef(new Map<string, string>());
+
+  const playlistCanonicalUrl = (() => {
+    const target = pageContext.actionUrl ?? currentUrl;
+    const listId = extractYouTubePlaylistId(target);
+    if (listId) return `https://music.youtube.com/playlist?list=${listId}`;
+    return canonicalMusicYouTubeUrl(target) ?? (target.trim() || null);
+  })();
+
+  const isPlaylistQueued = Boolean(
+    playlistCanonicalUrl && downloadedUrlsRef.current.has(playlistCanonicalUrl),
+  );
+
+  const playlistOutputFolder = playlistCanonicalUrl
+    ? playlistFolderByCanonicalRef.current.get(playlistCanonicalUrl)
+    : undefined;
+  const isPlaylistDownloadingInQueue = Boolean(
+    playlistOutputFolder
+    && downloadJobs.some(
+      (j) =>
+        j.options.playlistOutputFolder === playlistOutputFolder
+        && (j.status === "queued" || j.status === "downloading" || j.status === "paused"),
+    ),
+  );
+
+  const isPlaylistDownloading = downloadingPlaylist || isPlaylistDownloadingInQueue;
+  const isPlaylistInLibrary = isPlaylistQueued && !isPlaylistDownloading;
 
   const submitPasteUrl = useCallback((raw?: string) => {
     const resolved = resolveMusicExplorePasteUrl((raw ?? pasteInputValue).trim());
@@ -115,7 +223,6 @@ export function MusicExploreBottomBar({
   }, [pasteMode, onPasteUrlReady]);
 
   const downloadPlaylist = useCallback(async (targetUrl: string) => {
-    // Prefer the clean /playlist?list= form so yt-dlp always hits the playlist endpoint.
     const listId = extractYouTubePlaylistId(targetUrl);
     const canonical = listId
       ? `https://music.youtube.com/playlist?list=${listId}`
@@ -130,7 +237,9 @@ export function MusicExploreBottomBar({
       let offset = 0;
       let hasMore = true;
       let folderName: string | undefined;
-      while (hasMore) {
+      let pagesFetched = 0;
+      while (hasMore && pagesFetched < MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION) {
+        await throttleMusicExplorePageFetch();
         const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
           url: canonical,
           offset,
@@ -138,6 +247,7 @@ export function MusicExploreBottomBar({
           browserCookies: settings.browserContext ?? null,
           cookieFile: settings.cookieFile ?? null,
         });
+        pagesFetched += 1;
         if (!folderName) {
           folderName = sanitizePlaylistFolderName(playlistFolderTitle(page.title, canonical));
         }
@@ -155,6 +265,8 @@ export function MusicExploreBottomBar({
       }
       releaseHeldDownloadJobs();
       pumpDownloadQueue();
+      downloadedUrlsRef.current.add(canonical);
+      if (folderName) playlistFolderByCanonicalRef.current.set(canonical, folderName);
     } catch (e) {
       console.warn("[MusicExploreBottomBar] download playlist error:", e);
     } finally {
@@ -163,6 +275,7 @@ export function MusicExploreBottomBar({
   }, [
     enqueueDownload,
     outputDir,
+    pageContext.actionUrl,
     pumpDownloadQueue,
     releaseHeldDownloadJobs,
     saveToInternal,
@@ -184,7 +297,11 @@ export function MusicExploreBottomBar({
 
   const copyUrl = async () => {
     if (!currentUrl) return;
-    try { await navigator.clipboard.writeText(currentUrl); } catch { /* ok */ }
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch { /* ok */ }
   };
 
   const btn =
@@ -216,9 +333,6 @@ export function MusicExploreBottomBar({
             style={{ color: "var(--music-accent)" }}
           >
             {contextLabel}
-          </span>
-          <span className="text-[10px] truncate min-w-0 opacity-80">
-            {pageContext.hint}
           </span>
         </div>
       )}
@@ -310,32 +424,45 @@ export function MusicExploreBottomBar({
               className="flex flex-1 min-w-0 items-center gap-0.5"
             >
               {showDownloadPlaylist && (
-                <button
+                <RippleBtn
                   type="button"
                   onClick={handleDownloadPlaylist}
                   disabled={downloadingPlaylist}
                   className={cn(btn, "rf-music-tooltip-anchor")}
                   data-tooltip={
-                    pageContext.canDownloadPlaylist
-                      ? "Download every track in this playlist"
-                      : "Open the download panel for this playlist"
+                    isPlaylistDownloading
+                      ? "Downloading tracks from this playlist"
+                      : isPlaylistInLibrary
+                        ? "Re-download this playlist"
+                        : pageContext.canDownloadPlaylist
+                          ? "Download every track in this playlist"
+                          : "Open the download panel for this playlist"
                   }
-                  style={{ color: "var(--music-text-primary)" }}
+                  style={{
+                    color: isPlaylistInLibrary
+                      ? "var(--music-text-secondary)"
+                      : "var(--music-text-primary)",
+                  }}
                 >
-                  {downloadingPlaylist ? (
+                  {isPlaylistDownloading ? (
                     <Loader2 size={15} className="animate-spin" style={{ color: "var(--music-accent)" }} />
+                  ) : isPlaylistInLibrary ? (
+                    <CheckCheck size={15} style={{ color: "var(--music-accent)" }} />
                   ) : (
                     <Download size={15} style={{ color: "var(--music-accent)" }} />
                   )}
                   <span>
-                    Download playlist?
-                    {queueActive > 0 ? ` (${queueActive})` : ""}
+                    {isPlaylistDownloading
+                      ? "Playlist downloading"
+                      : isPlaylistInLibrary
+                        ? "Playlist in library"
+                        : `Download playlist${queueActive > 0 ? ` (${queueActive})` : ""}`}
                   </span>
-                </button>
+                </RippleBtn>
               )}
 
               {showPickTracks && (
-                <button
+                <RippleBtn
                   type="button"
                   onClick={onPickTracks}
                   className={cn(btn, "rf-music-tooltip-anchor")}
@@ -343,22 +470,22 @@ export function MusicExploreBottomBar({
                 >
                   <ListMusic size={15} />
                   <span>Pick tracks</span>
-                </button>
+                </RippleBtn>
               )}
 
               {pageContext.kind === "playlist" && pageContext.canDownloadPlaylist && (
-                <button
+                <RippleBtn
                   type="button"
                   onClick={onPickTracks}
                   className={cn(btn, "rf-music-tooltip-anchor")}
                   data-tooltip="Choose individual tracks"
                 >
                   <ListMusic size={15} />
-                  <span>Pick tracks</span>
-                </button>
+                  <span>Pick individual</span>
+                </RippleBtn>
               )}
 
-              <button
+              <RippleBtn
                 type="button"
                 onClick={onActivatePaste}
                 className={cn(btn, "rf-music-tooltip-anchor")}
@@ -366,9 +493,9 @@ export function MusicExploreBottomBar({
               >
                 <Link2 size={15} />
                 <span>Paste link</span>
-              </button>
+              </RippleBtn>
 
-              <button
+              <RippleBtn
                 type="button"
                 onClick={onReload}
                 className={cn(btn, "rf-music-tooltip-anchor")}
@@ -376,10 +503,10 @@ export function MusicExploreBottomBar({
               >
                 <RefreshCw size={15} />
                 <span>Reload</span>
-              </button>
+              </RippleBtn>
 
               <div className="ml-auto flex items-center gap-0.5">
-                <button
+                <RippleBtn
                   type="button"
                   onClick={() => void updateSetting("autoDownloadPlayingSongs", settings.autoDownloadPlayingSongs === false)}
                   className={cn(btn, "rf-music-tooltip-anchor gap-1.5")}
@@ -392,18 +519,42 @@ export function MusicExploreBottomBar({
                 >
                   <CloudDownload size={15} />
                   <span>Auto-save</span>
-                </button>
+                </RippleBtn>
 
                 {currentUrl && (
-                  <button
+                  <RippleBtn
                     type="button"
                     onClick={() => void copyUrl()}
                     className={cn(btn, "rf-music-tooltip-anchor")}
-                    data-tooltip="Copy page URL"
+                    data-tooltip={copied ? "Copied!" : "Copy page URL"}
                   >
-                    <Copy size={15} />
-                    <span>Copy URL</span>
-                  </button>
+                    <AnimatePresence mode="wait" initial={false}>
+                      {copied ? (
+                        <motion.span
+                          key="check"
+                          initial={{ scale: 0.6, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.6, opacity: 0 }}
+                          transition={{ duration: 0.13 }}
+                          style={{ display: "flex", color: "var(--music-accent)" }}
+                        >
+                          <Check size={15} />
+                        </motion.span>
+                      ) : (
+                        <motion.span
+                          key="copy"
+                          initial={{ scale: 0.6, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.6, opacity: 0 }}
+                          transition={{ duration: 0.13 }}
+                          style={{ display: "flex" }}
+                        >
+                          <Copy size={15} />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                    <span>{copied ? "Copied" : "Copy URL"}</span>
+                  </RippleBtn>
                 )}
               </div>
             </motion.div>

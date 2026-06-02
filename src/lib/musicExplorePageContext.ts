@@ -1,3 +1,4 @@
+import type { MusicExploreHarvestedTracklist } from "@/lib/musicExploreTracklistHarvest";
 import {
   canonicalMusicYouTubeUrl,
   canonicalYouTubePlaylistUrl,
@@ -21,6 +22,11 @@ export type MusicExplorePageKind =
   | "channel"
   | "other";
 
+export type MusicExploreShelfLink = {
+  title: string;
+  url: string;
+};
+
 /** Payload from the injected YTM webview script (`music-explore-page-context`). */
 export type MusicExplorePageContextPayload = {
   url: string;
@@ -28,6 +34,11 @@ export type MusicExplorePageContextPayload = {
   pageTitle?: string | null;
   playlistUrl?: string | null;
   isPlaylistPage?: boolean;
+  /** Prefer this over channel home when loading artist Albums/Browse shelves. */
+  browseTargetUrl?: string | null;
+  shelfLinks?: MusicExploreShelfLink[] | null;
+  /** Tracklist harvested from ytmusic-browse-response.data (album / OLAK shelf). */
+  harvestedTracklist?: MusicExploreHarvestedTracklist | null;
 };
 
 export type MusicExplorePageContext = {
@@ -36,6 +47,12 @@ export type MusicExplorePageContext = {
   pageTitle: string | null;
   /** Best URL for download-all / pick-tracks actions. */
   actionUrl: string | null;
+  /** YTM page to pass to yt-dlp for shelf/album discovery (Browse/Albums tab). */
+  browseTargetUrl: string | null;
+  /** Album/playlist links scraped from visible shelves in the webview. */
+  shelfLinks: MusicExploreShelfLink[];
+  /** Complete album/playlist tracklist from webview JSON when harvest gate passes. */
+  harvestedTracklist: MusicExploreHarvestedTracklist | null;
   hint: string;
   canDownloadPlaylist: boolean;
   canPickTracks: boolean;
@@ -49,7 +66,7 @@ const PAGE_HINTS: Record<MusicExplorePageKind, string> = {
   playlist: "Playlist — download every track or pick individual songs",
   watch: "Song — auto-save grabs this track while it plays",
   browse: "Browse — use Pick tracks to see what you can download",
-  artist: "Artist — browse their playlists, then download",
+  artist: "Artist — open Albums or Browse, then Pick tracks",
   album: "Album — pick tracks from the sidebar to download",
   channel: "Channel — browse playlists and albums to download",
   other: "Paste a music link or use Pick tracks on this page",
@@ -88,6 +105,40 @@ function kindFromUrl(url: string): MusicExplorePageKind {
   return "other";
 }
 
+function normalizeShelfLinks(raw?: MusicExploreShelfLink[] | null): MusicExploreShelfLink[] {
+  if (!raw?.length) return [];
+  const seen = new Set<string>();
+  const out: MusicExploreShelfLink[] = [];
+  for (const link of raw) {
+    const url = link.url?.trim();
+    const title = link.title?.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push({ title: title || url, url });
+    if (out.length >= 50) break;
+  }
+  return out;
+}
+
+function resolveBrowseTargetUrl(
+  url: string,
+  kind: MusicExplorePageKind,
+  browseTargetUrl?: string | null,
+): string | null {
+  const fromPayload = browseTargetUrl?.trim();
+  if (fromPayload) {
+    return (
+      resolveMusicExplorePasteUrl(fromPayload)
+      ?? canonicalMusicYouTubeUrl(fromPayload)
+      ?? fromPayload
+    );
+  }
+  if (kind === "browse" || kind === "album") {
+    return resolveMusicExplorePasteUrl(url) ?? canonicalMusicYouTubeUrl(url);
+  }
+  return null;
+}
+
 function resolveActionUrl(url: string, playlistUrl?: string | null): string | null {
   const fromPlaylist = playlistUrl?.trim();
   if (fromPlaylist) {
@@ -111,11 +162,42 @@ function resolveActionUrl(url: string, playlistUrl?: string | null): string | nu
   return url.trim() || null;
 }
 
+function normalizeHarvestedTracklist(
+  raw?: MusicExploreHarvestedTracklist | null,
+): MusicExploreHarvestedTracklist | null {
+  if (!raw?.tracks?.length) return null;
+  const tracks = raw.tracks
+    .map((t) => ({
+      videoId: t.videoId?.trim() ?? "",
+      title: t.title?.trim() ?? "",
+      durationSeconds: t.durationSeconds ?? null,
+      artist: t.artist?.trim() || null,
+      thumbnail: t.thumbnail?.trim() || null,
+    }))
+    .filter((t) => t.videoId.length >= 11 && t.title.length > 0);
+  if (tracks.length === 0) return null;
+  return {
+    harvestSourceUrl: raw.harvestSourceUrl?.trim() || "",
+    playlistUrl: raw.playlistUrl?.trim() || null,
+    browseTargetUrl: raw.browseTargetUrl?.trim() || null,
+    shelfKind: raw.shelfKind ?? null,
+    headerTrackCount:
+      typeof raw.headerTrackCount === "number" && raw.headerTrackCount > 0
+        ? raw.headerTrackCount
+        : null,
+    hasContinuation: Boolean(raw.hasContinuation),
+    tracks,
+  };
+}
+
 function buildContext(
   url: string,
   kind: MusicExplorePageKind,
   pageTitle: string | null,
   actionUrl: string | null,
+  browseTargetUrl: string | null,
+  shelfLinks: MusicExploreShelfLink[],
+  harvestedTracklist: MusicExploreHarvestedTracklist | null,
 ): MusicExplorePageContext {
   const hasPlaylistListId = Boolean(
     actionUrl && (isMusicYouTubePlaylistUrl(actionUrl) || extractYouTubePlaylistId(actionUrl)),
@@ -134,6 +216,9 @@ function buildContext(
     kind: isPlaylist ? "playlist" : kind,
     pageTitle,
     actionUrl,
+    browseTargetUrl,
+    shelfLinks,
+    harvestedTracklist,
     hint: PAGE_HINTS[isPlaylist ? "playlist" : kind],
     canDownloadPlaylist: hasPlaylistListId,
     canPickTracks: isPlaylist || isBrowsable || isWatch,
@@ -141,11 +226,56 @@ function buildContext(
   };
 }
 
+function isArtistOrChannelHomeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.hostname.replace(/^www\./i, "").toLowerCase() !== "music.youtube.com") {
+      return false;
+    }
+    const path = parsed.pathname.replace(/\/+$/, "") || "/";
+    return path.startsWith("/@") || path.startsWith("/channel/");
+  } catch {
+    return false;
+  }
+}
+
+function isSingleAlbumBrowseUrl(url: string): boolean {
+  return /music\.youtube\.com\/browse\/MPAD/i.test(url);
+}
+
+/** Panel / yt-dlp load URL: paste, then playlist action, then browse tab (not first shelf), then live page. */
+export function resolveExplorePanelUrl(
+  pasteUrl: string,
+  context: Pick<MusicExplorePageContext, "browseTargetUrl" | "actionUrl">,
+  currentMusicExploreUrl: string,
+): string {
+  const pasted = pasteUrl.trim();
+  if (pasted) return pasted;
+  const action = context.actionUrl?.trim();
+  if (
+    action
+    && (isMusicYouTubePlaylistUrl(action) || extractYouTubePlaylistId(action))
+  ) {
+    return action;
+  }
+  const browseTarget = context.browseTargetUrl?.trim();
+  const current = currentMusicExploreUrl.trim();
+  if (browseTarget) {
+    if (isArtistOrChannelHomeUrl(current) && isSingleAlbumBrowseUrl(browseTarget)) {
+      return current;
+    }
+    return browseTarget;
+  }
+  if (action) return action;
+  return current;
+}
+
 /** URL-only fallback when the webview has not emitted page context yet. */
 export function classifyMusicExplorePageFromUrl(url: string): MusicExplorePageContext {
   const kind = kindFromUrl(url);
   const actionUrl = resolveActionUrl(url);
-  return buildContext(url, kind, null, actionUrl);
+  const browseTargetUrl = resolveBrowseTargetUrl(url, kind);
+  return buildContext(url, kind, null, actionUrl, browseTargetUrl, [], null);
 }
 
 export function mergeMusicExplorePageContext(
@@ -154,11 +284,13 @@ export function mergeMusicExplorePageContext(
 ): MusicExplorePageContext {
   const effectiveUrl = payload?.url?.trim() || url.trim();
   if (!effectiveUrl) {
-    return buildContext("", "other", null, null);
+    return buildContext("", "other", null, null, null, [], null);
   }
 
   let kind = payload?.kind ?? kindFromUrl(effectiveUrl);
   const pageTitle = payload?.pageTitle?.trim() || null;
+  const shelfLinks = normalizeShelfLinks(payload?.shelfLinks);
+  const harvestedTracklist = normalizeHarvestedTracklist(payload?.harvestedTracklist);
 
   if (payload?.isPlaylistPage || payload?.playlistUrl) {
     kind = "playlist";
@@ -169,5 +301,19 @@ export function mergeMusicExplorePageContext(
   }
 
   const actionUrl = resolveActionUrl(effectiveUrl, payload?.playlistUrl);
-  return buildContext(effectiveUrl, kind, pageTitle, actionUrl);
+  const browseTargetUrl = resolveBrowseTargetUrl(
+    effectiveUrl,
+    kind,
+    payload?.browseTargetUrl,
+  );
+
+  return buildContext(
+    effectiveUrl,
+    kind,
+    pageTitle,
+    actionUrl,
+    browseTargetUrl,
+    shelfLinks,
+    harvestedTracklist,
+  );
 }

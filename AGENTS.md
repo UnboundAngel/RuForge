@@ -376,6 +376,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.9 (unreleased)
 
+- **Music Explore album tracklist harvest**: Pick tracks prefers the webview's loaded `ytmusic-browse-response.data` tracklist (injected harvest on `music-explore-page-context`) before `get_playlist_items_page` yt-dlp; mandatory completeness gate (header song count vs harvested rows, continuation detection) falls back to yt-dlp when browse JSON is partial. `explorerProfileScript.ts`, `musicExploreTracklistHarvest.ts`, `musicExplorePageContext.ts`, `MusicExploreDownloadPanel.tsx`, `MusicShell.tsx`.
+
 - **Music mini player cover (fix)**: Restored full-bleed cover with horizontal gradient fade in small/compact (removed fixed-width object-contain brick); large audio fills the window with object-cover and scrim instead of a centered letterboxed album card. `MiniPlayer.tsx`.
 
 - **Music sidebar + tooltip compliance pass (fix)**: Replaced native instant `title` tooltips in music nav, explore bar, collapsed download dock/orbs, right-panel toggle, and profile chip with delayed black `rf-music-tooltip-anchor` tooltips; fixed right sidebar tab clipping by tightening header spacing and renaming "Recently played" tab label to "Recent"; removed divider-line rows from Segments and Explore download panel headers; removed decorative shadows from MusicHome card/controls and MusicTrackView cover. `MusicNav.tsx`, `MusicNavBackCell.tsx`, `MusicExploreBottomBar.tsx`, `MusicExploreDownloadCollapsed.tsx`, `MusicExploreDownloadPanel.tsx`, `MusicRightPanel.tsx`, `MusicSegmentsTab.tsx`, `MusicHomeView.tsx`, `MusicTrackView.tsx`, `YouTubeProfileChip.tsx`, `index.css`.

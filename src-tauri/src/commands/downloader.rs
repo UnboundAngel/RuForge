@@ -1,6 +1,7 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
@@ -8,6 +9,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::download_job_manager::{kill_ytdlp_tree, DownloadJobManager};
 use crate::ytdlp_binary::ytdlp_shell_command;
+use crate::ytdlp_rate_limit::{
+    ytdlp_push_politeness_args, ytdlp_register_rate_limit_from_stderr,
+    ytdlp_subprocess_rate_gate_wait, ytdlp_stderr_is_rate_limited,
+};
 
 use crate::commands::gallery::cleanup_orphan_downloads_under;
 use crate::commands::media::extract_frames;
@@ -552,20 +557,63 @@ fn ytdlp_duration_secs(v: &serde_json::Value) -> Option<f64> {
         .filter(|x| x.is_finite() && *x >= 0.0)
 }
 
-fn ytdlp_entry_thumbnail(entry: &serde_json::Value) -> String {
-    if let Some(s) = entry.get("thumbnail").and_then(|v| v.as_str()) {
-        let s = s.trim();
-        if !s.is_empty() {
-            return s.to_string();
-        }
+/// Reject page URLs yt-dlp sometimes puts in thumbnail fields (causes broken img tags in the UI).
+fn is_probable_image_url(url: &str) -> bool {
+    let u = url.trim().to_lowercase();
+    if u.is_empty() {
+        return false;
     }
-    entry
-        .get("thumbnails")
-        .and_then(|arr| arr.as_array())
-        .and_then(|a| a.last()?.get("url").and_then(|u| u.as_str()).map(str::trim))
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .unwrap_or_default()
+    if u.contains("youtube.com/playlist")
+        || u.contains("music.youtube.com/playlist")
+        || u.contains("youtube.com/watch")
+        || u.contains("music.youtube.com/watch")
+        || u.contains("youtube.com/channel")
+        || u.contains("music.youtube.com/channel")
+        || u.contains("music.youtube.com/browse")
+        || u.contains("youtu.be/")
+    {
+        return false;
+    }
+    if u.contains("ytimg.com")
+        || u.contains("ggpht.com")
+        || u.contains("googleusercontent.com")
+        || u.contains("gstatic.com")
+    {
+        return true;
+    }
+    u.ends_with(".jpg")
+        || u.ends_with(".jpeg")
+        || u.ends_with(".png")
+        || u.ends_with(".webp")
+        || u.ends_with(".gif")
+}
+
+fn normalize_thumbnail_url(raw: &str) -> Option<String> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let normalized = if s.starts_with("//") {
+        format!("https:{s}")
+    } else {
+        s.to_string()
+    };
+    if is_probable_image_url(&normalized) {
+        Some(normalized)
+    } else {
+        None
+    }
+}
+
+fn thumbnail_from_thumbnails_array(arr: &[serde_json::Value]) -> Option<String> {
+    arr.iter()
+        .rev()
+        .find_map(|t| t.get("url").and_then(|u| u.as_str()))
+        .and_then(|s| normalize_thumbnail_url(s))
+}
+
+fn ytdlp_entry_thumbnail(entry: &serde_json::Value) -> String {
+    best_thumbnail_url(entry).unwrap_or_default()
 }
 
 fn ytdlp_entry_is_usable(entry: &serde_json::Value) -> bool {
@@ -829,7 +877,9 @@ async fn yt_dlp_single_json_simulate(
         )?;
     }
     args.push(url.to_string());
+    ytdlp_push_politeness_args(&mut args);
 
+    ytdlp_subprocess_rate_gate_wait().await?;
     let output = ytdlp_shell_command(app)?
         .args(args)
         .output()
@@ -838,6 +888,7 @@ async fn yt_dlp_single_json_simulate(
 
     if !output.status.success() {
         let err_msg = String::from_utf8_lossy(&output.stderr).to_string();
+        ytdlp_register_rate_limit_from_stderr(&err_msg).await;
         log::error!("[RuForge] yt-dlp failed: {}", err_msg);
         return Err(err_msg);
     }
@@ -1114,10 +1165,12 @@ pub async fn get_video_info(
     let cookie_probe = video_info_cookie_probe(browser_cookies, cookie_file);
     let cookie_ref = cookie_probe.as_ref();
 
-    let (json_video_res, json_audio_res) = tokio::join!(
-        yt_dlp_single_json_simulate_resilient(&app, &url, cookie_ref, Some(video_fmt_ref)),
-        yt_dlp_single_json_simulate_resilient(&app, &url, cookie_ref, Some(AUDIO_SIMULATE_FMT)),
-    );
+    // Run sequentially — parallel simulates double the request rate on the same cookies.
+    let json_video_res =
+        yt_dlp_single_json_simulate_resilient(&app, &url, cookie_ref, Some(video_fmt_ref)).await;
+    let json_audio_res =
+        yt_dlp_single_json_simulate_resilient(&app, &url, cookie_ref, Some(AUDIO_SIMULATE_FMT))
+            .await;
 
     let json_video = json_video_res.as_ref().ok();
     let json_audio = json_audio_res.as_ref().ok();
@@ -1757,6 +1810,15 @@ pub struct MusicBrowseResult {
     pub title: String,
     pub thumbnail: Option<String>,
     pub playlists: Vec<MusicPlaylistInfo>,
+    /// When set to `channel_tabs_only`, yt-dlp only returned Videos/Shorts/Live-style tabs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub browse_kind: Option<String>,
+}
+
+/// Serialize concurrent music browse / playlist yt-dlp calls (panel + bottom bar).
+fn music_ytdlp_mutex() -> &'static tokio::sync::Mutex<()> {
+    static MUTEX: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    MUTEX.get_or_init(|| tokio::sync::Mutex::new(()))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1781,27 +1843,394 @@ pub struct MusicPlaylistPage {
 }
 
 fn best_thumbnail_url(entry: &serde_json::Value) -> Option<String> {
-    if let Some(thumbs) = entry["thumbnails"].as_array() {
-        // Prefer a medium-sized thumbnail (width ~226 or first with a URL).
-        if let Some(t) = thumbs.iter().rev().find(|t| t["url"].is_string()) {
-            return t["url"].as_str().map(String::from);
+    if let Some(s) = entry.get("thumbnail").and_then(|v| v.as_str()) {
+        if let Some(u) = normalize_thumbnail_url(s) {
+            return Some(u);
         }
     }
-    entry["thumbnail"].as_str().map(String::from)
+    if let Some(arr) = entry.get("thumbnails").and_then(|v| v.as_array()) {
+        if let Some(u) = thumbnail_from_thumbnails_array(arr) {
+            return Some(u);
+        }
+    }
+    if let Some(s) = entry.get("playlist_thumbnail").and_then(|v| v.as_str()) {
+        if let Some(u) = normalize_thumbnail_url(s) {
+            return Some(u);
+        }
+    }
+    for key in ["channel_thumbnail", "uploader_thumbnail", "avatar"] {
+        if let Some(s) = entry.get(key).and_then(|v| v.as_str()) {
+            if let Some(u) = normalize_thumbnail_url(s) {
+                return Some(u);
+            }
+        }
+    }
+    for key in ["channel_thumbnails", "avatar_thumbnails"] {
+        if let Some(arr) = entry.get(key).and_then(|v| v.as_array()) {
+            if let Some(u) = thumbnail_from_thumbnails_array(arr) {
+                return Some(u);
+            }
+        }
+    }
+    None
+}
+
+fn is_youtube_channel_id(id: &str) -> bool {
+    let id = id.trim();
+    id.len() == 24 && id.starts_with("UC")
+}
+
+fn is_youtube_playlist_list_id(id: &str) -> bool {
+    let id = id.trim();
+    id.starts_with("PL")
+        || id.starts_with("OL")
+        || id.starts_with("VL")
+        || id.starts_with("RD")
+        || id.starts_with("UU")
+        || id.starts_with("LL")
+        || id.starts_with("FL")
+        || id.starts_with("LP")
+}
+
+/// YouTube Music browse entity ids (albums, artists, shelves) — not valid as `watch?v=` ids.
+fn is_youtube_music_browse_id(id: &str) -> bool {
+    let id = id.trim();
+    if id.len() < 8 {
+        return false;
+    }
+    id.starts_with("MPAD")
+        || id.starts_with("MPRE")
+        || id.starts_with("MPLY")
+        || id.starts_with("MPLA")
+        || id.starts_with("MPED")
+        || (id.starts_with("MP")
+            && id.len() >= 10
+            && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'))
+}
+
+fn is_music_album_browse_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    if !lower.contains("music.youtube.com/browse/") {
+        return false;
+    }
+    lower
+        .split("/browse/")
+        .nth(1)
+        .and_then(|rest| rest.split(&['?', '#'][..]).next())
+        .map(is_youtube_music_browse_id)
+        .unwrap_or(false)
+}
+
+fn is_channel_tab_title(title: &str) -> bool {
+    let t = title.trim().to_ascii_lowercase();
+    t == "videos"
+        || t == "uploads"
+        || t == "shorts"
+        || t == "live"
+        || t == "streams"
+        || t == "popular videos"
+        || t.ends_with(" - videos")
+}
+
+fn entry_url_looks_like_channel_tab(url: &str) -> bool {
+    let u = url.to_ascii_lowercase();
+    u.contains("/shorts")
+        || u.contains("/streams")
+        || (u.contains("/live") && !u.contains("music.youtube.com/browse/"))
+}
+
+fn humanize_music_ytdlp_error(stderr: &str) -> String {
+    if ytdlp_stderr_is_rate_limited(stderr) {
+        return "YouTube rate-limited this session. Wait a few minutes, turn off Auto-save in Explore, \
+                lower concurrent downloads, and add a batch start delay in Settings."
+            .to_string();
+    }
+    if stderr.contains("Failed to resolve album to playlist") {
+        return "This album page could not be resolved to a track list. Open the album in Explore, \
+                wait for it to finish loading, then try Pick tracks again — or update yt-dlp in Settings."
+            .to_string();
+    }
+    if stderr.contains("timed out") || stderr.contains("Timeout") {
+        return "yt-dlp timed out. Try again, or open the Albums/Browse tab before Pick tracks."
+            .to_string();
+    }
+    format!("yt-dlp error: {}", stderr.trim())
+}
+
+/// Channel tab suffix when yt-dlp only provides a UC id (Videos / Shorts / Live / Streams).
+fn channel_tab_path_from_title(title: &str) -> &'static str {
+    let t = title.to_ascii_lowercase();
+    if t.contains("short") {
+        "shorts"
+    } else if t.contains("live") {
+        "live"
+    } else if t.contains("stream") {
+        "streams"
+    } else {
+        "videos"
+    }
+}
+
+/// Never synthesize `playlist?list=UC…` — channel ids are not playlist list ids.
+fn resolve_music_entry_url(entry: &serde_json::Value, id: &str) -> String {
+    if let Some(u) = entry["url"]
+        .as_str()
+        .or_else(|| entry["webpage_url"].as_str())
+    {
+        let trimmed = u.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    let id = id.trim();
+    if is_youtube_playlist_list_id(id) {
+        return format!("https://music.youtube.com/playlist?list={}", id);
+    }
+    if is_youtube_channel_id(id) {
+        let title = entry["title"].as_str().unwrap_or("");
+        let tab = channel_tab_path_from_title(title);
+        return format!("https://www.youtube.com/channel/{}/{}", id, tab);
+    }
+    if is_youtube_music_browse_id(id) {
+        return format!("https://music.youtube.com/browse/{}", id);
+    }
+    if !id.is_empty() && entry["duration"].is_number() {
+        return format!("https://www.youtube.com/watch?v={}", id);
+    }
+    if !id.is_empty() && id.len() == 11 {
+        return format!("https://www.youtube.com/watch?v={}", id);
+    }
+    if !id.is_empty() {
+        return format!("https://music.youtube.com/browse/{}", id);
+    }
+    String::new()
+}
+
+fn should_include_music_browse_entry(entry: &serde_json::Value, entry_url: &str) -> bool {
+    let raw_id = entry["id"].as_str().unwrap_or("").trim();
+    let title = entry["title"].as_str().unwrap_or("").trim();
+
+    if title.is_empty() && raw_id.is_empty() && entry_url.is_empty() {
+        return false;
+    }
+
+    if is_channel_tab_title(title) {
+        return false;
+    }
+    if raw_id.starts_with("UU") {
+        return false;
+    }
+    if entry_url_looks_like_channel_tab(entry_url) {
+        return false;
+    }
+
+    if let Some(count) = entry["playlist_count"].as_u64() {
+        if count > 80
+            && !is_youtube_music_browse_id(raw_id)
+            && !(is_youtube_playlist_list_id(raw_id) && raw_id.starts_with("OLAK"))
+        {
+            return false;
+        }
+    }
+
+    if is_youtube_music_browse_id(raw_id) {
+        return true;
+    }
+    if is_youtube_playlist_list_id(raw_id) && !raw_id.starts_with("UU") {
+        return true;
+    }
+
+    let entry_type = entry["_type"].as_str().unwrap_or("");
+    if entry_type == "video" || entry_type == "url" {
+        return false;
+    }
+    if entry_type == "channel" && is_youtube_channel_id(raw_id) {
+        return false;
+    }
+    entry_type == "playlist" || entry_type == "url_transparent"
+}
+
+fn music_browse_entry_to_playlist(
+    entry: &serde_json::Value,
+    parent_thumb: &Option<String>,
+) -> Option<MusicPlaylistInfo> {
+    let raw_id = entry["id"].as_str().unwrap_or("").to_string();
+    let playlist_title = entry["title"].as_str().unwrap_or("").to_string();
+    let entry_url = resolve_music_entry_url(entry, &raw_id);
+    if entry_url.is_empty() && playlist_title.is_empty() {
+        return None;
+    }
+    if !should_include_music_browse_entry(entry, &entry_url) {
+        return None;
+    }
+    let stable_id = stable_music_entry_id(entry, &raw_id, &entry_url);
+    let track_count = entry["playlist_count"].as_u64().map(|n| n as u32);
+    let thumb = best_thumbnail_url(entry).or_else(|| parent_thumb.clone());
+    Some(MusicPlaylistInfo {
+        id: stable_id,
+        title: playlist_title,
+        url: entry_url,
+        thumbnail: thumb,
+        track_count,
+    })
+}
+
+fn push_music_browse_entry(
+    entry: &serde_json::Value,
+    parent_thumb: &Option<String>,
+    seen: &mut HashSet<String>,
+    playlists: &mut Vec<MusicPlaylistInfo>,
+) {
+    if let Some(pl) = music_browse_entry_to_playlist(entry, parent_thumb) {
+        if seen.insert(pl.id.clone()) {
+            playlists.push(pl);
+        }
+    }
+}
+
+fn walk_music_browse_entries(
+    value: &serde_json::Value,
+    depth: u32,
+    parent_thumb: &Option<String>,
+    seen: &mut HashSet<String>,
+    playlists: &mut Vec<MusicPlaylistInfo>,
+) {
+    if depth > 6 {
+        return;
+    }
+    if let Some(arr) = value.get("entries").and_then(|v| v.as_array()) {
+        for entry in arr {
+            push_music_browse_entry(entry, parent_thumb, seen, playlists);
+            walk_music_browse_entries(entry, depth + 1, parent_thumb, seen, playlists);
+        }
+    }
+}
+
+fn collect_music_browse_playlists(
+    root: &serde_json::Value,
+    parent_thumb: &Option<String>,
+) -> Vec<MusicPlaylistInfo> {
+    let mut seen = HashSet::new();
+    let mut playlists = Vec::new();
+
+    if let Some(entries) = root["entries"].as_array() {
+        for entry in entries {
+            push_music_browse_entry(entry, parent_thumb, &mut seen, &mut playlists);
+        }
+    }
+
+    if playlists.is_empty() {
+        walk_music_browse_entries(root, 0, parent_thumb, &mut seen, &mut playlists);
+    }
+
+    playlists
+}
+
+fn entry_looks_like_track(entry: &serde_json::Value) -> bool {
+    let entry_type = entry["_type"].as_str().unwrap_or("");
+    entry_type == "video" || entry_type == "url" || entry["duration"].is_number()
+}
+
+fn push_album_track_entry(
+    entry: &serde_json::Value,
+    seen: &mut HashSet<String>,
+    out: &mut Vec<serde_json::Value>,
+) {
+    if !entry_looks_like_track(entry) {
+        return;
+    }
+    let raw_id = entry["id"].as_str().unwrap_or("");
+    let url = resolve_music_entry_url(entry, raw_id);
+    let key = if url.is_empty() {
+        raw_id.to_string()
+    } else {
+        url
+    };
+    if key.is_empty() || !seen.insert(key) {
+        return;
+    }
+    out.push(entry.clone());
+}
+
+fn walk_album_track_entries(
+    value: &serde_json::Value,
+    depth: u32,
+    seen: &mut HashSet<String>,
+    out: &mut Vec<serde_json::Value>,
+) {
+    if depth > 6 {
+        return;
+    }
+    if let Some(arr) = value.get("entries").and_then(|v| v.as_array()) {
+        for entry in arr {
+            push_album_track_entry(entry, seen, out);
+            walk_album_track_entries(entry, depth + 1, seen, out);
+        }
+    }
+}
+
+fn collect_album_track_entries(root: &serde_json::Value) -> Vec<serde_json::Value> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+
+    if let Some(entries) = root["entries"].as_array() {
+        for entry in entries {
+            push_album_track_entry(entry, &mut seen, &mut out);
+        }
+    }
+    if out.is_empty() {
+        walk_album_track_entries(root, 0, &mut seen, &mut out);
+    }
+    out
+}
+
+/// Stable id for the UI: prefer unique url; channel ids repeat across artist tabs.
+fn stable_music_entry_id(entry: &serde_json::Value, id: &str, entry_url: &str) -> String {
+    let url = entry_url.trim();
+    if !url.is_empty() {
+        return url.to_string();
+    }
+    if !id.is_empty() && !is_youtube_channel_id(id) {
+        return id.to_string();
+    }
+    let title = entry["title"].as_str().unwrap_or("").trim();
+    if !title.is_empty() {
+        return format!("{}::{}", id, title);
+    }
+    id.to_string()
 }
 
 /// Fetch artist/channel page and return child playlists/albums.
-/// Uses `yt-dlp --flat-playlist -J URL`.
+/// Uses `--flat-playlist -J` for speed; parent thumbnail fills missing shelf art.
 #[tauri::command]
 pub async fn get_music_browse_info(
     app: AppHandle,
     url: String,
+    browser_cookies: Option<String>,
+    cookie_file: Option<String>,
 ) -> Result<MusicBrowseResult, String> {
+    let _guard = music_ytdlp_mutex()
+        .lock()
+        .await;
+
+    let mut args: Vec<String> = vec![
+        "--flat-playlist".into(),
+        "-J".into(),
+        "--no-warnings".into(),
+    ];
+    ytdlp_push_politeness_args(&mut args);
+    ytdlp_push_cookie_cli_args(
+        &app,
+        &mut args,
+        cookie_file.as_deref(),
+        browser_cookies.as_deref(),
+    )?;
+    args.push(url.clone());
+
+    ytdlp_subprocess_rate_gate_wait().await?;
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(90),
-        ytdlp_shell_command(&app)?
-            .args(["--flat-playlist", "-J", "--no-warnings", url.as_str()])
-            .output(),
+        ytdlp_shell_command(&app)?.args(&args).output(),
     )
     .await
     .map_err(|_| "yt-dlp browse timed out after 90s".to_string())?
@@ -1809,7 +2238,8 @@ pub async fn get_music_browse_info(
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr).to_string();
-        return Err(format!("yt-dlp error: {}", err));
+        ytdlp_register_rate_limit_from_stderr(&err).await;
+        return Err(humanize_music_ytdlp_error(&err));
     }
 
     let root: serde_json::Value = serde_json::from_slice(&output.stdout)
@@ -1817,42 +2247,185 @@ pub async fn get_music_browse_info(
 
     let title = root["title"].as_str().unwrap_or("").to_string();
     let thumbnail = best_thumbnail_url(&root);
+    let playlists = collect_music_browse_playlists(&root, &thumbnail);
 
-    let mut playlists = Vec::new();
-    if let Some(entries) = root["entries"].as_array() {
-        for entry in entries {
-            let entry_type = entry["_type"].as_str().unwrap_or("");
-            // Include playlists and channels (skip individual tracks at top level for artist pages).
-            if entry_type == "playlist" || entry_type == "url_transparent" || entry_type == "channel" || !entry_type.is_empty() {
-                let id = entry["id"].as_str().unwrap_or("").to_string();
-                let playlist_title = entry["title"].as_str().unwrap_or("").to_string();
-                if id.is_empty() && playlist_title.is_empty() {
-                    continue;
-                }
-                let entry_url = entry["url"].as_str()
-                    .or_else(|| entry["webpage_url"].as_str())
-                    .map(String::from)
-                    .unwrap_or_else(|| {
-                        if id.starts_with("PL") || id.starts_with("OL") {
-                            format!("https://music.youtube.com/playlist?list={}", id)
-                        } else {
-                            format!("https://www.youtube.com/playlist?list={}", id)
-                        }
-                    });
-                let track_count = entry["playlist_count"].as_u64().map(|n| n as u32);
-                let thumb = best_thumbnail_url(entry);
-                playlists.push(MusicPlaylistInfo {
-                    id,
-                    title: playlist_title,
-                    url: entry_url,
-                    thumbnail: thumb,
-                    track_count,
-                });
-            }
+    let browse_kind = if playlists.is_empty() {
+        let had_channel_tabs = root["entries"].as_array().is_some_and(|entries| {
+            entries.iter().any(|entry| {
+                let raw_id = entry["id"].as_str().unwrap_or("");
+                let entry_title = entry["title"].as_str().unwrap_or("");
+                let entry_url = resolve_music_entry_url(entry, raw_id);
+                is_channel_tab_title(entry_title)
+                    || raw_id.starts_with("UU")
+                    || entry_url_looks_like_channel_tab(&entry_url)
+                    || (entry["_type"].as_str() == Some("channel")
+                        && is_youtube_channel_id(raw_id))
+            })
+        });
+        if had_channel_tabs {
+            Some("channel_tabs_only".to_string())
+        } else {
+            None
         }
+    } else {
+        None
+    };
+
+    Ok(MusicBrowseResult {
+        title,
+        thumbnail,
+        playlists,
+        browse_kind,
+    })
+}
+
+async fn run_ytdlp_json(
+    app: &AppHandle,
+    mut args: Vec<String>,
+    timeout_label: &str,
+) -> Result<serde_json::Value, String> {
+    ytdlp_push_politeness_args(&mut args);
+    ytdlp_subprocess_rate_gate_wait().await?;
+
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(90),
+        ytdlp_shell_command(app)?.args(&args).output(),
+    )
+    .await
+    .map_err(|_| format!("yt-dlp {} timed out after 90s", timeout_label))?
+    .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).to_string();
+        ytdlp_register_rate_limit_from_stderr(&err).await;
+        return Err(humanize_music_ytdlp_error(&err));
     }
 
-    Ok(MusicBrowseResult { title, thumbnail, playlists })
+    serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))
+}
+
+async fn fetch_album_tracks_page(
+    app: &AppHandle,
+    url: &str,
+    offset: u32,
+    limit: u32,
+    browser_cookies: Option<&str>,
+    cookie_file: Option<&str>,
+) -> Result<MusicPlaylistPage, String> {
+    let limit = limit.max(1).min(100);
+    let start = offset + 1;
+    let end = offset + limit;
+
+    let mut flat_args: Vec<String> = vec![
+        "--flat-playlist".into(),
+        "-J".into(),
+        "--no-warnings".into(),
+        "--playlist-start".into(),
+        start.to_string(),
+        "--playlist-end".into(),
+        end.to_string(),
+    ];
+    ytdlp_push_cookie_cli_args(app, &mut flat_args, cookie_file, browser_cookies)?;
+    flat_args.push(url.to_string());
+
+    match run_ytdlp_json(app, flat_args, "playlist page").await {
+        Ok(root) => Ok(playlist_page_from_root(&root, offset, limit)),
+        Err(flat_err)
+            if flat_err.contains("Failed to resolve album to playlist")
+                || flat_err.contains("resolve album") =>
+        {
+            let mut browse_args: Vec<String> = vec!["-J".into(), "--no-warnings".into()];
+            ytdlp_push_cookie_cli_args(app, &mut browse_args, cookie_file, browser_cookies)?;
+            browse_args.push(url.to_string());
+            let root = run_ytdlp_json(app, browse_args, "album browse").await?;
+            let track_entries = collect_album_track_entries(&root);
+            let total = track_entries.len() as u32;
+            let slice: Vec<_> = track_entries
+                .into_iter()
+                .skip(offset as usize)
+                .take(limit as usize)
+                .collect();
+            let playlist_thumb = best_thumbnail_url(&root);
+            let mut items = Vec::new();
+            for entry in slice {
+                let raw_id = entry["id"].as_str().unwrap_or("").to_string();
+                let item_title = entry["title"].as_str().unwrap_or("").to_string();
+                let entry_url = resolve_music_entry_url(&entry, &raw_id);
+                if entry_url.is_empty() {
+                    continue;
+                }
+                let stable_id = stable_music_entry_id(&entry, &raw_id, &entry_url);
+                items.push(MusicTrackInfo {
+                    id: stable_id,
+                    title: item_title,
+                    url: entry_url,
+                    duration: entry["duration"].as_f64(),
+                    thumbnail: best_thumbnail_url(&entry).or_else(|| playlist_thumb.clone()),
+                    artist: entry["artist"]
+                        .as_str()
+                        .or_else(|| entry["uploader"].as_str())
+                        .map(String::from),
+                    album: entry["album"].as_str().map(String::from),
+                });
+            }
+            let fetched = offset + items.len() as u32;
+            Ok(MusicPlaylistPage {
+                items,
+                has_more: fetched < total,
+                total: Some(total),
+                title: root["title"].as_str().map(String::from),
+            })
+        }
+        Err(other) => Err(other),
+    }
+}
+
+fn playlist_page_from_root(
+    root: &serde_json::Value,
+    offset: u32,
+    limit: u32,
+) -> MusicPlaylistPage {
+    let total = root["playlist_count"].as_u64().map(|n| n as u32);
+    let mut items = Vec::new();
+    let entries = root["entries"].as_array().map(|v| v.as_slice()).unwrap_or_default();
+    let playlist_thumb = best_thumbnail_url(root);
+    for entry in entries {
+        let raw_id = entry["id"].as_str().unwrap_or("").to_string();
+        let item_title = entry["title"].as_str().unwrap_or("").to_string();
+        let entry_url = resolve_music_entry_url(entry, &raw_id);
+        if entry_url.is_empty() {
+            continue;
+        }
+        let stable_id = stable_music_entry_id(entry, &raw_id, &entry_url);
+        let duration = entry["duration"].as_f64();
+        let thumb = best_thumbnail_url(entry).or_else(|| playlist_thumb.clone());
+        let artist = entry["artist"]
+            .as_str()
+            .or_else(|| entry["uploader"].as_str())
+            .map(String::from);
+        let album = entry["album"].as_str().map(String::from);
+        items.push(MusicTrackInfo {
+            id: stable_id,
+            title: item_title,
+            url: entry_url,
+            duration,
+            thumbnail: thumb,
+            artist,
+            album,
+        });
+    }
+    let has_more = match total {
+        Some(t) => (offset + items.len() as u32) < t,
+        None => items.len() as u32 == limit,
+    };
+    let title = root["title"].as_str().map(String::from);
+    MusicPlaylistPage {
+        items,
+        has_more,
+        total,
+        title,
+    }
 }
 
 /// Fetch a page of tracks from a playlist URL.
@@ -1866,6 +2439,25 @@ pub async fn get_playlist_items_page(
     browser_cookies: Option<String>,
     cookie_file: Option<String>,
 ) -> Result<MusicPlaylistPage, String> {
+    let _guard = music_ytdlp_mutex()
+        .lock()
+        .await;
+
+    let cookie_file_ref = cookie_file.as_deref();
+    let browser_ref = browser_cookies.as_deref();
+
+    if is_music_album_browse_url(&url) {
+        return fetch_album_tracks_page(
+            &app,
+            &url,
+            offset,
+            limit,
+            browser_ref,
+            cookie_file_ref,
+        )
+        .await;
+    }
+
     let limit = limit.max(1).min(100);
     let start = offset + 1;
     let end = offset + limit;
@@ -1879,74 +2471,123 @@ pub async fn get_playlist_items_page(
         "--playlist-end".into(),
         end.to_string(),
     ];
-    ytdlp_push_cookie_cli_args(
-        &app,
-        &mut args,
-        cookie_file.as_deref(),
-        browser_cookies.as_deref(),
-    )?;
+    ytdlp_push_cookie_cli_args(&app, &mut args, cookie_file_ref, browser_ref)?;
     args.push(url);
 
-    let output = tokio::time::timeout(
-        std::time::Duration::from_secs(90),
-        ytdlp_shell_command(&app)?
-            .args(&args)
-            .output(),
-    )
-    .await
-    .map_err(|_| "yt-dlp playlist page timed out after 90s".to_string())?
-    .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+    let root = run_ytdlp_json(&app, args, "playlist page").await?;
+    Ok(playlist_page_from_root(&root, offset, limit))
+}
 
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).to_string();
-        return Err(format!("yt-dlp error: {}", err));
+#[cfg(test)]
+mod music_browse_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn normalize_thumbnail_url_protocol_relative() {
+        assert_eq!(
+            normalize_thumbnail_url("//i.ytimg.com/vi/abc/hqdefault.jpg").as_deref(),
+            Some("https://i.ytimg.com/vi/abc/hqdefault.jpg")
+        );
     }
 
-    let root: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))?;
-
-    let total = root["playlist_count"].as_u64().map(|n| n as u32);
-
-    let mut items = Vec::new();
-    let entries = root["entries"].as_array().map(|v| v.as_slice()).unwrap_or_default();
-    for entry in entries {
-        let id = entry["id"].as_str().unwrap_or("").to_string();
-        let item_title = entry["title"].as_str().unwrap_or("").to_string();
-        let entry_url = entry["url"].as_str()
-            .or_else(|| entry["webpage_url"].as_str())
-            .map(String::from)
-            .unwrap_or_else(|| format!("https://www.youtube.com/watch?v={}", id));
-        let duration = entry["duration"].as_f64();
-        let thumb = best_thumbnail_url(entry);
-        let artist = entry["artist"].as_str()
-            .or_else(|| entry["uploader"].as_str())
-            .map(String::from);
-        let album = entry["album"].as_str().map(String::from);
-        items.push(MusicTrackInfo {
-            id,
-            title: item_title,
-            url: entry_url,
-            duration,
-            thumbnail: thumb,
-            artist,
-            album,
+    #[test]
+    fn best_thumbnail_url_uses_thumbnails_array_and_normalizes() {
+        let entry = json!({
+            "thumbnails": [{ "url": "//i.ytimg.com/vi/abc/hqdefault.jpg" }]
         });
+        assert_eq!(
+            best_thumbnail_url(&entry).as_deref(),
+            Some("https://i.ytimg.com/vi/abc/hqdefault.jpg")
+        );
     }
 
-    // has_more: if we got `limit` items, there might be more; confirm with total if available.
-    let has_more = match total {
-        Some(t) => (offset + items.len() as u32) < t,
-        None => items.len() as u32 == limit,
-    };
+    #[test]
+    fn resolve_music_entry_url_channel_tab_from_title() {
+        let shorts = json!({ "title": "Shorts" });
+        assert_eq!(
+            resolve_music_entry_url(&shorts, "UCfM3zsQsOnfWNUppiycmBuw"),
+            "https://www.youtube.com/channel/UCfM3zsQsOnfWNUppiycmBuw/shorts"
+        );
+        let live = json!({ "title": "Live" });
+        assert_eq!(
+            resolve_music_entry_url(&live, "UCfM3zsQsOnfWNUppiycmBuw"),
+            "https://www.youtube.com/channel/UCfM3zsQsOnfWNUppiycmBuw/live"
+        );
+    }
 
-    let title = root["title"].as_str().map(String::from);
+    #[test]
+    fn resolve_music_entry_url_uu_playlist() {
+        let entry = json!({ "title": "Uploads" });
+        assert_eq!(
+            resolve_music_entry_url(&entry, "UUfM3zsQsOnfWNUppiycmBuw"),
+            "https://music.youtube.com/playlist?list=UUfM3zsQsOnfWNUppiycmBuw"
+        );
+    }
 
-    Ok(MusicPlaylistPage {
-        items,
-        has_more,
-        total,
-        title,
-    })
+    #[test]
+    fn normalize_thumbnail_url_rejects_playlist_page_urls() {
+        assert!(normalize_thumbnail_url(
+            "https://www.youtube.com/playlist?list=UCfM3zsQsOnfWNUppiycmBuw"
+        )
+        .is_none());
+        assert!(normalize_thumbnail_url("https://i.ytimg.com/vi/abc/hqdefault.jpg").is_some());
+    }
+
+    #[test]
+    fn resolve_music_entry_url_mpad_browse() {
+        let entry = json!({ "title": "The Eminem Show" });
+        assert_eq!(
+            resolve_music_entry_url(&entry, "MPADUCedvOgsKFzcK3hA5taf3KoQ"),
+            "https://music.youtube.com/browse/MPADUCedvOgsKFzcK3hA5taf3KoQ"
+        );
+    }
+
+    #[test]
+    fn should_exclude_channel_tab_entries() {
+        let videos = json!({
+            "_type": "playlist",
+            "id": "UUabc123",
+            "title": "Videos",
+            "playlist_count": 320
+        });
+        assert!(!should_include_music_browse_entry(
+            &videos,
+            "https://music.youtube.com/playlist?list=UUabc123"
+        ));
+
+        let shorts = json!({
+            "_type": "playlist",
+            "id": "UCabc123",
+            "title": "Shorts",
+            "playlist_count": 40
+        });
+        assert!(!should_include_music_browse_entry(
+            &shorts,
+            "https://www.youtube.com/channel/UCabc123/shorts"
+        ));
+
+        let album = json!({
+            "_type": "url_transparent",
+            "id": "MPADUCedvOgsKFzcK3hA5taf3KoQ",
+            "title": "The Eminem Show",
+            "playlist_count": 20
+        });
+        assert!(should_include_music_browse_entry(
+            &album,
+            "https://music.youtube.com/browse/MPADUCedvOgsKFzcK3hA5taf3KoQ"
+        ));
+    }
+
+    #[test]
+    fn is_music_album_browse_url_detects_mpad() {
+        assert!(is_music_album_browse_url(
+            "https://music.youtube.com/browse/MPADUCedvOgsKFzcK3hA5taf3KoQ"
+        ));
+        assert!(!is_music_album_browse_url(
+            "https://music.youtube.com/@Eminem"
+        ));
+    }
 }
 
 #[cfg(test)]

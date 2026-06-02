@@ -32,6 +32,8 @@ import { fetchVideoInfoWithTimeout } from "@/downloadVideoInfoFetch";
 import { ytdlpVideoFormatForMetadata } from "@/downloadFormat";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import {
+  isLikelyImageUrl,
+  musicPlaylistKey,
   musicTrackKey,
   playlistFolderTitle,
   type MusicBrowseResult,
@@ -39,6 +41,13 @@ import {
   type MusicPlaylistPage,
   type MusicTrackInfo,
 } from "@/lib/musicExploreTracks";
+import type { MusicExploreShelfLink } from "@/lib/musicExplorePageContext";
+import type { MusicExploreHarvestedTracklist } from "@/lib/musicExploreTracklistHarvest";
+import { tryPlaylistPageFromHarvest } from "@/lib/musicExploreTracklistHarvest";
+import {
+  MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION,
+  throttleMusicExplorePageFetch,
+} from "@/lib/ytdlpPageFetchThrottle";
 import {
   getCachedMusicExplorePlaylist,
   patchCachedMusicExplorePlaylistItems,
@@ -197,12 +206,27 @@ function TrackRow({
 function PlaylistCard({
   pl,
   index,
+  artistThumbnail,
   onClick,
 }: {
   pl: MusicPlaylistInfo;
   index: number;
+  artistThumbnail?: string | null;
   onClick: () => void;
 }) {
+  const thumbCandidates = useMemo(
+    () =>
+      [pl.thumbnail, artistThumbnail].filter(
+        (u): u is string => typeof u === "string" && u.trim() !== "" && isLikelyImageUrl(u),
+      ),
+    [pl.thumbnail, artistThumbnail],
+  );
+  const [thumbIndex, setThumbIndex] = useState(0);
+  useEffect(() => {
+    setThumbIndex(0);
+  }, [thumbCandidates]);
+  const thumbSrc = thumbCandidates[thumbIndex] ?? null;
+
   return (
     <motion.button
       type="button"
@@ -215,8 +239,15 @@ function PlaylistCard({
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "color-mix(in srgb, var(--music-surface-raised) 80%, white 20%)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--music-surface-raised)")}
     >
-      {pl.thumbnail ? (
-        <img src={pl.thumbnail} alt="" className="w-9 h-9 rounded object-cover shrink-0" style={{ borderRadius: "var(--music-card-radius)" }} />
+      {thumbSrc ? (
+        <img
+          src={thumbSrc}
+          alt=""
+          referrerPolicy="no-referrer"
+          className="w-9 h-9 rounded object-cover shrink-0"
+          style={{ borderRadius: "var(--music-card-radius)" }}
+          onError={() => setThumbIndex((i) => (i + 1 < thumbCandidates.length ? i + 1 : thumbCandidates.length))}
+        />
       ) : (
         <div className="w-9 h-9 rounded shrink-0 flex items-center justify-center" style={{ borderRadius: "var(--music-card-radius)", background: "var(--music-surface)", color: "var(--music-text-muted)" }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -234,9 +265,60 @@ function PlaylistCard({
   );
 }
 
+const PANEL_LOAD_DEBOUNCE_MS = 500;
+
+async function invokePlaylistItemsPage(
+  url: string,
+  offset: number,
+  limit: number,
+  browserCookies: string | null,
+  cookieFile: string | null,
+): Promise<MusicPlaylistPage> {
+  await throttleMusicExplorePageFetch();
+  return invoke<MusicPlaylistPage>("get_playlist_items_page", {
+    url,
+    offset,
+    limit,
+    browserCookies,
+    cookieFile,
+  });
+}
+
+function mergeShelfLinksIntoBrowse(
+  result: MusicBrowseResult,
+  shelfLinks: MusicExploreShelfLink[],
+): MusicBrowseResult {
+  if (shelfLinks.length === 0) return result;
+  const seen = new Set(result.playlists.map((p) => p.url.trim()));
+  const playlists = [...result.playlists];
+  for (const link of shelfLinks) {
+    const linkUrl = link.url.trim();
+    if (!linkUrl || seen.has(linkUrl)) continue;
+    seen.add(linkUrl);
+    playlists.push({
+      id: linkUrl,
+      title: link.title.trim() || linkUrl,
+      url: linkUrl,
+      thumbnail: result.thumbnail,
+      trackCount: null,
+    });
+  }
+  return {
+    ...result,
+    playlists,
+    browseKind: playlists.length > 0 ? null : result.browseKind,
+  };
+}
+
 type Props = {
   /** The current browse URL (ignored in paste mode). */
   url: string;
+  /** Visible album/playlist links from the YTM webview shelves. */
+  shelfLinks?: MusicExploreShelfLink[];
+  /** Album/playlist tracklist harvested from ytmusic-browse-response.data. */
+  harvestedTracklist?: MusicExploreHarvestedTracklist | null;
+  /** Current YTM page title (album/playlist name). */
+  pageTitle?: string | null;
   collapsed?: boolean;
   dockMinimized?: boolean;
   onClose: () => void;
@@ -251,6 +333,9 @@ const INITIAL_PLAYLIST_BATCH = 50;
 
 export function MusicExploreDownloadPanel({
   url,
+  shelfLinks = [],
+  harvestedTracklist = null,
+  pageTitle = null,
   collapsed = false,
   dockMinimized = false,
   onClose,
@@ -436,6 +521,21 @@ export function MusicExploreDownloadPanel({
         );
         return;
       }
+
+      const harvestedPage = tryPlaylistPageFromHarvest(
+        harvestedTracklist,
+        canonical,
+        pageTitle?.trim() || playlistFolderTitle(null, canonical),
+      );
+      if (harvestedPage) {
+        if (ac.signal.aborted) return;
+        applyPlaylistPhase(
+          playlistFolderTitle(harvestedPage.title ?? pageTitle, canonical),
+          canonical,
+          harvestedPage,
+        );
+        return;
+      }
     }
 
     setPhase({ kind: "loading", url: canonical });
@@ -444,13 +544,13 @@ export function MusicExploreDownloadPanel({
 
     try {
       if (kind === "playlist" || isMusicYouTubePlaylistUrl(canonical)) {
-        const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
-          url: canonical,
-          offset: 0,
-          limit: INITIAL_PLAYLIST_BATCH,
-          browserCookies: browserContext ?? null,
-          cookieFile: cookieFile ?? null,
-        });
+        const page = await invokePlaylistItemsPage(
+          canonical,
+          0,
+          INITIAL_PLAYLIST_BATCH,
+          browserContext ?? null,
+          cookieFile ?? null,
+        );
         if (ac.signal.aborted) return;
         applyPlaylistPhase(
           playlistFolderTitle(page.title, canonical),
@@ -512,7 +612,29 @@ export function MusicExploreDownloadPanel({
       }
 
       if (kind === "browse" || isMusicYouTubeUrl(canonical)) {
-        const result = await invoke<MusicBrowseResult>("get_music_browse_info", { url: canonical });
+        const harvestedBrowsePage = tryPlaylistPageFromHarvest(
+          harvestedTracklist,
+          canonical,
+          pageTitle?.trim() || playlistFolderTitle(null, canonical),
+        );
+        if (harvestedBrowsePage) {
+          if (ac.signal.aborted) return;
+          applyPlaylistPhase(
+            playlistFolderTitle(harvestedBrowsePage.title ?? pageTitle, canonical),
+            canonical,
+            harvestedBrowsePage,
+          );
+          return;
+        }
+
+        const result = mergeShelfLinksIntoBrowse(
+          await invoke<MusicBrowseResult>("get_music_browse_info", {
+            url: canonical,
+            browserCookies: browserContext ?? null,
+            cookieFile: cookieFile ?? null,
+          }),
+          shelfLinks,
+        );
         if (ac.signal.aborted) return;
         setPhase({ kind: "browse", result, url: canonical });
         return;
@@ -527,7 +649,7 @@ export function MusicExploreDownloadPanel({
       setPhase({ kind: "error", message: String(e) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [applyPlaylistPhase, preferredQuality, browserContext, cookieFile]);
+  }, [applyPlaylistPhase, preferredQuality, browserContext, cookieFile, shelfLinks, harvestedTracklist, pageTitle]);
 
   const openPlaylist = useCallback(async (pl: MusicPlaylistInfo) => {
     abortRef.current?.abort();
@@ -557,13 +679,13 @@ export function MusicExploreDownloadPanel({
     lastClickIndexRef.current = null;
 
     try {
-      const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
-        url: pl.url,
-        offset: 0,
-        limit: INITIAL_PLAYLIST_BATCH,
-        browserCookies: browserContext ?? null,
-        cookieFile: cookieFile ?? null,
-      });
+      const page = await invokePlaylistItemsPage(
+        pl.url,
+        0,
+        INITIAL_PLAYLIST_BATCH,
+        browserContext ?? null,
+        cookieFile ?? null,
+      );
       if (ac.signal.aborted) return;
       const title = playlistFolderTitle(page.title ?? pl.title, pl.url);
       applyPlaylistPhase(title, pl.url, page);
@@ -583,12 +705,16 @@ export function MusicExploreDownloadPanel({
       const newItems: MusicTrackInfo[] = [];
       let hasMore = true;
       let total = startTotal;
-      while (hasMore) {
-        const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
-          url: playlistUrl, offset: fetchedCount + newItems.length, limit: 100,
-          browserCookies: browserContext ?? null,
-          cookieFile: cookieFile ?? null,
-        });
+      let pagesFetched = 0;
+      while (hasMore && pagesFetched < MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION) {
+        const page = await invokePlaylistItemsPage(
+          playlistUrl,
+          fetchedCount + newItems.length,
+          100,
+          browserContext ?? null,
+          cookieFile ?? null,
+        );
+        pagesFetched += 1;
         newItems.push(...page.items);
         hasMore = page.hasMore;
         total = page.total ?? total;
@@ -707,7 +833,10 @@ export function MusicExploreDownloadPanel({
       lastClickIndexRef.current = null;
       return;
     }
-    void doLoad(url);
+    const timer = window.setTimeout(() => {
+      void doLoad(url);
+    }, PANEL_LOAD_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
   }, [url, doLoad]);
 
   const selectedTracks =
@@ -866,10 +995,20 @@ export function MusicExploreDownloadPanel({
         {phase.kind === "browse" && (
           <div className="flex flex-col gap-1.5">
             {phase.result.playlists.length === 0 ? (
-              <p className="text-[11px] py-4 text-center" style={{ color: "var(--music-text-muted)" }}>No playlists found.</p>
+              <p className="text-[11px] py-4 text-center" style={{ color: "var(--music-text-muted)" }}>
+                {phase.result.browseKind === "channel_tabs_only"
+                  ? "Open the Albums or Browse tab for this artist in Explore, then Pick tracks again."
+                  : "No albums or playlists found. Try the Browse tab or paste a playlist link."}
+              </p>
             ) : (
               phase.result.playlists.map((pl, i) => (
-                <PlaylistCard key={pl.id || pl.url} pl={pl} index={i} onClick={() => void openPlaylist(pl)} />
+                <PlaylistCard
+                  key={musicPlaylistKey(pl, i)}
+                  pl={pl}
+                  index={i}
+                  artistThumbnail={phase.result.thumbnail}
+                  onClick={() => void openPlaylist(pl)}
+                />
               ))
             )}
           </div>
@@ -896,16 +1035,7 @@ export function MusicExploreDownloadPanel({
               })}
             </AnimatePresence>
 
-            {phase.visibleCount < phase.items.length && (
-              <div className="flex items-center gap-1.5 px-2 py-1.5">
-                <Loader size={12} className="animate-spin" style={{ color: "var(--music-accent)" }} />
-                <span className="text-[10px]" style={{ color: "var(--music-text-muted)" }}>
-                  Loading tracks...
-                </span>
-              </div>
-            )}
-
-            {phase.visibleCount >= phase.items.length && phase.hasMore && !phase.loadingMore && (
+            {phase.hasMore && !phase.loadingMore && (
               <button
                 type="button"
                 onClick={() => void loadAllRemaining()}
