@@ -34,6 +34,10 @@ import {
   resolveMusicNextTrack,
   resolveMusicPrevTrack,
 } from "./musicAdvanceQueue";
+import { addListenTime } from "./musicListenStats";
+import { primaryArtist } from "./musicArtist";
+import { musicTrackIdentityKey } from "./musicShelfDedup";
+import { pickSmartNextTrack } from "./musicSmartShuffle";
 
 
 
@@ -127,7 +131,9 @@ export function useMusicPlayback(
 
   const clearMusicPlayerResume = useRuforgeStore((s) => s.clearMusicPlayerResume);
 
-
+  const navMode = useRuforgeStore((s) => s.navMode);
+  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
+  const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
 
   const [paused, setPaused] = useState(true);
 
@@ -140,6 +146,22 @@ export function useMusicPlayback(
   const isDraggingRef = useRef(false);
 
   const loadedPathRef = useRef<string | null>(null);
+  const listenAccumSecRef = useRef(0);
+  const lastListenTickRef = useRef<number | null>(null);
+  const sessionRecentKeysRef = useRef<string[]>([]);
+
+  const flushListenAccum = useCallback((file: import("@/types").MediaFile | null) => {
+    if (!file || listenAccumSecRef.current <= 0) return;
+    addListenTime(file, listenAccumSecRef.current);
+    listenAccumSecRef.current = 0;
+    lastListenTickRef.current = null;
+  }, []);
+
+  const pushSessionRecent = useCallback((file: import("@/types").MediaFile) => {
+    const key = musicTrackIdentityKey(file, primaryArtist);
+    const next = [...sessionRecentKeysRef.current.filter((k) => k !== key), key];
+    sessionRecentKeysRef.current = next.slice(-12);
+  }, []);
 
 
 
@@ -265,6 +287,18 @@ export function useMusicPlayback(
 
     const needsLoad = loadedPathRef.current !== path;
 
+    if (needsLoad && loadedPathRef.current) {
+      const prevPath = loadedPathRef.current;
+      const prevFile =
+        folderAudioPlaylist.find((f) => f.path === prevPath)
+        ?? libraryAudio.find((f) => f.path === prevPath);
+      if (prevFile) flushListenAccum(prevFile);
+    }
+
+    if (needsLoad) {
+      pushSessionRecent(playingFile);
+    }
+
 
 
     if (needsLoad) {
@@ -331,7 +365,21 @@ export function useMusicPlayback(
 
     }
 
-  }, [playingFile?.path, audioRef, musicPlayerResume, clearMusicPlayerResume, volume, isMuted, isLooping, playbackSpeed]);
+  }, [
+    playingFile?.path,
+    audioRef,
+    musicPlayerResume,
+    clearMusicPlayerResume,
+    volume,
+    isMuted,
+    isLooping,
+    playbackSpeed,
+    folderAudioPlaylist,
+    libraryAudio,
+    flushListenAccum,
+    pushSessionRecent,
+    playingFile,
+  ]);
 
 
 
@@ -554,9 +602,52 @@ export function useMusicPlayback(
 
 
 
+  const trySmartEndlessNext = useCallback((): boolean => {
+    if (navMode !== "music" || !playingFile) return false;
+
+    const inLibrary = libraryAudio.some((f) => f.path === playingFile.path);
+    const inFolder = folderAudioPlaylist.some((f) => f.path === playingFile.path);
+    if (!inLibrary && !inFolder) return false;
+
+    const pool =
+      folderAudioPlaylist.length > 1 && inFolder
+        ? folderAudioPlaylist
+        : libraryAudio;
+    if (pool.length === 0) return false;
+
+    const next = pickSmartNextTrack({
+      pool,
+      current: playingFile,
+      likedKeys: musicLikedKeys,
+      sessionRecentKeys: sessionRecentKeysRef.current,
+    });
+    if (!next) return false;
+
+    flushListenAccum(playingFile);
+    const base =
+      effectivePlaylist.length > 0 ? effectivePlaylist : folderAudioPlaylist;
+    if (!base.some((f) => f.path === next.path)) {
+      setFolderAudioPlaylist([...base, next]);
+    }
+    handlePlayFolderNeighbor(next);
+    return true;
+  }, [
+    navMode,
+    playingFile,
+    libraryAudio,
+    folderAudioPlaylist,
+    musicLikedKeys,
+    effectivePlaylist,
+    flushListenAccum,
+    setFolderAudioPlaylist,
+    handlePlayFolderNeighbor,
+  ]);
+
   const handleEnded = useCallback(() => {
 
     if (isLooping || !playingFile) return;
+
+    flushListenAccum(playingFile);
 
     const advanceState = {
       manualQueue,
@@ -578,12 +669,25 @@ export function useMusicPlayback(
         clearManualQueuePlayingState();
       }
       handlePlayFolderNeighbor(result.file);
-    } else {
+    } else if (!trySmartEndlessNext()) {
       clearManualQueuePlayingState();
       setPaused(true);
     }
 
-  }, [isLooping, playingFile, playlistIndex, effectivePlaylist, manualQueue, playingFromManualQueue, manualQueueContextIndex, handlePlayFolderNeighbor, applyManualQueueAdvance, clearManualQueuePlayingState]);
+  }, [
+    isLooping,
+    playingFile,
+    playlistIndex,
+    effectivePlaylist,
+    manualQueue,
+    playingFromManualQueue,
+    manualQueueContextIndex,
+    handlePlayFolderNeighbor,
+    applyManualQueueAdvance,
+    clearManualQueuePlayingState,
+    flushListenAccum,
+    trySmartEndlessNext,
+  ]);
 
 
 
@@ -598,6 +702,23 @@ export function useMusicPlayback(
     const onTimeUpdate = () => {
 
       if (!isDraggingRef.current) setCurrentTime(el.currentTime);
+
+      if (!el.paused && playingFile) {
+        const now = performance.now();
+        if (lastListenTickRef.current != null) {
+          const deltaSec = (now - lastListenTickRef.current) / 1000;
+          if (deltaSec > 0 && deltaSec < 4) {
+            listenAccumSecRef.current += deltaSec;
+          }
+        }
+        lastListenTickRef.current = now;
+        if (listenAccumSecRef.current >= 15) {
+          addListenTime(playingFile, listenAccumSecRef.current);
+          listenAccumSecRef.current = 0;
+        }
+      } else {
+        lastListenTickRef.current = null;
+      }
 
     };
 
@@ -637,7 +758,7 @@ export function useMusicPlayback(
 
     };
 
-  }, [audioRef, playingFile?.path, handleEnded]);
+  }, [audioRef, playingFile?.path, handleEnded, playingFile]);
 
 
 

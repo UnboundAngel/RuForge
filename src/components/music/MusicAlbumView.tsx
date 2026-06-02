@@ -8,6 +8,7 @@ import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
 import { fileMatchesArtistKey, primaryArtist, rawArtistFromFile } from "./musicArtist";
 import { normalizeAlbumShelfKey } from "./musicShelfDedup";
+import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 
 type TrackRowProps = {
@@ -110,14 +111,16 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
   const coverSrc = cover ? convertFileSrc(cover) : null;
   const totalDuration = useMemo(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
 
+  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
+
   const handleShuffle = () => {
     if (tracks.length === 0) return;
-    const shuffled = [...tracks];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    onPlayFile(shuffled[0], shuffled);
+    const shuffled = buildSmartShuffleOrder({
+      pool: tracks,
+      likedKeys: musicLikedKeys,
+      seed: Date.now() & 0xffffffff,
+    });
+    onPlayFile(shuffled[0]!, shuffled);
   };
 
   return (
