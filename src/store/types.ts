@@ -34,7 +34,8 @@ export type MusicView = "home" | "explore" | "library";
 export type MusicDetail =
   | { kind: "artist"; key: string }
   | { kind: "album"; artistKey: string; key: string }
-  | { kind: "song"; path: string };
+  | { kind: "song"; path: string }
+  | { kind: "stats" };
 
 /** Signed-in YouTube account read from the embedded Explorer session. */
 export type YouTubeExplorerProfile = {

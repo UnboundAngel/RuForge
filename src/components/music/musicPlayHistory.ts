@@ -1,4 +1,5 @@
 import type { MediaFile } from "@/types";
+import { recordListenStatsPlay } from "./musicListenStats";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
 
 export type PlayHistoryEntry = {
@@ -64,6 +65,7 @@ export function recordPlay(file: MediaFile): void {
   // Sort newest-first and trim the ring buffer.
   entries.sort((a, b) => b.playedAt - a.playedAt);
   save(entries.slice(0, MAX_ENTRIES));
+  recordListenStatsPlay(file);
 }
 
 /** Recent play history, newest first. */

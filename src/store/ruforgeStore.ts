@@ -43,6 +43,11 @@ import {
   type DownloadQueueSlice,
 } from "./downloadQueueSlice";
 import { readLoopForPath, writeLoopForPath } from "../playbackLoopStorage";
+import {
+  loadLikedIdentityKeys,
+  toggleTrackLike,
+} from "../components/music/musicLikedTracks";
+import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
 import { readPlaybackSpeed } from "../playbackSpeedStorage";
 import type { PlayInMiniPayload, PlayInMusicMiniPayload } from "../playerHandoff";
 import { writePlaybackPos } from "../playbackStorage";
@@ -144,6 +149,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
    * Used by skipPrev so "prev" goes back into the real playlist, not the manual item.
    */
   manualQueueContextIndex: number | null;
+  /** Identity keys for liked tracks (`musicLikedTracks` localStorage). */
+  musicLikedKeys: string[];
   volume: number;
   isMuted: boolean;
   isLooping: boolean;
@@ -185,6 +192,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
    * is cleared (playback ends without a next track, or user picks something else).
    */
   clearManualQueuePlayingState: () => void;
+  toggleMusicLike: (file: MediaFile) => void;
   setVolume: (v: number) => void;
   setMuted: (muted: boolean) => void;
   setLooping: (loop: boolean) => void;
@@ -217,6 +225,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   openMusicArtist: (key: string) => void;
   openMusicAlbum: (artistKey: string, key: string) => void;
   openMusicSong: (path: string) => void;
+  openMusicStats: () => void;
   closeMusicDetail: () => void;
   refreshStorageStats: () => Promise<void>;
   openAuthorizeCleanupModal: () => Promise<void>;
@@ -353,6 +362,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       manualQueue: [],
       playingFromManualQueue: false,
       manualQueueContextIndex: null,
+      musicLikedKeys: loadLikedIdentityKeys(),
       volume: playerInitVolume,
       isMuted: false,
       isLooping: playerInitLoop,
@@ -405,6 +415,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
       clearManualQueuePlayingState: () => {
         set({ playingFromManualQueue: false, manualQueueContextIndex: null });
+      },
+
+      toggleMusicLike: (file) => {
+        toggleTrackLike(file);
+        set({ musicLikedKeys: loadLikedIdentityKeys() });
       },
 
       setVolume: (volume) => {
@@ -463,11 +478,19 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       handlePlayPlaylist: (files, shuffle = false) => {
         if (files.length === 0) return;
-        const queue = [...files];
+        let queue = [...files];
         if (shuffle) {
-          for (let i = queue.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [queue[i], queue[j]] = [queue[j], queue[i]];
+          if (get().navMode === "music") {
+            queue = buildSmartShuffleOrder({
+              pool: files,
+              likedKeys: get().musicLikedKeys,
+              seed: Date.now() & 0xffffffff,
+            });
+          } else {
+            for (let i = queue.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [queue[i], queue[j]] = [queue[j], queue[i]];
+            }
           }
         }
         set({
@@ -726,6 +749,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       openMusicArtist: (key) => set({ musicDetail: { kind: "artist", key } }),
       openMusicAlbum: (artistKey, key) => set({ musicDetail: { kind: "album", artistKey, key } }),
       openMusicSong: (path) => set({ musicDetail: { kind: "song", path } }),
+      openMusicStats: () => set({ musicDetail: { kind: "stats" } }),
       closeMusicDetail: () => set({ musicDetail: null }),
 
       refreshStorageStats: async () => {

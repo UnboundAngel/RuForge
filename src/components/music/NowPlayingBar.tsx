@@ -9,6 +9,7 @@ import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
 import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
 import { MusicVolumeControl } from "./MusicVolumeControl";
+import { MusicLikeButton } from "./MusicLikeButton";
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
@@ -152,6 +153,7 @@ export function NowPlayingBar({
       onWheel={handleVolumeWheel}
     >
       <div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1fr)] items-center gap-x-4 px-4">
+        <div className="flex items-center gap-2 min-w-0">
         <div
           role="button"
           tabIndex={0}
@@ -162,7 +164,7 @@ export function NowPlayingBar({
               onToggleExpand();
             }
           }}
-          className="flex items-center gap-3 min-w-0 text-left cursor-pointer"
+          className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer"
           aria-label={expanded ? "Collapse player" : "Expand player"}
         >
           {coverSrc ? (
@@ -198,6 +200,8 @@ export function NowPlayingBar({
               </button>
             )}
           </div>
+        </div>
+        <MusicLikeButton file={playingFile} className="shrink-0" size={18} />
         </div>
 
         <div className="flex flex-col items-center justify-center gap-1.5 min-w-0">

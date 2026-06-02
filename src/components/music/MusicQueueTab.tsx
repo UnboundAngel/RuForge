@@ -7,6 +7,7 @@ import type { MediaFile } from "@/types";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { MusicLikeButton } from "./MusicLikeButton";
 import {
   buildCombinedQueuePaths,
   manualQueueFromCombinedReorder,
@@ -197,6 +198,19 @@ function QueueReorderRow({
   onDragActiveChange: (active: boolean) => void;
 }) {
   const dragControls = useDragControls();
+  const suppressPlayClickRef = useRef(false);
+
+  const handlePlay = useCallback(
+    (f: MediaFile) => {
+      if (suppressPlayClickRef.current) {
+        suppressPlayClickRef.current = false;
+        return;
+      }
+      onPlay(f);
+    },
+    [onPlay],
+  );
+
   return (
     <Reorder.Item
       value={path}
@@ -208,7 +222,10 @@ function QueueReorderRow({
       transition={{ layout: { duration: 0 } }}
       whileDrag={{ zIndex: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.35)" }}
       dragTransition={{ power: 0.15, timeConstant: 100 }}
-      onDragStart={() => onDragActiveChange(true)}
+      onDragStart={() => {
+        suppressPlayClickRef.current = true;
+        onDragActiveChange(true);
+      }}
       onDragEnd={() => onDragActiveChange(false)}
     >
       <TrackRow
@@ -217,8 +234,13 @@ function QueueReorderRow({
         draggable
         dragControls={dragControls}
         menuOpen={menuOpen}
-        onPlay={onPlay}
+        onPlay={handlePlay}
         onContextMenu={onContextMenu}
+        onRowPointerDown={(e) => {
+          if (!(e.target as Element).closest(".rf-music-queue-grip")) {
+            suppressPlayClickRef.current = false;
+          }
+        }}
       />
     </Reorder.Item>
   );
@@ -243,6 +265,7 @@ function TrackRow({
   menuOpen,
   onPlay,
   onContextMenu,
+  onRowPointerDown,
 }: {
   file: MediaFile;
   active: boolean;
@@ -251,6 +274,7 @@ function TrackRow({
   menuOpen: boolean;
   onPlay: (f: MediaFile) => void;
   onContextMenu: (f: MediaFile, x: number, y: number) => void;
+  onRowPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   const coverPath = bestCoverPath(file);
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
@@ -259,6 +283,7 @@ function TrackRow({
     <div
       className="group relative flex items-center gap-2.5 px-3 py-2 cursor-pointer rf-music-right-row select-none"
       data-active={active ? "true" : "false"}
+      onPointerDown={onRowPointerDown}
       onClick={() => onPlay(file)}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -310,6 +335,11 @@ function TrackRow({
           {file.artist ?? file.albumArtist ?? "Unknown artist"}
         </span>
       </div>
+      <MusicLikeButton
+        file={file}
+        className={menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"}
+        size={15}
+      />
       <button
         type="button"
         className={`rf-music-row-menu shrink-0 w-6 h-6 flex items-center justify-center rounded ${

@@ -12,6 +12,7 @@ import { MusicLibraryView } from "./MusicLibraryView";
 import { MusicArtistView } from "./MusicArtistView";
 import { MusicAlbumView } from "./MusicAlbumView";
 import { MusicTrackView } from "./MusicTrackView";
+import { MusicStatsView } from "./MusicStatsView";
 import { MusicExploreBottomBar } from "./MusicExploreBottomBar";
 import { MusicNavBackCell } from "./MusicNavBackCell";
 import { MusicExploreDownloadPanel } from "./MusicExploreDownloadPanel";
@@ -1016,6 +1017,10 @@ export function MusicShell() {
                         onOpenAlbum={openMusicAlbum}
                         onBack={closeMusicDetail}
                       />
+                    </motion.div>
+                  ) : musicDetail?.kind === "stats" ? (
+                    <motion.div key="stats" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0 overflow-y-auto overflow-x-hidden rf-scrollbar">
+                      <MusicStatsView onBack={closeMusicDetail} />
                     </motion.div>
                   ) : activeView === "home" ? (
                     <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0 overflow-hidden">

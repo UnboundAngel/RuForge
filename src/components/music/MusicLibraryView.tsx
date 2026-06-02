@@ -10,8 +10,11 @@ import { normalizeAlbumShelfKey } from "./musicShelfDedup";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { MusicLikeButton } from "./MusicLikeButton";
+import { resolveLikedFiles } from "./musicLikedTracks";
+import { MusicStatsView } from "./MusicStatsView";
 
-type LibTab = "songs" | "albums" | "artists";
+type LibTab = "songs" | "albums" | "artists" | "liked" | "stats";
 
 type SongRowProps = {
   file: MediaFile;
@@ -70,6 +73,11 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
       <div className="text-xs shrink-0 w-12 text-right" style={{ color: "var(--music-text-muted)" }}>
         {formatDuration(file.duration)}
       </div>
+      <MusicLikeButton
+        file={file}
+        className="opacity-0 group-hover/row:opacity-100 shrink-0"
+        size={15}
+      />
       {onContextMenu && (
         <button
           type="button"
@@ -175,6 +183,7 @@ type Props = {
 export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Props) {
   const entries = useRuforgeStore((s) => s.entries);
   const playingFile = useRuforgeStore((s) => s.playingFile);
+  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const [activeTab, setActiveTab] = useState<LibTab>("songs");
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
 
@@ -186,6 +195,11 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
   const sortedTracks = useMemo(
     () => [...tracks].sort((a, b) => a.name.localeCompare(b.name)),
     [tracks],
+  );
+
+  const likedTracks = useMemo(
+    () => resolveLikedFiles(tracks),
+    [tracks, musicLikedKeys],
   );
 
   const albums = useMemo(() => {
@@ -226,7 +240,9 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
     return [...map.values()].sort((a, b) => a.display.localeCompare(b.display));
   }, [tracks]);
 
-  const tabs: { id: LibTab; label: string }[] = [
+  const tabs: { id: LibTab; label: string; count?: number }[] = [
+    { id: "liked", label: "Liked Songs", count: likedTracks.length },
+    { id: "stats", label: "Stats" },
     { id: "songs", label: "Songs" },
     { id: "albums", label: "Albums" },
     { id: "artists", label: "Artists" },
@@ -256,12 +272,43 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
             }
           >
             {t.label}
+            {t.count != null && t.count > 0 ? ` · ${t.count}` : ""}
           </button>
         ))}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto py-2" style={{ scrollbarColor: "var(--music-border) transparent" }}>
+        {activeTab === "stats" && (
+          <MusicStatsView />
+        )}
+
+        {activeTab === "liked" && (
+          <div>
+            {likedTracks.length === 0 && (
+              <p className="text-center py-12 text-sm px-6" style={{ color: "var(--music-text-muted)" }}>
+                heart a track to build your liked songs playlist
+              </p>
+            )}
+            {likedTracks.map((file, i) => (
+              <SongRow
+                key={file.path}
+                file={file}
+                index={i}
+                isPlaying={playingFile?.path === file.path}
+                onClick={() => onPlayFile(file, likedTracks)}
+                menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
+                onContextMenu={(e) => setMenu({
+                  context: { kind: "song", file },
+                  x: e.clientX,
+                  y: e.clientY,
+                  onPlay: () => onPlayFile(file, likedTracks),
+                })}
+              />
+            ))}
+          </div>
+        )}
+
         {activeTab === "songs" && (
           <div>
             {sortedTracks.length === 0 && (

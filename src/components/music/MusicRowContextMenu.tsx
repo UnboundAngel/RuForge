@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { ListVideo, FolderOpen, User, Disc3, Play, Music2 } from "lucide-react";
+import { ListVideo, FolderOpen, User, Disc3, Play, Music2, Heart } from "lucide-react";
+import { primaryArtist } from "./musicArtist";
+import { musicTrackIdentityKey } from "./musicShelfDedup";
 
 import type { MediaFile } from "@/types";
 import { openInFileManager } from "@/openInFileManager";
@@ -32,6 +34,8 @@ const ROW =
 
 export function MusicRowContextMenu({ menu, onClose }: Props) {
   const enqueueManualQueue = useRuforgeStore((s) => s.enqueueManualQueue);
+  const toggleMusicLike = useRuforgeStore((s) => s.toggleMusicLike);
+  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const openMusicAlbum = useRuforgeStore((s) => s.openMusicAlbum);
   const openMusicSong = useRuforgeStore((s) => s.openMusicSong);
@@ -76,6 +80,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
     const albumKey = albumKeyFromFile(file);
     const hasArtist = !!artistKey;
     const hasAlbum = !!(file.canonicalAlbum ?? file.album)?.trim();
+    const liked = musicLikedKeys.includes(musicTrackIdentityKey(file, primaryArtist));
 
     rows = (
       <>
@@ -85,6 +90,10 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
             Play
           </button>
         )}
+        <button className={ROW} onClick={act(() => toggleMusicLike(file))}>
+          <Heart size={14} strokeWidth={2} fill={liked ? "currentColor" : "none"} />
+          {liked ? "Remove from Liked Songs" : "Add to Liked Songs"}
+        </button>
         <button className={ROW} onClick={act(() => enqueueManualQueue(file.path))}>
           <ListVideo size={14} strokeWidth={2} />
           Add to queue

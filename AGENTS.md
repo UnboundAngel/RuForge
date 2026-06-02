@@ -376,6 +376,14 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.9 (unreleased)
 
+- **Music stats view**: Dedicated listening stats surface (`MusicStatsView`) with all-time and this-week summaries, top 10 tracks/artists, red-accent section headers; open from Home Your stats See all or Library Stats tab; period helpers on existing listen-stats store. `MusicStatsView.tsx`, `musicListenStats.ts`, `MusicHomeStatsStrip.tsx`, `MusicLibraryView.tsx`, `MusicShell.tsx`, `MusicHomeView.tsx`, `ruforgeStore.ts`, `types.ts`.
+
+- **Music listen stats + smart shuffle**: Per-track listen stats in localStorage (play count, listen seconds, last played) keyed by music identity; batched listen time from `useMusicPlayback`; smart weighted shuffle (history, likes, recency penalty, artist spread) for Shuffle actions and endless autoplay at queue end; Home "Your stats" top tracks/artists strip. `musicListenStats.ts`, `musicSmartShuffle.ts`, `useMusicPlayback.ts`, `MusicHomeStatsStrip.tsx`, `musicPlayHistory.ts`, `ruforgeStore.ts`, `MusicArtistView.tsx`, `MusicAlbumView.tsx`, `MusicHomeView.tsx`.
+
+- **Music liked songs**: Heart toggle on now playing, queue, library, and home rows persists a local Liked Songs playlist (`ruforge-music-liked-tracks`); Library Liked Songs tab and Home shelf; liked tracks rank higher in Quick picks and Rediscover. `musicLikedTracks.ts`, `MusicLikeButton.tsx`, `ruforgeStore.ts`, `MusicLibraryView.tsx`, `MusicHomeView.tsx`, `MusicQueueTab.tsx`, `NowPlayingBar.tsx`, `MusicRowContextMenu.tsx`.
+
+- **Music queue reorder (fix)**: Dragging a queue row to reorder no longer starts playback on pointerup; play click is suppressed for the click that follows a grip drag. `MusicQueueTab.tsx`.
+
 - **Gallery scan perf (fix)**: Duplicate download cleanup moved off `scan_gallery` to `sweep_library_download_duplicates`; `fetchEntries` runs it once per scan root per session (or when `sweepDuplicates: true`, including post-migrate). Post-download targeted cleanup unchanged. `gallery.rs`, `ruforgeStore.ts`, `MigrateLibraryModal.tsx`.
 
 - **Poster backfill (fix)**: `filesMissingPoster` skips audio-only paths and files with embedded cover art so music library refresh does not trigger a second full scan. `posterBackfill.ts`.
