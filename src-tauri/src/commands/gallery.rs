@@ -1039,13 +1039,24 @@ fn sweep_download_tree_for_duplicates(root: &Path) {
 }
 
 #[tauri::command]
+pub async fn sweep_library_download_duplicates(dir: String) -> Result<(), String> {
+    let dir_path = std::path::Path::new(&dir);
+    if !dir_path.exists() {
+        return Ok(());
+    }
+    let root = dir_path.to_path_buf();
+    tokio::task::spawn_blocking(move || sweep_download_tree_for_duplicates(&root))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
     let dir_path = std::path::Path::new(&dir);
     if !dir_path.exists() {
         return Ok(vec![]);
     }
-
-    sweep_download_tree_for_duplicates(dir_path);
 
     let mut out: Vec<GalleryEntry> = Vec::new();
     let read_dir = match std::fs::read_dir(dir_path) {

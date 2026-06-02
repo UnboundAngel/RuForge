@@ -376,6 +376,14 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.9 (unreleased)
 
+- **Gallery scan perf (fix)**: Duplicate download cleanup moved off `scan_gallery` to `sweep_library_download_duplicates`; `fetchEntries` runs it once per scan root per session (or when `sweepDuplicates: true`, including post-migrate). Post-download targeted cleanup unchanged. `gallery.rs`, `ruforgeStore.ts`, `MigrateLibraryModal.tsx`.
+
+- **Poster backfill (fix)**: `filesMissingPoster` skips audio-only paths and files with embedded cover art so music library refresh does not trigger a second full scan. `posterBackfill.ts`.
+
+- **Library migrate (fix)**: `migrate_library_layout` now moves `{stem}.musicmeta.json` sidecars with the media bundle, matching export/delete parity. `migrate.rs`.
+
+- **Music mini dual-play (fix)**: Main music play paths emit `stop-music-mini-playback` to the music-mini window via `setPlayingFile` when `navMode === "music"`, so main playback stops the popped-out music mini. `ruforgeStore.ts`.
+
 - **Debug logging (Settings > Debugging)**: Per-category tree toggles (Rust terminal + JS DevTools), in-memory gates with `sync_debug_log_categories` on boot/toggle, `tauri-plugin-log` filter silences lofty TRACE unless `library.metadata.lofty` is on, `debugLog` / `rf_log!` helpers. `debugCategories.ts`, `debug_log.rs`, `DebugLogCategoryTree.tsx`, `types.ts`, `App.tsx`.
 
 - **Music Explore album tracklist harvest**: Pick tracks prefers webview `ytmusic-browse-response.data` before yt-dlp; browse-data poll after navigation; fail-safe completeness gate; harvest wait early-bails on URL mismatch and gate-incomplete truncated shelves (paste and >200 albums skip 1.5s poll); panel prefers harvest over yt-dlp session cache. `explorerProfileScript.ts`, `musicExploreTracklistHarvest.ts`, `MusicExploreDownloadPanel.tsx`, `MusicShell.tsx`.

@@ -27,7 +27,9 @@ use crate::commands::export::{
 };
 use crate::download_job_manager::DownloadJobManager;
 use crate::commands::ffprobe::probe_local_media_ffprobe;
-use crate::commands::gallery::{regroup_playlist_downloads, scan_gallery};
+use crate::commands::gallery::{
+    regroup_playlist_downloads, scan_gallery, sweep_library_download_duplicates,
+};
 use crate::commands::migrate::migrate_library_layout;
 use crate::commands::sponsorblock::ensure_sponsorblock_segments;
 use crate::commands::musicmeta::{
@@ -167,6 +169,7 @@ pub fn run() {
             pause_download_job,
             stop_all_active_download_jobs,
             scan_gallery,
+            sweep_library_download_duplicates,
             regroup_playlist_downloads,
             ensure_sponsorblock_segments,
             ensure_music_meta,
