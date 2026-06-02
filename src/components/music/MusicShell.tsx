@@ -362,6 +362,12 @@ export function MusicShell() {
   );
   if (showExplorePanel) panelUrlRef.current = currentPanelUrl;
   const explorePanelUrl = showExplorePanel ? currentPanelUrl : panelUrlRef.current;
+  const webviewHarvestUrls = [
+    currentMusicExploreUrl,
+    musicExplorePageContext.url,
+    musicExplorePageContext.actionUrl,
+    musicExplorePageContext.browseTargetUrl,
+  ].filter((u): u is string => Boolean(u?.trim()));
 
   useEffect(() => {
     void getEmbeddedExplorerWebview(MUSIC_EXPLORE_WEBVIEW_LABEL).then((webview) => {
@@ -918,6 +924,7 @@ export function MusicShell() {
                         shelfLinks={musicExplorePageContext.shelfLinks}
                         harvestedTracklist={musicExplorePageContext.harvestedTracklist}
                         pageTitle={musicExplorePageContext.pageTitle}
+                        webviewHarvestUrls={webviewHarvestUrls}
                         collapsed={navCollapsed}
                         dockMinimized={explorePanelDockMode}
                         onClose={closeExplorePanel}

@@ -482,6 +482,42 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
       harvestedTracklist: harvestedTracklist
     };
   }
+  function browseDataHasTrackShelf() {
+    try {
+      var browseEl = document.querySelector("ytmusic-browse-response");
+      var data = browseEl && browseEl.data;
+      if (!data || !data.contents) return false;
+      var found = findTrackShelf(data);
+      return !!(found && found.shelf && found.shelf.contents && found.shelf.contents.length);
+    } catch (e) {}
+    return false;
+  }
+  function clearBrowseDataWatcher() {
+    if (window.__rf_browse_poll) {
+      clearInterval(window.__rf_browse_poll);
+      window.__rf_browse_poll = null;
+    }
+  }
+  function armBrowseDataWatcher() {
+    clearBrowseDataWatcher();
+    if (browseDataHasTrackShelf()) {
+      window.__rf_emitPageContext();
+      return;
+    }
+    var started = Date.now();
+    var maxMs = 4000;
+    var intervalMs = 100;
+    window.__rf_browse_poll = setInterval(function() {
+      if (browseDataHasTrackShelf()) {
+        clearBrowseDataWatcher();
+        window.__rf_emitPageContext();
+        return;
+      }
+      if (Date.now() - started >= maxMs) {
+        clearBrowseDataWatcher();
+      }
+    }, intervalMs);
+  }
   function emitPageContext() {
     try {
       var ctx = readPageContext();
@@ -501,12 +537,17 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
       __rf_tauri_emit("music-explore-page-context", ctx);
     } catch (e) {}
   }
+  function refreshBrowseContext() {
+    window.__rf_emitPageContext();
+    armBrowseDataWatcher();
+  }
   window.__rf_emitPageContext = emitPageContext;
+  window.__rf_refreshBrowseContext = refreshBrowseContext;
   if (!window.__rf_ctx_ready) {
     window.__rf_ctx_ready = true;
-    window.addEventListener("yt-navigate-finish", function(){ window.__rf_emitPageContext(); });
+    window.addEventListener("yt-navigate-finish", function(){ refreshBrowseContext(); });
   }
-  window.__rf_emitPageContext();
+  refreshBrowseContext();
 })();`;
 
 /** Now-playing probe — safe to re-inject whenever the explore webview is shown. */
@@ -615,13 +656,17 @@ export const MUSIC_EXPLORE_INIT_SCRIPT = `(function(){
     }
   }
   function probeProfile() {${musicProfileProbeInner()}}
-  function tick() {
+  function tick(onNavigateFinish) {
     emitUrl();
     probeProfile();
     if (window.__rf_emitNowPlaying) window.__rf_emitNowPlaying();
-    if (window.__rf_emitPageContext) window.__rf_emitPageContext();
+    if (onNavigateFinish && window.__rf_refreshBrowseContext) {
+      window.__rf_refreshBrowseContext();
+    } else if (window.__rf_emitPageContext) {
+      window.__rf_emitPageContext();
+    }
   }
-  tick();
-  window.addEventListener("yt-navigate-finish", tick);
-  setInterval(tick, 2000);
+  tick(false);
+  window.addEventListener("yt-navigate-finish", function() { tick(true); });
+  setInterval(function() { tick(false); }, 2000);
 })();`;

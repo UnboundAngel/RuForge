@@ -43,7 +43,10 @@ import {
 } from "@/lib/musicExploreTracks";
 import type { MusicExploreShelfLink } from "@/lib/musicExplorePageContext";
 import type { MusicExploreHarvestedTracklist } from "@/lib/musicExploreTracklistHarvest";
-import { tryPlaylistPageFromHarvest } from "@/lib/musicExploreTracklistHarvest";
+import {
+  tryPlaylistPageFromHarvest,
+  waitForCompleteHarvestPlaylist,
+} from "@/lib/musicExploreTracklistHarvest";
 import {
   MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION,
   throttleMusicExplorePageFetch,
@@ -319,6 +322,8 @@ type Props = {
   harvestedTracklist?: MusicExploreHarvestedTracklist | null;
   /** Current YTM page title (album/playlist name). */
   pageTitle?: string | null;
+  /** Live webview page URLs used to decide whether null harvest may still arrive. */
+  webviewHarvestUrls?: readonly string[];
   collapsed?: boolean;
   dockMinimized?: boolean;
   onClose: () => void;
@@ -336,6 +341,7 @@ export function MusicExploreDownloadPanel({
   shelfLinks = [],
   harvestedTracklist = null,
   pageTitle = null,
+  webviewHarvestUrls = [],
   collapsed = false,
   dockMinimized = false,
   onClose,
@@ -358,6 +364,14 @@ export function MusicExploreDownloadPanel({
   const pendingCelebrationsRef = useRef<CollapsedCelebrate[]>([]);
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [celebrating, setCelebrating] = useState<CollapsedCelebrate | null>(null);
+  const harvestedTracklistRef = useRef(harvestedTracklist);
+  useEffect(() => {
+    harvestedTracklistRef.current = harvestedTracklist;
+  }, [harvestedTracklist]);
+  const webviewHarvestUrlsRef = useRef(webviewHarvestUrls);
+  useEffect(() => {
+    webviewHarvestUrlsRef.current = webviewHarvestUrls;
+  }, [webviewHarvestUrls]);
 
   const removeCompletedFromPlaylist = useCallback((completedUrls: string[]) => {
     if (completedUrls.length === 0) return;
@@ -504,6 +518,26 @@ export function MusicExploreDownloadPanel({
     abortRef.current = ac;
 
     if (kind === "playlist" || isMusicYouTubePlaylistUrl(canonical)) {
+      const playlistTitle = pageTitle?.trim() || playlistFolderTitle(null, canonical);
+      const harvestedPage = await waitForCompleteHarvestPlaylist(
+        () => harvestedTracklistRef.current,
+        canonical,
+        playlistTitle,
+        ac.signal,
+        () => webviewHarvestUrlsRef.current,
+      );
+      if (harvestedPage) {
+        if (ac.signal.aborted) return;
+        setSelected(new Set());
+        lastClickIndexRef.current = null;
+        applyPlaylistPhase(
+          playlistFolderTitle(harvestedPage.title ?? pageTitle, canonical),
+          canonical,
+          harvestedPage,
+        );
+        return;
+      }
+
       const cached = getCachedMusicExplorePlaylist(canonical);
       if (cached) {
         if (ac.signal.aborted) return;
@@ -518,21 +552,6 @@ export function MusicExploreDownloadPanel({
             total: cached.total,
           },
           true,
-        );
-        return;
-      }
-
-      const harvestedPage = tryPlaylistPageFromHarvest(
-        harvestedTracklist,
-        canonical,
-        pageTitle?.trim() || playlistFolderTitle(null, canonical),
-      );
-      if (harvestedPage) {
-        if (ac.signal.aborted) return;
-        applyPlaylistPhase(
-          playlistFolderTitle(harvestedPage.title ?? pageTitle, canonical),
-          canonical,
-          harvestedPage,
         );
         return;
       }
@@ -655,6 +674,22 @@ export function MusicExploreDownloadPanel({
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
+
+    const playlistTitle = playlistFolderTitle(pl.title, pl.url);
+    const harvestedPage = await waitForCompleteHarvestPlaylist(
+      () => harvestedTracklistRef.current,
+      pl.url,
+      playlistTitle,
+      ac.signal,
+      () => webviewHarvestUrlsRef.current,
+    );
+    if (harvestedPage) {
+      if (ac.signal.aborted) return;
+      setSelected(new Set());
+      lastClickIndexRef.current = null;
+      applyPlaylistPhase(playlistTitle, pl.url, harvestedPage);
+      return;
+    }
 
     const cached = getCachedMusicExplorePlaylist(pl.url);
     if (cached) {
