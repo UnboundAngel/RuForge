@@ -376,7 +376,7 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.9 (unreleased)
 
-- **Music Explore album tracklist harvest**: Pick tracks prefers the webview's loaded `ytmusic-browse-response.data` tracklist (injected harvest on `music-explore-page-context`) before `get_playlist_items_page` yt-dlp; mandatory completeness gate (header song count vs harvested rows, continuation detection) falls back to yt-dlp when browse JSON is partial. `explorerProfileScript.ts`, `musicExploreTracklistHarvest.ts`, `musicExplorePageContext.ts`, `MusicExploreDownloadPanel.tsx`, `MusicShell.tsx`.
+- **Music Explore album tracklist harvest**: Pick tracks prefers webview `ytmusic-browse-response.data` before yt-dlp; browse-data poll after navigation; fail-safe completeness gate; harvest wait early-bails on URL mismatch and gate-incomplete truncated shelves (paste and >200 albums skip 1.5s poll); panel prefers harvest over yt-dlp session cache. `explorerProfileScript.ts`, `musicExploreTracklistHarvest.ts`, `MusicExploreDownloadPanel.tsx`, `MusicShell.tsx`.
 
 - **Music mini player cover (fix)**: Restored full-bleed cover with horizontal gradient fade in small/compact (removed fixed-width object-contain brick); large audio fills the window with object-cover and scrim instead of a centered letterboxed album card. `MiniPlayer.tsx`.
 
