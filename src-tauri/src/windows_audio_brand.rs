@@ -52,7 +52,9 @@ fn branding_loop(display_name: &str, icon_path: &PathBuf) {
     }
     loop {
         if let Err(e) = scan_and_brand(display_name, icon_path) {
-            eprintln!("[ruforge] volume mixer branding: {e}");
+            if crate::debug_log::is_category_enabled("core.platform") {
+                eprintln!("[ruforge] volume mixer branding: {e}");
+            }
         }
         thread::sleep(Duration::from_millis(1500));
     }

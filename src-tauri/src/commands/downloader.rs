@@ -73,8 +73,10 @@ fn log_post_download_files_written(root: &Path, since: SystemTime) {
     }
 
     if !root.is_dir() {
-        log::info!(
-            "[RuForge] post-download file list skipped (not a directory): {}",
+        crate::rf_log!(
+            "download.post",
+            log::Level::Info,
+            "post-download file list skipped (not a directory): {}",
             root.display()
         );
         return;
@@ -82,8 +84,10 @@ fn log_post_download_files_written(root: &Path, since: SystemTime) {
 
     walk(root, root, 0, 8, cutoff, &mut rel_paths);
     rel_paths.sort();
-    log::info!(
-        "[RuForge] post-download files under {} (count={}, mtime cutoff ~{}s before job start): {:?}",
+    crate::rf_log!(
+        "download.post",
+        log::Level::Info,
+        "post-download files under {} (count={}, mtime cutoff ~{}s before job start): {:?}",
         root.display(),
         rel_paths.len(),
         SLACK_SECS,
@@ -889,7 +893,7 @@ async fn yt_dlp_single_json_simulate(
     if !output.status.success() {
         let err_msg = String::from_utf8_lossy(&output.stderr).to_string();
         ytdlp_register_rate_limit_from_stderr(&err_msg).await;
-        log::error!("[RuForge] yt-dlp failed: {}", err_msg);
+        crate::rf_log!("download.ytdlp", log::Level::Error, "yt-dlp failed: {}", err_msg);
         return Err(err_msg);
     }
     serde_json::from_slice(&output.stdout).map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))
@@ -908,8 +912,10 @@ async fn yt_dlp_single_json_simulate_resilient(
                 .and_then(|o| o.browser_cookies.as_deref())
                 .map(cookie_browser_label)
                 .unwrap_or("browser");
-            log::warn!(
-                "[RuForge] yt-dlp could not read {} cookies; retrying metadata without cookies",
+            crate::rf_log!(
+                "download.ytdlp",
+                log::Level::Warn,
+                "yt-dlp could not read {} cookies; retrying metadata without cookies",
                 label
             );
             match yt_dlp_single_json_simulate(app, url, None, format).await {
@@ -1190,16 +1196,20 @@ pub async fn get_video_info(
 
     if let Err(e) = &json_video_res {
         if json_audio.is_some() {
-            log::warn!(
-                "[RuForge] get_video_info video simulate failed (audio ok): {}",
+            crate::rf_log!(
+                "download.ytdlp",
+                log::Level::Warn,
+                "get_video_info video simulate failed (audio ok): {}",
                 e
             );
         }
     }
     if let Err(e) = &json_audio_res {
         if json_video.is_some() {
-            log::warn!(
-                "[RuForge] get_video_info audio simulate failed (video ok): {}",
+            crate::rf_log!(
+                "download.ytdlp",
+                log::Level::Warn,
+                "get_video_info audio simulate failed (video ok): {}",
                 e
             );
         }
@@ -1349,8 +1359,10 @@ fn build_ytdlp_download_args(
     }
 
     let sub_langs = options.sub_langs.trim();
-    log::info!(
-        "[RuForge] download audio_only={} sub_langs={:?} resume={}",
+    crate::rf_log!(
+        "download.jobs",
+        log::Level::Info,
+        "download audio_only={} sub_langs={:?} resume={}",
         options.audio_only,
         sub_langs,
         resume
@@ -1671,13 +1683,13 @@ pub async fn start_download_job(
                 }
                 CommandEvent::Terminated(payload) => {
                     if let Err(e) = manager_bg.remove_active(&job_id) {
-                        log::error!("[RuForge] job {} remove_active: {}", job_id, e);
+                        crate::rf_log!("download.jobs", log::Level::Error, "job {} remove_active: {}", job_id, e);
                     }
 
                     let paused = match manager_bg.take_paused(&job_id) {
                         Ok(b) => b,
                         Err(e) => {
-                            log::error!("[RuForge] job {} take_paused: {}", job_id, e);
+                            crate::rf_log!("download.jobs", log::Level::Error, "job {} take_paused: {}", job_id, e);
                             false
                         }
                     };
@@ -1727,7 +1739,7 @@ pub async fn start_download_job(
                         payload.code,
                         browser_cookies_for_errors.as_deref(),
                     );
-                    log::error!("[RuForge] job {} failed: {}", job_id, err);
+                    crate::rf_log!("download.jobs", log::Level::Error, "job {} failed: {}", job_id, err);
                     let _ = app.emit(
                         "download-job-finished",
                         DownloadJobFinishedPayload {
@@ -1744,18 +1756,18 @@ pub async fn start_download_job(
         }
 
         if let Err(e) = manager_bg.remove_active(&job_id) {
-            log::error!("[RuForge] job {} remove_active (channel end): {}", job_id, e);
+            crate::rf_log!("download.jobs", log::Level::Error, "job {} remove_active (channel end): {}", job_id, e);
         }
         let paused = match manager_bg.take_paused(&job_id) {
             Ok(b) => b,
             Err(e) => {
-                log::error!("[RuForge] job {} take_paused (channel end): {}", job_id, e);
+                crate::rf_log!("download.jobs", log::Level::Error, "job {} take_paused (channel end): {}", job_id, e);
                 false
             }
         };
         if !paused {
             let err = "Download process ended unexpectedly".to_string();
-            log::error!("[RuForge] job {}: {}", job_id, err);
+            crate::rf_log!("download.jobs", log::Level::Error, "job {}: {}", job_id, err);
             let _ = app.emit(
                 "download-job-finished",
                 DownloadJobFinishedPayload {

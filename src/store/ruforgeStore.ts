@@ -641,6 +641,16 @@ export const useRuforgeStore = create<RuforgeStore>()(
             console.error("Failed to update hardware acceleration preference:", e);
           }
         }
+
+        if (key === "debugLogEnabledCategories") {
+          try {
+            await invoke("sync_debug_log_categories", {
+              enabled: resolvedValue,
+            });
+          } catch (e) {
+            console.error("Failed to sync debug log categories:", e);
+          }
+        }
       },
 
       mergeHardwareAccelerationFromBackend: (hw) => {

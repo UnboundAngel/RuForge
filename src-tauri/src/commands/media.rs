@@ -384,7 +384,7 @@ fn delete_media_filesystem(app: &AppHandle, video_path: &str) -> Result<DeleteMe
 
     let sidecar_warnings = trash_paths(&paths);
     for warning in &sidecar_warnings {
-        log::warn!("[RuForge] delete trash: {warning}");
+        crate::rf_log!("library.delete", log::Level::Warn, "delete trash: {warning}");
     }
 
     prune_empty_dirs_after_media_delete(video_file_path);

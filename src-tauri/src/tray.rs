@@ -2,6 +2,8 @@ use tauri::menu::{Menu, MenuEvent, MenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, EventTarget, Manager};
 
+use crate::debug_log::is_category_enabled;
+
 /// Emitted to the **main** webview only. Handled in `App.tsx` using `@tauri-apps/api/webviewWindow`
 /// (`unminimize`, `show`, `setFocus`) — the same public API documented for the JS window layer.
 pub const TRAY_SHOW_MAIN_EVENT: &str = "ruforge:tray-show-main";
@@ -10,18 +12,28 @@ pub const TRAY_SHOW_MAIN_EVENT: &str = "ruforge:tray-show-main";
 /// so tray debugging does not rely on the browser console.
 #[tauri::command]
 pub fn tray_front_debug(line: String) {
-    eprintln!("[ruforge-tray] {line}");
+    if is_category_enabled("app.tray-debug") || is_category_enabled("core.tray") {
+        eprintln!("[ruforge-tray] {line}");
+    }
+}
+
+fn tray_log(line: impl AsRef<str>) {
+    if is_category_enabled("core.tray") {
+        eprintln!("[ruforge-tray] {}", line.as_ref());
+    }
 }
 
 fn request_show_main_from_tray(app: &AppHandle) {
-    eprintln!("[ruforge-tray] Rust: Show menu item matched, emitting `{TRAY_SHOW_MAIN_EVENT}` → main webview");
+    tray_log(format!(
+        "Rust: Show menu item matched, emitting `{TRAY_SHOW_MAIN_EVENT}` → main webview"
+    ));
     match app.emit_to(
         EventTarget::webview_window("main"),
         TRAY_SHOW_MAIN_EVENT,
         (),
     ) {
-        Ok(()) => eprintln!("[ruforge-tray] Rust: emit_to returned Ok"),
-        Err(e) => eprintln!("[ruforge-tray] Rust: emit_to FAILED: {e}"),
+        Ok(()) => tray_log("Rust: emit_to returned Ok"),
+        Err(e) => tray_log(format!("Rust: emit_to FAILED: {e}")),
     }
 }
 

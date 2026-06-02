@@ -23,6 +23,7 @@ import {
   throttleMusicExplorePageFetch,
 } from "@/lib/ytdlpPageFetchThrottle";
 import type { MusicExplorePageContext } from "@/lib/musicExplorePageContext";
+import { debugLog } from "@/debug/debugLog";
 
 type Props = {
   shellBlack?: boolean;
@@ -268,7 +269,7 @@ export function MusicExploreBottomBar({
       downloadedUrlsRef.current.add(canonical);
       if (folderName) playlistFolderByCanonicalRef.current.set(canonical, folderName);
     } catch (e) {
-      console.warn("[MusicExploreBottomBar] download playlist error:", e);
+      debugLog("music.explore-download", "warn", "download playlist error", e);
     } finally {
       setDownloadingPlaylist(false);
     }

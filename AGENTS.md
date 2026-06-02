@@ -376,6 +376,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.9 (unreleased)
 
+- **Debug logging (Settings > Debugging)**: Per-category tree toggles (Rust terminal + JS DevTools), in-memory gates with `sync_debug_log_categories` on boot/toggle, `tauri-plugin-log` filter silences lofty TRACE unless `library.metadata.lofty` is on, `debugLog` / `rf_log!` helpers. `debugCategories.ts`, `debug_log.rs`, `DebugLogCategoryTree.tsx`, `types.ts`, `App.tsx`.
+
 - **Music Explore album tracklist harvest**: Pick tracks prefers webview `ytmusic-browse-response.data` before yt-dlp; browse-data poll after navigation; fail-safe completeness gate; harvest wait early-bails on URL mismatch and gate-incomplete truncated shelves (paste and >200 albums skip 1.5s poll); panel prefers harvest over yt-dlp session cache. `explorerProfileScript.ts`, `musicExploreTracklistHarvest.ts`, `MusicExploreDownloadPanel.tsx`, `MusicShell.tsx`.
 
 - **Music mini player cover (fix)**: Restored full-bleed cover with horizontal gradient fade in small/compact (removed fixed-width object-contain brick); large audio fills the window with object-cover and scrim instead of a centered letterboxed album card. `MiniPlayer.tsx`.

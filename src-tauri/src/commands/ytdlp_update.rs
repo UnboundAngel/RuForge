@@ -240,7 +240,7 @@ pub(crate) async fn refresh_ytdlp_release_cache_inner(
 pub fn warm_ytdlp_release_cache_spawn(app_handle: AppHandle) {
     tauri::async_runtime::spawn(async move {
         if let Err(e) = refresh_ytdlp_release_cache_inner(&app_handle, false).await {
-            log::warn!("[RuForge] yt-dlp release cache warm failed: {}", e);
+            crate::rf_log!("download.updater", log::Level::Warn, "yt-dlp release cache warm failed: {}", e);
         }
     });
 }
@@ -266,7 +266,7 @@ pub async fn get_ytdlp_update_status(
         Ok(c) => c,
         Err(e) => {
             check_error = Some(e.clone());
-            log::warn!("[RuForge] yt-dlp upstream check failed: {}", e);
+            crate::rf_log!("download.updater", log::Level::Warn, "yt-dlp upstream check failed: {}", e);
             read_cache_disk(&app)
         }
     };

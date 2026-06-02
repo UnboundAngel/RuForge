@@ -1,5 +1,6 @@
 mod app_state;
 mod commands;
+pub mod debug_log;
 mod download_job_manager;
 mod process_tree;
 mod hardware_acceleration;
@@ -64,6 +65,7 @@ use crate::commands::ytdlp_update::{
     download_ytdlp_update, get_ytdlp_update_status, warm_ytdlp_release_cache_spawn,
 };
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
+use crate::debug_log::sync_debug_log_categories;
 use crate::tray::{setup_tray, tray_front_debug, TRAY_SHOW_MAIN_EVENT};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -91,14 +93,24 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_log::Builder::new().build())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(crate::debug_log::plugin_max_level())
+                .filter(|meta| crate::debug_log::log_filter(meta))
+                .build(),
+        )
         .setup(|app| {
             let handle = app.handle().clone();
             warm_ytdlp_release_cache_spawn(handle.clone());
             tauri::async_runtime::spawn(async move {
                 if let Ok(updater) = handle.updater() {
                     if let Ok(Some(update)) = updater.check().await {
-                        println!("Update found: {}", update.version);
+                        crate::rf_log!(
+                            "core.startup",
+                            log::Level::Info,
+                            "Update found: {}",
+                            update.version
+                        );
                     }
                 }
             });
@@ -118,13 +130,17 @@ pub fn run() {
 
             if let Some(main) = app.get_webview_window("main") {
                 let _ = main.listen(TRAY_SHOW_MAIN_EVENT, |_event| {
-                    eprintln!(
-                        "[ruforge-tray] Rust: main webview received `{TRAY_SHOW_MAIN_EVENT}` (routing OK)"
+                    crate::rf_log!(
+                        "core.tray",
+                        log::Level::Info,
+                        "main webview received `{TRAY_SHOW_MAIN_EVENT}` (routing OK)"
                     );
                 });
             } else {
-                eprintln!(
-                    "[ruforge-tray] Rust: setup could not resolve main webview — tray emit will miss"
+                crate::rf_log!(
+                    "core.tray",
+                    log::Level::Warn,
+                    "setup could not resolve main webview — tray emit will miss"
                 );
             }
 
@@ -142,6 +158,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            sync_debug_log_categories,
             tray_front_debug,
             get_video_info,
             get_music_browse_info,

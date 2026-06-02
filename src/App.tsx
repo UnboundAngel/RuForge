@@ -14,6 +14,8 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
+import { isDebugCategoryEnabled } from "./debug/debugCategories";
+import { debugLog } from "./debug/debugLog";
 import { useUrlDropIntake } from "./features/downloader/useUrlDropIntake";
 import { getYoutubeUrlDropHandler } from "./features/downloader/youtubeUrlDropRegistry";
 import { Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
@@ -351,10 +353,15 @@ function App() {
           setOutputDir(resolved);
         }
       } catch (e) {
-        console.warn("[RuForge] platform path hydrate failed", e);
+        debugLog("app.platform", "warn", "platform path hydrate failed", e);
       }
     })();
   }, [setOutputDir]);
+
+  useEffect(() => {
+    const enabled = useRuforgeStore.getState().settings.debugLogEnabledCategories;
+    void invoke("sync_debug_log_categories", { enabled }).catch(() => {});
+  }, []);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
   const setYoutubeExplorerProfile = useRuforgeStore((s) => s.setYoutubeExplorerProfile);
@@ -987,10 +994,13 @@ function App() {
   // System tray "Show" — event name must match `TRAY_SHOW_MAIN_EVENT` in `src-tauri/src/tray.rs`.
   // Uses the official JS `WebviewWindow` APIs (`unminimize` / `show` / `setFocus`), same layer as
   // https://v2.tauri.app/learn/system-tray/ (JS menu `action` / window helpers).
-  // Debug lines go to the **terminal** via `invoke("tray_front_debug")` → Rust `eprintln!`.
+  // Tray debug lines go to the terminal via `tray_front_debug` when app.tray-debug is enabled.
   useEffect(() => {
-    const trayDbg = (line: string) =>
-      invoke("tray_front_debug", { line }).catch(() => {});
+    const trayDbg = (line: string) => {
+      const enabled = new Set(useRuforgeStore.getState().settings.debugLogEnabledCategories);
+      if (!isDebugCategoryEnabled(enabled, "app.tray-debug")) return;
+      void invoke("tray_front_debug", { line }).catch(() => {});
+    };
     const unlistenTrayShow = listen("ruforge:tray-show-main", async () => {
       await trayDbg("App(main): listen fired for ruforge:tray-show-main");
       const main = await WebviewWindow.getByLabel("main");
