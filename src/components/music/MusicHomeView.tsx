@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Play, Search, X, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -18,8 +19,8 @@ import { primaryArtist } from "./musicArtist";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicHomeSearchEmpty } from "./MusicHomeSearchEmpty";
 import { MusicHomeStatsStrip } from "./MusicHomeStatsStrip";
-import { MusicLikeButton } from "./MusicLikeButton";
 import { resolveLikedFiles } from "./musicLikedTracks";
+import { LikedSongsCard } from "./LikedSongsCover";
 
 type MusicHomeViewProps = {
   onPlayFile: (file: MediaFile, playlist?: MediaFile[]) => void;
@@ -90,11 +91,6 @@ function QuickPickRow({ file, onClick, onContextMenu, menuOpen }: TrackCardProps
           {artist}
         </div>
       </div>
-      <MusicLikeButton
-        file={file}
-        className={menuOpen ? "opacity-100" : "opacity-0 group-hover/row:opacity-100"}
-        size={15}
-      />
       {onContextMenu && (
         <button
           type="button"
@@ -339,11 +335,10 @@ export function MusicHomeView({
 }: MusicHomeViewProps) {
   const entries = useRuforgeStore((s) => s.entries);
   const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
-  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
-  const setMusicView = useRuforgeStore((s) => s.setMusicView);
   const openMusicStats = useRuforgeStore((s) => s.openMusicStats);
+  const openMusicLiked = useRuforgeStore((s) => s.openMusicLiked);
+  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const sessionSeedRef = useRef(Math.floor(Math.random() * 0xffffffff));
-  const likedKeySet = useMemo(() => new Set(musicLikedKeys), [musicLikedKeys]);
 
   const [activeFilter, setActiveFilter] = useState<"all" | "relax" | "focus">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -480,20 +475,15 @@ export function MusicHomeView({
     [filteredTracks, musicLikedKeys],
   );
 
-  // Quick picks: liked tracks weighted heavily, then most-listened, then seeded shuffle.
+  // Quick picks: most-listened first, then seeded shuffle fallback.
   const quickPicks = useMemo(() => {
     const withHistory = filteredTracks
       .map((t) => ({
         file: t,
         secs: readFurthestPlaybackSec(t.path),
-        liked: likedKeySet.has(musicTrackIdentityKey(t, primaryArtist)),
       }))
-      .filter((x) => x.secs > 30 || x.liked)
-      .sort((a, b) => {
-        const scoreA = a.secs + (a.liked ? 1_000_000 : 0);
-        const scoreB = b.secs + (b.liked ? 1_000_000 : 0);
-        return scoreB - scoreA;
-      })
+      .filter((x) => x.secs > 30)
+      .sort((a, b) => b.secs - a.secs)
       .map((x) => x.file);
 
     const pool =
@@ -514,7 +504,7 @@ export function MusicHomeView({
       12,
       primaryArtist,
     );
-  }, [filteredTracks, likedKeySet]);
+  }, [filteredTracks]);
 
   // Quick picks columns: split 12 items into 3 columns (up to 4 rows per column)
   const quickPicksColumns = useMemo(() => {
@@ -532,14 +522,9 @@ export function MusicHomeView({
     if (unique.length < 6) return [];
     const sorted = [...unique].sort((a, b) => a.created - b.created);
     const older = sorted.slice(0, Math.ceil(sorted.length / 2));
-    const likedOlder = older.filter((t) => likedKeySet.has(musicTrackIdentityKey(t, primaryArtist)));
-    const restOlder = older.filter((t) => !likedKeySet.has(musicTrackIdentityKey(t, primaryArtist)));
-    const shuffled = [
-      ...seededShuffle(likedOlder, sessionSeedRef.current ^ 0xdeadbeef),
-      ...seededShuffle(restOlder, sessionSeedRef.current ^ 0xcafebabe),
-    ];
+    const shuffled = seededShuffle(older, sessionSeedRef.current ^ 0xdeadbeef);
     return diversifyTracksByArtist(shuffled, 1, 12, primaryArtist);
-  }, [filteredTracks, likedKeySet]);
+  }, [filteredTracks]);
 
   // Albums: dedup by (primaryArtistKey + albumKey). Display artist is the primary artist only.
   const albums = useMemo(() => {
@@ -686,40 +671,6 @@ export function MusicHomeView({
           />
         ) : (
           <div className="flex flex-col gap-12 pl-12 pr-12 pt-8 pb-16 max-w-[1300px] mx-auto w-full">
-            {likedTracks.length > 0 && activeFilter === "all" && !searchQuery && (
-              <section>
-                <div className="flex items-end justify-between mb-4 gap-4">
-                  <h2 className="text-2xl font-bold tracking-tight" style={{ color: "var(--music-text-primary)" }}>
-                    Liked Songs
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={() => setMusicView("library")}
-                    className="text-xs font-medium shrink-0 hover:underline"
-                    style={{ color: "var(--music-text-secondary)" }}
-                  >
-                    See all in Library
-                  </button>
-                </div>
-                <div className="flex flex-col gap-3 max-w-xl">
-                  {likedTracks.slice(0, 6).map((file) => (
-                    <QuickPickRow
-                      key={file.path}
-                      file={file}
-                      onClick={() => onPlayFile(file, likedTracks)}
-                      menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
-                      onContextMenu={(e) => setMenu({
-                        context: { kind: "song", file },
-                        x: e.clientX,
-                        y: e.clientY,
-                        onPlay: () => onPlayFile(file, likedTracks),
-                      })}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
             {activeFilter === "all" && !searchQuery && (
               <MusicHomeStatsStrip onSeeAll={openMusicStats} />
             )}
@@ -754,6 +705,33 @@ export function MusicHomeView({
                 </div>
               </section>
             )}
+
+            <AnimatePresence initial={false}>
+              {likedTracks.length > 0 && activeFilter === "all" && !searchQuery && (
+                <motion.section
+                  key="home-liked-songs"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <div className="flex items-end justify-between mb-4 gap-4">
+                    <h2 className="text-2xl font-bold tracking-tight" style={{ color: "var(--music-text-primary)" }}>
+                      Liked Songs
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={openMusicLiked}
+                      className="text-xs font-medium shrink-0 hover:underline"
+                      style={{ color: "var(--music-text-secondary)" }}
+                    >
+                      See all
+                    </button>
+                  </div>
+                  <LikedSongsCard files={likedTracks} onClick={openMusicLiked} />
+                </motion.section>
+              )}
+            </AnimatePresence>
 
             {/* Artists circular scroll shelf */}
             {artists.length > 0 && (

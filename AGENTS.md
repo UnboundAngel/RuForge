@@ -376,6 +376,12 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.9 (unreleased)
 
+- **Music liked Home + heart size (fix)**: Restored Liked Songs card on Home below Quick picks (fade-in, no top-of-page jolt); heart control matches transport icons (17px bar, 15px rows). `MusicHomeView.tsx`, `MusicLikeButton.tsx`, `NowPlayingBar.tsx`.
+
+- **Music like placement (fix)**: Hearts removed from Home, Library songs tab, and queue rows (context menu only there); no Home Liked Songs shelf (fixes first-like scroll jolt). Hearts stay on now playing, song page, artist/album tracklists, and Liked Songs view; `MusicLikeButton` dual-layer heart + burst/particles. `MusicLikeButton.tsx`, `MusicHomeView.tsx`, `MusicLibraryView.tsx`, `MusicQueueTab.tsx`, `MusicTrackView.tsx`, `MusicAlbumView.tsx`, `MusicArtistView.tsx`, `NowPlayingBar.tsx`.
+
+- **Music liked songs UX (fix)**: Liking no longer jumps rows to the top of Quick picks or Rediscover (removed +1M score boost and liked-first rediscover shuffle). Liked Songs is a virtual playlist with collage cover (up to 4 arts, gradient + heart fallback); Home shelf card and Library Liked tab use album-style header; `MusicLikeButton` gets burst + 5-particle like animation on `#ff0033`. `MusicHomeView.tsx`, `MusicLibraryView.tsx`, `MusicLikedView.tsx`, `LikedSongsCover.tsx`, `MusicLikeButton.tsx`, `ruforgeStore.ts`, `types.ts`, `MusicShell.tsx`.
+
 - **Music stats view**: Dedicated listening stats surface (`MusicStatsView`) with all-time and this-week summaries, top 10 tracks/artists, red-accent section headers; open from Home Your stats See all or Library Stats tab; period helpers on existing listen-stats store. `MusicStatsView.tsx`, `musicListenStats.ts`, `MusicHomeStatsStrip.tsx`, `MusicLibraryView.tsx`, `MusicShell.tsx`, `MusicHomeView.tsx`, `ruforgeStore.ts`, `types.ts`.
 
 - **Music listen stats + smart shuffle**: Per-track listen stats in localStorage (play count, listen seconds, last played) keyed by music identity; batched listen time from `useMusicPlayback`; smart weighted shuffle (history, likes, recency penalty, artist spread) for Shuffle actions and endless autoplay at queue end; Home "Your stats" top tracks/artists strip. `musicListenStats.ts`, `musicSmartShuffle.ts`, `useMusicPlayback.ts`, `MusicHomeStatsStrip.tsx`, `musicPlayHistory.ts`, `ruforgeStore.ts`, `MusicArtistView.tsx`, `MusicAlbumView.tsx`, `MusicHomeView.tsx`.

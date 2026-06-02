@@ -225,6 +225,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   openMusicArtist: (key: string) => void;
   openMusicAlbum: (artistKey: string, key: string) => void;
   openMusicSong: (path: string) => void;
+  openMusicLiked: () => void;
   openMusicStats: () => void;
   closeMusicDetail: () => void;
   refreshStorageStats: () => Promise<void>;
@@ -749,6 +750,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       openMusicArtist: (key) => set({ musicDetail: { kind: "artist", key } }),
       openMusicAlbum: (artistKey, key) => set({ musicDetail: { kind: "album", artistKey, key } }),
       openMusicSong: (path) => set({ musicDetail: { kind: "song", path } }),
+      openMusicLiked: () => set({ musicDetail: { kind: "liked" } }),
       openMusicStats: () => set({ musicDetail: { kind: "stats" } }),
       closeMusicDetail: () => set({ musicDetail: null }),
 

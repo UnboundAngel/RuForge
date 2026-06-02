@@ -90,7 +90,11 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
             Play
           </button>
         )}
-        <button className={ROW} onClick={act(() => toggleMusicLike(file))}>
+        <button
+          className={ROW}
+          style={liked ? { color: "var(--music-accent)" } : undefined}
+          onClick={act(() => toggleMusicLike(file))}
+        >
           <Heart size={14} strokeWidth={2} fill={liked ? "currentColor" : "none"} />
           {liked ? "Remove from Liked Songs" : "Add to Liked Songs"}
         </button>

@@ -8,6 +8,7 @@ import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
 import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
 import { albumKeyFromFile } from "./musicShelfDedup";
+import { MusicLikeButton } from "./MusicLikeButton";
 
 type Props = {
   path: string;
@@ -129,15 +130,22 @@ export function MusicTrackView({ path, onPlayFile, onOpenArtist, onOpenAlbum, on
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => onPlayFile(file, [file])}
-            className="flex items-center gap-2.5 w-fit px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-150 hover:brightness-110 active:scale-[0.97]"
-            style={{ background: "var(--music-accent)", color: "#fff" }}
-          >
-            <Play size={15} fill="currentColor" strokeWidth={0} />
-            Play
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onPlayFile(file, [file])}
+              className="flex items-center gap-2.5 w-fit px-6 py-2.5 text-sm font-bold transition-all duration-150 hover:brightness-110 active:scale-[0.97]"
+              style={{
+                background: "var(--music-accent)",
+                color: "#fff",
+                borderRadius: 12,
+              }}
+            >
+              <Play size={15} fill="currentColor" strokeWidth={0} />
+              Play
+            </button>
+            <MusicLikeButton file={file} size={17} />
+          </div>
         </div>
       </div>
     </div>
