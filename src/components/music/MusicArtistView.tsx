@@ -11,6 +11,7 @@ import { fileMatchesArtistKey, primaryArtist, rawArtistFromFile } from "./musicA
 import { normalizeAlbumShelfKey } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { MusicLikeButton } from "./MusicLikeButton";
 import {
   ensureArtistMetaSidecar,
   readArtistMetaSidecar,
@@ -238,7 +239,12 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, mot
         {formatDuration(file.duration)}
       </div>
 
-      {/* Three-dot menu */}
+      <MusicLikeButton
+        file={file}
+        size={15}
+        className={menuOpen ? "opacity-100" : "opacity-0 group-hover/row:opacity-100 shrink-0"}
+      />
+
       {onContextMenu && (
         <button
           type="button"

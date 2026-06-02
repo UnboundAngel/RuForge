@@ -7,7 +7,6 @@ import type { MediaFile } from "@/types";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
-import { MusicLikeButton } from "./MusicLikeButton";
 import {
   buildCombinedQueuePaths,
   manualQueueFromCombinedReorder,
@@ -137,7 +136,14 @@ export function MusicQueueTab({
               draggable={false}
               menuOpen={menu?.context.kind === "song" && menu.context.file.path === playingFile.path}
               onPlay={onPlay}
-              onContextMenu={(f, x, y) => setMenu({ context: { kind: "song", file: f }, x, y })}
+              onContextMenu={(f, x, y) =>
+                setMenu({
+                  context: { kind: "song", file: f },
+                  x,
+                  y,
+                  onPlay: () => onPlay(f),
+                })
+              }
             />
           </div>
         )}
@@ -165,7 +171,14 @@ export function MusicQueueTab({
                     active={playingFile?.path === path}
                     menuOpen={menu?.context.kind === "song" && menu.context.file.path === path}
                     onPlay={onPlay}
-                    onContextMenu={(f, x, y) => setMenu({ context: { kind: "song", file: f }, x, y })}
+                    onContextMenu={(f, x, y) =>
+                      setMenu({
+                        context: { kind: "song", file: f },
+                        x,
+                        y,
+                        onPlay: () => onPlay(f),
+                      })
+                    }
                     onDragActiveChange={setQueueDragging}
                   />
                 );
@@ -335,11 +348,6 @@ function TrackRow({
           {file.artist ?? file.albumArtist ?? "Unknown artist"}
         </span>
       </div>
-      <MusicLikeButton
-        file={file}
-        className={menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"}
-        size={15}
-      />
       <button
         type="button"
         className={`rf-music-row-menu shrink-0 w-6 h-6 flex items-center justify-center rounded ${

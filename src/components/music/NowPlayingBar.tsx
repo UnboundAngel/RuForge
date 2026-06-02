@@ -201,7 +201,7 @@ export function NowPlayingBar({
             )}
           </div>
         </div>
-        <MusicLikeButton file={playingFile} className="shrink-0" size={18} />
+        <MusicLikeButton file={playingFile} className={cn(barBtnClass, "overflow-visible")} size={17} />
         </div>
 
         <div className="flex flex-col items-center justify-center gap-1.5 min-w-0">

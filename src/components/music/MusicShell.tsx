@@ -11,6 +11,7 @@ import { MusicExploreView } from "./MusicExploreView";
 import { MusicLibraryView } from "./MusicLibraryView";
 import { MusicArtistView } from "./MusicArtistView";
 import { MusicAlbumView } from "./MusicAlbumView";
+import { MusicLikedView } from "./MusicLikedView";
 import { MusicTrackView } from "./MusicTrackView";
 import { MusicStatsView } from "./MusicStatsView";
 import { MusicExploreBottomBar } from "./MusicExploreBottomBar";
@@ -1005,6 +1006,13 @@ export function MusicShell() {
                         albumKey={musicDetail.key}
                         onPlayFile={handlePlayFile}
                         onOpenArtist={openMusicArtist}
+                        onBack={closeMusicDetail}
+                      />
+                    </motion.div>
+                  ) : musicDetail?.kind === "liked" ? (
+                    <motion.div key="liked" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0">
+                      <MusicLikedView
+                        onPlayFile={handlePlayFile}
                         onBack={closeMusicDetail}
                       />
                     </motion.div>

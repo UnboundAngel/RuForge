@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Play, MoreHorizontal } from "lucide-react";
+import { Play, MoreHorizontal, Shuffle } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
@@ -10,9 +10,10 @@ import { normalizeAlbumShelfKey } from "./musicShelfDedup";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
-import { MusicLikeButton } from "./MusicLikeButton";
 import { resolveLikedFiles } from "./musicLikedTracks";
 import { MusicStatsView } from "./MusicStatsView";
+import { LikedSongsCover } from "./LikedSongsCover";
+import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 
 type LibTab = "songs" | "albums" | "artists" | "liked" | "stats";
 
@@ -73,11 +74,6 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
       <div className="text-xs shrink-0 w-12 text-right" style={{ color: "var(--music-text-muted)" }}>
         {formatDuration(file.duration)}
       </div>
-      <MusicLikeButton
-        file={file}
-        className="opacity-0 group-hover/row:opacity-100 shrink-0"
-        size={15}
-      />
       {onContextMenu && (
         <button
           type="button"
@@ -285,27 +281,69 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
 
         {activeTab === "liked" && (
           <div>
-            {likedTracks.length === 0 && (
+            {likedTracks.length === 0 ? (
               <p className="text-center py-12 text-sm px-6" style={{ color: "var(--music-text-muted)" }}>
                 heart a track to build your liked songs playlist
               </p>
+            ) : (
+              <>
+                <div className="flex items-end gap-5 px-6 pb-4 pt-2">
+                  <LikedSongsCover files={likedTracks} className="w-28 h-28 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--music-text-muted)" }}>
+                      Playlist
+                    </p>
+                    <h2 className="text-xl font-bold truncate" style={{ color: "var(--music-text-primary)" }}>
+                      Liked Songs
+                    </h2>
+                    <p className="text-xs mt-1" style={{ color: "var(--music-text-muted)" }}>
+                      {likedTracks.length} {likedTracks.length === 1 ? "song" : "songs"}
+                    </p>
+                    <div className="flex items-center gap-2 mt-3">
+                      <button
+                        type="button"
+                        onClick={() => onPlayFile(likedTracks[0]!, likedTracks)}
+                        className="flex items-center gap-2 px-4 py-1.5 text-sm font-semibold transition-opacity hover:opacity-80"
+                        style={{ background: "var(--music-accent)", color: "#fff", borderRadius: 12 }}
+                      >
+                        <Play size={14} fill="currentColor" /> Play
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const shuffled = buildSmartShuffleOrder({
+                            pool: likedTracks,
+                            likedKeys: musicLikedKeys,
+                            seed: Date.now() & 0xffffffff,
+                          });
+                          onPlayFile(shuffled[0]!, shuffled);
+                        }}
+                        className="flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors hover:bg-white/10"
+                        style={{ borderColor: "var(--music-border)", color: "var(--music-text-primary)" }}
+                      >
+                        <Shuffle size={14} /> Shuffle
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {likedTracks.map((file, i) => (
+                  <SongRow
+                    key={file.path}
+                    file={file}
+                    index={i}
+                    isPlaying={playingFile?.path === file.path}
+                    onClick={() => onPlayFile(file, likedTracks)}
+                    menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
+                    onContextMenu={(e) => setMenu({
+                      context: { kind: "song", file },
+                      x: e.clientX,
+                      y: e.clientY,
+                      onPlay: () => onPlayFile(file, likedTracks),
+                    })}
+                  />
+                ))}
+              </>
             )}
-            {likedTracks.map((file, i) => (
-              <SongRow
-                key={file.path}
-                file={file}
-                index={i}
-                isPlaying={playingFile?.path === file.path}
-                onClick={() => onPlayFile(file, likedTracks)}
-                menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
-                onContextMenu={(e) => setMenu({
-                  context: { kind: "song", file },
-                  x: e.clientX,
-                  y: e.clientY,
-                  onPlay: () => onPlayFile(file, likedTracks),
-                })}
-              />
-            ))}
           </div>
         )}
 
