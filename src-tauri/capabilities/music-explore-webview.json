@@ -1,0 +1,16 @@
+{
+  "identifier": "music-explore-webview",
+  "description": "Grants the embedded music.youtube.com child webview permission to emit Tauri events so page-context, URL, and now-playing data can reach the main window.",
+  "local": false,
+  "remote": {
+    "urls": [
+      "https://music.youtube.com/**",
+      "https://*.youtube.com/**"
+    ]
+  },
+  "windows": ["main"],
+  "webviews": ["music-explore-view"],
+  "permissions": [
+    "core:event:allow-emit"
+  ]
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyMusicExplorePageFromUrl,
   mergeMusicExplorePageContext,
+  resolveExplorePanelUrl,
 } from "./musicExplorePageContext";
 
 describe("musicExplorePageContext", () => {
@@ -44,5 +45,45 @@ describe("musicExplorePageContext", () => {
       "search",
     );
     expect(classifyMusicExplorePageFromUrl("https://music.youtube.com/").kind).toBe("home");
+  });
+
+  it("resolveExplorePanelUrl prefers playlist action over browse target", () => {
+    const ctx = mergeMusicExplorePageContext(
+      "https://music.youtube.com/browse/MPADexample123456789",
+      {
+        url: "https://music.youtube.com/browse/MPADexample123456789",
+        kind: "album",
+        playlistUrl: "https://music.youtube.com/playlist?list=OLAK5uy_test1234567890",
+        browseTargetUrl: "https://music.youtube.com/browse/MPADexample123456789",
+      },
+    );
+    expect(resolveExplorePanelUrl("", ctx, ctx.url)).toBe(
+      "https://music.youtube.com/playlist?list=OLAK5uy_test1234567890",
+    );
+  });
+
+  it("resolveExplorePanelUrl keeps artist home URL instead of first shelf link", () => {
+    const ctx = mergeMusicExplorePageContext("https://music.youtube.com/@Eminem", {
+      url: "https://music.youtube.com/@Eminem",
+      kind: "artist",
+      browseTargetUrl: "https://music.youtube.com/browse/MPADfirstalbumonly",
+      shelfLinks: [
+        { title: "Album A", url: "https://music.youtube.com/browse/MPADfirstalbumonly" },
+        { title: "Album B", url: "https://music.youtube.com/browse/MPADsecondalbum" },
+      ],
+    });
+    expect(resolveExplorePanelUrl("", ctx, ctx.url)).toBe("https://music.youtube.com/@Eminem");
+  });
+
+  it("merges shelf links from webview payload", () => {
+    const ctx = mergeMusicExplorePageContext("https://music.youtube.com/@Eminem", {
+      url: "https://music.youtube.com/@Eminem",
+      kind: "artist",
+      shelfLinks: [
+        { title: "Album A", url: "https://music.youtube.com/browse/MPADaaaaaaaaaaaa" },
+      ],
+    });
+    expect(ctx.shelfLinks).toHaveLength(1);
+    expect(ctx.shelfLinks[0]?.title).toBe("Album A");
   });
 });

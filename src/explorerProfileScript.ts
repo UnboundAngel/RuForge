@@ -11,12 +11,40 @@ export type ExplorerYouTubeProfilePayload = {
 
 const PROFILE_EVENT = JSON.stringify(EXPLORER_YOUTUBE_PROFILE_EVENT);
 
+/**
+ * Emits a Tauri event using __TAURI_INTERNALS__ (always present in Tauri v2 child
+ * webviews, even on external URLs like music.youtube.com) with a fallback to the
+ * legacy window.__TAURI__.event API (only available when withGlobalTauri is set).
+ *
+ * Usage: inline `${tauriEmitHelperCode()}` at the top of any injected IIFE, then
+ * call `__rf_tauri_emit(eventName, payload)` or check `if (!__rf_tauri_emit) return;`.
+ */
+function tauriEmitHelperCode(): string {
+  return `var __rf_tauri_emit = (function() {
+    try {
+      var _ti = window.__TAURI_INTERNALS__;
+      if (_ti && typeof _ti.invoke === 'function') {
+        return function(ev, pl) {
+          _ti.invoke('plugin:event|emit', { event: ev, payload: pl, target: { kind: 'Any' } });
+        };
+      }
+    } catch (_e) {}
+    try {
+      var _te = window.__TAURI__ && window.__TAURI__.event;
+      if (_te && typeof _te.emit === 'function') {
+        return function(ev, pl) { _te.emit(ev, pl); };
+      }
+    } catch (_e2) {}
+    return null;
+  })();`;
+}
+
 function musicProfileProbeInner(): string {
   return `
     try {
-      if (!window.__TAURI__ || !window.__TAURI__.event) return;
+      if (!__rf_tauri_emit) return;
       var emit = function(payload) {
-        window.__TAURI__.event.emit(${PROFILE_EVENT}, payload);
+        __rf_tauri_emit(${PROFILE_EVENT}, payload);
       };
       var avatarImg = null;
       var avatarBtn = null;
@@ -69,9 +97,9 @@ function musicProfileProbeInner(): string {
 function explorerProfileProbeInner(): string {
   return `
     try {
-      if (!window.__TAURI__ || !window.__TAURI__.event) return;
+      if (!__rf_tauri_emit) return;
       var emit = function(payload) {
-        window.__TAURI__.event.emit(${PROFILE_EVENT}, payload);
+        __rf_tauri_emit(${PROFILE_EVENT}, payload);
       };
       var loggedIn = false;
       var loggedOut = false;
@@ -126,8 +154,15 @@ function explorerProfileProbeInner(): string {
   `;
 }
 
-export const EXPLORER_PROFILE_PROBE_SCRIPT = `(function(){${explorerProfileProbeInner()}})();`;
-export const MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT = `(function(){${musicProfileProbeInner()}})();`;
+export const EXPLORER_PROFILE_PROBE_SCRIPT = `(function(){
+  ${tauriEmitHelperCode()}
+  ${explorerProfileProbeInner()}
+})();`;
+
+export const MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT = `(function(){
+  ${tauriEmitHelperCode()}
+  ${musicProfileProbeInner()}
+})();`;
 
 /** Emitted by the injected script when the active YTM track changes. */
 export const MUSIC_EXPLORE_NOW_PLAYING_EVENT = "music-explore-now-playing";
@@ -137,7 +172,184 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_EVENT = "music-explore-page-context";
 
 /** Page-context probe — safe to re-inject whenever the explore webview is shown. */
 export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
-  if (!window.__TAURI__ || !window.__TAURI__.event) return;
+  ${tauriEmitHelperCode()}
+  if (!__rf_tauri_emit) return;
+  function parseDurationText(text) {
+    if (!text) return null;
+    var trimmed = String(text).trim();
+    if (!trimmed) return null;
+    if (/^\\d+[\\d,]*\\s*(?:plays|views|listeners)/i.test(trimmed)) return null;
+    var parts = trimmed.split(":").map(function(p) { return parseInt(p, 10); });
+    if (parts.some(function(n) { return isNaN(n); })) return null;
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 1) return parts[0];
+    return null;
+  }
+  function parseHeaderTrackCountFromRuns(runs) {
+    if (!runs || !runs.length) return null;
+    for (var i = 0; i < runs.length; i++) {
+      var m = String(runs[i].text || "").match(/([\\d][\\d,]*)\\s+songs?/i);
+      if (m) return parseInt(m[1].replace(/,/g, ""), 10);
+    }
+    return null;
+  }
+  function parseHeaderTrackCount(data) {
+    try {
+      var twoCol = data && data.contents && data.contents.twoColumnBrowseResultsRenderer;
+      if (!twoCol) return null;
+      var tabContents = twoCol.tabs && twoCol.tabs[0] && twoCol.tabs[0].tabRenderer
+        && twoCol.tabs[0].tabRenderer.content && twoCol.tabs[0].tabRenderer.content.sectionListRenderer
+        && twoCol.tabs[0].tabRenderer.content.sectionListRenderer.contents;
+      if (tabContents && tabContents[0] && tabContents[0].musicResponsiveHeaderRenderer) {
+        var runs = tabContents[0].musicResponsiveHeaderRenderer.secondSubtitle
+          && tabContents[0].musicResponsiveHeaderRenderer.secondSubtitle.runs;
+        var fromTab = parseHeaderTrackCountFromRuns(runs);
+        if (fromTab != null) return fromTab;
+      }
+      var secContents = twoCol.secondaryContents && twoCol.secondaryContents.sectionListRenderer
+        && twoCol.secondaryContents.sectionListRenderer.contents;
+      if (secContents) {
+        for (var hi = 0; hi < secContents.length; hi++) {
+          var block = secContents[hi];
+          if (block.musicResponsiveHeaderRenderer) {
+            var hr = block.musicResponsiveHeaderRenderer.secondSubtitle
+              && block.musicResponsiveHeaderRenderer.secondSubtitle.runs;
+            var fromSec = parseHeaderTrackCountFromRuns(hr);
+            if (fromSec != null) return fromSec;
+          }
+          if (block.musicPlaylistHeaderRenderer) {
+            var pr = block.musicPlaylistHeaderRenderer.secondSubtitle
+              && block.musicPlaylistHeaderRenderer.secondSubtitle.runs;
+            var fromPl = parseHeaderTrackCountFromRuns(pr);
+            if (fromPl != null) return fromPl;
+          }
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
+  function findTrackShelf(data) {
+    if (!data || !data.contents) return null;
+    var twoCol = data.contents.twoColumnBrowseResultsRenderer;
+    if (!twoCol) return null;
+    var secList = twoCol.secondaryContents && twoCol.secondaryContents.sectionListRenderer;
+    if (secList && secList.contents) {
+      for (var si = 0; si < secList.contents.length; si++) {
+        var secBlock = secList.contents[si];
+        if (secBlock.musicShelfRenderer) {
+          return { kind: "musicShelfRenderer", shelf: secBlock.musicShelfRenderer };
+        }
+        if (secBlock.musicPlaylistShelfRenderer) {
+          return { kind: "musicPlaylistShelfRenderer", shelf: secBlock.musicPlaylistShelfRenderer };
+        }
+      }
+    }
+    var tabs = twoCol.tabs;
+    if (tabs && tabs[0] && tabs[0].tabRenderer && tabs[0].tabRenderer.content) {
+      var tabList = tabs[0].tabRenderer.content.sectionListRenderer;
+      if (tabList && tabList.contents) {
+        for (var ti = 0; ti < tabList.contents.length; ti++) {
+          var tabBlock = tabList.contents[ti];
+          if (tabBlock.musicShelfRenderer) {
+            return { kind: "musicShelfRenderer", shelf: tabBlock.musicShelfRenderer };
+          }
+          if (tabBlock.musicPlaylistShelfRenderer) {
+            return { kind: "musicPlaylistShelfRenderer", shelf: tabBlock.musicPlaylistShelfRenderer };
+          }
+        }
+      }
+    }
+    return null;
+  }
+  function parseTrackRow(entry, isAlbum) {
+    if (!entry || entry.continuationItemRenderer) return null;
+    var row = entry.musicResponsiveListItemRenderer;
+    if (!row || !row.flexColumns || !row.flexColumns.length) return null;
+    var flex0 = row.flexColumns[0] && row.flexColumns[0].musicResponsiveListItemFlexColumnRenderer;
+    var runs0 = flex0 && flex0.text && flex0.text.runs && flex0.text.runs[0];
+    if (!runs0) return null;
+    var videoId = runs0.navigationEndpoint && runs0.navigationEndpoint.watchEndpoint
+      && runs0.navigationEndpoint.watchEndpoint.videoId;
+    var title = runs0.text;
+    if (!videoId || !title) return null;
+    var artist = null;
+    if (row.flexColumns[1]) {
+      var flex1 = row.flexColumns[1].musicResponsiveListItemFlexColumnRenderer;
+      if (flex1 && flex1.text && flex1.text.runs && flex1.text.runs[0]) {
+        artist = flex1.text.runs[0].text || null;
+      }
+    }
+    var durationSeconds = null;
+    if (row.fixedColumns && row.fixedColumns[0]) {
+      var fixed0 = row.fixedColumns[0].musicResponsiveListItemFixedColumnRenderer;
+      if (fixed0 && fixed0.text && fixed0.text.simpleText) {
+        durationSeconds = parseDurationText(fixed0.text.simpleText);
+      }
+    }
+    if (durationSeconds == null && isAlbum && row.flexColumns.length > 2) {
+      for (var fi = 2; fi < row.flexColumns.length; fi++) {
+        var flexN = row.flexColumns[fi].musicResponsiveListItemFlexColumnRenderer;
+        var runN = flexN && flexN.text && flexN.text.runs && flexN.text.runs[0];
+        if (runN && runN.text) {
+          var parsed = parseDurationText(runN.text);
+          if (parsed != null) {
+            durationSeconds = parsed;
+            break;
+          }
+        }
+      }
+    }
+    var thumbnail = null;
+    try {
+      var thumbs = row.thumbnail && row.thumbnail.musicThumbnailRenderer
+        && row.thumbnail.musicThumbnailRenderer.thumbnail
+        && row.thumbnail.musicThumbnailRenderer.thumbnail.thumbnails;
+      if (thumbs && thumbs.length) thumbnail = thumbs[thumbs.length - 1].url || null;
+    } catch (e2) {}
+    return {
+      videoId: videoId,
+      title: String(title).trim(),
+      durationSeconds: durationSeconds,
+      artist: artist,
+      thumbnail: thumbnail
+    };
+  }
+  function readHarvestedTracklist(playlistUrl, browseTargetUrl) {
+    try {
+      var browseEl = document.querySelector("ytmusic-browse-response");
+      var data = browseEl && browseEl.data;
+      if (!data || !data.contents) return null;
+      var found = findTrackShelf(data);
+      if (!found || !found.shelf || !found.shelf.contents) return null;
+      var contents = found.shelf.contents;
+      var hasContinuation = false;
+      if (contents.length && contents[contents.length - 1].continuationItemRenderer) {
+        hasContinuation = true;
+      }
+      var isAlbum = found.kind === "musicShelfRenderer";
+      var tracks = [];
+      var seen = {};
+      for (var ri = 0; ri < contents.length; ri++) {
+        if (contents[ri].continuationItemRenderer) continue;
+        var parsed = parseTrackRow(contents[ri], isAlbum);
+        if (!parsed || seen[parsed.videoId]) continue;
+        seen[parsed.videoId] = true;
+        tracks.push(parsed);
+      }
+      if (!tracks.length) return null;
+      return {
+        harvestSourceUrl: window.location.href.split("#")[0],
+        playlistUrl: playlistUrl || null,
+        browseTargetUrl: browseTargetUrl || null,
+        shelfKind: found.kind,
+        headerTrackCount: parseHeaderTrackCount(data),
+        hasContinuation: hasContinuation,
+        tracks: tracks
+      };
+    } catch (e) {}
+    return null;
+  }
   function readPageContext() {
     var href = window.location.href;
     var path = (window.location.pathname || "/").replace(/\\/+$/, "") || "/";
@@ -145,6 +357,8 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
     var pageTitle = null;
     var playlistUrl = null;
     var isPlaylistPage = false;
+    var browseTargetUrl = null;
+    var shelfLinks = [];
 
     if (path === "" || path === "/") kind = "home";
     else if (path.indexOf("/search") === 0) kind = "search";
@@ -182,6 +396,24 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
     } catch (e) {}
 
     try {
+      if (kind === "album" || (kind === "browse" && pageTitle)) {
+        var plAnchors = document.querySelectorAll(
+          'a[href*="/playlist?list=OLAK"], a[href*="/playlist?list=VL"], ytmusic-detail-header-renderer a[href*="list="]'
+        );
+        for (var pi = 0; pi < plAnchors.length; pi++) {
+          var ph = plAnchors[pi].href || "";
+          var pm = ph.match(/[?&]list=([^&]+)/);
+          if (pm && pm[1] && (pm[1].indexOf("OLAK") === 0 || pm[1].indexOf("VL") === 0 || pm[1].indexOf("PL") === 0)) {
+            playlistUrl = "https://music.youtube.com/playlist?list=" + pm[1];
+            isPlaylistPage = true;
+            kind = "album";
+            break;
+          }
+        }
+      }
+    } catch (e) {}
+
+    try {
       if (document.querySelector('[page-type="MUSIC_PAGE_TYPE_PLAYLIST"], ytmusic-playlist-header-renderer')) {
         kind = "playlist";
         isPlaylistPage = true;
@@ -204,22 +436,69 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
       } catch (e) {}
     }
 
+    try {
+      var shelfAnchors = document.querySelectorAll(
+        'ytmusic-carousel a[href*="/browse/"], ytmusic-carousel a[href*="/playlist?list="], ' +
+        'ytmusic-shelf-renderer a[href*="/browse/"], ytmusic-shelf-renderer a[href*="/playlist?list="], ' +
+        'ytmusic-browse a[href*="/browse/MP"], ytmusic-browse a[href*="/playlist?list="]'
+      );
+      var seenShelf = {};
+      for (var si = 0; si < shelfAnchors.length; si++) {
+        var sh = (shelfAnchors[si].href || "").split("#")[0];
+        if (!sh || seenShelf[sh]) continue;
+        if (sh.indexOf("/browse/MP") < 0 && sh.indexOf("list=OLAK") < 0 && sh.indexOf("list=PL") < 0 && sh.indexOf("list=VL") < 0) continue;
+        seenShelf[sh] = true;
+        var st = "";
+        try {
+          var card = shelfAnchors[si].closest("ytmusic-responsive-list-item-renderer, ytmusic-two-row-item-renderer");
+          if (card) {
+            var te = card.querySelector(".title, yt-formatted-string.title, .text");
+            if (te) st = (te.textContent || "").trim();
+          }
+        } catch (e2) {}
+        shelfLinks.push({ title: st || sh, url: sh });
+        if (shelfLinks.length >= 50) break;
+      }
+    } catch (e) {}
+
+    if (path.indexOf("/browse/MP") === 0) {
+      browseTargetUrl = href.split("#")[0];
+    } else if (kind === "artist" || kind === "channel") {
+      if (path.indexOf("/browse/MP") === 0) browseTargetUrl = href.split("#")[0];
+    } else if (kind === "album" || kind === "browse") {
+      browseTargetUrl = href.split("#")[0];
+    }
+
+    var harvestedTracklist = readHarvestedTracklist(playlistUrl, browseTargetUrl);
+
     return {
       url: href,
       kind: kind,
       pageTitle: pageTitle,
       playlistUrl: playlistUrl,
-      isPlaylistPage: isPlaylistPage
+      isPlaylistPage: isPlaylistPage,
+      browseTargetUrl: browseTargetUrl,
+      shelfLinks: shelfLinks,
+      harvestedTracklist: harvestedTracklist
     };
   }
   function emitPageContext() {
-    if (!window.__TAURI__ || !window.__TAURI__.event) return;
     try {
       var ctx = readPageContext();
-      var key = ctx.kind + "|" + ctx.url + "|" + (ctx.playlistUrl || "") + "|" + (ctx.pageTitle || "");
+      var shelfKey = "";
+      try { shelfKey = JSON.stringify(ctx.shelfLinks || []); } catch (e) { shelfKey = ""; }
+      var harvestKey = "";
+      try {
+        harvestKey = ctx.harvestedTracklist
+          ? ctx.harvestedTracklist.tracks.length + "|" + (ctx.harvestedTracklist.headerTrackCount || "")
+            + "|" + (ctx.harvestedTracklist.hasContinuation ? "c" : "")
+            + "|" + (ctx.harvestedTracklist.tracks[0] && ctx.harvestedTracklist.tracks[0].videoId || "")
+          : "";
+      } catch (e2) { harvestKey = ""; }
+      var key = ctx.kind + "|" + ctx.url + "|" + (ctx.playlistUrl || "") + "|" + (ctx.pageTitle || "") + "|" + (ctx.browseTargetUrl || "") + "|" + shelfKey + "|" + harvestKey;
       if (window.__rf_last_ctx === key) return;
       window.__rf_last_ctx = key;
-      window.__TAURI__.event.emit("music-explore-page-context", ctx);
+      __rf_tauri_emit("music-explore-page-context", ctx);
     } catch (e) {}
   }
   window.__rf_emitPageContext = emitPageContext;
@@ -232,7 +511,8 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
 
 /** Now-playing probe — safe to re-inject whenever the explore webview is shown. */
 export const MUSIC_EXPLORE_NOW_PLAYING_INSTALL = `(function(){
-  if (!window.__TAURI__ || !window.__TAURI__.event) return;
+  ${tauriEmitHelperCode()}
+  if (!__rf_tauri_emit) return;
   window.__rf_last_vid = window.__rf_last_vid || null;
   function readNowPlaying() {
     var videoId = null, title = null, artist = null;
@@ -289,12 +569,11 @@ export const MUSIC_EXPLORE_NOW_PLAYING_INSTALL = `(function(){
     return { videoId: videoId, title: title, artist: artist };
   }
   function emitNowPlayingWith(np) {
-    if (!window.__TAURI__ || !window.__TAURI__.event) return;
     try {
       if (!np.videoId) return;
       if (window.__rf_last_vid === np.videoId) return;
       window.__rf_last_vid = np.videoId;
-      window.__TAURI__.event.emit("music-explore-now-playing", np);
+      __rf_tauri_emit("music-explore-now-playing", np);
     } catch (e) {}
   }
   function emitNowPlaying() {
@@ -329,9 +608,10 @@ export const MUSIC_EXPLORE_NOW_PLAYING_INSTALL = `(function(){
 export const MUSIC_EXPLORE_INIT_SCRIPT = `(function(){
   if (window.__rf_mu__) return;
   window.__rf_mu__ = true;
+  ${tauriEmitHelperCode()}
   function emitUrl() {
-    if (window.__TAURI__ && window.__TAURI__.event) {
-      window.__TAURI__.event.emit("music-explore-url", window.location.href);
+    if (__rf_tauri_emit) {
+      __rf_tauri_emit("music-explore-url", window.location.href);
     }
   }
   function probeProfile() {${musicProfileProbeInner()}}

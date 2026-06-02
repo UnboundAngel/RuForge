@@ -44,9 +44,14 @@ import {
 import {
   classifyMusicExplorePageFromUrl,
   mergeMusicExplorePageContext,
+  resolveExplorePanelUrl,
   type MusicExplorePageContext,
   type MusicExplorePageContextPayload,
 } from "@/lib/musicExplorePageContext";
+import {
+  cancelAllMusicExploreAutoSave,
+  scheduleMusicExploreAutoSave,
+} from "@/lib/musicExploreAutoSave";
 import {
   buildDownloadJobOptions,
   patchDownloadJobOptionsForAudio,
@@ -70,6 +75,18 @@ const MUSIC_EXPLORE_URL = "https://music.youtube.com";
 
 /** Emitted by the music webview on every navigation; carries the new URL. */
 const MUSIC_EXPLORE_URL_EVENT = "music-explore-url";
+
+/** Filter main-window DevTools console with this prefix while debugging YTM page detection. */
+const MUSIC_EXPLORE_NAV_LOG = "[MusicExplore Nav]";
+const MUSIC_EXPLORE_NAV_DEBUG = import.meta.env.DEV;
+
+function logMusicExploreNavigation(
+  source: string,
+  detail: Record<string, unknown>,
+): void {
+  if (!MUSIC_EXPLORE_NAV_DEBUG) return;
+  console.info(MUSIC_EXPLORE_NAV_LOG, source, detail);
+}
 
 const sidebarEase = [0.4, 0, 0.2, 1] as const;
 const SIDEBAR_FULL = "var(--music-sidebar-width)";
@@ -254,6 +271,30 @@ export function MusicShell() {
   const showExploreStrip = activeView === "explore" && !musicDetail && !playerExpanded;
   const showExplorePanel = activeView === "explore" && panelOpen;
   const exploreWebviewActive = showExploreStrip;
+
+  useEffect(() => {
+    logMusicExploreNavigation("shell-state", {
+      activeView,
+      exploreWebviewActive,
+      showExploreStrip,
+      musicDetail: musicDetail ? musicDetail.kind : null,
+      playerExpanded,
+      currentUrl: currentMusicExploreUrl,
+      kind: musicExplorePageContext.kind,
+      pageTitle: musicExplorePageContext.pageTitle,
+      actionUrl: musicExplorePageContext.actionUrl,
+      canDownloadPlaylist: musicExplorePageContext.canDownloadPlaylist,
+      hint: musicExplorePageContext.hint,
+    });
+  }, [
+    activeView,
+    exploreWebviewActive,
+    showExploreStrip,
+    musicDetail,
+    playerExpanded,
+    currentMusicExploreUrl,
+    musicExplorePageContext,
+  ]);
   const hasActiveDownloadJobs = downloadJobs.some(
     (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
   );
@@ -311,8 +352,14 @@ export function MusicShell() {
 
   // Freeze the panel URL when it is hidden so navigation in the webview does not trigger
   // unnecessary doLoad calls inside MusicExploreDownloadPanel while it is off-screen.
-  const panelUrlRef = useRef(pasteUrl.trim() || currentMusicExploreUrl);
-  const currentPanelUrl = pasteUrl.trim() || currentMusicExploreUrl;
+  const panelUrlRef = useRef(
+    resolveExplorePanelUrl(pasteUrl, musicExplorePageContext, currentMusicExploreUrl),
+  );
+  const currentPanelUrl = resolveExplorePanelUrl(
+    pasteUrl,
+    musicExplorePageContext,
+    currentMusicExploreUrl,
+  );
   if (showExplorePanel) panelUrlRef.current = currentPanelUrl;
   const explorePanelUrl = showExplorePanel ? currentPanelUrl : panelUrlRef.current;
 
@@ -328,13 +375,29 @@ export function MusicShell() {
     void listen<string>(MUSIC_EXPLORE_URL_EVENT, (ev) => {
       if (!alive) return;
       const url = ev.payload ?? "";
+      logMusicExploreNavigation("webview-url", { url });
       setCurrentMusicExploreUrl(url);
       // Only seed a URL-based context when the URL actually changed; the richer
       // page-context event (which carries kind/playlistUrl/pageTitle) takes precedence
       // and must not be overwritten when both events arrive for the same URL.
       setMusicExplorePageContext((prev) => {
-        if (prev.url === url) return prev;
-        return classifyMusicExplorePageFromUrl(url);
+        if (prev.url === url) {
+          logMusicExploreNavigation("webview-url-context-unchanged", {
+            url,
+            kind: prev.kind,
+            actionUrl: prev.actionUrl,
+          });
+          return prev;
+        }
+        const next = classifyMusicExplorePageFromUrl(url);
+        logMusicExploreNavigation("webview-url-classified", {
+          url,
+          kind: next.kind,
+          actionUrl: next.actionUrl,
+          canDownloadPlaylist: next.canDownloadPlaylist,
+          canPickTracks: next.canPickTracks,
+        });
+        return next;
       });
     }).then((fn) => {
       if (!alive) {
@@ -355,9 +418,23 @@ export function MusicShell() {
     void listen<MusicExplorePageContextPayload>(MUSIC_EXPLORE_PAGE_CONTEXT_EVENT, (ev) => {
       if (!alive) return;
       const payload = ev.payload;
-      if (!payload?.url) return;
+      if (!payload?.url) {
+        logMusicExploreNavigation("webview-page-context-empty", { payload });
+        return;
+      }
+      logMusicExploreNavigation("webview-page-context", { payload });
       setCurrentMusicExploreUrl(payload.url);
-      setMusicExplorePageContext(mergeMusicExplorePageContext(payload.url, payload));
+      const merged = mergeMusicExplorePageContext(payload.url, payload);
+      logMusicExploreNavigation("webview-page-context-merged", {
+        url: merged.url,
+        kind: merged.kind,
+        pageTitle: merged.pageTitle,
+        actionUrl: merged.actionUrl,
+        canDownloadPlaylist: merged.canDownloadPlaylist,
+        canPickTracks: merged.canPickTracks,
+        hint: merged.hint,
+      });
+      setMusicExplorePageContext(merged);
     }).then((fn) => {
       if (!alive) {
         fn();
@@ -385,22 +462,28 @@ export function MusicShell() {
         if (store.settings.autoDownloadPlayingSongs === false) return;
 
         if (autoQueuedVideoIdsRef.current.has(videoId)) return;
-        autoQueuedVideoIdsRef.current.add(videoId);
 
-        const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
-        const dir = resolveDownloadOutputDir(store.saveToInternal, store.outputDir);
-        const base = buildDownloadJobOptions(store.settings, dir);
-        const opts = patchDownloadJobOptionsForAudio(base, true, store.settings);
+        scheduleMusicExploreAutoSave({ videoId, title }, (payload) => {
+          if (!alive) return;
+          if (autoQueuedVideoIdsRef.current.has(payload.videoId)) return;
+          autoQueuedVideoIdsRef.current.add(payload.videoId);
 
-        store.enqueueDownload(
-          watchUrl,
-          opts,
-          { title: title ?? undefined, approval: "auto" },
-        );
-        store.releaseHeldDownloadJobs();
-        store.pumpDownloadQueue();
-        setDockMinimized(false);
-        setDockPanelSession(true);
+          const s = useRuforgeStore.getState();
+          const watchUrl = `https://www.youtube.com/watch?v=${payload.videoId}`;
+          const dir = resolveDownloadOutputDir(s.saveToInternal, s.outputDir);
+          const base = buildDownloadJobOptions(s.settings, dir);
+          const opts = patchDownloadJobOptionsForAudio(base, true, s.settings);
+
+          s.enqueueDownload(
+            watchUrl,
+            opts,
+            { title: payload.title ?? undefined, approval: "auto" },
+          );
+          s.releaseHeldDownloadJobs();
+          s.pumpDownloadQueue();
+          setDockMinimized(false);
+          setDockPanelSession(true);
+        });
       },
     ).then((fn) => {
       if (!alive) {
@@ -411,6 +494,7 @@ export function MusicShell() {
     });
     return () => {
       alive = false;
+      cancelAllMusicExploreAutoSave();
       unlistenFn?.();
     };
   }, []);
@@ -502,7 +586,16 @@ export function MusicShell() {
           label: MUSIC_EXPLORE_WEBVIEW_LABEL,
           script: MUSIC_EXPLORE_NOW_PLAYING_INSTALL,
         });
-      } catch { /* webview not ready */ }
+        logMusicExploreNavigation("webview-bridge-injected", {
+          label: MUSIC_EXPLORE_WEBVIEW_LABEL,
+          note: "Uses __TAURI_INTERNALS__.invoke — events should now reach main window",
+        });
+      } catch (e) {
+        logMusicExploreNavigation("webview-bridge-inject-failed", {
+          label: MUSIC_EXPLORE_WEBVIEW_LABEL,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
     };
 
     const applyMusicExploreBounds = async (bounds: ExplorerBounds) => {
@@ -822,6 +915,9 @@ export function MusicShell() {
                     <div className={cn("flex flex-1 min-h-0 flex-col", !showExplorePanel && "hidden")}>
                       <MusicExploreDownloadPanel
                         url={explorePanelUrl}
+                        shelfLinks={musicExplorePageContext.shelfLinks}
+                        harvestedTracklist={musicExplorePageContext.harvestedTracklist}
+                        pageTitle={musicExplorePageContext.pageTitle}
                         collapsed={navCollapsed}
                         dockMinimized={explorePanelDockMode}
                         onClose={closeExplorePanel}

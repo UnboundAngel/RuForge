@@ -12,7 +12,7 @@ import { MusicMiniTrackInfo } from "./MusicMiniTrackInfo";
 import { MusicMiniProgressBar } from "./MusicMiniProgressBar";
 import { MusicMiniTransport } from "./MusicMiniTransport";
 import { useMusicMiniWindowChrome } from "./useMusicMiniWindowChrome";
-import { useMusicMiniPlayback } from "./useMusicMiniPlayback";
+import { coverSrcFor, useMusicMiniPlayback } from "./useMusicMiniPlayback";
 
 export default function MusicMiniPlayer() {
   const chrome = useMusicMiniWindowChrome();
@@ -48,9 +48,16 @@ export default function MusicMiniPlayer() {
 
   const displayLayers =
     playback.layers.length > 0
-      ? playback.layers
+      ? playback.layers.map((l) =>
+          l.coverSrc ? l : { ...l, coverSrc: coverSrcFor(l.file) },
+        )
       : playback.playingFile
-        ? [{ id: 0, file: playback.playingFile, coverSrc: null, dir: null }]
+        ? [{
+            id: 0,
+            file: playback.playingFile,
+            coverSrc: coverSrcFor(playback.playingFile),
+            dir: null,
+          }]
         : [];
 
   return (

@@ -7,6 +7,7 @@ mod tray;
 mod media_bundle;
 mod utils;
 mod ytdlp_binary;
+mod ytdlp_rate_limit;
 #[cfg(windows)]
 mod windows_audio_brand;
 
