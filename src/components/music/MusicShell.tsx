@@ -70,22 +70,18 @@ import { MusicRightPanel, type RightPanelTab } from "./MusicRightPanel";
 import { useSponsorBlockPlayback } from "@/hooks/useSponsorBlockPlayback";
 import { recordPlay, getRecentHistory, type PlayHistoryEntry } from "./musicPlayHistory";
 import { readMusicOnlySkip, writeMusicOnlySkip } from "./musicOnlySkipStorage";
+import { debugLog } from "@/debug/debugLog";
 
 const MUSIC_EXPLORE_URL = "https://music.youtube.com";
 
 /** Emitted by the music webview on every navigation; carries the new URL. */
 const MUSIC_EXPLORE_URL_EVENT = "music-explore-url";
 
-/** Filter main-window DevTools console with this prefix while debugging YTM page detection. */
-const MUSIC_EXPLORE_NAV_LOG = "[MusicExplore Nav]";
-const MUSIC_EXPLORE_NAV_DEBUG = import.meta.env.DEV;
-
 function logMusicExploreNavigation(
   source: string,
   detail: Record<string, unknown>,
 ): void {
-  if (!MUSIC_EXPLORE_NAV_DEBUG) return;
-  console.info(MUSIC_EXPLORE_NAV_LOG, source, detail);
+  debugLog("music.explore-nav", "info", source, detail);
 }
 
 const sidebarEase = [0.4, 0, 0.2, 1] as const;
@@ -647,7 +643,7 @@ export function MusicShell() {
           } catch { /* bridge injected lazily */ }
         } catch (e) {
           musicExploreLastBoundsRef.current = null;
-          console.error("[RuForge] Music explore webview error", e);
+          debugLog("music.webview", "error", "Music explore webview error", e);
           musicExploreScheduleRef.current?.();
           return;
         } finally {
@@ -703,7 +699,7 @@ export function MusicShell() {
         }
       } catch (e) {
         musicExploreLastBoundsRef.current = null;
-        console.error("[RuForge] Music explore bounds sync failed", e);
+        debugLog("music.webview", "error", "Music explore bounds sync failed", e);
       }
     };
 

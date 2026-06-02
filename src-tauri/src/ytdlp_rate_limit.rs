@@ -51,8 +51,10 @@ pub async fn ytdlp_register_rate_limit_from_stderr(stderr: &str) {
             .map(|prev| prev.max(until))
             .unwrap_or(until),
     );
-    log::warn!(
-        "[RuForge] yt-dlp: YouTube rate limit detected; pausing new yt-dlp requests for {}s",
+    crate::rf_log!(
+        "download.rate",
+        log::Level::Warn,
+        "yt-dlp: YouTube rate limit detected; pausing new yt-dlp requests for {}s",
         RATE_LIMIT_COOLDOWN_MS / 1000
     );
 }

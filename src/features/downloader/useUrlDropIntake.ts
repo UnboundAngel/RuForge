@@ -4,6 +4,7 @@ import {
   mimeTypesMayCarryUri,
   parseDroppedUrls,
 } from "./dropIntake";
+import { debugLog } from "@/debug/debugLog";
 
 export type DropIntakeReason = "no-url" | "wrong-host" | "modal-conflict" | "accepted";
 
@@ -30,7 +31,7 @@ function logDropOutcome(
   } else if (reason === "no-url") {
     rejected = 0;
   }
-  console.debug("[RuForge] drop", {
+  debugLog("devtools.drop", "debug", "drop intake", {
     count: parsedRawCount,
     accepted,
     rejected,

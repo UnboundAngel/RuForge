@@ -965,8 +965,10 @@ fn sweep_parent_dir_for_duplicate_outputs(parent: &Path) {
         group.sort_by(|a, b| b.1.cmp(&a.1));
         let keeper_path = group.first().expect("len >= 2").0.clone();
         for (path, _) in group.into_iter().skip(1) {
-            log::info!(
-                "[RuForge] removing duplicate download output {:?} (kept {:?}, key {})",
+            crate::rf_log!(
+                "library.dedup",
+                log::Level::Info,
+                "removing duplicate download output {:?} (kept {:?}, key {})",
                 path,
                 keeper_path,
                 key

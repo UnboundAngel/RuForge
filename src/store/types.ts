@@ -133,6 +133,8 @@ export interface RuforgeSettings {
   downloadJobStartDelayMs: number;
   /** When true, Settings shows the Debugging tab (group playlist, updater UI cycle, etc.). */
   showDebuggingSettings: boolean;
+  /** Debug log category ids enabled in Settings > Debugging (synced to Rust on change and boot). */
+  debugLogEnabledCategories: string[];
   /**
    * When true, audio files and all-audio playlists are hidden from the main Video Library.
    * Songs remain visible in Music mode regardless of download source.
@@ -172,6 +174,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
   downloadJobStartDelayMs: 0,
   showDebuggingSettings: false,
+  debugLogEnabledCategories: [],
   hideAudioFromMainLibrary: true,
   sponsorBlockEnabled: true,
   sponsorBlockCategoryModes: defaultCategoryModes(),
@@ -206,6 +209,9 @@ export function loadMergedSettings(): RuforgeSettings {
       autoDownloadScrubberPreviews: merged.autoDownloadScrubberPreviews !== false,
       autoDownloadPlayingSongs: merged.autoDownloadPlayingSongs !== false,
       showDebuggingSettings: merged.showDebuggingSettings === true,
+      debugLogEnabledCategories: Array.isArray(merged.debugLogEnabledCategories)
+        ? merged.debugLogEnabledCategories.filter((x): x is string => typeof x === "string")
+        : [],
       hideAudioFromMainLibrary: merged.hideAudioFromMainLibrary !== false,
       sponsorBlockEnabled: merged.sponsorBlockEnabled === true,
       sponsorBlockCategoryModes: mergeCategoryModes(merged.sponsorBlockCategoryModes),

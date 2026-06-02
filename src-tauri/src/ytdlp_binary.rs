@@ -54,15 +54,17 @@ pub fn is_userdata_ytdlp_active(app: &AppHandle) -> bool {
 pub fn ytdlp_shell_command(app: &AppHandle) -> Result<Command, String> {
     if let Ok(user_path) = userdata_ytdlp_path(app) {
         if userdata_looks_present(&user_path) {
-            log::info!(
-                "[RuForge] yt-dlp: using userdata binary {}",
+            crate::rf_log!(
+                "download.binary",
+                log::Level::Info,
+                "yt-dlp: using userdata binary {}",
                 user_path.display()
             );
             return Ok(app.shell().command(&user_path));
         }
     }
 
-    log::debug!("[RuForge] yt-dlp: using bundled sidecar");
+    crate::rf_log!("download.binary", log::Level::Debug, "yt-dlp: using bundled sidecar");
     app.shell().sidecar("yt-dlp").map_err(|e| e.to_string())
 }
 

@@ -11,6 +11,7 @@ import { emit } from "@tauri-apps/api/event";
 import { normalizeScanDirKey } from '../libraryScanDirs';
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR } from '../store/ruforgeStore';
 import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
+import { DebugLogCategoryTree } from './settings/DebugLogCategoryTree';
 import { SettingsDescription } from './settings/settingsDescription';
 import { RegroupPlaylistModal } from './RegroupPlaylistModal';
 import { MigrateLibraryModal } from './MigrateLibraryModal';
@@ -1132,6 +1133,9 @@ export const SettingsView: React.FC = () => {
                 onClose={() => setMusicMetaBackfillOpen(false)}
                 roots={galleryScanRoots(libraryScanDirs)}
               />
+              <SettingsSection title="Debug logging">
+                <DebugLogCategoryTree />
+              </SettingsSection>
               <SettingsSection title="Debugging">
                 <SettingItem
                   title="Hide songs from main library"
