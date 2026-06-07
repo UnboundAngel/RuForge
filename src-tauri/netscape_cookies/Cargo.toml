@@ -1,0 +1,8 @@
+[package]
+name = "netscape_cookies"
+version = "0.1.0"
+edition = "2021"
+description = "Netscape cookies.txt formatting for yt-dlp (no Tauri/WebView2)"
+
+[dependencies]
+cookie = "0.18"

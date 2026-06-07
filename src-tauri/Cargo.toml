@@ -5,6 +5,12 @@ description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
 
+[workspace]
+members = [".", "netscape_cookies"]
+
+[workspace.dependencies]
+netscape_cookies = { path = "netscape_cookies" }
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
@@ -41,6 +47,7 @@ futures-util = "0.3"
 sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 cookie = "0.18"
+netscape_cookies = { workspace = true }
 lofty = { version = "0.22", default-features = false }
 trash = "5"
 tempfile = "3"
