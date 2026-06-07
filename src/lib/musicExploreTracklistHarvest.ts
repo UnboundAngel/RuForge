@@ -208,7 +208,7 @@ export function harvestedTrackToMusicTrackInfo(
 
 export function harvestedTracklistToPlaylistPage(
   harvest: MusicExploreHarvestedTracklist,
-  playlistUrl: string,
+  _playlistUrl: string,
   playlistTitle: string,
 ): MusicPlaylistPage {
   const albumTitle = harvest.shelfKind === "musicShelfRenderer" ? playlistTitle : null;

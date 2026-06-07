@@ -1,0 +1,194 @@
+{
+  "nodes": [
+    {
+      "id": "t-music-mode",
+      "type": "task",
+      "label": "Music mode shell and playback",
+      "agent": "chad",
+      "details": [
+        "Spotify-style MusicShell with Home, Explore, Library, now-playing bar, vinyl AudioHeroStage, lofty tag reading, useMusicPlayback single audio element."
+      ],
+      "fileEdits": [
+        { "path": "src/components/music/MusicShell.tsx", "reason": "Music mode shell and layout." },
+        { "path": "src/components/music/AudioHeroStage.tsx", "reason": "Expanded vinyl player." },
+        { "path": "src-tauri/src/commands/gallery.rs", "reason": "extract_music_meta for audio files." }
+      ]
+    },
+    {
+      "id": "t-music-explore",
+      "type": "task",
+      "label": "YouTube Music Explore webview and downloads",
+      "agent": "chad",
+      "details": [
+        "Embedded music.youtube.com webview, floating download strip, Pick tracks panel, Paste URL, orb progress dock, browse JSON harvest before yt-dlp."
+      ],
+      "fileEdits": [
+        { "path": "src/components/music/MusicShell.tsx", "reason": "music-explore-view webview lifecycle." },
+        { "path": "src/components/music/MusicExploreDownloadPanel.tsx", "reason": "Pick tracks and batch download UI." },
+        { "path": "src/explorerProfileScript.ts", "reason": "Browse response harvest and profile probe." }
+      ]
+    },
+    {
+      "id": "t-music-detail",
+      "type": "task",
+      "label": "Music artist, album, and song pages",
+      "agent": "chad",
+      "details": [
+        "MusicArtistView with MusicBrainz lookup and vinyl cards; MusicAlbumView and MusicTrackView; musicDetail store slice and context menus."
+      ],
+      "fileEdits": [
+        { "path": "src/components/music/MusicArtistView.tsx", "reason": "Artist detail with mosaic hero." },
+        { "path": "src/components/music/MusicAlbumView.tsx", "reason": "Album tracklist and Play/Shuffle." },
+        { "path": "src-tauri/src/commands/musicmeta.rs", "reason": "Sidecar write and MusicBrainz enrichment." }
+      ]
+    },
+    {
+      "id": "t-music-queue-stats",
+      "type": "task",
+      "label": "Music queue, stats, and liked songs",
+      "agent": "chad",
+      "details": [
+        "Right panel Queue/History/Segments tabs, manual queue, listen stats, smart shuffle, Liked Songs virtual playlist and Stats view."
+      ],
+      "fileEdits": [
+        { "path": "src/components/music/MusicRightPanel.tsx", "reason": "Tabbed right sidebar." },
+        { "path": "src/lib/musicListenStats.ts", "reason": "Play count and listen time tracking." },
+        { "path": "src/components/music/MusicStatsView.tsx", "reason": "Dedicated stats page." }
+      ]
+    },
+    {
+      "id": "t-library-buckets",
+      "type": "task",
+      "label": "Media library bucket layout and migration",
+      "agent": "chad",
+      "details": [
+        "Videos/Music/Movies/Shows/Playlists buckets, migrate_library_layout command, bucket-aware scan and downloader templates."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/migrate.rs", "reason": "Library layout migration." },
+        { "path": "src-tauri/src/commands/gallery.rs", "reason": "Bucket-aware scan_gallery." },
+        { "path": "src/components/MigrateLibraryModal.tsx", "reason": "Settings migration UI." }
+      ]
+    },
+    {
+      "id": "t-delete-export",
+      "type": "task",
+      "label": "Recycle Bin delete and export bundle",
+      "agent": "chad",
+      "details": [
+        "Delete to OS Recycle Bin with full sidecar set; Recently Deleted restore; export_media_bundle with USB title-bar button."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/recently_deleted.rs", "reason": "Trash manifest and restore." },
+        { "path": "src-tauri/src/commands/export.rs", "reason": "Export bundle copy and manifest." },
+        { "path": "src/components/ExportBundleModal.tsx", "reason": "Export panel FSM." }
+      ]
+    },
+    {
+      "id": "t-radial-nav",
+      "type": "task",
+      "label": "Radial navigation and mode switching",
+      "agent": "chad",
+      "details": [
+        "Alt-hold radial with per-mode palettes, 56px icon rail, navMode cycle including music, Alt-release hover-to-select."
+      ],
+      "fileEdits": [
+        { "path": "src/components/navigation/AppSidebarRail.tsx", "reason": "Icon rail and mode cycle." },
+        { "path": "src/hooks/useAltRadialNav.ts", "reason": "Alt radial hover-to-select." },
+        { "path": "src/lib/radialNavTheme.ts", "reason": "Per-mode wedge palettes." }
+      ]
+    },
+    {
+      "id": "t-website-mobile",
+      "type": "task",
+      "label": "Website and mobile shell",
+      "agent": "chad",
+      "details": [
+        "Full ruforge.app docs, features pages, download flow, 94-page /m/ mobile shell, sitemap and SEO fixes."
+      ],
+      "fileEdits": [
+        { "path": "website/src/pages/docs/index.astro", "reason": "Obsidian-style docs hub." },
+        { "path": "website/src/layouts/MobileShell.astro", "reason": "Mobile shell wrapper." }
+      ]
+    },
+    {
+      "id": "t-debug-logging",
+      "type": "task",
+      "label": "Settings debug logging tree",
+      "agent": "chad",
+      "details": [
+        "Per-category Rust/JS toggles, sync_debug_log_categories on boot, lofty TRACE gated by category."
+      ],
+      "fileEdits": [
+        { "path": "src/lib/debugCategories.ts", "reason": "Category tree definitions." },
+        { "path": "src-tauri/src/commands/debug_log.rs", "reason": "Rust log filter sync." },
+        { "path": "src/components/DebugLogCategoryTree.tsx", "reason": "Settings UI tree." }
+      ]
+    },
+    {
+      "id": "f-music-explore",
+      "type": "fix",
+      "label": "Music Explore webview and download path",
+      "agent": "chad",
+      "details": [
+        "Webview HMR reattach, internal vault download path, browse JSON harvest gate, single-track paste URLs."
+      ],
+      "fileEdits": [
+        { "path": "src/components/music/MusicShell.tsx", "reason": "Webview lifecycle fixes." },
+        { "path": "src/lib/downloadQueue.ts", "reason": "resolveDownloadOutputDir for Explore." }
+      ]
+    },
+    {
+      "id": "f-mini-player",
+      "type": "fix",
+      "label": "Mini player music and cover fixes",
+      "agent": "chad",
+      "details": [
+        "Pop-out from music mode, stop main on library pick, transparent corners, full-bleed cover, dual-play guard."
+      ],
+      "fileEdits": [
+        { "path": "src/MiniPlayer.tsx", "reason": "Music mode handoff and cover layout." },
+        { "path": "src/store/ruforgeStore.ts", "reason": "stop-music-mini-playback emit." }
+      ]
+    },
+    {
+      "id": "f-gallery-scan",
+      "type": "fix",
+      "label": "Gallery scan and poster backfill perf",
+      "agent": "chad",
+      "details": [
+        "Duplicate sweep off scan_gallery hot path; poster backfill skips embedded-cover audio."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/gallery.rs", "reason": "sweep_library_download_duplicates split." },
+        { "path": "src/lib/posterBackfill.ts", "reason": "Skip audio with embedded art." }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-music-mode" },
+    { "source": "t-music-mode", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-explore" },
+    { "source": "t-music-explore", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-detail" },
+    { "source": "t-music-detail", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-queue-stats" },
+    { "source": "t-music-queue-stats", "target": "ruforge" },
+    { "source": "chad", "target": "t-library-buckets" },
+    { "source": "t-library-buckets", "target": "ruforge" },
+    { "source": "chad", "target": "t-delete-export" },
+    { "source": "t-delete-export", "target": "ruforge" },
+    { "source": "chad", "target": "t-radial-nav" },
+    { "source": "t-radial-nav", "target": "ruforge" },
+    { "source": "chad", "target": "t-website-mobile" },
+    { "source": "t-website-mobile", "target": "ruforge" },
+    { "source": "chad", "target": "t-debug-logging" },
+    { "source": "t-debug-logging", "target": "ruforge" },
+    { "source": "chad", "target": "f-music-explore" },
+    { "source": "f-music-explore", "target": "ruforge" },
+    { "source": "chad", "target": "f-mini-player" },
+    { "source": "f-mini-player", "target": "ruforge" },
+    { "source": "chad", "target": "f-gallery-scan" },
+    { "source": "f-gallery-scan", "target": "ruforge" }
+  ]
+}

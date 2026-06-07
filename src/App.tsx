@@ -92,6 +92,7 @@ import {
   getEmbeddedExplorerWebview,
 } from "./explorerWebviewLifecycle";
 import {
+  EXPLORER_PROFILE_PROBE_INSTALL,
   EXPLORER_PROFILE_PROBE_SCRIPT,
   EXPLORER_YOUTUBE_PROFILE_EVENT,
   MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT,
@@ -128,7 +129,7 @@ const WindowControls = ({
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
   const youtubeProfile = useRuforgeStore((s) => s.youtubeExplorerProfile);
-  const setActiveTabForProfile = useRuforgeStore((s) => s.setActiveTab);
+  const openProfilePage = useRuforgeStore((s) => s.openProfilePage);
 
   useEffect(() => {
     const updateMaximized = async () => {
@@ -187,7 +188,7 @@ const WindowControls = ({
         <YouTubeProfileChip
           size="sm"
           className="w-9 h-10 flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity"
-          onClick={() => setActiveTabForProfile("explorer")}
+          onClick={openProfilePage}
         />
       )}
 
@@ -651,6 +652,18 @@ function App() {
           explorerWebviewCreatingRef.current = false;
           if (!active) return;
           explorerWebviewRef.current = webview;
+          try {
+            await invoke("eval_in_webview", {
+              label: explorerWebviewLabelRef.current,
+              script: EXPLORER_PROFILE_PROBE_INSTALL,
+            });
+            await invoke("eval_in_webview", {
+              label: explorerWebviewLabelRef.current,
+              script: EXPLORER_PROFILE_PROBE_SCRIPT,
+            });
+          } catch {
+            /* probe installs when explorer tab opens */
+          }
           if (activeTab === "explorer") {
             void maybeReloadExplorerOnEnter();
           }
@@ -1095,13 +1108,35 @@ function App() {
           typeof payload.displayName === "string" &&
           payload.displayName.trim()
         ) {
-          setYoutubeExplorerProfile({
-            displayName: payload.displayName.trim(),
-            avatarUrl:
-              typeof payload.avatarUrl === "string" && payload.avatarUrl.trim()
-                ? payload.avatarUrl.trim()
-                : null,
-          });
+          const prev = useRuforgeStore.getState().youtubeExplorerProfile;
+          const rawName = payload.displayName.trim();
+          const displayName =
+            rawName === "Your channel"
+            && prev?.displayName
+            && prev.displayName !== "Your channel"
+              ? prev.displayName
+              : rawName;
+          const incomingAvatar =
+            typeof payload.avatarUrl === "string" && payload.avatarUrl.trim()
+              ? payload.avatarUrl.trim()
+              : payload.avatarUrl === null
+                ? null
+                : undefined;
+          let avatarUrl: string | null;
+          if (incomingAvatar) {
+            avatarUrl = incomingAvatar;
+          } else if (incomingAvatar === null) {
+            avatarUrl =
+              prev?.avatarUrl && (rawName === "Your channel" || rawName === prev.displayName)
+                ? prev.avatarUrl
+                : null;
+          } else {
+            avatarUrl =
+              prev?.avatarUrl && (rawName === "Your channel" || rawName === prev.displayName)
+                ? prev.avatarUrl
+                : null;
+          }
+          setYoutubeExplorerProfile({ displayName, avatarUrl });
         } else {
           setYoutubeExplorerProfile(null);
         }
@@ -1141,6 +1176,22 @@ function App() {
       clearInterval(id);
     };
   }, [postInstall, navMode, activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "explorer" || postInstall) return;
+    const label = explorerWebviewLabelRef.current;
+    const run = async () => {
+      try {
+        await invoke("eval_in_webview", { label, script: EXPLORER_PROFILE_PROBE_INSTALL });
+        await invoke("eval_in_webview", { label, script: EXPLORER_PROFILE_PROBE_SCRIPT });
+      } catch {
+        /* explorer webview not mounted yet */
+      }
+    };
+    void run();
+    const id = window.setInterval(() => void run(), 2000);
+    return () => clearInterval(id);
+  }, [activeTab, postInstall]);
 
   useEffect(() => {
     if (navMode === "music" || postInstall) return;
