@@ -32,3 +32,6 @@ export function directInstallerDownloadUrl(version: string = SITE.latestVersion)
 export function releaseNotesUrl(version: string = SITE.latestVersion): string {
   return `${SITE.releases}/tag/${releaseTag(version)}`;
 }
+
+/** Reject SPA/HTML fallthrough and truncated responses (see website/public/releases/README.md). */
+export const MIN_INSTALLER_BYTES = 80 * 1024 * 1024;

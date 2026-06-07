@@ -1,3 +1,5 @@
+import { MIN_INSTALLER_BYTES } from './downloadRelease';
+
 export type DownloadPhase = 'idle' | 'downloading' | 'processing' | 'complete' | 'error';
 
 export type ProgressSnapshot = {
@@ -84,8 +86,16 @@ export async function streamInstallerToBlob(
     throw new Error(`Download failed (${res.status})`);
   }
 
+  const contentType = res.headers.get('content-type') ?? '';
+  if (contentType.includes('text/html')) {
+    throw new Error('not_found');
+  }
+
   const totalHeader = res.headers.get('content-length');
   const total = totalHeader ? Number(totalHeader) : null;
+  if (total != null && total > 0 && total < MIN_INSTALLER_BYTES) {
+    throw new Error('not_found');
+  }
   const reader = res.body?.getReader();
   if (!reader) {
     throw new Error('Streaming not supported');
@@ -121,6 +131,10 @@ export async function streamInstallerToBlob(
     percent: 100,
   });
 
+  if (loaded < MIN_INSTALLER_BYTES) {
+    throw new Error('not_found');
+  }
+
   return new Blob(chunks, { type: res.headers.get('content-type') ?? 'application/octet-stream' });
 }
 
@@ -146,6 +160,9 @@ export async function fetchInstaller(
     }
   }
 
+  if (lastError instanceof Error && lastError.message !== 'not_found') {
+    console.warn('[RuForge download] fetch mirror failed, opening GitHub:', lastError.message);
+  }
   triggerBrowserDownload(directUrl);
   return { kind: 'browser' };
 }
