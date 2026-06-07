@@ -820,13 +820,26 @@ fn ytdlp_push_cookie_cli_args(
     browser_cookies: Option<&str>,
 ) -> Result<(), String> {
     if let Some(file) = cookie_file.filter(|s| !s.is_empty()) {
+        crate::rf_log!(
+            "download.ytdlp",
+            log::Level::Warn,
+            "yt-dlp cookie arg: --cookies {}",
+            file
+        );
         args.push("--cookies".into());
         args.push(file.to_string());
         return Ok(());
     }
     if let Some(browser) = browser_cookies.filter(|s| !s.is_empty() && *s != "chrome") {
+        let browser_arg = ytdlp_browser_cookie_arg(app, browser)?;
+        crate::rf_log!(
+            "download.ytdlp",
+            log::Level::Warn,
+            "yt-dlp cookie arg: --cookies-from-browser {}",
+            browser_arg
+        );
         args.push("--cookies-from-browser".into());
-        args.push(ytdlp_browser_cookie_arg(app, browser)?);
+        args.push(browser_arg);
     }
     Ok(())
 }
@@ -874,6 +887,12 @@ async fn ytdlp_download_options_with_ruforge_export(
     }
     let export = export_ruforge_cookies_for_ytdlp(app).await?;
     let path = export.path().display().to_string();
+    crate::rf_log!(
+        "download.ytdlp",
+        log::Level::Warn,
+        "Internal cookie export OK; yt-dlp will use --cookies (not --cookies-from-browser). {}",
+        export.report.summary_line()
+    );
     Ok((
         DownloadOptions {
             browser_cookies: None,
@@ -898,6 +917,12 @@ async fn ytdlp_music_cookie_retry_args(
     }
     let export = export_ruforge_cookies_for_ytdlp(app).await?;
     let path = export.path().display().to_string();
+    crate::rf_log!(
+        "download.ytdlp",
+        log::Level::Warn,
+        "Internal cookie export OK; yt-dlp will use --cookies (not --cookies-from-browser). {}",
+        export.report.summary_line()
+    );
     Ok((None, Some(path), Some(export)))
 }
 
@@ -1040,7 +1065,7 @@ async fn yt_dlp_single_json_simulate_with_cookie_fallback(
                 label,
                 without_err.lines().next().unwrap_or(&without_err)
             );
-            let (resolved, _cookie_guard) =
+            let (resolved, cookie_guard) =
                 match ytdlp_download_options_with_ruforge_export(app, fallback).await {
                     Ok(pair) => pair,
                     Err(export_err) => {
@@ -1050,13 +1075,22 @@ async fn yt_dlp_single_json_simulate_with_cookie_fallback(
                         ));
                     }
                 };
+            let export_summary = cookie_guard
+                .as_ref()
+                .map(|g| g.report.summary_line());
             match yt_dlp_single_json_simulate(app, url, Some(&resolved), format).await {
                 Ok(json) => Ok((json, true)),
-                Err(with_err) => Err(format_ytdlp_cookie_fallback_failure(
-                    &without_err,
-                    &with_err,
-                    fallback.browser_cookies.as_deref(),
-                )),
+                Err(with_err) => {
+                    let mut msg = format_ytdlp_cookie_fallback_failure(
+                        &without_err,
+                        &with_err,
+                        fallback.browser_cookies.as_deref(),
+                    );
+                    if let Some(summary) = export_summary {
+                        msg = format!("{summary}\n{msg}");
+                    }
+                    Err(msg)
+                }
             }
         }
     }
@@ -1730,6 +1764,10 @@ pub async fn start_download_job(
         Err(lock_err) => return Err(lock_err),
     }
 
+    let cookie_export_summary = cookie_export_guard
+        .as_ref()
+        .map(|g| g.report.summary_line());
+
     let manager_bg = manager.inner().clone();
     tauri::async_runtime::spawn(async move {
         use tauri_plugin_shell::process::CommandEvent;
@@ -1908,11 +1946,14 @@ pub async fn start_download_job(
                         return;
                     }
 
-                    let err = format_download_job_failure(
+                    let mut err = format_download_job_failure(
                         &error_log,
                         payload.code,
                         browser_cookies_for_errors.as_deref(),
                     );
+                    if let Some(summary) = &cookie_export_summary {
+                        err = format!("{summary}\n{err}");
+                    }
                     crate::rf_log!("download.jobs", log::Level::Error, "job {} failed: {}", job_id, err);
                     let _ = app.emit(
                         "download-job-finished",
@@ -2500,7 +2541,7 @@ async fn run_ytdlp_json_with_cookie_fallback(
                 label,
                 without_err.lines().next().unwrap_or(&without_err)
             );
-            let (browser, file, _cookie_guard) =
+            let (browser, file, cookie_guard) =
                 match ytdlp_music_cookie_retry_args(app, browser_cookies, cookie_file).await {
                     Ok(args) => args,
                     Err(export_err) => {
@@ -2510,6 +2551,7 @@ async fn run_ytdlp_json_with_cookie_fallback(
                         ));
                     }
                 };
+            let export_summary = cookie_guard.as_ref().map(|g| g.report.summary_line());
             let mut retry_args = prefix_args;
             ytdlp_push_cookie_cli_args(
                 app,
@@ -2520,11 +2562,17 @@ async fn run_ytdlp_json_with_cookie_fallback(
             retry_args.push(url);
             match run_ytdlp_json(app, retry_args, timeout_label).await {
                 Ok(root) => Ok(root),
-                Err(with_err) => Err(format_music_ytdlp_cookie_fallback_failure(
-                    &without_err,
-                    &with_err,
-                    browser_cookies,
-                )),
+                Err(with_err) => {
+                    let mut msg = format_music_ytdlp_cookie_fallback_failure(
+                        &without_err,
+                        &with_err,
+                        browser_cookies,
+                    );
+                    if let Some(summary) = export_summary {
+                        msg = format!("{summary}\n{msg}");
+                    }
+                    Err(msg)
+                }
             }
         }
         Err(err) => Err(err),
