@@ -226,6 +226,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   openMusicAlbum: (artistKey: string, key: string) => void;
   openMusicSong: (path: string) => void;
   openMusicLiked: () => void;
+  /** Music mode + listening stats (profile destination for the YouTube account chip). */
+  openProfilePage: () => void;
   openMusicStats: () => void;
   closeMusicDetail: () => void;
   refreshStorageStats: () => Promise<void>;
@@ -751,7 +753,15 @@ export const useRuforgeStore = create<RuforgeStore>()(
       openMusicAlbum: (artistKey, key) => set({ musicDetail: { kind: "album", artistKey, key } }),
       openMusicSong: (path) => set({ musicDetail: { kind: "song", path } }),
       openMusicLiked: () => set({ musicDetail: { kind: "liked" } }),
-      openMusicStats: () => set({ musicDetail: { kind: "stats" } }),
+      openProfilePage: () => {
+        localStorage.setItem("ruforge-nav-mode", "music");
+        set({
+          navMode: "music",
+          musicView: "home",
+          musicDetail: { kind: "stats" },
+        });
+      },
+      openMusicStats: () => get().openProfilePage(),
       closeMusicDetail: () => set({ musicDetail: null }),
 
       refreshStorageStats: async () => {

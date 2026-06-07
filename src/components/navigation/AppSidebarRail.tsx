@@ -35,6 +35,7 @@ export function AppSidebarRail({
   onSelectTab,
 }: AppSidebarRailProps) {
   const youtubeProfile = useRuforgeStore((s) => s.youtubeExplorerProfile);
+  const openProfilePage = useRuforgeStore((s) => s.openProfilePage);
 
   return (
     <div
@@ -88,7 +89,7 @@ export function AppSidebarRail({
         {navMode !== "music" && youtubeProfile && (
           <YouTubeProfileChip
             size="sm"
-            onClick={() => onSelectTab("explorer")}
+            onClick={openProfilePage}
             className="opacity-80 hover:opacity-100 transition-opacity"
           />
         )}
