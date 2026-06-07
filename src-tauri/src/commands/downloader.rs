@@ -14,6 +14,7 @@ use crate::ytdlp_rate_limit::{
     ytdlp_subprocess_rate_gate_wait, ytdlp_stderr_is_rate_limited,
 };
 
+use crate::commands::explorer_cookies::{export_ruforge_cookies_for_ytdlp, RuforgeCookieExport};
 use crate::commands::gallery::cleanup_orphan_downloads_under;
 use crate::commands::media::extract_frames;
 use crate::commands::musicmeta::{enrich_music_meta_path, find_recent_audio_files};
@@ -864,6 +865,42 @@ fn download_options_without_cookies(options: &DownloadOptions) -> DownloadOption
     }
 }
 
+async fn ytdlp_download_options_with_ruforge_export(
+    app: &AppHandle,
+    fallback: &DownloadOptions,
+) -> Result<(DownloadOptions, Option<RuforgeCookieExport>), String> {
+    if fallback.browser_cookies.as_deref() != Some("ruforge") {
+        return Ok((fallback.clone(), None));
+    }
+    let export = export_ruforge_cookies_for_ytdlp(app).await?;
+    let path = export.path().display().to_string();
+    Ok((
+        DownloadOptions {
+            browser_cookies: None,
+            cookie_file: Some(path),
+            ..fallback.clone()
+        },
+        Some(export),
+    ))
+}
+
+async fn ytdlp_music_cookie_retry_args(
+    app: &AppHandle,
+    browser_cookies: Option<&str>,
+    cookie_file: Option<&str>,
+) -> Result<(Option<String>, Option<String>, Option<RuforgeCookieExport>), String> {
+    if browser_cookies != Some("ruforge") {
+        return Ok((
+            browser_cookies.map(str::to_string),
+            cookie_file.map(str::to_string),
+            None,
+        ));
+    }
+    let export = export_ruforge_cookies_for_ytdlp(app).await?;
+    let path = export.path().display().to_string();
+    Ok((None, Some(path), Some(export)))
+}
+
 fn format_ytdlp_cookie_fallback_failure(
     without_err: &str,
     with_err: &str,
@@ -1003,7 +1040,17 @@ async fn yt_dlp_single_json_simulate_with_cookie_fallback(
                 label,
                 without_err.lines().next().unwrap_or(&without_err)
             );
-            match yt_dlp_single_json_simulate(app, url, Some(fallback), format).await {
+            let (resolved, _cookie_guard) =
+                match ytdlp_download_options_with_ruforge_export(app, fallback).await {
+                    Ok(pair) => pair,
+                    Err(export_err) => {
+                        return Err(format!(
+                            "{export_err}\n\nWithout cookies: {}",
+                            get_video_info_simulate_failure_message(&without_err)
+                        ));
+                    }
+                };
+            match yt_dlp_single_json_simulate(app, url, Some(&resolved), format).await {
                 Ok(json) => Ok((json, true)),
                 Err(with_err) => Err(format_ytdlp_cookie_fallback_failure(
                     &without_err,
@@ -1612,10 +1659,20 @@ pub async fn start_download_job(
             return Err(e);
         }
     };
-    let download_options = if used_cookies {
-        options.clone()
+    let (download_options, cookie_export_guard) = if used_cookies {
+        if options.browser_cookies.as_deref() == Some("ruforge") {
+            match ytdlp_download_options_with_ruforge_export(&app, &options).await {
+                Ok(pair) => pair,
+                Err(e) => {
+                    manager.release_claim_if_pending(&job_id)?;
+                    return Err(e);
+                }
+            }
+        } else {
+            (options.clone(), None)
+        }
     } else {
-        download_options_without_cookies(&options)
+        (download_options_without_cookies(&options), None)
     };
     let filename_template_eff =
         yt_dlp_effective_filename_template(&probe, &options.filename_template, &download_options);
@@ -1676,6 +1733,8 @@ pub async fn start_download_job(
     let manager_bg = manager.inner().clone();
     tauri::async_runtime::spawn(async move {
         use tauri_plugin_shell::process::CommandEvent;
+
+        let _cookie_export_guard = cookie_export_guard;
 
         let download_started_at = SystemTime::now();
         let diag_root = post_download_diag_listing_root(
@@ -2441,8 +2500,23 @@ async fn run_ytdlp_json_with_cookie_fallback(
                 label,
                 without_err.lines().next().unwrap_or(&without_err)
             );
+            let (browser, file, _cookie_guard) =
+                match ytdlp_music_cookie_retry_args(app, browser_cookies, cookie_file).await {
+                    Ok(args) => args,
+                    Err(export_err) => {
+                        return Err(format!(
+                            "{export_err}\n\nWithout cookies: {}",
+                            humanize_music_ytdlp_error(&without_err)
+                        ));
+                    }
+                };
             let mut retry_args = prefix_args;
-            ytdlp_push_cookie_cli_args(app, &mut retry_args, cookie_file, browser_cookies)?;
+            ytdlp_push_cookie_cli_args(
+                app,
+                &mut retry_args,
+                file.as_deref(),
+                browser.as_deref(),
+            )?;
             retry_args.push(url);
             match run_ytdlp_json(app, retry_args, timeout_label).await {
                 Ok(root) => Ok(root),
