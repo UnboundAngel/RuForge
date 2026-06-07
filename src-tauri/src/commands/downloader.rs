@@ -793,6 +793,8 @@ fn ytdlp_stderr_is_cookie_export_failure(err: &str) -> bool {
         || lower.contains("export cookies")
         || lower.contains("failed to decrypt with dpapi")
         || lower.contains("could not copy chrome")
+        || lower.contains("could not read cookies")
+        || lower.contains("error reading cookies")
         || (lower.contains("permission denied") && lower.contains("cookie"))
 }
 
@@ -828,12 +830,78 @@ fn ytdlp_push_cookie_cli_args(
     Ok(())
 }
 
-fn humanize_ytdlp_cookie_error(_err: &str, browser: Option<&str>) -> String {
+fn humanize_ytdlp_cookie_error(err: &str, browser: Option<&str>) -> String {
     let source = browser.map(cookie_browser_label).unwrap_or("browser");
-    format!(
-        "Could not read cookies from {}. For public videos choose None. For signed-in content try Firefox, export a cookies.txt file, or restart RuForge before using Internal.",
-        source
-    )
+    let raw = err.trim();
+    if raw.is_empty() {
+        format!(
+            "Could not read cookies from {}. For signed-in content try Firefox, export a cookies.txt file, or restart RuForge before using Internal.",
+            source
+        )
+    } else {
+        format!(
+            "Could not read cookies from {}.\n\nyt-dlp: {}\n\nFor signed-in content try Firefox, export a cookies.txt file, or restart RuForge before using Internal.",
+            source, raw
+        )
+    }
+}
+
+fn ytdlp_has_configured_cookie_source(
+    browser_cookies: Option<&str>,
+    cookie_file: Option<&str>,
+) -> bool {
+    cookie_file.filter(|s| !s.is_empty()).is_some()
+        || browser_cookies
+            .filter(|s| !s.is_empty() && *s != "chrome")
+            .is_some()
+}
+
+fn download_options_without_cookies(options: &DownloadOptions) -> DownloadOptions {
+    DownloadOptions {
+        browser_cookies: None,
+        cookie_file: None,
+        ..options.clone()
+    }
+}
+
+fn format_ytdlp_cookie_fallback_failure(
+    without_err: &str,
+    with_err: &str,
+    browser: Option<&str>,
+) -> String {
+    if ytdlp_stderr_is_cookie_export_failure(with_err) {
+        format!(
+            "{}\nWithout cookies: {}",
+            humanize_ytdlp_cookie_error(with_err, browser),
+            get_video_info_simulate_failure_message(without_err)
+        )
+    } else {
+        format!(
+            "Metadata fetch failed (without cookies: {}; with cookies: {})",
+            get_video_info_simulate_failure_message(without_err),
+            get_video_info_simulate_failure_message(with_err)
+        )
+    }
+}
+
+fn format_music_ytdlp_cookie_fallback_failure(
+    without_err: &str,
+    with_err: &str,
+    browser: Option<&str>,
+) -> String {
+    if ytdlp_stderr_is_cookie_export_failure(with_err) {
+        format!(
+            "{}\nWithout cookies: {}",
+            humanize_ytdlp_cookie_error(with_err, browser),
+            humanize_music_ytdlp_error(without_err)
+        )
+    } else {
+        format!(
+            "yt-dlp failed without cookies ({}); with cookies ({})",
+            humanize_music_ytdlp_error(without_err),
+            humanize_music_ytdlp_error(with_err)
+        )
+    }
 }
 
 fn format_download_job_failure(
@@ -842,7 +910,12 @@ fn format_download_job_failure(
     browser_cookies: Option<&str>,
 ) -> String {
     if ytdlp_stderr_is_cookie_export_failure(error_log) {
-        return humanize_ytdlp_cookie_error(error_log, browser_cookies);
+        let humanized = humanize_ytdlp_cookie_error(error_log, browser_cookies);
+        let trimmed = error_log.trim();
+        if trimmed.is_empty() || humanized.contains(trimmed) {
+            return humanized;
+        }
+        return format!("{}\n\nFull yt-dlp log:\n{}", humanized, trimmed);
     }
     let trimmed = error_log.trim();
     if trimmed.is_empty() {
@@ -899,39 +972,46 @@ async fn yt_dlp_single_json_simulate(
     serde_json::from_slice(&output.stdout).map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))
 }
 
-async fn yt_dlp_single_json_simulate_resilient(
+/// Simulate metadata without cookies first; retry once with configured cookies on any failure.
+async fn yt_dlp_single_json_simulate_with_cookie_fallback(
     app: &AppHandle,
     url: &str,
-    cookie_opts: Option<&DownloadOptions>,
+    cookie_fallback: Option<&DownloadOptions>,
     format: Option<&str>,
-) -> Result<serde_json::Value, String> {
-    match yt_dlp_single_json_simulate(app, url, cookie_opts, format).await {
-        Ok(json) => Ok(json),
-        Err(err) if cookie_opts.is_some() && ytdlp_stderr_is_cookie_export_failure(&err) => {
-            let label = cookie_opts
-                .and_then(|o| o.browser_cookies.as_deref())
+) -> Result<(serde_json::Value, bool), String> {
+    match yt_dlp_single_json_simulate(app, url, None, format).await {
+        Ok(json) => Ok((json, false)),
+        Err(without_err) => {
+            let Some(fallback) = cookie_fallback else {
+                return Err(get_video_info_simulate_failure_message(&without_err));
+            };
+            if !ytdlp_has_configured_cookie_source(
+                fallback.browser_cookies.as_deref(),
+                fallback.cookie_file.as_deref(),
+            ) {
+                return Err(get_video_info_simulate_failure_message(&without_err));
+            }
+            let label = fallback
+                .browser_cookies
+                .as_deref()
                 .map(cookie_browser_label)
-                .unwrap_or("browser");
+                .unwrap_or("cookie file");
             crate::rf_log!(
                 "download.ytdlp",
                 log::Level::Warn,
-                "yt-dlp could not read {} cookies; retrying metadata without cookies",
-                label
+                "yt-dlp metadata simulate failed without cookies; retrying with {}: {}",
+                label,
+                without_err.lines().next().unwrap_or(&without_err)
             );
-            match yt_dlp_single_json_simulate(app, url, None, format).await {
-                Ok(json) => Ok(json),
-                Err(retry_err) => Err(format!(
-                    "{} Metadata error: {}",
-                    humanize_ytdlp_cookie_error(&err, cookie_opts.and_then(|o| o.browser_cookies.as_deref())),
-                    get_video_info_simulate_failure_message(&retry_err)
+            match yt_dlp_single_json_simulate(app, url, Some(fallback), format).await {
+                Ok(json) => Ok((json, true)),
+                Err(with_err) => Err(format_ytdlp_cookie_fallback_failure(
+                    &without_err,
+                    &with_err,
+                    fallback.browser_cookies.as_deref(),
                 )),
             }
         }
-        Err(err) if cookie_opts.is_some() => Err(humanize_ytdlp_cookie_error(
-            &err,
-            cookie_opts.and_then(|o| o.browser_cookies.as_deref()),
-        )),
-        Err(err) => Err(get_video_info_simulate_failure_message(&err)),
     }
 }
 
@@ -1168,15 +1248,23 @@ pub async fn get_video_info(
     let audio_primary = audio_only.unwrap_or(false);
     let video_fmt = effective_video_format_for_info_probe(format.as_deref());
     let video_fmt_ref = video_fmt.as_str();
-    let cookie_probe = video_info_cookie_probe(browser_cookies, cookie_file);
-    let cookie_ref = cookie_probe.as_ref();
+    let cookie_fallback = video_info_cookie_probe(browser_cookies, cookie_file);
+    let cookie_ref = cookie_fallback.as_ref();
 
     // Run sequentially — parallel simulates double the request rate on the same cookies.
     let json_video_res =
-        yt_dlp_single_json_simulate_resilient(&app, &url, cookie_ref, Some(video_fmt_ref)).await;
+        yt_dlp_single_json_simulate_with_cookie_fallback(&app, &url, cookie_ref, Some(video_fmt_ref))
+            .await
+            .map(|(json, _)| json);
     let json_audio_res =
-        yt_dlp_single_json_simulate_resilient(&app, &url, cookie_ref, Some(AUDIO_SIMULATE_FMT))
-            .await;
+        yt_dlp_single_json_simulate_with_cookie_fallback(
+            &app,
+            &url,
+            cookie_ref,
+            Some(AUDIO_SIMULATE_FMT),
+        )
+        .await
+        .map(|(json, _)| json);
 
     let json_video = json_video_res.as_ref().ok();
     let json_audio = json_audio_res.as_ref().ok();
@@ -1501,15 +1589,36 @@ pub async fn start_download_job(
 ) -> Result<(), String> {
     manager.try_claim_active_job(&job_id)?;
 
-    let probe = match yt_dlp_single_json_simulate_resilient(&app, &url, Some(&options), None).await {
-        Ok(p) => p,
+    let cookie_fallback = if ytdlp_has_configured_cookie_source(
+        options.browser_cookies.as_deref(),
+        options.cookie_file.as_deref(),
+    ) {
+        Some(options.clone())
+    } else {
+        None
+    };
+
+    let (probe, used_cookies) = match yt_dlp_single_json_simulate_with_cookie_fallback(
+        &app,
+        &url,
+        cookie_fallback.as_ref(),
+        None,
+    )
+    .await
+    {
+        Ok(pair) => pair,
         Err(e) => {
             manager.release_claim_if_pending(&job_id)?;
             return Err(e);
         }
     };
+    let download_options = if used_cookies {
+        options.clone()
+    } else {
+        download_options_without_cookies(&options)
+    };
     let filename_template_eff =
-        yt_dlp_effective_filename_template(&probe, &options.filename_template, &options);
+        yt_dlp_effective_filename_template(&probe, &options.filename_template, &download_options);
 
     let output_dir = options.output_dir.trim().to_string();
     if output_dir.is_empty() {
@@ -1525,7 +1634,13 @@ pub async fn start_download_job(
         ));
     }
 
-    let args = match build_ytdlp_download_args(&app, &url, &options, &filename_template_eff, resume) {
+    let args = match build_ytdlp_download_args(
+        &app,
+        &url,
+        &download_options,
+        &filename_template_eff,
+        resume,
+    ) {
         Ok(a) => a,
         Err(e) => {
             manager.release_claim_if_pending(&job_id)?;
@@ -2231,63 +2346,48 @@ pub async fn get_music_browse_info(
         "--no-warnings".into(),
     ];
     ytdlp_push_politeness_args(&mut args);
-    ytdlp_push_cookie_cli_args(
+    run_ytdlp_json_with_cookie_fallback(
         &app,
-        &mut args,
-        cookie_file.as_deref(),
+        args,
+        url,
         browser_cookies.as_deref(),
-    )?;
-    args.push(url.clone());
-
-    ytdlp_subprocess_rate_gate_wait().await?;
-    let output = tokio::time::timeout(
-        std::time::Duration::from_secs(90),
-        ytdlp_shell_command(&app)?.args(&args).output(),
+        cookie_file.as_deref(),
+        "browse",
     )
     .await
-    .map_err(|_| "yt-dlp browse timed out after 90s".to_string())?
-    .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+    .and_then(|root| {
+        let title = root["title"].as_str().unwrap_or("").to_string();
+        let thumbnail = best_thumbnail_url(&root);
+        let playlists = collect_music_browse_playlists(&root, &thumbnail);
 
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).to_string();
-        ytdlp_register_rate_limit_from_stderr(&err).await;
-        return Err(humanize_music_ytdlp_error(&err));
-    }
-
-    let root: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))?;
-
-    let title = root["title"].as_str().unwrap_or("").to_string();
-    let thumbnail = best_thumbnail_url(&root);
-    let playlists = collect_music_browse_playlists(&root, &thumbnail);
-
-    let browse_kind = if playlists.is_empty() {
-        let had_channel_tabs = root["entries"].as_array().is_some_and(|entries| {
-            entries.iter().any(|entry| {
-                let raw_id = entry["id"].as_str().unwrap_or("");
-                let entry_title = entry["title"].as_str().unwrap_or("");
-                let entry_url = resolve_music_entry_url(entry, raw_id);
-                is_channel_tab_title(entry_title)
-                    || raw_id.starts_with("UU")
-                    || entry_url_looks_like_channel_tab(&entry_url)
-                    || (entry["_type"].as_str() == Some("channel")
-                        && is_youtube_channel_id(raw_id))
-            })
-        });
-        if had_channel_tabs {
-            Some("channel_tabs_only".to_string())
+        let browse_kind = if playlists.is_empty() {
+            let had_channel_tabs = root["entries"].as_array().is_some_and(|entries| {
+                entries.iter().any(|entry| {
+                    let raw_id = entry["id"].as_str().unwrap_or("");
+                    let entry_title = entry["title"].as_str().unwrap_or("");
+                    let entry_url = resolve_music_entry_url(entry, raw_id);
+                    is_channel_tab_title(entry_title)
+                        || raw_id.starts_with("UU")
+                        || entry_url_looks_like_channel_tab(&entry_url)
+                        || (entry["_type"].as_str() == Some("channel")
+                            && is_youtube_channel_id(raw_id))
+                })
+            });
+            if had_channel_tabs {
+                Some("channel_tabs_only".to_string())
+            } else {
+                None
+            }
         } else {
             None
-        }
-    } else {
-        None
-    };
+        };
 
-    Ok(MusicBrowseResult {
-        title,
-        thumbnail,
-        playlists,
-        browse_kind,
+        Ok(MusicBrowseResult {
+            title,
+            thumbnail,
+            playlists,
+            browse_kind,
+        })
     })
 }
 
@@ -2317,6 +2417,46 @@ async fn run_ytdlp_json(
         .map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))
 }
 
+async fn run_ytdlp_json_with_cookie_fallback(
+    app: &AppHandle,
+    prefix_args: Vec<String>,
+    url: String,
+    browser_cookies: Option<&str>,
+    cookie_file: Option<&str>,
+    timeout_label: &str,
+) -> Result<serde_json::Value, String> {
+    let mut args = prefix_args.clone();
+    args.push(url.clone());
+    match run_ytdlp_json(app, args, timeout_label).await {
+        Ok(root) => Ok(root),
+        Err(without_err) if ytdlp_has_configured_cookie_source(browser_cookies, cookie_file) => {
+            let label = browser_cookies
+                .map(cookie_browser_label)
+                .unwrap_or("cookie file");
+            crate::rf_log!(
+                "download.ytdlp",
+                log::Level::Warn,
+                "yt-dlp {} failed without cookies; retrying with {}: {}",
+                timeout_label,
+                label,
+                without_err.lines().next().unwrap_or(&without_err)
+            );
+            let mut retry_args = prefix_args;
+            ytdlp_push_cookie_cli_args(app, &mut retry_args, cookie_file, browser_cookies)?;
+            retry_args.push(url);
+            match run_ytdlp_json(app, retry_args, timeout_label).await {
+                Ok(root) => Ok(root),
+                Err(with_err) => Err(format_music_ytdlp_cookie_fallback_failure(
+                    &without_err,
+                    &with_err,
+                    browser_cookies,
+                )),
+            }
+        }
+        Err(err) => Err(err),
+    }
+}
+
 async fn fetch_album_tracks_page(
     app: &AppHandle,
     url: &str,
@@ -2329,7 +2469,7 @@ async fn fetch_album_tracks_page(
     let start = offset + 1;
     let end = offset + limit;
 
-    let mut flat_args: Vec<String> = vec![
+    let flat_prefix: Vec<String> = vec![
         "--flat-playlist".into(),
         "-J".into(),
         "--no-warnings".into(),
@@ -2338,19 +2478,32 @@ async fn fetch_album_tracks_page(
         "--playlist-end".into(),
         end.to_string(),
     ];
-    ytdlp_push_cookie_cli_args(app, &mut flat_args, cookie_file, browser_cookies)?;
-    flat_args.push(url.to_string());
 
-    match run_ytdlp_json(app, flat_args, "playlist page").await {
+    match run_ytdlp_json_with_cookie_fallback(
+        app,
+        flat_prefix,
+        url.to_string(),
+        browser_cookies,
+        cookie_file,
+        "playlist page",
+    )
+    .await
+    {
         Ok(root) => Ok(playlist_page_from_root(&root, offset, limit)),
         Err(flat_err)
             if flat_err.contains("Failed to resolve album to playlist")
                 || flat_err.contains("resolve album") =>
         {
-            let mut browse_args: Vec<String> = vec!["-J".into(), "--no-warnings".into()];
-            ytdlp_push_cookie_cli_args(app, &mut browse_args, cookie_file, browser_cookies)?;
-            browse_args.push(url.to_string());
-            let root = run_ytdlp_json(app, browse_args, "album browse").await?;
+            let browse_prefix: Vec<String> = vec!["-J".into(), "--no-warnings".into()];
+            let root = run_ytdlp_json_with_cookie_fallback(
+                app,
+                browse_prefix,
+                url.to_string(),
+                browser_cookies,
+                cookie_file,
+                "album browse",
+            )
+            .await?;
             let track_entries = collect_album_track_entries(&root);
             let total = track_entries.len() as u32;
             let slice: Vec<_> = track_entries
@@ -2474,7 +2627,7 @@ pub async fn get_playlist_items_page(
     let start = offset + 1;
     let end = offset + limit;
 
-    let mut args: Vec<String> = vec![
+    let prefix_args: Vec<String> = vec![
         "--flat-playlist".into(),
         "-J".into(),
         "--no-warnings".into(),
@@ -2483,10 +2636,15 @@ pub async fn get_playlist_items_page(
         "--playlist-end".into(),
         end.to_string(),
     ];
-    ytdlp_push_cookie_cli_args(&app, &mut args, cookie_file_ref, browser_ref)?;
-    args.push(url);
-
-    let root = run_ytdlp_json(&app, args, "playlist page").await?;
+    let root = run_ytdlp_json_with_cookie_fallback(
+        &app,
+        prefix_args,
+        url,
+        browser_ref,
+        cookie_file_ref,
+        "playlist page",
+    )
+    .await?;
     Ok(playlist_page_from_root(&root, offset, limit))
 }
 
@@ -2614,6 +2772,9 @@ mod cookie_error_tests {
         assert!(ytdlp_stderr_is_cookie_export_failure(
             "ERROR: Failed to decrypt with DPAPI. See https://github.com/yt-dlp/yt-dlp/issues/10927"
         ));
+        assert!(ytdlp_stderr_is_cookie_export_failure(
+            "ERROR: Could not read cookies from chrome profile"
+        ));
         assert!(!ytdlp_stderr_is_cookie_export_failure(
             "ERROR: Video unavailable"
         ));
@@ -2623,6 +2784,21 @@ mod cookie_error_tests {
     fn humanizes_ruforge_cookie_source() {
         let msg = humanize_ytdlp_cookie_error("cookie database", Some("ruforge"));
         assert!(msg.contains("RuForge Internal browser"));
-        assert!(msg.contains("None"));
+        assert!(msg.contains("Firefox"));
+    }
+
+    #[test]
+    fn humanized_cookie_error_includes_raw_stderr() {
+        let raw = "ERROR: Could not copy Chrome cookie database.";
+        let msg = humanize_ytdlp_cookie_error(raw, Some("ruforge"));
+        assert!(msg.contains(raw));
+    }
+
+    #[test]
+    fn cookie_fallback_failure_preserves_with_err_stderr() {
+        let without = "ERROR: Video unavailable";
+        let with_err = "ERROR: Could not copy Chrome cookie database.";
+        let msg = format_ytdlp_cookie_fallback_failure(without, with_err, Some("ruforge"));
+        assert!(msg.contains(with_err));
     }
 }
