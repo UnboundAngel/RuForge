@@ -50,6 +50,10 @@ import {
   toggleTrackLike,
 } from "../components/music/musicLikedTracks";
 import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
+import {
+  getActiveListenEventId,
+  transferListenSession,
+} from "../lib/musicListenSession";
 import { readPlaybackSpeed } from "../playbackSpeedStorage";
 import type { PlayInMiniPayload, PlayInMusicMiniPayload } from "../playerHandoff";
 import { writePlaybackPos } from "../playbackStorage";
@@ -611,9 +615,13 @@ export const useRuforgeStore = create<RuforgeStore>()(
           manualQueue: [...manualQueue],
           playingFromManualQueue,
           manualQueueContextIndex,
+          listenEventId: null,
         };
 
         try {
+          const listenEventId = getActiveListenEventId();
+          await transferListenSession("music_mini");
+          payload.listenEventId = listenEventId;
           writePlaybackPos(fileToHandoff.path, t);
           set({ playingFile: null });
           await invoke("open_music_mini_player");
@@ -770,10 +778,10 @@ export const useRuforgeStore = create<RuforgeStore>()(
         set({
           navMode: "music",
           musicView: "home",
-          musicDetail: { kind: "stats" },
+          musicDetail: { kind: "profile" },
         });
       },
-      openMusicStats: () => get().openProfilePage(),
+      openMusicStats: () => set({ musicDetail: { kind: "stats" } }),
       closeMusicDetail: () => set({ musicDetail: null }),
 
       refreshStorageStats: async () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaFile } from "@/types";
+import { resetListenSnapshotForTests } from "@/lib/musicListenSnapshot";
 import { clearListenStats, recordListenStatsPlay } from "./musicListenStats";
 import { buildSmartShuffleOrder, pickSmartNextTrack, smartShuffleWeight } from "./musicSmartShuffle";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
@@ -32,6 +33,7 @@ function track(id: string, artist: string): MediaFile {
 }
 
 beforeEach(() => {
+  resetListenSnapshotForTests();
   clearListenStats();
   store = {};
 });

@@ -14,6 +14,17 @@ import {
   type MusicAdvanceState,
 } from "@/components/music/musicAdvanceQueue";
 import { MUSIC_MINI_VOLUME_KEY } from "./musicMiniConstants";
+import {
+  beginListenSession,
+  endListenSession,
+  flushListenSessionAccum,
+  onListenTimeUpdateTick,
+  pauseListenAccumulator,
+  setPendingListenEndReason,
+  stageHandoffListenEventId,
+  takePendingListenEndReason,
+  tickListenAccumulator,
+} from "@/lib/musicListenSession";
 
 export type TrackDirection = "next" | "prev" | null;
 
@@ -175,6 +186,10 @@ export function useMusicMiniPlayback() {
         loadedPathRef.current = path;
         setCurrentTime(0);
         setDuration(0);
+        void (async () => {
+          await endListenSession(takePendingListenEndReason());
+          await beginListenSession(file, "music_mini");
+        })();
       }
       el.playbackRate = playbackSpeed;
       applyMediaOutputState(el, volume, muted);
@@ -212,6 +227,9 @@ export function useMusicMiniPlayback() {
         writeStoredVolume(payload.volume);
       }
       if (typeof payload.muted === "boolean") setMuted(payload.muted);
+      if (payload.listenEventId) {
+        stageHandoffListenEventId(payload.listenEventId);
+      }
       loadFile(
         payload.file,
         payload.startTime,
@@ -281,43 +299,57 @@ export function useMusicMiniPlayback() {
     const el = audioRef.current;
     if (!el || !playingFile) return;
 
-    const onTime = () => setCurrentTime(el.currentTime);
+    const onTime = () => {
+      setCurrentTime(el.currentTime);
+      if (!el.paused && playingFile) {
+        tickListenAccumulator();
+        void onListenTimeUpdateTick();
+      } else {
+        pauseListenAccumulator();
+      }
+    };
     const onMeta = () => setDuration(el.duration || 0);
     const onPlay = () => setPaused(false);
     const onPause = () => setPaused(true);
     const onEnded = () => {
-      if (isLooping) return;
-      const state: MusicAdvanceState = {
-        manualQueue,
-        effectivePlaylist,
-        playlistIndex,
-        playingFromManualQueue,
-        manualQueueContextIndex,
-      };
-      const result = resolveMusicNextTrack(state, resolveFromPlaylist);
-      if (!result) {
-        setPlayingFromManualQueue(false);
-        setManualQueue([]);
-        setManualQueueContextIndex(null);
-        setPaused(true);
-        return;
-      }
-      setManualQueue(result.manualQueueAfter);
-      setPlayingFromManualQueue(result.playingFromManualQueue);
-      setManualQueueContextIndex(result.manualQueueContextIndex);
-      if (!result.playingFromManualQueue) {
-        const nextIdx = effectivePlaylist.findIndex((f) => f.path === result.file.path);
-        if (nextIdx >= 0) setPlaylistIndex(nextIdx);
-      }
-      loadFile(result.file, 0, false, el.playbackRate, "next", {
-        playingFromManualQueue: result.playingFromManualQueue,
-        manualQueue: result.manualQueueAfter,
-        manualQueueContextIndex: result.manualQueueContextIndex,
-        playlistIndex:
-          result.playingFromManualQueue
-            ? playlistIndex
-            : effectivePlaylist.findIndex((f) => f.path === result.file.path),
-      });
+      void (async () => {
+        if (isLooping) return;
+        await flushListenSessionAccum(true);
+        const state: MusicAdvanceState = {
+          manualQueue,
+          effectivePlaylist,
+          playlistIndex,
+          playingFromManualQueue,
+          manualQueueContextIndex,
+        };
+        const result = resolveMusicNextTrack(state, resolveFromPlaylist);
+        if (!result) {
+          await endListenSession("completed");
+          setPlayingFromManualQueue(false);
+          setManualQueue([]);
+          setManualQueueContextIndex(null);
+          setPaused(true);
+          return;
+        }
+        await endListenSession("completed");
+        setManualQueue(result.manualQueueAfter);
+        setPlayingFromManualQueue(result.playingFromManualQueue);
+        setManualQueueContextIndex(result.manualQueueContextIndex);
+        if (!result.playingFromManualQueue) {
+          const nextIdx = effectivePlaylist.findIndex((f) => f.path === result.file.path);
+          if (nextIdx >= 0) setPlaylistIndex(nextIdx);
+        }
+        setPendingListenEndReason("manual_switch");
+        loadFile(result.file, 0, false, el.playbackRate, "next", {
+          playingFromManualQueue: result.playingFromManualQueue,
+          manualQueue: result.manualQueueAfter,
+          manualQueueContextIndex: result.manualQueueContextIndex,
+          playlistIndex:
+            result.playingFromManualQueue
+              ? playlistIndex
+              : effectivePlaylist.findIndex((f) => f.path === result.file.path),
+        });
+      })();
     };
 
     el.addEventListener("timeupdate", onTime);
@@ -379,12 +411,16 @@ export function useMusicMiniPlayback() {
       ? playlistIndex
       : effectivePlaylist.findIndex((f) => f.path === result.file.path);
     if (!result.playingFromManualQueue && nextIdx >= 0) setPlaylistIndex(nextIdx);
-    loadFile(result.file, 0, el ? !el.paused : false, el?.playbackRate ?? 1, "next", {
+    void (async () => {
+      await endListenSession("skipped");
+      setPendingListenEndReason("manual_switch");
+      loadFile(result.file, 0, el ? !el.paused : false, el?.playbackRate ?? 1, "next", {
       playingFromManualQueue: result.playingFromManualQueue,
       manualQueue: result.manualQueueAfter,
       manualQueueContextIndex: result.manualQueueContextIndex,
       playlistIndex: nextIdx >= 0 ? nextIdx : playlistIndex,
     });
+    })();
   }, [
     manualQueue,
     effectivePlaylist,

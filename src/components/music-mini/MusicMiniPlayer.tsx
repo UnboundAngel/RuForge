@@ -4,6 +4,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { SendToMusicMainPayload } from "@/playerHandoff";
 import { writePlaybackPos } from "@/playbackStorage";
+import {
+  getActiveListenEventId,
+  transferListenSession,
+} from "@/lib/musicListenSession";
 import { cn } from "@/lib/utils";
 import { MusicMiniTitleBar } from "./MusicMiniTitleBar";
 import { MusicMiniDisc } from "./MusicMiniDisc";
@@ -25,6 +29,8 @@ export default function MusicMiniPlayer() {
       return;
     }
     playback.persistPosition();
+    const listenEventId = getActiveListenEventId();
+    await transferListenSession("main");
     const payload: SendToMusicMainPayload = {
       file: playback.playingFile,
       currentTime: playback.currentTime,
@@ -36,6 +42,7 @@ export default function MusicMiniPlayer() {
       playingFromManualQueue: playback.playingFromManualQueue,
       manualQueueContextIndex: playback.manualQueueContextIndex,
       isLooping: playback.isLooping,
+      listenEventId,
     };
     if (!playback.paused) {
       writePlaybackPos(playback.playingFile.path, playback.currentTime, playback.duration);

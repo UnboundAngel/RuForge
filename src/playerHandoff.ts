@@ -32,6 +32,7 @@ export type PlayInMusicMiniPayload = {
   manualQueue?: string[];
   playingFromManualQueue?: boolean;
   manualQueueContextIndex?: number | null;
+  listenEventId?: string | null;
 };
 
 export type SendToMusicMainPayload = {
@@ -45,4 +46,5 @@ export type SendToMusicMainPayload = {
   playingFromManualQueue?: boolean;
   manualQueueContextIndex?: number | null;
   isLooping?: boolean;
+  listenEventId?: string | null;
 };

@@ -34,7 +34,16 @@ import {
   resolveMusicNextTrack,
   resolveMusicPrevTrack,
 } from "./musicAdvanceQueue";
-import { addListenTime } from "./musicListenStats";
+import {
+  beginListenSession,
+  endListenSession,
+  flushListenSessionAccum,
+  onListenTimeUpdateTick,
+  pauseListenAccumulator,
+  setPendingListenEndReason,
+  takePendingListenEndReason,
+  tickListenAccumulator,
+} from "@/lib/musicListenSession";
 import { primaryArtist } from "./musicArtist";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
 import { pickSmartNextTrack } from "./musicSmartShuffle";
@@ -146,16 +155,7 @@ export function useMusicPlayback(
   const isDraggingRef = useRef(false);
 
   const loadedPathRef = useRef<string | null>(null);
-  const listenAccumSecRef = useRef(0);
-  const lastListenTickRef = useRef<number | null>(null);
   const sessionRecentKeysRef = useRef<string[]>([]);
-
-  const flushListenAccum = useCallback((file: import("@/types").MediaFile | null) => {
-    if (!file || listenAccumSecRef.current <= 0) return;
-    addListenTime(file, listenAccumSecRef.current);
-    listenAccumSecRef.current = 0;
-    lastListenTickRef.current = null;
-  }, []);
 
   const pushSessionRecent = useCallback((file: import("@/types").MediaFile) => {
     const key = musicTrackIdentityKey(file, primaryArtist);
@@ -258,8 +258,8 @@ export function useMusicPlayback(
     const el = audioRef.current;
 
     if (!el || !playingFile) {
-
       loadedPathRef.current = null;
+      void endListenSession("abandoned_paused").catch(() => null);
 
       if (el) {
 
@@ -287,19 +287,18 @@ export function useMusicPlayback(
 
     const needsLoad = loadedPathRef.current !== path;
 
-    if (needsLoad && loadedPathRef.current) {
-      const prevPath = loadedPathRef.current;
-      const prevFile =
-        folderAudioPlaylist.find((f) => f.path === prevPath)
-        ?? libraryAudio.find((f) => f.path === prevPath);
-      if (prevFile) flushListenAccum(prevFile);
-    }
-
     if (needsLoad) {
-      pushSessionRecent(playingFile);
+      void (async () => {
+        if (loadedPathRef.current) {
+          await endListenSession(takePendingListenEndReason());
+        }
+        pushSessionRecent(playingFile);
+        const key = musicTrackIdentityKey(playingFile, primaryArtist);
+        await beginListenSession(playingFile, "main", {
+          wasLiked: musicLikedKeys.includes(key),
+        });
+      })();
     }
-
-
 
     if (needsLoad) {
 
@@ -376,9 +375,9 @@ export function useMusicPlayback(
     playbackSpeed,
     folderAudioPlaylist,
     libraryAudio,
-    flushListenAccum,
     pushSessionRecent,
     playingFile,
+    musicLikedKeys,
   ]);
 
 
@@ -531,6 +530,7 @@ export function useMusicPlayback(
       if (playingFromManualQueue) {
         clearManualQueuePlayingState();
       }
+      setPendingListenEndReason("skipped");
       handlePlayFolderNeighbor(prev);
     }
 
@@ -564,6 +564,7 @@ export function useMusicPlayback(
       clearManualQueuePlayingState();
     }
 
+    setPendingListenEndReason("skipped");
     handlePlayFolderNeighbor(result.file);
 
   }, [playingFile, playlistIndex, effectivePlaylist, manualQueue, playingFromManualQueue, manualQueueContextIndex, handlePlayFolderNeighbor, applyManualQueueAdvance, clearManualQueuePlayingState]);
@@ -623,12 +624,12 @@ export function useMusicPlayback(
     });
     if (!next) return false;
 
-    flushListenAccum(playingFile);
     const base =
       effectivePlaylist.length > 0 ? effectivePlaylist : folderAudioPlaylist;
     if (!base.some((f) => f.path === next.path)) {
       setFolderAudioPlaylist([...base, next]);
     }
+    setPendingListenEndReason("manual_switch");
     handlePlayFolderNeighbor(next);
     return true;
   }, [
@@ -638,16 +639,15 @@ export function useMusicPlayback(
     folderAudioPlaylist,
     musicLikedKeys,
     effectivePlaylist,
-    flushListenAccum,
     setFolderAudioPlaylist,
     handlePlayFolderNeighbor,
   ]);
 
-  const handleEnded = useCallback(() => {
+  const handleEnded = useCallback(async () => {
 
     if (isLooping || !playingFile) return;
 
-    flushListenAccum(playingFile);
+    await flushListenSessionAccum(true);
 
     const advanceState = {
       manualQueue,
@@ -663,13 +663,19 @@ export function useMusicPlayback(
     const result = resolveMusicNextTrack(advanceState, resolveFromPlaylist);
 
     if (result) {
+      await endListenSession("completed");
       if (result.playingFromManualQueue) {
         applyManualQueueAdvance(result.manualQueueContextIndex);
       } else {
         clearManualQueuePlayingState();
       }
+      setPendingListenEndReason("manual_switch");
       handlePlayFolderNeighbor(result.file);
-    } else if (!trySmartEndlessNext()) {
+      return;
+    }
+
+    await endListenSession("wall_endless_pick");
+    if (!trySmartEndlessNext()) {
       clearManualQueuePlayingState();
       setPaused(true);
     }
@@ -685,7 +691,6 @@ export function useMusicPlayback(
     handlePlayFolderNeighbor,
     applyManualQueueAdvance,
     clearManualQueuePlayingState,
-    flushListenAccum,
     trySmartEndlessNext,
   ]);
 
@@ -704,20 +709,10 @@ export function useMusicPlayback(
       if (!isDraggingRef.current) setCurrentTime(el.currentTime);
 
       if (!el.paused && playingFile) {
-        const now = performance.now();
-        if (lastListenTickRef.current != null) {
-          const deltaSec = (now - lastListenTickRef.current) / 1000;
-          if (deltaSec > 0 && deltaSec < 4) {
-            listenAccumSecRef.current += deltaSec;
-          }
-        }
-        lastListenTickRef.current = now;
-        if (listenAccumSecRef.current >= 15) {
-          addListenTime(playingFile, listenAccumSecRef.current);
-          listenAccumSecRef.current = 0;
-        }
+        tickListenAccumulator();
+        void onListenTimeUpdateTick();
       } else {
-        lastListenTickRef.current = null;
+        pauseListenAccumulator();
       }
 
     };
