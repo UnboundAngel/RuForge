@@ -32,7 +32,9 @@ import {
   type RuforgeSettings,
   type SettingsTab,
   type YouTubeExplorerProfile,
+  type YoutubeSessionStatus,
 } from "./types";
+import { hydrateYoutubeProfileSession } from "../lib/youtubeProfileSession";
 import {
   createRuforgePersistStorage,
   type RuforgePersistedSubset,
@@ -101,7 +103,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   isSearchExpanded: boolean;
   searchValue: string;
   lastExplorerUrl: string;
-  /** Null when Explorer session is signed out or webview has not reported yet. */
+  youtubeSessionStatus: YoutubeSessionStatus;
+  /** Display profile (live probe or cache); null when signed-out. */
   youtubeExplorerProfile: YouTubeExplorerProfile | null;
 
   notifications: RuforgeNotification[];
@@ -248,7 +251,10 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setIsSearchExpanded: (v: boolean | ((p: boolean) => boolean)) => void;
   setSearchValue: (v: string) => void;
   setLastExplorerUrl: (url: string) => void;
-  setYoutubeExplorerProfile: (profile: YouTubeExplorerProfile | null) => void;
+  setYoutubeProfileSession: (session: {
+    status: YoutubeSessionStatus;
+    profile: YouTubeExplorerProfile | null;
+  }) => void;
 
   notify: (message: string, type?: RuforgeNotification["type"]) => number;
   dismissNotification: (id: number) => void;
@@ -338,7 +344,13 @@ export const useRuforgeStore = create<RuforgeStore>()(
       isSearchExpanded: false,
       searchValue: "",
       lastExplorerUrl: "https://www.youtube.com",
-      youtubeExplorerProfile: null,
+      ...(() => {
+        const hydrated = hydrateYoutubeProfileSession();
+        return {
+          youtubeSessionStatus: hydrated.status,
+          youtubeExplorerProfile: hydrated.profile,
+        };
+      })(),
 
       notifications: [],
 
@@ -815,7 +827,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
         })),
       setSearchValue: (v) => set({ searchValue: v }),
       setLastExplorerUrl: (url) => set({ lastExplorerUrl: url }),
-      setYoutubeExplorerProfile: (youtubeExplorerProfile) => set({ youtubeExplorerProfile }),
+      setYoutubeProfileSession: (session) =>
+        set({
+          youtubeSessionStatus: session.status,
+          youtubeExplorerProfile: session.profile,
+        }),
 
       notify: (message, type = "info") => {
         const id = Date.now() + Math.floor(Math.random() * 1000);

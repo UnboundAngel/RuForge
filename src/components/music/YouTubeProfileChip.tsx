@@ -1,64 +1,102 @@
 import { useEffect, useState } from "react";
+import { isYoutubeAuthSurfaceActive } from "@/lib/youtubeAuthSurface";
+import {
+  readYoutubeProfileCache,
+  youtubeProfileHoverLabel,
+} from "@/lib/youtubeProfileSession";
+import { sanitizeYoutubeAvatarUrl } from "@/lib/youtubeAvatarUrl";
+import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { YouTubeLoginPill } from "./YouTubeLoginPill";
+import { YouTubeProfileAuthSpinner } from "./YouTubeProfileAuthSpinner";
 
 type Props = {
   className?: string;
   size?: "sm" | "md";
-  onClick?: () => void;
 };
 
-export function YouTubeProfileChip({ className, size = "md", onClick }: Props) {
+export function YouTubeProfileChip({ className, size = "md" }: Props) {
   const profile = useRuforgeStore((s) => s.youtubeExplorerProfile);
-  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  const navMode = useRuforgeStore((s) => s.navMode);
+  const activeTab = useRuforgeStore((s) => s.activeTab);
+  const musicView = useRuforgeStore((s) => s.musicView);
+  const authSurfaceActive = isYoutubeAuthSurfaceActive(navMode, activeTab, musicView);
+
+  const [imageFailed, setImageFailed] = useState(false);
+  const [fallbackAvatarUrl, setFallbackAvatarUrl] = useState<string | null>(null);
+
+  const liveAvatarUrl = profile
+    ? sanitizeYoutubeAvatarUrl(profile.avatarUrl)
+    : null;
+  const avatarUrl = liveAvatarUrl ?? fallbackAvatarUrl;
+  const hasPhoto = !!avatarUrl && !imageFailed;
+  const hoverLabel = youtubeProfileHoverLabel(profile);
 
   useEffect(() => {
-    setAvatarLoadFailed(false);
-  }, [profile?.avatarUrl]);
+    setImageFailed(false);
+    setFallbackAvatarUrl(null);
+  }, [liveAvatarUrl]);
 
-  if (!profile) return null;
-
-  const initial = profile.displayName.trim().charAt(0).toUpperCase() || "?";
-  const dim = size === "sm" ? "w-6 h-6 text-[10px]" : "w-8 h-8 text-xs";
-  const showAvatar = Boolean(profile.avatarUrl) && !avatarLoadFailed;
-
-  const inner = showAvatar ? (
-    <img
-      src={profile.avatarUrl!}
-      alt=""
-      className={`${dim} rounded-full object-cover border shadow-sm`}
-      style={{ borderColor: "rgba(255, 255, 255, 0.15)" }}
-      onError={() => setAvatarLoadFailed(true)}
-    />
-  ) : (
-    <div
-      className={`${dim} rounded-full flex items-center justify-center font-bold shadow border select-none`}
-      style={{
-        background: "var(--music-accent, #ff0033)",
-        color: "#ffffff",
-        borderColor: "rgba(255, 255, 255, 0.15)",
-      }}
-    >
-      {initial}
-    </div>
-  );
-
-  if (onClick) {
+  if (hasPhoto) {
+    const displayName = profile?.displayName ?? "YouTube";
     return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={`rf-music-tooltip-anchor ${className ?? ""}`}
-        data-tooltip={`Open your profile · ${profile.displayName}`}
-        aria-label={profile.displayName}
+      <div
+        className={cn("rf-yt-profile-pill-wrap flex justify-end shrink-0", className)}
       >
-        {inner}
-      </button>
+        <div
+          className={cn(
+            "rf-yt-profile-pill rf-yt-profile-pill--avatar-only",
+            size === "md" && "rf-yt-profile-pill--md",
+          )}
+          tabIndex={0}
+          role="img"
+          aria-label={`Signed in as ${displayName}`}
+        >
+          <div className="rf-yt-profile-pill__avatar-wrap">
+            <img
+              key={avatarUrl}
+              src={avatarUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              decoding="async"
+              className="rf-yt-profile-pill__avatar"
+              onError={() => {
+                const cache = readYoutubeProfileCache();
+                const cachedUrl = cache?.avatarUrl
+                  ? sanitizeYoutubeAvatarUrl(cache.avatarUrl)
+                  : null;
+                if (cachedUrl && cachedUrl !== avatarUrl) {
+                  setFallbackAvatarUrl(cachedUrl);
+                  return;
+                }
+                setImageFailed(true);
+              }}
+            />
+          </div>
+          <div className="rf-yt-profile-pill__label-wrap">
+            <span className="rf-yt-profile-pill__label">{hoverLabel}</span>
+          </div>
+        </div>
+      </div>
     );
   }
 
-  return (
-    <div className={`rf-music-tooltip-anchor ${className ?? ""}`} data-tooltip={profile.displayName} aria-label={profile.displayName}>
-      {inner}
-    </div>
-  );
+  if (authSurfaceActive) {
+    return (
+      <div
+        className={cn("rf-yt-profile-pill-wrap flex justify-end shrink-0", className)}
+      >
+        <div
+          className={cn(
+            "rf-yt-profile-pill rf-yt-profile-pill--avatar-only",
+            size === "md" && "rf-yt-profile-pill--md",
+          )}
+        >
+          <YouTubeProfileAuthSpinner size={size} />
+        </div>
+      </div>
+    );
+  }
+
+  return <YouTubeLoginPill className={className} size={size} />;
 }

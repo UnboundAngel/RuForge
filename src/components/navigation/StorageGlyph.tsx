@@ -10,6 +10,7 @@ export function StorageGlyph({ size = 28, className }: StorageGlyphProps) {
   const stats = useRuforgeStore((s) => s.storageStats);
   const limitGB = useRuforgeStore((s) => s.settings.storageLimitGB);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const openAuthorizeCleanupModal = useRuforgeStore((s) => s.openAuthorizeCleanupModal);
 
   if (!saveToInternal || !stats) return null;
 
@@ -24,9 +25,12 @@ export function StorageGlyph({ size = 28, className }: StorageGlyphProps) {
   const dash = (pct / 100) * c;
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={() => void openAuthorizeCleanupModal()}
+      aria-label={`Library storage ${tip}. Open cleanup.`}
       className={cn(
-        "group/storage relative flex items-center justify-center",
+        "group/storage relative flex items-center justify-center rounded-xl transition-opacity duration-150 opacity-80 hover:opacity-100",
         className,
       )}
     >
@@ -60,6 +64,6 @@ export function StorageGlyph({ size = 28, className }: StorageGlyphProps) {
       <span className="rf-rail-tooltip absolute left-[calc(100%+10px)] top-1/2 z-[280] -translate-y-1/2 opacity-0 group-hover/storage:opacity-100">
         {tip}
       </span>
-    </div>
+    </button>
   );
 }

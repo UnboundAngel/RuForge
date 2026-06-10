@@ -22,6 +22,7 @@ import {
   type CollapsedCelebrate,
 } from "./MusicExploreDownloadCollapsed";
 import { NowPlayingBar } from "./NowPlayingBar";
+import { MusicStorageStrip } from "./MusicStorageStrip";
 import { useMusicPlayback } from "./useMusicPlayback";
 import { AudioHeroStage } from "@/components/player/AudioHeroStage";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
@@ -73,6 +74,15 @@ import { useSponsorBlockPlayback } from "@/hooks/useSponsorBlockPlayback";
 import { recordPlay, getRecentHistory, type PlayHistoryEntry } from "./musicPlayHistory";
 import { readMusicOnlySkip, writeMusicOnlySkip } from "./musicOnlySkipStorage";
 import { debugLog } from "@/debug/debugLog";
+import {
+  onYoutubeAuthSurfaceEnter,
+  onYoutubeAuthSurfaceLeave,
+} from "@/lib/youtubeAuthSurface";
+import { profileNeedsIdentityProbe } from "@/lib/youtubeProfileSession";
+import {
+  profileNeedsAvatarProbe,
+  runMusicExploreProfileProbe,
+} from "@/lib/youtubeProfileProbeRunner";
 
 const MUSIC_EXPLORE_URL = "https://music.youtube.com";
 
@@ -324,6 +334,13 @@ export function MusicShell() {
     hasActiveDownloadJobs ||
     explorePanelDockMode;
 
+  const showMusicStorageStrip =
+    !playingFile
+    && !showExploreStrip
+    && !playerExpanded
+    && !hasActiveDownloadJobs
+    && dockCelebrating == null;
+
   useEffect(() => {
     void fetchEntries();
   }, [fetchEntries]);
@@ -529,6 +546,40 @@ export function MusicShell() {
       setPasteUrl("");
     }
   }, [activeView]);
+
+  const musicExploreProbeOnceRef = useRef(false);
+
+  useEffect(() => {
+    const was = prevExploreWebviewActiveRef.current;
+    prevExploreWebviewActiveRef.current = exploreWebviewActive;
+    if (!was && exploreWebviewActive) {
+      onYoutubeAuthSurfaceEnter();
+    }
+    if (was && !exploreWebviewActive) {
+      onYoutubeAuthSurfaceLeave();
+    }
+  }, [exploreWebviewActive]);
+
+  useEffect(() => {
+    if (!exploreWebviewActive) {
+      musicExploreProbeOnceRef.current = false;
+      return;
+    }
+    if (musicExploreProbeOnceRef.current) return;
+    const { youtubeExplorerProfile, youtubeSessionStatus } =
+      useRuforgeStore.getState();
+    if (
+      !profileNeedsAvatarProbe()
+      && !profileNeedsIdentityProbe(youtubeExplorerProfile, youtubeSessionStatus)
+    ) {
+      return;
+    }
+    musicExploreProbeOnceRef.current = true;
+    const t = window.setTimeout(() => {
+      void runMusicExploreProfileProbe("music-explore-open");
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [exploreWebviewActive]);
 
   useEffect(() => {
     if (!exploreWebviewActive) return;
@@ -1119,12 +1170,14 @@ export function MusicShell() {
         animate={{
           height: playingFile
             ? "var(--music-nowplaying-height)"
-            : "var(--music-bottom-idle)",
+            : showMusicStorageStrip
+              ? "var(--music-storage-strip-height)"
+              : "var(--music-bottom-idle)",
         }}
         transition={{ duration: 0.28, ease: sidebarEase }}
       >
-        <AnimatePresence>
-          {playingFile && (
+        <AnimatePresence mode="wait">
+          {playingFile ? (
             <motion.div
               key="nowplaying"
               className="h-full"
@@ -1158,7 +1211,18 @@ export function MusicShell() {
                 onToggleRightPanel={() => setRightPanelOpen((p) => !p)}
               />
             </motion.div>
-          )}
+          ) : showMusicStorageStrip ? (
+            <motion.div
+              key="storage"
+              className="h-full"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <MusicStorageStrip />
+            </motion.div>
+          ) : null}
         </AnimatePresence>
       </motion.div>
     </div>

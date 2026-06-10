@@ -60,6 +60,19 @@ import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff"
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
+import {
+  applyYoutubeProfileProbe,
+  type YoutubeProfileSessionState,
+} from "./lib/youtubeProfileSession";
+import {
+  onYoutubeAuthSurfaceEnter,
+  onYoutubeAuthSurfaceLeave,
+} from "./lib/youtubeAuthSurface";
+import {
+  runBootProfileProbeIfNeeded,
+  maybeScheduleIdentityFollowupProbe,
+  scheduleExplorerProfileProbeAfterShow,
+} from "./lib/youtubeProfileProbeRunner";
 import { MediaFile } from "./types";
 import {
   Settings,
@@ -92,10 +105,7 @@ import {
   getEmbeddedExplorerWebview,
 } from "./explorerWebviewLifecycle";
 import {
-  EXPLORER_PROFILE_PROBE_INSTALL,
-  EXPLORER_PROFILE_PROBE_SCRIPT,
   EXPLORER_YOUTUBE_PROFILE_EVENT,
-  MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT,
   MUSIC_EXPLORE_WEBVIEW_LABEL,
   type ExplorerYouTubeProfilePayload,
 } from "./explorerProfileScript";
@@ -128,8 +138,6 @@ const WindowControls = ({
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
-  const youtubeProfile = useRuforgeStore((s) => s.youtubeExplorerProfile);
-  const openProfilePage = useRuforgeStore((s) => s.openProfilePage);
 
   useEffect(() => {
     const updateMaximized = async () => {
@@ -184,13 +192,10 @@ const WindowControls = ({
         </TitlebarHoverButton>
       )}
 
-      {navMode !== "music" && youtubeProfile && (
-        <YouTubeProfileChip
-          size="sm"
-          className="w-9 h-10 flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity"
-          onClick={openProfilePage}
-        />
-      )}
+      <YouTubeProfileChip
+        size="sm"
+        className="h-10 flex items-center justify-end shrink-0 self-center"
+      />
 
       <div className="w-px h-4 bg-stone-500/20 mx-1" />
 
@@ -365,7 +370,7 @@ function App() {
   }, []);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
-  const setYoutubeExplorerProfile = useRuforgeStore((s) => s.setYoutubeExplorerProfile);
+  const setYoutubeProfileSession = useRuforgeStore((s) => s.setYoutubeProfileSession);
   const lastExplorerUrlRef = useRef(lastExplorerUrl);
   lastExplorerUrlRef.current = lastExplorerUrl;
   const storageBlocksNewDownloads =
@@ -574,6 +579,10 @@ function App() {
       if (mainContentRef.current) {
         mainContentRef.current.scrollTop = 0;
       }
+      onYoutubeAuthSurfaceEnter();
+    }
+    if (wasOnExplorer && !onExplorer) {
+      onYoutubeAuthSurfaceLeave();
     }
     if (!onExplorer) {
       explorerReloadPendingRef.current = false;
@@ -652,20 +661,9 @@ function App() {
           explorerWebviewCreatingRef.current = false;
           if (!active) return;
           explorerWebviewRef.current = webview;
-          try {
-            await invoke("eval_in_webview", {
-              label: explorerWebviewLabelRef.current,
-              script: EXPLORER_PROFILE_PROBE_INSTALL,
-            });
-            await invoke("eval_in_webview", {
-              label: explorerWebviewLabelRef.current,
-              script: EXPLORER_PROFILE_PROBE_SCRIPT,
-            });
-          } catch {
-            /* probe installs when explorer tab opens */
-          }
           if (activeTab === "explorer") {
             void maybeReloadExplorerOnEnter();
+            scheduleExplorerProfileProbeAfterShow("explorer-open");
           }
         } catch (e) {
           explorerWebviewCreatingRef.current = false;
@@ -682,6 +680,9 @@ function App() {
         webview.setPosition(new LogicalPosition(finalX, finalY)),
         webview.setSize(new LogicalSize(finalW, finalH)),
       ]);
+      if (activeTab === "explorer") {
+        scheduleExplorerProfileProbeAfterShow("explorer-open");
+      }
     };
 
     const syncWebview = async () => {
@@ -1103,95 +1104,37 @@ function App() {
       EXPLORER_YOUTUBE_PROFILE_EVENT,
       (event) => {
         const payload = event.payload;
+        const prev: YoutubeProfileSessionState = {
+          status: useRuforgeStore.getState().youtubeSessionStatus,
+          profile: useRuforgeStore.getState().youtubeExplorerProfile,
+        };
+        const next = applyYoutubeProfileProbe(payload, prev);
+        const changed =
+          next.status !== prev.status
+          || next.profile?.displayName !== prev.profile?.displayName
+          || next.profile?.avatarUrl !== prev.profile?.avatarUrl
+          || next.profile?.channelHandle !== prev.profile?.channelHandle;
+        if (changed) {
+          setYoutubeProfileSession(next);
+        }
         if (
-          payload &&
-          typeof payload.displayName === "string" &&
-          payload.displayName.trim()
+          next.status === "signed-in"
+          && next.profile?.avatarUrl
+          && !next.profile?.channelHandle
+          && !payload?.channelHandle
         ) {
-          const prev = useRuforgeStore.getState().youtubeExplorerProfile;
-          const rawName = payload.displayName.trim();
-          const displayName =
-            rawName === "Your channel"
-            && prev?.displayName
-            && prev.displayName !== "Your channel"
-              ? prev.displayName
-              : rawName;
-          const incomingAvatar =
-            typeof payload.avatarUrl === "string" && payload.avatarUrl.trim()
-              ? payload.avatarUrl.trim()
-              : payload.avatarUrl === null
-                ? null
-                : undefined;
-          let avatarUrl: string | null;
-          if (incomingAvatar) {
-            avatarUrl = incomingAvatar;
-          } else if (incomingAvatar === null) {
-            avatarUrl =
-              prev?.avatarUrl && (rawName === "Your channel" || rawName === prev.displayName)
-                ? prev.avatarUrl
-                : null;
-          } else {
-            avatarUrl =
-              prev?.avatarUrl && (rawName === "Your channel" || rawName === prev.displayName)
-                ? prev.avatarUrl
-                : null;
-          }
-          setYoutubeExplorerProfile({ displayName, avatarUrl });
-        } else {
-          setYoutubeExplorerProfile(null);
+          maybeScheduleIdentityFollowupProbe();
         }
       },
     );
     return () => { unlisten.then((f) => f()); };
-  }, [setYoutubeExplorerProfile]);
+  }, [setYoutubeProfileSession]);
 
   useEffect(() => {
     if (postInstall) return;
-    let alive = true;
-    const probe = async () => {
-      try {
-        await invoke("eval_in_webview", {
-          label: explorerWebviewLabelRef.current,
-          script: EXPLORER_PROFILE_PROBE_SCRIPT,
-        });
-      } catch {
-        /* Explorer webview not mounted yet */
-      }
-      if (navMode !== "music") return;
-      try {
-        await invoke("eval_in_webview", {
-          label: MUSIC_EXPLORE_WEBVIEW_LABEL,
-          script: MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT,
-        });
-      } catch {
-        /* Music explore webview not mounted yet */
-      }
-    };
-    void probe();
-    const id = window.setInterval(() => {
-      if (alive) void probe();
-    }, 5000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, [postInstall, navMode, activeTab]);
-
-  useEffect(() => {
-    if (activeTab !== "explorer" || postInstall) return;
-    const label = explorerWebviewLabelRef.current;
-    const run = async () => {
-      try {
-        await invoke("eval_in_webview", { label, script: EXPLORER_PROFILE_PROBE_INSTALL });
-        await invoke("eval_in_webview", { label, script: EXPLORER_PROFILE_PROBE_SCRIPT });
-      } catch {
-        /* explorer webview not mounted yet */
-      }
-    };
-    void run();
-    const id = window.setInterval(() => void run(), 2000);
-    return () => clearInterval(id);
-  }, [activeTab, postInstall]);
+    const status = useRuforgeStore.getState().youtubeSessionStatus;
+    void runBootProfileProbeIfNeeded(status);
+  }, [postInstall]);
 
   useEffect(() => {
     if (navMode === "music" || postInstall) return;

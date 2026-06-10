@@ -7,7 +7,6 @@ import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { readFurthestPlaybackSec } from "@/playbackStorage";
 import type { MediaFile } from "@/types";
-import { MusicProfileChip } from "./MusicProfileChip";
 import { MusicHomeSkeleton } from "./MusicHomeSkeleton";
 import {
   dedupeMusicTracks,
@@ -656,7 +655,6 @@ export function MusicHomeView({
           </div>
         </div>
 
-        <MusicProfileChip className="shrink-0 flex items-center" />
       </header>
 
       {filteredTracks.length === 0 ? (
