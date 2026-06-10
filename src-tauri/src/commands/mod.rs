@@ -7,6 +7,7 @@ pub mod ffprobe;
 pub mod gallery;
 pub mod media;
 pub mod musicmeta;
+pub mod music_listen_log;
 pub mod recently_deleted;
 pub mod migrate;
 pub mod notify_overlay;
