@@ -2465,6 +2465,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "netscape_cookies"
+version = "0.1.0"
+dependencies = [
+ "cookie",
+]
+
+[[package]]
 name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3551,10 +3558,12 @@ version = "0.1.9"
 dependencies = [
  "anyhow",
  "chrono",
+ "cookie",
  "dirs 6.0.0",
  "futures-util",
  "lofty",
  "log",
+ "netscape_cookies",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

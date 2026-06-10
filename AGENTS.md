@@ -1,4 +1,4 @@
-# RuForge: notes for IDE agents (Cursor / automation)
+﻿# RuForge: notes for IDE agents (Cursor / automation)
 
 Concise context for agents working **inside this repo's IDE workspace**. This is **not** a full architecture audit; use it as an onboarding + guardrails doc.
 
@@ -45,7 +45,7 @@ ships to users.
 - **In-app explorer webview:** primarily for **cookie / session flows** that yt-dlp needs (age-restricted, members-only, etc.). It is **not** positioned as a full in-app browser for casual watching. A **uBlock** payload may exist under `src-tauri` for this webview; treat it as **experimental / not relied upon** until it is verified working end-to-end.
 - **Explorer tab (where controls may live, mandatory):** The embedded explorer **child webview paints on top of** the main-column DOM. Anything rendered inside the Explorer tab body (bulges, `absolute`/`fixed` nodes under `flex-1`, etc.) can be **covered and unclickable**. **Do not** put explorer actions on tab bulges or in the content column.
   - **Only valid chrome:** the **top title band** (`h-10`, `z-[100]`), same layer as `WindowControls` in `App.tsx`.
-  - **Left cluster:** back / forward / reload via `ExplorerTitlebarNav`, **`fixed top-0`**, flush at the sidebar→content seam (`left: 80px` collapsed / `240px` expanded; `transition-[left]` must match sidebar width animation). Wired from `App.tsx`, not from inside the explorer panel.
+  - **Left cluster:** back / forward / reload via `ExplorerTitlebarNav`, **`fixed top-0`**, flush at the sidebarâ†’content seam (`left: 80px` collapsed / `240px` expanded; `transition-[left]` must match sidebar width animation). Wired from `App.tsx`, not from inside the explorer panel.
   - **Right cluster:** `WindowControls` (`fixed top-0 right-0`): download queue, mini player, then minimize / maximize / close.
 
 **How to advise:** ground recommendations in **what RuForge already is** and what is **already solved well elsewhere** (generic browsers, dedicated players, Plex-like libraries). Avoid **feature creep** and "compete with X" pivots unless the maintainer explicitly widens scope. Longer roadmap, priorities, and out-of-scope list live in the **planning doc** linked below. Prefer that over inventing new product direction in chat.
@@ -250,7 +250,7 @@ defined in `global.css` (desktop) or `website/src/styles/global.css`
 - **`MiniPlayer.tsx`:** Own webview. **Duplicated playback UI state** (current file, progress, hover, etc.) synchronized via Tauri events + some `localStorage` keys; do not expect the main window store to appear here.
 - **Heavy local `useState` in `PlayerView`:** Normal for playback UI (scrubber, menus, transient controls); not a "migration gap" by itself.
 - **Custom subtitles (`useSubtitleCueOverlay`):** Renders VTT cues over `<video>` (native tracks stay hidden); vertical drag persists in `localStorage`. **Layout clamps** against the scrub strip ref + player shell so captions never sit under the higher-`z` progress bar (where pointer events would trap the drag handle). Wired from **`PlayerView.tsx`** and **`MiniPlayer.tsx`**.
-- **Music mode (`navMode === "music"`):** Full shell swap in **`App.tsx`** → **`MusicShell`** (Home/Explore/Library, chapters sidebar, **`NowPlayingBar`**). Playback in **`useMusicPlayback`** (single `<audio>`, store-backed queue). Tag metadata via **`lofty`** in **`gallery.rs`**; UI under **`src/components/music/`**. Normal downloader/media/player paths unchanged in default/movie modes.
+- **Music mode (`navMode === "music"`):** Full shell swap in **`App.tsx`** â†’ **`MusicShell`** (Home/Explore/Library, chapters sidebar, **`NowPlayingBar`**). Playback in **`useMusicPlayback`** (single `<audio>`, store-backed queue). Tag metadata via **`lofty`** in **`gallery.rs`**; UI under **`src/components/music/`**. Normal downloader/media/player paths unchanged in default/movie modes.
 
 ## Zustand migration: are we "done"?
 
@@ -264,9 +264,9 @@ defined in `global.css` (desktop) or `website/src/styles/global.css`
 
 These should match for releases and for sane updater behavior:
 
-- `package.json` → `version`
-- `src-tauri/tauri.conf.json` → `version`
-- `src-tauri/Cargo.toml` → `[package] version` (and `Cargo.lock` updates when the crate version changes)
+- `package.json` â†’ `version`
+- `src-tauri/tauri.conf.json` â†’ `version`
+- `src-tauri/Cargo.toml` â†’ `[package] version` (and `Cargo.lock` updates when the crate version changes)
 
 A past mismatch was **`Cargo.toml` behind the JS/Tauri app version**. Fix on every bump.
 
@@ -295,7 +295,7 @@ honor faded dividers, fixes are non-red. Full detail in the authoring doc.
 
 ## Auto-updater (Tauri plugin-updater)
 
-- Config: `src-tauri/tauri.conf.json` → `plugins.updater` (`endpoints`, `pubkey`). Bundles: `"createUpdaterArtifacts": true`.
+- Config: `src-tauri/tauri.conf.json` â†’ `plugins.updater` (`endpoints`, `pubkey`). Bundles: `"createUpdaterArtifacts": true`.
 - Permissions: `src-tauri/capabilities/default.json` includes `updater:allow-check` and `updater:allow-download-and-install`.
 - **Runtime:** `src/App.tsx` calls `check()` on startup; in-app update UI uses `downloadAndInstall()` from the returned `Update` object. **Structured release copy** for agents lives in **`docs/changes.html`** (internal HTML); user-facing strings also come from **`updater.json` `notes`**, GitHub Releases, and the in-app changelog UI. Keep them consistent when you ship.
 - **Where "what's in this update" comes from (not hardcoded in the old build):** On each `check()`, the updater plugin fetches **`updater.json`** from `plugins.updater.endpoints` (e.g. raw `main` on GitHub). The **`version`** and **`notes`** fields describe the **available** update. Users on an older build see whatever **`notes`** says **at check time**. You do **not** need to ship new frontend code just to change that copy. The GitHub **Release description** is **not** read automatically; mirror anything you want users to see into **`updater.json` `notes`** (or keep Release + `notes` in sync by hand).
@@ -377,6 +377,18 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.10 (unreleased)
 
+- **Music stats (visual)**: Anti-pattern pass: no list-in-a-box cards, hero backdrop only, podium cover cards (#1 larger), compact spaced rows, artist avatar scroll, dot-separated metadata, play on art hover. `MusicStatsView.tsx`.
+
+- **Storage glyph (fix)**: Sidebar storage ring opens Authorize Cleanup on click (same as Music storage strip). `StorageGlyph.tsx`.
+
+- **Music storage strip**: Bottom library storage bar on Home/Library (used GB, cap progress when internal vault); hides during playback, Explore bar, active downloads, or expanded player; tap opens cleanup when on internal vault. `MusicStorageStrip.tsx`, `MusicShell.tsx`.
+
+- **YouTube profile @handle (fix)**: Probe keeps polling after avatar-only emit, briefly opens account menu on Explorer to read real @handle from menu DOM/JSON; identity follow-up when handle still missing; hover shows @handle not "Your channel". `explorerProfileScript.ts`, `youtubeProfileProbeRunner.ts`, `youtubeProfileSession.ts`, `App.tsx`.
+
+- **YouTube profile handle (fix)**: Handle probe scoped to topbar/account menu only (removed full-page ytInitialData walk that grabbed first feed channel e.g. @JoeBartGames); DOM @ links limited to topbar chrome. `explorerProfileScript.ts`, `youtubeProfileSession.ts`.
+
+- **YouTube titlebar profile chip**: Log in pill when signed out; avatar-ratio spinner on Explorer or Music Explore until PFP loads; session cached in localStorage; chip lives in titlebar only (all modes); hover expands to @handle; Log in opens Explorer (no profile page navigation). `YouTubeProfileChip.tsx`, `YouTubeLoginPill.tsx`, `youtubeProfileSession.ts`, `youtubeProfileProbeRunner.ts`, `explorerProfileScript.ts`, `App.tsx`.
+
 ## Release ritual
 
 **Why this exists:** "Push and commit everything" is ambiguous to an agent. The failure mode (observed): Chad invented a feature branch, committed there, and stranded `updater.json` off `main`. Then produced a flawless postmortem of the problem it had just caused. Chad's knowledge was never the gap. The gap was no defined, ordered, verified sequence. This is that sequence.
@@ -387,7 +399,7 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 **Hard rule (branching):** RuForge is a solo-dev repo. **All release commits go directly to `main`.** Do **not** create, switch to, or commit on any branch for a release. If you are not on `main`, stop and say so. Do not "fix" it with git surgery on a possibly-dirty tree; ask Angel.
 
-1. **Drain the Shipped log → version bump decision.** Read the entire `### vX.Y.Z (unreleased)` block. Decide PATCH vs MINOR from its contents (behavior change = at least PATCH; new feature / new persisted setting / new command = MINOR). State the chosen version and why, one line.
+1. **Drain the Shipped log â†’ version bump decision.** Read the entire `### vX.Y.Z (unreleased)` block. Decide PATCH vs MINOR from its contents (behavior change = at least PATCH; new feature / new persisted setting / new command = MINOR). State the chosen version and why, one line.
 2. **Bump all three version files together:** `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version`. A mismatch here is a known past failure. Confirm all three match.
 3. **Prep `updater.json` notes (agent, before build).** Write structured JSON in `notes`: markdown **teaser** (header + three bullets for the pre-download card; full markdown supported), plus `additions` and `fixes` arrays for post-install. Set `version`, `url` (`.../releases/download/v<semver>/RuForge_<semver>_x64-setup.exe`), leave `signature` empty until step 5.
 4. **Signed build (Angel only).** Angel runs `Build-signed-windows.bat` or `npm run build:signed`. Agent then reads NSIS `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/` (do not ask Angel to paste base64 unless the file is missing).
@@ -407,7 +419,7 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
    **WinGet manifest auto-update.** Once the WinGet Releaser GitHub Action is set up (one-time install per `https://github.com/vedantmgoyal9/winget-releaser`), it watches for new GitHub Releases on `UnboundAngel/RuForge` and automatically opens the winget manifest update PR against `microsoft/winget-pkgs` using Komac. No manual `wingetcreate` invocation needed per release. If the action is not yet installed, set it up before the next release. If a winget PR fails to auto-open for a release, that is a release blocker for the NEXT release, not a hard block on the current one.
 
-8. **Drain Shipped log → graph surfaces AND roll STATE.md (scoped, this
+8. **Drain Shipped log â†’ graph surfaces AND roll STATE.md (scoped, this
    step only).**
    a. Append the now-released changes into
       `docs/versions/version-<semver>.json` and the
@@ -442,8 +454,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
    If any check fails the release FAILED. Say exactly which check failed,
    show old vs expected version, and stop. "I committed it" / "I pushed it"
    is NOT done. Live, parsed, and version-matched is the only definition of
-   done. (Same principle as the session lesson: code present ≠ running on
-   the path that matters. Committed ≠ live on `main`.)
+   done. (Same principle as the session lesson: code present â‰  running on
+   the path that matters. Committed â‰  live on `main`.)
 10. **Report.** One block: chosen version + rationale, pushed commit hash, GitHub Release URL, the live `version` string you actually fetched in step 9, and confirmation the Release asset matches `updater.json` `url` (`.sig` only in `updater.json`).
 
 **If any step fails, stop at that step and report the failure plainly. Do not continue and do not claim partial success as success.**

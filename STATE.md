@@ -8,12 +8,12 @@
 
 Shipping version: 0.1.10 (unreleased)
 Last shipped to users: 0.1.9
-Last updated: 2026-06-07 (release 0.1.9)
+Last updated: 2026-06-09 (Music storage strip)
 Status: in progress
 
 ## Now
 
-0.1.10 cycle open on main. Last user release is 0.1.9 (Music mode, library buckets, export/delete, radial nav, website/mobile). Open P0 is empty. Next priorities unchanged: storage cap before enqueue (#10), downloader UI polish (#12), main-app nav restructure (RuForge | Movies & Shows | Music).
+0.1.10 cycle open on main. Music mode bottom storage strip (library used GB, cap bar on internal vault; hides for playback, Explore bar, downloads). YouTube titlebar profile chip with real @handle probe. Last user release is 0.1.9. Open P0 empty. Next: storage cap (#10), downloader UI polish (#12), nav restructure.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths

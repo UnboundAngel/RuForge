@@ -3,8 +3,6 @@ import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
 import { StorageGlyph } from "@/components/navigation/StorageGlyph";
-import { YouTubeProfileChip } from "@/components/music/YouTubeProfileChip";
-import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { ActiveTab } from "@/store/types";
 import type { NavMode } from "@/store/types";
 
@@ -34,9 +32,6 @@ export function AppSidebarRail({
   disabled,
   onSelectTab,
 }: AppSidebarRailProps) {
-  const youtubeProfile = useRuforgeStore((s) => s.youtubeExplorerProfile);
-  const openProfilePage = useRuforgeStore((s) => s.openProfilePage);
-
   return (
     <div
       className={cn(
@@ -86,13 +81,6 @@ export function AppSidebarRail({
       </nav>
 
       <div className="flex shrink-0 flex-col items-center gap-3 pb-4">
-        {navMode !== "music" && youtubeProfile && (
-          <YouTubeProfileChip
-            size="sm"
-            onClick={openProfilePage}
-            className="opacity-80 hover:opacity-100 transition-opacity"
-          />
-        )}
         <StorageGlyph />
       </div>
     </div>

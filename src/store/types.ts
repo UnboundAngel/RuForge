@@ -42,7 +42,12 @@ export type MusicDetail =
 export type YouTubeExplorerProfile = {
   displayName: string;
   avatarUrl: string | null;
+  /** @handle when the probe can read it from channel URLs. */
+  channelHandle?: string | null;
 };
+
+/** Titlebar chip: pending (hydrated cache), signed-in, or signed-out. */
+export type YoutubeSessionStatus = "pending" | "signed-in" | "signed-out";
 
 export type SettingsTab =
   | "general"

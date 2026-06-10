@@ -1,13 +1,16 @@
-/** Probe embedded Explorer for signed-in YouTube account; emits `explorer-youtube-profile`. */
+﻿/** Probe embedded Explorer for signed-in YouTube account; emits `explorer-youtube-profile`. */
 export const EXPLORER_YOUTUBE_PROFILE_EVENT = "explorer-youtube-profile";
 
 /** Label for the embedded music.youtube.com child webview created by MusicShell. */
 export const MUSIC_EXPLORE_WEBVIEW_LABEL = "music-explore-view";
 
+/** Hidden off-screen webview for boot cookie/profile probe only (never the visible Explorer surface). */
+export const EXPLORER_SESSION_PROBE_WEBVIEW_LABEL = "explorer-session-probe";
+
 export type ExplorerYouTubeProfilePayload = {
   displayName: string;
-  /** Omitted when the probe has no avatar — listener must not clear an existing URL. */
   avatarUrl?: string | null;
+  channelHandle?: string | null;
 } | null;
 
 const PROFILE_EVENT = JSON.stringify(EXPLORER_YOUTUBE_PROFILE_EVENT);
@@ -40,110 +43,409 @@ function tauriEmitHelperCode(): string {
   })();`;
 }
 
-/** youtube.com topbar avatar button (visible when signed in). */
-function profileDomFromYouTubeTopbarJs(): string {
+function avatarUrlProbeHelper(): string {
   return `
-        var avatarImg = null;
-        var avatarBtn = null;
-        try {
-          avatarBtn = document.querySelector(
-            "#avatar-btn, ytd-topbar-menu-button-renderer #avatar-btn, ytd-topbar-menu-button-renderer button, button[aria-label*='Google Account'], button[aria-label*='Account menu']"
-          );
-          avatarImg = document.querySelector(
-            "#avatar-btn img, ytd-topbar-menu-button-renderer #avatar-btn img, ytd-topbar-menu-button-renderer img.yt-img-shadow, ytd-topbar-menu-button-renderer .yt-spec-avatar-shape img, .yt-spec-avatar-shape img"
-          );
-        } catch (e) {}
-        var name = null;
-        try {
-          if (avatarBtn) {
-            var label = avatarBtn.getAttribute("aria-label") || "";
-            var m = label.match(/Google Account:\\s*(.+)/i);
-            if (m && m[1]) name = m[1].trim();
-            else if (label && !/^(Account menu|Google Account)$/i.test(label.trim())) {
-              name = label.trim();
-            }
-          }
-        } catch (e2) {}
-        var avatarUrl = avatarImg && avatarImg.src ? avatarImg.src : null;
-        return { name: name, avatarUrl: avatarUrl };
+    function rfSanitizeAvatarUrl(raw) {
+      if (!raw || typeof raw !== "string") return null;
+      var u = String(raw).trim();
+      if (!u) return null;
+      var lower = u.toLowerCase();
+      if (lower.indexOf("blob:") === 0 || lower.indexOf("about:") === 0 || lower.indexOf("javascript:") === 0) return null;
+      if (lower.indexOf("data:") === 0) return null;
+      if (u.indexOf("//") === 0) u = "https:" + u;
+      if (u.indexOf("http://") !== 0 && u.indexOf("https://") !== 0) return null;
+      return u;
+    }
+    function rfThumbUrl(thumbs) {
+      if (!thumbs || !thumbs.length) return null;
+      var last = thumbs[thumbs.length - 1];
+      return rfSanitizeAvatarUrl(last && last.url);
+    }
+    function rfImgAvatarUrl(img) {
+      if (!img) return null;
+      try {
+        var srcset = img.getAttribute("srcset");
+        if (srcset) {
+          var parts = srcset.split(",");
+          var pick = parts[parts.length - 1].trim().split(/\\s+/)[0];
+          var fromSet = rfSanitizeAvatarUrl(pick);
+          if (fromSet) return fromSet;
+        }
+      } catch (e) {}
+      try {
+        return rfSanitizeAvatarUrl(img.currentSrc || img.src || img.getAttribute("src"));
+      } catch (e2) {}
+      return null;
+    }
   `;
 }
 
-/** Shared ytInitialData topbar scrape (youtube.com + music.youtube.com). */
-function profileTopbarFromYtInitialDataJs(): string {
+function profileNameProbeHelper(): string {
   return `
-        var name = null;
-        var avatarUrl = null;
-        var data = window.ytInitialData;
-        var tb = data && data.response && data.response.topbar && data.response.topbar.desktopTopbarRenderer;
-        if (tb) {
-          var avatarBtn = tb.avatarButton && tb.avatarButton.avatarButtonRenderer;
-          if (avatarBtn && avatarBtn.image && avatarBtn.image.thumbnails && avatarBtn.image.thumbnails.length) {
-            avatarUrl = avatarBtn.image.thumbnails[avatarBtn.image.thumbnails.length - 1].url;
+    function rfIsGenericProfileName(n) {
+      if (!n || typeof n !== "string") return true;
+      var lower = String(n).trim().toLowerCase();
+      if (!lower) return true;
+      if (lower === "your channel" || lower === "youtube" || lower === "account") return true;
+      if (lower.indexOf("avatar") >= 0 || lower.indexOf("profile picture") >= 0) return true;
+      if (lower.indexOf("channel avatar") >= 0) return true;
+      return false;
+    }
+    function rfNormalizeProfileName(raw) {
+      if (!raw || typeof raw !== "string") return null;
+      var n = String(raw).trim();
+      if (rfIsGenericProfileName(n)) return null;
+      var colon = n.indexOf(":");
+      if (colon > 0 && colon < n.length - 1) {
+        var tail = n.slice(colon + 1).trim();
+        if (tail && !rfIsGenericProfileName(tail)) return tail;
+      }
+      return n;
+    }
+    function rfNormalizeHandle(raw) {
+      if (!raw || typeof raw !== "string") return null;
+      var t = String(raw).trim().replace(/^\\/+/, "");
+      var at = t.indexOf("@");
+      if (at >= 0) t = t.slice(at);
+      return rfHandleFromText(t);
+    }
+    function rfHandleFromHref(href) {
+      if (!href || typeof href !== "string") return null;
+      var m = href.match(/@([A-Za-z0-9._-]{1,30})/);
+      if (m) return "@" + m[1];
+      return null;
+    }
+    function rfWalkForAccountName(obj, depth, seen) {
+      if (!obj || depth > 12) return null;
+      if (typeof obj !== "object") return null;
+      try {
+        if (!seen) seen = new Set();
+        if (seen.has(obj)) return null;
+        seen.add(obj);
+      } catch (e) {}
+      if (obj.accountName && obj.accountName.simpleText) {
+        var a = rfNormalizeProfileName(obj.accountName.simpleText);
+        if (a) return a;
+      }
+      if (obj.channelName && obj.channelName.simpleText) {
+        var c = rfNormalizeProfileName(obj.channelName.simpleText);
+        if (c) return c;
+      }
+      var keys = Object.keys(obj);
+      for (var i = 0; i < keys.length; i++) {
+        var v = obj[keys[i]];
+        if (v && typeof v === "object") {
+          var found = rfWalkForAccountName(v, depth + 1, seen);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    function rfMusicProfileName(avatarBtn) {
+      var fromAria = null;
+      try {
+        if (avatarBtn) {
+          fromAria = rfNormalizeProfileName(avatarBtn.getAttribute("aria-label"))
+            || rfNormalizeProfileName(avatarBtn.getAttribute("title"));
+        }
+      } catch (e) {}
+      if (fromAria) return fromAria;
+      try {
+        var walked = rfWalkForAccountName(window.ytInitialData, 0, null);
+        if (walked) return walked;
+      } catch (e2) {}
+      try {
+        var link = rfDeepQuery(
+          'ytmusic-nav-bar a[href*="/@"], ytmusic-nav-bar a[href*="/channel/"], a[href*="music.youtube.com/@"], ytmusic-setting-channel a'
+        );
+        if (link) {
+          var h = rfHandleFromHref(link.getAttribute("href") || "");
+          if (h) return h;
+          var lt = rfNormalizeProfileName(link.textContent);
+          if (lt) return lt;
+        }
+      } catch (e3) {}
+      return null;
+    }
+    function rfExplorerAccountHandle(item) {
+      if (!item) return null;
+      try {
+        var ep = item.serviceEndpoint || item.navigationEndpoint;
+        var be = ep && ep.browseEndpoint;
+        if (be && be.canonicalBaseUrl) {
+          return rfHandleFromHref(be.canonicalBaseUrl);
+        }
+      } catch (e) {}
+      return null;
+    }
+    function rfHandleFromText(raw) {
+      if (!raw || typeof raw !== "string") return null;
+      var t = String(raw).trim();
+      if (t.indexOf("@") !== 0 || t.length < 3) return null;
+      if (!/^@[A-Za-z0-9._-]{1,30}$/.test(t)) return null;
+      return t;
+    }
+    function rfSlugHandle(raw) {
+      if (!raw || typeof raw !== "string") return null;
+      var t = String(raw).trim();
+      if (/^[A-Za-z0-9._-]{3,30}$/.test(t)) return "@" + t;
+      return null;
+    }
+    function rfTextFromFormatted(obj) {
+      if (!obj || typeof obj !== "object") return null;
+      if (obj.simpleText && typeof obj.simpleText === "string") {
+        var st = String(obj.simpleText).trim();
+        if (st) return st;
+      }
+      if (obj.runs && obj.runs.length) {
+        var parts = [];
+        for (var ri = 0; ri < obj.runs.length; ri++) {
+          if (obj.runs[ri] && obj.runs[ri].text) {
+            parts.push(String(obj.runs[ri].text));
           }
-          var entry = tb.interactiveAccountEntryPointRenderer;
-          if (entry && entry.buttonRenderer && entry.buttonRenderer.avatar && entry.buttonRenderer.avatar.avatarRenderer) {
-            var avR = entry.buttonRenderer.avatar.avatarRenderer;
-            if (avR.image && avR.image.thumbnails && avR.image.thumbnails.length) {
-              avatarUrl = avR.image.thumbnails[avR.image.thumbnails.length - 1].url;
-            }
-          }
-          var menu = tb.accountMenu && tb.accountMenu.accountMenuRenderer;
-          if (menu && menu.header && menu.header.accountSectionListRenderer) {
-            var contents = menu.header.accountSectionListRenderer.contents;
-            if (contents && contents[0]) {
-              var section = contents[0].accountSection && contents[0].accountSection.accountItemSectionRenderer;
-              if (section && section.contents && section.contents[0]) {
-                var item = section.contents[0].accountItem && section.contents[0].accountItem.accountItemRenderer;
-                if (item) {
-                  if (item.accountName && item.accountName.simpleText) name = item.accountName.simpleText;
-                  if (item.accountPhoto && item.accountPhoto.thumbnails && item.accountPhoto.thumbnails.length) {
-                    avatarUrl = item.accountPhoto.thumbnails[item.accountPhoto.thumbnails.length - 1].url;
-                  }
-                }
+        }
+        var joined = parts.join("").trim();
+        if (joined) return joined;
+      }
+      return null;
+    }
+    function rfExtractAccountItem(item) {
+      if (!item) return { name: null, channelHandle: null, avatarUrl: null };
+      var name = null;
+      var channelHandle = null;
+      var avatarUrl = null;
+      try {
+        var nameText = rfTextFromFormatted(item.accountName);
+        if (nameText) {
+          name = rfNormalizeProfileName(nameText) || name;
+        }
+        var bylineText = rfTextFromFormatted(item.accountByline);
+        if (bylineText) {
+          channelHandle = rfNormalizeHandle(bylineText) || rfHandleFromText(bylineText) || rfSlugHandle(bylineText) || channelHandle;
+        }
+        var handleText = rfTextFromFormatted(item.channelHandle);
+        if (handleText) {
+          channelHandle = rfNormalizeHandle(handleText) || rfHandleFromText(handleText) || rfSlugHandle(handleText) || channelHandle;
+        }
+        channelHandle = rfExplorerAccountHandle(item) || channelHandle;
+        if (item.accountPhoto && item.accountPhoto.thumbnails) {
+          avatarUrl = rfThumbUrl(item.accountPhoto.thumbnails) || avatarUrl;
+        }
+      } catch (e) {}
+      return { name: name, channelHandle: channelHandle, avatarUrl: avatarUrl };
+    }
+    function rfScanAccountMenu(tb) {
+      var name = null;
+      var channelHandle = null;
+      var avatarUrl = null;
+      try {
+        var menu = tb && tb.accountMenu && tb.accountMenu.accountMenuRenderer;
+        if (!menu) return { name: name, channelHandle: channelHandle, avatarUrl: avatarUrl };
+        var header = menu.header && menu.header.accountSectionListRenderer;
+        if (header && header.contents) {
+          for (var hi = 0; hi < header.contents.length; hi++) {
+            var section = header.contents[hi].accountSection
+              && header.contents[hi].accountSection.accountItemSectionRenderer;
+            if (!section || !section.contents) continue;
+            for (var si = 0; si < section.contents.length; si++) {
+              var item = section.contents[si].accountItem
+                && section.contents[si].accountItem.accountItemRenderer;
+              var picked = rfExtractAccountItem(item);
+              if (picked.channelHandle) {
+                channelHandle = picked.channelHandle;
+                name = picked.name || name;
+                avatarUrl = picked.avatarUrl || avatarUrl;
+              } else {
+                name = picked.name || name;
+                avatarUrl = picked.avatarUrl || avatarUrl;
               }
             }
           }
         }
-        return { name: name, avatarUrl: avatarUrl };
+      } catch (e) {}
+      return { name: name, channelHandle: channelHandle, avatarUrl: avatarUrl };
+    }
+    function rfWalkForChannelHandle(obj, depth, seen) {
+      if (!obj || depth > 14) return null;
+      if (typeof obj === "string") {
+        return rfNormalizeHandle(obj);
+      }
+      if (typeof obj !== "object") return null;
+      try {
+        if (!seen) seen = new Set();
+        if (seen.has(obj)) return null;
+        seen.add(obj);
+      } catch (e) {}
+      var keys = Object.keys(obj);
+      for (var i = 0; i < keys.length; i++) {
+        var v = obj[keys[i]];
+        if (typeof v === "string") {
+          var hit = rfNormalizeHandle(v);
+          if (hit) return hit;
+        } else if (v && typeof v === "object") {
+          var found = rfWalkForChannelHandle(v, depth + 1, seen);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    function rfExplorerProfileFromDom() {
+      var name = null;
+      var channelHandle = null;
+      try {
+        var roots = document.querySelectorAll(
+          "ytd-topbar-menu-button-renderer, #avatar-btn, ytd-active-account-participant-renderer, ytd-multi-page-menu-renderer, ytd-account-menu"
+        );
+        for (var r = 0; r < roots.length; r++) {
+          var strings = roots[r].querySelectorAll("yt-formatted-string");
+          for (var i = 0; i < strings.length; i++) {
+            var tx = (strings[i].textContent || "").trim();
+            var asHandle = rfHandleFromText(tx) || rfNormalizeHandle(tx);
+            if (asHandle) {
+              channelHandle = asHandle;
+              continue;
+            }
+            if (!rfIsGenericProfileName(tx) && !name && tx.length > 1 && tx.length < 80) {
+              name = tx;
+            }
+          }
+          var scopedLinks = roots[r].querySelectorAll(
+            'a[href*="/@"], a[href*="youtube.com/@"], a[href*="music.youtube.com/@"]'
+          );
+          for (var j = 0; j < scopedLinks.length; j++) {
+            var h = rfHandleFromHref(scopedLinks[j].getAttribute("href") || "");
+            if (h) {
+              channelHandle = h;
+              break;
+            }
+          }
+          if (channelHandle) break;
+        }
+      } catch (e) {}
+      return { name: name, channelHandle: channelHandle };
+    }
+    function rfHandleFromTopbarJson(tb) {
+      if (!tb) return { channelHandle: null, source: null };
+      var menuPick = rfScanAccountMenu(tb);
+      if (menuPick.channelHandle) {
+        return { channelHandle: menuPick.channelHandle, source: "account-menu" };
+      }
+      var avatarBtn = tb.avatarButton && tb.avatarButton.avatarButtonRenderer;
+      if (avatarBtn) {
+        var fromAvatar = rfExplorerAccountHandle(avatarBtn);
+        if (fromAvatar) return { channelHandle: fromAvatar, source: "avatar-endpoint" };
+      }
+      var entry = tb.interactiveAccountEntryPointRenderer;
+      if (entry && entry.buttonRenderer) {
+        var fromEntry = rfExplorerAccountHandle(entry.buttonRenderer);
+        if (fromEntry) return { channelHandle: fromEntry, source: "entry-endpoint" };
+      }
+      var menu = tb.accountMenu && tb.accountMenu.accountMenuRenderer;
+      if (menu) {
+        var walked = rfWalkForChannelHandle(menu, 0, null);
+        if (walked) return { channelHandle: walked, source: "account-menu-walk" };
+      }
+      var topbarWalk = rfWalkForChannelHandle(tb, 0, null);
+      if (topbarWalk) return { channelHandle: topbarWalk, source: "topbar-walk" };
+      return { channelHandle: null, source: null };
+    }
+    function rfHasIdentity(name, channelHandle) {
+      if (channelHandle) return true;
+      return !!(name && !rfIsGenericProfileName(name));
+    }
+  `;
+}
+
+function deepQueryHelper(): string {
+  return `
+    function rfDeepQuery(sel, root) {
+      root = root || document;
+      try {
+        var direct = root.querySelector(sel);
+        if (direct) return direct;
+      } catch (e) {}
+      var nodes;
+      try { nodes = root.querySelectorAll("*"); } catch (e2) { return null; }
+      for (var i = 0; i < nodes.length; i++) {
+        var sr = nodes[i].shadowRoot;
+        if (!sr) continue;
+        var found = rfDeepQuery(sel, sr);
+        if (found) return found;
+      }
+      return null;
+    }
   `;
 }
 
 function musicProfileProbeInner(): string {
   return `
+    ${avatarUrlProbeHelper()}
+    ${deepQueryHelper()}
+    ${profileNameProbeHelper()}
     try {
       if (!__rf_tauri_emit) return;
-      var emit = function(payload) {
-        __rf_tauri_emit(${PROFILE_EVENT}, payload);
-      };
-      var scrapeTopbar = function() {
-        return (function() {${profileTopbarFromYtInitialDataJs()}})();
-      };
       var avatarImg = null;
       var avatarBtn = null;
       try {
-        avatarBtn = document.querySelector(
-          "ytmusic-nav-bar #avatar-btn, #avatar-btn, ytmusic-app #avatar-btn"
+        avatarBtn = rfDeepQuery(
+          "#avatar-btn, ytmusic-nav-bar #avatar-btn, ytmusic-app #avatar-btn"
         );
-        avatarImg = document.querySelector(
-          "ytmusic-nav-bar #avatar-btn img, #avatar-btn img, ytmusic-app #avatar-btn img, .yt-spec-avatar-shape img"
+        avatarImg = rfDeepQuery(
+          "#avatar-btn img, ytmusic-nav-bar #avatar-btn img, .yt-spec-avatar-shape img, #avatar img"
         );
-      } catch (e) {}
-      if (avatarImg && avatarImg.src) {
-        var name = "";
-        try {
-          if (avatarBtn && avatarBtn.getAttribute("aria-label")) {
-            name = avatarBtn.getAttribute("aria-label");
+        if (!avatarImg && avatarBtn) {
+          avatarImg = avatarBtn.querySelector("img");
+          if (!avatarImg && avatarBtn.shadowRoot) {
+            avatarImg = avatarBtn.shadowRoot.querySelector("img");
           }
-        } catch (e) {}
-        emit({ displayName: name || "Your channel", avatarUrl: avatarImg.src });
-        return;
-      }
-      var scraped = scrapeTopbar();
-      if (scraped.avatarUrl) {
+        }
+      } catch (e) {}
+      var avatarUrl = rfImgAvatarUrl(avatarImg);
+      if (avatarUrl) {
+        var name = rfMusicProfileName(avatarBtn);
+        var channelHandle = null;
+        if (!channelHandle) {
+          try {
+            var navLink = rfDeepQuery('ytmusic-nav-bar a[href*="/@"]')
+              || rfDeepQuery('ytmusic-setting-channel a[href*="/@"]');
+            if (navLink) {
+              channelHandle = rfHandleFromHref(navLink.getAttribute("href") || "");
+            }
+          } catch (eLink) {}
+        }
+        if (!channelHandle || !name) {
+          var domPick = rfExplorerProfileFromDom();
+          name = domPick.name || name;
+          if (!channelHandle && domPick.channelHandle) {
+            channelHandle = domPick.channelHandle;
+          }
+        }
+        if (!channelHandle) {
+          var data = window.ytInitialData;
+          var tb = data && data.response && data.response.topbar && data.response.topbar.desktopTopbarRenderer;
+          if (tb) {
+            var tbPick = rfHandleFromTopbarJson(tb);
+            channelHandle = tbPick.channelHandle || channelHandle;
+            if (!name) {
+              var menuPick = rfScanAccountMenu(tb);
+              name = menuPick.name || name;
+            }
+          }
+        }
+        if (channelHandle && channelHandle.indexOf("@") === 0) {
+          name = name || channelHandle.slice(1);
+        }
+        var haveIdentity = rfHasIdentity(name, channelHandle);
+        if (avatarUrl && !haveIdentity && __rf_attempt < __rf_max) {
+          return;
+        }
+        if (!haveIdentity && __rf_attempt < __rf_max && !avatarUrl) {
+          return;
+        }
         emit({
-          displayName: scraped.name || "Your channel",
-          avatarUrl: scraped.avatarUrl
+          displayName: name || "Your channel",
+          avatarUrl: avatarUrl,
+          channelHandle: channelHandle
         });
         return;
       }
@@ -165,7 +467,9 @@ function musicProfileProbeInner(): string {
         if (cfg === false) loggedOut = true;
       } catch (e) {}
       if (loggedIn) {
-        emit({ displayName: scraped.name || "Your channel" });
+        if (__rf_attempt >= __rf_max) {
+          emit({ displayName: "Your channel", avatarUrl: null });
+        }
         return;
       }
       if (loggedOut && signIn) {
@@ -175,89 +479,169 @@ function musicProfileProbeInner(): string {
   `;
 }
 
+function profileProbePollWrapper(body: string, maxAttempts: number): string {
+  return `(function(){
+  ${tauriEmitHelperCode()}
+  var __rf_attempt = 0;
+  var __rf_max = ${maxAttempts};
+  window.__rf_profile_emitted = false;
+  window.__rf_last_emit_key = "";
+  var emit = function(payload) {
+    var key = payload
+      ? JSON.stringify({
+          h: payload.channelHandle || null,
+          a: payload.avatarUrl || null,
+          n: payload.displayName || null
+        })
+      : "null";
+    if (key === window.__rf_last_emit_key) return;
+    window.__rf_last_emit_key = key;
+    if (__rf_tauri_emit) __rf_tauri_emit(${PROFILE_EVENT}, payload);
+    if (!payload) {
+      window.__rf_profile_emitted = true;
+      return;
+    }
+    var hasHandle = !!(payload.channelHandle);
+    var hasAvatar = !!(payload.avatarUrl);
+    if (hasHandle) {
+      window.__rf_profile_emitted = true;
+      return;
+    }
+    if (hasAvatar && __rf_attempt >= __rf_max) {
+      window.__rf_profile_emitted = true;
+    }
+  };
+  function __rf_tick() {
+    __rf_attempt++;
+    ${body}
+    if (window.__rf_profile_emitted || __rf_attempt >= __rf_max) return;
+    setTimeout(__rf_tick, 650);
+  }
+  __rf_tick();
+})();`;
+}
+
 function explorerProfileProbeInner(): string {
   return `
-    try {
-      if (!__rf_tauri_emit) return;
-      var emit = function(payload) {
-        __rf_tauri_emit(${PROFILE_EVENT}, payload);
-      };
-      var scrapeTopbar = function() {
-        return (function() {${profileTopbarFromYtInitialDataJs()}})();
-      };
-      var scrapeDom = function() {
-        return (function() {${profileDomFromYouTubeTopbarJs()}})();
-      };
-      var dom = scrapeDom();
-      if (dom.avatarUrl) {
-        var tbDom = scrapeTopbar();
-        emit({
-          displayName: dom.name || tbDom.name || "Your channel",
-          avatarUrl: dom.avatarUrl
-        });
-        return;
-      }
-      var signIn = null;
+    ${avatarUrlProbeHelper()}
+    ${deepQueryHelper()}
+    ${profileNameProbeHelper()}
       try {
-        signIn = document.querySelector(
-          "ytd-sign-in-button, a[href*='accounts.google.com/ServiceLogin'], tp-yt-paper-button[aria-label*='Sign in']"
-        );
+        if (!__rf_tauri_emit) return;
+        var loggedInCfg = false;
+        var loggedOut = false;
+        try {
+          var cfg = window.ytcfg && window.ytcfg.get && window.ytcfg.get("LOGGED_IN");
+          if (cfg === true) loggedInCfg = true;
+          if (cfg === false) loggedOut = true;
+        } catch (e) {}
+        var name = null;
+        var channelHandle = null;
+        var avatarUrl = null;
+        try {
+          var avatarBtnDom = rfDeepQuery(
+            "button#avatar-btn, ytd-topbar-menu-button-renderer #avatar-btn, ytd-topbar-menu-button-renderer button"
+          );
+          var domImgEarly = rfDeepQuery(
+            "button#avatar-btn img, ytd-topbar-menu-button-renderer img, .yt-spec-avatar-shape img"
+          );
+          if (!domImgEarly && avatarBtnDom) {
+            domImgEarly = avatarBtnDom.querySelector("img");
+            if (!domImgEarly && avatarBtnDom.shadowRoot) {
+              domImgEarly = avatarBtnDom.shadowRoot.querySelector("img");
+            }
+          }
+          avatarUrl = rfImgAvatarUrl(domImgEarly) || avatarUrl;
+        } catch (eDomEarly) {}
+        var data = window.ytInitialData;
+        var tb = data && data.response && data.response.topbar && data.response.topbar.desktopTopbarRenderer;
+        if (tb) {
+          var avatarBtn = tb.avatarButton && tb.avatarButton.avatarButtonRenderer;
+          if (avatarBtn && avatarBtn.image && avatarBtn.image.thumbnails) {
+            avatarUrl = rfThumbUrl(avatarBtn.image.thumbnails) || avatarUrl;
+          }
+          var entry = tb.interactiveAccountEntryPointRenderer;
+          if (entry && entry.buttonRenderer && entry.buttonRenderer.avatar && entry.buttonRenderer.avatar.avatarRenderer) {
+            var avR = entry.buttonRenderer.avatar.avatarRenderer;
+            if (avR.image && avR.image.thumbnails) {
+              avatarUrl = rfThumbUrl(avR.image.thumbnails) || avatarUrl;
+            }
+          }
+          var menuPick = rfScanAccountMenu(tb);
+          name = menuPick.name || name;
+          channelHandle = menuPick.channelHandle || channelHandle;
+          avatarUrl = menuPick.avatarUrl || avatarUrl;
+          if (!channelHandle) {
+            var tbPick = rfHandleFromTopbarJson(tb);
+            channelHandle = tbPick.channelHandle || channelHandle;
+          }
+        }
+        if (!channelHandle || !name) {
+          var domPick = rfExplorerProfileFromDom();
+          name = domPick.name || name;
+          if (!channelHandle && domPick.channelHandle) {
+            channelHandle = domPick.channelHandle;
+          }
+        }
+        if (!name && channelHandle && channelHandle.indexOf("@") === 0) {
+          name = channelHandle.slice(1);
+        }
+        var domHasAvatarBtn = false;
+        try {
+          domHasAvatarBtn = !!rfDeepQuery(
+            "#avatar-btn, ytd-topbar-menu-button-renderer #avatar-btn, button[aria-label*='Account menu']"
+          );
+        } catch (eBtn) {}
+        var hasTopbarAvatar = !!(tb && tb.avatarButton);
+        var signedIn = loggedInCfg || !!avatarUrl || hasTopbarAvatar || domHasAvatarBtn;
+        if (loggedOut && tb && tb.signInButton && !tb.avatarButton && !avatarUrl && !domHasAvatarBtn) {
+          emit(null);
+          return;
+        }
+        if (!signedIn) {
+          if (__rf_attempt < __rf_max) return;
+        }
+        if (!channelHandle && __rf_attempt >= 4 && __rf_attempt <= 6 && !window.__rf_menu_opened) {
+          try {
+            var menuBtn = rfDeepQuery(
+              "button#avatar-btn, ytd-topbar-menu-button-renderer #avatar-btn, ytd-topbar-menu-button-renderer button"
+            );
+            if (menuBtn) {
+              window.__rf_menu_opened = true;
+              menuBtn.click();
+            }
+          } catch (eMenu) {}
+        }
+        if (avatarUrl) {
+          emit({
+            displayName: name || "Your channel",
+            avatarUrl: avatarUrl,
+            channelHandle: channelHandle
+          });
+          if (channelHandle) return;
+        }
+        var haveIdentity = rfHasIdentity(name, channelHandle);
+        if (haveIdentity || __rf_attempt >= __rf_max) {
+          emit({
+            displayName: name || "Your channel",
+            avatarUrl: avatarUrl,
+            channelHandle: channelHandle
+          });
+        }
       } catch (e) {}
-      if (signIn && !document.querySelector("#avatar-btn, ytd-topbar-menu-button-renderer #avatar-btn")) {
-        emit(null);
-        return;
-      }
-      var scraped = scrapeTopbar();
-      if (scraped.avatarUrl) {
-        emit({
-          displayName: scraped.name || dom.name || "Your channel",
-          avatarUrl: scraped.avatarUrl
-        });
-        return;
-      }
-      var loggedIn = false;
-      var loggedOut = false;
-      try {
-        var cfg = window.ytcfg && window.ytcfg.get && window.ytcfg.get("LOGGED_IN");
-        if (cfg === true) loggedIn = true;
-        if (cfg === false) loggedOut = true;
-      } catch (e) {}
-      if (loggedIn || dom.name) {
-        emit({ displayName: scraped.name || dom.name || "Your channel" });
-        return;
-      }
-      if (loggedOut) {
-        var data2 = window.ytInitialData;
-        var tb2 = data2 && data2.response && data2.response.topbar && data2.response.topbar.desktopTopbarRenderer;
-        if (tb2 && tb2.signInButton && !tb2.avatarButton) { emit(null); return; }
-      }
-    } catch (e) {}
   `;
 }
 
-export const EXPLORER_PROFILE_PROBE_SCRIPT = `(function(){
-  ${tauriEmitHelperCode()}
-  ${explorerProfileProbeInner()}
-})();`;
+export function buildExplorerProfileProbeScript(maxAttempts: number): string {
+  return profileProbePollWrapper(explorerProfileProbeInner(), maxAttempts);
+}
 
-/** Injected once into explorer-view: re-probe on navigation and while the tab is open. */
-export const EXPLORER_PROFILE_PROBE_INSTALL = `(function(){
-  if (window.__rf_ex_profile__) return;
-  window.__rf_ex_profile__ = true;
-  ${tauriEmitHelperCode()}
-  function probeProfile() {${explorerProfileProbeInner()}}
-  if (!window.__rf_ex_profile_ready) {
-    window.__rf_ex_profile_ready = true;
-    window.addEventListener("yt-navigate-finish", function() { probeProfile(); });
-  }
-  probeProfile();
-  setInterval(probeProfile, 2000);
-})();`;
+export const EXPLORER_PROFILE_PROBE_SCRIPT = buildExplorerProfileProbeScript(16);
 
-export const MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT = `(function(){
-  ${tauriEmitHelperCode()}
-  ${musicProfileProbeInner()}
-})();`;
+export const MUSIC_EXPLORE_PROFILE_PROBE_SCRIPT = profileProbePollWrapper(
+  musicProfileProbeInner(),
+  12,
+);
 
 /** Emitted by the injected script when the active YTM track changes. */
 export const MUSIC_EXPLORE_NOW_PLAYING_EVENT = "music-explore-now-playing";
@@ -265,7 +649,7 @@ export const MUSIC_EXPLORE_NOW_PLAYING_EVENT = "music-explore-now-playing";
 /** Emitted on navigation with page kind, title, and playlist URL hints for the bottom bar. */
 export const MUSIC_EXPLORE_PAGE_CONTEXT_EVENT = "music-explore-page-context";
 
-/** Page-context probe — safe to re-inject whenever the explore webview is shown. */
+/** Page-context probe ΓÇö safe to re-inject whenever the explore webview is shown. */
 export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
   ${tauriEmitHelperCode()}
   if (!__rf_tauri_emit) return;
@@ -645,7 +1029,7 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
   refreshBrowseContext();
 })();`;
 
-/** Now-playing probe — safe to re-inject whenever the explore webview is shown. */
+/** Now-playing probe ΓÇö safe to re-inject whenever the explore webview is shown. */
 export const MUSIC_EXPLORE_NOW_PLAYING_INSTALL = `(function(){
   ${tauriEmitHelperCode()}
   if (!__rf_tauri_emit) return;
@@ -763,5 +1147,4 @@ export const MUSIC_EXPLORE_INIT_SCRIPT = `(function(){
   }
   tick(false);
   window.addEventListener("yt-navigate-finish", function() { tick(true); });
-  setInterval(function() { tick(false); }, 2000);
 })();`;
