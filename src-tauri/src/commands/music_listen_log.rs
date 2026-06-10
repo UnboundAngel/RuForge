@@ -114,6 +114,7 @@ impl PlaySource {
         }
     }
 
+    #[allow(dead_code)]
     fn as_str(self) -> &'static str {
         match self {
             Self::Folder => "folder",
@@ -123,6 +124,13 @@ impl PlaySource {
             Self::Explore => "explore",
             Self::Unknown => "unknown",
         }
+    }
+
+    fn validate_opt(s: &Option<String>) -> Result<(), String> {
+        if let Some(ref v) = s {
+            Self::parse(v).ok_or_else(|| format!("Invalid source: {v}"))?;
+        }
+        Ok(())
     }
 }
 
@@ -692,9 +700,7 @@ pub fn music_listen_begin(
             return Err("identityKey is required".to_string());
         }
         let surface_parsed = Surface::parse(&surface).ok_or_else(|| format!("Invalid surface: {surface}"))?;
-        if let Some(ref s) = source {
-            PlaySource::parse(s).ok_or_else(|| format!("Invalid source: {s}"))?;
-        }
+        PlaySource::validate_opt(&source)?;
 
         if let Some(active) = read_active(&dir)? {
             if active.identity_key != meta.identity_key {
@@ -870,6 +876,61 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    fn sample_meta(key: &str) -> ListenTrackMeta {
+        ListenTrackMeta {
+            identity_key: key.to_string(),
+            path: Some(format!("/music/{key}.mp3")),
+            title: Some("Track".to_string()),
+            artist: Some("Artist".to_string()),
+        }
+    }
+
+    fn open_session(
+        dir: &Path,
+        event_id: &str,
+        meta: &ListenTrackMeta,
+        surface: Surface,
+        started_at: i64,
+    ) -> Result<(), String> {
+        let session = ActiveSession {
+            id: event_id.to_string(),
+            identity_key: meta.identity_key.clone(),
+            started_at,
+            listened_sec: 0.0,
+            last_tick_at: started_at,
+            surface: surface.as_str().to_string(),
+            path: meta.path.clone(),
+            title: meta.title.clone(),
+            artist: meta.artist.clone(),
+            source: Some(PlaySource::Library.as_str().to_string()),
+            was_liked: Some(false),
+        };
+        write_active(dir, &session)
+    }
+
+    fn transfer_surface(dir: &Path, surface: Surface) -> Result<(), String> {
+        let mut active = read_active(dir)?.ok_or_else(|| "No active session".to_string())?;
+        active.surface = surface.as_str().to_string();
+        active.last_tick_at = active.last_tick_at.saturating_add(1000);
+        write_active(dir, &active)
+    }
+
+    fn end_session(
+        dir: &Path,
+        reason: EndReason,
+        listened_sec: f64,
+        ended_at: i64,
+    ) -> Result<TrackPlayedEvent, String> {
+        let active = read_active(dir)?.ok_or_else(|| "No active session".to_string())?;
+        let mut session = active;
+        session.listened_sec = listened_sec;
+        close_active_session(dir, session, reason, ended_at)
+    }
+
+    fn read_events(dir: &Path) -> Vec<TrackPlayedEvent> {
+        parse_events_jsonl(dir).unwrap_or_default()
+    }
+
     #[test]
     fn append_and_rebuild_snapshot() {
         let dir = tempdir().unwrap();
@@ -897,5 +958,129 @@ mod tests {
         assert_eq!(snap.stats.len(), 1);
         assert_eq!(snap.stats[0].play_count, 1);
         assert_eq!(snap.stats[0].listen_time_sec, 120.0);
+    }
+
+    #[test]
+    fn verify_main_play_writes_jsonl() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let meta = sample_meta("id:main-track");
+        open_session(path, "evt-main", &meta, Surface::Main, 1_700_000_000_000).unwrap();
+        end_session(path, EndReason::Completed, 95.0, 1_700_000_095_000).unwrap();
+
+        let events = read_events(path);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].end_reason, "completed");
+        assert_eq!(events[0].surface.as_deref(), Some("main"));
+        assert!(events_path(path).is_file());
+        assert!(snapshot_path(path).is_file());
+    }
+
+    #[test]
+    fn verify_mini_session_writes_jsonl() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let meta = sample_meta("id:mini-track");
+        open_session(path, "evt-mini", &meta, Surface::MusicMini, 1_700_000_100_000).unwrap();
+        end_session(path, EndReason::Completed, 42.0, 1_700_000_142_000).unwrap();
+
+        let events = read_events(path);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].surface.as_deref(), Some("music_mini"));
+    }
+
+    #[test]
+    fn verify_handoff_single_event_no_double_count() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let meta = sample_meta("id:handoff-track");
+        open_session(path, "evt-handoff", &meta, Surface::Main, 1_700_000_200_000).unwrap();
+        transfer_surface(path, Surface::MusicMini).unwrap();
+        transfer_surface(path, Surface::Main).unwrap();
+        end_session(path, EndReason::Completed, 180.0, 1_700_000_380_000).unwrap();
+
+        let events = read_events(path);
+        assert_eq!(events.len(), 1, "handoff must produce one JSONL line");
+        let snap = read_snapshot_file(path).unwrap();
+        assert_eq!(snap.stats.len(), 1);
+        assert_eq!(snap.stats[0].play_count, 1);
+    }
+
+    #[test]
+    fn verify_skip_and_wall_end_reasons() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+
+        open_session(path, "evt-skip", &sample_meta("id:skip"), Surface::Main, 1_700_000_300_000)
+            .unwrap();
+        end_session(path, EndReason::Skipped, 8.0, 1_700_000_308_000).unwrap();
+
+        open_session(path, "evt-wall", &sample_meta("id:wall"), Surface::Main, 1_700_000_400_000)
+            .unwrap();
+        end_session(
+            path,
+            EndReason::WallEndlessPick,
+            210.0,
+            1_700_000_610_000,
+        )
+        .unwrap();
+
+        let events = read_events(path);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].end_reason, "skipped");
+        assert_eq!(events[1].end_reason, "wall_endless_pick");
+    }
+
+    #[test]
+    fn verify_orphan_active_closed_as_abandoned_paused() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        open_session(path, "evt-orphan", &sample_meta("id:orphan"), Surface::Main, 1_700_000_500_000)
+            .unwrap();
+        close_orphan_active_if_any(path).unwrap();
+
+        let events = read_events(path);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].end_reason, "abandoned_paused");
+        assert!(active_path(path).exists() == false);
+    }
+
+    #[test]
+    fn verify_rebuild_snapshot_recovery() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        open_session(path, "evt-rebuild", &sample_meta("id:rebuild"), Surface::Main, 1_700_000_600_000)
+            .unwrap();
+        end_session(path, EndReason::Completed, 60.0, 1_700_000_660_000).unwrap();
+        fs::remove_file(snapshot_path(path)).unwrap();
+
+        let snap = rebuild_snapshot_from_sources(path).unwrap();
+        assert_eq!(snap.stats.len(), 1);
+        assert_eq!(snap.stats[0].play_count, 1);
+        assert!(snapshot_path(path).is_file());
+    }
+
+    #[test]
+    fn verify_concurrent_handoff_stress() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        open_session(
+            path,
+            "evt-stress",
+            &sample_meta("id:stress"),
+            Surface::Main,
+            1_700_000_700_000,
+        )
+        .unwrap();
+        for i in 0..20 {
+            let surface = if i % 2 == 0 {
+                Surface::MusicMini
+            } else {
+                Surface::Main
+            };
+            transfer_surface(path, surface).unwrap();
+        }
+        end_session(path, EndReason::Completed, 30.0, 1_700_000_730_000).unwrap();
+        assert_eq!(read_events(path).len(), 1);
     }
 }

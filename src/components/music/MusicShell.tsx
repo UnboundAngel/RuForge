@@ -13,6 +13,7 @@ import { MusicArtistView } from "./MusicArtistView";
 import { MusicAlbumView } from "./MusicAlbumView";
 import { MusicLikedView } from "./MusicLikedView";
 import { MusicTrackView } from "./MusicTrackView";
+import { MusicProfileView } from "./MusicProfileView";
 import { MusicStatsView } from "./MusicStatsView";
 import { MusicExploreBottomBar } from "./MusicExploreBottomBar";
 import { MusicNavBackCell } from "./MusicNavBackCell";
@@ -71,7 +72,10 @@ import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
 import { MusicRightPanel, type RightPanelTab } from "./MusicRightPanel";
 import { useSponsorBlockPlayback } from "@/hooks/useSponsorBlockPlayback";
-import { recordPlay, getRecentHistory, type PlayHistoryEntry } from "./musicPlayHistory";
+import { getRecentHistory, type PlayHistoryEntry } from "./musicPlayHistory";
+import { importLegacyListenDataIfNeeded } from "@/lib/musicListenLegacyImport";
+import { refreshListenSnapshot } from "@/lib/musicListenSnapshot";
+import { setPendingListenEndReason } from "@/lib/musicListenSession";
 import { readMusicOnlySkip, writeMusicOnlySkip } from "./musicOnlySkipStorage";
 import { debugLog } from "@/debug/debugLog";
 import {
@@ -268,12 +272,15 @@ export function MusicShell() {
     musicOnlySkippedRef.current.clear();
   }, [playingFile?.path]);
 
-  // Record play history whenever the playing file changes
+  // Refresh history tab when playback changes (snapshot updated by listen session).
   useEffect(() => {
     if (!playingFile) return;
-    recordPlay(playingFile);
-    setHistoryEntries(getRecentHistory());
+    void refreshListenSnapshot().then(() => setHistoryEntries(getRecentHistory()));
   }, [playingFile?.path]);
+
+  useEffect(() => {
+    void importLegacyListenDataIfNeeded().then(() => refreshListenSnapshot());
+  }, []);
 
   const isPasteMode = panelMode === "paste";
   const showExploreStrip = activeView === "explore" && !musicDetail && !playerExpanded;
@@ -797,6 +804,7 @@ export function MusicShell() {
   }, [exploreWebviewActive]);
 
   const handlePlayFile = useCallback((file: MediaFile, playlist?: MediaFile[]) => {
+    setPendingListenEndReason("manual_switch");
     setFolderAudioPlaylist(playlist ?? []);
     setPlayingFile(file);
   }, [setFolderAudioPlaylist, setPlayingFile]);
@@ -1076,6 +1084,10 @@ export function MusicShell() {
                         onOpenAlbum={openMusicAlbum}
                         onBack={closeMusicDetail}
                       />
+                    </motion.div>
+                  ) : musicDetail?.kind === "profile" ? (
+                    <motion.div key="profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0 overflow-y-auto overflow-x-hidden rf-scrollbar">
+                      <MusicProfileView onBack={closeMusicDetail} />
                     </motion.div>
                   ) : musicDetail?.kind === "stats" ? (
                     <motion.div key="stats" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0 overflow-y-auto overflow-x-hidden rf-scrollbar">

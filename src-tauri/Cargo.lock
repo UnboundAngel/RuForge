@@ -3583,6 +3583,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "trash",
+ "uuid",
  "windows 0.61.3",
 ]
 

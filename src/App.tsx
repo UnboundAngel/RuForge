@@ -57,6 +57,7 @@ import { buildEntireLibraryExportPreset } from "./lib/exportSelection";
 import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
 import { ConfirmDialogHost } from "./components/ConfirmDialog";
 import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff";
+import { stageHandoffListenEventId } from "./lib/musicListenSession";
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
@@ -977,6 +978,9 @@ function App() {
   useEffect(() => {
     const unlisten = listen<SendToMusicMainPayload>("send-to-music-main", async (event) => {
       const payload = event.payload;
+      if (payload.listenEventId) {
+        stageHandoffListenEventId(payload.listenEventId);
+      }
       const st = useRuforgeStore.getState();
       if (typeof payload.volume === "number") st.setVolume(payload.volume);
       if (typeof payload.muted === "boolean") st.setMuted(payload.muted);

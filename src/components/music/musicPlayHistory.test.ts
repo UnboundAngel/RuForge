@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaFile } from "@/types";
+import { resetListenSnapshotForTests } from "@/lib/musicListenSnapshot";
 import {
   clearHistory,
   getPlayCount,
@@ -34,6 +35,7 @@ function track(partial: Partial<MediaFile> & Pick<MediaFile, "path" | "name">): 
 }
 
 beforeEach(() => {
+  resetListenSnapshotForTests();
   clearHistory();
   store = {};
 });

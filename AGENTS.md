@@ -377,6 +377,16 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.10 (unreleased)
 
+- **Listen-event log (foundation)**: Append-only `track_played` JSONL in app data via Mutex-serialized Rust writer; dual-surface session coordinator (main + music-mini) with handoff transfer; derived listen-stats/play-history snapshot; legacy localStorage import; `music_listen_clear` command. `music_listen_log.rs`, `musicListenSession.ts`, `musicListenStats.ts`, `musicPlayHistory.ts`, `useMusicPlayback.ts`, `useMusicMiniPlayback.ts`.
+
+- **Music stats UI (fix)**: Removed Listening eyebrow; stronger summary under Your stats; top track time and plays on cover hover only with darker scrim. `MusicStatsView.tsx`.
+
+- **Music stats copy (fix)**: Plain labels without middots or chevron links; clearer all-time/this-week section titles and hero summary. `MusicStatsView.tsx`, `MusicProfileView.tsx`, `MusicHomeStatsStrip.tsx`, `MusicLibraryView.tsx`.
+
+- **Music Home layout (fix)**: Quick picks use responsive CSS grid (1/2/3/4 cols) instead of JS column split; Liked Songs full-width banner row; content fills panel width. `MusicHomeView.tsx`, `LikedSongsCover.tsx`, `MusicHomeSkeleton.tsx`.
+
+- **Music profile screen**: Profile mockup with YouTube identity, glance stats, highlights, liked, recent plays, storage; titlebar chip opens it; Home stats strip removed; full stats via link. `MusicProfileView.tsx`, `MusicShell.tsx`, `MusicHomeView.tsx`, `YouTubeProfileChip.tsx`.
+
 - **Music stats (visual)**: Anti-pattern pass: no list-in-a-box cards, hero backdrop only, podium cover cards (#1 larger), compact spaced rows, artist avatar scroll, dot-separated metadata, play on art hover. `MusicStatsView.tsx`.
 
 - **Storage glyph (fix)**: Sidebar storage ring opens Authorize Cleanup on click (same as Music storage strip). `StorageGlyph.tsx`.

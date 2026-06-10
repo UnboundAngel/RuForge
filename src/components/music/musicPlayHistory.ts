@@ -1,6 +1,7 @@
 import type { MediaFile } from "@/types";
+import { getCachedListenSnapshot, setListenSnapshotForTests } from "@/lib/musicListenSnapshot";
+
 import { recordListenStatsPlay } from "./musicListenStats";
-import { musicTrackIdentityKey } from "./musicShelfDedup";
 
 export type PlayHistoryEntry = {
   path: string;
@@ -11,79 +12,57 @@ export type PlayHistoryEntry = {
   playCount: number;
 };
 
-const LS_KEY = "ruforge-music-play-history";
-const MAX_ENTRIES = 50;
-
-function primaryArtist(raw: string): string {
-  return raw.split(/,|&|feat\.|ft\.|x /i)[0]?.trim() ?? raw;
-}
-
 function load(): PlayHistoryEntry[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as PlayHistoryEntry[];
-  } catch {
-    return [];
-  }
+  return getCachedListenSnapshot().history.map((h) => ({
+    path: h.path,
+    identityKey: h.identityKey,
+    title: h.title,
+    artist: h.artist,
+    playedAt: h.playedAt,
+    playCount: h.playCount,
+  }));
 }
 
-function save(entries: PlayHistoryEntry[]): void {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(entries));
-  } catch {
-    // storage not available
-  }
-}
-
-/** Record that a track started playing. Updates play count and recency. */
+/** @deprecated Production uses musicListenSession. Vitest-only helper. */
 export function recordPlay(file: MediaFile): void {
-  const key = musicTrackIdentityKey(file, primaryArtist);
-  const title = file.name ?? "";
-  const artist = file.artist ?? file.albumArtist ?? "";
-
-  const entries = load();
-  const existing = entries.find((e) => e.identityKey === key);
-
-  if (existing) {
-    existing.playedAt = Date.now();
-    existing.playCount += 1;
-    existing.title = title;
-    existing.artist = artist;
-    existing.path = file.path;
-  } else {
-    entries.unshift({
-      path: file.path,
-      identityKey: key,
-      title,
-      artist,
-      playedAt: Date.now(),
-      playCount: 1,
-    });
-  }
-
-  // Sort newest-first and trim the ring buffer.
-  entries.sort((a, b) => b.playedAt - a.playedAt);
-  save(entries.slice(0, MAX_ENTRIES));
+  if (!import.meta.env.VITEST) return;
   recordListenStatsPlay(file);
+  syncTestHistoryFromStats();
 }
 
-/** Recent play history, newest first. */
 export function getRecentHistory(): PlayHistoryEntry[] {
   return load().slice().sort((a, b) => b.playedAt - a.playedAt);
 }
 
-/** Most-played history, highest count first, tie-break by recency. */
 export function getMostPlayedHistory(): PlayHistoryEntry[] {
   return load().slice().sort((a, b) => b.playCount - a.playCount || b.playedAt - a.playedAt);
 }
 
-/** Play count for an identity key; 0 when not in history. */
 export function getPlayCount(identityKey: string): number {
   return load().find((e) => e.identityKey === identityKey)?.playCount ?? 0;
 }
 
-/** Remove all history. */
 export function clearHistory(): void {
-  save([]);
+  if (import.meta.env.VITEST) {
+    const snap = getCachedListenSnapshot();
+    setListenSnapshotForTests({ ...snap, history: [] });
+  }
+}
+
+/** Vitest: mirror play into snapshot history via listen-stats test path. */
+export function syncTestHistoryFromStats(): void {
+  if (!import.meta.env.VITEST) return;
+  const snap = getCachedListenSnapshot();
+  const history = snap.stats
+    .map((s) => ({
+      path: s.path,
+      identityKey: s.identityKey,
+      title: s.title,
+      artist: s.artist,
+      playedAt: s.lastPlayed,
+      playCount: s.playCount,
+    }))
+    .sort((a, b) => b.playedAt - a.playedAt)
+    .slice(0, 50);
+  setListenSnapshotForTests({ ...snap, history });
 }

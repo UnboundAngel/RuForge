@@ -13,6 +13,7 @@ import {
   recordListenStatsPlay,
   SEVEN_DAYS_MS,
 } from "./musicListenStats";
+import { resetListenSnapshotForTests } from "@/lib/musicListenSnapshot";
 
 let store: Record<string, string> = {};
 vi.stubGlobal("localStorage", {
@@ -39,6 +40,7 @@ function track(partial: Partial<MediaFile> & Pick<MediaFile, "path" | "name">): 
 }
 
 beforeEach(() => {
+  resetListenSnapshotForTests();
   clearListenStats();
   store = {};
 });
