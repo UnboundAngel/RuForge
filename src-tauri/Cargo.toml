@@ -51,6 +51,7 @@ netscape_cookies = { workspace = true }
 lofty = { version = "0.22", default-features = false }
 trash = "5"
 tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 

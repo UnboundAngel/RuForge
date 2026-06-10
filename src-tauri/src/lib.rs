@@ -36,6 +36,11 @@ use crate::commands::musicmeta::{
     backfill_music_meta, ensure_artist_meta_sidecar, ensure_music_meta, get_artist_info,
     read_artist_meta_sidecar, read_music_meta,
 };
+use crate::commands::music_listen_log::{
+    music_listen_accumulate, music_listen_begin, music_listen_clear, music_listen_end,
+    music_listen_get_snapshot, music_listen_import_legacy, music_listen_rebuild_snapshot,
+    music_listen_transfer,
+};
 use crate::commands::media::{
     delete_media, delete_media_batch, ensure_poster_if_missing, extract_frames, get_subtitle_tracks,
     read_local_subtitle_vtt,
@@ -217,7 +222,15 @@ pub fn run() {
             migrate_library_layout,
             list_recently_deleted,
             restore_recently_deleted,
-            remove_recently_deleted_entry
+            remove_recently_deleted_entry,
+            music_listen_begin,
+            music_listen_transfer,
+            music_listen_accumulate,
+            music_listen_end,
+            music_listen_get_snapshot,
+            music_listen_rebuild_snapshot,
+            music_listen_import_legacy,
+            music_listen_clear
         ])
         .run(context)
         .expect("error while running tauri application");
