@@ -17,7 +17,6 @@ import {
 import { primaryArtist } from "./musicArtist";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicHomeSearchEmpty } from "./MusicHomeSearchEmpty";
-import { MusicHomeStatsStrip } from "./MusicHomeStatsStrip";
 import { resolveLikedFiles } from "./musicLikedTracks";
 import { LikedSongsCard } from "./LikedSongsCover";
 
@@ -334,7 +333,6 @@ export function MusicHomeView({
 }: MusicHomeViewProps) {
   const entries = useRuforgeStore((s) => s.entries);
   const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
-  const openMusicStats = useRuforgeStore((s) => s.openMusicStats);
   const openMusicLiked = useRuforgeStore((s) => s.openMusicLiked);
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const sessionSeedRef = useRef(Math.floor(Math.random() * 0xffffffff));
@@ -505,16 +503,6 @@ export function MusicHomeView({
     );
   }, [filteredTracks]);
 
-  // Quick picks columns: split 12 items into 3 columns (up to 4 rows per column)
-  const quickPicksColumns = useMemo(() => {
-    const cols = [];
-    const size = 4;
-    for (let i = 0; i < quickPicks.length; i += size) {
-      cols.push(quickPicks.slice(i, i + size));
-    }
-    return cols;
-  }, [quickPicks]);
-
   // Rediscover: random older items (bottom half by created date), different seed.
   const rediscover = useMemo(() => {
     const unique = dedupeMusicTracks(filteredTracks, primaryArtist);
@@ -668,37 +656,29 @@ export function MusicHomeView({
             onSearchYoutubeMusic={onSearchYoutubeMusic}
           />
         ) : (
-          <div className="flex flex-col gap-12 pl-12 pr-12 pt-8 pb-16 max-w-[1300px] mx-auto w-full">
-            {activeFilter === "all" && !searchQuery && (
-              <MusicHomeStatsStrip onSeeAll={openMusicStats} />
-            )}
-
+          <div className="flex flex-col gap-12 px-6 sm:px-8 lg:px-12 pt-8 pb-16 w-full min-w-0">
             {/* Quick picks — most listened or suggested */}
             {quickPicks.length > 0 && (
-              <section>
+              <section className="w-full min-w-0">
                 <div className="flex items-end justify-between mb-4">
                   <h2 className="text-2xl font-bold tracking-tight" style={{ color: "var(--music-text-primary)" }}>
                     Quick picks
                   </h2>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3">
-                  {quickPicksColumns.map((col, colIdx) => (
-                    <div key={colIdx} className="flex flex-col gap-3">
-                      {col.map((file) => (
-                        <QuickPickRow
-                          key={file.path}
-                          file={file}
-                          onClick={() => onPlayFile(file, quickPicks)}
-                          menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
-                          onContextMenu={(e) => setMenu({
-                            context: { kind: "song", file },
-                            x: e.clientX,
-                            y: e.clientY,
-                            onPlay: () => onPlayFile(file, quickPicks),
-                          })}
-                        />
-                      ))}
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 w-full min-w-0">
+                  {quickPicks.map((file) => (
+                    <QuickPickRow
+                      key={file.path}
+                      file={file}
+                      onClick={() => onPlayFile(file, quickPicks)}
+                      menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
+                      onContextMenu={(e) => setMenu({
+                        context: { kind: "song", file },
+                        x: e.clientX,
+                        y: e.clientY,
+                        onPlay: () => onPlayFile(file, quickPicks),
+                      })}
+                    />
                   ))}
                 </div>
               </section>
@@ -708,6 +688,7 @@ export function MusicHomeView({
               {likedTracks.length > 0 && activeFilter === "all" && !searchQuery && (
                 <motion.section
                   key="home-liked-songs"
+                  className="w-full min-w-0"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}

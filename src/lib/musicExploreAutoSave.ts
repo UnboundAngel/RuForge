@@ -1,10 +1,12 @@
-/** Debounced auto-save for Music Explore now-playing events (avoids rate-limit bursts). */
+/** Auto-save for Music Explore: queue only after sustained listen time on one track. */
 
-const AUTO_SAVE_DEBOUNCE_MS = 4_500;
-const pendingByVideoId = new Map<
-  string,
-  { timer: ReturnType<typeof setTimeout>; cancelled: boolean }
->();
+const AUTO_SAVE_LISTEN_THRESHOLD_MS = 15_000;
+
+let activeEntry: {
+  videoId: string;
+  timer: ReturnType<typeof setTimeout>;
+  cancelled: boolean;
+} | null = null;
 
 export type MusicExploreAutoSavePayload = {
   videoId: string;
@@ -12,8 +14,9 @@ export type MusicExploreAutoSavePayload = {
 };
 
 /**
- * Schedules `onSave` only if the same `videoId` is still playing after debounce.
- * Returns a cancel function for cleanup on unmount/navigation.
+ * Starts a listen timer for `videoId`. Fires `onSave` only if the same track is
+ * still active after {@link AUTO_SAVE_LISTEN_THRESHOLD_MS}. Cancels any pending
+ * timer for a previous track (skip away before threshold).
  */
 export function scheduleMusicExploreAutoSave(
   payload: MusicExploreAutoSavePayload,
@@ -22,31 +25,35 @@ export function scheduleMusicExploreAutoSave(
   const videoId = payload.videoId.trim();
   if (!videoId) return () => {};
 
-  const prev = pendingByVideoId.get(videoId);
-  if (prev) {
-    prev.cancelled = true;
-    clearTimeout(prev.timer);
+  if (activeEntry) {
+    activeEntry.cancelled = true;
+    clearTimeout(activeEntry.timer);
+    activeEntry = null;
   }
 
-  const entry = { timer: undefined as unknown as ReturnType<typeof setTimeout>, cancelled: false };
+  const entry = {
+    videoId,
+    timer: undefined as unknown as ReturnType<typeof setTimeout>,
+    cancelled: false,
+  };
   entry.timer = setTimeout(() => {
-    pendingByVideoId.delete(videoId);
+    if (activeEntry === entry) activeEntry = null;
     if (entry.cancelled) return;
     onSave(payload);
-  }, AUTO_SAVE_DEBOUNCE_MS);
-  pendingByVideoId.set(videoId, entry);
+  }, AUTO_SAVE_LISTEN_THRESHOLD_MS);
+  activeEntry = entry;
 
   return () => {
+    if (activeEntry !== entry) return;
     entry.cancelled = true;
     clearTimeout(entry.timer);
-    pendingByVideoId.delete(videoId);
+    activeEntry = null;
   };
 }
 
 export function cancelAllMusicExploreAutoSave(): void {
-  for (const [, entry] of pendingByVideoId) {
-    entry.cancelled = true;
-    clearTimeout(entry.timer);
-  }
-  pendingByVideoId.clear();
+  if (!activeEntry) return;
+  activeEntry.cancelled = true;
+  clearTimeout(activeEntry.timer);
+  activeEntry = null;
 }

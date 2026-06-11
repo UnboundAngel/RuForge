@@ -38,8 +38,8 @@ use crate::commands::musicmeta::{
 };
 use crate::commands::music_listen_log::{
     music_listen_accumulate, music_listen_begin, music_listen_clear, music_listen_end,
-    music_listen_get_snapshot, music_listen_import_legacy, music_listen_rebuild_snapshot,
-    music_listen_transfer,
+    music_listen_get_integrity, music_listen_get_snapshot, music_listen_import_legacy,
+    music_listen_rebuild_snapshot, music_listen_transfer,
 };
 use crate::commands::media::{
     delete_media, delete_media_batch, ensure_poster_if_missing, extract_frames, get_subtitle_tracks,
@@ -123,6 +123,16 @@ pub fn run() {
             });
 
             setup_tray(app)?;
+
+            if let Err(e) = crate::commands::music_listen_log::music_listen_startup_housekeeping(
+                app.handle(),
+            ) {
+                crate::rf_log!(
+                    "core.startup",
+                    log::Level::Warn,
+                    "listen log startup housekeeping failed: {e}"
+                );
+            }
 
             #[cfg(windows)]
             {
@@ -228,6 +238,7 @@ pub fn run() {
             music_listen_accumulate,
             music_listen_end,
             music_listen_get_snapshot,
+            music_listen_get_integrity,
             music_listen_rebuild_snapshot,
             music_listen_import_legacy,
             music_listen_clear

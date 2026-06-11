@@ -4,6 +4,8 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 
 import { emitTo } from "@tauri-apps/api/event";
 
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
 import { releaseAnalyserGraph } from "@/audioAnalyserGraph";
 
 import { applyMediaOutputState } from "@/applyMediaOutputState";
@@ -228,11 +230,15 @@ export function useMusicPlayback(
 
 
   useEffect(() => {
-
-    void emitTo("music-mini", "stop-music-mini-playback", "main-app").catch(() => null);
+    try {
+      if (getCurrentWindow().label === "main") {
+        void emitTo("music-mini", "stop-music-mini-playback", "main-app").catch(() => null);
+      }
+    } catch {
+      /* not in Tauri */
+    }
 
     return () => {
-
       const el = audioRef.current;
 
       if (el) {

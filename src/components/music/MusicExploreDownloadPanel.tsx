@@ -1,13 +1,11 @@
-import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { Download, Loader, Loader2, X } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
-import type { DownloadJob } from "@/downloadQueue";
 import {
   countActivePlaylistDownloads,
   isActiveMusicExploreDownloadUi,
-  jobWasActive,
   musicExploreTrackDownloadUi,
   type MusicExploreTrackDownloadUi,
 } from "@/lib/musicExploreDownloadStatus";
@@ -328,12 +326,11 @@ type Props = {
   dockMinimized?: boolean;
   onClose: () => void;
   onMinimize?: () => void;
-  /** Synced for dock chip success ring when panel UI is minimized away. */
-  onCelebratingChange?: (track: CollapsedCelebrate | null) => void;
+  /** Completion orb state (owned by MusicShell for all download sources). */
+  celebrating?: CollapsedCelebrate | null;
 };
 
-const COLLAPSED_CELEBRATE_MS = 2100;
-/** Tracks fetched in one yt-dlp call on first open (batched, not one-by-one). */
+/** Debounce before loading a pasted URL into the panel. */
 const INITIAL_PLAYLIST_BATCH = 50;
 
 export function MusicExploreDownloadPanel({
@@ -346,7 +343,7 @@ export function MusicExploreDownloadPanel({
   dockMinimized = false,
   onClose,
   onMinimize,
-  onCelebratingChange,
+  celebrating = null,
 }: Props) {
   const settings = useRuforgeStore((s) => s.settings);
   const outputDir = useRuforgeStore((s) => s.outputDir);
@@ -360,10 +357,6 @@ export function MusicExploreDownloadPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
   const lastClickIndexRef = useRef<number | null>(null);
-  const prevDownloadJobsRef = useRef<DownloadJob[]>(downloadJobs);
-  const pendingCelebrationsRef = useRef<CollapsedCelebrate[]>([]);
-  const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [celebrating, setCelebrating] = useState<CollapsedCelebrate | null>(null);
   const harvestedTracklistRef = useRef(harvestedTracklist);
   useEffect(() => {
     harvestedTracklistRef.current = harvestedTracklist;
@@ -403,47 +396,14 @@ export function MusicExploreDownloadPanel({
     });
   }, []);
 
-  // Stable ref so the setTimeout callback always calls the latest version of
-  // processNextCelebration even when removeCompletedFromPlaylist changes identity.
-  const processNextCelebrationRef = useRef<() => void>(() => {});
-  const processNextCelebration = useCallback(() => {
-    if (celebrateTimerRef.current) return;
-    const next = pendingCelebrationsRef.current.shift();
-    if (!next) {
-      setCelebrating(null);
-      return;
-    }
-    setCelebrating(next);
-    celebrateTimerRef.current = setTimeout(() => {
-      celebrateTimerRef.current = null;
-      removeCompletedFromPlaylist([next.url]);
-      setCelebrating(null);
-      processNextCelebrationRef.current();
-    }, COLLAPSED_CELEBRATE_MS);
-  }, [removeCompletedFromPlaylist]);
-  processNextCelebrationRef.current = processNextCelebration;
-
-  const enqueueCelebrations = useCallback(
-    (tracks: CollapsedCelebrate[]) => {
-      if (tracks.length === 0) return;
-      pendingCelebrationsRef.current.push(...tracks);
-      if (!celebrateTimerRef.current) {
-        processNextCelebration();
-      }
-    },
-    [processNextCelebration],
-  );
-
-  useLayoutEffect(() => {
-    onCelebratingChange?.(celebrating);
-  }, [celebrating, onCelebratingChange]);
-
   useEffect(() => {
-    return () => {
-      if (celebrateTimerRef.current) clearTimeout(celebrateTimerRef.current);
-      onCelebratingChange?.(null);
-    };
-  }, [onCelebratingChange]);
+    if (!celebrating) return;
+    const url = celebrating.url;
+    const t = window.setTimeout(() => {
+      removeCompletedFromPlaylist([url]);
+    }, 2100);
+    return () => window.clearTimeout(t);
+  }, [celebrating?.url, removeCompletedFromPlaylist]);
 
   const buildAudioOpts = useCallback(() => {
     const dir = resolveDownloadOutputDir(saveToInternal, outputDir);
@@ -455,10 +415,20 @@ export function MusicExploreDownloadPanel({
     const opts = buildAudioOpts();
     const folderName = playlistTitle ? sanitizePlaylistFolderName(playlistTitle) : undefined;
     for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
       enqueueDownload(
-        tracks[i].url,
+        track.url,
         { ...opts, playlistOutputFolder: folderName, playlistIndex: i + 1 },
-        { title: tracks[i].title, approval: "held" },
+        {
+          title: track.title,
+          approval: "held",
+          snapshot: {
+            title: track.title,
+            thumbnail: track.thumbnail?.trim() ?? "",
+            duration: track.duration ?? 0,
+            isPlaylist: false,
+          },
+        },
       );
     }
     releaseHeldDownloadJobs();
@@ -813,52 +783,6 @@ export function MusicExploreDownloadPanel({
     });
     lastClickIndexRef.current = index;
   }, [phase]);
-
-  useLayoutEffect(() => {
-    const prev = prevDownloadJobsRef.current;
-    prevDownloadJobsRef.current = downloadJobs;
-
-    if (phase.kind !== "playlist") return;
-
-    const completedUrls: string[] = [];
-    const completedTracks: CollapsedCelebrate[] = [];
-    for (const track of phase.items) {
-      const trackUrl = track.url;
-      const hadActive = prev.some(
-        (j) => youtubeUrlsMatch(j.url, trackUrl) && jobWasActive(j),
-      );
-      const hasActive = downloadJobs.some(
-        (j) => youtubeUrlsMatch(j.url, trackUrl) && jobWasActive(j),
-      );
-      const hasFailed = downloadJobs.some(
-        (j) => youtubeUrlsMatch(j.url, trackUrl) && j.status === "failed",
-      );
-      if (hadActive && !hasActive && !hasFailed) {
-        completedUrls.push(trackUrl);
-        completedTracks.push({
-          url: trackUrl,
-          title: track.title,
-          thumbnail: track.thumbnail,
-        });
-      }
-    }
-
-    if (completedUrls.length === 0) return;
-
-    if (collapsed || dockMinimized) {
-      enqueueCelebrations(completedTracks);
-      return;
-    }
-
-    removeCompletedFromPlaylist(completedUrls);
-  }, [
-    downloadJobs,
-    phase,
-    collapsed,
-    dockMinimized,
-    enqueueCelebrations,
-    removeCompletedFromPlaylist,
-  ]);
 
   useEffect(() => {
     if (!url.trim()) {

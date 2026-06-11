@@ -81,7 +81,7 @@ function artistTracks(artistKey: string, lookup: MediaLookup): MediaFile[] {
 }
 
 function statMetaLine(listenTimeSec: number, playCount: number): string {
-  return `${formatListenDuration(listenTimeSec)} · ${playCount} ${playCount === 1 ? "play" : "plays"}`;
+  return `${formatListenDuration(listenTimeSec)}, ${playCount} ${playCount === 1 ? "play" : "plays"}`;
 }
 
 type TopTrackCardProps = {
@@ -137,7 +137,7 @@ function TopTrackCard({ rank, row, lookup, hero, onPlay, onOpen }: TopTrackCardP
           {rankLabel}
         </span>
         {file && onPlay && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-200 group-hover/top:opacity-100">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/58 opacity-0 transition-opacity duration-200 group-hover/top:opacity-100">
             <span
               className="flex h-10 w-10 items-center justify-center rounded-full"
               style={{ background: "var(--music-accent)", color: "#fff" }}
@@ -145,6 +145,9 @@ function TopTrackCard({ rank, row, lookup, hero, onPlay, onOpen }: TopTrackCardP
             >
               <Play size={16} fill="currentColor" className="ml-0.5" />
             </span>
+            <p className="text-[11px] font-semibold tabular-nums text-center px-2 leading-snug text-white/90">
+              {statMetaLine(row.listenTimeSec, row.playCount)}
+            </p>
           </div>
         )}
       </div>
@@ -160,9 +163,6 @@ function TopTrackCard({ rank, row, lookup, hero, onPlay, onOpen }: TopTrackCardP
             {artist}
           </p>
         ) : null}
-        <p className="text-[11px] mt-1 truncate" style={{ color: "var(--music-text-muted)" }}>
-          {statMetaLine(row.listenTimeSec, row.playCount)}
-        </p>
       </div>
     </button>
   );
@@ -228,7 +228,7 @@ function CompactTrackRow({ rank, row, lookup, onPlay, onOpen }: CompactTrackRowP
           {row.title || "Unknown"}
         </p>
         <p className="text-xs truncate" style={{ color: "var(--music-text-muted)" }}>
-          {artist ? `${artist} · ` : ""}
+          {artist ? `${artist}, ` : ""}
           {statMetaLine(row.listenTimeSec, row.playCount)}
         </p>
       </div>
@@ -380,13 +380,13 @@ export function MusicStatsView({ onBack }: Props) {
   const topThree = snapshot.topTracks.slice(0, 3);
   const restTracks = snapshot.topTracks.slice(3);
 
-  const heroSummary = [
-    `${formatListenDuration(snapshot.allTime.listenTimeSec)} all time`,
-    `${snapshot.allTime.playCount.toLocaleString()} plays`,
-    snapshot.week.listenTimeSec > 0
-      ? `${formatListenDuration(snapshot.week.listenTimeSec)} this week`
-      : null,
-  ].filter(Boolean).join(" · ");
+  const heroSummaryParts = [
+    `${formatListenDuration(snapshot.allTime.listenTimeSec)} listened, ${snapshot.allTime.playCount.toLocaleString()} plays all time`,
+  ];
+  if (snapshot.week.listenTimeSec > 0) {
+    heroSummaryParts.push(`${formatListenDuration(snapshot.week.listenTimeSec)} this week`);
+  }
+  const heroSummary = heroSummaryParts.join(". ");
 
   return (
     <div className="flex flex-col h-full overflow-y-auto rf-scrollbar" style={{ background: "var(--music-bg)" }}>
@@ -419,19 +419,19 @@ export function MusicStatsView({ onBack }: Props) {
           </button>
         )}
         <div className="relative z-10 flex flex-col justify-end px-6 pt-16 pb-6 min-h-[200px]">
-          <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: "var(--music-text-muted)" }}>
-            Your stats
-          </p>
           <h1
             className="font-bold leading-none tracking-tight"
             style={{
-              fontSize: "clamp(1.85rem, 4.5vw, 2.5rem)",
+              fontSize: "clamp(2rem, 5vw, 2.75rem)",
               color: "var(--music-text-primary)",
             }}
           >
-            Your listening
+            Your stats
           </h1>
-          <p className="text-xs mt-2.5 max-w-lg leading-relaxed" style={{ color: "var(--music-text-muted)" }}>
+          <p
+            className="text-sm font-medium mt-2.5 max-w-lg leading-relaxed tabular-nums"
+            style={{ color: "var(--music-text-secondary)" }}
+          >
             {heroSummary}
           </p>
         </div>
@@ -440,7 +440,7 @@ export function MusicStatsView({ onBack }: Props) {
       <div className="flex flex-col gap-10 px-6 pb-10 max-w-4xl w-full">
         {topThree.length > 0 && (
           <section>
-            <SectionLabel>Top tracks · all time</SectionLabel>
+            <SectionLabel>All-time top tracks</SectionLabel>
             <div className="flex items-end gap-4 overflow-x-auto pb-1 rf-scrollbar">
               {topThree.map((row, i) => (
                 <TopTrackCard
@@ -492,7 +492,7 @@ export function MusicStatsView({ onBack }: Props) {
 
         {snapshot.topArtists.length > 0 && (
           <section>
-            <SectionLabel>Top artists · all time</SectionLabel>
+            <SectionLabel>All-time top artists</SectionLabel>
             <div className="flex gap-5 overflow-x-auto pb-1 rf-scrollbar">
               {snapshot.topArtists.map((row, i) => (
                 <ArtistTile
@@ -511,7 +511,7 @@ export function MusicStatsView({ onBack }: Props) {
           <>
             {snapshot.weekTracks.length > 0 && (
               <section>
-                <SectionLabel>Top tracks · this week</SectionLabel>
+                <SectionLabel>Top tracks this week</SectionLabel>
                 <div className="flex flex-col gap-3">
                   {snapshot.weekTracks.map((row, i) => (
                     <CompactTrackRow
@@ -529,7 +529,7 @@ export function MusicStatsView({ onBack }: Props) {
 
             {snapshot.weekArtists.length > 0 && (
               <section>
-                <SectionLabel>Top artists · this week</SectionLabel>
+                <SectionLabel>Top artists this week</SectionLabel>
                 <div className="flex gap-5 overflow-x-auto pb-1 rf-scrollbar">
                   {snapshot.weekArtists.map((row, i) => (
                     <ArtistTile

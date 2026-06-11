@@ -1,14 +1,43 @@
 import { jobHasDownloadTransferStarted, type DownloadJob } from "./downloadQueue";
 import { parseYtdlpEtaToSeconds } from "./downloadProgress";
 import type { RuforgeStore } from "./store/ruforgeStore";
+import type { ProgressPayload } from "./types";
 
-/** No yt-dlp progress yet: metadata hydrate + invoke + connect. */
-const PRE_TRANSFER_MAX_MS = 4 * 60_000;
+/** Ignore duplicate yt-dlp lines (0% spinners, repeated %) that reset the idle clock. */
+export function progressAdvancesDownloadWatchdog(
+  prev: ProgressPayload | null,
+  next: ProgressPayload,
+): boolean {
+  if (!prev) {
+    if (next.status === "processing") return true;
+    return typeof next.percentage === "number" && next.percentage > 0;
+  }
+  if (next.status === "processing" && prev.status !== "processing") return true;
+
+  const prevBytes = prev.downloadedBytes ?? 0;
+  const nextBytes = next.downloadedBytes ?? 0;
+  if (nextBytes > prevBytes) return true;
+
+  const prevPct = prev.percentage ?? 0;
+  const nextPct = next.percentage ?? 0;
+  if (nextPct > prevPct + 0.05) return true;
+
+  return false;
+}
+
+/** No yt-dlp transfer bytes yet (connect + first stdout). */
+const PRE_TRANSFER_MAX_MS = 30_000;
 const MIN_ACTIVE_IDLE_MS = 5 * 60_000;
 const MAX_ACTIVE_IDLE_MS = 45 * 60_000;
 const PROCESSING_IDLE_MS = 10 * 60_000;
 const PROCESSING_LARGE_IDLE_MS = 25 * 60_000;
+const AUDIO_PROCESSING_IDLE_MS = 45_000;
+const AUDIO_ACTIVE_IDLE_MS = 45_000;
+const AUDIO_ACTIVE_IDLE_MAX_MS = 90_000;
 const LARGE_BYTES = 1_000_000_000;
+
+/** Hard cap from when status becomes downloading (auto-save audio should finish well under this). */
+export const MAX_DOWNLOAD_WALL_CLOCK_MS = 2 * 60_000;
 
 type WatchEntry = {
   lastActivityMs: number;
@@ -21,17 +50,76 @@ let generationSeq = 0;
 
 let storeGet: (() => RuforgeStore) | null = null;
 let onStall: ((jobId: string) => void) | null = null;
+let onTimeout: ((jobId: string) => void) | null = null;
+let foregroundBound = false;
 
 export function initDownloadJobWatchdog(
   get: () => RuforgeStore,
   stallHandler: (jobId: string) => void,
+  timeoutHandler: (jobId: string) => void,
 ): void {
   storeGet = get;
   onStall = stallHandler;
+  onTimeout = timeoutHandler;
+  queueMicrotask(() => syncDownloadJobWatchdogsFromStore());
+  bindDownloadWatchdogForegroundRecovery();
+}
+
+function readStoreJobs(): DownloadJob[] {
+  return storeGet?.()?.downloadJobs ?? [];
+}
+
+/** Re-arm timers after Vite HMR or module reload left jobs stuck in downloading. */
+export function syncDownloadJobWatchdogsFromStore(): void {
+  const jobs = readStoreJobs();
+  for (const job of jobs) {
+    if (job.status === "downloading") {
+      armDownloadJobWatchdog(job.id);
+    }
+  }
+}
+
+function bindDownloadWatchdogForegroundRecovery(): void {
+  if (foregroundBound || typeof document === "undefined") return;
+  foregroundBound = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    syncDownloadJobWatchdogsFromStore();
+    void evaluateAllDownloadingJobsNow();
+  });
+}
+
+function jobWallClockAgeMs(job: DownloadJob): number {
+  const started =
+    typeof job.downloadingSince === "number" && job.downloadingSince > 0
+      ? job.downloadingSince
+      : typeof job.createdAt === "number" && job.createdAt > 0
+        ? job.createdAt
+        : Date.now();
+  return Date.now() - started;
+}
+
+function jobExceededWallClock(job: DownloadJob): boolean {
+  return jobWallClockAgeMs(job) >= MAX_DOWNLOAD_WALL_CLOCK_MS;
+}
+
+async function evaluateAllDownloadingJobsNow(): Promise<void> {
+  const jobs = readStoreJobs();
+  for (const job of jobs) {
+    if (job.status !== "downloading") continue;
+    const entry = entries.get(job.id);
+    if (!entry) {
+      armDownloadJobWatchdog(job.id);
+      continue;
+    }
+    await evaluateStall(job.id, entry.generation);
+  }
 }
 
 /** Idle budget before treating a downloading job as stalled (not a global poll interval). */
 export function computeDownloadJobStallThresholdMs(job: DownloadJob): number {
+  const audioOnly = job.options?.audioOnly === true;
+
   if (!jobHasDownloadTransferStarted(job)) {
     return PRE_TRANSFER_MAX_MS;
   }
@@ -42,6 +130,9 @@ export function computeDownloadJobStallThresholdMs(job: DownloadJob): number {
   }
 
   if (p.status === "processing") {
+    if (audioOnly) {
+      return AUDIO_PROCESSING_IDLE_MS;
+    }
     const total =
       (typeof p.totalBytes === "number" && p.totalBytes > 0 ? p.totalBytes : null) ??
       job.metadata?.fileSizeBytes ??
@@ -57,6 +148,17 @@ export function computeDownloadJobStallThresholdMs(job: DownloadJob): number {
     typeof p.percentage === "number" && Number.isFinite(p.percentage)
       ? Math.max(0, Math.min(100, p.percentage))
       : 0;
+
+  if (audioOnly) {
+    const etaSec = parseYtdlpEtaToSeconds(p.eta ?? "");
+    if (etaSec != null && etaSec > 0) {
+      const fromEta = (etaSec * 2 + 20) * 1000;
+      return Math.min(Math.max(fromEta, 45_000), AUDIO_ACTIVE_IDLE_MAX_MS);
+    }
+    if (pct >= 99) return 45_000;
+    if (pct >= 90) return 60_000;
+    return AUDIO_ACTIVE_IDLE_MS;
+  }
 
   const etaSec = parseYtdlpEtaToSeconds(p.eta ?? "");
   if (etaSec != null && etaSec > 0) {
@@ -85,7 +187,7 @@ function scheduleCheck(jobId: string, generation: number, delayMs: number): void
 }
 
 function resolveJob(jobId: string): DownloadJob | undefined {
-  return storeGet?.().downloadJobs.find((j) => j.id === jobId);
+  return readStoreJobs().find((j) => j.id === jobId);
 }
 
 async function evaluateStall(jobId: string, generation: number): Promise<void> {
@@ -98,16 +200,42 @@ async function evaluateStall(jobId: string, generation: number): Promise<void> {
     return;
   }
 
-  const idleMs = Date.now() - entry.lastActivityMs;
+  if (jobExceededWallClock(job)) {
+    disarmDownloadJobWatchdog(jobId);
+    onTimeout?.(jobId);
+    return;
+  }
+
+  const now = Date.now();
+  const idleMs = now - entry.lastActivityMs;
   const threshold = computeDownloadJobStallThresholdMs(job);
 
   if (idleMs >= threshold) {
     disarmDownloadJobWatchdog(jobId);
-    onStall?.(jobId);
+    const audioOnly = job.options?.audioOnly === true;
+    if (!jobHasDownloadTransferStarted(job) || audioOnly) {
+      onTimeout?.(jobId);
+    } else {
+      onStall?.(jobId);
+    }
     return;
   }
 
-  scheduleCheck(jobId, generation, threshold - idleMs);
+  scheduleCheck(
+    jobId,
+    generation,
+    Math.max(
+      1000,
+      Math.min(threshold - idleMs, MAX_DOWNLOAD_WALL_CLOCK_MS - jobWallClockAgeMs(job)),
+    ),
+  );
+}
+
+function scheduleWatchdogCheck(jobId: string, generation: number, job: DownloadJob | undefined): void {
+  const idleDelay = job ? computeDownloadJobStallThresholdMs(job) : PRE_TRANSFER_MAX_MS;
+  const wallRemaining =
+    job != null ? MAX_DOWNLOAD_WALL_CLOCK_MS - jobWallClockAgeMs(job) : MAX_DOWNLOAD_WALL_CLOCK_MS;
+  scheduleCheck(jobId, generation, Math.max(1000, Math.min(idleDelay, wallRemaining)));
 }
 
 function touchEntry(jobId: string): WatchEntry {
@@ -126,16 +254,19 @@ function touchEntry(jobId: string): WatchEntry {
 export function armDownloadJobWatchdog(jobId: string): void {
   const entry = touchEntry(jobId);
   const job = resolveJob(jobId);
-  const delay = job ? computeDownloadJobStallThresholdMs(job) : PRE_TRANSFER_MAX_MS;
-  scheduleCheck(jobId, entry.generation, delay);
+  if (job?.status === "downloading" && jobExceededWallClock(job)) {
+    disarmDownloadJobWatchdog(jobId);
+    onTimeout?.(jobId);
+    return;
+  }
+  scheduleWatchdogCheck(jobId, entry.generation, job);
 }
 
 /** Reset the idle window after progress IPC (or other meaningful activity). */
 export function touchDownloadJobWatchdog(jobId: string): void {
   const entry = touchEntry(jobId);
   const job = resolveJob(jobId);
-  const delay = job ? computeDownloadJobStallThresholdMs(job) : PRE_TRANSFER_MAX_MS;
-  scheduleCheck(jobId, entry.generation, delay);
+  scheduleWatchdogCheck(jobId, entry.generation, job);
 }
 
 export function disarmDownloadJobWatchdog(jobId: string): void {

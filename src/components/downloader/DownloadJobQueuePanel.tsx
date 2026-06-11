@@ -425,7 +425,13 @@ const QueueIconButton = ({
 
 function queuePanelShouldShow(jobs: DownloadJob[]): boolean {
   if (jobs.length === 0) return false;
-  return jobs.some((j) => j.status !== "completed" && j.status !== "failed");
+  return jobs.some(
+    (j) =>
+      j.status !== "completed" &&
+      j.status !== "failed" &&
+      j.status !== "timed_out" &&
+      j.status !== "skipped",
+  );
 }
 
 const DownloadJobRow = ({

@@ -18,10 +18,8 @@ import { MusicStatsView } from "./MusicStatsView";
 import { MusicExploreBottomBar } from "./MusicExploreBottomBar";
 import { MusicNavBackCell } from "./MusicNavBackCell";
 import { MusicExploreDownloadPanel } from "./MusicExploreDownloadPanel";
-import {
-  ExploreDownloadDockChip,
-  type CollapsedCelebrate,
-} from "./MusicExploreDownloadCollapsed";
+import { ExploreDownloadDockChip } from "./MusicExploreDownloadCollapsed";
+import { useMusicDownloadCelebrations } from "@/hooks/useMusicDownloadCelebrations";
 import { NowPlayingBar } from "./NowPlayingBar";
 import { MusicStorageStrip } from "./MusicStorageStrip";
 import { useMusicPlayback } from "./useMusicPlayback";
@@ -74,6 +72,7 @@ import { MusicRightPanel, type RightPanelTab } from "./MusicRightPanel";
 import { useSponsorBlockPlayback } from "@/hooks/useSponsorBlockPlayback";
 import { getRecentHistory, type PlayHistoryEntry } from "./musicPlayHistory";
 import { importLegacyListenDataIfNeeded } from "@/lib/musicListenLegacyImport";
+import { refreshListenIntegrity } from "@/lib/musicListenIntegrity";
 import { refreshListenSnapshot } from "@/lib/musicListenSnapshot";
 import { setPendingListenEndReason } from "@/lib/musicListenSession";
 import { readMusicOnlySkip, writeMusicOnlySkip } from "./musicOnlySkipStorage";
@@ -162,7 +161,6 @@ export function MusicShell() {
   const [panelMode, setPanelMode] = useState<"pick" | "paste">("pick");
   const [pasteUrl, setPasteUrl] = useState("");
   const [dockMinimized, setDockMinimized] = useState(false);
-  const [dockCelebrating, setDockCelebrating] = useState<CollapsedCelebrate | null>(null);
   const [dockPanelSession, setDockPanelSession] = useState(false);
 
   // Right panel state
@@ -222,6 +220,7 @@ export function MusicShell() {
   }, []);
 
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
+  const downloadCelebrating = useMusicDownloadCelebrations(downloadJobs);
   const prevAutoQueueJobsRef = useRef(downloadJobs);
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
   const musicDetail = useRuforgeStore((s) => s.musicDetail);
@@ -279,7 +278,8 @@ export function MusicShell() {
   }, [playingFile?.path]);
 
   useEffect(() => {
-    void importLegacyListenDataIfNeeded().then(() => refreshListenSnapshot());
+    void importLegacyListenDataIfNeeded()
+      .then(() => Promise.all([refreshListenIntegrity(), refreshListenSnapshot()]));
   }, []);
 
   const isPasteMode = panelMode === "paste";
@@ -320,24 +320,24 @@ export function MusicShell() {
       setDockPanelSession(true);
       return;
     }
-    if (!hasActiveDownloadJobs && !dockCelebrating && dockPanelSession) {
+    if (!hasActiveDownloadJobs && !downloadCelebrating && dockPanelSession) {
       const t = window.setTimeout(() => setDockPanelSession(false), 2400);
       return () => window.clearTimeout(t);
     }
   }, [
     explorePanelDockMode,
     hasActiveDownloadJobs,
-    dockCelebrating,
+    downloadCelebrating,
     dockPanelSession,
   ]);
 
   const keepExplorePanelMounted =
     showExplorePanel ||
     hasActiveDownloadJobs ||
-    dockCelebrating != null ||
+    downloadCelebrating != null ||
     (explorePanelDockMode && dockPanelSession);
   const showDownloadDockChip =
-    dockCelebrating != null ||
+    downloadCelebrating != null ||
     hasActiveDownloadJobs ||
     explorePanelDockMode;
 
@@ -346,7 +346,7 @@ export function MusicShell() {
     && !showExploreStrip
     && !playerExpanded
     && !hasActiveDownloadJobs
-    && dockCelebrating == null;
+    && downloadCelebrating == null;
 
   useEffect(() => {
     void fetchEntries();
@@ -502,10 +502,20 @@ export function MusicShell() {
           const base = buildDownloadJobOptions(s.settings, dir);
           const opts = patchDownloadJobOptionsForAudio(base, true, s.settings);
 
+          const videoId = payload.videoId;
           s.enqueueDownload(
             watchUrl,
             opts,
-            { title: payload.title ?? undefined, approval: "auto" },
+            {
+              title: payload.title ?? undefined,
+              approval: "auto",
+              snapshot: {
+                title: payload.title?.trim() || videoId,
+                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+                duration: 0,
+                isPlaylist: false,
+              },
+            },
           );
           s.releaseHeldDownloadJobs();
           s.pumpDownloadQueue();
@@ -963,7 +973,7 @@ export function MusicShell() {
                   showDownloadDockChip ? (
                     <ExploreDownloadDockChip
                       downloadJobs={downloadJobs}
-                      celebrating={dockCelebrating}
+                      celebrating={downloadCelebrating}
                       navCollapsed={navCollapsed}
                       onClick={() => {
                         setDockMinimized(false);
@@ -986,7 +996,7 @@ export function MusicShell() {
                         dockMinimized={explorePanelDockMode}
                         onClose={closeExplorePanel}
                         onMinimize={() => setDockMinimized(true)}
-                        onCelebratingChange={setDockCelebrating}
+                        celebrating={downloadCelebrating}
                       />
                     </div>
                   ) : undefined

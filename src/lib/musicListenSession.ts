@@ -78,10 +78,20 @@ export function pauseListenAccumulator(): void {
   lastListenTickMs = null;
 }
 
+function clearStaleListenSessionState(): void {
+  activeEventId = null;
+  activeIdentityKey = null;
+  resetListenAccumulator();
+}
+
+function isNoActiveListenSessionError(e: unknown): boolean {
+  return String(e).includes("No active listen session");
+}
+
 async function persistAccumulate(force: boolean): Promise<void> {
   if (!activeEventId) return;
+  if (listenAccumSec <= 0) return;
   if (!force && listenAccumSec < ACCUMULATE_FLUSH_SEC) return;
-  if (listenAccumSec <= 0 && !force) return;
   const lastTickAt = Date.now();
   try {
     await invoke("music_listen_accumulate", {
@@ -90,6 +100,10 @@ async function persistAccumulate(force: boolean): Promise<void> {
       lastTickAt,
     });
   } catch (e) {
+    if (isNoActiveListenSessionError(e)) {
+      clearStaleListenSessionState();
+      return;
+    }
     console.warn("music_listen_accumulate failed", e);
   }
 }
@@ -186,9 +200,9 @@ export async function endListenSession(
   const flush = opts?.flush !== false;
   if (flush) {
     await persistAccumulate(true);
+    listenAccumSec = 0;
   }
   const eventId = activeEventId;
-  const finalSec = listenAccumSec;
   activeEventId = null;
   activeIdentityKey = null;
   resetListenAccumulator();
@@ -196,11 +210,13 @@ export async function endListenSession(
     await invoke("music_listen_end", {
       eventId,
       endReason,
-      listenedSec: finalSec,
       endedAt: Date.now(),
     });
     await refreshListenSnapshot();
   } catch (e) {
+    if (isNoActiveListenSessionError(e)) {
+      return;
+    }
     console.warn("music_listen_end failed", e);
   }
 }

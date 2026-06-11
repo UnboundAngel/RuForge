@@ -20,6 +20,7 @@ export function YouTubeProfileChip({ className, size = "md" }: Props) {
   const navMode = useRuforgeStore((s) => s.navMode);
   const activeTab = useRuforgeStore((s) => s.activeTab);
   const musicView = useRuforgeStore((s) => s.musicView);
+  const openProfilePage = useRuforgeStore((s) => s.openProfilePage);
   const authSurfaceActive = isYoutubeAuthSurfaceActive(navMode, activeTab, musicView);
 
   const [imageFailed, setImageFailed] = useState(false);
@@ -43,14 +44,14 @@ export function YouTubeProfileChip({ className, size = "md" }: Props) {
       <div
         className={cn("rf-yt-profile-pill-wrap flex justify-end shrink-0", className)}
       >
-        <div
+        <button
+          type="button"
+          onClick={openProfilePage}
           className={cn(
             "rf-yt-profile-pill rf-yt-profile-pill--avatar-only",
             size === "md" && "rf-yt-profile-pill--md",
           )}
-          tabIndex={0}
-          role="img"
-          aria-label={`Signed in as ${displayName}`}
+          aria-label={`Signed in as ${displayName}. Open profile.`}
         >
           <div className="rf-yt-profile-pill__avatar-wrap">
             <img
@@ -76,7 +77,7 @@ export function YouTubeProfileChip({ className, size = "md" }: Props) {
           <div className="rf-yt-profile-pill__label-wrap">
             <span className="rf-yt-profile-pill__label">{hoverLabel}</span>
           </div>
-        </div>
+        </button>
       </div>
     );
   }
