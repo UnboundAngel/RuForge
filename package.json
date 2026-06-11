@@ -1,7 +1,7 @@
 {
   "name": "ruforge",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.1.10",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "build:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-signed-windows.ps1",
+    "prep:website-release": "node scripts/sync-website-release.mjs",
+    "prep:website-release:changelog-only": "node scripts/sync-website-release.mjs --skip-installer --skip-build",
     "test": "vitest run"
   },
   "dependencies": {

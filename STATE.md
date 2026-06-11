@@ -6,14 +6,14 @@
 > this header. If this file and the code disagree, the code wins and this
 > file is stale: fix it forward, do not trust it blindly.
 
-Shipping version: 0.1.10 (unreleased)
+Shipping version: 0.1.11 (unreleased)
 Last shipped to users: 0.1.9
-Last updated: 2026-06-10 (Download watchdog: meaningful progress + audio timeout)
+Last updated: 2026-06-11 (0.1.10 release prep: updater notes, website changelog)
 Status: in progress
 
 ## Now
 
-0.1.10 cycle open on main. Download watchdog: only real byte/% advances reset idle; audio-only stalls yellow-timeout; 30s pre-transfer / 45s audio idle / 2m wall clock from downloadingSince; arm after yt-dlp start. Music Explore auto-save waits 15s on same track. Listen log P0 fix in tree. Last user release is 0.1.9.
+0.1.10 is prepped on main (version triplet 0.1.10, updater.json notes, `/changelog` entry). Live auto-update still serves 0.1.9 until Angel runs signed build, pastes NSIS signature into `updater.json`, and pushes. Then `gh release create v0.1.10` with the installer. Open cycle is 0.1.11.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -26,6 +26,23 @@ local dev, not a shipped target yet.
 
 Closed release 0.1.9 (what users on 0.1.9 receive). The release-note drafter
 reads this for the last shipped delta, not the git tree.
+
+**0.1.10 (prepped, not yet on updater):**
+
+Additions:
+- Website release automation (`prep:website-release`, site version from package.json).
+- Listen-event log (Rust JSONL, dual-surface sessions, stats from snapshot).
+- Music profile screen (YouTube identity, stats, liked, recent plays, storage).
+- Music storage strip on Home/Library.
+- YouTube titlebar profile chip (Log in pill, spinner, @handle hover).
+
+Fixes:
+- Music Explore auto-save 15s listen gate.
+- Download complete celebrations and watchdog timeout/batch advance pass.
+- Listen log integrity (v2 events, cutover marker).
+- Music mini corners and skip autoplay.
+- Music stats/profile/home layout and copy polish.
+- Storage glyph opens cleanup; YouTube @handle probe scoped to topbar.
 
 **0.1.9 shipped:**
 
@@ -57,13 +74,13 @@ Fixes:
 
 ## Open P0 (blocks release)
 
-(none)
+0.1.10 blocked on signed Windows build + updater.json signature push (Angel only).
 
 ## Next 3 (priority order)
 
-1. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
-2. Downloader UI polish (#12 Jim pass) or mid-download drop E2E verify (#15).
-3. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell (cut from Music Phase A/B plan; needs its own pass).
+1. Angel: `Build-signed-windows.bat`, paste NSIS `.sig` into `updater.json`, push, `gh release create v0.1.10`.
+2. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
+3. Downloader UI polish (#12 Jim pass) or mid-download drop E2E verify (#15).
 
 ## Notes (not P0)
 

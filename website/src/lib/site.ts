@@ -1,3 +1,5 @@
+import { APP_VERSION } from './appVersion';
+
 export const SITE = {
   name: 'RuForge',
   url: 'https://ruforge.app',
@@ -8,7 +10,7 @@ export const SITE = {
   releases: 'https://github.com/UnboundAngel/RuForge/releases',
   discussions: 'https://github.com/UnboundAngel/RuForge/discussions',
   license: 'https://github.com/UnboundAngel/RuForge/blob/main/LICENSE',
-  latestVersion: '0.1.9',
+  latestVersion: APP_VERSION,
   ogImage:
     'https://repository-images.githubusercontent.com/1235101565/9467631f-98c4-4fac-b475-4c1020ec9868',
 } as const;
