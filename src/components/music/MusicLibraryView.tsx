@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { resolveLikedFiles } from "./musicLikedTracks";
-import { MusicStatsView } from "./MusicStatsView";
+import { MusicProfileView } from "./MusicProfileView";
 import { LikedSongsCover } from "./LikedSongsCover";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 
@@ -268,7 +268,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
             }
           >
             {t.label}
-            {t.count != null && t.count > 0 ? ` · ${t.count}` : ""}
+            {t.count != null && t.count > 0 ? ` (${t.count})` : ""}
           </button>
         ))}
       </div>
@@ -276,7 +276,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
       {/* Content */}
       <div className="flex-1 overflow-y-auto py-2" style={{ scrollbarColor: "var(--music-border) transparent" }}>
         {activeTab === "stats" && (
-          <MusicStatsView />
+          <MusicProfileView />
         )}
 
         {activeTab === "liked" && (

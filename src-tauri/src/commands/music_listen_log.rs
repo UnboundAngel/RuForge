@@ -12,8 +12,12 @@ const EVENTS_FILENAME: &str = "music-listen-events.jsonl";
 const ACTIVE_FILENAME: &str = "music-listen-active.json";
 const SNAPSHOT_FILENAME: &str = "music-listen-snapshot.json";
 const ROLLUP_FILENAME: &str = "music-listen-rollup.json";
+const INTEGRITY_FILENAME: &str = "music-listen-integrity.json";
 
 const SCHEMA_V: i32 = 1;
+const EVENT_SCHEMA_V_LEGACY: i32 = 1;
+const EVENT_SCHEMA_V: i32 = 2;
+const INTEGRITY_SCHEMA_V: i32 = 1;
 const SNAPSHOT_STATS_CAP: usize = 500;
 const SNAPSHOT_HISTORY_CAP: usize = 50;
 const RAW_RETENTION_MS: i64 = 24 * 30 * 24 * 60 * 60 * 1000; // ~24 months
@@ -282,6 +286,45 @@ fn rollup_path(dir: &Path) -> PathBuf {
     dir.join(ROLLUP_FILENAME)
 }
 
+fn integrity_path(dir: &Path) -> PathBuf {
+    dir.join(INTEGRITY_FILENAME)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListenIntegrity {
+    pub v: i32,
+    pub stats_trustworthy_after_ms: i64,
+}
+
+fn read_integrity(dir: &Path) -> Result<ListenIntegrity, String> {
+    let path = integrity_path(dir);
+    if !path.is_file() {
+        return Err("Listen integrity file missing".to_string());
+    }
+    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&raw).map_err(|e| format!("Invalid listen integrity: {e}"))
+}
+
+fn write_integrity(dir: &Path, integrity: &ListenIntegrity) -> Result<(), String> {
+    ensure_data_dir(dir)?;
+    let raw = serde_json::to_string(integrity).map_err(|e| e.to_string())?;
+    fs::write(integrity_path(dir), raw).map_err(|e| e.to_string())
+}
+
+/// Set once on first post-fix startup. Never overwritten; survives clear/rebuild.
+fn ensure_integrity_cutover(dir: &Path) -> Result<ListenIntegrity, String> {
+    if integrity_path(dir).is_file() {
+        return read_integrity(dir);
+    }
+    let integrity = ListenIntegrity {
+        v: INTEGRITY_SCHEMA_V,
+        stats_trustworthy_after_ms: Utc::now().timestamp_millis(),
+    };
+    write_integrity(dir, &integrity)?;
+    Ok(integrity)
+}
+
 fn ensure_data_dir(dir: &Path) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| e.to_string())
 }
@@ -360,7 +403,7 @@ fn write_rollup(dir: &Path, rollup: &RollupFile) -> Result<(), String> {
 }
 
 fn validate_closed_event(event: &TrackPlayedEvent) -> bool {
-    if event.v != SCHEMA_V {
+    if event.v != EVENT_SCHEMA_V_LEGACY && event.v != EVENT_SCHEMA_V {
         return false;
     }
     if event.event_type != "track_played" {
@@ -377,7 +420,7 @@ fn validate_closed_event(event: &TrackPlayedEvent) -> bool {
 
 fn build_event_from_active(active: &ActiveSession, end_reason: EndReason, ended_at: i64) -> TrackPlayedEvent {
     TrackPlayedEvent {
-        v: SCHEMA_V,
+        v: EVENT_SCHEMA_V,
         id: active.id.clone(),
         event_type: "track_played".to_string(),
         identity_key: active.identity_key.clone(),
@@ -585,6 +628,11 @@ fn rebuild_snapshot_from_sources(dir: &Path) -> Result<ListenSnapshot, String> {
 
 fn close_orphan_active_if_any(dir: &Path) -> Result<(), String> {
     if let Some(active) = read_active(dir)? {
+        let never_accumulated =
+            active.listened_sec <= 0.0 && active.last_tick_at <= active.started_at;
+        if never_accumulated {
+            return clear_active(dir);
+        }
         let ended_at = active.last_tick_at.max(active.started_at);
         let _ = close_active_session(dir, active, EndReason::AbandonedPaused, ended_at)?;
     }
@@ -670,11 +718,19 @@ fn prune_old_events(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn boot_housekeeping(app: &AppHandle) -> Result<(), String> {
-    let dir = data_dir(app)?;
-    close_orphan_active_if_any(&dir)?;
-    prune_old_events(&dir)?;
-    Ok(())
+fn prune_if_needed(app: &AppHandle) -> Result<(), String> {
+    prune_old_events(&data_dir(app)?)
+}
+
+/// Crash recovery only: call once per process start, not during playback.
+pub fn music_listen_startup_housekeeping(app: &AppHandle) -> Result<(), String> {
+    with_log_lock(|| {
+        let dir = data_dir(app)?;
+        ensure_integrity_cutover(&dir)?;
+        close_orphan_active_if_any(&dir)?;
+        prune_old_events(&dir)?;
+        Ok(())
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -694,7 +750,7 @@ pub fn music_listen_begin(
 ) -> Result<ListenBeginResult, String> {
     with_log_lock(|| {
         let dir = data_dir(&app)?;
-        boot_housekeeping(&app)?;
+        prune_if_needed(&app)?;
 
         if meta.identity_key.trim().is_empty() {
             return Err("identityKey is required".to_string());
@@ -759,7 +815,11 @@ pub fn music_listen_accumulate(
         if active.id != event_id {
             return Err("Active session id mismatch".to_string());
         }
-        active.listened_sec = listened_sec.max(0.0);
+        let delta = listened_sec.max(0.0);
+        if delta <= 0.0 {
+            return Ok(());
+        }
+        active.listened_sec += delta;
         active.last_tick_at = last_tick_at.max(active.started_at);
         write_active(&dir, &active)
     })
@@ -773,18 +833,15 @@ pub fn music_listen_end(
     listened_sec: Option<f64>,
     ended_at: Option<i64>,
 ) -> Result<(), String> {
+    let _ = listened_sec;
     with_log_lock(|| {
         let dir = data_dir(&app)?;
         let reason = EndReason::parse(&end_reason).ok_or_else(|| format!("Invalid endReason: {end_reason}"))?;
-        let mut active = read_active(&dir)?.ok_or_else(|| "No active listen session".to_string())?;
+        let active = read_active(&dir)?.ok_or_else(|| "No active listen session".to_string())?;
         if active.id != event_id {
             return Err("Active session id mismatch".to_string());
         }
-        if let Some(sec) = listened_sec {
-            active.listened_sec = sec.max(0.0);
-        }
         let ended = ended_at.unwrap_or_else(|| Utc::now().timestamp_millis());
-        active.last_tick_at = ended.max(active.started_at);
         close_active_session(&dir, active, reason, ended)?;
         prune_old_events(&dir)?;
         Ok(())
@@ -792,12 +849,13 @@ pub fn music_listen_end(
 }
 
 #[tauri::command]
+pub fn music_listen_get_integrity(app: AppHandle) -> Result<ListenIntegrity, String> {
+    with_log_lock(|| ensure_integrity_cutover(&data_dir(&app)?))
+}
+
+#[tauri::command]
 pub fn music_listen_get_snapshot(app: AppHandle) -> Result<ListenSnapshot, String> {
-    with_log_lock(|| {
-        let dir = data_dir(&app)?;
-        close_orphan_active_if_any(&dir)?;
-        read_snapshot_file(&dir)
-    })
+    with_log_lock(|| read_snapshot_file(&data_dir(&app)?))
 }
 
 #[tauri::command]
@@ -915,6 +973,17 @@ mod tests {
         write_active(dir, &active)
     }
 
+    fn accumulate_session(dir: &Path, delta: f64, last_tick_at: i64) -> Result<(), String> {
+        let mut active = read_active(dir)?.ok_or_else(|| "No active session".to_string())?;
+        let delta = delta.max(0.0);
+        if delta <= 0.0 {
+            return Ok(());
+        }
+        active.listened_sec += delta;
+        active.last_tick_at = last_tick_at.max(active.started_at);
+        write_active(dir, &active)
+    }
+
     fn end_session(
         dir: &Path,
         reason: EndReason,
@@ -927,6 +996,11 @@ mod tests {
         close_active_session(dir, session, reason, ended_at)
     }
 
+    fn end_session_as_client(dir: &Path, reason: EndReason, ended_at: i64) -> Result<TrackPlayedEvent, String> {
+        let active = read_active(dir)?.ok_or_else(|| "No active session".to_string())?;
+        close_active_session(dir, active, reason, ended_at)
+    }
+
     fn read_events(dir: &Path) -> Vec<TrackPlayedEvent> {
         parse_events_jsonl(dir).unwrap_or_default()
     }
@@ -937,7 +1011,7 @@ mod tests {
         let path = dir.path();
 
         let event = TrackPlayedEvent {
-            v: SCHEMA_V,
+            v: EVENT_SCHEMA_V_LEGACY,
             id: "test-id".to_string(),
             event_type: "track_played".to_string(),
             identity_key: "id:abc".to_string(),
@@ -1032,17 +1106,39 @@ mod tests {
     }
 
     #[test]
-    fn verify_orphan_active_closed_as_abandoned_paused() {
+    fn verify_orphan_zero_progress_discarded_not_logged() {
         let dir = tempdir().unwrap();
         let path = dir.path();
         open_session(path, "evt-orphan", &sample_meta("id:orphan"), Surface::Main, 1_700_000_500_000)
             .unwrap();
         close_orphan_active_if_any(path).unwrap();
 
+        assert_eq!(read_events(path).len(), 0);
+        assert!(!active_path(path).exists());
+    }
+
+    #[test]
+    fn verify_orphan_with_listen_time_logged_abandoned_paused() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        open_session(
+            path,
+            "evt-orphan-heard",
+            &sample_meta("id:orphan-heard"),
+            Surface::Main,
+            1_700_000_550_000,
+        )
+        .unwrap();
+        let mut active = read_active(path).unwrap().unwrap();
+        active.listened_sec = 22.0;
+        active.last_tick_at = active.started_at + 22_000;
+        write_active(path, &active).unwrap();
+        close_orphan_active_if_any(path).unwrap();
+
         let events = read_events(path);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].end_reason, "abandoned_paused");
-        assert!(active_path(path).exists() == false);
+        assert_eq!(events[0].listened_sec, Some(22.0));
     }
 
     #[test]
@@ -1082,5 +1178,66 @@ mod tests {
         }
         end_session(path, EndReason::Completed, 30.0, 1_700_000_730_000).unwrap();
         assert_eq!(read_events(path).len(), 1);
+    }
+
+    #[test]
+    fn verify_multi_flush_accumulates_total() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let started = 1_700_001_000_000_i64;
+        open_session(path, "evt-multi", &sample_meta("id:multi"), Surface::Main, started).unwrap();
+        accumulate_session(path, 15.0, started + 15_000).unwrap();
+        accumulate_session(path, 15.0, started + 30_000).unwrap();
+        accumulate_session(path, 12.0, started + 42_000).unwrap();
+        let event = end_session_as_client(path, EndReason::Completed, started + 42_000).unwrap();
+
+        assert_eq!(event.v, EVENT_SCHEMA_V);
+        assert_eq!(event.listened_sec, Some(42.0));
+        let snap = read_snapshot_file(path).unwrap();
+        assert_eq!(snap.stats[0].listen_time_sec, 42.0);
+    }
+
+    #[test]
+    fn verify_end_after_flush_preserves_total() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let started = 1_700_001_100_000_i64;
+        open_session(path, "evt-flush-end", &sample_meta("id:flush-end"), Surface::Main, started)
+            .unwrap();
+        accumulate_session(path, 30.0, started + 30_000).unwrap();
+        accumulate_session(path, 0.0, started + 30_001).unwrap();
+        let event = end_session_as_client(path, EndReason::Completed, started + 30_000).unwrap();
+
+        assert_eq!(event.listened_sec, Some(30.0));
+    }
+
+    #[test]
+    fn verify_integrity_cutover_survives_clear_and_rebuild() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let integrity = ensure_integrity_cutover(path).unwrap();
+        open_session(path, "evt-int", &sample_meta("id:int"), Surface::Main, 1_700_001_200_000)
+            .unwrap();
+        end_session(path, EndReason::Completed, 5.0, 1_700_001_205_000).unwrap();
+        rebuild_snapshot_from_sources(path).unwrap();
+
+        for name in [EVENTS_FILENAME, ACTIVE_FILENAME, SNAPSHOT_FILENAME, ROLLUP_FILENAME] {
+            let p = path.join(name);
+            if p.is_file() {
+                fs::remove_file(p).unwrap();
+            }
+        }
+        assert!(integrity_path(path).is_file());
+        let after = read_integrity(path).unwrap();
+        assert_eq!(
+            after.stats_trustworthy_after_ms,
+            integrity.stats_trustworthy_after_ms
+        );
+        ensure_integrity_cutover(path).unwrap();
+        let again = read_integrity(path).unwrap();
+        assert_eq!(
+            again.stats_trustworthy_after_ms,
+            integrity.stats_trustworthy_after_ms
+        );
     }
 }

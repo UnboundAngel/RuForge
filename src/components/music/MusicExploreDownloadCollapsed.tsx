@@ -1,21 +1,31 @@
-import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+﻿import { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronDown, ChevronUp, Music2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Music2, TriangleAlert } from "lucide-react";
 import type { DownloadJob } from "@/downloadQueue";
 import { jobHasDownloadTransferStarted } from "@/downloadQueue";
 import {
   isActiveMusicExploreDownloadUi,
   musicExploreTrackDownloadUi,
 } from "@/lib/musicExploreDownloadStatus";
-import type { MusicTrackInfo } from "@/lib/musicExploreTracks";
-import { youtubeUrlsMatch } from "@/youtubeUrl";
+import { isLikelyImageUrl, type MusicTrackInfo } from "@/lib/musicExploreTracks";
+import { extractYouTubeVideoId, youtubeUrlsMatch } from "@/youtubeUrl";
 import { cn } from "@/lib/utils";
 
 export type CollapsedCelebrate = {
   url: string;
   title: string;
   thumbnail: string | null;
+  warning?: boolean;
+  startPct?: number;
 };
+
+function resolveTrackThumb(thumbnail: string | null | undefined, url: string): string | null {
+  const trimmed = thumbnail?.trim();
+  if (trimmed && isLikelyImageUrl(trimmed)) return trimmed;
+  const videoId = extractYouTubeVideoId(url);
+  if (videoId) return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  return null;
+}
 
 const STROKE = 2;
 const ORB_RING_OUTSET = 4;
@@ -24,26 +34,77 @@ const ORB_GAP = 8;
 const CHIP_SIZE = 36;
 const CHIP_THUMB = 28;
 const SIDEBAR_MS = 200;
-const SUCCESS_REVEAL_MS = 420;
+const ORB_COMPLETE_FILL_MS = 520;
 const CHIP_EXIT_MS = 320;
+
+function clampPct(value: number): number {
+  return Math.min(100, Math.max(0, value));
+}
+
+function useOrbCompleteSequence(active: boolean, startPct: number) {
+  const [ringPct, setRingPct] = useState(() => clampPct(startPct));
+  const [completeVisual, setCompleteVisual] = useState(false);
+  const [iconOpacity, setIconOpacity] = useState(0);
+  const [iconScale, setIconScale] = useState(0.55);
+
+  useLayoutEffect(() => {
+    if (!active) {
+      setCompleteVisual(false);
+      setIconOpacity(0);
+      setIconScale(0.55);
+      return;
+    }
+
+    const start = clampPct(startPct);
+    setRingPct(start);
+    setCompleteVisual(false);
+    setIconOpacity(0);
+    setIconScale(0.55);
+
+    let kick2 = 0;
+    const kick1 = requestAnimationFrame(() => {
+      kick2 = requestAnimationFrame(() => {
+        setCompleteVisual(true);
+        setRingPct(100);
+        setIconOpacity(1);
+        setIconScale(1);
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(kick1);
+      cancelAnimationFrame(kick2);
+    };
+  }, [active, startPct]);
+
+  return { ringPct, completeVisual, iconOpacity, iconScale };
+}
 
 function OrbRing({
   pct,
   indeterminate,
   success,
+  warning,
   orbSize,
+  progressClassName = "rf-dock-chip-progress-stroke",
 }: {
   pct: number;
   indeterminate?: boolean;
   success?: boolean;
+  warning?: boolean;
   orbSize: number;
+  progressClassName?: string;
 }) {
   const ringSz = orbSize + 8;
   const r = (ringSz - STROKE) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ - (Math.min(100, Math.max(0, pct)) / 100) * circ;
-  const stroke = success ? "#22c55e" : "var(--music-accent)";
-  const track = success ? "rgb(34 197 94 / 0.2)" : "rgb(255 255 255 / 0.12)";
+  const stroke = warning ? "#eab308" : success ? "#22c55e" : "var(--music-accent)";
+  const track = warning
+    ? "rgb(234 179 8 / 0.2)"
+    : success
+      ? "rgb(34 197 94 / 0.2)"
+      : "rgb(255 255 255 / 0.12)";
 
   const svg = (
     <svg
@@ -64,7 +125,7 @@ function OrbRing({
         strokeDasharray={indeterminate ? `${circ * 0.28} ${circ * 0.72}` : circ}
         strokeDashoffset={indeterminate ? 0 : offset}
         transform={`rotate(-90 ${ringSz / 2} ${ringSz / 2})`}
-        className="rf-dock-chip-progress-stroke"
+        className={progressClassName}
       />
     </svg>
   );
@@ -103,7 +164,12 @@ function TrackThumb({
       style={{ width: size, height: size }}
     >
       {thumbnail ? (
-        <img src={thumbnail} alt={title} className="w-full h-full object-cover" />
+        <img
+          src={thumbnail}
+          alt={title}
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover"
+        />
       ) : (
         <div
           className="w-full h-full flex items-center justify-center"
@@ -120,13 +186,21 @@ function PillProgressBorder({
   pct,
   indeterminate,
   success,
+  warning,
+  progressClassName = "rf-dock-chip-progress-stroke",
 }: {
   pct: number;
   indeterminate?: boolean;
   success?: boolean;
+  warning?: boolean;
+  progressClassName?: string;
 }) {
-  const stroke = success ? "#22c55e" : "var(--music-accent)";
-  const track = success ? "rgb(34 197 94 / 0.2)" : "rgb(255 255 255 / 0.12)";
+  const stroke = warning ? "#eab308" : success ? "#22c55e" : "var(--music-accent)";
+  const track = warning
+    ? "rgb(234 179 8 / 0.2)"
+    : success
+      ? "rgb(34 197 94 / 0.2)"
+      : "rgb(255 255 255 / 0.12)";
   const clamped = Math.min(100, Math.max(0, pct));
   const dash = indeterminate ? "28 72" : `${clamped} ${100 - clamped}`;
 
@@ -163,7 +237,7 @@ function PillProgressBorder({
         strokeDasharray={dash}
         vectorEffect="non-scaling-stroke"
         className={cn(
-          "rf-dock-chip-progress-stroke",
+          progressClassName,
           indeterminate && "rf-dock-pill-indeterminate-stroke",
         )}
       />
@@ -176,17 +250,28 @@ function TrackOrb({
   title,
   pct,
   indeterminate,
-  success,
+  completing,
+  completeStartPct,
+  warning,
   size,
 }: {
   thumbnail: string | null;
   title: string;
   pct: number;
   indeterminate?: boolean;
-  success?: boolean;
+  completing?: boolean;
+  completeStartPct?: number;
+  warning?: boolean;
   size: number;
 }) {
+  const seq = useOrbCompleteSequence(!!completing, completeStartPct ?? pct);
+  const displayPct = completing ? seq.ringPct : pct;
+  const ringSuccess = !!completing && !warning;
+  const ringWarning = !!completing && !!warning;
+  const showIcon = !!completing;
   const frame = size + ORB_RING_OUTSET * 2;
+  const iconSize = Math.round(size * 0.38);
+
   return (
     <div
       className="relative shrink-0 overflow-visible flex items-center justify-center"
@@ -195,23 +280,34 @@ function TrackOrb({
       <div className="relative" style={{ width: size, height: size }}>
         <TrackThumb thumbnail={thumbnail} title={title} size={size} />
 
-        <OrbRing pct={pct} indeterminate={indeterminate} success={success} orbSize={size} />
+        <OrbRing
+          pct={displayPct}
+          indeterminate={indeterminate && !completing}
+          success={ringSuccess}
+          warning={ringWarning}
+          orbSize={size}
+          progressClassName={completing ? "rf-orb-complete-stroke" : "rf-dock-chip-progress-stroke"}
+        />
 
-        {success && (
-          <motion.div
-            key="success"
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: "spring", stiffness: 380, damping: 22 }}
-            className="absolute inset-0 flex items-center justify-center rounded-full pointer-events-none z-[1]"
-            style={{ background: "rgb(0 0 0 / 0.5)" }}
+        {showIcon && (
+          <div
+            className="absolute inset-0 z-[1] flex items-center justify-center rounded-full pointer-events-none"
+            style={{
+              background: "rgb(0 0 0 / 0.5)",
+              opacity: seq.iconOpacity,
+              transform: `scale(${seq.iconScale})`,
+              transition: `
+                transform ${ORB_COMPLETE_FILL_MS}ms cubic-bezier(0.16, 1, 0.3, 1),
+                opacity ${ORB_COMPLETE_FILL_MS}ms ease-out
+              `,
+            }}
           >
-            <Check
-              size={Math.round(size * 0.38)}
-              strokeWidth={2.5}
-              style={{ color: "#22c55e" }}
-            />
-          </motion.div>
+            {warning ? (
+              <TriangleAlert size={iconSize} strokeWidth={2.5} style={{ color: "#eab308" }} />
+            ) : (
+              <Check size={iconSize} strokeWidth={2.5} style={{ color: "#22c55e" }} />
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -228,8 +324,22 @@ function visibleCollapsedTracks(
   downloadJobs: DownloadJob[],
   celebrating: CollapsedCelebrate | null,
 ): MusicTrackInfo[] {
+  if (celebrating) {
+    const hit = items.find((t) => youtubeUrlsMatch(t.url, celebrating.url));
+    if (hit) return [hit];
+    return [
+      {
+        id: celebrating.url,
+        title: celebrating.title,
+        url: celebrating.url,
+        duration: null,
+        thumbnail: celebrating.thumbnail,
+        artist: null,
+        album: null,
+      },
+    ];
+  }
   return items.filter((t) => {
-    if (celebrating && youtubeUrlsMatch(t.url, celebrating.url)) return true;
     return isActiveMusicExploreDownloadUi(
       musicExploreTrackDownloadUi(downloadJobs, t.url),
     );
@@ -380,13 +490,18 @@ export function MusicExploreDownloadCollapsed({
             stackTracks.map((track, index) => {
               const isCelebrating =
                 !!celebrating && youtubeUrlsMatch(track.url, celebrating.url);
+              const isWarningCelebrate = isCelebrating && !!celebrating?.warning;
               const isFocal =
                 !!focalTrack && youtubeUrlsMatch(track.url, focalTrack.url);
               const job = jobForTrack(downloadJobs, track.url);
-              const pct = isCelebrating ? 100 : (job?.progress?.percentage ?? 0);
+              const rawLivePct = clampPct(job?.progress?.percentage ?? 0);
+              const livePct =
+                !isCelebrating && job?.status === "downloading"
+                  ? Math.min(rawLivePct, 99)
+                  : rawLivePct;
               const indeterminate =
                 !isCelebrating &&
-                pct < 100 &&
+                livePct < 100 &&
                 !!job &&
                 (job.status === "queued" ||
                   job.status === "paused" ||
@@ -395,7 +510,15 @@ export function MusicExploreDownloadCollapsed({
               const opacity = stackOrbOpacity(index, stackTracks.length, isFocal);
               const canToggleStack =
                 playlistBatch && isFocal && visibleItems.length > 1;
-              const orbPhase = isCelebrating ? "success" : job?.status ?? "idle";
+              const completeStartPct = isCelebrating
+                ? Math.min(clampPct(celebrating?.startPct ?? livePct), 99)
+                : livePct;
+              const thumbSrc = resolveTrackThumb(
+                isCelebrating
+                  ? celebrating?.thumbnail ?? track.thumbnail
+                  : track.thumbnail,
+                track.url,
+              );
 
               return (
                 <motion.div
@@ -431,12 +554,13 @@ export function MusicExploreDownloadCollapsed({
                   }
                 >
                   <TrackOrb
-                    key={`${track.url}-${orbPhase}`}
-                    thumbnail={track.thumbnail}
-                    title={track.title}
-                    pct={pct}
+                    thumbnail={thumbSrc}
+                    title={isCelebrating ? celebrating?.title ?? track.title : track.title}
+                    pct={livePct}
                     indeterminate={indeterminate}
-                    success={isCelebrating}
+                    completing={isCelebrating}
+                    completeStartPct={completeStartPct}
+                    warning={isWarningCelebrate}
                     size={ORB_SIZE}
                   />
                 </motion.div>
@@ -475,14 +599,24 @@ export function ExploreDownloadDockChip({
   const hasWork = count > 0 || !!celebrating;
   const [present, setPresent] = useState(hasWork);
   const [fadingOut, setFadingOut] = useState(false);
-  const [displayPct, setDisplayPct] = useState(0);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [livePct, setLivePct] = useState(0);
   const lastPctRef = useRef(0);
 
   const title =
     celebrating?.title ?? activeJob?.metadata?.title ?? "Downloading";
-  const thumbnail =
-    celebrating?.thumbnail ?? activeJob?.metadata?.thumbnail ?? null;
+  const thumbnail = resolveTrackThumb(
+    celebrating?.thumbnail ?? activeJob?.metadata?.thumbnail ?? null,
+    celebrating?.url ?? activeJob?.url ?? "",
+  );
+  const warningVisual = !!celebrating?.warning;
+  const completeStartPct = celebrating
+    ? Math.min(clampPct(celebrating.startPct ?? lastPctRef.current), 99)
+    : livePct;
+  const completeSeq = useOrbCompleteSequence(!!celebrating, completeStartPct);
+  const displayPct = celebrating ? completeSeq.ringPct : livePct;
+  const ringSuccess = !!celebrating && !warningVisual;
+  const ringWarning = !!celebrating && warningVisual;
+  const showCompleteIcon = !!celebrating;
 
   useEffect(() => {
     if (hasWork) {
@@ -495,8 +629,7 @@ export function ExploreDownloadDockChip({
     const t = window.setTimeout(() => {
       setPresent(false);
       setFadingOut(false);
-      setDisplayPct(0);
-      setShowSuccess(false);
+      setLivePct(0);
       lastPctRef.current = 0;
     }, CHIP_EXIT_MS);
     return () => window.clearTimeout(t);
@@ -505,10 +638,12 @@ export function ExploreDownloadDockChip({
   useEffect(() => {
     if (celebrating) return;
     if (!activeJob) return;
-    const pct = Math.min(100, Math.max(0, activeJob.progress?.percentage ?? 0));
+    const pct =
+      activeJob.status === "downloading"
+        ? Math.min(clampPct(activeJob.progress?.percentage ?? 0), 99)
+        : clampPct(activeJob.progress?.percentage ?? 0);
     lastPctRef.current = pct;
-    setShowSuccess(false);
-    setDisplayPct(pct);
+    setLivePct(pct);
   }, [
     celebrating,
     activeJob?.id,
@@ -516,46 +651,21 @@ export function ExploreDownloadDockChip({
     activeJob?.progress?.percentage,
   ]);
 
-  useEffect(() => {
-    if (!celebrating) {
-      setShowSuccess(false);
-      return;
-    }
-
-    setShowSuccess(false);
-    setDisplayPct(lastPctRef.current);
-
-    const fillTimer = window.setTimeout(() => {
-      lastPctRef.current = 100;
-      setDisplayPct(100);
-    }, 48);
-
-    const revealTimer = window.setTimeout(() => {
-      setShowSuccess(true);
-    }, SUCCESS_REVEAL_MS + 48);
-
-    return () => {
-      window.clearTimeout(fillTimer);
-      window.clearTimeout(revealTimer);
-    };
-  }, [celebrating?.url]);
-
-  const successVisual = showSuccess;
-
   const indeterminate =
-    !successVisual &&
     !celebrating &&
     !!activeJob &&
-    (displayPct < 100 &&
-      (activeJob.status === "queued" ||
-        activeJob.status === "paused" ||
-        (activeJob.status === "downloading" &&
-          !jobHasDownloadTransferStarted(activeJob))));
+    livePct < 100 &&
+    (activeJob.status === "queued" ||
+      activeJob.status === "paused" ||
+      (activeJob.status === "downloading" &&
+        !jobHasDownloadTransferStarted(activeJob)));
 
   if (!present) return null;
 
-  const ariaLabel = successVisual || celebrating
-    ? "Download complete. Click to expand."
+  const ariaLabel = showCompleteIcon || celebrating
+    ? warningVisual
+      ? "Download timed out. Click to expand."
+      : "Download complete. Click to expand."
     : `${count} download${count !== 1 ? "s" : ""} in progress. Click to expand.`;
 
   return (
@@ -589,7 +699,9 @@ export function ExploreDownloadDockChip({
         <PillProgressBorder
           pct={displayPct}
           indeterminate={indeterminate}
-          success={successVisual}
+          success={ringSuccess}
+          warning={ringWarning}
+          progressClassName={celebrating ? "rf-orb-complete-stroke" : "rf-dock-chip-progress-stroke"}
         />
       </div>
 
@@ -627,32 +739,43 @@ export function ExploreDownloadDockChip({
             <OrbRing
               pct={displayPct}
               indeterminate={indeterminate}
-              success={successVisual}
+              success={ringSuccess}
+              warning={ringWarning}
               orbSize={CHIP_SIZE}
+              progressClassName={celebrating ? "rf-orb-complete-stroke" : "rf-dock-chip-progress-stroke"}
             />
           </div>
 
-          <AnimatePresence>
-            {successVisual && (
-              <motion.div
-                key={`success-${celebrating?.url ?? "done"}`}
-                initial={{ opacity: 0, scale: 0.55 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.85 }}
-                transition={{ type: "spring", stiffness: 340, damping: 24 }}
-                className="absolute inset-0 z-[1] flex items-center justify-center rounded-full pointer-events-none"
-                style={{ background: "rgb(0 0 0 / 0.5)" }}
-              >
+          {showCompleteIcon && (
+            <div
+              className="absolute inset-0 z-[1] flex items-center justify-center rounded-full pointer-events-none"
+              style={{
+                background: "rgb(0 0 0 / 0.5)",
+                opacity: completeSeq.iconOpacity,
+                transform: `scale(${completeSeq.iconScale})`,
+                transition: `
+                  transform ${ORB_COMPLETE_FILL_MS}ms cubic-bezier(0.16, 1, 0.3, 1),
+                  opacity ${ORB_COMPLETE_FILL_MS}ms ease-out
+                `,
+              }}
+            >
+              {warningVisual ? (
+                <TriangleAlert
+                  size={navCollapsed ? 14 : 12}
+                  strokeWidth={2.5}
+                  style={{ color: "#eab308" }}
+                />
+              ) : (
                 <Check
                   size={navCollapsed ? 14 : 12}
                   strokeWidth={2.5}
                   style={{ color: "#22c55e" }}
                 />
-              </motion.div>
-            )}
-          </AnimatePresence>
+              )}
+            </div>
+          )}
 
-          {navCollapsed && !successVisual && count > 1 && (
+          {navCollapsed && !showCompleteIcon && count > 1 && (
             <span
               className="absolute inset-0 z-[1] flex items-center justify-center rounded-full pointer-events-none"
               style={{ background: "rgb(0 0 0 / 0.42)" }}

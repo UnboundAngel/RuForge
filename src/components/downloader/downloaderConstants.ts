@@ -16,6 +16,7 @@ export const DOWNLOAD_JOB_STATUS_LABEL: Record<DownloadJob["status"], string> = 
   paused: "Paused",
   completed: "Completed",
   failed: "Failed",
+  timed_out: "Timed out",
   skipped: LIBRARY_DUPLICATE_SKIP_MESSAGE,
 };
 

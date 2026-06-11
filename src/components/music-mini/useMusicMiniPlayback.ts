@@ -254,27 +254,30 @@ export function useMusicMiniPlayback() {
       applyHandoff(e.payload);
     });
     const unlistenStop = listen("stop-music-mini-playback", () => {
-      const el = audioRef.current;
-      if (el) {
-        el.pause();
-        el.removeAttribute("src");
-        el.load();
-      }
-      loadedPathRef.current = null;
-      setPlayingFile(null);
-      setLayers([]);
-      if (layerPruneTimerRef.current) {
-        clearTimeout(layerPruneTimerRef.current);
-        layerPruneTimerRef.current = null;
-      }
-      setEffectivePlaylist([]);
-      setPlaylistIndex(0);
-      setManualQueue([]);
-      setPlayingFromManualQueue(false);
-      setManualQueueContextIndex(null);
-      setPaused(true);
-      setCurrentTime(0);
-      setDuration(0);
+      void (async () => {
+        await endListenSession("abandoned_paused");
+        const el = audioRef.current;
+        if (el) {
+          el.pause();
+          el.removeAttribute("src");
+          el.load();
+        }
+        loadedPathRef.current = null;
+        setPlayingFile(null);
+        setLayers([]);
+        if (layerPruneTimerRef.current) {
+          clearTimeout(layerPruneTimerRef.current);
+          layerPruneTimerRef.current = null;
+        }
+        setEffectivePlaylist([]);
+        setPlaylistIndex(0);
+        setManualQueue([]);
+        setPlayingFromManualQueue(false);
+        setManualQueueContextIndex(null);
+        setPaused(true);
+        setCurrentTime(0);
+        setDuration(0);
+      })();
     });
     return () => {
       void unlistenPlay.then((f) => f());
@@ -395,6 +398,7 @@ export function useMusicMiniPlayback() {
 
   const skipNext = useCallback(() => {
     const el = audioRef.current;
+    const shouldPause = el?.paused ?? true;
     const state: MusicAdvanceState = {
       manualQueue,
       effectivePlaylist,
@@ -414,7 +418,7 @@ export function useMusicMiniPlayback() {
     void (async () => {
       await endListenSession("skipped");
       setPendingListenEndReason("manual_switch");
-      loadFile(result.file, 0, el ? !el.paused : false, el?.playbackRate ?? 1, "next", {
+      loadFile(result.file, 0, shouldPause, el?.playbackRate ?? 1, "next", {
       playingFromManualQueue: result.playingFromManualQueue,
       manualQueue: result.manualQueueAfter,
       manualQueueContextIndex: result.manualQueueContextIndex,
@@ -433,6 +437,7 @@ export function useMusicMiniPlayback() {
 
   const skipPrev = useCallback(() => {
     const el = audioRef.current;
+    const shouldPause = el?.paused ?? true;
     if (el && el.currentTime > 3) {
       el.currentTime = 0;
       setCurrentTime(0);
@@ -450,7 +455,7 @@ export function useMusicMiniPlayback() {
     setPlayingFromManualQueue(false);
     const prevIdx = effectivePlaylist.findIndex((f) => f.path === prev.path);
     if (prevIdx >= 0) setPlaylistIndex(prevIdx);
-    loadFile(prev, 0, el ? !el.paused : false, el?.playbackRate ?? 1, "prev", {
+    loadFile(prev, 0, shouldPause, el?.playbackRate ?? 1, "prev", {
       playingFromManualQueue: false,
       manualQueue,
       manualQueueContextIndex,

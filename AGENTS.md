@@ -377,7 +377,25 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.10 (unreleased)
 
-- **Listen-event log (foundation)**: Append-only `track_played` JSONL in app data via Mutex-serialized Rust writer; dual-surface session coordinator (main + music-mini) with handoff transfer; derived listen-stats/play-history snapshot; legacy localStorage import; `music_listen_clear` command. `music_listen_log.rs`, `musicListenSession.ts`, `musicListenStats.ts`, `musicPlayHistory.ts`, `useMusicPlayback.ts`, `useMusicMiniPlayback.ts`.
+- **Music Explore auto-save**: Queue download only after 15s on the same track; skip cancels pending timer for the previous song. `musicExploreAutoSave.ts`.
+
+- **Download complete animation (fix)**: Global job-completion celebrations (auto-save + pick tracks); green/yellow ring + checkmark from first completion frame; auto-save thumbs on enqueue. `useMusicDownloadCelebrations.ts`, `MusicShell.tsx`, `MusicExploreDownloadCollapsed.tsx`.
+
+- **Download watchdog (fix)**: Progress lines that do not advance bytes/% no longer reset idle; audio-only stalls yellow-timeout (not red fail); 2m wall clock from downloadingSince; 30s pre-transfer / 45s audio idle. `downloadJobWatchdog.ts`, `downloadQueueSlice.ts`.
+
+- **Auto-save listen gate**: Queue auto-download only after 15s on the same track (skip cancels); was 4.5s debounce on click. `musicExploreAutoSave.ts`.
+
+- **Download timeouts (fix)**: No transfer bytes within 30s → yellow skip; audio idle caps 45s–2m; 3m absolute job cap (was 4m pre-transfer / 8–20m wall). `downloadJobWatchdog.ts`.
+
+- **Download timeout + batch advance (fix)**: 20 min wall-clock cap per job; watchdog re-arms after sleep/HMR/foreground; timed_out status pumps next queue item; music explore orb/dock shows yellow warning then continues batch. `downloadJobWatchdog.ts`, `downloadQueueSlice.ts`, `MusicExploreDownloadCollapsed.tsx`, `MusicExploreDownloadPanel.tsx`.
+
+- **Listen log integrity (fix)**: Accumulate uses += deltas; end closes with server total only (ignores listenedSec payload); client skips zero-delta flush and omits end listenedSec; new JSONL events v:2; cutover in `music-listen-integrity.json` (survives clear/rebuild); scoring helper gates pre-cutover listenTimeSec. `music_listen_log.rs`, `musicListenSession.ts`, `musicListenIntegrity.ts`, `MusicShell.tsx`.
+
+- **Music mini corners (fix)**: Removed inner border and duplicate fill; single clipped shell with matched 1.5rem radius so transparent window corners stay clean. `MusicMiniPlayer.tsx`, `index.css`.
+
+- **Music mini skip autoplay (fix)**: Skip next/prev preserve play state; `shouldPause` no longer inverted vs `el.paused`. `useMusicMiniPlayback.ts`.
+
+- **Listen-event log**: Append-only v1 `track_played` JSONL in app data (Mutex writer); dual-surface session coordinator (main + music-mini) with handoff transfer; listen stats and play history derived from Rust snapshot; legacy localStorage import; zero-progress boot orphans discarded; `music_listen_clear` command. `music_listen_log.rs`, `musicListenSession.ts`, `musicListenStats.ts`, `musicPlayHistory.ts`, `useMusicPlayback.ts`, `useMusicMiniPlayback.ts`, `App.tsx`.
 
 - **Music stats UI (fix)**: Removed Listening eyebrow; stronger summary under Your stats; top track time and plays on cover hover only with darker scrim. `MusicStatsView.tsx`.
 

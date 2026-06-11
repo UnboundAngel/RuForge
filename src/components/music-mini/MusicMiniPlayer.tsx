@@ -69,8 +69,7 @@ export default function MusicMiniPlayer() {
 
   return (
     <div
-      className="w-full h-full overflow-hidden select-none relative [clip-path:inset(0_round_1.5rem)]"
-      style={{ background: "var(--music-surface)" }}
+      className="rf-mm-shell w-full h-full overflow-hidden select-none relative outline-none ring-0"
       data-music-mode="true"
     >
       <MusicMiniTitleBar
@@ -83,13 +82,7 @@ export default function MusicMiniPlayer() {
 
       <audio ref={playback.audioRef} preload="metadata" />
 
-      <div
-        className="relative w-full h-full flex flex-col overflow-hidden border border-white/5"
-        style={{
-          borderRadius: 32,
-          background: "var(--music-surface)",
-        }}
-      >
+      <div className="relative w-full h-full flex flex-col overflow-hidden">
         <div
           className={cn(
             "absolute z-30 group/disc cursor-pointer transition-all duration-[700ms] ease-[cubic-bezier(0.25,1,0.5,1)]",

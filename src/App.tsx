@@ -58,6 +58,20 @@ import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
 import { ConfirmDialogHost } from "./components/ConfirmDialog";
 import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff";
 import { stageHandoffListenEventId } from "./lib/musicListenSession";
+
+function miniKindFromWindowLabel(label: string): "video" | "music" | null {
+  if (label === "mini") return "video";
+  if (label === "music-mini") return "music";
+  return null;
+}
+
+function initialMiniKind(): "video" | "music" | null {
+  try {
+    return miniKindFromWindowLabel(getCurrentWindow().label);
+  } catch {
+    return null;
+  }
+}
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
@@ -246,7 +260,7 @@ function App() {
   const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
   const selectedPlaylist = useRuforgeStore((s) => s.selectedPlaylist);
   const setSelectedPlaylist = useRuforgeStore((s) => s.setSelectedPlaylist);
-  const [miniKind, setMiniKind] = useState<"video" | "music" | null>(null);
+  const [miniKind, setMiniKind] = useState<"video" | "music" | null>(initialMiniKind);
   const isSearchExpanded = useRuforgeStore((s) => s.isSearchExpanded);
   const setIsSearchExpanded = useRuforgeStore((s) => s.setIsSearchExpanded);
   const searchValue = useRuforgeStore((s) => s.searchValue);
@@ -828,18 +842,13 @@ function App() {
     if (pending) setPostInstall(pending);
   }, []);
 
-  // Detect mini player window
   useEffect(() => {
-    const checkWindow = async () => {
-      try {
-        const win = getCurrentWindow();
-        if (win.label === "mini") setMiniKind("video");
-        else if (win.label === "music-mini") setMiniKind("music");
-      } catch (e) {
-        console.error("Window detection failed", e);
-      }
-    };
-    checkWindow();
+    try {
+      const kind = miniKindFromWindowLabel(getCurrentWindow().label);
+      if (kind) setMiniKind(kind);
+    } catch (e) {
+      console.error("Window detection failed", e);
+    }
   }, []);
 
   // Foreground state for in-app vs overlay notifications (main window only).
@@ -1293,6 +1302,15 @@ function App() {
 
   if (miniKind === "video") return <MiniPlayer />;
   if (miniKind === "music") return <MusicMiniPlayer />;
+
+  try {
+    const label = getCurrentWindow().label;
+    if (label === "mini" || label === "music-mini") {
+      return null;
+    }
+  } catch {
+    /* web bundle / tests */
+  }
 
   return (
     <div

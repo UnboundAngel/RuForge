@@ -58,16 +58,12 @@ export function MusicHomeSkeleton() {
         <Shimmer className="w-9 h-9 rounded-full shrink-0" />
       </header>
 
-      <div className="flex flex-col gap-12 pl-12 pr-12 pt-8 pb-16 max-w-[1300px] mx-auto w-full">
-        <section>
+      <div className="flex flex-col gap-12 px-6 sm:px-8 lg:px-12 pt-8 pb-16 w-full min-w-0">
+        <section className="w-full min-w-0">
           <Shimmer className="h-8 w-36 mb-4" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3">
-            {Array.from({ length: 3 }).map((_, col) => (
-              <div key={col} className="flex flex-col gap-3">
-                {Array.from({ length: 4 }).map((_, row) => (
-                  <QuickPickRowSkeleton key={row} />
-                ))}
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 w-full min-w-0">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <QuickPickRowSkeleton key={i} />
             ))}
           </div>
         </section>

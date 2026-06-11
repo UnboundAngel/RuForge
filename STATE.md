@@ -8,12 +8,12 @@
 
 Shipping version: 0.1.10 (unreleased)
 Last shipped to users: 0.1.9
-Last updated: 2026-06-10 (Listen-event log foundation)
+Last updated: 2026-06-10 (Download watchdog: meaningful progress + audio timeout)
 Status: in progress
 
 ## Now
 
-0.1.10 cycle open on main. Listen-event log: append-only track_played JSONL on disk, dual-surface session coordinator (main + music-mini), derived stats snapshot. Prior: Music profile, storage strip, stats UI, YouTube chip. Last user release is 0.1.9.
+0.1.10 cycle open on main. Download watchdog: only real byte/% advances reset idle; audio-only stalls yellow-timeout; 30s pre-transfer / 45s audio idle / 2m wall clock from downloadingSince; arm after yt-dlp start. Music Explore auto-save waits 15s on same track. Listen log P0 fix in tree. Last user release is 0.1.9.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths

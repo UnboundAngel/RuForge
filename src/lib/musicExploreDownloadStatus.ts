@@ -5,7 +5,8 @@ export type MusicExploreTrackDownloadUi =
   | "idle"
   | "queued"
   | "downloading"
-  | "failed";
+  | "failed"
+  | "timed_out";
 
 function matchingJobs(jobs: DownloadJob[], trackUrl: string): DownloadJob[] {
   return jobs.filter((j) => youtubeUrlsMatch(j.url, trackUrl));
@@ -18,6 +19,7 @@ export function musicExploreTrackDownloadUi(
   const matches = matchingJobs(jobs, trackUrl);
   if (matches.length === 0) return "idle";
   if (matches.some((j) => j.status === "failed")) return "failed";
+  if (matches.some((j) => j.status === "timed_out")) return "timed_out";
   if (matches.some((j) => j.status === "downloading")) return "downloading";
   if (matches.some((j) => j.status === "queued" || j.status === "paused")) {
     return "queued";

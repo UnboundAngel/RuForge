@@ -92,9 +92,12 @@ export function LikedSongsCard({ files, onClick }: CardProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col gap-3 text-left group/card shrink-0 w-36 md:w-40 transition-all duration-300 relative hover:z-25"
+      className="group/card flex w-full min-w-0 items-center gap-4 sm:gap-5 rounded-2xl px-3 py-3 sm:px-4 sm:py-3.5 text-left transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.995]"
+      style={{
+        background: "linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.02) 100%)",
+      }}
     >
-      <div className="relative w-32 h-32 md:w-36 md:h-36 shrink-0 overflow-hidden transition-transform duration-200 group-hover/card:scale-[1.03]">
+      <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 shrink-0 overflow-hidden rounded-xl transition-transform duration-200 group-hover/card:scale-[1.03]">
         <LikedSongsCover files={files} className="w-full h-full" />
         <div className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity duration-300">
           <div
@@ -107,14 +110,14 @@ export function LikedSongsCard({ files, onClick }: CardProps) {
           </div>
         </div>
       </div>
-      <div className="px-0.5 min-w-0 flex flex-col gap-0.5">
+      <div className="min-w-0 flex-1 flex flex-col gap-1 pr-1">
         <div
-          className="text-sm font-bold truncate leading-tight group-hover/card:text-[var(--music-accent)] transition-colors"
+          className="text-base sm:text-lg font-bold leading-tight group-hover/card:text-[var(--music-accent)] transition-colors"
           style={{ color: "var(--music-text-primary)" }}
         >
           Liked Songs
         </div>
-        <div className="text-xs truncate leading-snug" style={{ color: "var(--music-text-secondary)" }}>
+        <div className="text-sm leading-snug" style={{ color: "var(--music-text-secondary)" }}>
           {files.length} {files.length === 1 ? "song" : "songs"}
         </div>
       </div>

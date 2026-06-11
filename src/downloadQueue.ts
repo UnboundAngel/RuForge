@@ -110,10 +110,15 @@ export type DownloadJobStatus =
   | "paused"
   | "completed"
   | "failed"
+  /** Hard time limit hit; batch UIs show warning and advance to the next item. */
+  | "timed_out"
   /** Brief UI state before row removal when auto-skip duplicates is on and the file is in library. */
   | "skipped";
 
 export const LIBRARY_DUPLICATE_SKIP_MESSAGE = "Already in library";
+
+export const DOWNLOAD_TIMED_OUT_MESSAGE =
+  "Download timed out. Skipped to the next item.";
 
 /** How long a duplicate-skipped row stays visible before removal. */
 export const LIBRARY_DUPLICATE_SKIP_ROW_MS = 1800;
@@ -163,6 +168,8 @@ export interface DownloadJob {
   error?: string | null;
   options: DownloadJobOptions;
   createdAt: number;
+  /** Wall-clock anchor for watchdog (set when status becomes downloading). */
+  downloadingSince?: number;
   /** When true, next start uses yt-dlp `--continue` with stored cookie opts. */
   resumeOnStart?: boolean;
 }
@@ -173,6 +180,8 @@ export type DownloadJobFinishedPayload = {
   error?: string;
   /** Set by Rust on IPC finish; used when the queue row was removed before this handler runs. */
   url?: string;
+  /** Wall-clock or watchdog timeout; music batch shows warning UI and continues. */
+  timedOut?: boolean;
 };
 
 export { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from "./store/types";

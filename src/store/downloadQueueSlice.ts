@@ -11,6 +11,7 @@ import {
   downloadJobMediaNeedsHydration,
   LIBRARY_DUPLICATE_SKIP_MESSAGE,
   LIBRARY_DUPLICATE_SKIP_ROW_MS,
+  DOWNLOAD_TIMED_OUT_MESSAGE,
   patchDownloadJobOptionsForAudio,
   patchDownloadJobOptionsFromSettings,
   persistDownloadJobs,
@@ -45,6 +46,7 @@ import {
   disarmDownloadJobWatchdog,
   initDownloadJobWatchdog,
   touchDownloadJobWatchdog,
+  progressAdvancesDownloadWatchdog,
 } from "../downloadJobWatchdog";
 import { deliverUserNotification } from "../systemNotify";
 import { findLibraryDuplicate } from "../duplicateDownload";
@@ -55,6 +57,10 @@ const DOWNLOAD_JOB_HYDRATE_PERSIST_DEBOUNCE_MS = 75;
 let hydratePersistTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const skippedJobRemovalTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const timedOutJobRemovalTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Match collapsed music explore celebration duration. */
+const TIMED_OUT_JOB_ROW_MS = 2100;
 
 /** Coalesce gallery scans when duplicate-skip needs library rows before yt-dlp. */
 let entriesFetchForDuplicateCheckInflight: Promise<void> | null = null;
@@ -102,6 +108,23 @@ function markJobSkippedLibraryDuplicate(jobs: DownloadJob[], jobId: string): Dow
         }
       : j,
   );
+}
+
+function clearTimedOutJobRemovalTimer(jobId: string): void {
+  const t = timedOutJobRemovalTimers.get(jobId);
+  if (t) {
+    clearTimeout(t);
+    timedOutJobRemovalTimers.delete(jobId);
+  }
+}
+
+function scheduleTimedOutJobRemoval(get: () => RuforgeStore, jobId: string): void {
+  if (timedOutJobRemovalTimers.has(jobId)) return;
+  const timer = setTimeout(() => {
+    timedOutJobRemovalTimers.delete(jobId);
+    void get().removeDownloadJob(jobId);
+  }, TIMED_OUT_JOB_ROW_MS);
+  timedOutJobRemovalTimers.set(jobId, timer);
 }
 
 function scheduleSkippedJobRemoval(get: () => RuforgeStore, jobId: string): void {
@@ -273,7 +296,7 @@ function resolveFocusAfterMutation(
 ): string | null {
   if (prevFocus) {
     const j = jobs.find((x) => x.id === prevFocus);
-    if (j && j.status !== "completed" && j.status !== "failed" && j.status !== "skipped") {
+    if (j && j.status !== "completed" && j.status !== "failed" && j.status !== "skipped" && j.status !== "timed_out") {
       return prevFocus;
     }
   }
@@ -347,38 +370,61 @@ function handleStalledDownloadJob(get: () => RuforgeStore): (jobId: string) => v
   };
 }
 
+function handleTimedOutDownloadJob(get: () => RuforgeStore): (jobId: string) => void {
+  return (jobId) => {
+    void (async () => {
+      const job = get().downloadJobs.find((j) => j.id === jobId);
+      if (!job || job.status !== "downloading") return;
+
+      try {
+        await invoke("pause_download_job", { jobId });
+      } catch (e) {
+        console.warn("[RuForge] timeout cleanup pause_download_job:", e);
+      }
+
+      const latest = get().downloadJobs.find((j) => j.id === jobId);
+      if (!latest || latest.status !== "downloading") return;
+
+      get().onDownloadJobFinished({
+        jobId,
+        url: job.url,
+        success: false,
+        timedOut: true,
+        error: DOWNLOAD_TIMED_OUT_MESSAGE,
+      });
+    })();
+  };
+}
+
 export const createDownloadQueueSlice: StateCreator<
   RuforgeStore,
   [],
   [],
   DownloadQueueSlice
 > = (set, get) => {
-  initDownloadJobWatchdog(get, handleStalledDownloadJob(get));
+  initDownloadJobWatchdog(get, handleStalledDownloadJob(get), handleTimedOutDownloadJob(get));
 
   function startHydratedDownloadJob(
     jobId: string,
     url: string,
     resume: boolean,
   ): void {
-    armDownloadJobWatchdog(jobId);
     void (async () => {
       try {
         if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
-          disarmDownloadJobWatchdog(jobId);
           get().pumpDownloadQueue();
           return;
         }
         await hydrateDownloadJobMetadata(get, set, jobId, url);
         const job = get().downloadJobs.find((j) => j.id === jobId);
         if (!job || job.status !== "downloading") {
-          disarmDownloadJobWatchdog(jobId);
           return;
         }
         if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
-          disarmDownloadJobWatchdog(jobId);
           get().pumpDownloadQueue();
           return;
         }
+        armDownloadJobWatchdog(jobId);
         await invoke("start_download_job", {
           jobId,
           url,
@@ -443,6 +489,7 @@ export const createDownloadQueueSlice: StateCreator<
         url: next.url,
         resume: Boolean(next.resumeOnStart),
       });
+      const now = Date.now();
       jobs = jobs.map((j) =>
         j.id === next.id
           ? {
@@ -450,6 +497,7 @@ export const createDownloadQueueSlice: StateCreator<
               status: "downloading" as const,
               error: null,
               resumeOnStart: false,
+              downloadingSince: now,
             }
           : j,
       );
@@ -693,6 +741,7 @@ export const createDownloadQueueSlice: StateCreator<
       const running = get().downloadJobs.filter((j) => j.status === "downloading").length;
       const atCapacity = running >= get().maxConcurrentDownloads;
 
+      const resumeNow = Date.now();
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
           j.id === id
@@ -702,6 +751,7 @@ export const createDownloadQueueSlice: StateCreator<
                 approval: "auto" as const,
                 error: null,
                 resumeOnStart: true,
+                downloadingSince: atCapacity ? j.downloadingSince : resumeNow,
               }
             : j,
         );
@@ -719,24 +769,21 @@ export const createDownloadQueueSlice: StateCreator<
         return;
       }
 
-      armDownloadJobWatchdog(id);
       try {
         if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
-          disarmDownloadJobWatchdog(id);
           get().pumpDownloadQueue();
           return;
         }
         await hydrateDownloadJobMetadata(get, set, id, job.url);
         const latest = get().downloadJobs.find((j) => j.id === id);
         if (!latest || latest.status !== "downloading") {
-          disarmDownloadJobWatchdog(id);
           return;
         }
         if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
-          disarmDownloadJobWatchdog(id);
           get().pumpDownloadQueue();
           return;
         }
+        armDownloadJobWatchdog(id);
         await invoke("start_download_job", {
           jobId: id,
           url: job.url,
@@ -763,6 +810,9 @@ export const createDownloadQueueSlice: StateCreator<
     },
 
     retryDownloadJob: (id) => {
+      const job = get().downloadJobs.find((j) => j.id === id);
+      if (!job || (job.status !== "failed" && job.status !== "timed_out")) return;
+      clearTimedOutJobRemovalTimer(id);
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
           j.id === id
@@ -773,6 +823,7 @@ export const createDownloadQueueSlice: StateCreator<
                 error: null,
                 progress: null,
                 resumeOnStart: false,
+                createdAt: Date.now(),
               }
             : j,
         );
@@ -787,6 +838,7 @@ export const createDownloadQueueSlice: StateCreator<
       if (!job) return;
       disarmDownloadJobWatchdog(id);
       clearSkippedJobRemovalTimer(id);
+      clearTimedOutJobRemovalTimer(id);
       const removedUrl = job.url;
       if (job.status === "downloading") {
         await get().pauseDownloadJob(id);
@@ -877,12 +929,17 @@ export const createDownloadQueueSlice: StateCreator<
     },
 
     applyDownloadProgress: (payload) => {
+      const prevJob = get().downloadJobs.find((j) => j.id === payload.jobId);
+      const prevProgress = prevJob?.progress ?? null;
+      const advancesWatchdog = progressAdvancesDownloadWatchdog(prevProgress, payload);
+
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) => {
           if (
             j.id !== payload.jobId ||
             j.status === "completed" ||
-            j.status === "failed"
+            j.status === "failed" ||
+            j.status === "timed_out"
           ) {
             return j;
           }
@@ -900,7 +957,7 @@ export const createDownloadQueueSlice: StateCreator<
         };
       });
       const job = get().downloadJobs.find((j) => j.id === payload.jobId);
-      if (job?.status === "downloading") {
+      if (job?.status === "downloading" && advancesWatchdog) {
         touchDownloadJobWatchdog(payload.jobId);
       }
     },
@@ -946,7 +1003,11 @@ export const createDownloadQueueSlice: StateCreator<
           j.id === payload.jobId
             ? {
                 ...j,
-                status: payload.success ? ("completed" as const) : ("failed" as const),
+                status: payload.success
+                  ? ("completed" as const)
+                  : payload.timedOut
+                    ? ("timed_out" as const)
+                    : ("failed" as const),
                 error: payload.error ?? null,
                 progress: payload.success ? j.progress : j.progress,
                 resumeOnStart: false,
@@ -987,6 +1048,9 @@ export const createDownloadQueueSlice: StateCreator<
       for (const id of skippedIds) {
         scheduleSkippedJobRemoval(get, id);
       }
+      if (payload.timedOut) {
+        scheduleTimedOutJobRemoval(get, payload.jobId);
+      }
       for (const st of starts) {
         startHydratedDownloadJob(st.id, st.url, st.resume);
       }
@@ -1012,6 +1076,15 @@ export const createDownloadQueueSlice: StateCreator<
           (j) => j.status === "queued" || j.status === "downloading",
         );
         if (!busy) get().setActiveTab("media");
+      } else if (payload.timedOut) {
+        void deliverUserNotification(
+          {
+            dedupeKey: `download-timed-out:${payload.jobId}`,
+            body: DOWNLOAD_TIMED_OUT_MESSAGE,
+            kind: "warning",
+          },
+          (message, type) => get().notify(message, type),
+        );
       } else {
         const line = (payload.error ?? "Download failed").split("\n")[0];
         void deliverUserNotification(

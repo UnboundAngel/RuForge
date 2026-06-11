@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import {
   formatListenDuration,
@@ -56,7 +55,6 @@ export function MusicHomeStatsStrip({ onSeeAll }: Props) {
               style={{ color: "var(--music-accent)" }}
             >
               See all
-              <ChevronRight size={14} />
             </button>
           )}
         </div>
