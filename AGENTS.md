@@ -375,47 +375,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 **This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see `## Release ritual`). That is the only time the graph JSON / `changes.html` get touched. Prefer one line per user-visible feature or fix; batch incremental polish passes into one line instead of ten `(fix)` breakpoints.
 
 
-### v0.1.10 (unreleased)
+### v0.1.11 (unreleased)
 
-- **Music Explore auto-save**: Queue download only after 15s on the same track; skip cancels pending timer for the previous song. `musicExploreAutoSave.ts`.
-
-- **Download complete animation (fix)**: Global job-completion celebrations (auto-save + pick tracks); green/yellow ring + checkmark from first completion frame; auto-save thumbs on enqueue. `useMusicDownloadCelebrations.ts`, `MusicShell.tsx`, `MusicExploreDownloadCollapsed.tsx`.
-
-- **Download watchdog (fix)**: Progress lines that do not advance bytes/% no longer reset idle; audio-only stalls yellow-timeout (not red fail); 2m wall clock from downloadingSince; 30s pre-transfer / 45s audio idle. `downloadJobWatchdog.ts`, `downloadQueueSlice.ts`.
-
-- **Auto-save listen gate**: Queue auto-download only after 15s on the same track (skip cancels); was 4.5s debounce on click. `musicExploreAutoSave.ts`.
-
-- **Download timeouts (fix)**: No transfer bytes within 30s → yellow skip; audio idle caps 45s–2m; 3m absolute job cap (was 4m pre-transfer / 8–20m wall). `downloadJobWatchdog.ts`.
-
-- **Download timeout + batch advance (fix)**: 20 min wall-clock cap per job; watchdog re-arms after sleep/HMR/foreground; timed_out status pumps next queue item; music explore orb/dock shows yellow warning then continues batch. `downloadJobWatchdog.ts`, `downloadQueueSlice.ts`, `MusicExploreDownloadCollapsed.tsx`, `MusicExploreDownloadPanel.tsx`.
-
-- **Listen log integrity (fix)**: Accumulate uses += deltas; end closes with server total only (ignores listenedSec payload); client skips zero-delta flush and omits end listenedSec; new JSONL events v:2; cutover in `music-listen-integrity.json` (survives clear/rebuild); scoring helper gates pre-cutover listenTimeSec. `music_listen_log.rs`, `musicListenSession.ts`, `musicListenIntegrity.ts`, `MusicShell.tsx`.
-
-- **Music mini corners (fix)**: Removed inner border and duplicate fill; single clipped shell with matched 1.5rem radius so transparent window corners stay clean. `MusicMiniPlayer.tsx`, `index.css`.
-
-- **Music mini skip autoplay (fix)**: Skip next/prev preserve play state; `shouldPause` no longer inverted vs `el.paused`. `useMusicMiniPlayback.ts`.
-
-- **Listen-event log**: Append-only v1 `track_played` JSONL in app data (Mutex writer); dual-surface session coordinator (main + music-mini) with handoff transfer; listen stats and play history derived from Rust snapshot; legacy localStorage import; zero-progress boot orphans discarded; `music_listen_clear` command. `music_listen_log.rs`, `musicListenSession.ts`, `musicListenStats.ts`, `musicPlayHistory.ts`, `useMusicPlayback.ts`, `useMusicMiniPlayback.ts`, `App.tsx`.
-
-- **Music stats UI (fix)**: Removed Listening eyebrow; stronger summary under Your stats; top track time and plays on cover hover only with darker scrim. `MusicStatsView.tsx`.
-
-- **Music stats copy (fix)**: Plain labels without middots or chevron links; clearer all-time/this-week section titles and hero summary. `MusicStatsView.tsx`, `MusicProfileView.tsx`, `MusicHomeStatsStrip.tsx`, `MusicLibraryView.tsx`.
-
-- **Music Home layout (fix)**: Quick picks use responsive CSS grid (1/2/3/4 cols) instead of JS column split; Liked Songs full-width banner row; content fills panel width. `MusicHomeView.tsx`, `LikedSongsCover.tsx`, `MusicHomeSkeleton.tsx`.
-
-- **Music profile screen**: Profile mockup with YouTube identity, glance stats, highlights, liked, recent plays, storage; titlebar chip opens it; Home stats strip removed; full stats via link. `MusicProfileView.tsx`, `MusicShell.tsx`, `MusicHomeView.tsx`, `YouTubeProfileChip.tsx`.
-
-- **Music stats (visual)**: Anti-pattern pass: no list-in-a-box cards, hero backdrop only, podium cover cards (#1 larger), compact spaced rows, artist avatar scroll, dot-separated metadata, play on art hover. `MusicStatsView.tsx`.
-
-- **Storage glyph (fix)**: Sidebar storage ring opens Authorize Cleanup on click (same as Music storage strip). `StorageGlyph.tsx`.
-
-- **Music storage strip**: Bottom library storage bar on Home/Library (used GB, cap progress when internal vault); hides during playback, Explore bar, active downloads, or expanded player; tap opens cleanup when on internal vault. `MusicStorageStrip.tsx`, `MusicShell.tsx`.
-
-- **YouTube profile @handle (fix)**: Probe keeps polling after avatar-only emit, briefly opens account menu on Explorer to read real @handle from menu DOM/JSON; identity follow-up when handle still missing; hover shows @handle not "Your channel". `explorerProfileScript.ts`, `youtubeProfileProbeRunner.ts`, `youtubeProfileSession.ts`, `App.tsx`.
-
-- **YouTube profile handle (fix)**: Handle probe scoped to topbar/account menu only (removed full-page ytInitialData walk that grabbed first feed channel e.g. @JoeBartGames); DOM @ links limited to topbar chrome. `explorerProfileScript.ts`, `youtubeProfileSession.ts`.
-
-- **YouTube titlebar profile chip**: Log in pill when signed out; avatar-ratio spinner on Explorer or Music Explore until PFP loads; session cached in localStorage; chip lives in titlebar only (all modes); hover expands to @handle; Log in opens Explorer (no profile page navigation). `YouTubeProfileChip.tsx`, `YouTubeLoginPill.tsx`, `youtubeProfileSession.ts`, `youtubeProfileProbeRunner.ts`, `explorerProfileScript.ts`, `App.tsx`.
 
 ## Release ritual
 
@@ -432,7 +393,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 3. **Prep `updater.json` notes (agent, before build).** Write structured JSON in `notes`: markdown **teaser** (header + three bullets for the pre-download card; full markdown supported), plus `additions` and `fixes` arrays for post-install. Set `version`, `url` (`.../releases/download/v<semver>/RuForge_<semver>_x64-setup.exe`), leave `signature` empty until step 5.
 4. **Signed build (Angel only).** Angel runs `Build-signed-windows.bat` or `npm run build:signed`. Agent then reads NSIS `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/` (do not ask Angel to paste base64 unless the file is missing).
 5. **Finish `updater.json` (agent).** Paste `.sig` base64 into `signature`, set `pub_date` from the build time or minisign timestamp. The `signature` value is the literal base64 CONTENTS of the `.sig` file, never a path or URL. That mistake breaks every install silently.
-6. **Commit + push to `main` (agent).** Confirm current branch is `main`. Write a clear commit message (version + one-line summary). The commit MUST include `updater.json`, all three version files, and any unreleased code. Push to `origin main`. State the pushed commit hash.
+5b. **Sync website release assets (agent).** Run `npm run prep:website-release` from repo root (requires signed NSIS at `src-tauri/target/release/bundle/nsis/`). Commits: generated `website/src/content/releases/v0-1-x.md`. Site version comes from root `package.json` at Astro build time; no `site.ts` edit. Include the generated changelog in the release commit. Cloudflare Pages redeploys on push. Same-origin installer streaming needs the copied exe in the deploy artifact (gitignored; GitHub fallback works without it). Use `npm run prep:website-release:changelog-only` if the signed build is not ready yet.
+6. **Commit + push to `main` (agent).** Confirm current branch is `main`. Write a clear commit message (version + one-line summary). The commit MUST include `updater.json`, all three version files, generated website changelog when applicable, and any unreleased code. Push to `origin main`. State the pushed commit hash.
 7. **GitHub Release (agent, `gh`).** Use GitHub CLI on `UnboundAngel/RuForge`. Tag **`v<semver>`** must match the `updater.json` download path. Example:
 
    ```powershell

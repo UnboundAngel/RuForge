@@ -39,7 +39,7 @@ Output: `website/dist/`
 
 ## Content
 
-- **Releases:** add `src/content/releases/v0-1-x.md` with frontmatter `version`, `date`, `additions`, `fixes`. Quote YAML strings that contain colons.
+- **Releases:** generated from root `updater.json` structured `notes` via `npm run prep:website-release` (writes `src/content/releases/v0-1-x.md` with frontmatter `version`, `date`, `additions`, `fixes`). Do not hand-author release markdown at ship time.
 - **Roadmap:** edit `src/content/roadmap.json`, then rebuild.
 - **Legal:** edit files under repo `docs/legal/`; no copy in `website/`.
 

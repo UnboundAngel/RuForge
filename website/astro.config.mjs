@@ -1,9 +1,17 @@
 // @ts-check
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 import { qrcode } from 'vite-plugin-qrcode';
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const appVersion = JSON.parse(
+  readFileSync(join(repoRoot, 'package.json'), 'utf-8'),
+).version;
 
 // https://astro.build/config
 export default defineConfig({
@@ -18,6 +26,9 @@ export default defineConfig({
     }),
   ],
   vite: {
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion),
+    },
     plugins: [tailwindcss(), qrcode()],
     server: {
       fs: {
