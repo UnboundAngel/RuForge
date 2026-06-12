@@ -7,13 +7,13 @@
 > file is stale: fix it forward, do not trust it blindly.
 
 Shipping version: 0.1.11 (unreleased)
-Last shipped to users: 0.1.9
-Last updated: 2026-06-11 (0.1.10 release prep: updater notes, website changelog)
+Last shipped to users: 0.1.10
+Last updated: 2026-06-12 (Shipped 0.1.10: updater live, GitHub Release)
 Status: in progress
 
 ## Now
 
-0.1.10 is prepped on main (version triplet 0.1.10, updater.json notes, `/changelog` entry). Live auto-update still serves 0.1.9 until Angel runs signed build, pastes NSIS signature into `updater.json`, and pushes. Then `gh release create v0.1.10` with the installer. Open cycle is 0.1.11.
+0.1.10 shipped. Users on 0.1.9 receive the update via auto-updater. Open cycle is 0.1.11.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -27,7 +27,7 @@ local dev, not a shipped target yet.
 Closed release 0.1.9 (what users on 0.1.9 receive). The release-note drafter
 reads this for the last shipped delta, not the git tree.
 
-**0.1.10 (prepped, not yet on updater):**
+**0.1.10 shipped:**
 
 Additions:
 - Website release automation (`prep:website-release`, site version from package.json).
@@ -74,13 +74,13 @@ Fixes:
 
 ## Open P0 (blocks release)
 
-0.1.10 blocked on signed Windows build + updater.json signature push (Angel only).
+(none)
 
 ## Next 3 (priority order)
 
-1. Angel: `Build-signed-windows.bat`, paste NSIS `.sig` into `updater.json`, push, `gh release create v0.1.10`.
-2. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
-3. Downloader UI polish (#12 Jim pass) or mid-download drop E2E verify (#15).
+1. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
+2. Downloader UI polish (#12 Jim pass) or mid-download drop E2E verify (#15).
+3. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell (cut from Music Phase A/B plan; needs its own pass).
 
 ## Notes (not P0)
 
