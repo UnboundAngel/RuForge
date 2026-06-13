@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { convertFileSrc } from "@tauri-apps/api/core";
 
-import { emitTo } from "@tauri-apps/api/event";
+import { stopMusicMiniForMainClaim } from "@/lib/mainPlaybackClaim";
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -27,6 +27,7 @@ import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { isAudioOnlyPath } from "@/mediaKind";
 
 import { readPlaybackSpeed, writePlaybackSpeed } from "@/playbackSpeedStorage";
+import { readResumeSeconds } from "@/playbackStorage";
 
 import { useRuforgeStore } from "@/store/ruforgeStore";
 
@@ -106,7 +107,7 @@ type PlaybackState = {
 
 
 
-/** One hidden `<audio>` in MusicShell; this hook owns load/play/pause/cleanup. */
+/** Persistent main-window audio engine (lives in MainPlaybackHost). */
 
 export function useMusicPlayback(
 
@@ -141,6 +142,8 @@ export function useMusicPlayback(
   const musicPlayerResume = useRuforgeStore((s) => s.musicPlayerResume);
 
   const clearMusicPlayerResume = useRuforgeStore((s) => s.clearMusicPlayerResume);
+
+  const activityOwner = useRuforgeStore((s) => s.activityOwner);
 
   const navMode = useRuforgeStore((s) => s.navMode);
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
@@ -232,55 +235,39 @@ export function useMusicPlayback(
   useEffect(() => {
     try {
       if (getCurrentWindow().label === "main") {
-        void emitTo("music-mini", "stop-music-mini-playback", "main-app").catch(() => null);
+        stopMusicMiniForMainClaim();
       }
     } catch {
       /* not in Tauri */
     }
-
-    return () => {
-      const el = audioRef.current;
-
-      if (el) {
-
-        el.pause();
-
-        releaseAnalyserGraph(el, true);
-
-        el.removeAttribute("src");
-
-        el.load();
-
-      }
-
-    };
-
-  }, [audioRef]);
-
-
+  }, []);
 
   useEffect(() => {
 
     const el = audioRef.current;
 
-    if (!el || !playingFile) {
-      loadedPathRef.current = null;
-      void endListenSession("abandoned_paused").catch(() => null);
+    if (!el) return;
 
-      if (el) {
+    const isAudioEngineFile = !!playingFile && isAudioOnlyPath(playingFile.path);
+    const engineActive = isAudioEngineFile && !activityOwner;
 
-        el.pause();
+    if (!engineActive) {
+      const explicitStop = !playingFile && !activityOwner;
+      const switchedToVideo = !!playingFile && !isAudioOnlyPath(playingFile.path);
 
-        releaseAnalyserGraph(el, true);
+      el.pause();
+      releaseAnalyserGraph(el, true);
 
+      if (explicitStop || switchedToVideo) {
+        loadedPathRef.current = null;
+        void endListenSession("abandoned_paused").catch(() => null);
+        el.removeAttribute("src");
+        el.load();
+        setCurrentTime(0);
+        setDuration(0);
       }
 
       setPaused(true);
-
-      setCurrentTime(0);
-
-      setDuration(0);
-
       return;
 
     }
@@ -360,6 +347,14 @@ export function useMusicPlayback(
 
       } else {
 
+        const storedResume = readResumeSeconds(path, 0);
+
+        if (storedResume > 0) {
+
+          el.currentTime = storedResume;
+
+        }
+
         void el.play()
 
           .then(() => setPaused(false))
@@ -384,6 +379,7 @@ export function useMusicPlayback(
     pushSessionRecent,
     playingFile,
     musicLikedKeys,
+    activityOwner,
   ]);
 
 

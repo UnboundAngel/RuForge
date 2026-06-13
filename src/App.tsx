@@ -99,6 +99,10 @@ import {
   AlertCircle,
   HardDrive,
 } from "lucide-react";
+import { OnboardingOverlay } from "./components/onboarding/OnboardingOverlay";
+import { ActivityIsland } from "./components/island/ActivityIsland";
+import type { ActivityHandoffSyncPayload, ActivityMiniTeardownPayload } from "./lib/activityTypes";
+import { MainPlaybackHost } from "./playback/MainPlaybackHost";
 import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
 import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
 import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
@@ -403,6 +407,8 @@ function App() {
   const [updaterContentLength, setUpdaterContentLength] = useState<number | undefined>(undefined);
   const [updaterTeaserDismissed, setUpdaterTeaserDismissed] = useState(false);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const shellBlocked = Boolean(postInstall || onboardingOpen);
 
   const applyAvailableUpdate = useCallback((next: Update) => {
     if (updateRef.current) {
@@ -800,7 +806,7 @@ function App() {
 
   // Explorer host lives outside AnimatePresence; re-sync once the cutout node commits.
   useEffect(() => {
-    if (activeTab !== "explorer" || postInstall) return;
+    if (activeTab !== "explorer" || shellBlocked) return;
     let cancelled = false;
     let frames = 0;
     const tick = () => {
@@ -817,7 +823,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, postInstall]);
+  }, [activeTab, shellBlocked]);
 
   const performUpdateCheckRef = useRef(performUpdateCheck);
   performUpdateCheckRef.current = performUpdateCheck;
@@ -902,8 +908,8 @@ function App() {
 
     const unlistenStop = listen<string>("stop-playback", (event) => {
       if (event.payload === "main-app") return;
-      // Mini claims playback: clear file and leave the player tab in one update so we never sit on
-      // `activeTab === "player"` with a null `playingFile` (Zustand can re-render PlayerView before React commits removal).
+      const st = useRuforgeStore.getState();
+      if (st.activityOwner === "music-mini") return;
       if (event.payload === "mini-player") {
         useRuforgeStore.setState((s) => ({
           playingFile: null,
@@ -914,8 +920,42 @@ function App() {
       useRuforgeStore.getState().stopPlayback();
     });
 
+    const unlistenMiniTeardown = listen<ActivityMiniTeardownPayload>(
+      "activity-mini-teardown",
+      (event) => {
+        const st = useRuforgeStore.getState();
+        if (st.activityOwner === event.payload.surface) {
+          st.clearActivityHandoff();
+        }
+      },
+    );
+
+    const unlistenHandoffSync = listen<ActivityHandoffSyncPayload>(
+      "activity-handoff-sync",
+      (event) => {
+        const { surface, file, startTime, paused } = event.payload;
+        useRuforgeStore.getState().syncActivityHandoff(surface, {
+          file,
+          startTime,
+          paused,
+        });
+      },
+    );
+
     const unlistenManualUpdaterCheck = listen("ruforge-check-updater", () => {
       void performUpdateCheckRef.current(true);
+    });
+
+    const unlistenDebugOnboarding = listen("debug-replay-onboarding", () => {
+      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      setOnboardingOpen(true);
+    });
+
+    const unlistenDebugBootSplash = listen("debug-preview-boot-splash", () => {
+      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      void import("./lib/bootSplash").then(({ showBootSplashPreview }) => {
+        showBootSplashPreview();
+      });
     });
 
     const unlistenDebugUpdater = listen("debug-cycle-updater", () => {
@@ -947,7 +987,11 @@ function App() {
     return () => {
       unlisten.then((f) => f());
       unlistenStop.then((f) => f());
+      unlistenMiniTeardown.then((f) => f());
+      unlistenHandoffSync.then((f) => f());
       unlistenManualUpdaterCheck.then((f) => f());
+      unlistenDebugOnboarding.then((f) => f());
+      unlistenDebugBootSplash.then((f) => f());
       unlistenDebugUpdater.then((f) => f());
     };
   }, []);
@@ -993,7 +1037,6 @@ function App() {
       const st = useRuforgeStore.getState();
       if (typeof payload.volume === "number") st.setVolume(payload.volume);
       if (typeof payload.muted === "boolean") st.setMuted(payload.muted);
-      st.setPlayingFile(payload.file);
       useRuforgeStore.setState({
         musicPlayerResume: {
           currentTime: Math.max(0, payload.currentTime),
@@ -1009,6 +1052,7 @@ function App() {
           : {}),
         ...(typeof payload.isLooping === "boolean" ? { isLooping: payload.isLooping } : {}),
       });
+      st.setPlayingFile(payload.file);
       const main = await WebviewWindow.getByLabel("main");
       await main?.setFocus().catch(() => {});
       window.setTimeout(() => void main?.setFocus().catch(() => {}), 120);
@@ -1144,13 +1188,13 @@ function App() {
   }, [setYoutubeProfileSession]);
 
   useEffect(() => {
-    if (postInstall) return;
+    if (shellBlocked) return;
     const status = useRuforgeStore.getState().youtubeSessionStatus;
     void runBootProfileProbeIfNeeded(status);
-  }, [postInstall]);
+  }, [shellBlocked]);
 
   useEffect(() => {
-    if (navMode === "music" || postInstall) return;
+    if (navMode === "music" || shellBlocked) return;
     void (async () => {
       try {
         await invoke("eval_in_webview", {
@@ -1169,10 +1213,10 @@ function App() {
         }
       }
     })();
-  }, [navMode, postInstall]);
+  }, [navMode, shellBlocked]);
 
   useEffect(() => {
-    if (activeTab !== "explorer" || postInstall) return;
+    if (activeTab !== "explorer" || shellBlocked) return;
     let alive = true;
     const tick = async () => {
       try {
@@ -1188,10 +1232,10 @@ function App() {
       alive = false;
       clearInterval(id);
     };
-  }, [activeTab, postInstall, setLastExplorerUrl]);
+  }, [activeTab, shellBlocked, setLastExplorerUrl]);
 
   useEffect(() => {
-    if (activeTab !== "settings" || postInstall) {
+    if (activeTab !== "settings" || shellBlocked) {
       settingsTabMorph.set(0);
       setSettingsMorphAmount(0);
       setSettingsScrollable(false);
@@ -1259,9 +1303,9 @@ function App() {
       setSettingsMorphAmount(0);
       setSettingsScrollable(false);
     };
-  }, [activeTab, postInstall, settingsTab, settingsTabMorph]);
+  }, [activeTab, shellBlocked, settingsTab, settingsTabMorph]);
 
-  const showExplorerToolbar = activeTab === "explorer" && !postInstall;
+  const showExplorerToolbar = activeTab === "explorer" && !shellBlocked;
 
   const onExplorerBack = useCallback(async () => {
     try {
@@ -1298,7 +1342,7 @@ function App() {
   }, []);
 
   const { open: radialNavOpen, anchor: radialNavAnchor } =
-    useAltRadialNav(!!postInstall);
+    useAltRadialNav(shellBlocked);
 
   if (miniKind === "video") return <MiniPlayer />;
   if (miniKind === "music") return <MusicMiniPlayer />;
@@ -1313,6 +1357,7 @@ function App() {
   }
 
   return (
+    <MainPlaybackHost>
     <div
       className="h-screen w-screen text-stone-50 font-sans flex overflow-hidden select-none relative"
       style={{ background: navMode === "music" ? "var(--music-bg, #0f0f0f)" : "#271C18" }}
@@ -1346,6 +1391,8 @@ function App() {
         onUpdaterStatusClick={() => setUpdaterTeaserDismissed(false)}
       />
 
+      {!shellBlocked && <ActivityIsland />}
+
       {/* Global Drag Region - Top strip except controls area */}
       <div
         className={`fixed top-0 left-0 h-10 z-[50] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
@@ -1359,7 +1406,7 @@ function App() {
       <AppSidebarRail
         activeTab={activeTab}
         navMode={navMode}
-        disabled={!!postInstall}
+        disabled={shellBlocked}
         onSelectTab={setActiveTab}
       />
 
@@ -1368,7 +1415,7 @@ function App() {
         
         {/* Settings / Gallery tab strip */}
         <AnimatePresence mode="wait">
-          {(activeTab === "settings" && !postInstall) ? (
+          {(activeTab === "settings" && !shellBlocked) ? (
             <motion.div
               key="settings-tabs"
               initial={false}
@@ -1473,7 +1520,7 @@ function App() {
               </motion.div>
             </div>
             </motion.div>
-          ) : (activeTab === "media" && !selectedPlaylist && !postInstall) ? (
+          ) : (activeTab === "media" && !selectedPlaylist && !shellBlocked) ? (
             <motion.div
               key="gallery-tabs"
               initial={{ opacity: 0, x: -20 }}
@@ -1516,7 +1563,7 @@ function App() {
         </AnimatePresence>
 
         {/* Gallery search/settings tab bulge */}
-        {(activeTab === "media" && !postInstall) && (
+        {(activeTab === "media" && !shellBlocked) && (
           <div className="absolute right-6 top-0 z-20 flex h-[80px] pointer-events-none">
             <div
               className="relative flex h-[80px] bg-[#271C18] rounded-b-[28px] px-6 items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
@@ -1589,7 +1636,7 @@ function App() {
 
         {/* ── Main Content ─────────────────────────────── */}
         <div className="flex-1 relative z-0 bg-[#1D1613] rounded-tl-[32px] overflow-hidden rf-main-content-shell">
-          {activeTab === "explorer" && !postInstall ? (
+          {activeTab === "explorer" && !shellBlocked ? (
             <div
               ref={explorerWebviewHostRef}
               className="fixed z-[1] top-10 bottom-0 right-0 pointer-events-none"
@@ -1611,16 +1658,6 @@ function App() {
             onDismiss={() => setUpdaterTeaserDismissed(true)}
             dismissed={updaterTeaserDismissed}
           />
-          {postInstall && (
-            <UpdaterPostInstallStack
-              version={postInstall.version}
-              notes={postInstall.notes}
-              additions={postInstall.additions}
-              fixes={postInstall.fixes}
-              onDismiss={() => setPostInstall(null)}
-              onOpenChangelog={() => void openUrl(RELEASES_PAGE)}
-            />
-          )}
           {isMainUrlDropHover ? (
             <div
               aria-hidden
@@ -1734,6 +1771,20 @@ function App() {
       </>
       )}
 
+      {postInstall && (
+        <UpdaterPostInstallStack
+          version={postInstall.version}
+          notes={postInstall.notes}
+          additions={postInstall.additions}
+          fixes={postInstall.fixes}
+          onDismiss={() => setPostInstall(null)}
+          onOpenChangelog={() => void openUrl(RELEASES_PAGE)}
+        />
+      )}
+      {onboardingOpen && !postInstall && (
+        <OnboardingOverlay onComplete={() => setOnboardingOpen(false)} />
+      )}
+
       <UpdaterFullWindowUpdate
         phase={updaterPhase}
         downloaded={updaterDownloaded}
@@ -1748,6 +1799,7 @@ function App() {
       <ExportBundleHost />
       <ConfirmDialogHost />
     </div>
+    </MainPlaybackHost>
   );
 }
 

@@ -81,6 +81,7 @@ export function NowPlayingBar({
   const [volumeInteractTick, setVolumeInteractTick] = useState(0);
   const utilitiesRef = useRef<HTMLDivElement>(null);
   const scrubTrackRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!showMoreMenu) setMorePanel("main");
@@ -122,13 +123,20 @@ export function NowPlayingBar({
     window.addEventListener("mouseup", onUp);
   }, [onPauseForScrub, onResumeAfterScrub, seekToFraction, isDraggingRef]);
 
-  const handleVolumeWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const step = e.deltaY > 0 ? -0.05 : 0.05;
-    const next = Math.max(0, Math.min(1, volume + step));
-    setVolume(next);
-    if (isMuted && next > 0) setMuted(false);
-    setVolumeInteractTick((t) => t + 1);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      const step = e.deltaY > 0 ? -0.05 : 0.05;
+      const next = Math.max(0, Math.min(1, volume + step));
+      setVolume(next);
+      if (isMuted && next > 0) setMuted(false);
+      setVolumeInteractTick((t) => t + 1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
   }, [volume, isMuted, setVolume, setMuted]);
 
   const toggleLoop = useCallback(() => {
@@ -145,12 +153,12 @@ export function NowPlayingBar({
 
   return (
     <div
+      ref={barRef}
       className="shrink-0"
       style={{
         height: "var(--music-nowplaying-height)",
         background: expanded ? "var(--music-bg)" : "var(--music-surface)",
       }}
-      onWheel={handleVolumeWheel}
     >
       <div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1fr)] items-center gap-x-4 px-4">
         <div className="flex items-center gap-2 min-w-0">

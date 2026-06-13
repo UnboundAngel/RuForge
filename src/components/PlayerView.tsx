@@ -48,6 +48,9 @@ import { AudioHeroStage } from "./player/AudioHeroStage";
 import { SponsorBlockScrubOverlay } from "./player/SponsorBlockScrubOverlay";
 import { SponsorBlockSkipButton } from "./player/SponsorBlockSkipButton";
 import { useSponsorBlockPlayback } from "../hooks/useSponsorBlockPlayback";
+import { MainPlaybackProvider } from "../context/MainPlaybackContext";
+import { shouldPlayerOwnBridge } from "../playback/bridgeArbitration";
+import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import type { SponsorBlockSkipCategory } from "../sponsorBlock";
 
@@ -153,9 +156,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   );
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const settings = useRuforgeStore((s) => s.settings);
+  const hostAudio = useOptionalMainAudioPlayback();
+  const activeTab = useRuforgeStore((s) => s.activeTab);
   const audioOnly = isAudioOnlyPath(file.path);
+  const audioDelegated = audioOnly && hostAudio != null;
   const mediaRef = useRef<HTMLMediaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
   const scrubberRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
   const controlsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -166,8 +173,14 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [buffered, setBuffered] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   useImperativeHandle(ref, () => ({
-    getCurrentTime: () => mediaRef.current?.currentTime ?? 0,
-    getIsPaused: () => mediaRef.current?.paused ?? true,
+    getCurrentTime: () =>
+      audioDelegated && hostAudio
+        ? hostAudio.currentTime
+        : mediaRef.current?.currentTime ?? 0,
+    getIsPaused: () =>
+      audioDelegated && hostAudio
+        ? hostAudio.paused
+        : mediaRef.current?.paused ?? true,
   }));
   const [showControls, setShowControls] = useState(true);
   const [showVolume, setShowVolume] = useState(false);
@@ -340,6 +353,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   const [playbackSpeed, setPlaybackSpeedState] = useState(() => readPlaybackSpeed());
   const setPlaybackSpeed = (speed: number) => {
+    if (audioDelegated && hostAudio) {
+      hostAudio.setPlaybackSpeed(speed);
+    }
     writePlaybackSpeed(speed);
     setPlaybackSpeedState(speed);
   };
@@ -359,17 +375,36 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   /** crossOrigin before src so asset URLs are CORS-clean for Web Audio MediaElementSource. */
   useEffect(() => {
-    if (!audioOnly || !audioMediaSrc) return;
+    if (audioDelegated || !audioOnly || !audioMediaSrc) return;
     const el = mediaRef.current;
     if (!el) return;
     el.crossOrigin = "anonymous";
     if (el.src !== audioMediaSrc) {
       el.src = audioMediaSrc;
     }
-  }, [audioOnly, audioMediaSrc]);
+  }, [audioDelegated, audioOnly, audioMediaSrc]);
 
-  // Sync volume/mute/loop from store to <video> / <audio> (store actions persist flat LS for MiniPlayer)
   useEffect(() => {
+    if (audioDelegated || !hostAudio) return;
+    setIsPaused(hostAudio.paused);
+    setCurrentTime(hostAudio.currentTime);
+    setDuration(hostAudio.duration);
+    if (hostAudio.duration > 0) {
+      setProgress((hostAudio.currentTime / hostAudio.duration) * 100);
+    }
+    setPlaybackSpeedState(hostAudio.playbackSpeed);
+  }, [
+    audioDelegated,
+    hostAudio,
+    hostAudio?.paused,
+    hostAudio?.currentTime,
+    hostAudio?.duration,
+    hostAudio?.playbackSpeed,
+  ]);
+
+  // Sync volume/mute/loop from store to <video> (store actions persist flat LS for MiniPlayer)
+  useEffect(() => {
+    if (audioDelegated) return;
     const el = mediaRef.current;
     if (!el) return;
     applyMediaOutputState(el, volume, isMuted);
@@ -378,6 +413,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   // Sync playback speed (preservesPitch reduces time-stretch artifacts when rate ≠ 1)
   useEffect(() => {
+    if (audioDelegated) return;
     if (mediaRef.current) {
       mediaRef.current.preservesPitch = true;
       mediaRef.current.playbackRate = playbackSpeed;
@@ -396,6 +432,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       blockClickRef.current = false;
       return;
     }
+    if (audioDelegated && hostAudio) {
+      const wasPaused = hostAudio.paused;
+      hostAudio.togglePlay();
+      setClickFlash(wasPaused ? "play" : "pause");
+      if (!wasPaused) {
+        writePlaybackPos(file.path, hostAudio.currentTime, hostAudio.duration);
+      }
+      setTimeout(() => setClickFlash(null), 500);
+      return;
+    }
     const media = mediaRef.current;
     if (!media) return;
     if (media.paused) {
@@ -410,7 +456,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       writePlaybackPos(file.path, media.currentTime, media.duration);
     }
     setTimeout(() => setClickFlash(null), 500);
-  }, [file.path, volume, isMuted]);
+  }, [file.path, volume, isMuted, audioDelegated, hostAudio]);
 
   const handleMediaCanPlay = useCallback((el: HTMLMediaElement) => {
     applyMediaOutputState(el, volume, isMuted);
@@ -452,6 +498,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   ]);
 
   const skip = (seconds: number) => {
+    if (audioDelegated && hostAudio) {
+      hostAudio.skipBySeconds(seconds);
+      setSkipFlash({ side: seconds > 0 ? "right" : "left", amount: Math.abs(seconds) });
+      if (skipTimeoutRef.current) clearTimeout(skipTimeoutRef.current);
+      skipTimeoutRef.current = setTimeout(() => setSkipFlash(null), 600);
+      return;
+    }
     const vid = mediaRef.current;
     if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
     const next = Math.min(vid.duration, Math.max(0, vid.currentTime + seconds));
@@ -471,10 +524,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   };
 
   const handleAuxClickMute = (e: React.MouseEvent) => {
-    if (e.button !== 1 || !mediaRef.current) return;
+    if (e.button !== 1) return;
     e.preventDefault();
-    const nextMuted = !mediaRef.current.muted;
-    mediaRef.current.muted = nextMuted;
+    const nextMuted = !useRuforgeStore.getState().isMuted;
     setMuted(nextMuted);
     setShowVolume(true);
     if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
@@ -501,7 +553,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     pressTimeout.current = setTimeout(() => {
       setIsPressing(side);
       setPreviousSpeed(playbackSpeed);
-      setPlaybackSpeed(side === "right" ? 2 : 0.5);
+      const nextSpeed = side === "right" ? 2 : 0.5;
+      if (audioDelegated && hostAudio) {
+        hostAudio.setPlaybackSpeed(nextSpeed);
+      }
+      setPlaybackSpeed(nextSpeed);
     }, 500);
   };
 
@@ -520,6 +576,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   };
 
   const handlePopOut = () => {
+    if (audioDelegated && hostAudio) {
+      writePlaybackPos(file.path, hostAudio.currentTime, hostAudio.duration);
+      const wasPlaying = !hostAudio.paused;
+      if (wasPlaying) hostAudio.togglePlay();
+      void handlePopOutFromStore(hostAudio.currentTime, {
+        paused: !wasPlaying,
+        playbackSpeed: hostAudio.playbackSpeed,
+      });
+      return;
+    }
     const media = mediaRef.current;
     if (media) {
       writePlaybackPos(file.path, media.currentTime, media.duration);
@@ -546,30 +612,50 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   const applyScrubTime = useCallback(
     (t: number, opts?: { persist?: boolean }) => {
+      const delegatedDur =
+        audioDelegated && hostAudio && hostAudio.duration > 0 ? hostAudio.duration : 0;
       const vid = mediaRef.current;
-      if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
-      const clamped = Math.min(vid.duration, Math.max(0, t));
-      const ratio = clamped / vid.duration;
+      const dur =
+        delegatedDur > 0
+          ? delegatedDur
+          : vid && isFinite(vid.duration) && vid.duration > 0
+            ? vid.duration
+            : 0;
+      if (dur <= 0) return;
+      const clamped = Math.min(dur, Math.max(0, t));
+      const ratio = clamped / dur;
       isUserSeekingRef.current = true;
       setScrubDragPercent(ratio * 100);
       setCurrentTime(clamped);
       setProgress(ratio * 100);
-      vid.currentTime = clamped;
+      if (audioDelegated && hostAudio) {
+        hostAudio.seek(clamped);
+      } else if (vid) {
+        vid.currentTime = clamped;
+      }
       if (opts?.persist) {
-        writePlaybackPos(file.path, clamped, vid.duration);
+        writePlaybackPos(file.path, clamped, dur);
         lastPlaybackPersistRef.current = Date.now();
       }
     },
-    [file.path],
+    [file.path, audioDelegated, hostAudio],
   );
 
   const applyScrubPosition = useCallback(
     (pos: number, opts?: { persist?: boolean }) => {
+      const delegatedDur =
+        audioDelegated && hostAudio && hostAudio.duration > 0 ? hostAudio.duration : 0;
       const vid = mediaRef.current;
-      if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
-      applyScrubTime(pos * vid.duration, opts);
+      const dur =
+        delegatedDur > 0
+          ? delegatedDur
+          : vid && isFinite(vid.duration) && vid.duration > 0
+            ? vid.duration
+            : 0;
+      if (dur <= 0) return;
+      applyScrubTime(pos * dur, opts);
     },
-    [applyScrubTime],
+    [applyScrubTime, audioDelegated, hostAudio],
   );
 
   const chapters = useMemo(() => {
@@ -589,11 +675,19 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   const seekToTimeSeconds = useCallback(
     (t: number) => {
+      const delegatedDur =
+        audioDelegated && hostAudio && hostAudio.duration > 0 ? hostAudio.duration : 0;
       const vid = mediaRef.current;
-      if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
-      applyScrubPosition(Math.min(1, Math.max(0, t / vid.duration)), { persist: true });
+      const dur =
+        delegatedDur > 0
+          ? delegatedDur
+          : vid && isFinite(vid.duration) && vid.duration > 0
+            ? vid.duration
+            : 0;
+      if (dur <= 0) return;
+      applyScrubPosition(Math.min(1, Math.max(0, t / dur)), { persist: true });
     },
-    [applyScrubPosition],
+    [applyScrubPosition, audioDelegated, hostAudio],
   );
 
   const patchSbStats = useCallback(
@@ -791,9 +885,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const resolveScrubTime = useCallback(
     (e: { clientX: number }): number => {
       const rect = scrubberRef.current?.getBoundingClientRect();
+      const delegatedDur =
+        audioDelegated && hostAudio && hostAudio.duration > 0 ? hostAudio.duration : 0;
       const vid = mediaRef.current;
-      if (!rect || rect.width <= 0 || !vid || !isFinite(vid.duration)) return 0;
-      const dur = duration > 0 ? duration : vid.duration;
+      const vidDur = vid && isFinite(vid.duration) ? vid.duration : 0;
+      if (!rect || rect.width <= 0) return 0;
+      const dur = delegatedDur > 0 ? delegatedDur : duration > 0 ? duration : vidDur;
+      if (!isFinite(dur) || dur <= 0) return 0;
       return timeForScrubberClientX(
         chapters,
         dur,
@@ -802,17 +900,25 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         rect.width,
       );
     },
-    [chapters, duration],
+    [chapters, duration, audioDelegated, hostAudio],
   );
 
   const handleScrubMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
+    const delegatedDur =
+      audioDelegated && hostAudio && hostAudio.duration > 0 ? hostAudio.duration : 0;
     const vid = mediaRef.current;
-    if (!vid || !isFinite(vid.duration)) return;
+    const hasDur =
+      delegatedDur > 0 || (vid && isFinite(vid.duration) && vid.duration > 0);
+    if (!hasDur) return;
 
-    wasPlayingBeforeScrubRef.current = !vid.paused;
-    if (wasPlayingBeforeScrubRef.current) {
-      vid.pause();
+    if (audioDelegated && hostAudio) {
+      wasPlayingBeforeScrubRef.current = hostAudio.pauseForScrub();
+    } else if (vid) {
+      wasPlayingBeforeScrubRef.current = !vid.paused;
+      if (wasPlayingBeforeScrubRef.current) {
+        vid.pause();
+      }
     }
 
     setIsScrubbing(true);
@@ -827,7 +933,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
 
-      if (wasPlayingBeforeScrubRef.current && mediaRef.current) {
+      if (audioDelegated && hostAudio) {
+        hostAudio.resumeAfterScrub(wasPlayingBeforeScrubRef.current);
+      } else if (wasPlayingBeforeScrubRef.current && mediaRef.current) {
         void mediaRef.current.play().catch(() => {});
       }
     };
@@ -890,7 +998,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     playlistIdx >= 0 && playlistIdx < folderAudioPlaylist.length - 1
       ? folderAudioPlaylist[playlistIdx + 1]
       : null;
-  const prefetchNextEnabled = audioOnly && readAudioPrefetchNext() && nextInFolder !== null;
+  const prefetchNextEnabled =
+    audioOnly && !audioDelegated && readAudioPrefetchNext() && nextInFolder !== null;
 
   useEffect(() => {
     if (!prefetchNextEnabled || !nextInFolder) return;
@@ -903,7 +1012,20 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
   }, [prefetchNextEnabled, nextInFolder]);
 
+  const bridgeActive = shouldPlayerOwnBridge(file, activeTab);
+
+  const mainPlaybackValue = useMemo(
+    () => ({
+      paused: isPaused,
+      currentTime,
+      duration,
+      togglePlay,
+    }),
+    [isPaused, currentTime, duration, togglePlay],
+  );
+
   return (
+    <MainPlaybackProvider bridgeOwner="player-video" active={bridgeActive} value={mainPlaybackValue}>
     <motion.div
       ref={containerRef}
       initial={{ opacity: 0 }}
@@ -978,43 +1100,47 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
           </motion.div>
         )}
       </AnimatePresence>
-      {/* Local <video> or <audio> (Chromium stack); audio skips video decode path */}
+      {/* Local <video> or host-delegated audio presentation */}
       <div className="absolute inset-0">
         {audioOnly ? (
           <>
-            <audio
-              crossOrigin="anonymous"
-              ref={(node) => {
-                mediaRef.current = node;
-                setAudioEl(node);
-                if (node) {
-                  node.crossOrigin = "anonymous";
-                  if (audioMediaSrc && node.src !== audioMediaSrc) {
-                    node.src = audioMediaSrc;
-                  }
-                }
-              }}
-              className="absolute w-px h-px opacity-0 pointer-events-none"
-              preload="metadata"
-              autoPlay
-              onCanPlay={(e) => handleMediaCanPlay(e.currentTarget)}
-              onTimeUpdate={handleTimeUpdate}
-              onSeeked={handleSeeked}
-              onLoadedMetadata={handleLoadedMetadata}
-              onPause={() => setIsPaused(true)}
-              onPlay={() => setIsPaused(false)}
-              onEnded={() => {
-                if (!isLooping) handlePlaybackEnded();
-              }}
-            />
-            {prefetchNextEnabled && nextInFolder && (
-              <audio
-                crossOrigin="anonymous"
-                ref={prefetchAudioRef}
-                preload="auto"
-                className="absolute w-px h-px opacity-0 pointer-events-none"
-                aria-hidden
-              />
+            {!audioDelegated && (
+              <>
+                <audio
+                  crossOrigin="anonymous"
+                  ref={(node) => {
+                    mediaRef.current = node;
+                    setAudioEl(node);
+                    if (node) {
+                      node.crossOrigin = "anonymous";
+                      if (audioMediaSrc && node.src !== audioMediaSrc) {
+                        node.src = audioMediaSrc;
+                      }
+                    }
+                  }}
+                  className="absolute w-px h-px opacity-0 pointer-events-none"
+                  preload="metadata"
+                  autoPlay
+                  onCanPlay={(e) => handleMediaCanPlay(e.currentTarget)}
+                  onTimeUpdate={handleTimeUpdate}
+                  onSeeked={handleSeeked}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onPause={() => setIsPaused(true)}
+                  onPlay={() => setIsPaused(false)}
+                  onEnded={() => {
+                    if (!isLooping) handlePlaybackEnded();
+                  }}
+                />
+                {prefetchNextEnabled && nextInFolder && (
+                  <audio
+                    crossOrigin="anonymous"
+                    ref={prefetchAudioRef}
+                    preload="auto"
+                    className="absolute w-px h-px opacity-0 pointer-events-none"
+                    aria-hidden
+                  />
+                )}
+              </>
             )}
             <div
               className="absolute inset-0"
@@ -1032,7 +1158,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             >
               <AudioHeroStage
                 coverSrc={coverArtSrc ? convertFileSrc(coverArtSrc) : null}
-                audioEl={audioEl}
+                audioEl={audioDelegated && hostAudio ? hostAudio.audioEl : audioEl}
                 connectKey={file.path}
                 isPaused={isPaused}
                 isMuted={isMuted}
@@ -1612,6 +1738,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         )}
       </AnimatePresence>
     </motion.div>
+    </MainPlaybackProvider>
   );
 });
 

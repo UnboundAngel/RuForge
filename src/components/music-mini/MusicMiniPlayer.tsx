@@ -1,7 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import {
+  closeMusicMiniFromMini,
+  emitMusicMiniTeardown,
+} from "@/lib/mainPlaybackClaim";
 import type { SendToMusicMainPayload } from "@/playerHandoff";
 import { writePlaybackPos } from "@/playbackStorage";
 import {
@@ -25,7 +29,7 @@ export default function MusicMiniPlayer() {
 
   const handleBack = useCallback(async () => {
     if (!playback.playingFile) {
-      await getCurrentWindow().close();
+      await closeMusicMiniFromMini();
       return;
     }
     playback.persistPosition();
@@ -50,8 +54,22 @@ export default function MusicMiniPlayer() {
     await emit("send-to-music-main", payload);
     const main = await WebviewWindow.getByLabel("main");
     await main?.setFocus().catch(() => {});
-    await getCurrentWindow().close();
+    await closeMusicMiniFromMini();
   }, [playback]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void getCurrentWindow()
+      .onCloseRequested(() => {
+        emitMusicMiniTeardown();
+      })
+      .then((fn) => {
+        unlisten = fn;
+      });
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   const displayLayers =
     playback.layers.length > 0

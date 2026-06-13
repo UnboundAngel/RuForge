@@ -358,6 +358,29 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 - Prefer reading **`ruforgeStore.ts`**, **`App.tsx`**, **`MiniPlayer.tsx`**, and **`tauri.conf.json`** before large refactors.
 - For updater or signing behavior, trust **current Tauri v2 + plugin-updater docs** over memory; the surface changes over time.
 
+## Onboarding contract
+
+In-app walkthrough for features the user has not been shown yet. Separate from post-update What's New (`UpdaterPostInstallStack` / `updatePostInstall.ts`, one-shot after install via `ruforge.postInstallPayload.v1`).
+
+**Version gate:** Each step carries `introducedIn: "<semver>"` (same triplet as `package.json`). Flat LS key `ruforge-onboarding-last-seen-version` stores the highest version the user completed. On launch, run steps where `introducedIn` is greater than last-seen (semver compare), then bump last-seen to the max `introducedIn` among steps shown. Patch releases with no new registry entries fire nothing.
+
+**Order:** Post-install What's New dismisses first; onboarding chains after (install already restarted the app). Reuse the `postInstall` shell-block pattern in `App.tsx` so the two surfaces do not stack.
+
+**Welcome step:** Pure intro. No fields, no path confirm, no new LS keys for identity. Welcome card reuses the website hero title animation (`AnimatedText` / `HeroAnimatedTitle`, Framer Motion SVG underline draw, procedural so near-zero asset weight). Port target `src/components/onboarding/` or shared `src/components/ui/`; requires adding Patrick Hand woff2 + `@font-face` to the desktop CSS (the app has no `font-hand` token today). Remap website tokens (`text-rf-accent` etc) to the app's `--accent` / `--text`.
+
+**Feature steps:** Media-first (16:9 slot for screenshot or gif). Each step may set `settingsGate` to a `RuforgeSettings` boolean key. Skip the step when that setting is falsy (feature toggled off). Use existing keys only: `sponsorBlockEnabled`, `autoDownloadPlayingSongs`, `hideAudioFromMainLibrary`, `downloadSubtitles`, `autoDownloadScrubberPreviews`, `downloadAudioOnly`, `audioAutoAdvanceFolder`, `audioPrefetchNext`, `skipDuplicatesAutomatically`, `launchAtStartup`, `minimizeToTray`, `hardwareAcceleration`, `showDebuggingSettings`. Do not invent settings.
+
+**Dev:** `import.meta.env.DEV` ignores last-seen and replays the full curated registry every launch. Also ship **Replay onboarding** under Settings > Debugging (visible when `showDebuggingSettings` is on).
+
+**Where code lives (not built yet until authorized):**
+
+- Step registry: `src/lib/onboardingSteps.ts` (ordered list + types). Only steps Angel authors go here.
+- LS read/write: `src/lib/onboardingStorage.ts` (`ruforge-onboarding-last-seen-version`).
+- UI: `src/components/onboarding/` (overlay/stack), wired from `App.tsx` after `postInstall` clears.
+- Media is per-card and optional. A card declares its own media as one of: none, image (webp/png/gif), or video (mp4/webm). Folder stays `src/assets/onboarding/`, referenced by Vite import (same as `@/assets/neotubeIcon.png`). Renderer picks `<img>` for image/gif, `<video autoPlay loop muted playsInline>` for video. Do NOT use `convertFileSrc` for bundled step media (that's for user filesystem paths). Keep step videos short and compressed: video bytes ship in the installer.
+
+**Release gate (step 1 of Release ritual, same pass as PATCH/MINOR):** After reading the `(unreleased)` Shipped log block, scan it for new user-facing features that need a walkthrough step. Bug fixes, polish, refactors: no step. If a feature warrants onboarding and no registry row exists with `introducedIn` set to the release version, stop and ask Angel: does this need a step, what is the copy, and what file goes under `src/assets/onboarding/`? Do not ship when Angel said yes and the step is missing. Same zero-distance rule as the Shipped log.
+
 ## Shipped log
 
 **Why this exists:** Updates were getting lost because the only places to record them lived in `docs/`. Files Chad has no reason to open during a bug fix. This log lives **here, in the file you already read every task**, so there is zero distance between finishing work and recording it. Distance is what kills logging, not effort.
@@ -377,6 +400,16 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 ### v0.1.11 (unreleased)
 
+- **Playback (D-audio)**: `activity-handoff-sync` updates island stub metadata when video/music mini changes file (`activityHandoffSync.ts`, `App.tsx`, `MiniPlayer.tsx`, `useMusicMiniPlayback.ts`).
+- **Playback (D-audio)**: video mini handoff seek retries on `loadedmetadata` when first seek runs at `duration === 0` (`MiniPlayer.tsx`).
+- **Playback (D-audio)**: Tauri capabilities grant `core:window:allow-destroy` + `core:webview:allow-webview-close` so mini close from claim/teardown works (`default.json`).
+- **Playback (D-audio)**: video pop-out waits for `mini-player-ready` before `emitTo("mini", "play-in-mini")`, mirrors music-mini handoff order (`ruforgeStore.ts` `handlePopOut`).
+- **Playback (D-audio)**: unified `claimMainPlayback()` stops music-mini and closes video-mini on main claim; `activity-mini-teardown` clears island stub when video/music mini closes or returns to library (`mainPlaybackClaim.ts`, `App.tsx`, `MiniPlayer.tsx`, `MusicMiniPlayer.tsx`).
+- **Boot splash**: designed flowing screen-edge Siri-style gradient orbs that drift and blend near viewport edges with a heavy blur falloff (default and music modes), keeping the center artwork completely unobstructed (`index.html`, `src/lib/bootSplash.ts`).
+- **Activity island (E-audio)**: `main-music` island shows when `navMode !== "music"` with live host bridge (waveform, play/pause, skip); `main-video` frozen resume unchanged; debug ingest logs removed (`activityIslandResolve.ts`, `useCurrentActivity.ts`, `ActivityIsland.tsx`).
+- **Music**: pop-out waits for `music-mini-ready` before handoff emit (fixes double-click mini open); volume wheel uses non-passive listener in `NowPlayingBar.tsx`; stale listen adopt falls back to fresh session in `musicListenSession.ts`.
+- **Playback (D-audio)**: main claim (`setPlayingFile`, `stopPlayback`, `handlePlayFile`) routes through `claimMainPlayback()` (both minis); delete/cleanup via `releasePlaybackBeforeDelete`; `stop-playback` with `"mini-player"` partial-clears main only (handoff preserved); music-mini `stop-playback` ignored when `activityOwner === "music-mini"`; back-from-mini sets `musicPlayerResume` before `setPlayingFile`.
+- **Onboarding**: demo overlay wired in `App.tsx` (dev auto-show each launch, chains after post-install What's New, Settings > Debugging replay).
 
 ## Release ritual
 
@@ -388,7 +421,7 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 **Hard rule (branching):** RuForge is a solo-dev repo. **All release commits go directly to `main`.** Do **not** create, switch to, or commit on any branch for a release. If you are not on `main`, stop and say so. Do not "fix" it with git surgery on a possibly-dirty tree; ask Angel.
 
-1. **Drain the Shipped log â†’ version bump decision.** Read the entire `### vX.Y.Z (unreleased)` block. Decide PATCH vs MINOR from its contents (behavior change = at least PATCH; new feature / new persisted setting / new command = MINOR). State the chosen version and why, one line.
+1. **Drain the Shipped log â†’ version bump decision (+ onboarding gate).** Read the entire `### vX.Y.Z (unreleased)` block. Decide PATCH vs MINOR from its contents (behavior change = at least PATCH; new feature / new persisted setting / new command = MINOR). State the chosen version and why, one line. Then run the **Onboarding contract** release gate on the same block: any new user-facing feature that needs a walkthrough must have a row in `src/lib/onboardingSteps.ts` with `introducedIn` matching the release version and art under `src/assets/onboarding/` if Angel provided it. If warranted and missing, ask Angel before continuing. Bug-fix-only releases add no steps.
 2. **Bump all three version files together:** `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version`. A mismatch here is a known past failure. Confirm all three match.
 3. **Prep `updater.json` notes (agent, before build).** Write structured JSON in `notes`: markdown **teaser** (header + three bullets for the pre-download card; full markdown supported), plus `additions` and `fixes` arrays for post-install. Set `version`, `url` (`.../releases/download/v<semver>/RuForge_<semver>_x64-setup.exe`), leave `signature` empty until step 5.
 4. **Signed build (Angel only).** Angel runs `Build-signed-windows.bat` or `npm run build:signed`. Agent then reads NSIS `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/` (do not ask Angel to paste base64 unless the file is missing).
