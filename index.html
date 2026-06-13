@@ -5,11 +5,286 @@
     <link rel="icon" type="image/png" href="/neotubeIcon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RuForge</title>
-    </head>
-    <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-    </body>
-    </html>
+    <script>
+      (function () {
+        try {
+          var seenKey = "rf-boot-seen";
+          if (sessionStorage.getItem(seenKey) === "1") {
+            document.documentElement.dataset.bootSkip = "1";
+          } else {
+            sessionStorage.setItem(seenKey, "1");
+          }
 
+          var raw = localStorage.getItem("ruforge-nav-mode");
+          var music = raw === "music";
+          if (document.documentElement.dataset.bootSkip !== "1") {
+            var href = music ? "/boot/music-background.webp" : "/boot/normal-background.webp";
+            var link = document.createElement("link");
+            link.rel = "preload";
+            link.as = "image";
+            link.href = href;
+            document.head.appendChild(link);
+          }
+          document.documentElement.dataset.bootMode = music ? "music" : "default";
+        } catch (e) {
+          document.documentElement.dataset.bootMode = "default";
+        }
+      })();
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #271c18;
+      }
+
+      html[data-boot-mode="music"],
+      html[data-boot-mode="music"] body {
+        background: #0f0f0f;
+      }
+
+      html[data-boot-skip="1"] #rf-boot {
+        display: none !important;
+      }
+
+      #rf-boot {
+        --boot-accent-1: #EDCF9B;
+        --boot-accent-2: #D4A373;
+        --boot-accent-3: #FDF0D5;
+        --boot-text: #fafaf9;
+
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        overflow: hidden;
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 420ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      #rf-boot[data-mode="music"] {
+        --boot-accent-1: #ff0033;
+        --boot-accent-2: #ff007f;
+        --boot-accent-3: #7f00ff;
+        --boot-text: #ffffff;
+      }
+
+      #rf-boot.rf-boot--out {
+        opacity: 0;
+      }
+
+      #rf-boot.rf-boot--hidden {
+        display: none !important;
+      }
+
+      #rf-boot[data-preview="1"] {
+        pointer-events: auto;
+        display: block !important;
+      }
+
+      html[data-boot-skip="1"] #rf-boot[data-preview="1"] {
+        display: block !important;
+      }
+
+      .rf-boot__layer {
+        position: absolute;
+        inset: 0;
+        background-position: center;
+        background-size: cover;
+        background-repeat: no-repeat;
+        opacity: 0;
+      }
+
+      .rf-boot__layer--default {
+        background-image: url("/boot/normal-background.webp");
+      }
+
+      .rf-boot__layer--music {
+        background-image: url("/boot/music-background.webp");
+      }
+
+      #rf-boot[data-mode="default"] .rf-boot__layer--default,
+      #rf-boot[data-mode="music"] .rf-boot__layer--music {
+        opacity: 1;
+      }
+
+      /* Siri Window Border Glow Effect (Soft fading off the sides) */
+      .rf-boot__siri-glow {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 5;
+      }
+
+      .rf-boot__siri-orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(80px);
+        -webkit-filter: blur(80px);
+        opacity: 0.22;
+        mix-blend-mode: screen;
+        pointer-events: none;
+        transition: opacity 0.5s ease;
+      }
+
+      #rf-boot[data-mode="music"] .rf-boot__siri-orb {
+        opacity: 0.32;
+      }
+
+      .rf-boot__siri-orb--1 {
+        top: -15vh;
+        left: 15vw;
+        width: 35vw;
+        height: 30vh;
+        background: var(--boot-accent-1);
+      }
+
+      .rf-boot__siri-orb--2 {
+        bottom: -15vh;
+        right: 15vw;
+        width: 35vw;
+        height: 30vh;
+        background: var(--boot-accent-2);
+      }
+
+      .rf-boot__siri-orb--3 {
+        top: 25vh;
+        right: -12vw;
+        width: 25vw;
+        height: 35vh;
+        background: var(--boot-accent-3);
+      }
+
+      .rf-boot__siri-orb--4 {
+        bottom: 25vh;
+        left: -12vw;
+        width: 25vw;
+        height: 35vh;
+        background: var(--boot-accent-1);
+      }
+
+      .rf-boot__container {
+        position: absolute;
+        bottom: 8%;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        opacity: 1;
+      }
+
+      .rf-boot__title {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        font-size: 0.875rem;
+        font-weight: 500;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        color: var(--boot-text);
+        margin: 0;
+        opacity: 0.65;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+      }
+
+      @keyframes boot-fade-in {
+        0% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
+      @keyframes siri-orb-move-1 {
+        0%, 100% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(10vw, 4vh) scale(1.15);
+        }
+      }
+
+      @keyframes siri-orb-move-2 {
+        0%, 100% {
+          transform: translate(0, 0) scale(1.1);
+        }
+        50% {
+          transform: translate(-10vw, -4vh) scale(0.9);
+        }
+      }
+
+      @keyframes siri-orb-move-3 {
+        0%, 100% {
+          transform: translate(0, 0) scale(0.95);
+        }
+        50% {
+          transform: translate(-4vw, -8vh) scale(1.1);
+        }
+      }
+
+      @keyframes siri-orb-move-4 {
+        0%, 100% {
+          transform: translate(0, 0) scale(1.1);
+        }
+        50% {
+          transform: translate(4vw, 8vh) scale(0.95);
+        }
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .rf-boot__container {
+          animation: boot-fade-in 300ms ease-out forwards;
+        }
+
+        .rf-boot__siri-orb--1 {
+          animation: siri-orb-move-1 8s ease-in-out infinite;
+        }
+
+        .rf-boot__siri-orb--2 {
+          animation: siri-orb-move-2 8s ease-in-out infinite;
+        }
+
+        .rf-boot__siri-orb--3 {
+          animation: siri-orb-move-3 7s ease-in-out infinite;
+        }
+
+        .rf-boot__siri-orb--4 {
+          animation: siri-orb-move-4 7s ease-in-out infinite;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="rf-boot" data-mode="default" aria-hidden="true">
+      <div class="rf-boot__layer rf-boot__layer--default"></div>
+      <div class="rf-boot__layer rf-boot__layer--music"></div>
+      <div class="rf-boot__siri-glow">
+        <div class="rf-boot__siri-orb rf-boot__siri-orb--1"></div>
+        <div class="rf-boot__siri-orb rf-boot__siri-orb--2"></div>
+        <div class="rf-boot__siri-orb rf-boot__siri-orb--3"></div>
+        <div class="rf-boot__siri-orb rf-boot__siri-orb--4"></div>
+      </div>
+      <div class="rf-boot__container" role="status" aria-live="polite" aria-label="Loading RuForge">
+        <h1 class="rf-boot__title">RuForge</h1>
+      </div>
+    </div>
+    <div id="root"></div>
+    <script>
+      (function () {
+        try {
+          var boot = document.getElementById("rf-boot");
+          if (!boot) return;
+          var raw = localStorage.getItem("ruforge-nav-mode");
+          boot.dataset.mode = raw === "music" ? "music" : "default";
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

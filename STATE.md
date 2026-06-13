@@ -8,12 +8,12 @@
 
 Shipping version: 0.1.11 (unreleased)
 Last shipped to users: 0.1.10
-Last updated: 2026-06-12 (Shipped 0.1.10: updater live, GitHub Release)
+Last updated: 2026-06-13 (handoff-sync + video mini seek fix)
 Status: in progress
 
 ## Now
 
-0.1.10 shipped. Users on 0.1.9 receive the update via auto-updater. Open cycle is 0.1.11.
+0.1.10 shipped. Open cycle is 0.1.11. D-audio claim+teardown+handoff-sync built; re-cold-boot #5 island swap + B seek. E-audio signed off except island layout (Jim).
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -24,8 +24,17 @@ local dev, not a shipped target yet.
 
 ## What is new since last user release
 
-Closed release 0.1.9 (what users on 0.1.9 receive). The release-note drafter
+Closed release 0.1.10 (what users upgrading from 0.1.9 receive). The release-note drafter
 reads this for the last shipped delta, not the git tree.
+
+**0.1.11 (unreleased):**
+
+- Playback (D-audio): `activity-handoff-sync` island metadata on mini file change; video handoff seek retry at `loadedmetadata`.
+- Playback (D-audio): unified `claimMainPlayback()` + `activity-mini-teardown`; Tauri `allow-destroy` for mini close.
+- Boot splash: Siri-style edge orbs loader (default + music modes).
+- Activity island (E-audio): live `main-music` off music mode; `main-video` frozen unchanged.
+- Music polish: mini-ready-before-emit, volume wheel fix, stale listen adopt.
+- Onboarding: demo overlay (dev replay + Settings > Debugging).
 
 **0.1.10 shipped:**
 
@@ -43,34 +52,6 @@ Fixes:
 - Music mini corners and skip autoplay.
 - Music stats/profile/home layout and copy polish.
 - Storage glyph opens cleanup; YouTube @handle probe scoped to topbar.
-
-**0.1.9 shipped:**
-
-Additions:
-- Music mode: Spotify-style local library (Home, Explore, Library, now-playing bar, vinyl expanded player, embedded tag metadata).
-- YouTube Music Explore: embedded webview, download strip, Pick tracks, Paste URL, per-track orb progress dock, audio-only batch downloads.
-- Music detail pages: artist (MusicBrainz, mosaic hero, vinyl cards), album, and song views with Play/Shuffle and navigation stack.
-- Music metadata enrichment: `{stem}.musicmeta.json` sidecars at download time and via Settings backfill.
-- Music right panel: Queue, Recently played, and Segments tabs; manual queue; drag-reorder; play history; music-only SponsorBlock skip.
-- Music listen stats and smart shuffle: play counts, Home stats strip, dedicated Stats view, weighted shuffle.
-- Liked Songs: heart on now playing and detail tracklists; virtual playlist with collage cover; Library tab and Home shelf.
-- Radial navigation: Alt-hold menu with per-mode palettes; 56px icon rail; nav mode cycle including Music.
-- Media library buckets: Videos/Music/Movies/Shows/Playlists layout; Settings migration tool.
-- Delete and Recently Deleted: OS Recycle Bin with full sidecar cleanup; restore from trash when recoverable.
-- Export bundle: timestamped export folder; USB title-bar button; panel from context menus and Settings.
-- Settings debug logging: per-category Rust/JS toggles with boot sync (lofty TRACE off by default).
-- App-wide YouTube profile chip; music row context menus.
-- Website and mobile: Obsidian-style docs, six feature pages, download flow, 94-page `/m/` mobile shell.
-
-Fixes:
-- Music Explore: webview lifecycle, internal vault download path, browse JSON tracklist harvest, single-track paste URLs.
-- Music layout and UI: panel height, delayed tooltips, right panel tabs, mini player cover, queue drag without accidental play.
-- Music liked UX: no shelf jump on like; Home Liked shelf without scroll jolt; heart sizing matches transport icons.
-- Gallery scan: duplicate sweep off hot path; poster backfill skips embedded-cover audio.
-- Library migrate moves musicmeta sidecars; artist metadata disk cache on revisits.
-- Mini player: pop-out from music mode, stops main on library pick, transparent corners, hover z-order.
-- Chapter scrubber alignment; Explorer HMR reattach; radial Alt-release hover-to-select.
-- Music mini dual-play guard; downloader cookie export fallback; notification enter flash.
 
 ## Open P0 (blocks release)
 

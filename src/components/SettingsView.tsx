@@ -1168,6 +1168,32 @@ export const SettingsView: React.FC = () => {
                   onClick={() => setRegroupPlaylistOpen(true)}
                 />
                 <SettingItem
+                  title="Replay onboarding"
+                  description="Open the welcome and feature walkthrough overlay."
+                  control={
+                    <button
+                      type="button"
+                      onClick={() => void emit("debug-replay-onboarding")}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                    >
+                      REPLAY
+                    </button>
+                  }
+                />
+                <SettingItem
+                  title="Preview boot splash"
+                  description="Show the startup screen with the current nav mode background. Click anywhere to dismiss."
+                  control={
+                    <button
+                      type="button"
+                      onClick={() => void emit("debug-preview-boot-splash")}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                    >
+                      PREVIEW
+                    </button>
+                  }
+                />
+                <SettingItem
                   title="Cycle updater UI"
                   description="Step through Available, Downloading, Installing, and Post-Install updater phases."
                   control={

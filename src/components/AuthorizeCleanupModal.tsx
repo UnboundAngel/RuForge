@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback, memo } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { emitTo } from "@tauri-apps/api/event";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { releasePlaybackBeforeDelete } from "../releasePlaybackBeforeDelete";
 import { X, Video, Trash2, CheckSquare, Square, Loader2 } from "lucide-react";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { youtubeUrlsMatch } from "../youtubeUrl";
@@ -191,22 +190,7 @@ export function AuthorizeCleanupModal() {
 
     setBusy(true);
     try {
-      const pathSet = new Set(paths);
-      const st = useRuforgeStore.getState();
-      if (st.playingFile && pathSet.has(st.playingFile.path)) {
-        st.stopPlayback();
-        if (st.activeTab === "player") {
-          st.setActiveTab("media");
-        }
-      }
-      try {
-        const mini = await WebviewWindow.getByLabel("mini");
-        if (mini) {
-          await emitTo("mini", "stop-playback", "main-app");
-        }
-      } catch {
-        // Mini window may not exist.
-      }
+      await releasePlaybackBeforeDelete(paths);
 
       const deleted = await invoke<number>("delete_media_batch", { paths });
       clearPlaybackStateForDeletedPaths(paths);

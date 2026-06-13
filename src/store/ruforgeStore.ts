@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { invoke } from "@tauri-apps/api/core";
-import { emit, emitTo, listen } from "@tauri-apps/api/event";
+import { emitTo, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -51,6 +51,10 @@ import {
 } from "../components/music/musicLikedTracks";
 import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
 import {
+  claimMainPlayback,
+  closeVideoMiniWindow,
+} from "../lib/mainPlaybackClaim";
+import {
   getActiveListenEventId,
   transferListenSession,
 } from "../lib/musicListenSession";
@@ -67,6 +71,7 @@ import type {
   ExportOutcome,
   ExportPanelPreset,
 } from "../lib/exportTypes";
+import type { ActivityHandoffSnapshot, ActivityOwner } from "../lib/activityTypes";
 
 export type {
   ActiveTab,
@@ -143,6 +148,9 @@ export interface RuforgeStore extends DownloadQueueSlice {
 
   /** Main-window player; `volume` / `isLooping` mirror flat LS keys read by MiniPlayer. */
   playingFile: MediaFile | null;
+  /** Set when playback hands off to a mini webview; drives activity island stub state. */
+  activityOwner: ActivityOwner | null;
+  activityHandoff: ActivityHandoffSnapshot | null;
   folderAudioPlaylist: MediaFile[];
   /**
    * Manual queue paths (FIFO). Drained before effectivePlaylist advances.
@@ -178,6 +186,12 @@ export interface RuforgeStore extends DownloadQueueSlice {
   exportOutcome: ExportOutcome | null;
 
   setPlayingFile: (file: MediaFile | null) => void;
+  setActivityHandoff: (owner: ActivityOwner, snapshot: ActivityHandoffSnapshot) => void;
+  syncActivityHandoff: (
+    surface: "video-mini" | "music-mini",
+    snapshot: ActivityHandoffSnapshot,
+  ) => void;
+  clearActivityHandoff: () => void;
   clearPlayerResumeAt: () => void;
   clearMusicPlayerResume: () => void;
   setFolderAudioPlaylist: (files: MediaFile[]) => void;
@@ -305,6 +319,46 @@ function forgetNotificationDismissTimer(id: number): void {
   }
 }
 
+let popOutMusicInFlight = false;
+let popOutVideoInFlight = false;
+
+const MUSIC_MINI_READY_TIMEOUT_MS = 6000;
+const VIDEO_MINI_READY_TIMEOUT_MS = 6000;
+
+function waitForMusicMiniReady(): Promise<void> {
+  return new Promise((resolve) => {
+    let unlisten: (() => void) | null = null;
+    const timer = window.setTimeout(() => {
+      unlisten?.();
+      resolve();
+    }, MUSIC_MINI_READY_TIMEOUT_MS);
+    void listen("music-mini-ready", () => {
+      window.clearTimeout(timer);
+      unlisten?.();
+      resolve();
+    }).then((f) => {
+      unlisten = f;
+    });
+  });
+}
+
+function waitForVideoMiniReady(): Promise<void> {
+  return new Promise((resolve) => {
+    let unlisten: (() => void) | null = null;
+    const timer = window.setTimeout(() => {
+      unlisten?.();
+      resolve();
+    }, VIDEO_MINI_READY_TIMEOUT_MS);
+    void listen("mini-player-ready", () => {
+      window.clearTimeout(timer);
+      unlisten?.();
+      resolve();
+    }).then((f) => {
+      unlisten = f;
+    });
+  });
+}
+
 /** Clears all pending auto-dismiss timers (e.g. window unload, Vite HMR module dispose). */
 export function clearRuforgeNotificationDismissTimers(): void {
   for (const handle of notificationDismissTimers.values()) {
@@ -377,6 +431,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
       activeMenu: null,
 
       playingFile: null,
+      activityOwner: null,
+      activityHandoff: null,
       folderAudioPlaylist: [],
       manualQueue: [],
       playingFromManualQueue: false,
@@ -397,10 +453,22 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       setPlayingFile: (playingFile) => {
         const isLooping = playingFile ? readLoopForPath(playingFile.path) : false;
-        if (playingFile && get().navMode === "music") {
-          void emitTo("music-mini", "stop-music-mini-playback", "main-app").catch(() => null);
+        if (playingFile) {
+          claimMainPlayback();
+          set({ playingFile, isLooping, activityOwner: null, activityHandoff: null });
+        } else {
+          set({ playingFile, isLooping });
         }
-        set({ playingFile, isLooping });
+      },
+      setActivityHandoff: (owner, snapshot) => {
+        set({ activityOwner: owner, activityHandoff: snapshot });
+      },
+      syncActivityHandoff: (surface, snapshot) => {
+        if (get().activityOwner !== surface) return;
+        set({ activityHandoff: snapshot });
+      },
+      clearActivityHandoff: () => {
+        set({ activityOwner: null, activityHandoff: null });
       },
       clearPlayerResumeAt: () => set({ playerResumeAt: null }),
       clearMusicPlayerResume: () => set({ musicPlayerResume: null }),
@@ -459,32 +527,21 @@ export const useRuforgeStore = create<RuforgeStore>()(
         set({ isLooping });
       },
 
-      stopPlayback: () => set({ playingFile: null }),
+      stopPlayback: () => {
+        claimMainPlayback();
+        set({ playingFile: null, activityOwner: null, activityHandoff: null });
+      },
 
       handlePlayFile: async (file, playlist) => {
-        const mini = await WebviewWindow.getByLabel("mini");
-        if (mini) {
-          await emitTo("mini", "stop-playback", "main-app");
-          try {
-            await mini.close();
-          } catch (e) {
-            console.error("Failed to close mini player", e);
-          }
-        }
+        await closeVideoMiniWindow();
 
         const prev = get().playingFile;
-        const isLooping = readLoopForPath(file.path);
         if (playlist !== undefined) {
-          set({
-            playingFile: file,
-            activeTab: "player",
-            folderAudioPlaylist: playlist,
-            isLooping,
-            playerResumeAt: null,
-          });
+          set({ folderAudioPlaylist: playlist, activeTab: "player", playerResumeAt: null });
         } else {
-          set({ playingFile: file, activeTab: "player", isLooping, playerResumeAt: null });
+          set({ activeTab: "player", playerResumeAt: null });
         }
+        get().setPlayingFile(file);
 
         if (prev?.path !== file.path) {
           get().notify(`Now playing: ${file.name}`);
@@ -514,9 +571,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
         }
         set({
           folderAudioPlaylist: queue,
-          playingFile: queue[0],
           activeTab: "player",
         });
+        get().setPlayingFile(queue[0]);
         get().notify(
           shuffle ? `Shuffling ${files.length} items` : `Playing ${files.length} items`,
         );
@@ -526,6 +583,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
         if (get().navMode === "music") {
           return get().handlePopOutMusic(startTime, opts);
         }
+        if (popOutVideoInFlight) return;
+        popOutVideoInFlight = true;
         const { playingFile, activeTab, navMode, volume, isMuted } = get();
         const fileToHandoff = playingFile;
         const canHandoff = !!fileToHandoff && (activeTab === "player" || navMode === "music");
@@ -533,7 +592,6 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const paused = opts?.paused ?? false;
         const speed = opts?.playbackSpeed ?? readPlaybackSpeed();
         try {
-          await invoke("open_mini_player");
           if (canHandoff && fileToHandoff) {
             writePlaybackPos(fileToHandoff.path, t);
             const playInMiniPayload: PlayInMiniPayload = {
@@ -545,34 +603,37 @@ export const useRuforgeStore = create<RuforgeStore>()(
               muted: isMuted,
               navMode,
             };
-            await emit("play-in-mini", playInMiniPayload);
-            let unlistenFn: (() => void) | null = null;
-            listen("mini-player-ready", () => {
-              void emit("play-in-mini", playInMiniPayload);
-              if (unlistenFn) {
-                unlistenFn();
-                unlistenFn = null;
-              }
-            }).then((f) => {
-              unlistenFn = f;
+
+            const existingMini = await WebviewWindow.getByLabel("mini");
+            const readyWait = existingMini ? null : waitForVideoMiniReady();
+
+            get().setActivityHandoff("video-mini", {
+              file: fileToHandoff,
+              startTime: t,
+              paused,
             });
-            setTimeout(() => {
-              if (unlistenFn) {
-                unlistenFn();
-                unlistenFn = null;
-              }
-            }, 5000);
             set({
               playingFile: null,
               ...(navMode !== "music" ? { activeTab: "media" } : {}),
             });
+
+            await invoke("open_mini_player");
+            if (readyWait) await readyWait;
+
+            await emitTo("mini", "play-in-mini", playInMiniPayload);
+          } else {
+            await invoke("open_mini_player");
           }
         } catch (e) {
           console.error(e);
+        } finally {
+          popOutVideoInFlight = false;
         }
       },
 
       handlePopOutMusic: async (startTime, opts) => {
+        if (popOutMusicInFlight) return;
+        popOutMusicInFlight = true;
         const {
           playingFile,
           volume,
@@ -585,7 +646,10 @@ export const useRuforgeStore = create<RuforgeStore>()(
           manualQueueContextIndex,
         } = get();
         const fileToHandoff = playingFile;
-        if (!fileToHandoff) return;
+        if (!fileToHandoff) {
+          popOutMusicInFlight = false;
+          return;
+        }
         const t = Math.max(0, startTime ?? 0);
         const paused = opts?.paused ?? false;
         const speed = opts?.playbackSpeed ?? readPlaybackSpeed();
@@ -623,27 +687,25 @@ export const useRuforgeStore = create<RuforgeStore>()(
           await transferListenSession("music_mini");
           payload.listenEventId = listenEventId;
           writePlaybackPos(fileToHandoff.path, t);
-          set({ playingFile: null });
-          await invoke("open_music_mini_player");
-          await emitTo("music-mini", "play-in-music-mini", payload);
-          let unlistenFn: (() => void) | null = null;
-          listen("music-mini-ready", () => {
-            void emitTo("music-mini", "play-in-music-mini", payload);
-            if (unlistenFn) {
-              unlistenFn();
-              unlistenFn = null;
-            }
-          }).then((f) => {
-            unlistenFn = f;
+
+          const existingMini = await WebviewWindow.getByLabel("music-mini");
+          const readyWait = existingMini ? null : waitForMusicMiniReady();
+
+          get().setActivityHandoff("music-mini", {
+            file: fileToHandoff,
+            startTime: t,
+            paused,
           });
-          setTimeout(() => {
-            if (unlistenFn) {
-              unlistenFn();
-              unlistenFn = null;
-            }
-          }, 5000);
+          set({ playingFile: null });
+
+          await invoke("open_music_mini_player");
+          if (readyWait) await readyWait;
+
+          await emitTo("music-mini", "play-in-music-mini", payload);
         } catch (e) {
           console.error(e);
+        } finally {
+          popOutMusicInFlight = false;
         }
       },
 

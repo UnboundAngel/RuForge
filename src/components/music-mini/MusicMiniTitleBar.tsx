@@ -1,5 +1,5 @@
 import { Pin, ExternalLink, X } from "lucide-react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { closeMusicMiniFromMini } from "@/lib/mainPlaybackClaim";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -58,7 +58,7 @@ export function MusicMiniTitleBar({
         </button>
         <button
           type="button"
-          onClick={() => void getCurrentWindow().close()}
+          onClick={() => void closeMusicMiniFromMini()}
           className="rf-mm-chrome-btn"
           aria-label="Close"
         >

@@ -137,10 +137,15 @@ export async function beginListenSession(
     try {
       await invoke("music_listen_transfer", { surface });
       await refreshListenSnapshot();
+      return activeEventId;
     } catch (e) {
-      console.warn("music_listen_transfer on adopt failed", e);
+      if (!isNoActiveListenSessionError(e)) {
+        console.warn("music_listen_transfer on adopt failed", e);
+      }
+      activeEventId = null;
+      activeIdentityKey = null;
+      resetListenAccumulator();
     }
-    return activeEventId;
   }
 
   if (activeEventId && activeIdentityKey === meta.identityKey) {

@@ -22,7 +22,7 @@ import { ExploreDownloadDockChip } from "./MusicExploreDownloadCollapsed";
 import { useMusicDownloadCelebrations } from "@/hooks/useMusicDownloadCelebrations";
 import { NowPlayingBar } from "./NowPlayingBar";
 import { MusicStorageStrip } from "./MusicStorageStrip";
-import { useMusicPlayback } from "./useMusicPlayback";
+import { useMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { AudioHeroStage } from "@/components/player/AudioHeroStage";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -105,6 +105,7 @@ const SIDEBAR_COLLAPSED = "var(--music-sidebar-collapsed-width)";
 
 type ExpandedOverlayProps = {
   coverSrc: string | null;
+  audioEl: HTMLAudioElement | null;
   isPaused: boolean;
   isMuted: boolean;
   onTogglePlay: () => void;
@@ -112,6 +113,7 @@ type ExpandedOverlayProps = {
 
 function ExpandedOverlay({
   coverSrc,
+  audioEl,
   isPaused,
   isMuted,
   onTogglePlay,
@@ -124,7 +126,7 @@ function ExpandedOverlay({
     <div className="absolute inset-0 z-[2] pointer-events-none overflow-hidden">
       <AudioHeroStage
         coverSrc={coverSrc}
-        audioEl={null}
+        audioEl={audioEl}
         connectKey={playingFile?.path ?? ""}
         isPaused={isPaused}
         isMuted={isMuted}
@@ -175,8 +177,7 @@ export function MusicShell() {
       return !prev;
     });
   }, []);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const playback = useMusicPlayback(audioRef);
+  const playback = useMainAudioPlayback();
 
   const webviewHostRef = useRef<HTMLDivElement | null>(null);
   const musicExploreWebviewRef = useRef<Webview | null>(null);
@@ -932,9 +933,7 @@ export function MusicShell() {
         background: shellBlack ? "#000000" : "var(--music-shell-chrome)",
         color: "var(--music-text-primary)",
       }}
-    >
-      <audio ref={audioRef} crossOrigin="anonymous" className="hidden" preload="auto" />
-
+      >
       <div
         className="relative z-[3] flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden"
         style={{
@@ -1040,7 +1039,7 @@ export function MusicShell() {
                     >
                       <AudioHeroStage
                         coverSrc={coverSrc}
-                        audioEl={null}
+                        audioEl={playback.audioEl}
                         connectKey={playingFile.path}
                         isPaused={playback.paused}
                         isMuted={isMuted}
@@ -1055,6 +1054,7 @@ export function MusicShell() {
                     <ExpandedOverlay
                       key="expanded"
                       coverSrc={coverSrc}
+                      audioEl={playback.audioEl}
                       isPaused={playback.paused}
                       isMuted={isMuted}
                       onTogglePlay={playback.togglePlay}

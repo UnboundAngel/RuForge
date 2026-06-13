@@ -6,6 +6,11 @@ import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { setMiniWindowFocused } from "./appWindowFocus";
+import {
+  closeVideoMiniFromMini,
+  emitVideoMiniTeardown,
+} from "./lib/mainPlaybackClaim";
+import { emitActivityHandoffSync } from "./lib/activityHandoffSync";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import logo from "./assets/neotubeIcon.png";
 import {
@@ -401,6 +406,20 @@ export default function MiniPlayer() {
 
   useEffect(() => {
     emit("mini-player-ready");
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void getCurrentWindow()
+      .onCloseRequested(() => {
+        emitVideoMiniTeardown();
+      })
+      .then((fn) => {
+        unlisten = fn;
+      });
+    return () => {
+      unlisten?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -910,7 +929,8 @@ export default function MiniPlayer() {
     const v = mediaRef.current;
     if (!v) return;
     let t = startTime;
-    if (isFinite(v.duration) && v.duration > 0) t = Math.min(t, v.duration);
+    const durReady = isFinite(v.duration) && v.duration > 0;
+    if (durReady) t = Math.min(t, v.duration);
     v.currentTime = t;
     v.playbackRate = payload.playbackSpeed ?? playbackSpeed;
     applyMediaOutputState(
@@ -925,8 +945,10 @@ export default function MiniPlayer() {
       void v.play().catch(() => {});
       setIsPaused(false);
     }
-    playInMiniStartTimeRef.current = null;
-    resumeSeekAppliedPathRef.current = payload.file.path;
+    if (durReady) {
+      playInMiniStartTimeRef.current = null;
+      resumeSeekAppliedPathRef.current = payload.file.path;
+    }
   };
 
   useEffect(() => {
@@ -989,19 +1011,27 @@ export default function MiniPlayer() {
 
     const handoffTime = playInMiniStartTimeRef.current;
     const isHandoff = handoffTime !== null;
-    if (!isHandoff && resumeSeekAppliedPathRef.current === playingFile.path) return;
+    if (
+      !isHandoff &&
+      resumeSeekAppliedPathRef.current === playingFile.path &&
+      isFinite(v.duration) &&
+      v.duration > 0
+    ) {
+      return;
+    }
 
     let t: number;
     if (isHandoff) {
       t = handoffTime;
-      playInMiniStartTimeRef.current = null;
       if (isFinite(v.duration) && v.duration > 0) {
         t = Math.min(Math.max(0, t), v.duration);
+        playInMiniStartTimeRef.current = null;
+        resumeSeekAppliedPathRef.current = playingFile.path;
       }
     } else {
       t = readResumeSeconds(playingFile.path, v.duration);
+      resumeSeekAppliedPathRef.current = playingFile.path;
     }
-    resumeSeekAppliedPathRef.current = playingFile.path;
     v.currentTime = t;
     if (handoffPausedRef.current) {
       v.pause();
@@ -1384,7 +1414,7 @@ export default function MiniPlayer() {
     setPlayingFile(file);
     incrementViewCount(file);
     setIsMediaSelectorOpen(false);
-    // Tell main window mini has taken over so main audio stops.
+    emitActivityHandoffSync("video-mini", file, 0, false);
     void emit("stop-playback", "mini-player");
   };
 
@@ -1395,6 +1425,7 @@ export default function MiniPlayer() {
     setIsPaused(true);
     setIsMediaSelectorOpen(false);
     setPlayingFile(null);
+    emitVideoMiniTeardown();
   };
 
   const pickShuffleNext = (): MediaFile | null => {
@@ -1580,7 +1611,7 @@ export default function MiniPlayer() {
                   await emit("send-to-main", payload);
                   const main = await WebviewWindow.getByLabel("main");
                   await main?.setFocus().catch(console.error);
-                  getCurrentWindow().close();
+                  await closeVideoMiniFromMini();
                 }}
                 className="p-1.5 text-stone-400 hover:text-[color:var(--accent)] transition-colors"
               >
@@ -1620,7 +1651,7 @@ export default function MiniPlayer() {
             <button 
               onPointerDown={(e) => {
                 e.stopPropagation();
-                getCurrentWindow().close();
+                void closeVideoMiniFromMini();
               }} 
               className="p-1.5 text-stone-400 hover:text-white transition-colors"
             >
@@ -2315,7 +2346,7 @@ export default function MiniPlayer() {
                             await emit("send-to-main", payload);
                             const main = await WebviewWindow.getByLabel("main");
                             await main?.setFocus().catch(console.error);
-                            getCurrentWindow().close();
+                            await closeVideoMiniFromMini();
                           }}
                           className={`relative z-10 text-stone-400 hover:text-white transition-colors flex items-center justify-center ${outerBtnSize} shrink-0`}
                           title="Back to Library"
@@ -2343,7 +2374,7 @@ export default function MiniPlayer() {
                       <button 
                         onPointerDown={(e) => {
                           e.stopPropagation();
-                          getCurrentWindow().close();
+                          void closeVideoMiniFromMini();
                         }}
                         className="w-6 h-6 flex items-center justify-center rounded-lg text-stone-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
                         title="Close Player"
@@ -2373,7 +2404,7 @@ export default function MiniPlayer() {
                             await emit("send-to-main", payload);
                             const main = await WebviewWindow.getByLabel("main");
                             await main?.setFocus().catch(console.error);
-                            getCurrentWindow().close();
+                            await closeVideoMiniFromMini();
                           }}
                           className="w-6 h-6 flex items-center justify-center rounded-lg text-stone-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
                           title="Back to Library"
@@ -2443,7 +2474,7 @@ export default function MiniPlayer() {
                             await emit("send-to-main", payload);
                             const main = await WebviewWindow.getByLabel("main");
                             await main?.setFocus().catch(console.error);
-                            getCurrentWindow().close();
+                            await closeVideoMiniFromMini();
                           }}
                           className="w-6 h-6 flex items-center justify-center rounded-lg text-stone-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
                           title="Back to Library"

@@ -4,6 +4,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { applyMediaOutputState } from "@/applyMediaOutputState";
 import { bestCoverPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
+import { emitActivityHandoffSync } from "@/lib/activityHandoffSync";
 import type { PlayInMusicMiniPayload } from "@/playerHandoff";
 import { writePlaybackPos } from "@/playbackStorage";
 import {
@@ -179,6 +180,7 @@ export function useMusicMiniPlayback() {
 
       const path = file.path;
       const needsLoad = loadedPathRef.current !== path;
+      emitActivityHandoffSync("music-mini", file, startTime, shouldPause);
       if (needsLoad) {
         el.pause();
         el.src = convertFileSrc(path);
