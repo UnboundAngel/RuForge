@@ -277,6 +277,10 @@ function App() {
   useMotionValueEvent(settingsTabMorph, "change", setSettingsMorphAmount);
   const settingsTabDockLeft = SIDEBAR_RAIL_PX + 48;
   const sidebarChromeLeft = SIDEBAR_RAIL_PX;
+  const backgroundVideoFile =
+    playingFile && !isAudioOnlyPath(playingFile.path) ? playingFile : null;
+  const videoPlayerShellVisible =
+    Boolean(backgroundVideoFile) && navMode !== "music" && activeTab === "player";
   const notifications = useRuforgeStore((s) => s.notifications);
   const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const notify = useRuforgeStore((s) => s.notify);
@@ -1721,22 +1725,6 @@ function App() {
                 <SettingsView key="settings" />
               )}
             </AnimatePresence>
-            {playingFile && !isAudioOnlyPath(playingFile.path) ? (
-              <div
-                className={
-                  activeTab === "player"
-                    ? "absolute inset-0 z-50"
-                    : "pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-                }
-                aria-hidden={activeTab !== "player"}
-              >
-                <PlayerView
-                  ref={playerViewRef}
-                  key={`player-${playingFile.path}`}
-                  onBack={() => setActiveTab("media")}
-                />
-              </div>
-            ) : null}
           </main>
 
           {/* Toast Notifications */}
@@ -1803,6 +1791,24 @@ function App() {
       </div>
       </>
       )}
+
+      {backgroundVideoFile ? (
+        <div
+          className={
+            videoPlayerShellVisible
+              ? "pointer-events-auto fixed z-[40] top-[var(--rf-titlebar-h)] bottom-0 right-0 overflow-hidden bg-[#1D1613] rounded-tl-[32px]"
+              : "pointer-events-none fixed left-[-9999px] top-0 h-px w-px overflow-hidden opacity-0"
+          }
+          style={videoPlayerShellVisible ? { left: sidebarChromeLeft } : undefined}
+          aria-hidden={!videoPlayerShellVisible}
+        >
+          <PlayerView
+            ref={playerViewRef}
+            key={`player-${backgroundVideoFile.path}`}
+            onBack={() => setActiveTab("media")}
+          />
+        </div>
+      ) : null}
 
       {postInstall && (
         <UpdaterPostInstallStack

@@ -18,6 +18,27 @@
   animation: marquee 15s linear infinite;
 }
 
+.rf-marquee-fade-left {
+  mask-image: linear-gradient(to right, transparent 0, #000 1.25rem, #000 calc(100% - 0.35rem));
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 1.25rem, #000 calc(100% - 0.35rem));
+}
+
+.rf-marquee-fade-left::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  width: 1.25rem;
+  pointer-events: none;
+  background: linear-gradient(to right, rgb(0 0 0 / 0.72), transparent);
+}
+
+.rf-activity-island-portal[data-rf-nav-mode="media"] .rf-marquee-fade-left::before {
+  background: linear-gradient(to right, rgb(24 18 16 / 0.92), transparent);
+}
+
 :root {
   --bg: #1c1512;
   --surface: rgba(43, 30, 25, 0.7);
@@ -35,6 +56,9 @@
   --radius-pill: 999px;
   --rf-titlebar-h: 48px;
   --rf-window-outer-radius: 12px;
+  /* Activity island shell: darker espresso pocket on #271C18 chrome (portal sets data-rf-nav-mode). */
+  --rf-island-shell-media: #181210;
+  --rf-island-shell-music: #000000;
 }
 
 html,
@@ -1104,6 +1128,14 @@ button.rf-yt-profile-pill {
     max-width: 11rem;
     opacity: 1;
   }
+}
+
+.rf-island-shell {
+  background-color: var(--rf-island-shell-media);
+}
+
+.rf-activity-island-portal[data-rf-nav-mode="music"] .rf-island-shell {
+  background-color: var(--rf-island-shell-music);
 }
 
 .rf-island-waveform-art-bg {

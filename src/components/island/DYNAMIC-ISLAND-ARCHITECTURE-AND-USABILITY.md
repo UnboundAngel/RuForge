@@ -245,7 +245,7 @@ DynamicIsland      ← content prop only
 |-------|--------|
 | `paused` | Island UI for play/pause icon |
 | `waveformPaused` | `isStub \|\| paused` |
-| `showSkip` | `renderState === "main-music"` |
+| `showTrackSkip` | `renderState === "main-music"` |
 | `showExpandedControls` | `isExpanded && !isStub && hasSession` |
 | `canSeek` | bridge has `seek` + duration > 0 + not stub |
 | `accentColor` | Settings accent (`ActivityIsland`); waveform fallback when no cover or mini stub |

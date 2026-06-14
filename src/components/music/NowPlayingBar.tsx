@@ -25,7 +25,6 @@ type Props = {
   hasChapters: boolean;
   hasPrevInQueue: boolean;
   hasNextInQueue: boolean;
-  isDraggingRef: React.MutableRefObject<boolean>;
   onTogglePlay: () => void;
   onSkipPrev: () => void;
   onSkipNext: () => void;
@@ -33,9 +32,8 @@ type Props = {
   onJumpPrevChapter: () => void;
   onJumpNextChapter: () => void;
   onSetPlaybackSpeed: (speed: number) => void;
-  onSeek: (seconds: number) => void;
-  onPauseForScrub: () => boolean;
-  onResumeAfterScrub: (wasPlaying: boolean) => void;
+  onBeginScrub: () => void;
+  onReleaseScrub: (seconds: number) => void;
   onToggleExpand: () => void;
   /** Right panel toggle: omit to hide the button. */
   rightPanelOpen?: boolean;
@@ -51,7 +49,6 @@ export function NowPlayingBar({
   hasChapters,
   hasPrevInQueue,
   hasNextInQueue,
-  isDraggingRef,
   onTogglePlay,
   onSkipPrev,
   onSkipNext,
@@ -59,9 +56,8 @@ export function NowPlayingBar({
   onJumpPrevChapter,
   onJumpNextChapter,
   onSetPlaybackSpeed,
-  onSeek,
-  onPauseForScrub,
-  onResumeAfterScrub,
+  onBeginScrub,
+  onReleaseScrub,
   onToggleExpand,
   rightPanelOpen,
   onToggleRightPanel,
@@ -83,6 +79,12 @@ export function NowPlayingBar({
   const scrubTrackRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
+  const isScrubbingRef = useRef(false);
+  const scrubPctRef = useRef<number | null>(null);
+  const pendingReleaseRef = useRef(false);
+  const pendingReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scrubPct, setScrubPct] = useState<number | null>(null);
+
   useEffect(() => {
     if (!showMoreMenu) setMorePanel("main");
   }, [showMoreMenu]);
@@ -98,30 +100,92 @@ export function NowPlayingBar({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [showMoreMenu]);
 
-  const seekToFraction = useCallback((clientX: number) => {
+  const clearPendingRelease = useCallback(() => {
+    if (pendingReleaseTimeoutRef.current !== null) {
+      clearTimeout(pendingReleaseTimeoutRef.current);
+      pendingReleaseTimeoutRef.current = null;
+    }
+    scrubPctRef.current = null;
+    pendingReleaseRef.current = false;
+    setScrubPct(null);
+  }, []);
+
+  // Preview-on-release: clear the pending preview once currentTime catches
+  // up to the seek target, with a timeout fallback so it can't get stuck.
+  useEffect(() => {
+    if (isScrubbingRef.current || scrubPctRef.current === null || !pendingReleaseRef.current) {
+      return;
+    }
+    if (duration <= 0) return;
+    const targetSec = (scrubPctRef.current / 100) * duration;
+    if (Math.abs(currentTime - targetSec) < 0.35) {
+      clearPendingRelease();
+    }
+  }, [currentTime, duration, clearPendingRelease]);
+
+  // Track change: don't let a stale preview bleed into the next track.
+  useEffect(() => {
+    clearPendingRelease();
+    isScrubbingRef.current = false;
+  }, [playingFile?.path, clearPendingRelease]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingReleaseTimeoutRef.current !== null) {
+        clearTimeout(pendingReleaseTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const previewFromClientX = useCallback((clientX: number) => {
     const track = scrubTrackRef.current;
-    if (!track || !duration) return;
+    if (!track || !duration) return null;
     const rect = track.getBoundingClientRect();
     const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    onSeek(frac * duration);
-  }, [duration, onSeek]);
+    const pct = frac * 100;
+    scrubPctRef.current = pct;
+    setScrubPct(pct);
+    return frac * duration;
+  }, [duration]);
 
   const handleScrubMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    isDraggingRef.current = true;
-    const wasPlaying = onPauseForScrub();
-    seekToFraction(e.clientX);
-    const onMove = (ev: MouseEvent) => { if (isDraggingRef.current) seekToFraction(ev.clientX); };
+    if (pendingReleaseTimeoutRef.current !== null) {
+      clearTimeout(pendingReleaseTimeoutRef.current);
+      pendingReleaseTimeoutRef.current = null;
+    }
+    pendingReleaseRef.current = false;
+    onBeginScrub();
+    isScrubbingRef.current = true;
+    previewFromClientX(e.clientX);
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isScrubbingRef.current) return;
+      previewFromClientX(ev.clientX);
+    };
+
     const onUp = (ev: MouseEvent) => {
-      isDraggingRef.current = false;
-      seekToFraction(ev.clientX);
-      onResumeAfterScrub(wasPlaying);
+      if (!isScrubbingRef.current) return;
+      const finalSec = previewFromClientX(ev.clientX);
+      isScrubbingRef.current = false;
+      if (finalSec !== null) {
+        onReleaseScrub(finalSec);
+      }
+      if (duration > 0) {
+        pendingReleaseRef.current = true;
+        pendingReleaseTimeoutRef.current = setTimeout(() => {
+          clearPendingRelease();
+        }, 500);
+      } else {
+        clearPendingRelease();
+      }
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
+
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [onPauseForScrub, onResumeAfterScrub, seekToFraction, isDraggingRef]);
+  }, [duration, onBeginScrub, onReleaseScrub, previewFromClientX, clearPendingRelease]);
 
   useEffect(() => {
     const el = barRef.current;
@@ -147,7 +211,10 @@ export function NowPlayingBar({
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
   const artist = playingFile ? rawArtistFromFile(playingFile) : "";
   const artistNavKey = playingFile ? artistKeyFromFile(playingFile) : "";
-  const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const pct =
+    isScrubbingRef.current || scrubPctRef.current !== null
+      ? (scrubPctRef.current ?? scrubPct ?? 0)
+      : duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
 
   if (!playingFile) return null;
 

@@ -2,14 +2,16 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 import {
-  getMainPlaybackBridge,
-  subscribeMainPlaybackBridge,
-} from "@/lib/mainPlaybackBridge";
-import type { ActivityRenderState, CurrentActivity } from "@/lib/activityTypes";
-import {
+  bridgeOwnerMatchesRenderState,
   resolveActivityAwayFromSurface,
   resolveActivityHasSession,
 } from "@/lib/activityIslandResolve";
+import {
+  getMainPlaybackBridge,
+  getMainPlaybackBridgeOwner,
+  subscribeMainPlaybackBridge,
+} from "@/lib/mainPlaybackBridge";
+import type { ActivityRenderState, CurrentActivity } from "@/lib/activityTypes";
 import { bestCoverPath, isAudioOnlyPath } from "@/mediaKind";
 import { readFurthestPlaybackSec, readStoredPlaybackDuration } from "@/playbackStorage";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -66,6 +68,11 @@ export function useCurrentActivity(): CurrentActivity {
     getMainPlaybackBridge,
     getMainPlaybackBridge,
   );
+  const bridgeOwner = useSyncExternalStore(
+    subscribeMainPlaybackBridge,
+    getMainPlaybackBridgeOwner,
+    getMainPlaybackBridgeOwner,
+  );
 
   const lastLiveBridgeRef = useRef<LiveBridgeCache | null>(null);
 
@@ -86,12 +93,13 @@ export function useCurrentActivity(): CurrentActivity {
   const coverSrc = useMemo(() => coverSrcForPath(coverPath), [coverPath]);
 
   useEffect(() => {
-    if (renderState === "idle") {
+    if (renderState === "idle" || playback === null) {
       lastLiveBridgeRef.current = null;
     }
-  }, [renderState]);
+  }, [renderState, playback]);
 
-  const hasLivePlayback = playback !== null;
+  const hasLivePlayback =
+    playback !== null && bridgeOwnerMatchesRenderState(bridgeOwner, renderState);
 
   const paused = useMemo(() => {
     if (renderState === "mini-owned") return activityHandoff?.paused ?? true;
@@ -142,7 +150,7 @@ export function useCurrentActivity(): CurrentActivity {
     return { currentTime: 0, duration: 0 };
   }, [renderState, activityHandoff, playback, playingFile, file]);
 
-  const activity = useMemo(
+  return useMemo(
     (): CurrentActivity => ({
       renderState,
       hasSession,
@@ -168,6 +176,4 @@ export function useCurrentActivity(): CurrentActivity {
       hasLivePlayback,
     ],
   );
-
-  return activity;
 }

@@ -132,12 +132,15 @@ export const MarqueeText = ({
   className = "",
   layoutKey,
   centered = false,
+  fadeLeadingEdge = false,
 }: {
   text: string;
   className?: string;
   layoutKey?: boolean | number | string;
   /** Center the text when it fits without scrolling. */
   centered?: boolean;
+  /** Left-edge fade while scrolling (text exits left). */
+  fadeLeadingEdge?: boolean;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
@@ -160,7 +163,12 @@ export const MarqueeText = ({
   }, [text, layoutKey]);
 
   return (
-    <div ref={containerRef} className={`${className} overflow-hidden whitespace-nowrap`}>
+    <div
+      ref={containerRef}
+      className={`${className} relative overflow-hidden whitespace-nowrap ${
+        shouldMarquee && fadeLeadingEdge ? "rf-marquee-fade-left" : ""
+      }`}
+    >
       <div
         className={`flex w-max ${shouldMarquee ? "animate-marquee" : ""}`}
         style={centered && !shouldMarquee ? { margin: "0 auto" } : undefined}

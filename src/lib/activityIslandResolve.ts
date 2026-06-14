@@ -1,10 +1,21 @@
 import type { ActivityRenderState } from "@/lib/activityTypes";
 import { isAudioOnlyPath } from "@/mediaKind";
+import type { MainPlaybackBridgeOwner } from "@/playback/bridgeArbitration";
 import type { ActiveTab, NavMode } from "@/store/types";
 
 /** Active playback session exists (idle = no session). Drives island content, not visibility. */
 export function resolveActivityHasSession(renderState: ActivityRenderState): boolean {
   return renderState !== "idle";
+}
+
+export function bridgeOwnerMatchesRenderState(
+  owner: MainPlaybackBridgeOwner | null,
+  renderState: ActivityRenderState,
+): boolean {
+  if (!owner) return false;
+  if (renderState === "main-music") return owner === "host-audio";
+  if (renderState === "main-video") return owner === "player-video";
+  return false;
 }
 
 /**
@@ -44,7 +55,13 @@ export function navigateToActivityOwningSurface(
     return;
   }
 
-  if (renderState === "main-video" || renderState === "mini-owned") {
+  if (renderState === "main-video") {
+    nav.setNavMode("default");
+    nav.setActiveTab("player");
+    return;
+  }
+
+  if (renderState === "mini-owned") {
     nav.setActiveTab("player");
   }
 }

@@ -57,9 +57,13 @@ import {
 } from "@/lib/mainPlaybackBridge";
 import { shouldPlayerOwnBridge } from "../playback/bridgeArbitration";
 import { registerPlaybackMediaElement } from "@/lib/playbackMediaElement";
+import { peekAnalyserGraph } from "@/audioAnalyserGraph";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import type { SponsorBlockSkipCategory } from "../sponsorBlock";
+
+const SCRUB_DUCK_OUT_SEC = 0.008;
+const SCRUB_DUCK_IN_SEC = 0.012;
 
 const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: string }) => {
   const speedToAngle: Record<number, number> = {
@@ -190,6 +194,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const durationRef = useRef(0);
   const togglePlayRef = useRef<() => void>(() => {});
   const seekToTimeRef = useRef<(t: number) => void>(() => {});
+  const beginScrubRef = useRef<() => void>(() => {});
+  const releaseScrubRef = useRef<(seconds: number) => void>(() => {});
   useImperativeHandle(ref, () => ({
     getCurrentTime: () =>
       audioDelegated && hostAudio
@@ -211,7 +217,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const pressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blockClickRef = useRef(false);
-  const wasPlayingBeforeScrubRef = useRef(false);
+  const scrubGenerationRef = useRef(0);
   /** Blocks `timeupdate` from snapping the scrub thumb while a seek is in flight. */
   const isUserSeekingRef = useRef(false);
   const lastPlaybackPersistRef = useRef(0);
@@ -460,6 +466,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       setTimeout(() => setClickFlash(null), 500);
       return;
     }
+    scrubGenerationRef.current += 1;
     const media = mediaRef.current;
     if (!media) return;
     if (media.paused) {
@@ -656,6 +663,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         writePlaybackPos(file.path, clamped, dur);
         lastPlaybackPersistRef.current = Date.now();
       }
+      syncVideoBridgeTelemetry();
     },
     [file.path, audioDelegated, hostAudio],
   );
@@ -854,6 +862,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     setIsScrubbing(false);
     const vid = mediaRef.current;
     if (vid) syncProgressFromVideo(vid);
+    syncVideoBridgeTelemetry();
   }, [syncProgressFromVideo]);
 
   const syncPausedFromMedia = (paused: boolean) => {
@@ -886,8 +895,142 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       ...telemetry,
       togglePlay: () => togglePlayRef.current(),
       seek: (seconds: number) => seekToTimeRef.current(seconds),
+      beginScrub: () => beginScrubRef.current(),
+      releaseScrub: (seconds: number) => releaseScrubRef.current(seconds),
     });
   };
+
+  const beginScrubBridge = useCallback(() => {
+    if (audioDelegated && hostAudio) {
+      hostAudio.beginScrub();
+      return;
+    }
+    setIsScrubbing(true);
+    isUserSeekingRef.current = true;
+  }, [audioDelegated, hostAudio]);
+
+  const releaseScrubBridgeVideo = useCallback(
+    (seconds: number, dur: number) => {
+      const vid = mediaRef.current;
+      if (!vid || dur <= 0) return;
+      const clamped = Math.max(0, Math.min(dur, seconds));
+      const capturedGen = scrubGenerationRef.current;
+
+      const rampGainBackIn = () => {
+        if (scrubGenerationRef.current !== capturedGen) return;
+        const graph = peekAnalyserGraph(vid);
+        if (!graph) return;
+        const { gain, ctx } = graph;
+        gain.gain.cancelScheduledValues(ctx.currentTime);
+        gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(1, ctx.currentTime + SCRUB_DUCK_IN_SEC);
+      };
+
+      const performSeek = () => {
+        if (scrubGenerationRef.current !== capturedGen) return;
+        vid.currentTime = clamped;
+        setCurrentTime(clamped);
+        setProgress((clamped / dur) * 100);
+        syncVideoBridgeTelemetry();
+
+        const onSeeked = () => {
+          vid.removeEventListener("seeked", onSeeked);
+          if (scrubGenerationRef.current !== capturedGen) return;
+          rampGainBackIn();
+        };
+
+        if (vid.seeking) {
+          vid.addEventListener("seeked", onSeeked);
+          return;
+        }
+
+        requestAnimationFrame(() => {
+          if (scrubGenerationRef.current !== capturedGen) return;
+          if (vid.seeking) {
+            vid.addEventListener("seeked", onSeeked);
+          } else {
+            rampGainBackIn();
+          }
+        });
+      };
+
+      const graph = peekAnalyserGraph(vid);
+      if (graph) {
+        const { gain, ctx } = graph;
+        gain.gain.cancelScheduledValues(ctx.currentTime);
+        gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + SCRUB_DUCK_OUT_SEC);
+        window.setTimeout(performSeek, SCRUB_DUCK_OUT_SEC * 1000);
+      } else {
+        performSeek();
+      }
+    },
+    [],
+  );
+
+  const releaseScrubBridge = useCallback(
+    (seconds: number) => {
+      if (audioDelegated && hostAudio) {
+        hostAudio.releaseScrub(seconds);
+        return;
+      }
+      const vid = mediaRef.current;
+      const dur =
+        vid && isFinite(vid.duration) && vid.duration > 0
+          ? vid.duration
+          : durationRef.current;
+      if (dur <= 0) return;
+      releaseScrubBridgeVideo(seconds, dur);
+    },
+    [audioDelegated, hostAudio, releaseScrubBridgeVideo],
+  );
+
+  const previewScrubTime = useCallback(
+    (t: number) => {
+      const delegatedDur =
+        audioDelegated && hostAudio && hostAudio.duration > 0 ? hostAudio.duration : 0;
+      const vid = mediaRef.current;
+      const dur =
+        delegatedDur > 0
+          ? delegatedDur
+          : vid && isFinite(vid.duration) && vid.duration > 0
+            ? vid.duration
+            : duration > 0
+              ? duration
+              : 0;
+      if (dur <= 0) return;
+      const clamped = Math.min(dur, Math.max(0, t));
+      const ratio = clamped / dur;
+      isUserSeekingRef.current = true;
+      setScrubDragPercent(ratio * 100);
+      setCurrentTime(clamped);
+      setProgress(ratio * 100);
+    },
+    [duration, audioDelegated, hostAudio],
+  );
+
+  const releaseScrubAtTime = useCallback(
+    (t: number) => {
+      const delegatedDur =
+        audioDelegated && hostAudio && hostAudio.duration > 0 ? hostAudio.duration : 0;
+      const vid = mediaRef.current;
+      const dur =
+        delegatedDur > 0
+          ? delegatedDur
+          : vid && isFinite(vid.duration) && vid.duration > 0
+            ? vid.duration
+            : duration > 0
+              ? duration
+              : 0;
+      if (dur <= 0) return;
+      const clamped = Math.min(dur, Math.max(0, t));
+      writePlaybackPos(file.path, clamped, dur);
+      lastPlaybackPersistRef.current = Date.now();
+      releaseScrubBridge(clamped);
+      syncVideoBridgeTelemetry();
+    },
+    [file.path, duration, audioDelegated, hostAudio, releaseScrubBridge],
+  );
 
   const handleTimeUpdate = () => {
     if (isUserSeekingRef.current) return;
@@ -979,32 +1122,17 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       delegatedDur > 0 || (vid && isFinite(vid.duration) && vid.duration > 0);
     if (!hasDur) return;
 
-    if (audioDelegated && hostAudio) {
-      wasPlayingBeforeScrubRef.current = hostAudio.pauseForScrub();
-    } else if (vid) {
-      wasPlayingBeforeScrubRef.current = !vid.paused;
-      if (wasPlayingBeforeScrubRef.current) {
-        vid.pause();
-      }
-    }
-
-    setIsScrubbing(true);
-    applyScrubTime(resolveScrubTime(e));
+    beginScrubBridge();
+    previewScrubTime(resolveScrubTime(e));
 
     const onMove = (ev: MouseEvent) => {
-      applyScrubTime(resolveScrubTime(ev));
+      previewScrubTime(resolveScrubTime(ev));
     };
 
     const onUp = (ev: MouseEvent) => {
-      applyScrubTime(resolveScrubTime(ev), { persist: true });
+      releaseScrubAtTime(resolveScrubTime(ev));
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-
-      if (audioDelegated && hostAudio) {
-        hostAudio.resumeAfterScrub(wasPlayingBeforeScrubRef.current);
-      } else if (wasPlayingBeforeScrubRef.current && mediaRef.current) {
-        void mediaRef.current.play().catch(() => {});
-      }
     };
 
     window.addEventListener("mousemove", onMove);
@@ -1103,7 +1231,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   useEffect(() => {
     togglePlayRef.current = togglePlay;
     seekToTimeRef.current = seekToTimeSeconds;
-  }, [togglePlay, seekToTimeSeconds]);
+    beginScrubRef.current = beginScrubBridge;
+    releaseScrubRef.current = releaseScrubBridge;
+  }, [togglePlay, seekToTimeSeconds, beginScrubBridge, releaseScrubBridge]);
 
   const mainPlaybackValue = useMemo(
     () => ({
@@ -1112,6 +1242,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       duration,
       togglePlay: () => togglePlayRef.current(),
       seek: (seconds: number) => seekToTimeRef.current(seconds),
+      beginScrub: () => beginScrubRef.current(),
+      releaseScrub: (seconds: number) => releaseScrubRef.current(seconds),
     }),
     [isPaused, currentTime, duration],
   );

@@ -18,7 +18,12 @@ export function HoverMarqueeText({ text, className = "", layoutKey }: Props) {
       onMouseLeave={() => setHovered(false)}
     >
       {hovered ? (
-        <MarqueeText text={text} className={className} layoutKey={layoutKey} />
+        <MarqueeText
+          text={text}
+          className={className}
+          layoutKey={layoutKey}
+          fadeLeadingEdge
+        />
       ) : (
         <div className={cn(className, "truncate")}>{text}</div>
       )}
