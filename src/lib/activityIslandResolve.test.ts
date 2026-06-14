@@ -1,23 +1,64 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { resolveActivityShowIsland } from "./activityIslandResolve";
+import {
+  navigateToActivityOwningSurface,
+  resolveActivityAwayFromSurface,
+  resolveActivityHasSession,
+} from "./activityIslandResolve";
 
-describe("resolveActivityShowIsland", () => {
-  it("shows main-music island when left music mode", () => {
-    expect(resolveActivityShowIsland("main-music", "media", "default")).toBe(true);
-    expect(resolveActivityShowIsland("main-music", "player", "movie")).toBe(true);
+describe("resolveActivityHasSession", () => {
+  it("is false only for idle", () => {
+    expect(resolveActivityHasSession("idle")).toBe(false);
+    expect(resolveActivityHasSession("main-music")).toBe(true);
+    expect(resolveActivityHasSession("main-video")).toBe(true);
+    expect(resolveActivityHasSession("mini-owned")).toBe(true);
+  });
+});
+
+describe("resolveActivityAwayFromSurface", () => {
+  it("is false for idle", () => {
+    expect(resolveActivityAwayFromSurface("idle", "media", "default")).toBe(false);
   });
 
-  it("hides main-music island while in music mode", () => {
-    expect(resolveActivityShowIsland("main-music", "media", "music")).toBe(false);
+  it("collapses on music mode for main-music but session remains", () => {
+    expect(resolveActivityAwayFromSurface("main-music", "media", "music")).toBe(false);
+    expect(resolveActivityAwayFromSurface("main-music", "media", "default")).toBe(true);
+    expect(resolveActivityAwayFromSurface("main-music", "player", "movie")).toBe(true);
   });
 
-  it("keeps main-video frozen island off player tab only", () => {
-    expect(resolveActivityShowIsland("main-video", "media", "default")).toBe(true);
-    expect(resolveActivityShowIsland("main-video", "player", "default")).toBe(false);
+  it("collapses on player tab for main-video but session remains", () => {
+    expect(resolveActivityAwayFromSurface("main-video", "player", "default")).toBe(false);
+    expect(resolveActivityAwayFromSurface("main-video", "media", "default")).toBe(true);
   });
 
-  it("always shows mini-owned stub", () => {
-    expect(resolveActivityShowIsland("mini-owned", "player", "music")).toBe(true);
+  it("allows expansion for mini-owned stub on any tab", () => {
+    expect(resolveActivityAwayFromSurface("mini-owned", "player", "music")).toBe(true);
+    expect(resolveActivityAwayFromSurface("mini-owned", "media", "default")).toBe(true);
+  });
+});
+
+describe("navigateToActivityOwningSurface", () => {
+  it("opens music mode for main-music", () => {
+    const setNavMode = vi.fn();
+    const setActiveTab = vi.fn();
+    navigateToActivityOwningSurface("main-music", "/a.flac", { setNavMode, setActiveTab });
+    expect(setNavMode).toHaveBeenCalledWith("music");
+    expect(setActiveTab).not.toHaveBeenCalled();
+  });
+
+  it("opens player tab for main-video", () => {
+    const setNavMode = vi.fn();
+    const setActiveTab = vi.fn();
+    navigateToActivityOwningSurface("main-video", "/a.mp4", { setNavMode, setActiveTab });
+    expect(setActiveTab).toHaveBeenCalledWith("player");
+    expect(setNavMode).not.toHaveBeenCalled();
+  });
+
+  it("opens music mode for audio mini-owned stub", () => {
+    const setNavMode = vi.fn();
+    const setActiveTab = vi.fn();
+    navigateToActivityOwningSurface("mini-owned", "/a.mp3", { setNavMode, setActiveTab });
+    expect(setNavMode).toHaveBeenCalledWith("music");
+    expect(setActiveTab).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useMusicPlayback } from "@/components/music/useMusicPlayback";
 import { MainPlaybackProvider } from "@/context/MainPlaybackContext";
+import { registerPlaybackMediaElement } from "@/lib/playbackMediaElement";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 
 import { shouldHostOwnBridge } from "./bridgeArbitration";
@@ -23,6 +24,7 @@ export function MainPlaybackHost({ children }: { children: React.ReactNode }) {
       currentTime: playback.currentTime,
       duration: playback.duration,
       togglePlay: playback.togglePlay,
+      seek: playback.seek,
       skipPrev: playback.skipPrev,
       skipNext: playback.skipNext,
       hasPrevInQueue: playback.hasPrevInQueue,
@@ -33,6 +35,7 @@ export function MainPlaybackHost({ children }: { children: React.ReactNode }) {
       playback.currentTime,
       playback.duration,
       playback.togglePlay,
+      playback.seek,
       playback.skipPrev,
       playback.skipNext,
       playback.hasPrevInQueue,
@@ -48,12 +51,24 @@ export function MainPlaybackHost({ children }: { children: React.ReactNode }) {
     [playback, audioEl],
   );
 
+  useLayoutEffect(() => {
+    if (!bridgeActive) {
+      registerPlaybackMediaElement("host-audio", null);
+      return;
+    }
+    registerPlaybackMediaElement("host-audio", audioRef.current);
+    return () => registerPlaybackMediaElement("host-audio", null);
+  }, [bridgeActive, audioEl, playingFile?.path]);
+
   return (
     <MainAudioPlaybackContext.Provider value={audioPlaybackValue}>
       <audio
         ref={(node) => {
           audioRef.current = node;
           setAudioEl(node);
+          if (bridgeActive && node) {
+            registerPlaybackMediaElement("host-audio", node);
+          }
         }}
         crossOrigin="anonymous"
         className="hidden"

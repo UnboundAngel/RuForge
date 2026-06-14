@@ -115,6 +115,7 @@ Phase 2 work (distribution, content, README polish) is authorized separately.
 - **Living roadmap / ideas (in-repo, canonical for agents):** `docs/RuForge.md`. Update when shipped work lands. Optional mirror outside the repo: `c:\Random things i dont want deleted\markdown files\RuForge.md` (keep in sync by hand if you use both).
 - **Graph surfaces (`docs/changes.html`, `docs/versions/version-<semver>.json`, `docs/versioner.html`):** Angel's project-tracking + release-note source. These are **drained from the Shipped log at release time only** (see `## Release ritual`, step 8). **Never** edited per-change mid-cycle. The gap between the Shipped log and the last version present in the graph surfaces IS the release-prep to-do; do not wait to be told.
 - **In-repo machine plans:** `.cursor/plans/` (e.g. Zustand migration audit). Implementation detail, may lag; trust code + this `AGENTS.md` for "what shipped."
+- **Dynamic Island (architecture & usability):** `src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`. Read before island, motion, playback-bridge, or island-onboarding edits. Extend that file when you learn something future agents must not break; do not duplicate long island animation rules here.
 
 ## Who does what (this workspace vs elsewhere)
 
@@ -293,6 +294,12 @@ Hard rule unchanged by the move: never edit the changes.html JS or CSS
 rendering logic. Append to the JSON island only, recompute `.rf-count`,
 honor faded dividers, fixes are non-red. Full detail in the authoring doc.
 
+## Dynamic Island (architecture & usability)
+
+Canonical doc: **`src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`**.
+
+Before changing `ActivityIsland`, `DynamicIsland`, island motion/expand behavior, playback bridge wiring for the island, or onboarding that targets the island: **read that file first**. If the task would add island animation rules, state-machine notes, z-index/layout constraints, or onboarding integration guidance to this file or to comments, **put it in that doc instead** and keep `AGENTS.md` to this pointer.
+
 ## Auto-updater (Tauri plugin-updater)
 
 - Config: `src-tauri/tauri.conf.json` â†’ `plugins.updater` (`endpoints`, `pubkey`). Bundles: `"createUpdaterArtifacts": true`.
@@ -362,6 +369,8 @@ Copy the **base64 signature** from each `.sig` into `updater.json` for the match
 
 In-app walkthrough for features the user has not been shown yet. Separate from post-update What's New (`UpdaterPostInstallStack` / `updatePostInstall.ts`, one-shot after install via `ruforge.postInstallPayload.v1`).
 
+Steps that highlight or drive the activity island: read **`src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`** first (portal, expand morph, `shellBlocked`, z-index). Append new island onboarding rules there if needed.
+
 **Version gate:** Each step carries `introducedIn: "<semver>"` (same triplet as `package.json`). Flat LS key `ruforge-onboarding-last-seen-version` stores the highest version the user completed. On launch, run steps where `introducedIn` is greater than last-seen (semver compare), then bump last-seen to the max `introducedIn` among steps shown. Patch releases with no new registry entries fire nothing.
 
 **Order:** Post-install What's New dismisses first; onboarding chains after (install already restarted the app). Reuse the `postInstall` shell-block pattern in `App.tsx` so the two surfaces do not stack.
@@ -400,13 +409,35 @@ In-app walkthrough for features the user has not been shown yet. Separate from p
 
 ### v0.1.11 (unreleased)
 
-- **Playback (D-audio)**: `activity-handoff-sync` updates island stub metadata when video/music mini changes file (`activityHandoffSync.ts`, `App.tsx`, `MiniPlayer.tsx`, `useMusicMiniPlayback.ts`).
+- **Activity island (E-audio)**: removed dead cover palette extraction (`extractColorPalette*`, `accentPalette` wiring); `prominentColor.ts` slimmed to MiniPlayer-only; archive note in `src/_deprecated/README.md`.
+- **Activity island (E-audio)**: waveform bars sample blurred cover art per column (no pixel palette extraction); settings accent fallback when no cover (`ActivityIslandWaveform.tsx`, `useCurrentActivity.ts`).
+- **Activity island (E-audio)**: monochrome waveform uses Apple-style orange-to-gold bar ramp from image warmth (not hash-scattered hues) (`prominentColor.ts`).
+- **Activity island (E-audio)**: waveform palette loads cover via `convertFileSrc` (not `readFile`), skips `crossOrigin` on local assets, and label-only synthetic fallback when canvas read fails (`prominentColor.ts`, `useCurrentActivity.ts`).
+- **Activity island (E-audio)**: monochrome album art gets synthetic 5-hue waveform palette from album-name hash and avg luminance instead of settings accent fallback (`prominentColor.ts`, `useCurrentActivity.ts`).
+- **Activity island (E-audio)**: waveform now applies Apple-style AGC (running RMS level adapts per-track, `AGC_TARGET = 0.22`, fast attack / slow release, gain clamped 0.6x-3.2x) and per-band perceptual weighting (bass/treble bars boosted relative to mids) so quiet and loud tracks both produce visible motion (`audioAnalyserGraph.ts` `readIslandBandLevels`, new `agcLevel` field on `AnalyserGraph`); bar motion replaced flat lerp with spring-damper physics (stiffness 360 / damping 18) for "shoot up on attack, float down with inertia" (`islandWaveformLevels.ts` `springStep`).
+- **Activity island (E-audio)**: waveform bars colored per-bar from a 5-color hue palette extracted from cover art (Apple-style gradient), via new `extractColorPaletteFromPath`/`extractColorPaletteFromImageData` (`prominentColor.ts`); `useCurrentActivity` exposes `accentPalette`, threaded through `ActivityIsland.tsx` → `DynamicIsland.tsx` → `ActivityIslandWaveform.tsx` (falls back to single `accentColor` when palette is empty).
+- **Activity island (E-audio)**: waveform band order reversed so the leftmost bar is the highest frequency band and the rightmost is bass, matching Apple's spectrum-analyzer layout (`audioAnalyserGraph.ts` `readIslandBandLevels`).
+- **Activity island (E-audio)**: waveform bars were still saturating to max on most audio (curve `pow(x, 0.7) * 2.2` left no headroom); changed to `pow(x, 1.6) * 1.15` for real dynamic range between quiet and loud passages (`audioAnalyserGraph.ts` `readIslandBandLevels`); bars grow symmetrically from a center baseline (Apple-style dual-sided) instead of bottom-up (`ActivityIslandWaveform.tsx` `items-center`).
+- **Activity island (E-audio)**: fixed waveform bars not tracking real audio — `useSyncExternalStore` snapshot was a mutated-in-place array so React never saw updates (`islandWaveformLevels.ts`); fixed MES analyser graphs being permanently silenced on hard release, which killed the analyser after track changes (`audioAnalyserGraph.ts`); fixed bar trail/ghosting via `items-end` growth, `contain: strict`, and compositing isolation (`ActivityIslandWaveform.tsx`).
+- **Activity island (E-audio)**: island waveform uses single shared analyser driver, log-spaced bands, height-based bars (fixes trail / dead bars / compact-expand churn).
+- **Player**: video play/pause icon no longer overwritten by idle music host audio sync (`PlayerView.tsx`).
+- **Window chrome**: main window outer radius 12px when not maximized; square when maximized (`mainWindowFrame.ts`, `index.css`, `App.tsx`).
+- **Window chrome**: edge resize strips via `startResizeDragging` restore borderless resize after `shadow: false` (`WindowResizeEdges.tsx`, `App.tsx`).
+- **Onboarding**: island Alt-hold celebrate phase ("nice!" + accent ring) and soft exit before dismiss; spring-smoothed progress ring (`OnboardingIsland.tsx`, `useAltHoldProgress.ts`).
+- **Activity island (E-audio)**: live bridge sync (paused/time/duration from `<video>`), seek + play/pause/skip wired, duration fallback, titlebar 48px centering (`PlayerView.tsx`, `useCurrentActivity.ts`, `ActivityIsland.tsx`, `DynamicIsland.tsx`, `index.css`).
+- **Activity island (E-audio)**: off-tab video keeps full-size PlayerView behind content so playback bridge and waveform stay live; island uses explicit spring dimensions, no-drag titlebar hit target, showIsland gating (`App.tsx`, `ActivityIsland.tsx`, `DynamicIsland.tsx`).
+- **Activity island (E-audio)**: waveform restored to scaleY mirror loop bars (`ActivityIslandWaveform.tsx`); bridge publish uses `useLayoutEffect` (`MainPlaybackContext.tsx`).
+- **Activity island (E-audio)**: restored 5-bar `ActivityIslandWaveform`; accent from filesystem cover read via blob URL (`extractProminentColorFromPath`, `prominentColor.ts`).
+- **Playback (C-video lite)**: video `PlayerView` stays mounted off-tab (1px hidden shell); `shouldPlayerOwnBridge` no longer gates on `activeTab` (`App.tsx`, `bridgeArbitration.ts`).
+- **Window chrome**: main window `shadow: false` in `tauri.conf.json` (Windows borderless focus top hairline); off-tab video shell moved off-screen; island shadow only when expanded.
+- **Activity island (E-audio)**: model A always-mounted single `motion` node; `hasSession` + `awayFromOwningSurface` replace mount-gating `showIsland` (`ActivityIsland.tsx`, `activityIslandResolve.ts`).
+- **Playback (D-audio)**: video pop-out uses module-level `play-in-mini` bridge + emits handoff inside `mini-player-ready` callback so mini receives file instead of Video Library (`videoMiniHandoffBridge.ts`, `MiniPlayer.tsx`, `ruforgeStore.ts`).
 - **Playback (D-audio)**: video mini handoff seek retries on `loadedmetadata` when first seek runs at `duration === 0` (`MiniPlayer.tsx`).
 - **Playback (D-audio)**: Tauri capabilities grant `core:window:allow-destroy` + `core:webview:allow-webview-close` so mini close from claim/teardown works (`default.json`).
 - **Playback (D-audio)**: video pop-out waits for `mini-player-ready` before `emitTo("mini", "play-in-mini")`, mirrors music-mini handoff order (`ruforgeStore.ts` `handlePopOut`).
 - **Playback (D-audio)**: unified `claimMainPlayback()` stops music-mini and closes video-mini on main claim; `activity-mini-teardown` clears island stub when video/music mini closes or returns to library (`mainPlaybackClaim.ts`, `App.tsx`, `MiniPlayer.tsx`, `MusicMiniPlayer.tsx`).
 - **Boot splash**: designed flowing screen-edge Siri-style gradient orbs that drift and blend near viewport edges with a heavy blur falloff (default and music modes), keeping the center artwork completely unobstructed (`index.html`, `src/lib/bootSplash.ts`).
-- **Activity island (E-audio)**: `main-music` island shows when `navMode !== "music"` with live host bridge (waveform, play/pause, skip); `main-video` frozen resume unchanged; debug ingest logs removed (`activityIslandResolve.ts`, `useCurrentActivity.ts`, `ActivityIsland.tsx`).
+- **Activity island (E-audio)**: model A always-mounted chrome; `hasSession` drives content, `awayFromOwningSurface` drives expansion only (`activityIslandResolve.ts`, `useCurrentActivity.ts`, `ActivityIsland.tsx`).
 - **Music**: pop-out waits for `music-mini-ready` before handoff emit (fixes double-click mini open); volume wheel uses non-passive listener in `NowPlayingBar.tsx`; stale listen adopt falls back to fresh session in `musicListenSession.ts`.
 - **Playback (D-audio)**: main claim (`setPlayingFile`, `stopPlayback`, `handlePlayFile`) routes through `claimMainPlayback()` (both minis); delete/cleanup via `releasePlaybackBeforeDelete`; `stop-playback` with `"mini-player"` partial-clears main only (handoff preserved); music-mini `stop-playback` ignored when `activityOwner === "music-mini"`; back-from-mini sets `musicPlayerResume` before `setPlayingFile`.
 - **Onboarding**: demo overlay wired in `App.tsx` (dev auto-show each launch, chains after post-install What's New, Settings > Debugging replay).

@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { RadialMenu } from "@/components/ui/radial-menu";
 import { radialMenuItemsForMode, radialNavActionForItem } from "@/lib/radialNavItems";
+import { mainWindowPortalRoot } from "@/lib/mainWindowFrame";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { ActiveTab } from "@/store/types";
 
@@ -8,9 +9,15 @@ type RadialNavOverlayProps = {
   open: boolean;
   anchor: { x: number; y: number };
   onNavigate: (tab: ActiveTab) => void;
+  onCenterClick?: () => void;
 };
 
-export function RadialNavOverlay({ open, anchor, onNavigate }: RadialNavOverlayProps) {
+export function RadialNavOverlay({
+  open,
+  anchor,
+  onNavigate,
+  onCenterClick,
+}: RadialNavOverlayProps) {
   const navMode = useRuforgeStore((s) => s.navMode);
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
   const setNavMode = useRuforgeStore((s) => s.setNavMode);
@@ -47,11 +54,11 @@ export function RadialNavOverlay({ open, anchor, onNavigate }: RadialNavOverlayP
           open={open}
           navMode={navMode}
           menuItems={menuItems}
-          onCenterClick={() => cycleNavMode()}
+          onCenterClick={onCenterClick ?? cycleNavMode}
           onSelect={handleSelect}
         />
       </div>
     </div>,
-    document.body,
+    mainWindowPortalRoot(),
   );
 }

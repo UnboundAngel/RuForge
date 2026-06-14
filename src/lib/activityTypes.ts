@@ -23,7 +23,8 @@ export type ActivityRenderState = "idle" | "main-music" | "main-video" | "mini-o
 
 export type CurrentActivity = {
   renderState: ActivityRenderState;
-  showIsland: boolean;
+  hasSession: boolean;
+  awayFromOwningSurface: boolean;
   file: MediaFile | null;
   paused: boolean;
   currentTime: number;
