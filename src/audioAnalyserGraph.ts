@@ -4,6 +4,8 @@ export type AnalyserGraph = {
   ctx: AudioContext;
   analyser: AnalyserNode;
   source: AudioNode;
+  /** Sits between source and analyser; used to duck audio during scrub seeks without touching el.volume. */
+  gain: GainNode;
   freqData: Uint8Array;
   tappedStream: boolean;
   /** AGC running level estimate (RMS, 0..1), adapts per-track. */
@@ -52,12 +54,18 @@ function wireGraph(
   analyser: AnalyserNode,
   tappedStream: boolean,
 ): AnalyserGraph {
-  source.connect(analyser);
-  analyser.connect(ctx.destination);
+  const gain = ctx.createGain();
+  gain.gain.value = 1;
+  source.connect(gain);
+  gain.connect(analyser);
+  if (!tappedStream) {
+    analyser.connect(ctx.destination);
+  }
   const graph: AnalyserGraph = {
     ctx,
     analyser,
     source,
+    gain,
     freqData: new Uint8Array(analyser.frequencyBinCount),
     tappedStream,
     agcLevel: AGC_TARGET,
@@ -70,12 +78,16 @@ function wireGraph(
 function reconnectExistingGraph(g: AnalyserGraph): AnalyserGraph {
   try {
     g.source.disconnect();
+    g.gain.disconnect();
     g.analyser.disconnect();
   } catch {
     /* already disconnected */
   }
-  g.source.connect(g.analyser);
-  g.analyser.connect(g.ctx.destination);
+  g.source.connect(g.gain);
+  g.gain.connect(g.analyser);
+  if (!g.tappedStream) {
+    g.analyser.connect(g.ctx.destination);
+  }
   void g.ctx.resume();
   return g;
 }
@@ -113,6 +125,13 @@ function tryCaptureStreamGraph(el: HTMLMediaElement): AnalyserGraph | null {
   const source = ctx.createMediaStreamSource(stream);
   mediaStreamSources.set(el, source);
   return wireGraph(el, ctx, source, analyser, true);
+}
+
+/** Returns the graph for `el` if one already exists, without creating one. */
+export function peekAnalyserGraph(el: HTMLMediaElement): AnalyserGraph | null {
+  const existing = graphs.get(el);
+  if (existing && existing.ctx.state !== "closed") return existing;
+  return null;
 }
 
 /** Audio: media-element tap first. Keeps context open on soft release for MES reuse. */
@@ -170,6 +189,7 @@ export function releaseAnalyserGraph(el: HTMLMediaElement, closeContext = false)
 
   try {
     g.source.disconnect();
+    g.gain.disconnect();
     g.analyser.disconnect();
   } catch {
     /* already disconnected */

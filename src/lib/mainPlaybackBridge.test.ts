@@ -42,3 +42,41 @@ describe("mainPlaybackBridge video paused telemetry", () => {
     expect(getMainPlaybackBridge()?.paused).toBe(false);
   });
 });
+
+describe("mainPlaybackBridge host-audio paused telemetry", () => {
+  beforeEach(() => {
+    publishMainPlaybackBridge("host-audio", null);
+  });
+
+  it("trusts paused true on music even when currentTime advanced since last publish", () => {
+    publishMainPlaybackBridge("host-audio", {
+      paused: false,
+      currentTime: 10,
+      duration: 240,
+    });
+
+    publishMainPlaybackBridge("host-audio", {
+      paused: true,
+      currentTime: 10.4,
+      duration: 240,
+    });
+
+    expect(getMainPlaybackBridge()?.paused).toBe(true);
+  });
+
+  it("keeps paused true when already paused and currentTime jumps (seek while paused)", () => {
+    publishMainPlaybackBridge("host-audio", {
+      paused: true,
+      currentTime: 50,
+      duration: 240,
+    });
+
+    publishMainPlaybackBridge("host-audio", {
+      paused: true,
+      currentTime: 80,
+      duration: 240,
+    });
+
+    expect(getMainPlaybackBridge()?.paused).toBe(true);
+  });
+});

@@ -50,6 +50,7 @@ import {
   toggleTrackLike,
 } from "../components/music/musicLikedTracks";
 import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
+import { isAudioOnlyPath } from "../mediaKind";
 import {
   claimMainPlayback,
   closeVideoMiniWindow,
@@ -61,6 +62,7 @@ import {
 import { readPlaybackSpeed } from "../playbackSpeedStorage";
 import type { PlayInMiniPayload, PlayInMusicMiniPayload } from "../playerHandoff";
 import { writePlaybackPos } from "../playbackStorage";
+import { parkAndStopVideoPlayback } from "../lib/videoPlaybackPark";
 import { dedupeGalleryEntriesCombined } from "../galleryDedupe";
 import {
   buildMusicEffectivePlaylist,
@@ -171,6 +173,9 @@ export interface RuforgeStore extends DownloadQueueSlice {
   isLooping: boolean;
   /** One-shot resume position (seconds) after mini → main handoff. */
   playerResumeAt: number | null;
+  /** Video session parked when music claims playback over in-progress video. */
+  parkedVideoFile: MediaFile | null;
+  parkedVideoAt: number | null;
   /** One-shot resume after music-mini → main handoff. */
   musicPlayerResume: {
     currentTime: number;
@@ -442,6 +447,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
       isMuted: false,
       isLooping: playerInitLoop,
       playerResumeAt: null,
+      parkedVideoFile: null,
+      parkedVideoAt: null,
       musicPlayerResume: null,
       cleanupModalOpen: false,
 
@@ -452,10 +459,49 @@ export const useRuforgeStore = create<RuforgeStore>()(
       exportOutcome: null,
 
       setPlayingFile: (playingFile) => {
+        const prev = get().playingFile;
         const isLooping = playingFile ? readLoopForPath(playingFile.path) : false;
+
+        if (
+          playingFile &&
+          prev &&
+          !isAudioOnlyPath(prev.path) &&
+          isAudioOnlyPath(playingFile.path)
+        ) {
+          const parkedAt = parkAndStopVideoPlayback(prev);
+          claimMainPlayback();
+          set({
+            playingFile,
+            isLooping,
+            activityOwner: null,
+            activityHandoff: null,
+            parkedVideoFile: prev,
+            parkedVideoAt: parkedAt,
+          });
+          return;
+        }
+
         if (playingFile) {
           claimMainPlayback();
-          set({ playingFile, isLooping, activityOwner: null, activityHandoff: null });
+          const { parkedVideoFile, parkedVideoAt } = get();
+          const restoreParkedVideo =
+            !isAudioOnlyPath(playingFile.path) &&
+            parkedVideoFile?.path === playingFile.path;
+          set({
+            playingFile,
+            isLooping,
+            activityOwner: null,
+            activityHandoff: null,
+            ...(restoreParkedVideo
+              ? {
+                  playerResumeAt: parkedVideoAt ?? null,
+                  parkedVideoFile: null,
+                  parkedVideoAt: null,
+                }
+              : !isAudioOnlyPath(playingFile.path)
+                ? { parkedVideoFile: null, parkedVideoAt: null }
+                : {}),
+          });
         } else {
           set({ playingFile, isLooping });
         }
@@ -529,7 +575,13 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       stopPlayback: () => {
         claimMainPlayback();
-        set({ playingFile: null, activityOwner: null, activityHandoff: null });
+        set({
+          playingFile: null,
+          activityOwner: null,
+          activityHandoff: null,
+          parkedVideoFile: null,
+          parkedVideoAt: null,
+        });
       },
 
       handlePlayFile: async (file, playlist) => {

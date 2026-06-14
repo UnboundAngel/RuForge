@@ -1225,7 +1225,6 @@ export function MusicShell() {
                 hasChapters={playback.hasChapters}
                 hasPrevInQueue={playback.hasPrevInQueue}
                 hasNextInQueue={playback.hasNextInQueue}
-                isDraggingRef={playback.isDraggingRef}
                 onTogglePlay={playback.togglePlay}
                 onSkipPrev={playback.skipPrev}
                 onSkipNext={playback.skipNext}
@@ -1233,9 +1232,8 @@ export function MusicShell() {
                 onJumpPrevChapter={playback.jumpPrevChapter}
                 onJumpNextChapter={playback.jumpNextChapter}
                 onSetPlaybackSpeed={playback.setPlaybackSpeed}
-                onSeek={playback.seek}
-                onPauseForScrub={playback.pauseForScrub}
-                onResumeAfterScrub={playback.resumeAfterScrub}
+                onBeginScrub={playback.beginScrub}
+                onReleaseScrub={playback.releaseScrub}
                 onToggleExpand={handleToggleExpand}
                 rightPanelOpen={rightPanelOpen}
                 onToggleRightPanel={() => setRightPanelOpen((p) => !p)}

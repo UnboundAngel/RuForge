@@ -20,6 +20,8 @@ export type MainPlaybackSnapshot = {
   duration: number;
   togglePlay?: () => void;
   seek?: (seconds: number) => void;
+  beginScrub?: () => void;
+  releaseScrub?: (seconds: number) => void;
   skipPrev?: () => void;
   skipNext?: () => void;
   hasPrevInQueue?: boolean;
@@ -65,6 +67,8 @@ export function MainPlaybackProvider({
       hasNextInQueue: v.hasNextInQueue,
       togglePlay: () => latestRef.current.togglePlay?.(),
       seek: (seconds: number) => latestRef.current.seek?.(seconds),
+      beginScrub: () => latestRef.current.beginScrub?.(),
+      releaseScrub: (seconds: number) => latestRef.current.releaseScrub?.(seconds),
       skipPrev: () => latestRef.current.skipPrev?.(),
       skipNext: () => latestRef.current.skipNext?.(),
     });

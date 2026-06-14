@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  bridgeOwnerMatchesRenderState,
   navigateToActivityOwningSurface,
   resolveActivityAwayFromSurface,
   resolveActivityHasSession,
@@ -12,6 +13,16 @@ describe("resolveActivityHasSession", () => {
     expect(resolveActivityHasSession("main-music")).toBe(true);
     expect(resolveActivityHasSession("main-video")).toBe(true);
     expect(resolveActivityHasSession("mini-owned")).toBe(true);
+  });
+});
+
+describe("bridgeOwnerMatchesRenderState", () => {
+  it("matches host-audio to main-music and player-video to main-video", () => {
+    expect(bridgeOwnerMatchesRenderState("host-audio", "main-music")).toBe(true);
+    expect(bridgeOwnerMatchesRenderState("player-video", "main-video")).toBe(true);
+    expect(bridgeOwnerMatchesRenderState("player-video", "main-music")).toBe(false);
+    expect(bridgeOwnerMatchesRenderState("host-audio", "main-video")).toBe(false);
+    expect(bridgeOwnerMatchesRenderState(null, "main-video")).toBe(false);
   });
 });
 
@@ -50,8 +61,11 @@ describe("navigateToActivityOwningSurface", () => {
     const setNavMode = vi.fn();
     const setActiveTab = vi.fn();
     navigateToActivityOwningSurface("main-video", "/a.mp4", { setNavMode, setActiveTab });
+    expect(setNavMode).toHaveBeenCalledWith("default");
     expect(setActiveTab).toHaveBeenCalledWith("player");
-    expect(setNavMode).not.toHaveBeenCalled();
+    expect(setNavMode.mock.invocationCallOrder[0]).toBeLessThan(
+      setActiveTab.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("opens music mode for audio mini-owned stub", () => {

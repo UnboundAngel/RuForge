@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.11 (unreleased)
 Last shipped to users: 0.1.10
-Last updated: 2026-06-13 (onboarding Alt-hold copy)
+Last updated: 2026-06-14 (music-nav video session fix)
 Status: in progress
 
 ## Now
@@ -29,6 +29,16 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.11 (unreleased):**
 
+- Playback (music nav): video keeps playing across music-mode enter; hoisted off-tab PlayerView; parks + stops only on audio claim.
+- Activity island: owner-aware hasLivePlayback; compact chrome when paused on owning surface.
+- Activity island: scrubber fill-only (no hover thumb); capture-stream analyser duplicate audio fix (`IslandExpandedContent.tsx`, `audioAnalyserGraph.ts`).
+- Activity island: scrubber fixed height, inner-bar drag rect, pinned clock widths for flush cursor (`IslandExpandedContent.tsx`).
+- Activity island: scrubber drag uses frozen track rect; release preview holds until bridge seek lands (no stale snap); next-track transport alignment fix (`IslandExpandedContent.tsx`).
+- Activity island: transport dead-zones fixed — center/wing wrappers no longer steal clicks; icons/overlays pass through to buttons; waveform non-interactive until hover pop-out (`IslandExpandedContent.tsx`, `IslandVolumeControl.tsx`, `IslandWaveformHoverSlot.tsx`).
+- Playback scrub: Spotify model — audio/video keeps playing during drag; thumb tracks cursor (preview only); one seek on release with gain de-click envelope when analyser graph exists (`beginScrub`/`releaseScrub` replaces `pauseForScrub`/`resumeAfterScrub`; `useMusicPlayback.ts`, `PlayerView.tsx`, island/NowPlayingBar scrubbers).
+- Activity island: scrub generation token cancels orphaned deferred pause and seeked resume when user toggles play during or after scrub (`useMusicPlayback.ts`, `PlayerView.tsx`).
+- Activity island: expanded controls reorganized (centered transport, hover volume slider with red muted icon + middle-click mute, reserved slider slot avoids prev-track overlap, waveform → mini, cover opens player).
+- Activity island: media-mode shell is hue-matched espresso pocket `#181210` (music stays `#000`) for cutout on default chrome.
 - Activity island: waveform bars use blurred cover slices (no canvas palette extraction); dead `prominentColor` island code removed.
 - Player: video play/pause icon fixed; idle music host no longer overwrites video paused state (`PlayerView.tsx`).
 - Onboarding: 500ms Alt ring; swap hint after ring; dismissed pill stays gone until new step or debug replay.

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 function fmt(s: number): string {
@@ -16,6 +16,8 @@ export function MusicMiniProgressBar({ currentTime, duration, onSeek }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubFrac, setScrubFrac] = useState<number | null>(null);
+  const pendingReleaseRef = useRef(false);
+  const pendingReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const frac =
     scrubFrac !== null
@@ -26,47 +28,88 @@ export function MusicMiniProgressBar({ currentTime, duration, onSeek }: Props) {
   const pct = frac * 100;
   const displayTime = duration > 0 ? frac * duration : currentTime;
 
-  const seekToClientX = useCallback(
-    (clientX: number) => {
-      const track = trackRef.current;
-      if (!track || !duration) return;
-      const rect = track.getBoundingClientRect();
-      const next = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      setScrubFrac(next);
-      onSeek(next);
-    },
-    [duration, onSeek],
-  );
+  const clearPendingRelease = useCallback(() => {
+    if (pendingReleaseTimeoutRef.current !== null) {
+      clearTimeout(pendingReleaseTimeoutRef.current);
+      pendingReleaseTimeoutRef.current = null;
+    }
+    pendingReleaseRef.current = false;
+    setScrubFrac(null);
+  }, []);
+
+  // Clear the preview once currentTime catches up to the seek target, with
+  // a timeout fallback so it can't get stuck.
+  useEffect(() => {
+    if (scrubbing || scrubFrac === null || !pendingReleaseRef.current) return;
+    if (duration <= 0) return;
+    const targetSec = scrubFrac * duration;
+    if (Math.abs(currentTime - targetSec) < 0.35) {
+      clearPendingRelease();
+    }
+  }, [currentTime, duration, scrubbing, scrubFrac, clearPendingRelease]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingReleaseTimeoutRef.current !== null) {
+        clearTimeout(pendingReleaseTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const previewFromClientX = useCallback((clientX: number) => {
+    const track = trackRef.current;
+    if (!track || !duration) return null;
+    const rect = track.getBoundingClientRect();
+    const next = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    setScrubFrac(next);
+    return next;
+  }, [duration]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!duration) return;
       e.preventDefault();
+      if (pendingReleaseTimeoutRef.current !== null) {
+        clearTimeout(pendingReleaseTimeoutRef.current);
+        pendingReleaseTimeoutRef.current = null;
+      }
+      pendingReleaseRef.current = false;
       setScrubbing(true);
       e.currentTarget.setPointerCapture(e.pointerId);
-      seekToClientX(e.clientX);
+      previewFromClientX(e.clientX);
     },
-    [duration, seekToClientX],
+    [duration, previewFromClientX],
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!scrubbing) return;
-      seekToClientX(e.clientX);
+      previewFromClientX(e.clientX);
     },
-    [scrubbing, seekToClientX],
+    [scrubbing, previewFromClientX],
   );
 
   const endScrub = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!scrubbing) return;
     setScrubbing(false);
-    setScrubFrac(null);
+    const finalFrac = previewFromClientX(e.clientX);
+    if (finalFrac !== null) {
+      onSeek(finalFrac);
+    }
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
       /* already released */
     }
-  }, [scrubbing]);
+    if (duration > 0) {
+      pendingReleaseRef.current = true;
+      pendingReleaseTimeoutRef.current = setTimeout(() => {
+        clearPendingRelease();
+      }, 500);
+    } else {
+      clearPendingRelease();
+    }
+  }, [scrubbing, previewFromClientX, onSeek, duration, clearPendingRelease]);
 
   return (
     <div className="w-full flex items-center gap-3 px-8 mb-4">

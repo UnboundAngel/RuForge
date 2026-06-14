@@ -1222,7 +1222,21 @@ export default function MiniPlayer() {
       window.removeEventListener("mouseup", onUp);
 
       if (wasPlayingBeforeScrubRef.current && mediaRef.current) {
-        void mediaRef.current.play().catch(() => {});
+        const media = mediaRef.current;
+        const startPlay = () => {
+          void media.play().catch(() => {});
+        };
+        if (media.seeking) {
+          media.addEventListener("seeked", startPlay, { once: true });
+        } else {
+          requestAnimationFrame(() => {
+            if (media.seeking) {
+              media.addEventListener("seeked", startPlay, { once: true });
+            } else {
+              startPlay();
+            }
+          });
+        }
       }
     };
 

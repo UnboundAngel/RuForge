@@ -5,9 +5,6 @@ let snapshot: MainPlaybackSnapshot | null = null;
 let owner: MainPlaybackBridgeOwner | null = null;
 const listeners = new Set<() => void>();
 
-let lastTelemetryWallMs = 0;
-let lastTelemetryTime = 0;
-
 function notify() {
   for (const fn of listeners) fn();
 }
@@ -17,25 +14,12 @@ function stabilizePaused(
   currentTime: number,
   paused: boolean,
 ): boolean {
-  const now = performance.now();
+  if (prev && paused !== prev.paused) {
+    return paused;
+  }
 
-  if (prev && currentTime > prev.currentTime + 0.025) {
-    lastTelemetryWallMs = now;
-    lastTelemetryTime = currentTime;
+  if (paused && prev && !prev.paused && currentTime > prev.currentTime + 0.025) {
     return false;
-  }
-
-  if (paused && prev && !prev.paused) {
-    const timeMoved = currentTime > lastTelemetryTime + 0.01;
-    const recentAdvance = now - lastTelemetryWallMs < 900;
-    if (timeMoved || recentAdvance) {
-      return false;
-    }
-  }
-
-  if (!paused) {
-    lastTelemetryWallMs = now;
-    lastTelemetryTime = currentTime;
   }
 
   return paused;
@@ -93,8 +77,6 @@ export function publishMainPlaybackBridge(
     if (owner === bridgeOwner) {
       owner = null;
       snapshot = null;
-      lastTelemetryWallMs = 0;
-      lastTelemetryTime = 0;
       notify();
     }
     return;
