@@ -342,7 +342,7 @@ function waitForMusicMiniReady(): Promise<void> {
   });
 }
 
-function waitForVideoMiniReady(): Promise<void> {
+function waitForVideoMiniReadyThen(onReady: () => void | Promise<void>): Promise<void> {
   return new Promise((resolve) => {
     let unlisten: (() => void) | null = null;
     const timer = window.setTimeout(() => {
@@ -352,7 +352,7 @@ function waitForVideoMiniReady(): Promise<void> {
     void listen("mini-player-ready", () => {
       window.clearTimeout(timer);
       unlisten?.();
-      resolve();
+      void Promise.resolve(onReady()).finally(() => resolve());
     }).then((f) => {
       unlisten = f;
     });
@@ -583,7 +583,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
         if (get().navMode === "music") {
           return get().handlePopOutMusic(startTime, opts);
         }
-        if (popOutVideoInFlight) return;
+        if (popOutVideoInFlight) {
+          return;
+        }
         popOutVideoInFlight = true;
         const { playingFile, activeTab, navMode, volume, isMuted } = get();
         const fileToHandoff = playingFile;
@@ -605,7 +607,6 @@ export const useRuforgeStore = create<RuforgeStore>()(
             };
 
             const existingMini = await WebviewWindow.getByLabel("mini");
-            const readyWait = existingMini ? null : waitForVideoMiniReady();
 
             get().setActivityHandoff("video-mini", {
               file: fileToHandoff,
@@ -617,10 +618,16 @@ export const useRuforgeStore = create<RuforgeStore>()(
               ...(navMode !== "music" ? { activeTab: "media" } : {}),
             });
 
-            await invoke("open_mini_player");
-            if (readyWait) await readyWait;
+            const emitHandoff = async () => {
+              await emitTo("mini", "play-in-mini", playInMiniPayload);
+            };
 
-            await emitTo("mini", "play-in-mini", playInMiniPayload);
+            await invoke("open_mini_player");
+            if (existingMini) {
+              await emitHandoff();
+            } else {
+              await waitForVideoMiniReadyThen(emitHandoff);
+            }
           } else {
             await invoke("open_mini_player");
           }

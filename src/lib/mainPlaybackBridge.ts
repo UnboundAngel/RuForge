@@ -5,8 +5,84 @@ let snapshot: MainPlaybackSnapshot | null = null;
 let owner: MainPlaybackBridgeOwner | null = null;
 const listeners = new Set<() => void>();
 
+let lastTelemetryWallMs = 0;
+let lastTelemetryTime = 0;
+
 function notify() {
   for (const fn of listeners) fn();
+}
+
+function stabilizePaused(
+  prev: MainPlaybackSnapshot | null,
+  currentTime: number,
+  paused: boolean,
+): boolean {
+  const now = performance.now();
+
+  if (prev && currentTime > prev.currentTime + 0.025) {
+    lastTelemetryWallMs = now;
+    lastTelemetryTime = currentTime;
+    return false;
+  }
+
+  if (paused && prev && !prev.paused) {
+    const timeMoved = currentTime > lastTelemetryTime + 0.01;
+    const recentAdvance = now - lastTelemetryWallMs < 900;
+    if (timeMoved || recentAdvance) {
+      return false;
+    }
+  }
+
+  if (!paused) {
+    lastTelemetryWallMs = now;
+    lastTelemetryTime = currentTime;
+  }
+
+  return paused;
+}
+
+function mergeSnapshot(
+  bridgeOwner: MainPlaybackBridgeOwner,
+  value: MainPlaybackSnapshot,
+): MainPlaybackSnapshot {
+  const prev = owner === bridgeOwner ? snapshot : null;
+
+  let currentTime = value.currentTime;
+  let paused = value.paused;
+
+  if (prev) {
+    if (
+      currentTime < prev.currentTime - 0.75 &&
+      !paused &&
+      prev.currentTime > 1.5
+    ) {
+      currentTime = prev.currentTime;
+    }
+  }
+
+  if (bridgeOwner === "player-video") {
+    return {
+      ...value,
+      currentTime,
+      paused: value.paused,
+    };
+  }
+
+  paused = stabilizePaused(prev, currentTime, paused);
+
+  return {
+    ...value,
+    currentTime,
+    paused,
+  };
+}
+
+function snapshotsEqual(a: MainPlaybackSnapshot, b: MainPlaybackSnapshot): boolean {
+  return (
+    a.paused === b.paused &&
+    a.duration === b.duration &&
+    Math.abs(a.currentTime - b.currentTime) < 0.05
+  );
 }
 
 export function publishMainPlaybackBridge(
@@ -17,13 +93,34 @@ export function publishMainPlaybackBridge(
     if (owner === bridgeOwner) {
       owner = null;
       snapshot = null;
+      lastTelemetryWallMs = 0;
+      lastTelemetryTime = 0;
       notify();
     }
     return;
   }
+
+  const next = mergeSnapshot(bridgeOwner, value);
+  if (snapshot && owner === bridgeOwner && snapshotsEqual(snapshot, next)) {
+    return;
+  }
+
   owner = bridgeOwner;
-  snapshot = value;
+  snapshot = next;
   notify();
+}
+
+/** Video island path: patch telemetry without replacing callback refs. */
+export function patchMainPlaybackBridgeTelemetry(
+  bridgeOwner: MainPlaybackBridgeOwner,
+  patch: Pick<MainPlaybackSnapshot, "paused" | "currentTime" | "duration">,
+) {
+  if (owner !== bridgeOwner || !snapshot) return;
+
+  publishMainPlaybackBridge(bridgeOwner, {
+    ...snapshot,
+    ...patch,
+  });
 }
 
 /** @deprecated Use publishMainPlaybackBridge with owner. Kept for incremental migration. */

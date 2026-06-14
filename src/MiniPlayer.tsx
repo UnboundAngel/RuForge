@@ -11,6 +11,7 @@ import {
   emitVideoMiniTeardown,
 } from "./lib/mainPlaybackClaim";
 import { emitActivityHandoffSync } from "./lib/activityHandoffSync";
+import { registerVideoMiniHandoffSink } from "./lib/videoMiniHandoffBridge";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import logo from "./assets/neotubeIcon.png";
 import {
@@ -39,7 +40,7 @@ import {
 } from "./playbackStorage";
 import { readLoopForPath, writeLoopForPath } from "./playbackLoopStorage";
 import { readPlaybackSpeed, writePlaybackSpeed } from "./playbackSpeedStorage";
-import { extractProminentColor } from "./prominentColor";
+import { extractProminentColorFromPath, hexIsNearBlackOrWhite } from "./prominentColor";
 import { useVideoAmbientBackdrop } from "./useVideoAmbientBackdrop";
 import type { PlayInMiniPayload, SendToMainPayload } from "./playerHandoff";
 import { ensurePostersForFiles, filesMissingPoster } from "./posterBackfill";
@@ -405,10 +406,6 @@ export default function MiniPlayer() {
   }, [settings.accentColor]);
 
   useEffect(() => {
-    emit("mini-player-ready");
-  }, []);
-
-  useEffect(() => {
     let unlisten: (() => void) | undefined;
     void getCurrentWindow()
       .onCloseRequested(() => {
@@ -520,9 +517,9 @@ export default function MiniPlayer() {
       syncRuforgeAccentCss(defaultAccent);
       return;
     }
-    const src = convertFileSrc(coverArtSrc);
-    extractProminentColor(src).then((color) => {
-      syncRuforgeAccentCss(color || defaultAccent);
+    void extractProminentColorFromPath(coverArtSrc).then((color) => {
+      const picked = color && !hexIsNearBlackOrWhite(color) ? color : defaultAccent;
+      syncRuforgeAccentCss(picked);
     });
   }, [coverArtSrc, defaultAccent, isSmallMode, playingFile, playingAudioOnly]);
 
@@ -1040,41 +1037,58 @@ export default function MiniPlayer() {
     }
   };
 
-  useEffect(() => {
-    const unlisten = listen<MediaFile>("play-media", (_event) => {
+  const applyPlayInMiniHandoff = useCallback((payload: PlayInMiniPayload) => {
+    playInMiniStartTimeRef.current = Number.isFinite(payload.startTime)
+      ? Math.max(0, payload.startTime)
+      : 0;
+    handoffPausedRef.current = payload.paused ?? false;
+    setPlayingFile(payload.file);
+    if (payload.navMode) setMiniNavMode(payload.navMode);
+    setIsLooping(readLoopForPath(payload.file.path));
+    incrementViewCount(payload.file);
+    void emit("stop-playback", "mini-player");
+    getCurrentWindow().setFocus().catch(console.error);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => applyMiniHandoff(payload));
+    });
+  }, []);
+
+  useLayoutEffect(() => registerVideoMiniHandoffSink(applyPlayInMiniHandoff), [
+    applyPlayInMiniHandoff,
+  ]);
+
+  useLayoutEffect(() => {
+    let disposed = false;
+    const cleanups: Array<() => void> = [];
+
+    void listen<MediaFile>("play-media", (_event) => {
       setPlayingFile(null);
+    }).then((fn) => {
+      if (disposed) {
+        fn();
+        return;
+      }
+      cleanups.push(fn);
     });
 
-    const unlistenMiniHandoff = listen<PlayInMiniPayload>("play-in-mini", (event) => {
-      const payload = event.payload;
-      playInMiniStartTimeRef.current = Number.isFinite(payload.startTime)
-        ? Math.max(0, payload.startTime)
-        : 0;
-      handoffPausedRef.current = payload.paused ?? false;
-      setPlayingFile(payload.file);
-      if (payload.navMode) setMiniNavMode(payload.navMode);
-      setIsLooping(readLoopForPath(payload.file.path));
-      incrementViewCount(payload.file);
-      void emit("stop-playback", "mini-player");
-      getCurrentWindow().setFocus().catch(console.error);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => applyMiniHandoff(payload));
-      });
-    });
-
-    const unlistenStop = listen<string>("stop-playback", (event) => {
+    void listen<string>("stop-playback", (event) => {
       if (event.payload !== "mini-player") {
         const v = mediaRef.current;
         if (v) v.pause();
         setPlayingFile(null);
         setIsPaused(true);
       }
+    }).then((fn) => {
+      if (disposed) {
+        fn();
+        return;
+      }
+      cleanups.push(fn);
     });
 
     return () => {
-      unlisten.then((f) => f());
-      unlistenMiniHandoff.then((f) => f());
-      unlistenStop.then((f) => f());
+      disposed = true;
+      for (const fn of cleanups) fn();
     };
     // applyMiniHandoff closes over latest volume/speed handlers
     // eslint-disable-next-line react-hooks/exhaustive-deps

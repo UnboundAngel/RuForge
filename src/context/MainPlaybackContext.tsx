@@ -1,13 +1,25 @@
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 
 import type { MainPlaybackBridgeOwner } from "@/playback/bridgeArbitration";
-import { publishMainPlaybackBridge } from "@/lib/mainPlaybackBridge";
+import {
+  getMainPlaybackBridge,
+  getMainPlaybackBridgeOwner,
+  publishMainPlaybackBridge,
+} from "@/lib/mainPlaybackBridge";
 
 export type MainPlaybackSnapshot = {
   paused: boolean;
   currentTime: number;
   duration: number;
   togglePlay?: () => void;
+  seek?: (seconds: number) => void;
   skipPrev?: () => void;
   skipNext?: () => void;
   hasPrevInQueue?: boolean;
@@ -19,21 +31,53 @@ const MainPlaybackContext = createContext<MainPlaybackSnapshot | null>(null);
 export function MainPlaybackProvider({
   bridgeOwner,
   active,
+  liveTelemetry = false,
   value,
   children,
 }: {
   bridgeOwner: MainPlaybackBridgeOwner;
   active: boolean;
+  /** When true, only callbacks/queue flags publish here; time/paused come from live media patches. */
+  liveTelemetry?: boolean;
   value: MainPlaybackSnapshot;
   children: ReactNode;
 }) {
-  useEffect(() => {
+  const latestRef = useRef(value);
+  latestRef.current = value;
+
+  useLayoutEffect(() => {
     if (!active) {
       publishMainPlaybackBridge(bridgeOwner, null);
       return;
     }
-    publishMainPlaybackBridge(bridgeOwner, value);
-  }, [bridgeOwner, active, value]);
+
+    const v = latestRef.current;
+    const existing =
+      liveTelemetry && getMainPlaybackBridgeOwner() === bridgeOwner
+        ? getMainPlaybackBridge()
+        : null;
+
+    publishMainPlaybackBridge(bridgeOwner, {
+      paused: existing?.paused ?? v.paused,
+      currentTime: existing?.currentTime ?? v.currentTime,
+      duration: existing?.duration ?? v.duration,
+      hasPrevInQueue: v.hasPrevInQueue,
+      hasNextInQueue: v.hasNextInQueue,
+      togglePlay: () => latestRef.current.togglePlay?.(),
+      seek: (seconds: number) => latestRef.current.seek?.(seconds),
+      skipPrev: () => latestRef.current.skipPrev?.(),
+      skipNext: () => latestRef.current.skipNext?.(),
+    });
+  }, [
+    bridgeOwner,
+    active,
+    liveTelemetry,
+    value.hasPrevInQueue,
+    value.hasNextInQueue,
+    ...(liveTelemetry
+      ? []
+      : [value.paused, value.currentTime, value.duration]),
+  ]);
 
   useEffect(
     () => () => {

@@ -62,10 +62,12 @@ import {
 import {
   readExplorerHostBounds,
   explorerBoundsEqual,
+  insetExplorerBoundsForRoundedWindow,
   createExplorerBoundsRafScheduler,
   runExplorerLayoutTransitionFollowUp,
   type ExplorerBounds,
 } from "@/explorerBoundsSync";
+import { useMainWindowMaximized } from "@/hooks/useMainWindowMaximized";
 import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
 import { MusicRightPanel, type RightPanelTab } from "./MusicRightPanel";
@@ -151,6 +153,7 @@ function ExpandedOverlay({
 }
 
 export function MusicShell() {
+  const isMainMaximized = useMainWindowMaximized();
   const activeView = useRuforgeStore((s) => s.musicView);
   const setMusicView = useRuforgeStore((s) => s.setMusicView);
   const [playerExpanded, setPlayerExpanded] = useState(false);
@@ -752,8 +755,13 @@ export function MusicShell() {
       const host = webviewHostRef.current;
       if (!host) return;
 
-      const bounds = readExplorerHostBounds(host);
-      if (!bounds) return;
+      const raw = readExplorerHostBounds(host);
+      if (!raw) return;
+      const bounds = insetExplorerBoundsForRoundedWindow(
+        raw,
+        host,
+        !isMainMaximized,
+      );
       const pendingNavigate = musicExploreNavigatePendingRef.current;
       if (
         !pendingNavigate
@@ -812,7 +820,7 @@ export function MusicShell() {
       resizeObserver?.disconnect();
       unlistenWindowResize?.();
     };
-  }, [exploreWebviewActive]);
+  }, [exploreWebviewActive, isMainMaximized]);
 
   const handlePlayFile = useCallback((file: MediaFile, playlist?: MediaFile[]) => {
     setPendingListenEndReason("manual_switch");

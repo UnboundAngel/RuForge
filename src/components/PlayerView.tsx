@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Icon } from "@iconify/react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -49,7 +49,14 @@ import { SponsorBlockScrubOverlay } from "./player/SponsorBlockScrubOverlay";
 import { SponsorBlockSkipButton } from "./player/SponsorBlockSkipButton";
 import { useSponsorBlockPlayback } from "../hooks/useSponsorBlockPlayback";
 import { MainPlaybackProvider } from "../context/MainPlaybackContext";
+import {
+  getMainPlaybackBridge,
+  getMainPlaybackBridgeOwner,
+  patchMainPlaybackBridgeTelemetry,
+  publishMainPlaybackBridge,
+} from "@/lib/mainPlaybackBridge";
 import { shouldPlayerOwnBridge } from "../playback/bridgeArbitration";
+import { registerPlaybackMediaElement } from "@/lib/playbackMediaElement";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import type { SponsorBlockSkipCategory } from "../sponsorBlock";
@@ -157,9 +164,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const settings = useRuforgeStore((s) => s.settings);
   const hostAudio = useOptionalMainAudioPlayback();
-  const activeTab = useRuforgeStore((s) => s.activeTab);
   const audioOnly = isAudioOnlyPath(file.path);
   const audioDelegated = audioOnly && hostAudio != null;
+  const bridgeActive = shouldPlayerOwnBridge(file);
+  const registerVideoMediaIfActive = useCallback(
+    (el: HTMLMediaElement | null) => {
+      if (!bridgeActive || audioOnly) return;
+      if (el) registerPlaybackMediaElement("player-video", el);
+    },
+    [bridgeActive, audioOnly],
+  );
   const mediaRef = useRef<HTMLMediaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -172,6 +186,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [currentTime, setCurrentTime] = useState(0);
   const [buffered, setBuffered] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const isPausedRef = useRef(false);
+  const durationRef = useRef(0);
+  const togglePlayRef = useRef<() => void>(() => {});
+  const seekToTimeRef = useRef<(t: number) => void>(() => {});
   useImperativeHandle(ref, () => ({
     getCurrentTime: () =>
       audioDelegated && hostAudio
@@ -385,7 +403,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   }, [audioDelegated, audioOnly, audioMediaSrc]);
 
   useEffect(() => {
-    if (audioDelegated || !hostAudio) return;
+    if (!audioDelegated || !hostAudio) return;
     setIsPaused(hostAudio.paused);
     setCurrentTime(hostAudio.currentTime);
     setDuration(hostAudio.duration);
@@ -447,14 +465,15 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (media.paused) {
       applyMediaOutputState(media, volume, isMuted);
       void media.play().catch(() => {});
-      setIsPaused(false);
+      syncPausedFromMedia(false);
       setClickFlash("play");
     } else {
       media.pause();
-      setIsPaused(true);
+      syncPausedFromMedia(true);
       setClickFlash("pause");
       writePlaybackPos(file.path, media.currentTime, media.duration);
     }
+    syncVideoBridgeTelemetry();
     setTimeout(() => setClickFlash(null), 500);
   }, [file.path, volume, isMuted, audioDelegated, hostAudio]);
 
@@ -837,6 +856,39 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (vid) syncProgressFromVideo(vid);
   }, [syncProgressFromVideo]);
 
+  const syncPausedFromMedia = (paused: boolean) => {
+    if (isPausedRef.current === paused) return;
+    isPausedRef.current = paused;
+    setIsPaused(paused);
+  };
+
+  const syncVideoBridgeTelemetry = () => {
+    if (audioOnly || !shouldPlayerOwnBridge(file)) return;
+    const vid = mediaRef.current;
+    if (!vid) return;
+    const dur =
+      isFinite(vid.duration) && vid.duration > 0
+        ? vid.duration
+        : durationRef.current;
+    const telemetry = {
+      paused: vid.paused,
+      currentTime: vid.currentTime,
+      duration: dur,
+    };
+    if (
+      getMainPlaybackBridge() &&
+      getMainPlaybackBridgeOwner() === "player-video"
+    ) {
+      patchMainPlaybackBridgeTelemetry("player-video", telemetry);
+      return;
+    }
+    publishMainPlaybackBridge("player-video", {
+      ...telemetry,
+      togglePlay: () => togglePlayRef.current(),
+      seek: (seconds: number) => seekToTimeRef.current(seconds),
+    });
+  };
+
   const handleTimeUpdate = () => {
     if (isUserSeekingRef.current) return;
     if (progressRafRef.current != null) return;
@@ -844,19 +896,31 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       progressRafRef.current = null;
       if (isUserSeekingRef.current) return;
       const vid = mediaRef.current;
-      if (!vid || !isFinite(vid.duration)) return;
-      setCurrentTime(vid.currentTime);
-      setProgress((vid.currentTime / vid.duration) * 100);
-      if (vid.buffered.length > 0) {
-        setBuffered((vid.buffered.end(vid.buffered.length - 1) / vid.duration) * 100);
+      if (!vid) return;
+
+      syncPausedFromMedia(vid.paused);
+
+      if (isFinite(vid.currentTime)) {
+        setCurrentTime(vid.currentTime);
       }
-      const now = Date.now();
-      if (now - lastPlaybackPersistRef.current > 4000 && vid.duration > 0) {
-        lastPlaybackPersistRef.current = now;
-        if (vid.currentTime > 0.5) {
-          writePlaybackPos(file.path, vid.currentTime, vid.duration);
+
+      if (isFinite(vid.duration) && vid.duration > 0) {
+        durationRef.current = vid.duration;
+        setDuration(vid.duration);
+        setProgress((vid.currentTime / vid.duration) * 100);
+        if (vid.buffered.length > 0) {
+          setBuffered((vid.buffered.end(vid.buffered.length - 1) / vid.duration) * 100);
+        }
+        const now = Date.now();
+        if (now - lastPlaybackPersistRef.current > 4000) {
+          lastPlaybackPersistRef.current = now;
+          if (vid.currentTime > 0.5) {
+            writePlaybackPos(file.path, vid.currentTime, vid.duration);
+          }
         }
       }
+
+      syncVideoBridgeTelemetry();
     });
   };
 
@@ -864,6 +928,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (isUserSeekingRef.current) return;
     const vid = mediaRef.current;
     if (!vid) return;
+    syncPausedFromMedia(vid.paused);
+    durationRef.current = vid.duration;
     setDuration(vid.duration);
     applyMediaOutputState(vid, volume, isMuted);
     vid.preservesPitch = true;
@@ -879,6 +945,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (handoffResume) clearPlayerResumeAt();
     resumeSeekAppliedPathRef.current = file.path;
     vid.currentTime = resume;
+    syncVideoBridgeTelemetry();
   };
 
   // Scrubber drag
@@ -1012,20 +1079,50 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
   }, [prefetchNextEnabled, nextInFolder]);
 
-  const bridgeActive = shouldPlayerOwnBridge(file, activeTab);
+  const bindVideoRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      (mediaRef as React.MutableRefObject<HTMLVideoElement | null>).current = node;
+      registerVideoMediaIfActive(node);
+    },
+    [registerVideoMediaIfActive],
+  );
+
+  useLayoutEffect(() => {
+    if (!bridgeActive || audioOnly) {
+      registerPlaybackMediaElement("player-video", null);
+      return;
+    }
+    registerVideoMediaIfActive(mediaRef.current);
+    return () => registerPlaybackMediaElement("player-video", null);
+  }, [bridgeActive, audioOnly, file.path, registerVideoMediaIfActive]);
+
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
+
+  useEffect(() => {
+    togglePlayRef.current = togglePlay;
+    seekToTimeRef.current = seekToTimeSeconds;
+  }, [togglePlay, seekToTimeSeconds]);
 
   const mainPlaybackValue = useMemo(
     () => ({
       paused: isPaused,
       currentTime,
       duration,
-      togglePlay,
+      togglePlay: () => togglePlayRef.current(),
+      seek: (seconds: number) => seekToTimeRef.current(seconds),
     }),
-    [isPaused, currentTime, duration, togglePlay],
+    [isPaused, currentTime, duration],
   );
 
   return (
-    <MainPlaybackProvider bridgeOwner="player-video" active={bridgeActive} value={mainPlaybackValue}>
+    <MainPlaybackProvider
+      bridgeOwner="player-video"
+      active={bridgeActive}
+      liveTelemetry
+      value={mainPlaybackValue}
+    >
     <motion.div
       ref={containerRef}
       initial={{ opacity: 0 }}
@@ -1177,19 +1274,30 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               style={{ opacity: mediaBlendOpacity }}
             >
               <video
-                ref={mediaRef as React.RefObject<HTMLVideoElement>}
+                ref={bindVideoRef}
                 src={convertFileSrc(file.path)}
+                crossOrigin="anonymous"
                 className="relative h-full w-full object-contain"
                 autoPlay
                 playsInline
                 preload="metadata"
                 poster={coverArtSrc ? convertFileSrc(coverArtSrc) : undefined}
-                onCanPlay={(e) => handleMediaCanPlay(e.currentTarget)}
+                onCanPlay={(e) => {
+                  handleMediaCanPlay(e.currentTarget);
+                  registerVideoMediaIfActive(e.currentTarget);
+                }}
                 onTimeUpdate={handleTimeUpdate}
                 onSeeked={handleSeeked}
                 onLoadedMetadata={handleLoadedMetadata}
-                onPause={() => setIsPaused(true)}
-                onPlay={() => setIsPaused(false)}
+                onPause={() => {
+                  syncPausedFromMedia(true);
+                  syncVideoBridgeTelemetry();
+                }}
+                onPlay={() => {
+                  syncPausedFromMedia(false);
+                  syncVideoBridgeTelemetry();
+                  registerVideoMediaIfActive(mediaRef.current);
+                }}
                 onEnded={() => {
                   if (!isLooping) handlePlaybackEnded();
                 }}

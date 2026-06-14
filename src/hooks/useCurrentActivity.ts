@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 import {
@@ -6,26 +6,41 @@ import {
   subscribeMainPlaybackBridge,
 } from "@/lib/mainPlaybackBridge";
 import type { ActivityRenderState, CurrentActivity } from "@/lib/activityTypes";
-import { resolveActivityShowIsland } from "@/lib/activityIslandResolve";
+import {
+  resolveActivityAwayFromSurface,
+  resolveActivityHasSession,
+} from "@/lib/activityIslandResolve";
 import { bestCoverPath, isAudioOnlyPath } from "@/mediaKind";
-import { extractProminentColor } from "@/prominentColor";
 import { readFurthestPlaybackSec, readStoredPlaybackDuration } from "@/playbackStorage";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
 
-const DEFAULT_ACCENT = "#EDCF9B";
+type LiveBridgeCache = {
+  paused: boolean;
+  currentTime: number;
+  duration: number;
+};
 
-function coverPathForFile(file: MediaFile): string | null {
+function coverPathForFile(file: MediaFile | null): string | null {
+  if (!file) return null;
   if (isAudioOnlyPath(file.path)) {
     return bestCoverPath(file);
   }
   return file.thumbnailPath ?? file.ruforgePosterPath ?? null;
 }
 
-function coverSrcForFile(file: MediaFile | null): string | null {
-  if (!file) return null;
-  const p = coverPathForFile(file);
-  return p ? convertFileSrc(p) : null;
+function coverSrcForPath(coverPath: string | null): string | null {
+  return coverPath ? convertFileSrc(coverPath) : null;
+}
+
+function resolveDuration(file: MediaFile | null, bridgeDuration: number): number {
+  if (bridgeDuration > 0 && Number.isFinite(bridgeDuration)) return bridgeDuration;
+  if (file && file.duration > 0) return file.duration;
+  if (file) {
+    const stored = readStoredPlaybackDuration(file.path);
+    if (stored > 0) return stored;
+  }
+  return 0;
 }
 
 function resolveRenderState(
@@ -40,54 +55,48 @@ function resolveRenderState(
   return "main-video";
 }
 
-export function useCurrentActivity(): CurrentActivity & { accentColor: string } {
+export function useCurrentActivity(): CurrentActivity {
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const activeTab = useRuforgeStore((s) => s.activeTab);
   const navMode = useRuforgeStore((s) => s.navMode);
   const activityOwner = useRuforgeStore((s) => s.activityOwner);
   const activityHandoff = useRuforgeStore((s) => s.activityHandoff);
-  const settingsAccent = useRuforgeStore((s) =>
-    typeof s.settings.accentColor === "string" ? s.settings.accentColor : DEFAULT_ACCENT,
-  );
-
   const playback = useSyncExternalStore(
     subscribeMainPlaybackBridge,
     getMainPlaybackBridge,
     getMainPlaybackBridge,
   );
 
+  const lastLiveBridgeRef = useRef<LiveBridgeCache | null>(null);
+
   const renderState = resolveRenderState(activityOwner, playingFile);
-  const showIsland = resolveActivityShowIsland(renderState, activeTab, navMode);
+  const hasSession = resolveActivityHasSession(renderState);
+  const awayFromOwningSurface = resolveActivityAwayFromSurface(
+    renderState,
+    activeTab,
+    navMode,
+  );
 
   const file = useMemo(() => {
     if (renderState === "mini-owned") return activityHandoff?.file ?? null;
     return playingFile;
   }, [renderState, activityHandoff, playingFile]);
 
-  const coverSrc = useMemo(() => coverSrcForFile(file), [file]);
-
-  const [accentColor, setAccentColor] = useState(settingsAccent);
+  const coverPath = useMemo(() => coverPathForFile(file), [file]);
+  const coverSrc = useMemo(() => coverSrcForPath(coverPath), [coverPath]);
 
   useEffect(() => {
-    if (!coverSrc) {
-      setAccentColor(settingsAccent);
-      return;
+    if (renderState === "idle") {
+      lastLiveBridgeRef.current = null;
     }
-    let cancelled = false;
-    void extractProminentColor(coverSrc).then((color) => {
-      if (cancelled) return;
-      setAccentColor(color || settingsAccent);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [coverSrc, settingsAccent]);
+  }, [renderState]);
 
   const hasLivePlayback = playback !== null;
 
   const paused = useMemo(() => {
     if (renderState === "mini-owned") return activityHandoff?.paused ?? true;
     if (playback) return playback.paused;
+    if (lastLiveBridgeRef.current) return lastLiveBridgeRef.current.paused;
     return true;
   }, [renderState, activityHandoff, playback]);
 
@@ -103,29 +112,41 @@ export function useCurrentActivity(): CurrentActivity & { accentColor: string } 
             : 0;
       return { currentTime: t, duration: dur };
     }
+
     if (playback) {
+      const dur = resolveDuration(file, playback.duration);
+      const next = {
+        currentTime: Math.max(0, playback.currentTime),
+        duration: dur,
+        paused: playback.paused,
+      };
+      lastLiveBridgeRef.current = next;
+      return { currentTime: next.currentTime, duration: next.duration };
+    }
+
+    if (lastLiveBridgeRef.current) {
       return {
-        currentTime: playback.currentTime,
-        duration: playback.duration,
+        currentTime: lastLiveBridgeRef.current.currentTime,
+        duration: lastLiveBridgeRef.current.duration,
       };
     }
+
     if (playingFile && renderState === "main-video") {
-      const dur = Math.max(
-        playingFile.duration > 0 ? playingFile.duration : 0,
-        readStoredPlaybackDuration(playingFile.path),
-      );
+      const dur = resolveDuration(playingFile, 0);
       return {
         currentTime: readFurthestPlaybackSec(playingFile.path),
         duration: dur,
       };
     }
+
     return { currentTime: 0, duration: 0 };
-  }, [renderState, activityHandoff, playback, playingFile]);
+  }, [renderState, activityHandoff, playback, playingFile, file]);
 
   const activity = useMemo(
     (): CurrentActivity => ({
       renderState,
-      showIsland,
+      hasSession,
+      awayFromOwningSurface,
       file,
       paused,
       currentTime,
@@ -135,8 +156,18 @@ export function useCurrentActivity(): CurrentActivity & { accentColor: string } 
       stubLabel: renderState === "mini-owned" ? "playing in mini" : null,
       hasLivePlayback,
     }),
-    [renderState, showIsland, file, paused, currentTime, duration, coverSrc, hasLivePlayback],
+    [
+      renderState,
+      hasSession,
+      awayFromOwningSurface,
+      file,
+      paused,
+      currentTime,
+      duration,
+      coverSrc,
+      hasLivePlayback,
+    ],
   );
 
-  return { ...activity, accentColor };
+  return activity;
 }

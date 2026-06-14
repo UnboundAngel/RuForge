@@ -1,3 +1,5 @@
+import { MAIN_WINDOW_OUTER_RADIUS_PX } from "@/lib/mainWindowFrame";
+
 /** Logical pixel bounds for the embedded explorer cutout (main-window coordinates). */
 export type ExplorerBounds = {
   x: number;
@@ -31,6 +33,28 @@ export function explorerBoundsEqual(
     a.width === b.width &&
     a.height === b.height
   );
+}
+
+/** Child explorer webviews ignore DOM clip-path; shrink flush edges when the shell is rounded. */
+export function insetExplorerBoundsForRoundedWindow(
+  bounds: ExplorerBounds,
+  host: HTMLElement,
+  rounded: boolean,
+): ExplorerBounds {
+  if (!rounded) return bounds;
+
+  const rect = host.getBoundingClientRect();
+  const inset = MAIN_WINDOW_OUTER_RADIUS_PX;
+  let { x, y, width, height } = bounds;
+
+  if (rect.right >= window.innerWidth - 0.5) {
+    width = Math.max(0, width - inset);
+  }
+  if (rect.bottom >= window.innerHeight - 0.5) {
+    height = Math.max(0, height - inset);
+  }
+
+  return { x, y, width, height };
 }
 
 /** Matches explorer host `transition-[left] duration-500` in App.tsx. */

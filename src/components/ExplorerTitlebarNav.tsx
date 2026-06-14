@@ -21,7 +21,7 @@ export function ExplorerTitlebarNav({
 }: ExplorerTitlebarNavProps) {
   return (
     <div
-      className="pointer-events-auto fixed top-0 z-[100] flex h-10 items-center gap-0.5 transition-[left] duration-500 ease-[0.23,1,0.32,1]"
+      className="pointer-events-auto fixed top-0 z-[100] flex h-[var(--rf-titlebar-h)] items-center gap-0.5 transition-[left] duration-500 ease-[0.23,1,0.32,1]"
       style={{ left }}
     >
       <TitlebarHoverButton tooltip="Back" onClick={onBack}>

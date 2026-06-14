@@ -99,14 +99,17 @@ import {
   AlertCircle,
   HardDrive,
 } from "lucide-react";
-import { OnboardingOverlay } from "./components/onboarding/OnboardingOverlay";
+import { OnboardingFlow, resolveActiveOnboardingSteps } from "./components/onboarding/OnboardingFlow";
 import { ActivityIsland } from "./components/island/ActivityIsland";
+import { WindowResizeEdges } from "./components/window/WindowResizeEdges";
 import type { ActivityHandoffSyncPayload, ActivityMiniTeardownPayload } from "./lib/activityTypes";
 import { MainPlaybackHost } from "./playback/MainPlaybackHost";
 import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
 import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
 import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
+import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
+import { writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
 
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
 import {
@@ -131,12 +134,16 @@ import {
 import {
   createExplorerBoundsRafScheduler,
   explorerBoundsEqual,
+  insetExplorerBoundsForRoundedWindow,
   readExplorerHostBounds,
   runExplorerLayoutTransitionFollowUp,
   type ExplorerBounds,
 } from "./explorerBoundsSync";
+import { useMainWindowMaximized } from "./hooks/useMainWindowMaximized";
+import { useMainWindowTransparentFrame } from "./hooks/useMainWindowTransparentFrame";
 
 const WindowControls = ({
+  isMaximized,
   onExportUsbClick,
   hasRemovableDrive,
   navMode,
@@ -146,6 +153,7 @@ const WindowControls = ({
   storageBlocksNewDownloads,
   onUpdaterStatusClick,
 }: {
+  isMaximized: boolean;
   onExportUsbClick: () => void;
   hasRemovableDrive: boolean;
   navMode: string;
@@ -155,29 +163,10 @@ const WindowControls = ({
   storageBlocksNewDownloads: boolean;
   onUpdaterStatusClick?: () => void;
 }) => {
-  const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
 
-  useEffect(() => {
-    const updateMaximized = async () => {
-      setIsMaximized(await appWindow.isMaximized());
-    };
-    updateMaximized();
-    
-    let unlistenFn: (() => void) | null = null;
-    appWindow.onResized(updateMaximized).then(f => {
-      unlistenFn = f;
-    });
-
-    return () => {
-      if (typeof unlistenFn === 'function') {
-        unlistenFn();
-      }
-    };
-  }, [appWindow]);
-
   return (
-    <div className="fixed top-0 right-0 z-[100] flex items-center h-10 pr-2 pointer-events-auto">
+    <div className="fixed top-0 right-0 z-[100] flex h-[var(--rf-titlebar-h)] items-center pr-2 pointer-events-auto">
       <div className="mr-3">
         <UpdaterStatusIndicator 
           phase={updaterPhase} 
@@ -253,6 +242,7 @@ function App() {
   const activeTab = useRuforgeStore((s) => s.activeTab);
   const setActiveTab = useRuforgeStore((s) => s.setActiveTab);
   const navMode = useRuforgeStore((s) => s.navMode);
+  const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
   const settings = useRuforgeStore((s) => s.settings);
   const settingsTab = useRuforgeStore((s) => s.settingsTab);
@@ -265,6 +255,8 @@ function App() {
   const selectedPlaylist = useRuforgeStore((s) => s.selectedPlaylist);
   const setSelectedPlaylist = useRuforgeStore((s) => s.setSelectedPlaylist);
   const [miniKind, setMiniKind] = useState<"video" | "music" | null>(initialMiniKind);
+  const isMainMaximized = useMainWindowMaximized();
+  useMainWindowTransparentFrame(isMainMaximized);
   const isSearchExpanded = useRuforgeStore((s) => s.isSearchExpanded);
   const setIsSearchExpanded = useRuforgeStore((s) => s.setIsSearchExpanded);
   const searchValue = useRuforgeStore((s) => s.searchValue);
@@ -408,7 +400,7 @@ function App() {
   const [updaterTeaserDismissed, setUpdaterTeaserDismissed] = useState(false);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const shellBlocked = Boolean(postInstall || onboardingOpen);
+  const shellBlocked = Boolean(postInstall);
 
   const applyAvailableUpdate = useCallback((next: Update) => {
     if (updateRef.current) {
@@ -713,8 +705,13 @@ function App() {
         const host = explorerWebviewHostRef.current;
         if (!host) return;
 
-        const bounds = readExplorerHostBounds(host);
-        if (!bounds) return;
+        const raw = readExplorerHostBounds(host);
+        if (!raw) return;
+        const bounds = insetExplorerBoundsForRoundedWindow(
+          raw,
+          host,
+          !isMainMaximized,
+        );
 
         if (
           explorerBoundsEqual(bounds, explorerLastSyncedBoundsRef.current)
@@ -793,7 +790,7 @@ function App() {
       resizeObserver?.disconnect();
       unlistenWindowResize?.();
     };
-  }, [activeTab]);
+  }, [activeTab, isMainMaximized]);
 
   useEffect(() => {
     if (activeTab !== "explorer") return;
@@ -847,6 +844,12 @@ function App() {
     const pending = consumePendingPostInstall();
     if (pending) setPostInstall(pending);
   }, []);
+
+  useEffect(() => {
+    if (postInstall) return;
+    const steps = resolveActiveOnboardingSteps();
+    if (steps.length > 0) setOnboardingOpen(true);
+  }, [postInstall]);
 
   useEffect(() => {
     try {
@@ -948,6 +951,7 @@ function App() {
 
     const unlistenDebugOnboarding = listen("debug-replay-onboarding", () => {
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      writeOnboardingLastSeenVersion("0.0.0");
       setOnboardingOpen(true);
     });
 
@@ -1344,6 +1348,11 @@ function App() {
   const { open: radialNavOpen, anchor: radialNavAnchor } =
     useAltRadialNav(shellBlocked);
 
+  const handleRadialCenterClick = useCallback(() => {
+    cycleNavMode();
+    if (onboardingOpen) notifyOnboardingModeSwap();
+  }, [cycleNavMode, onboardingOpen]);
+
   if (miniKind === "video") return <MiniPlayer />;
   if (miniKind === "music") return <MusicMiniPlayer />;
 
@@ -1359,7 +1368,11 @@ function App() {
   return (
     <MainPlaybackHost>
     <div
-      className="h-screen w-screen text-stone-50 font-sans flex overflow-hidden select-none relative"
+      className={`h-screen w-screen text-stone-50 font-sans flex overflow-hidden select-none relative ${
+        isMainMaximized
+          ? "rf-main-window-shell--maximized"
+          : "rf-main-window-shell--rounded"
+      }`}
       style={{ background: navMode === "music" ? "var(--music-bg, #0f0f0f)" : "#271C18" }}
       data-music-mode={navMode === "music" ? "true" : undefined}
     >
@@ -1368,6 +1381,7 @@ function App() {
         open={radialNavOpen}
         anchor={radialNavAnchor}
         onNavigate={(tab) => setActiveTab(tab)}
+        onCenterClick={handleRadialCenterClick}
       />
 
       {showExplorerToolbar && (
@@ -1381,6 +1395,7 @@ function App() {
 
       {/* Window Controls */}
       <WindowControls
+        isMaximized={isMainMaximized}
         onExportUsbClick={() => void handleExportUsbTitlebar()}
         hasRemovableDrive={hasRemovableDrive}
         navMode={navMode}
@@ -1395,9 +1410,11 @@ function App() {
 
       {/* Global Drag Region - Top strip except controls area */}
       <div
-        className={`fixed top-0 left-0 h-10 z-[50] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
+        className={`fixed top-0 left-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
         data-tauri-drag-region
       />
+
+      <WindowResizeEdges active={!isMainMaximized} />
 
       {navMode === "music" ? (
         <MusicShell />
@@ -1411,7 +1428,7 @@ function App() {
       />
 
       {/* ── Right Column (tab chrome above recessed content field) ─ */}
-      <div className="rf-chrome-column flex-1 flex flex-col min-w-0 min-h-0 pt-[40px] relative bg-[#271C18]">
+      <div className="rf-chrome-column flex-1 flex flex-col min-w-0 min-h-0 pt-[var(--rf-titlebar-h)] relative bg-[#271C18]">
         
         {/* Settings / Gallery tab strip */}
         <AnimatePresence mode="wait">
@@ -1693,7 +1710,7 @@ function App() {
                   />
                 )
               )}
-              {activeTab === "player" && playingFile && (
+              {activeTab === "player" && playingFile && isAudioOnlyPath(playingFile.path) && (
                 <PlayerView
                   ref={playerViewRef}
                   key={`player-${playingFile.path}`}
@@ -1704,6 +1721,22 @@ function App() {
                 <SettingsView key="settings" />
               )}
             </AnimatePresence>
+            {playingFile && !isAudioOnlyPath(playingFile.path) ? (
+              <div
+                className={
+                  activeTab === "player"
+                    ? "absolute inset-0 z-50"
+                    : "pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+                }
+                aria-hidden={activeTab !== "player"}
+              >
+                <PlayerView
+                  ref={playerViewRef}
+                  key={`player-${playingFile.path}`}
+                  onBack={() => setActiveTab("media")}
+                />
+              </div>
+            ) : null}
           </main>
 
           {/* Toast Notifications */}
@@ -1782,7 +1815,7 @@ function App() {
         />
       )}
       {onboardingOpen && !postInstall && (
-        <OnboardingOverlay onComplete={() => setOnboardingOpen(false)} />
+        <OnboardingFlow onComplete={() => setOnboardingOpen(false)} />
       )}
 
       <UpdaterFullWindowUpdate

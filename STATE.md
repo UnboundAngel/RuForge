@@ -8,12 +8,12 @@
 
 Shipping version: 0.1.11 (unreleased)
 Last shipped to users: 0.1.10
-Last updated: 2026-06-13 (handoff-sync + video mini seek fix)
+Last updated: 2026-06-13 (onboarding Alt-hold copy)
 Status: in progress
 
 ## Now
 
-0.1.10 shipped. Open cycle is 0.1.11. D-audio claim+teardown+handoff-sync built; re-cold-boot #5 island swap + B seek. E-audio signed off except island layout (Jim).
+0.1.10 shipped. Open cycle is 0.1.11. Activity island model A (always-mounted single node). D-audio claim+teardown+handoff-sync built; video pop-out handoff race fixed.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -29,12 +29,19 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.11 (unreleased):**
 
+- Activity island: waveform bars use blurred cover slices (no canvas palette extraction); dead `prominentColor` island code removed.
+- Player: video play/pause icon fixed; idle music host no longer overwrites video paused state (`PlayerView.tsx`).
+- Onboarding: 500ms Alt ring; swap hint after ring; dismissed pill stays gone until new step or debug replay.
+- Window chrome: rounded outer shell when not maximized; square when maximized (`mainWindowFrame.ts`, `App.tsx`).
+- Window chrome: edge resize strips restore borderless drag-resize (`WindowResizeEdges.tsx`).
+- Activity island (E-audio): 5-bar waveform restored; cover accent via `extractProminentColorFromPath` (blob URL, vibrant bucket pick).
+- Playback (D-audio): video pop-out module-level `play-in-mini` bridge; handoff emits inside `mini-player-ready` callback.
 - Playback (D-audio): `activity-handoff-sync` island metadata on mini file change; video handoff seek retry at `loadedmetadata`.
 - Playback (D-audio): unified `claimMainPlayback()` + `activity-mini-teardown`; Tauri `allow-destroy` for mini close.
 - Boot splash: Siri-style edge orbs loader (default + music modes).
 - Activity island (E-audio): live `main-music` off music mode; `main-video` frozen unchanged.
 - Music polish: mini-ready-before-emit, volume wheel fix, stale listen adopt.
-- Onboarding: demo overlay (dev replay + Settings > Debugging).
+- Onboarding: island-only Alt-hold progress pill (no full-screen cards); dev replay + Settings > Debugging.
 
 **0.1.10 shipped:**
 

@@ -10,6 +10,7 @@ import {
   isBootSplashSkipped,
   syncBootNavMode,
 } from "./lib/bootSplash";
+import { syncMainWindowTransparentFrame } from "./lib/mainWindowFrame";
 import "./index.css";
 
 window.addEventListener("beforeunload", clearRuforgeNotificationDismissTimers);
@@ -26,6 +27,10 @@ syncBootNavMode();
 
 if (label !== "main") {
   hideBootSplashImmediate();
+}
+
+if (label === "main") {
+  syncMainWindowTransparentFrame(true);
 }
 
 if (import.meta.env.DEV && label === "main") {

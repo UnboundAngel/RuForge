@@ -33,6 +33,8 @@
   --radius-card: 20px;
   --radius-modal: 24px;
   --radius-pill: 999px;
+  --rf-titlebar-h: 48px;
+  --rf-window-outer-radius: 12px;
 }
 
 html,
@@ -49,6 +51,24 @@ body {
 #root {
   height: 100%;
   background-color: var(--bg);
+}
+
+html[data-rf-window-rounded="1"] #rf-boot {
+  border-radius: var(--rf-window-outer-radius);
+  clip-path: inset(0 round var(--rf-window-outer-radius));
+  overflow: hidden;
+}
+
+.rf-main-window-shell--rounded {
+  border-radius: var(--rf-window-outer-radius);
+  clip-path: inset(0 round var(--rf-window-outer-radius));
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.rf-main-window-shell--maximized {
+  border-radius: 0;
+  clip-path: none;
 }
 
 .scrollbar-none::-webkit-scrollbar {
@@ -1083,6 +1103,19 @@ button.rf-yt-profile-pill {
   .rf-yt-profile-pill:focus-visible .rf-yt-profile-pill__label-wrap {
     max-width: 11rem;
     opacity: 1;
+  }
+}
+
+.rf-island-waveform-art-bg {
+  filter: blur(5px) saturate(1.35);
+  transform: scale(1.3);
+  transform-origin: center center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-island-waveform-art-bg {
+    filter: blur(4px) saturate(1.2);
+    transform: scale(1.15);
   }
 }
 
