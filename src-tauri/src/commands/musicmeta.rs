@@ -81,6 +81,7 @@ pub struct MusicMetaSidecarDto {
 #[derive(Debug, Clone, Copy)]
 pub enum EnrichMode {
     Full { force: bool },
+    ArtistTagsOnly,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -563,10 +564,6 @@ pub async fn enrich_music_meta_at(
     mode: EnrichMode,
     opts: EnrichOpts,
 ) -> bool {
-    let EnrichMode::Full { force } = mode else {
-        return false;
-    };
-
     let ext = media.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
     if !is_audio_only_ext(&ext) {
         return false;
@@ -575,6 +572,33 @@ pub async fn enrich_music_meta_at(
     let Some(parent) = media.parent() else { return false; };
     let Some(stem) = media.file_stem().and_then(|s| s.to_str()) else { return false; };
     let sidecar = sidecar_path_for(parent, stem);
+
+    if matches!(mode, EnrichMode::ArtistTagsOnly) {
+        let Some(mut dto) = read_sidecar(&sidecar) else {
+            return false;
+        };
+        if !sidecar_needs_artist_tags(&dto) {
+            return false;
+        }
+        let artist = dto
+            .canonical_artist
+            .clone()
+            .and_then(|s| {
+                let t = s.trim().to_string();
+                if t.is_empty() { None } else { Some(t) }
+            });
+        apply_artist_tags_to_dto(app_data_root, &mut dto, artist.as_deref(), true).await;
+        if !sidecar_needs_artist_tags(&dto) {
+            dto.schema_version = SIDECAR_SCHEMA_VERSION;
+            dto.enriched_at = iso_now();
+            return write_sidecar(&sidecar, &dto);
+        }
+        return false;
+    }
+
+    let EnrichMode::Full { force } = mode else {
+        return false;
+    };
 
     if !force && sidecar.is_file() {
         return false;
@@ -794,34 +818,46 @@ pub async fn read_music_meta(media_path: String) -> Option<MusicMetaSidecarDto> 
     read_sidecar(&sidecar)
 }
 
-/// Scan `roots` for audio files missing a sidecar and enrich them.
-/// Emits `music-meta-backfill-progress` events with {done, total, currentTitle}.
-/// Rate-limited to <= 1 MB request/sec via the shared gate.
+/// Scan library audio: full enrich for missing sidecars, then patch artist tags on legacy sidecars.
+/// Emits `music-meta-backfill-progress` with {done, total, currentTitle}.
 #[tauri::command]
 pub async fn backfill_music_meta(app: AppHandle, roots: Vec<String>) -> Result<u32, String> {
     let all = library_audio_files(&roots);
-    let pending: Vec<PathBuf> = all
-        .into_iter()
-        .filter(|p| {
-            p.parent()
-                .and_then(|par| p.file_stem()?.to_str().map(|s| sidecar_path_for(par, s)))
-                .map(|sp| !sp.is_file())
-                .unwrap_or(false)
-        })
-        .collect();
+    let backfill_opts = EnrichOpts { artist_tags: true };
 
-    let total = pending.len() as u32;
+    let mut missing_sidecar: Vec<PathBuf> = Vec::new();
+    let mut needs_tag_patch: Vec<PathBuf> = Vec::new();
+
+    for p in all {
+        let Some(parent) = p.parent() else { continue };
+        let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else { continue };
+        let sp = sidecar_path_for(parent, stem);
+        if !sp.is_file() {
+            missing_sidecar.push(p);
+            continue;
+        }
+        if read_sidecar(&sp)
+            .map(|dto| sidecar_needs_artist_tags(&dto))
+            .unwrap_or(false)
+        {
+            needs_tag_patch.push(p);
+        }
+    }
+
+    let total = (missing_sidecar.len() + needs_tag_patch.len()) as u32;
     let mut done: u32 = 0;
     let mut enriched: u32 = 0;
 
-    let backfill_opts = EnrichOpts { artist_tags: true };
-
     let _ = app.emit(
         "music-meta-backfill-progress",
-        MusicMetaBackfillProgress { done, total, current_title: None },
+        MusicMetaBackfillProgress {
+            done,
+            total,
+            current_title: None,
+        },
     );
 
-    for path in &pending {
+    for path in &missing_sidecar {
         let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
         if enrich_music_meta_path(
             &app,
@@ -836,7 +872,34 @@ pub async fn backfill_music_meta(app: AppHandle, roots: Vec<String>) -> Result<u
         done += 1;
         let _ = app.emit(
             "music-meta-backfill-progress",
-            MusicMetaBackfillProgress { done, total, current_title: title },
+            MusicMetaBackfillProgress {
+                done,
+                total,
+                current_title: title,
+            },
+        );
+    }
+
+    for path in &needs_tag_patch {
+        let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
+        if enrich_music_meta_path(
+            &app,
+            path,
+            EnrichMode::ArtistTagsOnly,
+            backfill_opts,
+        )
+        .await
+        {
+            enriched += 1;
+        }
+        done += 1;
+        let _ = app.emit(
+            "music-meta-backfill-progress",
+            MusicMetaBackfillProgress {
+                done,
+                total,
+                current_title: title,
+            },
         );
     }
 
@@ -1129,5 +1192,48 @@ mod tests {
         assert!(dto.genres.is_empty());
         assert!(dto.artist_mb_id.is_none());
         assert!(sidecar_needs_artist_tags(&dto));
+    }
+
+    #[tokio::test]
+    async fn apply_artist_tags_reads_cached_artist_sidecar_without_refetch() {
+        use super::{
+            apply_artist_tags_to_dto, artist_meta_sidecar_from_info, artist_meta_sidecar_path_in,
+            write_json_sidecar, ArtistInfoDto, MusicMetaSidecarDto, SIDECAR_SCHEMA_VERSION,
+        };
+
+        let tmp = tempfile::tempdir().unwrap();
+        let app_data = tmp.path();
+        let artist_info = ArtistInfoDto {
+            mb_id: "cached-mbid".to_string(),
+            name: "Rick Astley".to_string(),
+            artist_type: Some("Person".to_string()),
+            disambiguation: None,
+            origin_city: None,
+            country: None,
+            genres: vec!["pop".to_string(), "dance-pop".to_string()],
+        };
+        let artist_path = artist_meta_sidecar_path_in(app_data, "Rick Astley");
+        write_json_sidecar(&artist_path, &artist_meta_sidecar_from_info(artist_info));
+
+        let mut dto = MusicMetaSidecarDto {
+            schema_version: SIDECAR_SCHEMA_VERSION,
+            enriched_at: "2024-01-01T00:00:00Z".to_string(),
+            identity_source: "youtube".to_string(),
+            canonical_artist: Some("Rick Astley".to_string()),
+            canonical_album: None,
+            canonical_title: Some("Never Gonna Give You Up".to_string()),
+            year: None,
+            mb_recording_id: None,
+            mb_release_id: None,
+            mb_release_group_id: None,
+            match_confidence: None,
+            youtube: None,
+            genres: Vec::new(),
+            artist_mb_id: None,
+        };
+
+        apply_artist_tags_to_dto(app_data, &mut dto, Some("Rick Astley"), true).await;
+        assert_eq!(dto.genres, vec!["pop", "dance-pop"]);
+        assert_eq!(dto.artist_mb_id.as_deref(), Some("cached-mbid"));
     }
 }

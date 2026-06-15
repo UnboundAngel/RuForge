@@ -118,12 +118,12 @@ export const MusicMetaBackfillModal = ({ open, onClose, roots }: Props) => {
       titleId="music-meta-backfill-title"
       title="Enrich music metadata"
       icon={Music}
-      description="Scans library audio files missing a metadata sidecar. Writes canonical identity from embedded tags, MusicBrainz matches, and YouTube snapshot data."
+      description="Scans library audio for missing sidecars and patches legacy sidecars missing artist genres. Writes canonical identity plus artist MB genres on each track sidecar."
       footer={footer}
     >
       {phase === "idle" && (
         <p className="text-[13px] leading-relaxed text-stone-400">
-          Rate-limited to one MusicBrainz request per second. Large libraries may take several minutes.
+          Creates sidecars for tracks without one, then patches existing sidecars missing artist genres. Rate-limited to one MusicBrainz request per second; artist lookups are cached per artist name.
         </p>
       )}
 
