@@ -10,7 +10,7 @@ use crate::utils::{is_audio_only_ext, resolve_info_json_path, THUMB_DIR_NAME};
 
 const MB_API_BASE: &str = "https://musicbrainz.org/ws/2";
 const MB_SCORE_FLOOR: u32 = 90;
-const SIDECAR_SCHEMA_VERSION: u32 = 1;
+const SIDECAR_SCHEMA_VERSION: u32 = 2;
 const ARTIST_META_SCHEMA_VERSION: u32 = 1;
 const RATE_LIMIT_MS: u64 = 1100;
 
@@ -72,6 +72,14 @@ pub struct MusicMetaSidecarDto {
     pub match_confidence: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub youtube: Option<MusicMetaYoutubeDto>,
+    #[serde(default)]
+    pub genres: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artist_mb_id: Option<String>,
+}
+
+pub fn sidecar_needs_artist_tags(dto: &MusicMetaSidecarDto) -> bool {
+    dto.genres.is_empty() && dto.artist_mb_id.is_none()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -592,6 +600,8 @@ pub async fn enrich_music_meta_path(media: &Path, force: bool) -> bool {
         mb_release_group_id: mb_match.as_ref().and_then(|m| m.release_group_id.clone()),
         match_confidence: mb_match.as_ref().map(|m| m.score),
         youtube: Some(yt.snapshot),
+        genres: Vec::new(),
+        artist_mb_id: None,
     };
 
     write_sidecar(&sidecar, &dto)
@@ -921,7 +931,7 @@ pub async fn ensure_artist_meta_sidecar(
 
 #[cfg(test)]
 mod tests {
-    use super::clean_music_title;
+    use super::{clean_music_title, read_sidecar, sidecar_needs_artist_tags};
 
     macro_rules! clean_eq {
         ($input:expr, $expected:expr) => {
@@ -987,5 +997,24 @@ mod tests {
     #[test]
     fn strips_audio_paren() {
         clean_eq!("Track (Audio)", "Track");
+    }
+
+    #[test]
+    fn v1_sidecar_deserializes_with_empty_artist_tag_fields() {
+        let json = r#"{
+            "schemaVersion": 1,
+            "enrichedAt": "2024-01-01T00:00:00Z",
+            "identitySource": "youtube",
+            "canonicalArtist": "Artist",
+            "canonicalTitle": "Song"
+        }"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("track.musicmeta.json");
+        std::fs::write(&path, json).unwrap();
+        let dto = read_sidecar(&path).expect("parse v1 sidecar");
+        assert_eq!(dto.schema_version, 1);
+        assert!(dto.genres.is_empty());
+        assert!(dto.artist_mb_id.is_none());
+        assert!(sidecar_needs_artist_tags(&dto));
     }
 }

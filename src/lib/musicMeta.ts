@@ -22,6 +22,8 @@ export interface MusicMetaSidecar {
   mbReleaseGroupId?: string | null;
   matchConfidence?: number | null;
   youtube?: MusicMetaYoutube | null;
+  genres?: string[];
+  artistMbId?: string | null;
 }
 
 export function ensureMusicMeta(mediaPath: string, force?: boolean): Promise<boolean> {
