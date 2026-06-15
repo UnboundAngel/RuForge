@@ -154,6 +154,8 @@ export interface DownloadJobOptions {
   playlistOutputFolder?: string | null;
   /** 1-based playlist index for ordered filenames. */
   playlistIndex?: number | null;
+  /** When true, post-download enrich stamps artist genres on track sidecars. */
+  stampArtistTags: boolean;
 }
 
 export interface DownloadJob {
@@ -222,6 +224,7 @@ export function patchDownloadJobOptionsForAudio(
     audioFormat: normalizeDownloadAudioFormat(settings.downloadAudioFormat),
     autoScrubberPreviews:
       !audioOnly && settings.autoDownloadScrubberPreviews !== false,
+    stampArtistTags: settings.stampTrackSidecarArtistTags !== false,
   };
 }
 
@@ -233,13 +236,15 @@ export function patchDownloadJobOptionsFromSettings(
   const subLangs = options.audioOnly ? "" : effectiveDownloadSubLangs(settings);
   const autoScrubberPreviews =
     !options.audioOnly && settings.autoDownloadScrubberPreviews !== false;
+  const stampArtistTags = settings.stampTrackSidecarArtistTags !== false;
   if (
     options.subLangs === subLangs &&
-    options.autoScrubberPreviews === autoScrubberPreviews
+    options.autoScrubberPreviews === autoScrubberPreviews &&
+    options.stampArtistTags === stampArtistTags
   ) {
     return options;
   }
-  return { ...options, subLangs, autoScrubberPreviews };
+  return { ...options, subLangs, autoScrubberPreviews, stampArtistTags };
 }
 
 /** Cookie context for yt-dlp metadata simulate and download (matches `DownloadOptions`). */
@@ -275,6 +280,7 @@ export function buildDownloadJobOptions(
       audioOnly: false,
       audioFormat: normalizeDownloadAudioFormat(settings.downloadAudioFormat),
       autoScrubberPreviews: settings.autoDownloadScrubberPreviews !== false,
+      stampArtistTags: settings.stampTrackSidecarArtistTags !== false,
     },
     audioOnly,
     settings,
@@ -294,6 +300,7 @@ export function toInvokeDownloadOptions(opts: DownloadJobOptions) {
     auto_scrub_previews: opts.autoScrubberPreviews !== false,
     playlist_output_folder: opts.playlistOutputFolder ?? null,
     playlist_index: opts.playlistIndex ?? null,
+    stamp_artist_tags: opts.stampArtistTags !== false,
   };
 }
 
@@ -338,6 +345,7 @@ function normalizePersistedDownloadJob(j: DownloadJob): DownloadJob | null {
     audioOnly: opts?.audioOnly === true,
     audioFormat: normalizeDownloadAudioFormat(opts?.audioFormat),
     autoScrubberPreviews: opts?.autoScrubberPreviews !== false,
+    stampArtistTags: opts?.stampArtistTags !== false,
   };
   if (options.audioOnly) {
     options = {

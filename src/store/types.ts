@@ -157,6 +157,8 @@ export interface RuforgeSettings {
    * an audio-only download for that track (silently, no prompts).
    */
   autoDownloadPlayingSongs: boolean;
+  /** When true, audio download enrich stamps artist genres/MBID on track sidecars. */
+  stampTrackSidecarArtistTags: boolean;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -188,6 +190,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   sponsorBlockCategoryModes: defaultCategoryModes(),
   sponsorBlockCategoryStats: defaultCategoryStats(),
   autoDownloadPlayingSongs: true,
+  stampTrackSidecarArtistTags: true,
 };
 
 /** Hidden legacy default was `"chrome"` (not in downloader UI). Treat as no cookie source. */
@@ -216,6 +219,7 @@ export function loadMergedSettings(): RuforgeSettings {
       downloadSubtitles: merged.downloadSubtitles !== false,
       autoDownloadScrubberPreviews: merged.autoDownloadScrubberPreviews !== false,
       autoDownloadPlayingSongs: merged.autoDownloadPlayingSongs !== false,
+      stampTrackSidecarArtistTags: merged.stampTrackSidecarArtistTags !== false,
       showDebuggingSettings: merged.showDebuggingSettings === true,
       debugLogEnabledCategories: Array.isArray(merged.debugLogEnabledCategories)
         ? merged.debugLogEnabledCategories.filter((x): x is string => typeof x === "string")

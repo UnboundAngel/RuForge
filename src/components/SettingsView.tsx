@@ -1153,8 +1153,24 @@ export const SettingsView: React.FC = () => {
                   }
                 />
                 <SettingItem
+                  title="Stamp artist tags on download"
+                  description="After audio downloads, copy MusicBrainz artist genres and MBID onto each track sidecar. Turn off to skip artist lookups during the session; run Enrich music metadata to backfill later."
+                  active={settings.stampTrackSidecarArtistTags !== false}
+                  control={
+                    <ToggleSlot
+                      active={settings.stampTrackSidecarArtistTags !== false}
+                      onClick={() =>
+                        void updateSetting(
+                          "stampTrackSidecarArtistTags",
+                          settings.stampTrackSidecarArtistTags === false,
+                        )
+                      }
+                    />
+                  }
+                />
+                <SettingItem
                   title="Enrich music metadata"
-                  description="Scan library audio files and write canonical identity sidecars from embedded tags, MusicBrainz matches, and YouTube snapshot data."
+                  description="Scan library audio for missing sidecars and patch legacy sidecars without artist genres. Always includes artist tag stamping."
                   onClick={() => setMusicMetaBackfillOpen(true)}
                 />
                 <SettingItem

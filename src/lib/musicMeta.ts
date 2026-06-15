@@ -26,8 +26,16 @@ export interface MusicMetaSidecar {
   artistMbId?: string | null;
 }
 
-export function ensureMusicMeta(mediaPath: string, force?: boolean): Promise<boolean> {
-  return invoke<boolean>("ensure_music_meta", { mediaPath, force });
+export function ensureMusicMeta(
+  mediaPath: string,
+  force?: boolean,
+  artistTags?: boolean,
+): Promise<boolean> {
+  return invoke<boolean>("ensure_music_meta", {
+    mediaPath,
+    force,
+    artistTags,
+  });
 }
 
 export function readMusicMeta(mediaPath: string): Promise<MusicMetaSidecar | null> {
