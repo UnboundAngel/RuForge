@@ -8,7 +8,7 @@ import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
 import { fileMatchesArtistKey, primaryArtist, rawArtistFromFile } from "./musicArtist";
-import { normalizeAlbumShelfKey } from "./musicShelfDedup";
+import { buildMultiTrackAlbumGroups } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicLikeButton } from "./MusicLikeButton";
@@ -321,19 +321,14 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
   }, [tracks, artistKey]);
 
   const albums = useMemo(() => {
-    const map = new Map<string, { key: string; display: string; cover: string | null; year?: number | null; tracks: MediaFile[] }>();
-    for (const t of tracks) {
-      const rawAlbum = (t.canonicalAlbum ?? t.album)?.trim() ?? "";
-      if (!rawAlbum) continue;
-      const key = normalizeAlbumShelfKey(rawAlbum);
-      if (!map.has(key)) {
-        map.set(key, { key, display: rawAlbum, cover: bestCoverPath(t), year: t.year, tracks: [] });
-      } else if (!map.get(key)!.year && t.year) {
-        map.get(key)!.year = t.year;
-      }
-      map.get(key)!.tracks.push(t);
-    }
-    return [...map.values()].sort((a, b) => {
+    const groups = buildMultiTrackAlbumGroups(tracks, primaryArtist);
+    return groups.map((g) => ({
+      key: g.albumKey,
+      display: g.album,
+      cover: bestCoverPath(g.tracks[0]!),
+      year: g.tracks.find((t) => t.year)?.year ?? null,
+      tracks: g.tracks,
+    })).sort((a, b) => {
       if (a.year && b.year) return a.year - b.year;
       if (a.year) return -1;
       if (b.year) return 1;

@@ -1,4 +1,4 @@
-import altRadialPlaceholderGif from "@/assets/onboarding/alt-radial-placeholder.gif";
+import altRadialDemoGif from "@/assets/onboarding/alt-radial-demo.gif";
 
 import { semverGreater } from "./onboardingStorage";
 
@@ -12,6 +12,7 @@ export type OnboardingIslandStep = {
   expandedCaption: string;
   mediaSrc: string;
   mediaAlt: string;
+  defaultExpanded?: boolean;
 };
 
 export type OnboardingStep = OnboardingIslandStep;
@@ -25,8 +26,9 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
     compactFollowUp: "to change modes",
     expandedCaption:
       "Hold Alt to navigate around the app. It's the only way to access different modes.",
-    mediaSrc: altRadialPlaceholderGif,
+    mediaSrc: altRadialDemoGif,
     mediaAlt: "Alt radial navigation demo",
+    defaultExpanded: true,
   },
 ];
 

@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Play, MoreHorizontal, Shuffle } from "lucide-react";
+import { Play, Pause, MoreHorizontal, Shuffle } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import type { MediaFile } from "@/types";
 import { primaryArtist } from "./musicArtist";
-import { normalizeAlbumShelfKey } from "./musicShelfDedup";
+import { buildMultiTrackAlbumGroups } from "./musicShelfDedup";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
@@ -30,6 +31,8 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
   const cover = bestCoverPath(file);
   const coverSrc = cover ? convertFileSrc(cover) : null;
   const artist = file.artist ?? file.albumArtist ?? (file.name.includes(" - ") ? file.name.split(" - ")[0].trim() : "");
+  const playback = useOptionalMainAudioPlayback();
+  const showPauseOnHover = isPlaying && playback != null && !playback.paused;
 
   return (
     <div
@@ -41,7 +44,13 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
     >
       <div className="w-8 text-right text-sm shrink-0" style={{ color: isPlaying ? "var(--music-accent)" : "var(--music-text-muted)" }}>
         <span className="group-hover/row:hidden">{isPlaying ? "♪" : index + 1}</span>
-        <span className="hidden group-hover/row:inline"><Play size={14} fill="currentColor" /></span>
+        <span className="hidden group-hover/row:inline">
+          {showPauseOnHover ? (
+            <Pause size={14} fill="currentColor" />
+          ) : (
+            <Play size={14} fill="currentColor" />
+          )}
+        </span>
       </div>
       {coverSrc ? (
         <img src={coverSrc} alt="" className="w-11 h-11 rounded shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
@@ -198,29 +207,10 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
     [tracks, musicLikedKeys],
   );
 
-  const albums = useMemo(() => {
-    const map = new Map<string, { albumKey: string; artistKey: string; album: string; artist: string; cover: string | null; tracks: MediaFile[] }>();
-    for (const t of tracks) {
-      const albumName = (t.canonicalAlbum ?? t.album)?.trim() ?? "";
-      if (!albumName) continue;
-      const artistRaw = t.canonicalArtist?.trim() || t.albumArtist || t.artist || "";
-      const artistKey = primaryArtist(artistRaw).toLowerCase();
-      const albumKey = normalizeAlbumShelfKey(albumName);
-      const key = `${artistKey}::${albumKey}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          albumKey,
-          artistKey,
-          album: albumName,
-          artist: artistRaw,
-          cover: bestCoverPath(t),
-          tracks: [],
-        });
-      }
-      map.get(key)!.tracks.push(t);
-    }
-    return [...map.values()].sort((a, b) => a.album.localeCompare(b.album));
-  }, [tracks]);
+  const albums = useMemo(
+    () => buildMultiTrackAlbumGroups(tracks, primaryArtist),
+    [tracks],
+  );
 
   const artists = useMemo(() => {
     const map = new Map<string, { key: string; display: string; tracks: MediaFile[] }>();
@@ -383,7 +373,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                 key={`${a.artistKey}::${a.albumKey}`}
                 album={a.album}
                 artist={a.artist}
-                cover={a.cover}
+                cover={bestCoverPath(a.tracks[0]!)}
                 trackCount={a.tracks.length}
                 onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
                 onContextMenu={(e) => setMenu({

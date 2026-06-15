@@ -3,6 +3,7 @@ import { Music } from "lucide-react";
 import {
   acquireAnalyserGraph,
   readSmoothedLoudness,
+  reconnectAnalyserPlaybackRoute,
   releaseAnalyserGraph,
   type AnalyserGraph,
 } from "../../audioAnalyserGraph";
@@ -164,7 +165,7 @@ export function AudioHeroStage({
     return () => {
       audioEl.removeEventListener("play", onPlaying);
       audioEl.removeEventListener("playing", onPlaying);
-      releaseAnalyserGraph(audioEl, false);
+      reconnectAnalyserPlaybackRoute(audioEl);
       graphRef.current = null;
     };
   }, [audioEl, connectKey, showForeground]);

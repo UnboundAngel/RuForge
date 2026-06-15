@@ -10,6 +10,10 @@ mod utils;
 mod ytdlp_binary;
 mod ytdlp_rate_limit;
 #[cfg(windows)]
+mod taskbar_thumbbar;
+#[cfg(windows)]
+mod taskbar_thumbbar_icons;
+#[cfg(windows)]
 mod windows_audio_brand;
 
 use std::sync::Mutex;
@@ -161,9 +165,19 @@ pub fn run() {
                 );
             }
 
+            #[cfg(windows)]
+            taskbar_thumbbar::attach_to_main(app);
+
             Ok(())
         })
         .on_window_event(|window, event| {
+            #[cfg(windows)]
+            if window.label() == "main" {
+                if matches!(event, tauri::WindowEvent::Destroyed) {
+                    taskbar_thumbbar::on_main_destroyed();
+                }
+            }
+
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.state::<AppConfig>();
                 let minimize_to_tray = *state.minimize_to_tray.lock().unwrap();
@@ -241,7 +255,9 @@ pub fn run() {
             music_listen_get_integrity,
             music_listen_rebuild_snapshot,
             music_listen_import_legacy,
-            music_listen_clear
+            music_listen_clear,
+            #[cfg(windows)]
+            taskbar_thumbbar::sync_taskbar_transport,
         ])
         .run(context)
         .expect("error while running tauri application");

@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { stopMusicMiniForMainClaim } from "@/lib/mainPlaybackClaim";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { peekAnalyserGraph, releaseAnalyserGraph } from "@/audioAnalyserGraph";
+import {
+  peekAnalyserGraph,
+  reconnectAnalyserPlaybackRoute,
+  releaseAnalyserGraph,
+} from "@/audioAnalyserGraph";
 import { applyMediaOutputState } from "@/applyMediaOutputState";
 import {
   chapterAtTime,
@@ -13,7 +17,6 @@ import {
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { isAudioOnlyPath } from "@/mediaKind";
 import { readPlaybackSpeed, writePlaybackSpeed } from "@/playbackSpeedStorage";
-import { readResumeSeconds } from "@/playbackStorage";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import {
   hasMusicNextTrack,
@@ -212,10 +215,6 @@ export function useMusicPlayback(
           setPaused(true);
         }
       } else {
-        const storedResume = readResumeSeconds(path, 0);
-        if (storedResume > 0) {
-          el.currentTime = storedResume;
-        }
         void el.play()
           .then(() => setPaused(false))
           .catch(() => setPaused(true));
@@ -262,6 +261,7 @@ export function useMusicPlayback(
     const el = audioRef.current;
     if (!el) return;
     if (el.paused) {
+      reconnectAnalyserPlaybackRoute(el);
       void el.play().then(() => setPaused(false)).catch(() => setPaused(true));
     } else {
       el.pause();

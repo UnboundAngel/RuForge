@@ -6,8 +6,8 @@ import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
-import { fileMatchesArtistKey, primaryArtist, rawArtistFromFile } from "./musicArtist";
-import { normalizeAlbumShelfKey } from "./musicShelfDedup";
+import { artistKeyFromFile, primaryArtist, rawArtistFromFile } from "./musicArtist";
+import { normalizeAlbumShelfKey, rawAlbumNameFromFile } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicLikeButton } from "./MusicLikeButton";
@@ -87,8 +87,8 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
   const tracks = useMemo(() => {
     const all = flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path));
     const albumTracks = all.filter((t) => {
-      if (!fileMatchesArtistKey(t, artistKey)) return false;
-      const album = (t.canonicalAlbum ?? t.album)?.trim();
+      if (artistKeyFromFile(t) !== artistKey.trim().toLowerCase()) return false;
+      const album = rawAlbumNameFromFile(t);
       if (!album) return false;
       return normalizeAlbumShelfKey(album) === albumKey.trim().toLowerCase();
     });

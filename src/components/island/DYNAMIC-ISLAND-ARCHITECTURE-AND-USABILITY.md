@@ -173,7 +173,7 @@ Three mutually exclusive inner trees, absolutely positioned:
 
 ### Portal
 
-`ActivityIsland` uses `createPortal(..., document.body)`.
+`ActivityIsland` uses `createPortal(..., mainWindowPortalRoot())` (`#root`).
 
 **Why:** The app root uses `overflow-hidden`. Mounting the island inside the main column clips expanded height and breaks titlebar alignment.
 
@@ -348,7 +348,7 @@ Wire via React context consumed **only** by `ActivityIsland`, merging mock conte
 
 ### Onboarding island (Alt radial step)
 
-`OnboardingIsland.tsx` reuses the titlebar portal slot (`z-110`, `pt-[6px]`) but is **not** `ActivityIsland`. It mounts during onboarding island steps only (`OnboardingFlow`), portaled to `document.body` (vs. `ActivityIsland`'s `#root` portal — both are `position: fixed` to the viewport, so they land at the same visual slot).
+`OnboardingIsland.tsx` reuses the titlebar portal slot (`z-110`, `pt-[6px]`) but is **not** `ActivityIsland`. It mounts during onboarding island steps only (`OnboardingFlow`), portaled to `#root` via `mainWindowPortalRoot()` (same as `ActivityIsland`).
 
 - **Compact:** `Switch app modes · hold` + key cap until ring completes; then `Click` + RuForge icon + `to change modes` (latched); upward fade; 268×36 pill.
 - **Outer progress:** holding Alt fills the pill perimeter (~500ms); release early resets; ring hides once complete.

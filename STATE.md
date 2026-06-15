@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.11 (unreleased)
 Last shipped to users: 0.1.10
-Last updated: 2026-06-14 (music-nav video session fix)
+Last updated: 2026-06-14 (Windows taskbar transport toolbar)
 Status: in progress
 
 ## Now
@@ -29,6 +29,15 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.11 (unreleased):**
 
+- Windows taskbar: thumbbar clicks no longer dismiss the taskbar preview (`taskbar_thumbbar.rs`).
+- Windows taskbar: thumbbar button clicks route transport (WM_COMMAND LOWORD + message filter + deferred emit); play/pause media-element fallback (`taskbar_thumbbar.rs`, `taskbarTransportSync.ts`).
+- Windows taskbar: thumbnail transport toolbar on main HWND (prev / play-pause / next); `ruforge:taskbar-transport` + `sync_taskbar_transport` (`taskbar_thumbbar.rs`, `taskbarTransportSync.ts`).
+- Music detail: liner notes under release metadata; sparse archive footer (YouTube, dates, path only); opacity/y expand animation (`MusicTrackCredits.tsx`, `MusicTrackView.tsx`).
+- Music detail: song view loads sidecar metadata and listen stats on open; background enrich when sidecar missing (`MusicShell.tsx`).
+- Music detail: cinematic song screen with immersive release typography, Watch on YouTube via `openUrl`, compact Play/Back/Like chrome (`MusicTrackView.tsx`).
+- Music playback: cold start always 0:00; no stored resume on normal play; mini back-to-app handoff unchanged.
+- Music Home: Recently added / Recently listened toggle; playlist glass rows, singles grid, albums vinyl shelf; Rediscover removed; listen tab with relative time and empty state.
+- Music library: single-track downloads stay standalone (not album shelves); lone yt-dlp playlist entries save under `Music/`; album page artist matching fixed; title-equals-album sidecar stripped on enrich.
 - Playback (music nav): video keeps playing across music-mode enter; hoisted off-tab PlayerView; parks + stops only on audio claim.
 - Activity island: owner-aware hasLivePlayback; compact chrome when paused on owning surface.
 - Activity island: scrubber fill-only (no hover thumb); capture-stream analyser duplicate audio fix (`IslandExpandedContent.tsx`, `audioAnalyserGraph.ts`).
@@ -100,3 +109,8 @@ Version triplet must stay aligned every bump: package.json,
 src-tauri/tauri.conf.json, src-tauri/Cargo.toml.
 Zustand audit doc (cite, do not restate inline):
 c:\Users\Attic\.cursor\plans\zustand_migration_audit_53cd5b61.plan.md
+
+## Shipped log
+- Redesigned track detail page with parsed masonry credits grid and interactive explorer button
+- Polished track detail view buttons (removed Back/Heart outer circles, reduced Play Now button size)
+- Redesigned the music detail description and track credits into a two-column alignment style, avoiding flat left-aligned text, and polished the file path link footer icon.

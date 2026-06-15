@@ -141,6 +141,7 @@ import {
 } from "./explorerBoundsSync";
 import { useMainWindowMaximized } from "./hooks/useMainWindowMaximized";
 import { useMainWindowTransparentFrame } from "./hooks/useMainWindowTransparentFrame";
+import { setupTaskbarTransportBridge } from "./lib/taskbarTransportSync";
 
 const WindowControls = ({
   isMaximized,
@@ -901,6 +902,8 @@ function App() {
       searchInputRef.current.focus();
     }
   }, [isSearchExpanded]);
+
+  useEffect(() => setupTaskbarTransportBridge(), []);
 
   // Tauri event listeners
   useEffect(() => {

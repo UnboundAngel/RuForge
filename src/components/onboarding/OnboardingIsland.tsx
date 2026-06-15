@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { createPortal } from "react-dom";
 
 import logo from "@/assets/neotubeIcon.png";
+import { mainWindowPortalRoot } from "@/lib/mainWindowFrame";
 import type { OnboardingIslandStep } from "@/lib/onboardingSteps";
 import {
   setOnboardingIslandOccupied,
@@ -289,12 +290,15 @@ export function OnboardingIsland({
   expandedCaption,
   mediaSrc,
   mediaAlt,
+  defaultExpanded = false,
   onDismiss,
 }: OnboardingIslandProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [phase, setPhase] = useState<IslandPhase>("active");
   const expandedRef = useRef(false);
+  const defaultExpandedRef = useRef(defaultExpanded);
   expandedRef.current = expanded;
+  defaultExpandedRef.current = defaultExpanded;
 
   const ringRef = useRef<SVGRectElement>(null);
 
@@ -323,7 +327,7 @@ export function OnboardingIsland({
   useEffect(() => {
     if (phase !== "active") return;
     return subscribeOnboardingModeSwap(() => {
-      if (expandedRef.current) {
+      if (expandedRef.current && !defaultExpandedRef.current) {
         setExpanded(false);
         window.setTimeout(beginCelebrate, COLLAPSE_BEFORE_CELEBRATE_MS);
         return;
@@ -463,6 +467,6 @@ export function OnboardingIsland({
         </motion.div>
       </motion.div>
     </>,
-    document.body,
+    mainWindowPortalRoot(),
   );
 }
