@@ -78,6 +78,22 @@ pub struct MusicMetaSidecarDto {
     pub artist_mb_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum EnrichMode {
+    Full { force: bool },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EnrichOpts {
+    pub artist_tags: bool,
+}
+
+impl Default for EnrichOpts {
+    fn default() -> Self {
+        Self { artist_tags: true }
+    }
+}
+
 pub fn sidecar_needs_artist_tags(dto: &MusicMetaSidecarDto) -> bool {
     dto.genres.is_empty() && dto.artist_mb_id.is_none()
 }
@@ -122,11 +138,11 @@ fn iso_now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
-fn sidecar_path_for(parent: &Path, stem: &str) -> PathBuf {
+pub fn sidecar_path_for(parent: &Path, stem: &str) -> PathBuf {
     parent.join(format!("{stem}.musicmeta.json"))
 }
 
-fn read_sidecar(path: &Path) -> Option<MusicMetaSidecarDto> {
+pub fn read_sidecar(path: &Path) -> Option<MusicMetaSidecarDto> {
     let content = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
 }
@@ -503,9 +519,54 @@ fn identity_source(from_tag: bool, from_mb: bool, from_yt: bool) -> &'static str
 
 // ---- Core enrichment logic -----------------------------------------------
 
+async fn apply_artist_tags_to_dto(
+    app_data_root: &Path,
+    dto: &mut MusicMetaSidecarDto,
+    artist_name: Option<&str>,
+    artist_tags: bool,
+) {
+    if !artist_tags {
+        dto.genres.clear();
+        dto.artist_mb_id = None;
+        return;
+    }
+    let Some(name) = artist_name.filter(|s| !s.trim().is_empty()) else {
+        dto.genres.clear();
+        dto.artist_mb_id = None;
+        return;
+    };
+    if let Some(meta) = load_or_fetch_artist_meta_in(app_data_root, name, false).await {
+        dto.genres = meta.genres;
+        dto.artist_mb_id = Some(meta.mb_id);
+    } else {
+        dto.genres.clear();
+        dto.artist_mb_id = None;
+    }
+}
+
 /// Enrich a single audio file. Returns true if a sidecar was written (new or updated).
-/// Idempotent: skips immediately when sidecar exists and `force` is false.
-pub async fn enrich_music_meta_path(media: &Path, force: bool) -> bool {
+pub async fn enrich_music_meta_path(
+    app: &AppHandle,
+    media: &Path,
+    mode: EnrichMode,
+    opts: EnrichOpts,
+) -> bool {
+    let Ok(app_data) = app.path().app_data_dir() else {
+        return false;
+    };
+    enrich_music_meta_at(&app_data, media, mode, opts).await
+}
+
+pub async fn enrich_music_meta_at(
+    app_data_root: &Path,
+    media: &Path,
+    mode: EnrichMode,
+    opts: EnrichOpts,
+) -> bool {
+    let EnrichMode::Full { force } = mode else {
+        return false;
+    };
+
     let ext = media.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
     if !is_audio_only_ext(&ext) {
         return false;
@@ -513,13 +574,12 @@ pub async fn enrich_music_meta_path(media: &Path, force: bool) -> bool {
 
     let Some(parent) = media.parent() else { return false; };
     let Some(stem) = media.file_stem().and_then(|s| s.to_str()) else { return false; };
-
     let sidecar = sidecar_path_for(parent, stem);
+
     if !force && sidecar.is_file() {
         return false;
     }
 
-    // Read .info.json for YouTube snapshot
     let info_path = resolve_info_json_path(parent, stem);
     let info_json = info_path
         .as_ref()
@@ -529,7 +589,6 @@ pub async fn enrich_music_meta_path(media: &Path, force: bool) -> bool {
     let tags = read_tags(media);
     let yt = read_yt_meta(info_json.as_ref());
 
-    // MB lookup: only when we have something meaningful to query
     let mb_match = {
         let lookup_title = tags.title.clone()
             .or_else(|| yt.title.clone())
@@ -547,7 +606,6 @@ pub async fn enrich_music_meta_path(media: &Path, force: bool) -> bool {
         }
     };
 
-    // Resolve identity: tags > MB > YouTube > filename
     let (canonical_title, t_tag, t_mb, t_yt) = resolve_field(
         tags.title.clone(),
         mb_match.as_ref().and_then(|m| m.title.clone()),
@@ -574,7 +632,6 @@ pub async fn enrich_music_meta_path(media: &Path, force: bool) -> bool {
         t_yt || a_yt || al_yt,
     );
 
-    // Cover art: fetch from CAA only when no local cover exists and we have a release MBID
     if !local_cover_exists(parent, stem, tags.has_embedded_cover) {
         if let Some(release_id) = mb_match.as_ref().map(|m| m.release_id.clone()) {
             if let Some(bytes) = fetch_caa_cover(&release_id).await {
@@ -587,11 +644,11 @@ pub async fn enrich_music_meta_path(media: &Path, force: bool) -> bool {
         }
     }
 
-    let dto = MusicMetaSidecarDto {
+    let mut dto = MusicMetaSidecarDto {
         schema_version: SIDECAR_SCHEMA_VERSION,
         enriched_at: iso_now(),
         identity_source: src.to_string(),
-        canonical_artist,
+        canonical_artist: canonical_artist.clone(),
         canonical_album,
         canonical_title,
         year: mb_match.as_ref().and_then(|m| m.year),
@@ -603,6 +660,14 @@ pub async fn enrich_music_meta_path(media: &Path, force: bool) -> bool {
         genres: Vec::new(),
         artist_mb_id: None,
     };
+
+    apply_artist_tags_to_dto(
+        app_data_root,
+        &mut dto,
+        canonical_artist.as_deref(),
+        opts.artist_tags,
+    )
+    .await;
 
     write_sidecar(&sidecar, &dto)
 }
@@ -700,8 +765,23 @@ fn walk_recent_audio(dir: &Path, cutoff: SystemTime, depth: u32, max: u32, out: 
 
 /// Enrich a single audio file. Idempotent; skips if sidecar exists unless force=true.
 #[tauri::command]
-pub async fn ensure_music_meta(media_path: String, force: Option<bool>) -> bool {
-    enrich_music_meta_path(Path::new(&media_path), force.unwrap_or(false)).await
+pub async fn ensure_music_meta(
+    app: AppHandle,
+    media_path: String,
+    force: Option<bool>,
+    artist_tags: Option<bool>,
+) -> bool {
+    enrich_music_meta_path(
+        &app,
+        Path::new(&media_path),
+        EnrichMode::Full {
+            force: force.unwrap_or(false),
+        },
+        EnrichOpts {
+            artist_tags: artist_tags.unwrap_or(true),
+        },
+    )
+    .await
 }
 
 /// Read the enrichment sidecar for a file (for the song detail page).
@@ -734,6 +814,8 @@ pub async fn backfill_music_meta(app: AppHandle, roots: Vec<String>) -> Result<u
     let mut done: u32 = 0;
     let mut enriched: u32 = 0;
 
+    let backfill_opts = EnrichOpts { artist_tags: true };
+
     let _ = app.emit(
         "music-meta-backfill-progress",
         MusicMetaBackfillProgress { done, total, current_title: None },
@@ -741,7 +823,14 @@ pub async fn backfill_music_meta(app: AppHandle, roots: Vec<String>) -> Result<u
 
     for path in &pending {
         let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
-        if enrich_music_meta_path(path, false).await {
+        if enrich_music_meta_path(
+            &app,
+            path,
+            EnrichMode::Full { force: false },
+            backfill_opts,
+        )
+        .await
+        {
             enriched += 1;
         }
         done += 1;
