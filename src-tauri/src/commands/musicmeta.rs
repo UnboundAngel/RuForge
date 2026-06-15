@@ -807,14 +807,41 @@ fn normalize_artist_sidecar_stem(artist_name: &str) -> String {
     }
 }
 
+fn artist_meta_sidecar_path_in(app_data_root: &Path, artist_name: &str) -> PathBuf {
+    let stem = normalize_artist_sidecar_stem(artist_name);
+    app_data_root
+        .join("musicmeta")
+        .join("artists")
+        .join(format!("{stem}.artistmeta.json"))
+}
+
 fn artist_meta_sidecar_path(app: &AppHandle, artist_name: &str) -> Option<PathBuf> {
     let root = app.path().app_data_dir().ok()?;
-    let stem = normalize_artist_sidecar_stem(artist_name);
-    Some(
-        root.join("musicmeta")
-            .join("artists")
-            .join(format!("{stem}.artistmeta.json")),
-    )
+    Some(artist_meta_sidecar_path_in(&root, artist_name))
+}
+
+async fn load_or_fetch_artist_meta_in(
+    app_data_root: &Path,
+    artist_name: &str,
+    force: bool,
+) -> Option<ArtistMetaSidecarDto> {
+    let path = artist_meta_sidecar_path_in(app_data_root, artist_name);
+    if !force && path.is_file() {
+        return read_json_sidecar(&path);
+    }
+    let info = fetch_artist_info_from_mb(artist_name).await?;
+    let dto = artist_meta_sidecar_from_info(info);
+    let _ = write_json_sidecar(&path, &dto);
+    Some(dto)
+}
+
+async fn load_or_fetch_artist_meta(
+    app: &AppHandle,
+    artist_name: &str,
+    force: bool,
+) -> Option<ArtistMetaSidecarDto> {
+    let root = app.path().app_data_dir().ok()?;
+    load_or_fetch_artist_meta_in(&root, artist_name, force).await
 }
 
 async fn fetch_artist_info_from_mb(artist_name: &str) -> Option<ArtistInfoDto> {
@@ -906,7 +933,6 @@ pub async fn read_artist_meta_sidecar(
 }
 
 /// Ensure artist metadata sidecar exists; fetches once and writes if missing.
-/// Idempotent: when sidecar exists and force=false, no network request occurs.
 #[tauri::command]
 pub async fn ensure_artist_meta_sidecar(
     app: AppHandle,
@@ -920,11 +946,9 @@ pub async fn ensure_artist_meta_sidecar(
     if !force && path.is_file() {
         return false;
     }
-    let Some(info) = fetch_artist_info_from_mb(&artist_name).await else {
-        return false;
-    };
-    let dto = artist_meta_sidecar_from_info(info);
-    write_json_sidecar(&path, &dto)
+    load_or_fetch_artist_meta(&app, &artist_name, force)
+        .await
+        .is_some()
 }
 
 // ---- Tests ---------------------------------------------------------------
