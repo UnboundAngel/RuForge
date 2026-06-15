@@ -15,8 +15,8 @@ function artistFromPathOrStem(stem: string): string {
 /** Artist string resolved via canonical sidecar first, then tags, then filename heuristic. */
 export function rawArtistFromFile(file: MediaFile): string {
   if (file.canonicalArtist?.trim()) return file.canonicalArtist.trim();
-  if (file.artist?.trim()) return file.artist.trim();
   if (file.albumArtist?.trim()) return file.albumArtist.trim();
+  if (file.artist?.trim()) return file.artist.trim();
   const fromName = artistFromPathOrStem(file.name);
   if (fromName) return fromName;
   const path = file.path.replace(/\\/g, "/");

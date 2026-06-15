@@ -1,15 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { ListVideo, FolderOpen, User, Disc3, Play, Music2, Heart } from "lucide-react";
-import { primaryArtist } from "./musicArtist";
-import { musicTrackIdentityKey } from "./musicShelfDedup";
-
+import { albumKeyFromFile, fileHasBrowsableAlbum, musicTrackIdentityKey } from "./musicShelfDedup";
+import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
+import { isAudioOnlyPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
 import { openInFileManager } from "@/openInFileManager";
 import { useRuforgeStore } from "@/store/ruforgeStore";
-import { artistKeyFromFile } from "./musicArtist";
-import { albumKeyFromFile } from "./musicShelfDedup";
+import { artistKeyFromFile, primaryArtist } from "./musicArtist";
 
 export type MusicMenuContext =
   | { kind: "song"; file: MediaFile }
@@ -39,6 +38,11 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const openMusicAlbum = useRuforgeStore((s) => s.openMusicAlbum);
   const openMusicSong = useRuforgeStore((s) => s.openMusicSong);
+  const entries = useRuforgeStore((s) => s.entries);
+  const libraryTracks = useMemo(
+    () => flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path)),
+    [entries],
+  );
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -79,7 +83,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
     const artistKey = artistKeyFromFile(file);
     const albumKey = albumKeyFromFile(file);
     const hasArtist = !!artistKey;
-    const hasAlbum = !!(file.canonicalAlbum ?? file.album)?.trim();
+    const hasAlbum = fileHasBrowsableAlbum(file, libraryTracks);
     const liked = musicLikedKeys.includes(musicTrackIdentityKey(file, primaryArtist));
 
     rows = (

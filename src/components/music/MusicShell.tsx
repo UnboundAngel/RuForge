@@ -76,6 +76,12 @@ import { getRecentHistory, type PlayHistoryEntry } from "./musicPlayHistory";
 import { importLegacyListenDataIfNeeded } from "@/lib/musicListenLegacyImport";
 import { refreshListenIntegrity } from "@/lib/musicListenIntegrity";
 import { refreshListenSnapshot } from "@/lib/musicListenSnapshot";
+import { readMusicMeta, ensureMusicMeta, type MusicMetaSidecar } from "@/lib/musicMeta";
+import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
+import { isAudioOnlyPath } from "@/mediaKind";
+import { formatListenDuration } from "./musicListenStats";
+import { primaryArtist } from "./musicArtist";
+import { musicTrackIdentityKey } from "./musicShelfDedup";
 import { setPendingListenEndReason } from "@/lib/musicListenSession";
 import { readMusicOnlySkip, writeMusicOnlySkip } from "./musicOnlySkipStorage";
 import { debugLog } from "@/debug/debugLog";
@@ -173,6 +179,12 @@ export function MusicShell() {
   const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("queue");
   const [musicOnlySkip, setMusicOnlySkipState] = useState(() => readMusicOnlySkip());
   const [historyEntries, setHistoryEntries] = useState<PlayHistoryEntry[]>(() => getRecentHistory());
+  const [activeTrackMeta, setActiveTrackMeta] = useState<MusicMetaSidecar | null>(null);
+  const [activeTrackStats, setActiveTrackStats] = useState<{
+    plays: number;
+    lastPlayed: string;
+    listenTime: string;
+  } | null>(null);
 
   const toggleMusicOnlySkip = useCallback(() => {
     setMusicOnlySkipState((prev) => {
@@ -285,6 +297,60 @@ export function MusicShell() {
     void importLegacyListenDataIfNeeded()
       .then(() => Promise.all([refreshListenIntegrity(), refreshListenSnapshot()]));
   }, []);
+
+  useEffect(() => {
+    if (musicDetail?.kind !== "song") {
+      setActiveTrackMeta(null);
+      setActiveTrackStats(null);
+      return;
+    }
+
+    const path = musicDetail.path;
+    let cancelled = false;
+
+    void (async () => {
+      const meta = await readMusicMeta(path);
+      if (cancelled) return;
+
+      if (meta) {
+        setActiveTrackMeta(meta);
+      } else {
+        setActiveTrackMeta(null);
+        void ensureMusicMeta(path);
+      }
+
+      const snap = await refreshListenSnapshot();
+      if (cancelled) return;
+
+      const entries = useRuforgeStore.getState().entries;
+      const file = flattenGalleryScanToMediaFiles(entries)
+        .filter((f) => isAudioOnlyPath(f.path))
+        .find((f) => f.path === path);
+
+      const identityKey = file ? musicTrackIdentityKey(file, primaryArtist) : null;
+      const statRow =
+        snap.stats.find((s) => s.path === path)
+        ?? (identityKey ? snap.stats.find((s) => s.identityKey === identityKey) : undefined);
+
+      if (statRow) {
+        setActiveTrackStats({
+          plays: statRow.playCount,
+          lastPlayed: new Date(statRow.lastPlayed).toLocaleDateString(undefined, {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          }),
+          listenTime: formatListenDuration(statRow.listenTimeSec),
+        });
+      } else {
+        setActiveTrackStats(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [musicDetail?.kind === "song" ? musicDetail.path : null]);
 
   const isPasteMode = panelMode === "paste";
   const showExploreStrip = activeView === "explore" && !musicDetail && !playerExpanded;
@@ -1101,6 +1167,8 @@ export function MusicShell() {
                         onOpenArtist={openMusicArtist}
                         onOpenAlbum={openMusicAlbum}
                         onBack={closeMusicDetail}
+                        meta={activeTrackMeta ?? undefined}
+                        listenStats={activeTrackStats ?? undefined}
                       />
                     </motion.div>
                   ) : musicDetail?.kind === "profile" ? (
@@ -1118,6 +1186,7 @@ export function MusicShell() {
                         onOpenArtist={openMusicArtist}
                         onOpenAlbum={openMusicAlbum}
                         onSearchYoutubeMusic={handleSearchYoutubeMusic}
+                        historyEntries={historyEntries}
                       />
                     </motion.div>
                   ) : activeView === "explore" ? (

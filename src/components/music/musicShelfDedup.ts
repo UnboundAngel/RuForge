@@ -1,6 +1,7 @@
 import type { MediaFile } from "@/types";
 import { stripYtdlpStreamSuffix } from "@/galleryDedupe";
 import { extractYouTubeVideoId } from "@/youtubeUrl";
+import { artistKeyFromFile } from "./musicArtist";
 
 function normalizeToken(raw: string): string {
   return raw
@@ -76,6 +77,66 @@ function artistShelfKey(file: MediaFile, primaryArtist: (raw: string) => string)
 /** Album dedup key for shelf grouping. Prefers canonical album from sidecar. */
 export function albumKeyFromFile(file: MediaFile): string {
   return normalizeAlbumShelfKey(file.canonicalAlbum ?? file.album ?? "");
+}
+
+export function rawAlbumNameFromFile(file: MediaFile): string {
+  return (file.canonicalAlbum ?? file.album)?.trim() ?? "";
+}
+
+export type AlbumGroup = {
+  albumKey: string;
+  artistKey: string;
+  album: string;
+  artist: string;
+  tracks: MediaFile[];
+};
+
+/** Group tracks by artist + album; omit single-track pseudo-albums (standalone songs). */
+export function buildMultiTrackAlbumGroups(
+  tracks: MediaFile[],
+  primaryArtist: (raw: string) => string,
+): AlbumGroup[] {
+  const map = new Map<string, AlbumGroup>();
+  for (const t of tracks) {
+    const albumName = rawAlbumNameFromFile(t);
+    if (!albumName) continue;
+    const artistKey = artistKeyFromFile(t);
+    if (!artistKey) continue;
+    const albumKey = normalizeAlbumShelfKey(albumName);
+    const key = `${artistKey}::${albumKey}`;
+    if (!map.has(key)) {
+      const raw = t.canonicalArtist?.trim() || t.albumArtist || t.artist || "";
+      map.set(key, {
+        albumKey,
+        artistKey,
+        album: albumName,
+        artist: raw ? primaryArtist(raw) : artistKey,
+        tracks: [],
+      });
+    }
+    map.get(key)!.tracks.push(t);
+  }
+  return [...map.values()].filter((g) => g.tracks.length >= 2);
+}
+
+export function fileHasBrowsableAlbum(
+  file: MediaFile,
+  tracks: MediaFile[],
+): boolean {
+  const albumName = rawAlbumNameFromFile(file);
+  if (!albumName) return false;
+  const artistKey = artistKeyFromFile(file);
+  if (!artistKey) return false;
+  const albumKey = normalizeAlbumShelfKey(albumName);
+  let count = 0;
+  for (const t of tracks) {
+    if (artistKeyFromFile(t) !== artistKey) continue;
+    const a = rawAlbumNameFromFile(t);
+    if (!a || normalizeAlbumShelfKey(a) !== albumKey) continue;
+    count += 1;
+    if (count >= 2) return true;
+  }
+  return false;
 }
 
 /**

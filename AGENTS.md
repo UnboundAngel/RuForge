@@ -409,6 +409,21 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.11 (unreleased)
 
+- **Windows taskbar**: thumbbar clicks no longer dismiss the taskbar preview (`THBF_DISMISSONCLICK` removed, `taskbar_thumbbar.rs`).
+- **Windows taskbar**: white alpha icons, like button with heart-to-check morph, play/pause sync fix (`serde` camelCase), 4-button Spotify layout (`taskbar_thumbbar_icons.rs`, `taskbarTransportSync.ts`).
+- **Music detail**: credits accordion uses CSS grid expand; renamed from Liner notes; tucked under copyright with tighter archive spacing (`MusicTrackCredits.tsx`, `MusicTrackView.tsx`).
+- **Music detail**: liner notes under release block; footer sparse (YouTube, dates, path); no collapsed preview or auto-generated footer noise (`MusicTrackCredits.tsx`, `MusicTrackView.tsx`).
+- **Music detail**: liner notes expand in-place in footer archive cluster (tonal pocket, ~4 roles scroll); removed right-edge slide-over panel (`MusicTrackCredits.tsx`, `MusicTrackView.tsx`).
+- **Music detail**: Watch on YouTube opens via `openUrl` with sidecar, gallery `sourceUrl`, or `sourceId` fallback (`MusicTrackView.tsx`).
+- **Music detail**: song view loads sidecar metadata + listen stats on navigation; background `ensureMusicMeta` when sidecar missing (`MusicShell.tsx`, `MusicTrackView.tsx`).
+- **Music**: restyled track detail page to Immersive Ambient Gatefold layout with blurred background artwork and glassmorphic stats (`MusicTrackView.tsx`).
+- **Music playback**: cold start always seeks to 0:00; removed stored `readResumeSeconds` on normal play; mini handoff resume unchanged (`useMusicPlayback.ts`).
+- **Music playback**: expanded now-playing close no longer silences audio; MES analyser soft-release restores destination routing, unpause reconnect guard (`audioAnalyserGraph.ts`, `AudioHeroStage.tsx`, `useMusicPlayback.ts`).
+- **Music Home**: album shelves paginate by window-fit count so only full covers show (no clipped edge); shared `MusicAlbumShelf` on Home + Recent (`MusicAlbumShelf.tsx`, `musicAlbumShelfLayout.ts`).
+- **Music Home**: playing row hover shows pause on active track; listened artist/time grid stops timestamp clipping artist (`MusicQuickPickRow.tsx`, `MusicLibraryView.tsx`).
+- **Music Home**: Recently added / Recently listened toggle replaces Rediscover; playlists as glass mosaic rows, singles grid, albums vinyl shelf; listen history tab with relative time and empty state (`MusicHomeRecentSection.tsx`, `musicRecentGroups.ts`, `MusicQuickPickRow.tsx`, `MusicAlbumCard.tsx`, `MusicRecentPlaylistCard.tsx`, `MusicHomeView.tsx`, `MusicShell.tsx`).
+- **Music library**: single-track downloads no longer appear as albums; yt-dlp lone `entries[0]` saves to `Music/` not `Playlists/`; artist key order fixed for album page matching; pseudo-album sidecar stripped when album equals title (`musicShelfDedup.ts`, `musicArtist.ts`, `downloader.rs`, `musicmeta.rs`, `galleryScan.ts`).
+- **Onboarding**: alt-radial island starts expanded (`defaultExpanded`), stays expanded through radial completion; portal to `#root` fixes backdrop blocking radial center-click; real demo GIF (`alt-radial-demo.gif`, `onboardingSteps.ts`, `OnboardingIsland.tsx`).
 - **Activity island**: cover expand from music browse with video playing exits music mode then opens player tab (`navigateToActivityOwningSurface`, `activityIslandResolve.ts`).
 - **Playback (music nav)**: video keeps playing (bridge + waveform live) across music-mode enter; hoisted off-tab `PlayerView` outside nav branch (`App.tsx`); parks position + stops decode only when audio claims via `setPlayingFile` (`videoPlaybackPark.ts`, `ruforgeStore.ts`, `playbackMediaElement.ts`).
 - **Activity island**: owner-aware `hasLivePlayback` (no stale live flag after bridge clear); compact chrome when paused on owning surface (`useCurrentActivity.ts`, `ActivityIsland.tsx`).

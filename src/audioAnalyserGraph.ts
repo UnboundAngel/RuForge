@@ -205,7 +205,21 @@ export function releaseAnalyserGraph(el: HTMLMediaElement, closeContext = false)
     } catch {
       /* already closed */
     }
+    return;
   }
+
+  // MES soft-release must restore destination routing; the element outlives visualizer mounts.
+  if (!g.tappedStream) {
+    reconnectExistingGraph(g);
+  }
+}
+
+/** Reconnect an existing MES graph to ctx.destination (idempotent backstop before play). */
+export function reconnectAnalyserPlaybackRoute(el: HTMLMediaElement): boolean {
+  const g = peekAnalyserGraph(el);
+  if (!g || g.tappedStream || g.ctx.state === "closed") return false;
+  reconnectExistingGraph(g);
+  return true;
 }
 
 /** Bass-weighted loudness 0..1 from frequency bins (no silence gate). */

@@ -525,7 +525,7 @@ fn dual_file_sizes_from_ytdlp_json(
             any_video.then_some(video_sum).filter(|&s| s > 0),
         );
     }
-    dual_file_sizes_from_entry_json(json, max_height, audio_primary)
+    dual_file_sizes_from_entry_json(ytdlp_primary_entry(json), max_height, audio_primary)
 }
 
 fn sanitize_playlist_folder_name(raw: &str) -> String {
@@ -625,13 +625,25 @@ fn ytdlp_entry_is_usable(entry: &serde_json::Value) -> bool {
     !(entry.is_null() || entry.as_object().is_some_and(|m| m.is_empty()))
 }
 
+/// When yt-dlp wraps a lone watch URL in `entries: [one]`, use that entry for metadata and paths.
+fn ytdlp_primary_entry(json: &serde_json::Value) -> &serde_json::Value {
+    if let Some(entries) = json.get("entries").and_then(|e| e.as_array()) {
+        if entries.len() == 1 {
+            if let Some(entry) = entries.first().filter(|e| ytdlp_entry_is_usable(e)) {
+                return entry;
+            }
+        }
+    }
+    json
+}
+
 fn ytdlp_usable_playlist_entries(json: &serde_json::Value) -> Option<Vec<&serde_json::Value>> {
     let entries = json.get("entries").and_then(|e| e.as_array())?;
     let usable: Vec<&serde_json::Value> = entries.iter().filter(|e| ytdlp_entry_is_usable(e)).collect();
-    if usable.is_empty() {
-        None
-    } else {
+    if usable.len() >= 2 {
         Some(usable)
+    } else {
+        None
     }
 }
 
@@ -734,17 +746,18 @@ fn video_info_from_ytdlp_single_json(json: serde_json::Value) -> VideoInfo {
             }
         }
         None => {
+            let entry = ytdlp_primary_entry(&json);
             let (uploader, channel) = ytdlp_uploader_channel(&json);
             VideoInfo {
-                title: json
+                title: entry
                     .get("title")
                     .and_then(|v| v.as_str())
                     .unwrap_or("Unknown")
                     .to_string(),
-                thumbnail: json["thumbnail"].as_str().unwrap_or("").to_string(),
-                duration: ytdlp_duration_secs(&json).unwrap_or(0.0),
+                thumbnail: entry["thumbnail"].as_str().unwrap_or("").to_string(),
+                duration: ytdlp_duration_secs(entry).unwrap_or(0.0),
                 formats: vec![],
-                file_size_bytes: video_file_size_from_ytdlp_json(&json),
+                file_size_bytes: video_file_size_from_ytdlp_json(entry),
                 file_size_bytes_audio: None,
                 file_size_bytes_video: None,
                 is_playlist: false,

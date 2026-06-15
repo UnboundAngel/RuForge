@@ -326,6 +326,30 @@ fn title_from_stem(stem: &str) -> String {
     clean_music_title(stem)
 }
 
+fn normalize_identity_token(raw: &str) -> String {
+    raw.trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Topic/single uploads often repeat the track title as the album name.
+fn drop_single_track_pseudo_album(album: Option<String>, title: &Option<String>) -> Option<String> {
+    let album = album?;
+    let title = title.as_ref()?.trim();
+    if title.is_empty() {
+        return Some(album);
+    }
+    if normalize_identity_token(&album) == normalize_identity_token(title) {
+        return None;
+    }
+    Some(album)
+}
+
 // ---- Cover existence check -----------------------------------------------
 
 fn local_cover_exists(parent: &Path, stem: &str, has_embedded_cover: bool) -> bool {
@@ -534,6 +558,7 @@ pub async fn enrich_music_meta_path(media: &Path, force: bool) -> bool {
         yt.album.clone(),
         None,
     );
+    let canonical_album = drop_single_track_pseudo_album(canonical_album, &canonical_title);
 
     let src = identity_source(
         t_tag || a_tag || al_tag,

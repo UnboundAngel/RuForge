@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MediaFile } from "@/types";
 import {
+  buildMultiTrackAlbumGroups,
   dedupeMusicTracks,
   diversifyTracksByArtist,
   musicTrackIdentityKey,
@@ -61,5 +62,23 @@ describe("musicShelfDedup", () => {
     const out = diversifyTracksByArtist(files, 1, 3, primary);
     expect(out).toHaveLength(3);
     expect(out.filter((f) => f.artist === "Juice WRLD")).toHaveLength(2);
+  });
+
+  it("omits single-track pseudo-albums from album groups", () => {
+    const solo = track({
+      path: "/solo.mp3",
+      name: "ascension (slowed)",
+      artist: "gloryin",
+      album: "ascension (slowed)",
+      albumArtist: "gloryin - Topic",
+    });
+    const realAlbum = [
+      track({ path: "/a1.mp3", name: "One", artist: "Sleep Token", album: "Eden", albumArtist: "Sleep Token" }),
+      track({ path: "/a2.mp3", name: "Two", artist: "Sleep Token", album: "Eden", albumArtist: "Sleep Token" }),
+    ];
+    const groups = buildMultiTrackAlbumGroups([solo, ...realAlbum], primary);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.album).toBe("Eden");
+    expect(groups[0]?.tracks).toHaveLength(2);
   });
 });

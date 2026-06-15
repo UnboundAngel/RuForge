@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Play, Search, X, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { Play, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
@@ -9,22 +9,28 @@ import { readFurthestPlaybackSec } from "@/playbackStorage";
 import type { MediaFile } from "@/types";
 import { MusicHomeSkeleton } from "./MusicHomeSkeleton";
 import {
+  buildMultiTrackAlbumGroups,
   dedupeMusicTracks,
   diversifyTracksByArtist,
-  musicTrackIdentityKey,
-  normalizeAlbumShelfKey,
 } from "./musicShelfDedup";
 import { primaryArtist } from "./musicArtist";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicHomeSearchEmpty } from "./MusicHomeSearchEmpty";
 import { resolveLikedFiles } from "./musicLikedTracks";
 import { LikedSongsCard } from "./LikedSongsCover";
+import { MusicQuickPickRow } from "./MusicQuickPickRow";
+import { MusicAlbumCard } from "./MusicAlbumCard";
+import { MusicAlbumShelf } from "./MusicAlbumShelf";
+import { MUSIC_ALBUM_SHELF_GAP_HOME_PX } from "@/lib/musicAlbumShelfLayout";
+import { MusicHomeRecentSection } from "./MusicHomeRecentSection";
+import type { PlayHistoryEntry } from "./musicPlayHistory";
 
 type MusicHomeViewProps = {
   onPlayFile: (file: MediaFile, playlist?: MediaFile[]) => void;
   onOpenArtist: (artistKey: string) => void;
   onOpenAlbum: (artistKey: string, albumKey: string) => void;
   onSearchYoutubeMusic?: (query: string) => void;
+  historyEntries?: PlayHistoryEntry[];
 };
 
 /** Seeded shuffle: stable for the session based on a random seed frozen on first render. */
@@ -37,149 +43,6 @@ function seededShuffle<T>(items: T[], seed: number): T[] {
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
-}
-
-type TrackCardProps = {
-  file: MediaFile;
-  onClick: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
-  menuOpen?: boolean;
-};
-
-/** Quick picks: neutral rows, uniform subtle gradient (not per-track color coding). */
-function QuickPickRow({ file, onClick, onContextMenu, menuOpen }: TrackCardProps) {
-  const cover = bestCoverPath(file);
-  const coverSrc = cover ? convertFileSrc(cover) : null;
-  const artist = file.artist ?? file.albumArtist ?? (file.name.includes(" - ") ? file.name.split(" - ")[0].trim() : "Unknown Artist");
-
-  return (
-    <div
-      className="group/row relative flex items-center gap-4 rounded-lg px-3 py-2.5 w-full min-h-[4.5rem] transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.99] cursor-pointer"
-      style={{
-        background: "linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 55%, rgba(255,255,255,0.02) 100%)",
-        color: "var(--music-text-primary)",
-      }}
-      onClick={onClick}
-      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
-    >
-      <div className="relative w-16 h-16 shrink-0 rounded-md overflow-hidden bg-stone-950 transition-transform duration-200 group-hover/row:scale-[1.03]">
-        {coverSrc ? (
-          <img
-            src={coverSrc}
-            alt=""
-            className="w-full h-full"
-            style={{ objectFit: "cover" }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/50">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-            </svg>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity duration-200">
-          <Play size={18} className="text-white fill-white" />
-        </div>
-      </div>
-      <div className="min-w-0 flex-1 flex flex-col gap-1 pr-1">
-        <div className="text-[15px] font-bold truncate leading-tight" style={{ color: "var(--music-text-primary)" }}>
-          {file.name}
-        </div>
-        <div className="text-sm font-medium truncate leading-snug" style={{ color: "var(--music-text-secondary)" }}>
-          {artist}
-        </div>
-      </div>
-      {onContextMenu && (
-        <button
-          type="button"
-          className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full border-0 bg-transparent transition-opacity duration-100 ${menuOpen ? "opacity-100" : "opacity-0 group-hover/row:opacity-100"}`}
-          style={{ color: "var(--music-text-muted)" }}
-          onClick={(e) => { e.stopPropagation(); onContextMenu(e); }}
-          aria-label="More options"
-        >
-          <MoreHorizontal size={15} />
-        </button>
-      )}
-    </div>
-  );
-}
-
-type MusicCardProps = {
-  title: string;
-  subtitle: string;
-  cover: string | null;
-  isSquare: boolean;
-  onClick: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
-};
-
-/** 
- * Beautiful vertical card for Albums / Tracks horizontal scroll shelves.
- * Simulates a physical vinyl record sliding out of the cover sleeve and spinning on hover.
- */
-function MusicCard({ title, subtitle, cover, onClick, onContextMenu }: MusicCardProps) {
-  const coverSrc = cover ? convertFileSrc(cover) : null;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
-      className="flex flex-col gap-3 text-left group/card shrink-0 w-36 md:w-40 transition-all duration-300 relative hover:z-25"
-    >
-      <div className="relative w-32 h-32 md:w-36 md:h-36 shrink-0 z-10">
-        <div className="absolute top-0.5 bottom-0.5 right-0.5 aspect-square rounded-full bg-neutral-950 border border-neutral-800 transition-all duration-500 ease-out translate-x-0 group-hover/card:translate-x-6 group-hover/card:rotate-[180deg] z-0 flex items-center justify-center">
-          <div className="absolute inset-2 rounded-full border border-neutral-900/60" />
-          <div className="absolute inset-4 rounded-full border border-neutral-900/60" />
-          <div className="absolute inset-6 rounded-full border border-neutral-900/60" />
-          <div className="absolute inset-8 rounded-full border border-neutral-900/60" />
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-stone-900 border border-neutral-850 flex items-center justify-center relative">
-            {coverSrc ? (
-              <img src={coverSrc} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-neutral-800" />
-            )}
-            <div className="absolute w-2.5 h-2.5 rounded-full bg-black border border-stone-900 z-10" />
-          </div>
-        </div>
-
-        <div className="relative z-10 w-full h-full rounded-xl overflow-hidden bg-stone-950 border border-white/5 transition-all duration-300 ease-out group-hover/card:-translate-x-2 group-hover/card:scale-[0.97] group-hover/card:rotate-[-2deg]">
-          {coverSrc ? (
-            <img
-              src={coverSrc}
-              alt=""
-              className="w-full h-full"
-              style={{ objectFit: "cover" }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-[var(--music-text-muted)]">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.35 }}>
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-              </svg>
-            </div>
-          )}
-          <div className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 z-20">
-            <div
-              className="w-11 h-11 rounded-full flex items-center justify-center"
-              style={{ background: "var(--music-accent)" }}
-            >
-              <Play size={18} className="text-white fill-white ml-0.5" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-0.5 min-w-0 flex flex-col gap-0.5 z-20 relative">
-        <div className="text-sm font-bold truncate leading-tight group-hover/card:text-[var(--music-accent)] transition-colors" style={{ color: "var(--music-text-primary)" }}>
-          {title}
-        </div>
-        {subtitle && (
-          <div className="text-xs truncate leading-snug" style={{ color: "var(--music-text-secondary)" }}>
-            {subtitle}
-          </div>
-        )}
-      </div>
-    </button>
-  );
 }
 
 type ArtistPillProps = {
@@ -330,6 +193,7 @@ export function MusicHomeView({
   onOpenArtist,
   onOpenAlbum,
   onSearchYoutubeMusic,
+  historyEntries = [],
 }: MusicHomeViewProps) {
   const entries = useRuforgeStore((s) => s.entries);
   const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
@@ -383,90 +247,6 @@ export function MusicHomeView({
     return result;
   }, [tracks, activeFilter, searchQuery]);
 
-  // Recently added: group by album (one card per album), fall back to loose tracks.
-  // This prevents a downloaded playlist from flooding the shelf with individual tracks.
-  const recentlyAdded = useMemo(() => {
-    type RecentItem =
-      | { kind: "album"; albumKey: string; artistKey: string; album: string; artist: string; cover: string | null; isSquare: boolean; newestDate: number; tracks: MediaFile[] }
-      | { kind: "track"; file: MediaFile };
-
-    const albumMap = new Map<string, Extract<RecentItem, { kind: "album" }>>();
-    const looseTracks: MediaFile[] = [];
-    const seenLoose = new Set<string>();
-
-    for (const t of filteredTracks) {
-      const tAlbum = (t.canonicalAlbum ?? t.album)?.trim();
-      if (tAlbum) {
-        const artistRaw = t.canonicalArtist?.trim() || t.albumArtist || t.artist || "";
-        const albumKey = normalizeAlbumShelfKey(tAlbum);
-        const key = `${primaryArtist(artistRaw).toLowerCase()}::${albumKey}`;
-        if (!albumMap.has(key)) {
-          albumMap.set(key, {
-            kind: "album",
-            albumKey,
-            artistKey: primaryArtist(artistRaw).toLowerCase(),
-            album: tAlbum,
-            artist: primaryArtist(artistRaw) || artistRaw,
-            cover: bestCoverPath(t),
-            isSquare: hasSquareCover(t),
-            newestDate: t.created,
-            tracks: [],
-          });
-        }
-        const entry = albumMap.get(key)!;
-        entry.tracks.push(t);
-        if (t.created > entry.newestDate) {
-          entry.newestDate = t.created;
-          const c = bestCoverPath(t);
-          if (c) entry.cover = c;
-        }
-      } else {
-        const looseKey = musicTrackIdentityKey(t, primaryArtist);
-        if (seenLoose.has(looseKey)) continue;
-        seenLoose.add(looseKey);
-        looseTracks.push(t);
-      }
-    }
-
-    const sortedAlbums = [...albumMap.values()].sort((a, b) => b.newestDate - a.newestDate);
-    const sortedLoose = looseTracks.sort((a, b) => b.created - a.created);
-
-    const items: RecentItem[] = [];
-    for (const a of sortedAlbums) items.push(a);
-    for (const t of sortedLoose) items.push({ kind: "track", file: t });
-
-    const artistKeyFor = (item: RecentItem): string =>
-      item.kind === "album"
-        ? item.artistKey
-        : primaryArtist(item.file.artist ?? item.file.albumArtist ?? "").toLowerCase();
-
-    const counts = new Map<string, number>();
-    const picked: RecentItem[] = [];
-    const pickedKeys = new Set<string>();
-
-    for (const item of items) {
-      if (picked.length >= 12) break;
-      const ak = artistKeyFor(item);
-      const n = counts.get(ak) ?? 0;
-      if (n >= 2) continue;
-      counts.set(ak, n + 1);
-      picked.push(item);
-      pickedKeys.add(item.kind === "album" ? `album:${item.artistKey}::${item.albumKey}` : item.file.path);
-    }
-
-    if (picked.length < 12) {
-      for (const item of items) {
-        if (picked.length >= 12) break;
-        const id = item.kind === "album" ? `album:${item.artistKey}::${item.albumKey}` : item.file.path;
-        if (pickedKeys.has(id)) continue;
-        picked.push(item);
-        pickedKeys.add(id);
-      }
-    }
-
-    return picked;
-  }, [filteredTracks]);
-
   const likedTracks = useMemo(
     () => resolveLikedFiles(filteredTracks),
     [filteredTracks, musicLikedKeys],
@@ -503,40 +283,19 @@ export function MusicHomeView({
     );
   }, [filteredTracks]);
 
-  // Rediscover: random older items (bottom half by created date), different seed.
-  const rediscover = useMemo(() => {
-    const unique = dedupeMusicTracks(filteredTracks, primaryArtist);
-    if (unique.length < 6) return [];
-    const sorted = [...unique].sort((a, b) => a.created - b.created);
-    const older = sorted.slice(0, Math.ceil(sorted.length / 2));
-    const shuffled = seededShuffle(older, sessionSeedRef.current ^ 0xdeadbeef);
-    return diversifyTracksByArtist(shuffled, 1, 12, primaryArtist);
-  }, [filteredTracks]);
-
-  // Albums: dedup by (primaryArtistKey + albumKey). Display artist is the primary artist only.
+  // Albums: only multi-track releases; single downloads stay standalone songs.
   const albums = useMemo(() => {
-    const seen = new Map<string, { albumKey: string; artistKey: string; album: string; artist: string; cover: string | null; isSquare: boolean; tracks: MediaFile[] }>();
-    for (const t of filteredTracks) {
-      const albumName = (t.canonicalAlbum ?? t.album)?.trim() ?? "";
-      if (!albumName) continue;
-      const artistRaw = t.canonicalArtist?.trim() || t.albumArtist || t.artist || "";
-      const primary = primaryArtist(artistRaw);
-      const albumKey = normalizeAlbumShelfKey(albumName);
-      const key = `${primary.toLowerCase()}::${albumKey}`;
-      if (!seen.has(key)) {
-        seen.set(key, {
-          albumKey,
-          artistKey: primary.toLowerCase(),
-          album: albumName,
-          artist: primary || artistRaw,
-          cover: bestCoverPath(t),
-          isSquare: hasSquareCover(t),
-          tracks: [],
-        });
-      }
-      seen.get(key)!.tracks.push(t);
-    }
-    return [...seen.values()].slice(0, 12);
+    return buildMultiTrackAlbumGroups(filteredTracks, primaryArtist)
+      .slice(0, 12)
+      .map((g) => ({
+        albumKey: g.albumKey,
+        artistKey: g.artistKey,
+        album: g.album,
+        artist: g.artist,
+        cover: bestCoverPath(g.tracks[0]!),
+        isSquare: hasSquareCover(g.tracks[0]!),
+        tracks: g.tracks,
+      }));
   }, [filteredTracks]);
 
   // Artists: group by PRIMARY artist only so "Juice WRLD, Trippie Redd" and
@@ -667,7 +426,7 @@ export function MusicHomeView({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 w-full min-w-0">
                   {quickPicks.map((file) => (
-                    <QuickPickRow
+                    <MusicQuickPickRow
                       key={file.path}
                       file={file}
                       onClick={() => onPlayFile(file, quickPicks)}
@@ -740,14 +499,16 @@ export function MusicHomeView({
 
             {/* Albums horizontal pageable scroll shelf */}
             {albums.length > 0 && (
-              <ScrollShelf title="Albums">
-                {albums.map((a) => (
-                  <MusicCard
-                    key={`${a.artistKey}::${a.albumKey}`}
+              <MusicAlbumShelf
+                title="Albums"
+                gap={MUSIC_ALBUM_SHELF_GAP_HOME_PX}
+                items={albums}
+                keyFn={(a) => `${a.artistKey}::${a.albumKey}`}
+                renderItem={(a) => (
+                  <MusicAlbumCard
                     title={a.album}
                     subtitle={a.artist}
                     cover={a.cover}
-                    isSquare={a.isSquare}
                     onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
                     onContextMenu={(e) => setMenu({
                       context: { kind: "album", artistKey: a.artistKey, albumKey: a.albumKey, displayName: a.album, artistName: a.artist },
@@ -756,77 +517,23 @@ export function MusicHomeView({
                       onPlay: a.tracks.length > 0 ? () => onPlayFile(a.tracks[0], a.tracks) : undefined,
                     })}
                   />
-                ))}
-              </ScrollShelf>
+                )}
+              />
             )}
 
-            {/* Recently added: albums grouped (one card per album), loose tracks as fallback */}
-            {recentlyAdded.length > 0 && (
-              <ScrollShelf title="Recently added">
-                {recentlyAdded.map((item) => {
-                  if (item.kind === "album") {
-                    return (
-                      <MusicCard
-                        key={`${item.artistKey}::${item.albumKey}`}
-                        title={item.album}
-                        subtitle={item.artist}
-                        cover={item.cover}
-                        isSquare={item.isSquare}
-                        onClick={() => onOpenAlbum(item.artistKey, item.albumKey)}
-                        onContextMenu={(e) => setMenu({
-                          context: { kind: "album", artistKey: item.artistKey, albumKey: item.albumKey, displayName: item.album, artistName: item.artist },
-                          x: e.clientX,
-                          y: e.clientY,
-                          onPlay: item.tracks.length > 0 ? () => onPlayFile(item.tracks[0], item.tracks) : undefined,
-                        })}
-                      />
-                    );
-                  }
-                  const { file } = item;
-                  const artist = file.artist ?? file.albumArtist ?? (file.name.includes(" - ") ? file.name.split(" - ")[0].trim() : "Unknown Artist");
-                  return (
-                    <MusicCard
-                      key={file.path}
-                      title={file.name}
-                      subtitle={artist}
-                      cover={bestCoverPath(file)}
-                      isSquare={hasSquareCover(file)}
-                      onClick={() => onPlayFile(file, [file])}
-                      onContextMenu={(e) => setMenu({
-                        context: { kind: "song", file },
-                        x: e.clientX,
-                        y: e.clientY,
-                        onPlay: () => onPlayFile(file, [file]),
-                      })}
-                    />
-                  );
-                })}
-              </ScrollShelf>
-            )}
-
-            {/* Rediscover horizontal pageable scroll shelf */}
-            {rediscover.length > 0 && (
-              <ScrollShelf title="Rediscover">
-                {rediscover.map((file) => {
-                  const artist = file.artist ?? file.albumArtist ?? (file.name.includes(" - ") ? file.name.split(" - ")[0].trim() : "Unknown Artist");
-                  return (
-                    <MusicCard
-                      key={file.path}
-                      title={file.name}
-                      subtitle={artist}
-                      cover={bestCoverPath(file)}
-                      isSquare={hasSquareCover(file)}
-                      onClick={() => onPlayFile(file, rediscover)}
-                      onContextMenu={(e) => setMenu({
-                        context: { kind: "song", file },
-                        x: e.clientX,
-                        y: e.clientY,
-                        onPlay: () => onPlayFile(file, rediscover),
-                      })}
-                    />
-                  );
-                })}
-              </ScrollShelf>
+            {activeFilter === "all" && !searchQuery && (
+              <MusicHomeRecentSection
+                tracks={filteredTracks}
+                historyEntries={historyEntries}
+                quickPicks={quickPicks}
+                onPlayFile={onPlayFile}
+                onOpenAlbum={onOpenAlbum}
+                onPlayQuickPicks={() => {
+                  if (quickPicks[0]) onPlayFile(quickPicks[0], quickPicks);
+                }}
+                setMenu={setMenu}
+                menu={menu}
+              />
             )}
           </div>
         )}
