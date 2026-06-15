@@ -1,5 +1,5 @@
 mod app_state;
-mod commands;
+pub mod commands;
 pub mod debug_log;
 mod download_job_manager;
 mod process_tree;

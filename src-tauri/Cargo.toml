@@ -55,6 +55,10 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 
+[[bin]]
+name = "verify_track_enrich"
+path = "src/bin/verify_track_enrich.rs"
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
   "Win32_Foundation",

@@ -17,7 +17,7 @@ use crate::ytdlp_rate_limit::{
 use crate::commands::explorer_cookies::{export_ruforge_cookies_for_ytdlp, RuforgeCookieExport};
 use crate::commands::gallery::cleanup_orphan_downloads_under;
 use crate::commands::media::extract_frames;
-use crate::commands::musicmeta::{enrich_music_meta_path, find_recent_audio_files};
+use crate::commands::musicmeta::find_recent_audio_files;
 use crate::utils::is_media_ext;
 
 /// Where yt-dlp wrote files for this job: playlist subfolder if template has a fixed prefix, else output root.
@@ -1941,9 +1941,19 @@ pub async fn start_download_job(
                         if options.audio_only {
                             let enrich_root = diag_root.clone();
                             let enrich_since = download_started_at;
+                            let enrich_app = app.clone();
                             tauri::async_runtime::spawn(async move {
+                                let opts = crate::commands::musicmeta::EnrichOpts {
+                                    artist_tags: true,
+                                };
                                 for audio_path in find_recent_audio_files(&enrich_root, enrich_since) {
-                                    enrich_music_meta_path(&audio_path, false).await;
+                                    let _ = crate::commands::musicmeta::enrich_music_meta_path(
+                                        &enrich_app,
+                                        &audio_path,
+                                        crate::commands::musicmeta::EnrichMode::Full { force: false },
+                                        opts,
+                                    )
+                                    .await;
                                 }
                             });
                         }
