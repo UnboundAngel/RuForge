@@ -1234,6 +1234,10 @@ fn default_auto_scrub_previews() -> bool {
     true
 }
 
+fn default_stamp_artist_tags() -> bool {
+    true
+}
+
 /// Scrubber sprites are for video files only (not audio-only library entries).
 fn is_video_scrub_ext(ext: &str) -> bool {
     matches!(ext, "mp4" | "mkv" | "webm")
@@ -1264,6 +1268,9 @@ pub struct DownloadOptions {
     /// 1-based index in the playlist for filename ordering (`01 - title.ext`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub playlist_index: Option<u32>,
+    /// When true, post-download enrich copies artist MB genres onto the track sidecar.
+    #[serde(default = "default_stamp_artist_tags")]
+    pub stamp_artist_tags: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -1325,6 +1332,7 @@ fn video_info_cookie_probe(
         auto_scrub_previews: true,
         playlist_output_folder: None,
         playlist_index: None,
+        stamp_artist_tags: true,
     })
 }
 
@@ -1941,10 +1949,11 @@ pub async fn start_download_job(
                         if options.audio_only {
                             let enrich_root = diag_root.clone();
                             let enrich_since = download_started_at;
+                            let stamp_artist_tags = options.stamp_artist_tags;
                             let enrich_app = app.clone();
                             tauri::async_runtime::spawn(async move {
                                 let opts = crate::commands::musicmeta::EnrichOpts {
-                                    artist_tags: true,
+                                    artist_tags: stamp_artist_tags,
                                 };
                                 for audio_path in find_recent_audio_files(&enrich_root, enrich_since) {
                                     let _ = crate::commands::musicmeta::enrich_music_meta_path(

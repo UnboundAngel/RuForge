@@ -316,7 +316,7 @@ export function MusicShell() {
         setActiveTrackMeta(meta);
       } else {
         setActiveTrackMeta(null);
-        void ensureMusicMeta(path);
+        void ensureMusicMeta(path, false, settings.stampTrackSidecarArtistTags !== false);
       }
 
       const snap = await refreshListenSnapshot();
