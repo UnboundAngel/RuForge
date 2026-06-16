@@ -425,10 +425,11 @@ export const createDownloadQueueSlice: StateCreator<
           return;
         }
         armDownloadJobWatchdog(jobId);
+        const invokeOptions = toInvokeDownloadOptions(job.options);
         await invoke("start_download_job", {
           jobId,
           url,
-          options: toInvokeDownloadOptions(job.options),
+          options: invokeOptions,
           resume,
         });
       } catch (e) {

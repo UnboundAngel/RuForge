@@ -4,6 +4,7 @@ version = "0.1.10"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
+default-run = "ruforge"
 
 [workspace]
 members = [".", "netscape_cookies"]

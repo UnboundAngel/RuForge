@@ -233,6 +233,8 @@ pub fn run() {
             open_in_file_manager,
             get_subtitle_tracks,
             read_local_subtitle_vtt,
+            crate::commands::comments_sidecar::read_video_comments_sidecar,
+            crate::commands::comments_sidecar::ensure_video_comments_sidecar,
             get_ytdlp_update_status,
             download_ytdlp_update,
             push_background_notify,
