@@ -1,0 +1,113 @@
+{
+  "nodes": [
+    {
+      "id": "t-player-comments",
+      "type": "task",
+      "label": "Player comments drawer and download sidecar",
+      "agent": "chad",
+      "details": [
+        "YouTube-style sliding comments drawer; v1 {stem}.comments.json sidecar on single-video download; ensure sidecar lazy fetch with cookie parity; Top 25 threads cap."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/comments_sidecar.rs", "reason": "Sidecar fetch, path normalization, yt-dlp caps." },
+        { "path": "src/components/player/comments/CommentsPanel.tsx", "reason": "Drawer UI and empty states." },
+        { "path": "src/components/PlayerView.tsx", "reason": "Wired sliding drawer on open." }
+      ]
+    },
+    {
+      "id": "t-music-sidecar-v2",
+      "type": "task",
+      "label": "Music track sidecar schema v2",
+      "agent": "chad",
+      "details": [
+        "genres and artistMbId from MusicBrainz artist cache; stampTrackSidecarArtistTags toggle; backfill pass 2 for legacy sidecars."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/musicmeta.rs", "reason": "Schema v2 and enrich hook." },
+        { "path": "src/components/SettingsView.tsx", "reason": "stampTrackSidecarArtistTags debugging toggle." }
+      ]
+    },
+    {
+      "id": "t-taskbar-transport",
+      "type": "task",
+      "label": "Windows taskbar thumbnail transport",
+      "agent": "chad",
+      "details": [
+        "Prev / play-pause / next on main HWND; white alpha icons; thumbbar dismiss fix; play-pause sync via serde camelCase."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/taskbar_thumbbar.rs", "reason": "Thumbnail toolbar and WM_COMMAND routing." },
+        { "path": "src/taskbarTransportSync.ts", "reason": "Frontend transport sync." }
+      ]
+    },
+    {
+      "id": "t-activity-island",
+      "type": "task",
+      "label": "Activity island E-audio and video bridge",
+      "agent": "chad",
+      "details": [
+        "Off-tab PlayerView keeps live bridge; owner-aware hasLivePlayback; Spotify scrub model; waveform AGC and cover-art palette; transport dead-zone fixes."
+      ],
+      "fileEdits": [
+        { "path": "src/components/island/ActivityIsland.tsx", "reason": "Island shell and expand behavior." },
+        { "path": "src/components/island/IslandExpandedContent.tsx", "reason": "Scrubber, transport, volume." },
+        { "path": "src/lib/videoPlaybackPark.ts", "reason": "Video park on audio claim." }
+      ]
+    },
+    {
+      "id": "t-music-home-detail",
+      "type": "task",
+      "label": "Music home, library, and track detail",
+      "agent": "chad",
+      "details": [
+        "Recently added / Recently listened toggle; vinyl album shelves; gatefold track page; liner notes credits accordion; single-track download dedup."
+      ],
+      "fileEdits": [
+        { "path": "src/components/music/MusicHomeView.tsx", "reason": "Home recent/listened sections." },
+        { "path": "src/components/music/MusicTrackView.tsx", "reason": "Immersive track detail." },
+        { "path": "src/components/music/musicShelfDedup.ts", "reason": "Single-track vs album shelf rules." }
+      ]
+    },
+    {
+      "id": "f-island-scrub",
+      "type": "fix",
+      "label": "Island scrub and play-pause sync",
+      "agent": "chad",
+      "details": [
+        "Scrub preview-only until mouseup; play icon follows live bridge; transport wrappers no longer steal clicks."
+      ],
+      "fileEdits": [
+        { "path": "src/lib/mainPlaybackBridge.ts", "reason": "Bridge telemetry and stabilizePaused." }
+      ]
+    },
+    {
+      "id": "f-window-chrome",
+      "type": "fix",
+      "label": "Window chrome resize and radius",
+      "agent": "chad",
+      "details": [
+        "Rounded outer shell when not maximized; edge resize strips for borderless drag-resize."
+      ],
+      "fileEdits": [
+        { "path": "src/components/WindowResizeEdges.tsx", "reason": "Edge resize strips." },
+        { "path": "src/lib/mainWindowFrame.ts", "reason": "Radius when not maximized." }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-player-comments" },
+    { "source": "t-player-comments", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-sidecar-v2" },
+    { "source": "t-music-sidecar-v2", "target": "ruforge" },
+    { "source": "chad", "target": "t-taskbar-transport" },
+    { "source": "t-taskbar-transport", "target": "ruforge" },
+    { "source": "chad", "target": "t-activity-island" },
+    { "source": "t-activity-island", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-home-detail" },
+    { "source": "t-music-home-detail", "target": "ruforge" },
+    { "source": "chad", "target": "f-island-scrub" },
+    { "source": "f-island-scrub", "target": "ruforge" },
+    { "source": "chad", "target": "f-window-chrome" },
+    { "source": "f-window-chrome", "target": "ruforge" }
+  ]
+}
