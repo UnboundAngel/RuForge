@@ -106,6 +106,7 @@ import type { ActivityHandoffSyncPayload, ActivityMiniTeardownPayload } from "./
 import { MainPlaybackHost } from "./playback/MainPlaybackHost";
 import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
 import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
+import { RF_TITLEBAR_H_PX } from "./lib/chromeLayout";
 import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
@@ -265,9 +266,13 @@ function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [recentlyDeletedOpen, setRecentlyDeletedOpen] = useState(false);
   const mainContentRef = useRef<HTMLElement>(null);
-  /** 0 = bulge tabs flush on panel; 1 = tucked into the 40px title band (scrollable settings only). */
+  /** 0 = bulge tabs flush on panel; 1 = tucked into the title band (scrollable settings only). */
   const settingsTabMorph = useMotionValue(0);
-  const settingsTabMorphY = useTransform(settingsTabMorph, [0, 1], [0, -40]);
+  const settingsTabMorphY = useTransform(
+    settingsTabMorph,
+    [0, 1],
+    [0, -RF_TITLEBAR_H_PX],
+  );
   const [settingsMorphAmount, setSettingsMorphAmount] = useState(0);
   const [settingsScrollable, setSettingsScrollable] = useState(false);
   const settingsTabsDocked = settingsMorphAmount > 0.55;
@@ -1447,23 +1452,23 @@ function App() {
             >
             {settingsMorphAmount > 0 && !settingsTabsDocked ? (
               <div
-                className="pointer-events-none absolute top-0 left-0 right-0 z-[25] h-10 bg-[#271C18]"
+                className="pointer-events-none absolute top-0 left-0 right-0 z-[25] h-[var(--rf-titlebar-h)] bg-[#271C18]"
                 aria-hidden
               />
             ) : null}
             <div
               className={
                 settingsTabsDocked
-                  ? "pointer-events-auto fixed top-0 z-[30] flex h-10 items-center overflow-hidden"
-                  : "pointer-events-none absolute left-6 top-0 z-[30] flex h-[80px] items-start"
+                  ? "pointer-events-auto fixed top-0 z-[30] flex h-[var(--rf-titlebar-h)] items-center overflow-hidden"
+                  : "pointer-events-none absolute left-6 top-0 z-[30] flex h-[var(--rf-tab-strip-h)] items-start"
               }
               style={settingsTabsDocked ? { left: settingsTabDockLeft } : undefined}
             >
               <motion.div
                 className={
                   settingsTabsDocked
-                    ? "flex h-10 items-center"
-                    : "flex h-[80px] origin-top-left items-start"
+                    ? "flex h-[var(--rf-titlebar-h)] items-center"
+                    : "flex h-[var(--rf-tab-strip-h)] origin-top-left items-start"
                 }
                 style={
                   !settingsTabsDocked && settingsScrollable
@@ -1493,8 +1498,8 @@ function App() {
                     onClick={() => setSettingsTab(tab)}
                     className={`relative flex cursor-pointer justify-center pointer-events-auto transition-[height,padding] duration-200 ${
                       settingsTabsDocked
-                        ? "h-10 items-center px-4"
-                        : "h-[80px] items-end px-6 pb-2"
+                        ? "h-[var(--rf-titlebar-h)] items-center px-4"
+                        : "h-[var(--rf-tab-strip-h)] items-end px-6 pb-2"
                     }`}
                   >
                     {isActive && (
@@ -1510,7 +1515,10 @@ function App() {
                         }`}
                         style={
                           showSettingsTabBulge
-                            ? { clipPath: "inset(40px -100px -100px -100px)" }
+                            ? {
+                                clipPath:
+                                  "inset(var(--rf-titlebar-h) -100px -100px -100px)",
+                              }
                             : undefined
                         }
                         transition={{
@@ -1519,10 +1527,10 @@ function App() {
                       >
                         {showSettingsTabBulge ? (
                           <>
-                            <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
+                            <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
                               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
                             </div>
-                            <div className="absolute right-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
+                            <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
                               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
                             </div>
                           </>
@@ -1550,7 +1558,7 @@ function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="absolute left-6 top-0 z-20 flex items-start h-[80px] pointer-events-none"
+              className="absolute left-6 top-0 z-20 flex items-start h-[var(--rf-tab-strip-h)] pointer-events-none"
             >
               {(['all', 'in-progress', 'watched'] as const).map((t) => {
                 const isActive = galleryFilter === t;
@@ -1559,19 +1567,22 @@ function App() {
                   <button
                     key={t}
                     onClick={() => setGalleryFilter(t)}
-                    className="relative flex h-[80px] px-6 items-end pb-2 justify-center cursor-pointer pointer-events-auto group/tab"
+                    className="relative flex h-[var(--rf-tab-strip-h)] px-6 items-end pb-2 justify-center cursor-pointer pointer-events-auto group/tab"
                   >
                     {isActive && (
                       <motion.div
                         layoutId="galleryTabShape"
                         className="absolute inset-0 bg-[#271C18] rounded-b-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.5)] z-0"
-                        style={{ clipPath: "inset(40px -100px -100px -100px)" }}
+                        style={{
+                          clipPath:
+                            "inset(var(--rf-titlebar-h) -100px -100px -100px)",
+                        }}
                         transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                       >
-                        <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
+                        <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
                           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
                         </div>
-                        <div className="absolute right-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18]">
+                        <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
                           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
                         </div>
                       </motion.div>
@@ -1588,15 +1599,17 @@ function App() {
 
         {/* Gallery search/settings tab bulge */}
         {(activeTab === "media" && !shellBlocked) && (
-          <div className="absolute right-6 top-0 z-20 flex h-[80px] pointer-events-none">
+          <div className="absolute right-6 top-0 z-20 flex h-[var(--rf-tab-strip-h)] pointer-events-none">
             <div
-              className="relative flex h-[80px] bg-[#271C18] rounded-b-[28px] px-6 items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
-              style={{ clipPath: "inset(40px -100px -100px -100px)" }}
+              className="relative flex h-[var(--rf-tab-strip-h)] bg-[#271C18] rounded-b-[28px] px-6 items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+              style={{
+                clipPath: "inset(var(--rf-titlebar-h) -100px -100px -100px)",
+              }}
             >
-              <div className="absolute left-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
+              <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
               </div>
-              <div className="absolute right-[-16px] top-[40px] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
+              <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
               </div>
 

@@ -8,12 +8,12 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-16 (release 0.1.11 shipped)
+Last updated: 2026-06-16
 Status: in progress
 
 ## Now
 
-0.1.11 shipped. Open cycle is 0.1.12. Player comments drawer, music sidecar v2, activity island scrub/transport pass, Windows taskbar transport toolbar.
+0.1.11 shipped. Open cycle is 0.1.12. Player comments drawer, music sidecar v2, activity island scrub/transport pass, Windows taskbar transport toolbar. Media tab bulge fillets realigned to 48px titlebar.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -29,7 +29,8 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
-(none yet)
+- Media chrome: tab bulge corner SVGs and clip insets follow `--rf-titlebar-h` on Video Library and Settings.
+- Settings scroll morph: numeric titlebar offset; bulge at rest only (reverted strip clip/overflow).
 
 **0.1.11 shipped:**
 

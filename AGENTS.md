@@ -409,6 +409,8 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Media chrome**: tab bulge SVG fillets and clip insets track `--rf-titlebar-h` again on Video Library and Settings tabs (`App.tsx`, `index.css`).
+- **Settings tabs**: scroll morph uses `RF_TITLEBAR_H_PX`; bulge fillets at scroll rest only (no strip clip).
 
 ## Release ritual
 
