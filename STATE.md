@@ -8,12 +8,12 @@
 
 Shipping version: 0.1.11 (unreleased)
 Last shipped to users: 0.1.10
-Last updated: 2026-06-15 (comments archive batch fix)
+Last updated: 2026-06-16 (version bump 0.1.11; signed build pending)
 Status: in progress
 
 ## Now
 
-0.1.10 shipped. Open cycle is 0.1.11. Activity island model A (always-mounted single node). D-audio claim+teardown+handoff-sync built; video pop-out handoff race fixed.
+0.1.10 shipped to users. Version files bumped to 0.1.11 on main; signed build + updater.json swap pending. Do not ship another 0.1.10 binary. Run `Build-signed-windows.bat` at 0.1.11, then paste NSIS `.sig` into `updater.0.1.11.prep.json` and promote to `updater.json`.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
