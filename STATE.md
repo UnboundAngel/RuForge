@@ -6,14 +6,14 @@
 > this header. If this file and the code disagree, the code wins and this
 > file is stale: fix it forward, do not trust it blindly.
 
-Shipping version: 0.1.11 (unreleased)
-Last shipped to users: 0.1.10
-Last updated: 2026-06-16 (version bump 0.1.11; signed build pending)
+Shipping version: 0.1.12 (unreleased)
+Last shipped to users: 0.1.11
+Last updated: 2026-06-16 (release 0.1.11 shipped)
 Status: in progress
 
 ## Now
 
-0.1.10 shipped to users. Version files bumped to 0.1.11 on main; signed build + updater.json swap pending. Do not ship another 0.1.10 binary. Run `Build-signed-windows.bat` at 0.1.11, then paste NSIS `.sig` into `updater.0.1.11.prep.json` and promote to `updater.json`.
+0.1.11 shipped. Open cycle is 0.1.12. Player comments drawer, music sidecar v2, activity island scrub/transport pass, Windows taskbar transport toolbar.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -24,46 +24,34 @@ local dev, not a shipped target yet.
 
 ## What is new since last user release
 
-Closed release 0.1.10 (what users upgrading from 0.1.9 receive). The release-note drafter
+Closed release 0.1.11 (what users upgrading from 0.1.10 receive). The release-note drafter
 reads this for the last shipped delta, not the git tree.
 
-**0.1.11 (unreleased):**
+**0.1.12 (unreleased):**
 
-- Download comments: max_comments grammar fixed (`all,25,all,5,2`); per-thread reply cap renamed; bundled yt-dlp 2026.03.17 supports depth field.
-- Player comments: empty-state split (missing toggle-off, loading disk/network, fetch error + retry, empty-valid); header Top 25 threads label; ensure cookie parity with download spawn.
-- Music metadata: track sidecars v2 stamp `genres` + `artistMbId` from MusicBrainz artist cache on download/enrich; `stampTrackSidecarArtistTags` (default on); backfill pass 2 for legacy sidecars (`musicmeta.rs`, `downloadQueue.ts`).
-- Windows taskbar: thumbbar clicks no longer dismiss the taskbar preview (`taskbar_thumbbar.rs`).
-- Windows taskbar: thumbbar button clicks route transport (WM_COMMAND LOWORD + message filter + deferred emit); play/pause media-element fallback (`taskbar_thumbbar.rs`, `taskbarTransportSync.ts`).
-- Windows taskbar: thumbnail transport toolbar on main HWND (prev / play-pause / next); `ruforge:taskbar-transport` + `sync_taskbar_transport` (`taskbar_thumbbar.rs`, `taskbarTransportSync.ts`).
-- Music detail: liner notes under release metadata; sparse archive footer (YouTube, dates, path only); opacity/y expand animation (`MusicTrackCredits.tsx`, `MusicTrackView.tsx`).
-- Music detail: song view loads sidecar metadata and listen stats on open; background enrich when sidecar missing (`MusicShell.tsx`).
-- Music detail: cinematic song screen with immersive release typography, Watch on YouTube via `openUrl`, compact Play/Back/Like chrome (`MusicTrackView.tsx`).
-- Music playback: cold start always 0:00; no stored resume on normal play; mini back-to-app handoff unchanged.
-- Music Home: Recently added / Recently listened toggle; playlist glass rows, singles grid, albums vinyl shelf; Rediscover removed; listen tab with relative time and empty state.
-- Music library: single-track downloads stay standalone (not album shelves); lone yt-dlp playlist entries save under `Music/`; album page artist matching fixed; title-equals-album sidecar stripped on enrich.
-- Playback (music nav): video keeps playing across music-mode enter; hoisted off-tab PlayerView; parks + stops only on audio claim.
-- Activity island: owner-aware hasLivePlayback; compact chrome when paused on owning surface.
-- Activity island: scrubber fill-only (no hover thumb); capture-stream analyser duplicate audio fix (`IslandExpandedContent.tsx`, `audioAnalyserGraph.ts`).
-- Activity island: scrubber fixed height, inner-bar drag rect, pinned clock widths for flush cursor (`IslandExpandedContent.tsx`).
-- Activity island: scrubber drag uses frozen track rect; release preview holds until bridge seek lands (no stale snap); next-track transport alignment fix (`IslandExpandedContent.tsx`).
-- Activity island: transport dead-zones fixed — center/wing wrappers no longer steal clicks; icons/overlays pass through to buttons; waveform non-interactive until hover pop-out (`IslandExpandedContent.tsx`, `IslandVolumeControl.tsx`, `IslandWaveformHoverSlot.tsx`).
-- Playback scrub: Spotify model — audio/video keeps playing during drag; thumb tracks cursor (preview only); one seek on release with gain de-click envelope when analyser graph exists (`beginScrub`/`releaseScrub` replaces `pauseForScrub`/`resumeAfterScrub`; `useMusicPlayback.ts`, `PlayerView.tsx`, island/NowPlayingBar scrubbers).
-- Activity island: scrub generation token cancels orphaned deferred pause and seeked resume when user toggles play during or after scrub (`useMusicPlayback.ts`, `PlayerView.tsx`).
-- Activity island: expanded controls reorganized (centered transport, hover volume slider with red muted icon + middle-click mute, reserved slider slot avoids prev-track overlap, waveform → mini, cover opens player).
-- Activity island: media-mode shell is hue-matched espresso pocket `#181210` (music stays `#000`) for cutout on default chrome.
-- Activity island: waveform bars use blurred cover slices (no canvas palette extraction); dead `prominentColor` island code removed.
-- Player: video play/pause icon fixed; idle music host no longer overwrites video paused state (`PlayerView.tsx`).
-- Onboarding: 500ms Alt ring; swap hint after ring; dismissed pill stays gone until new step or debug replay.
-- Window chrome: rounded outer shell when not maximized; square when maximized (`mainWindowFrame.ts`, `App.tsx`).
-- Window chrome: edge resize strips restore borderless drag-resize (`WindowResizeEdges.tsx`).
-- Activity island (E-audio): 5-bar waveform restored; cover accent via `extractProminentColorFromPath` (blob URL, vibrant bucket pick).
-- Playback (D-audio): video pop-out module-level `play-in-mini` bridge; handoff emits inside `mini-player-ready` callback.
-- Playback (D-audio): `activity-handoff-sync` island metadata on mini file change; video handoff seek retry at `loadedmetadata`.
-- Playback (D-audio): unified `claimMainPlayback()` + `activity-mini-teardown`; Tauri `allow-destroy` for mini close.
-- Boot splash: Siri-style edge orbs loader (default + music modes).
-- Activity island (E-audio): live `main-music` off music mode; `main-video` frozen unchanged.
-- Music polish: mini-ready-before-emit, volume wheel fix, stale listen adopt.
-- Onboarding: island-only Alt-hold progress pill (no full-screen cards); dev replay + Settings > Debugging.
+(none yet)
+
+**0.1.11 shipped:**
+
+Additions:
+- Player comments: sliding drawer; v1 comments sidecar on download; lazy ensure sidecar; Top 25 threads cap.
+- Music metadata: track sidecars v2 (`genres`, `artistMbId`); `stampTrackSidecarArtistTags` (default on); backfill pass 2.
+- Windows taskbar: thumbnail transport toolbar; white icons; like heart-to-check morph.
+- Music Home: Recently added / Recently listened toggle; vinyl album shelves; listen history tab.
+- Music detail: gatefold track page; liner notes credits accordion; Watch on YouTube via `openUrl`.
+- Activity island: off-tab video bridge; owner-aware `hasLivePlayback`; Spotify scrub; waveform AGC from cover art.
+- Playback (music nav): video keeps playing in music mode; hoisted off-tab `PlayerView`.
+- Onboarding: alt-radial island demo (expanded default, portal fix).
+- Boot splash: edge gradient orbs.
+
+Fixes:
+- Download comments: `max_comments` grammar; `.f###` path strip; dedup preserves shared sidecar.
+- Music library: single-track downloads stay standalone; lone playlist entries under `Music/`.
+- Music playback: cold start 0:00; expanded close no longer silences audio.
+- Activity island: transport dead-zones; scrub preview until mouseup; play icon follows bridge.
+- Windows taskbar: thumbbar clicks no longer dismiss preview.
+- Player: video play/pause icon not overwritten by music host sync.
+- Window chrome: rounded shell when not maximized; edge resize strips.
 
 **0.1.10 shipped:**
 
