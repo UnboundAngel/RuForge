@@ -32,6 +32,37 @@ pub fn stem_candidates(stem: &str) -> Vec<&str> {
     }
 }
 
+/// Sidecar files next to one exact media stem (no stripped-stem variants).
+pub fn collect_sidecar_sources_exact_stem(parent: &Path, stem: &str) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = Vec::new();
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+
+    for name in [
+        format!("{stem}.jpg"),
+        format!("{stem}.webp"),
+        format!("{stem}.info.json"),
+        format!("{stem}..info.json"),
+        format!("{stem}.sponsorblock.json"),
+        format!("{stem}.musicmeta.json"),
+        format!("{stem}.comments.json"),
+    ] {
+        let p = parent.join(&name);
+        if p.is_file() && seen.insert(p.clone()) {
+            paths.push(p);
+        }
+    }
+
+    if let Ok(vtts) = crate::utils::vtt_sidecars_for_stem(parent, stem) {
+        for (p, _) in vtts {
+            if seen.insert(p.clone()) {
+                paths.push(p);
+            }
+        }
+    }
+
+    paths
+}
+
 /// Complete flat sidecar set next to a media file (matches export bundler).
 pub fn collect_sidecar_sources(parent: &Path, stem: &str) -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = Vec::new();
@@ -105,7 +136,13 @@ pub fn collect_deletion_paths(media_path: &Path) -> Vec<PathBuf> {
         None => return paths,
     };
 
-    for sidecar in collect_sidecar_sources(parent, stem) {
+    let sidecar_list = if strip_ytdlp_stream_suffix(stem) != stem {
+        collect_sidecar_sources_exact_stem(parent, stem)
+    } else {
+        collect_sidecar_sources(parent, stem)
+    };
+
+    for sidecar in sidecar_list {
         if seen.insert(sidecar.clone()) {
             paths.push(sidecar);
         }
@@ -155,6 +192,25 @@ pub fn prune_empty_dirs_after_media_delete(media_path: &Path) {
 mod tests {
     use super::*;
     use crate::utils::POSTER_FILE;
+
+    #[test]
+    fn stream_duplicate_delete_keeps_shared_stripped_stem_sidecars() {
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path();
+        let keeper = parent.join("Title.webm");
+        let duplicate = parent.join("Title.f398.mp4");
+        std::fs::write(&keeper, b"keeper").unwrap();
+        std::fs::write(&duplicate, b"dup").unwrap();
+        std::fs::write(parent.join("Title.comments.json"), br#"{"v":1}"#).unwrap();
+        std::fs::write(parent.join("Title.info.json"), br#"{"id":"x"}"#).unwrap();
+        std::fs::write(parent.join("Title.f398.info.json"), br#"{"id":"x"}"#).unwrap();
+
+        let paths = collect_deletion_paths(&duplicate);
+        assert!(paths.iter().any(|p| p.ends_with("Title.f398.mp4")));
+        assert!(paths.iter().any(|p| p.ends_with("Title.f398.info.json")));
+        assert!(!paths.iter().any(|p| p.ends_with("Title.comments.json")));
+        assert!(!paths.iter().any(|p| p.ends_with("Title.info.json")));
+    }
 
     #[test]
     fn collect_deletion_paths_includes_comments_and_thumb_tree() {

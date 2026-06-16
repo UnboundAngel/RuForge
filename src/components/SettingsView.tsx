@@ -863,6 +863,29 @@ export const SettingsView: React.FC = () => {
                   }
                 />
                 <SettingItem
+                  title="Download comments"
+                  description={
+                    settings.downloadAudioOnly
+                      ? "Saved for video downloads. Not used while Download audio only is on."
+                      : settings.downloadComments
+                      ? "Single-video downloads archive YouTube comments to a sidecar on disk. The player reads from disk when present, or fetches once from YouTube if missing and a source URL is available."
+                      : "Comment sidecars are not fetched with new single-video downloads."
+                  }
+                  active={settings.downloadComments}
+                  onClick={() =>
+                    void updateSetting("downloadComments", !settings.downloadComments)
+                  }
+                  control={
+                    <ToggleSlot
+                      active={settings.downloadComments}
+                      muted={settings.downloadAudioOnly}
+                      onClick={() =>
+                        void updateSetting("downloadComments", !settings.downloadComments)
+                      }
+                    />
+                  }
+                />
+                <SettingItem
                   title="Skip Duplicates"
                   description="Automatically skip downloads when the video is already in your library."
                   active={settings.skipDuplicatesAutomatically}

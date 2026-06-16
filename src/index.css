@@ -40,6 +40,9 @@
 }
 
 :root {
+  --color-media-page: #141414;
+  --color-media-panel: #1e1c1b;
+  --color-media-card: #262321;
   --bg: #1c1512;
   --surface: rgba(43, 30, 25, 0.7);
   --surface-elevated: rgba(56, 39, 32, 0.85);
@@ -1149,5 +1152,27 @@ button.rf-yt-profile-pill {
     filter: blur(4px) saturate(1.2);
     transform: scale(1.15);
   }
+}
+
+.rf-comments-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.rf-comments-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.rf-comments-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rf-comments-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+.rf-comments-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 

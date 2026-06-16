@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
 import { Icon } from "@iconify/react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 // @ts-ignore
@@ -20,6 +20,7 @@ import {
   Video,
   Layers,
   Ellipsis,
+  MessageSquare,
 } from "lucide-react";
 import { type FfprobeHint, type MediaFile } from "../types";
 import { ScrubHoverPreview } from "./player/ScrubHoverPreview";
@@ -33,6 +34,7 @@ import {
 } from "../audioPlaybackPrefs";
 import { isAudioOnlyPath } from "../mediaKind";
 import { fetchSubtitleTracks, revokeSubtitleBlobSrcs, subtitleTracksWithBlobSrc, syncVideoTextTrackModes, type SubtitleTrack } from "../localVideoSubtitles";
+import { cookieContextFromSettings } from "@/downloadQueue";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { useSubtitleCueOverlay } from "../useSubtitleCueOverlay";
 import { applyMediaOutputState } from "../applyMediaOutputState";
@@ -61,6 +63,11 @@ import { peekAnalyserGraph } from "@/audioAnalyserGraph";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import type { SponsorBlockSkipCategory } from "../sponsorBlock";
+import {
+  COMMENTS_PANEL_WIDTH,
+  SlidingCommentsDrawer,
+} from "./player/comments/SlidingCommentsDrawer";
+import { useVideoComments } from "./player/comments/useVideoComments";
 
 const SCRUB_DUCK_OUT_SEC = 0.008;
 const SCRUB_DUCK_IN_SEC = 0.012;
@@ -385,11 +392,47 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   };
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const [showPlayerMoreMenu, setShowPlayerMoreMenu] = useState(false);
   const [clickFlash, setClickFlash] = useState<"play" | "pause" | null>(null);
   const [skipFlash, setSkipFlash] = useState<{ side: "left" | "right"; amount: number } | null>(null);
   const skipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  const commentCookies = useMemo(
+    () => cookieContextFromSettings(settings),
+    [settings.browserContext, settings.cookieFile],
+  );
+  const { comments: videoComments, loading: commentsLoading, loadingLabel: commentsLoadingLabel, viewState: commentsViewState, retry: retryComments } = useVideoComments(
+    !audioOnly ? file.path : null,
+    !audioOnly ? file.sourceUrl : null,
+    settings.downloadComments === true,
+    commentCookies.browserCookies,
+    commentCookies.cookieFile,
+  );
+  const commentsPanelX = useMotionValue(COMMENTS_PANEL_WIDTH);
+  const commentsVideoScale = useTransform(
+    commentsPanelX,
+    [0, COMMENTS_PANEL_WIDTH],
+    [0.82, 1],
+  );
+  const commentsVideoTranslateX = useTransform(
+    commentsPanelX,
+    [0, COMMENTS_PANEL_WIDTH],
+    [-(COMMENTS_PANEL_WIDTH / 2), 0],
+  );
+
+  useEffect(() => {
+    setCommentsPanelOpen(false);
+  }, [file.path]);
+
+  const handleCommentsPanelX = useCallback((x: number) => {
+    commentsPanelX.set(x);
+  }, [commentsPanelX]);
+
+  const toggleCommentsPanel = useCallback(() => {
+    setShowPlaylist(false);
+    setCommentsPanelOpen((open) => !open);
+  }, []);
 
   const audioMediaSrc = useMemo(
     () => (audioOnly ? convertFileSrc(file.path) : ""),
@@ -1395,7 +1438,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             </div>
           </>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            className="absolute inset-0 flex items-center justify-center transform-gpu"
+            style={{ scale: commentsVideoScale, x: commentsVideoTranslateX }}
+          >
             <canvas
               ref={ambientCanvasRef}
               className="absolute inset-[-15%] w-[130%] h-[130%] z-0 blur-[100px] opacity-50 pointer-events-none transition-opacity duration-700"
@@ -1459,9 +1505,23 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
+
+      {!audioOnly && (
+        <SlidingCommentsDrawer
+          isOpen={commentsPanelOpen}
+          onOpenChange={setCommentsPanelOpen}
+          comments={videoComments}
+          commentsLoading={commentsLoading}
+          commentsLoadingLabel={commentsLoadingLabel}
+          commentsViewState={commentsViewState}
+          downloadCommentsEnabled={settings.downloadComments === true}
+          onCommentsRetry={retryComments}
+          onAnimatedXChange={handleCommentsPanelX}
+        />
+      )}
 
       {/* Speed Indicator (YouTube style hold) */}
       <AnimatePresence>
@@ -1848,11 +1908,20 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                           {(prevInFolder || nextInFolder) && <div className="my-1 border-t border-white/10" />}
                           <button
                             type="button"
-                            onClick={() => { setShowPlaylist(!showPlaylist); setShowPlayerMoreMenu(false); }}
+                            onClick={() => { setShowPlaylist(!showPlaylist); setCommentsPanelOpen(false); setShowPlayerMoreMenu(false); }}
                             className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-white/5 flex items-center gap-2 ${showPlaylist ? "text-[color:var(--accent)]" : "text-stone-300 hover:text-white"}`}
                           >
                             <Layers className="w-4 h-4" /> Up next
                           </button>
+                          {!audioOnly && (
+                            <button
+                              type="button"
+                              onClick={() => { toggleCommentsPanel(); setShowPlayerMoreMenu(false); }}
+                              className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-white/5 flex items-center gap-2 ${commentsPanelOpen ? "text-[color:var(--accent)]" : "text-stone-300 hover:text-white"}`}
+                            >
+                              <MessageSquare className="w-4 h-4" /> Comments
+                            </button>
+                          )}
                           {subtitleTracks.length > 0 && (
                             <>
                               <div className="my-1 border-t border-white/10" />
@@ -1967,6 +2036,17 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                       <Icon icon="material-symbols:ad-group-outline" className="w-4 h-4" />
                     </button>
                   </Tooltip>
+                  {!audioOnly && (
+                    <Tooltip text="Comments">
+                      <button
+                        type="button"
+                        onClick={toggleCommentsPanel}
+                        className={`${playerBarBtnClass} ${commentsPanelOpen ? "bg-white/10 text-[color:var(--accent)]" : ""}`}
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                      </button>
+                    </Tooltip>
+                  )}
                   <Tooltip text={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
                     <button type="button" onClick={toggleFullscreen} className={playerBarBtnClass}>
                       {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}

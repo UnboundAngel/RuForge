@@ -20,6 +20,21 @@ use crate::commands::media::extract_frames;
 use crate::commands::musicmeta::find_recent_audio_files;
 use crate::utils::is_media_ext;
 
+/// yt-dlp `youtube:max_comments` parent-thread cap (`max-parents`).
+const COMMENTS_MAX_PARENTS: u32 = 25;
+/// yt-dlp `youtube:max_comments` per-thread reply cap (`max-replies-per-thread`).
+const COMMENTS_MAX_REPLIES_PER_THREAD: u32 = 5;
+/// yt-dlp `youtube:max_comments` reply depth cap (`max-depth`: top-level + direct replies).
+const COMMENTS_MAX_DEPTH: u32 = 2;
+/// yt-dlp `youtube:comment_sort` (YouTube-side sort).
+const COMMENTS_SORT: &str = "top";
+
+fn ytdlp_comments_extractor_args() -> String {
+    format!(
+        "youtube:max_comments=all,{COMMENTS_MAX_PARENTS},all,{COMMENTS_MAX_REPLIES_PER_THREAD},{COMMENTS_MAX_DEPTH};comment_sort={COMMENTS_SORT}"
+    )
+}
+
 /// Where yt-dlp wrote files for this job: playlist subfolder if template has a fixed prefix, else output root.
 fn post_download_diag_listing_root(output_dir: &Path, filename_template_eff: &str) -> std::path::PathBuf {
     if let Some((first, _)) = filename_template_eff.split_once('/') {
@@ -1109,6 +1124,209 @@ async fn yt_dlp_single_json_simulate_with_cookie_fallback(
     }
 }
 
+async fn yt_dlp_comments_json_fetch(
+    app: &AppHandle,
+    url: &str,
+    cookie_opts: Option<&DownloadOptions>,
+) -> Result<serde_json::Value, String> {
+    let extractor_args = ytdlp_comments_extractor_args();
+    let mut args: Vec<String> = vec![
+        "-J".into(),
+        "--skip-download".into(),
+        "--write-comments".into(),
+        "--extractor-args".into(),
+        extractor_args,
+    ];
+    if let Some(opts) = cookie_opts {
+        ytdlp_push_cookie_cli_args(
+            app,
+            &mut args,
+            opts.cookie_file.as_deref(),
+            opts.browser_cookies.as_deref(),
+        )?;
+    }
+    args.push(url.to_string());
+    ytdlp_push_politeness_args(&mut args);
+
+    ytdlp_subprocess_rate_gate_wait().await?;
+    let output = ytdlp_shell_command(app)?
+        .args(args)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run yt-dlp (comments): {}", e))?;
+
+    if !output.status.success() {
+        let err_msg = String::from_utf8_lossy(&output.stderr).to_string();
+        ytdlp_register_rate_limit_from_stderr(&err_msg).await;
+        crate::rf_log!(
+            "download.comments",
+            log::Level::Warn,
+            "yt-dlp comments fetch failed: {}",
+            err_msg.lines().next().unwrap_or(&err_msg)
+        );
+        return Err(err_msg);
+    }
+    let parsed: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse yt-dlp comments JSON: {}", e))?;
+    Ok(parsed)
+}
+
+pub(crate) async fn fetch_ytdlp_comments_json(
+    app: &AppHandle,
+    url: &str,
+    cookie_fallback: Option<&DownloadOptions>,
+) -> Result<serde_json::Value, String> {
+    yt_dlp_comments_json_fetch_with_cookie_fallback(app, url, cookie_fallback).await
+}
+
+async fn yt_dlp_comments_json_fetch_with_cookie_fallback(
+    app: &AppHandle,
+    url: &str,
+    cookie_fallback: Option<&DownloadOptions>,
+) -> Result<serde_json::Value, String> {
+    match yt_dlp_comments_json_fetch(app, url, None).await {
+        Ok(json) => Ok(json),
+        Err(without_err) => {
+            let Some(fallback) = cookie_fallback else {
+                return Err(without_err);
+            };
+            if !ytdlp_has_configured_cookie_source(
+                fallback.browser_cookies.as_deref(),
+                fallback.cookie_file.as_deref(),
+            ) {
+                return Err(without_err);
+            }
+            let (resolved, cookie_guard) =
+                ytdlp_download_options_with_ruforge_export(app, fallback).await?;
+            let _cookie_guard = cookie_guard;
+            yt_dlp_comments_json_fetch(app, url, Some(&resolved)).await
+        }
+    }
+}
+
+fn spawn_comments_sidecar_for_single_video(
+    app: AppHandle,
+    url: String,
+    cookie_fallback: Option<DownloadOptions>,
+    listing_root: PathBuf,
+    since: SystemTime,
+) {
+    tauri::async_runtime::spawn(async move {
+        let json = match yt_dlp_comments_json_fetch_with_cookie_fallback(
+            &app,
+            &url,
+            cookie_fallback.as_ref(),
+        )
+        .await
+        {
+            Ok(j) => j,
+            Err(_e) => {
+                return;
+            }
+        };
+
+        let video_id = json
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if video_id.is_empty() {
+            crate::rf_log!(
+                "download.comments",
+                log::Level::Warn,
+                "comments fetch returned no video id"
+            );
+            return;
+        }
+
+        let raw_comments = json
+            .get("comments")
+            .and_then(|v| v.as_array())
+            .map(|a| a.as_slice())
+            .unwrap_or(&[]);
+        let entries = crate::commands::comments_sidecar::map_ytdlp_comments(raw_comments);
+
+        let listing_root_for_scan = listing_root.clone();
+        let mut paths: Vec<PathBuf> = Vec::new();
+        for attempt in 0..12_u32 {
+            paths = tokio::task::spawn_blocking({
+                let listing_root = listing_root_for_scan.clone();
+                move || collect_recent_video_paths(&listing_root, since)
+            })
+            .await
+            .unwrap_or_default();
+            if !paths.is_empty() {
+                break;
+            }
+            if attempt < 11 {
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+            }
+        }
+
+        let Some(media_path) = paths.into_iter().max_by_key(|p| {
+            let stem = p
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("");
+            let has_stream_suffix = crate::commands::comments_sidecar::strip_ytdlp_stream_suffix(stem)
+                != stem;
+            (
+                !has_stream_suffix,
+                std::fs::metadata(p)
+                    .and_then(|m| m.modified())
+                    .ok(),
+            )
+        }) else {
+            crate::rf_log!(
+                "download.comments",
+                log::Level::Warn,
+                "comments write skipped: no recent video under {}",
+                listing_root.display()
+            );
+            return;
+        };
+
+        let entry_count = entries.len();
+        let write_result = tokio::task::spawn_blocking(move || {
+            crate::commands::comments_sidecar::write_comments_sidecar(
+                &media_path,
+                &video_id,
+                &entries,
+            )
+        })
+        .await;
+
+        match write_result {
+            Ok(Ok(path)) => {
+                crate::rf_log!(
+                    "download.comments",
+                    log::Level::Info,
+                    "wrote {} ({} comments)",
+                    path.display(),
+                    entry_count
+                );
+            }
+            Ok(Err(e)) => {
+                crate::rf_log!(
+                    "download.comments",
+                    log::Level::Warn,
+                    "comments sidecar write failed: {}",
+                    e
+                );
+            }
+            Err(e) => {
+                crate::rf_log!(
+                    "download.comments",
+                    log::Level::Warn,
+                    "comments sidecar write task failed: {:?}",
+                    e
+                );
+            }
+        }
+    });
+}
+
 #[derive(Default, Clone)]
 struct PlaylistDownloadProgressExtras {
     current_index: Option<u32>,
@@ -1238,6 +1456,10 @@ fn default_stamp_artist_tags() -> bool {
     true
 }
 
+fn default_download_comments() -> bool {
+    false
+}
+
 /// Scrubber sprites are for video files only (not audio-only library entries).
 fn is_video_scrub_ext(ext: &str) -> bool {
     matches!(ext, "mp4" | "mkv" | "webm")
@@ -1271,6 +1493,9 @@ pub struct DownloadOptions {
     /// When true, post-download enrich copies artist MB genres onto the track sidecar.
     #[serde(default = "default_stamp_artist_tags")]
     pub stamp_artist_tags: bool,
+    /// When true, fetch YouTube comments after a single-video download and write `{stem}.comments.json`.
+    #[serde(default = "default_download_comments")]
+    pub download_comments: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -1310,7 +1535,7 @@ fn effective_video_format_for_info_probe(format: Option<&str>) -> String {
     }
 }
 
-fn video_info_cookie_probe(
+pub(crate) fn video_info_cookie_probe(
     browser_cookies: Option<String>,
     cookie_file: Option<String>,
 ) -> Option<DownloadOptions> {
@@ -1333,6 +1558,7 @@ fn video_info_cookie_probe(
         playlist_output_folder: None,
         playlist_index: None,
         stamp_artist_tags: true,
+        download_comments: false,
     })
 }
 
@@ -1790,6 +2016,7 @@ pub async fn start_download_job(
         .map(|g| g.report.summary_line());
 
     let manager_bg = manager.inner().clone();
+    let comments_cookie_fallback = cookie_fallback.clone();
     tauri::async_runtime::spawn(async move {
         use tauri_plugin_shell::process::CommandEvent;
 
@@ -1965,6 +2192,20 @@ pub async fn start_download_job(
                                     .await;
                                 }
                             });
+                        }
+                        if options.download_comments
+                            && crate::commands::comments_sidecar::is_single_video_download(
+                                &options,
+                                &filename_template_eff,
+                            )
+                        {
+                            spawn_comments_sidecar_for_single_video(
+                                app.clone(),
+                                url.clone(),
+                                comments_cookie_fallback.clone(),
+                                diag_root.clone(),
+                                download_started_at,
+                            );
                         }
                         let _ = app.emit(
                             "download-job-finished",
@@ -2954,5 +3195,17 @@ mod cookie_error_tests {
         let with_err = "ERROR: Could not copy Chrome cookie database.";
         let msg = format_ytdlp_cookie_fallback_failure(without, with_err, Some("ruforge"));
         assert!(msg.contains(with_err));
+    }
+}
+
+#[cfg(test)]
+mod comments_fetch_tests {
+    use super::*;
+
+    #[test]
+    fn extractor_args_single_youtube_block_with_caps_and_sort() {
+        let args = ytdlp_comments_extractor_args();
+        assert_eq!(args, "youtube:max_comments=all,25,all,5,2;comment_sort=top");
+        assert!(!args.contains("youtube:comment_sort"));
     }
 }

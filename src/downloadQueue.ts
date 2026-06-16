@@ -154,8 +154,10 @@ export interface DownloadJobOptions {
   playlistOutputFolder?: string | null;
   /** 1-based playlist index for ordered filenames. */
   playlistIndex?: number | null;
-  /** When true, post-download enrich stamps artist genres on track sidecars. */
+  /** When true, audio download enrich stamps artist genres on track sidecars. */
   stampArtistTags: boolean;
+  /** When true, single-video downloads fetch YouTube comments into `{stem}.comments.json`. */
+  downloadComments: boolean;
 }
 
 export interface DownloadJob {
@@ -225,6 +227,8 @@ export function patchDownloadJobOptionsForAudio(
     autoScrubberPreviews:
       !audioOnly && settings.autoDownloadScrubberPreviews !== false,
     stampArtistTags: settings.stampTrackSidecarArtistTags !== false,
+    downloadComments:
+      !audioOnly && settings.downloadComments === true,
   };
 }
 
@@ -237,14 +241,17 @@ export function patchDownloadJobOptionsFromSettings(
   const autoScrubberPreviews =
     !options.audioOnly && settings.autoDownloadScrubberPreviews !== false;
   const stampArtistTags = settings.stampTrackSidecarArtistTags !== false;
+  const downloadComments =
+    !options.audioOnly && settings.downloadComments === true;
   if (
     options.subLangs === subLangs &&
     options.autoScrubberPreviews === autoScrubberPreviews &&
-    options.stampArtistTags === stampArtistTags
+    options.stampArtistTags === stampArtistTags &&
+    options.downloadComments === downloadComments
   ) {
     return options;
   }
-  return { ...options, subLangs, autoScrubberPreviews, stampArtistTags };
+  return { ...options, subLangs, autoScrubberPreviews, stampArtistTags, downloadComments };
 }
 
 /** Cookie context for yt-dlp metadata simulate and download (matches `DownloadOptions`). */
@@ -281,6 +288,7 @@ export function buildDownloadJobOptions(
       audioFormat: normalizeDownloadAudioFormat(settings.downloadAudioFormat),
       autoScrubberPreviews: settings.autoDownloadScrubberPreviews !== false,
       stampArtistTags: settings.stampTrackSidecarArtistTags !== false,
+      downloadComments: settings.downloadComments === true,
     },
     audioOnly,
     settings,
@@ -301,6 +309,7 @@ export function toInvokeDownloadOptions(opts: DownloadJobOptions) {
     playlist_output_folder: opts.playlistOutputFolder ?? null,
     playlist_index: opts.playlistIndex ?? null,
     stamp_artist_tags: opts.stampArtistTags !== false,
+    download_comments: opts.downloadComments === true,
   };
 }
 
@@ -346,6 +355,7 @@ function normalizePersistedDownloadJob(j: DownloadJob): DownloadJob | null {
     audioFormat: normalizeDownloadAudioFormat(opts?.audioFormat),
     autoScrubberPreviews: opts?.autoScrubberPreviews !== false,
     stampArtistTags: opts?.stampArtistTags !== false,
+    downloadComments: opts?.downloadComments === true,
   };
   if (options.audioOnly) {
     options = {

@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.11 (unreleased)
 Last shipped to users: 0.1.10
-Last updated: 2026-06-14 (Windows taskbar transport toolbar)
+Last updated: 2026-06-15 (comments archive batch fix)
 Status: in progress
 
 ## Now
@@ -29,6 +29,9 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.11 (unreleased):**
 
+- Download comments: max_comments grammar fixed (`all,25,all,5,2`); per-thread reply cap renamed; bundled yt-dlp 2026.03.17 supports depth field.
+- Player comments: empty-state split (missing toggle-off, loading disk/network, fetch error + retry, empty-valid); header Top 25 threads label; ensure cookie parity with download spawn.
+- Music metadata: track sidecars v2 stamp `genres` + `artistMbId` from MusicBrainz artist cache on download/enrich; `stampTrackSidecarArtistTags` (default on); backfill pass 2 for legacy sidecars (`musicmeta.rs`, `downloadQueue.ts`).
 - Windows taskbar: thumbbar clicks no longer dismiss the taskbar preview (`taskbar_thumbbar.rs`).
 - Windows taskbar: thumbbar button clicks route transport (WM_COMMAND LOWORD + message filter + deferred emit); play/pause media-element fallback (`taskbar_thumbbar.rs`, `taskbarTransportSync.ts`).
 - Windows taskbar: thumbnail transport toolbar on main HWND (prev / play-pause / next); `ruforge:taskbar-transport` + `sync_taskbar_transport` (`taskbar_thumbbar.rs`, `taskbarTransportSync.ts`).

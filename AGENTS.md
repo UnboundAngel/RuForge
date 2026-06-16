@@ -409,6 +409,14 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.11 (unreleased)
 
+- **Player comments**: empty-state split (missing/loading disk vs network/error/empty-valid), retry on fetch error, header shows Top 25 threads cap label (`useVideoComments.ts`, `loadVideoComments.ts`, `CommentsPanel.tsx`).
+- **Player comments**: ensure path uses same cookie fallback as download spawn (`comments_sidecar.rs`).
+- **Download comments**: max_comments spec fixed to `all,25,all,5,2` (global reply budget `all`, per-thread cap 5, depth 2); renamed `COMMENTS_MAX_REPLIES_PER_THREAD` (`downloader.rs`).
+- **Player comments**: dedup cleanup no longer deletes shared `{stem}.comments.json` when removing yt-dlp `.fNNN` duplicates; download write retries path scan; panel opens via `ensure_video_comments_sidecar` (lazy fetch when sidecar missing + source URL known) (`media_bundle.rs`, `downloader.rs`, `comments_sidecar.rs`, `loadVideoComments.ts`).
+- **Download comments**: sidecar path strips yt-dlp `.f###` stream suffix so `{title}.comments.json` matches `.webm` playback (`comments_sidecar.rs`, `downloader.rs`).
+- **Download comments**: sidecar fetch passes yt-dlp caps/sort via `--extractor-args` (`all,25,5,5;comment_sort=top`, named constants in `downloader.rs`).
+- **Player**: YouTube-style sliding comments drawer reads `{stem}.comments.json` on open only; v1 sidecar written post single-video download when Download comments is on (`comments_sidecar.rs`, `downloader.rs`, `loadVideoComments.ts`, `PlayerView.tsx`).
+- **Music metadata**: track sidecars v2 stamp `genres` + `artistMbId` from cached MusicBrainz artist lookup on download/enrich; `stampTrackSidecarArtistTags` setting (default on) skips tags but still writes v2; backfill pass 2 patches legacy sidecars (`musicmeta.rs`, `downloader.rs`, `downloadQueue.ts`, `SettingsView.tsx`).
 - **Windows taskbar**: thumbbar clicks no longer dismiss the taskbar preview (`THBF_DISMISSONCLICK` removed, `taskbar_thumbbar.rs`).
 - **Windows taskbar**: white alpha icons, like button with heart-to-check morph, play/pause sync fix (`serde` camelCase), 4-button Spotify layout (`taskbar_thumbbar_icons.rs`, `taskbarTransportSync.ts`).
 - **Music detail**: credits accordion uses CSS grid expand; renamed from Liner notes; tucked under copyright with tighter archive spacing (`MusicTrackCredits.tsx`, `MusicTrackView.tsx`).
