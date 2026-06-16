@@ -58,6 +58,9 @@
   --radius-modal: 24px;
   --radius-pill: 999px;
   --rf-titlebar-h: 48px;
+  /* Tab bulge strip: title band + label row (media/settings). */
+  --rf-tab-chrome-h: 40px;
+  --rf-tab-strip-h: calc(var(--rf-titlebar-h) + var(--rf-tab-chrome-h));
   --rf-window-outer-radius: 12px;
   /* Activity island shell: darker espresso pocket on #271C18 chrome (portal sets data-rf-nav-mode). */
   --rf-island-shell-media: #181210;
