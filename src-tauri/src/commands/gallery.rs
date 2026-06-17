@@ -3,7 +3,13 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::commands::media::scrub_sprites_complete_for_path;
+use crate::commands::media::list_scrub_sprite_paths_for_video;
 use crate::utils::{is_audio_only_ext, is_item_bucket, is_media_ext, is_playlist_bucket, primary_vtt_sidecar, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
+
+fn is_scrub_sprite_video_ext(ext: &str) -> bool {
+    matches!(ext, "mp4" | "mkv" | "webm")
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chapter {
@@ -64,6 +70,12 @@ pub struct MediaFile {
     /// MusicBrainz match score (0-100). Present only when a lookup was attempted and matched.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub match_confidence: Option<u32>,
+    /// True when ffmpeg scrubber sprite sheets cover the full video duration.
+    #[serde(default)]
+    pub scrub_sprites_complete: bool,
+    /// Sprite sheet paths under `.ruforge/thumbs/` (read-only at scan time).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scrub_sprite_paths: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -546,6 +558,18 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             CanonicalMeta { artist: None, album: None, title: None, year: None, mb_release_id: None, match_confidence: None }
         };
 
+        let scrub_sprites_complete = if is_audio_only_ext(ext) || !is_scrub_sprite_video_ext(ext) {
+            true
+        } else {
+            scrub_sprites_complete_for_path(&path, duration)
+        };
+
+        let scrub_sprite_paths = if is_audio_only_ext(ext) || !is_scrub_sprite_video_ext(ext) {
+            Vec::new()
+        } else {
+            list_scrub_sprite_paths_for_video(&path)
+        };
+
         files.push(MediaFile {
             name: display_name,
             path: path.to_string_lossy().to_string(),
@@ -571,6 +595,8 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             year: canonical.year,
             mb_release_id: canonical.mb_release_id,
             match_confidence: canonical.match_confidence,
+            scrub_sprites_complete,
+            scrub_sprite_paths,
         });
     }
     if files.len() >= 2 {
@@ -926,6 +952,8 @@ fn media_file_from_path_for_cleanup(path: &Path) -> Option<MediaFile> {
         year: None,
         mb_release_id: None,
         match_confidence: None,
+        scrub_sprites_complete: true,
+        scrub_sprite_paths: Vec::new(),
     })
 }
 
@@ -1283,6 +1311,18 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         CanonicalMeta { artist: None, album: None, title: None, year: None, mb_release_id: None, match_confidence: None }
     };
 
+    let scrub_sprites_complete = if is_audio_only_ext(ext) || !is_scrub_sprite_video_ext(ext) {
+        true
+    } else {
+        scrub_sprites_complete_for_path(path, duration)
+    };
+
+    let scrub_sprite_paths = if is_audio_only_ext(ext) || !is_scrub_sprite_video_ext(ext) {
+        Vec::new()
+    } else {
+        list_scrub_sprite_paths_for_video(path)
+    };
+
     Ok(MediaFile {
         name: display_name,
         path: path.to_string_lossy().to_string(),
@@ -1308,6 +1348,8 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         year: canonical.year,
         mb_release_id: canonical.mb_release_id,
         match_confidence: canonical.match_confidence,
+        scrub_sprites_complete,
+        scrub_sprite_paths,
     })
 }
 
@@ -1575,6 +1617,8 @@ mod tests {
             year: None,
             mb_release_id: None,
             match_confidence: None,
+            scrub_sprites_complete: true,
+            scrub_sprite_paths: Vec::new(),
         };
         let key = media_library_group_key(path, &file);
         assert!(key.starts_with("stem:"));
@@ -1609,6 +1653,8 @@ mod tests {
             year: None,
             mb_release_id: None,
             match_confidence: None,
+            scrub_sprites_complete: true,
+            scrub_sprite_paths: Vec::new(),
         };
         let intermediate = MediaFile {
             name: "My Video".into(),
@@ -1635,6 +1681,8 @@ mod tests {
             year: None,
             mb_release_id: None,
             match_confidence: None,
+            scrub_sprites_complete: true,
+            scrub_sprite_paths: Vec::new(),
         };
         let muxed_path = Path::new(&muxed.path);
         let inter_path = Path::new(&intermediate.path);

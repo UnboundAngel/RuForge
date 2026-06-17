@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 Status: in progress
 
 ## Now
@@ -29,6 +29,9 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Scrub hover: windowed sprite sheet preload on long videos (current sheet ±1, one ahead in travel direction); ≤2 sheets still preload all; gallery `scrubSpritePaths` fast path unchanged.
+- Scrub hover: rAF-throttled scrub bar hover, sprite paths cached at gallery scan (skip player IPC when complete), JPEG preload, CSS background-position previews, library scrub backfill deferred while player tab is active.
+- Scrub previews: faster parallel ffmpeg generation, library backfill when auto mode is on, per-card building-previews spinner on Video Library cards.
 - Media chrome: tab bulge corner SVGs and clip insets follow `--rf-titlebar-h` on Video Library and Settings.
 - Settings scroll morph: numeric titlebar offset; bulge at rest only (reverted strip clip/overflow).
 

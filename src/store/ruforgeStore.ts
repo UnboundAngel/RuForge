@@ -14,6 +14,8 @@ import {
   writeLibraryScanDirsToLs,
 } from "../libraryScanDirs";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
+import { ensureScrubSpritesForFiles, filesMissingScrubSprites } from "../scrubSpriteBackfill";
+import { mediaPathsMatch } from "../lib/mediaPathMatch";
 import {
   DEFAULT_SETTINGS,
   LS_MINI_LOOP,
@@ -304,12 +306,17 @@ export interface RuforgeStore extends DownloadQueueSlice {
      */
     manageLoadingStart?: boolean;
     skipPosterBackfill?: boolean;
+    skipScrubBackfill?: boolean;
     posterEpoch?: number;
+    scrubEpoch?: number;
     /** Full-tree duplicate download cleanup before scan (e.g. after library migration). */
     sweepDuplicates?: boolean;
   }) => Promise<void>;
   invalidateEntries: (opts?: { silent?: boolean; sweepDuplicates?: boolean }) => Promise<void>;
   setGalleryActiveMenu: (menu: GalleryContextMenuState) => void;
+  addGalleryExtractingPath: (path: string) => void;
+  removeGalleryExtractingPath: (path: string) => void;
+  /** @deprecated Prefer add/remove; clears all when null. */
   setGalleryExtractingPath: (path: string | null) => void;
 }
 
@@ -377,6 +384,44 @@ let galleryFetchToken = 0;
 
 /** Serial for poster backfill so stale async work cannot chain a second scan after navigation. */
 let galleryPosterEpoch = 0;
+let galleryScrubEpoch = 0;
+
+let deferredScrubBackfillQueue: MediaFile[] = [];
+
+function playbackBlocksScrubBackfill(state: {
+  playingFile: MediaFile | null;
+  activeTab: ActiveTab;
+}): boolean {
+  return state.playingFile !== null || state.activeTab === "player";
+}
+
+function queueDeferredScrubBackfill(files: MediaFile[]) {
+  const seen = new Set(deferredScrubBackfillQueue.map((f) => f.path));
+  for (const f of files) {
+    if (!seen.has(f.path)) {
+      seen.add(f.path);
+      deferredScrubBackfillQueue.push(f);
+    }
+  }
+}
+
+function tryFlushDeferredScrubBackfill(get: () => RuforgeStore) {
+  if (playbackBlocksScrubBackfill(get())) return;
+  if (deferredScrubBackfillQueue.length === 0) return;
+  const list = deferredScrubBackfillQueue;
+  deferredScrubBackfillQueue = [];
+  void (async () => {
+    await ensureScrubSpritesForFiles(list, {
+      onStart: (path) => get().addGalleryExtractingPath(path),
+      onEnd: (path) => get().removeGalleryExtractingPath(path),
+    });
+    await get().fetchEntries({
+      manageLoadingStart: false,
+      skipPosterBackfill: true,
+      skipScrubBackfill: true,
+    });
+  })();
+}
 
 const pathsInit = readInitialPathsFromLs();
 const playerInitVolume = readInitialPlayerVolumeFromLs();
@@ -504,6 +549,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
           });
         } else {
           set({ playingFile, isLooping });
+          tryFlushDeferredScrubBackfill(get);
         }
       },
       setActivityHandoff: (owner, snapshot) => {
@@ -582,6 +628,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
           parkedVideoFile: null,
           parkedVideoAt: null,
         });
+        tryFlushDeferredScrubBackfill(get);
       },
 
       handlePlayFile: async (file, playlist) => {
@@ -946,7 +993,10 @@ export const useRuforgeStore = create<RuforgeStore>()(
       setExportOutcome: (exportOutcome) => set({ exportOutcome }),
       resetExportOutcome: () => set({ exportOutcome: null, exportProgress: null }),
 
-      setActiveTab: (tab) => set({ activeTab: tab }),
+      setActiveTab: (tab) => {
+        set({ activeTab: tab });
+        if (tab !== "player") tryFlushDeferredScrubBackfill(get);
+      },
       setSettingsTab: (tab) => set({ settingsTab: tab }),
       setGalleryFilter: (f) => set({ galleryFilter: f }),
       setSelectedPlaylist: (p) => set({ selectedPlaylist: p }),
@@ -1029,12 +1079,17 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const myToken = ++galleryFetchToken;
         const manageLoadingStart = opts?.manageLoadingStart !== false;
         const skipPosterBackfill = opts?.skipPosterBackfill === true;
+        const skipScrubBackfill = opts?.skipScrubBackfill === true;
         const posterEpoch =
           opts?.posterEpoch ??
           (skipPosterBackfill ? galleryPosterEpoch : (++galleryPosterEpoch, galleryPosterEpoch));
-        const { libraryScanDirs, notify } = get();
+        const scrubEpoch =
+          opts?.scrubEpoch ??
+          (skipScrubBackfill ? galleryScrubEpoch : (++galleryScrubEpoch, galleryScrubEpoch));
+        const { libraryScanDirs, notify, settings } = get();
         if (manageLoadingStart) set({ galleryLoading: true });
-        let backfillList: MediaFile[] | null = null;
+        let posterBackfillList: MediaFile[] | null = null;
+        let scrubBackfillList: MediaFile[] | null = null;
         try {
           const dirs = galleryScanRoots(libraryScanDirs);
           const forceSweep = opts?.sweepDuplicates === true;
@@ -1059,17 +1114,21 @@ export const useRuforgeStore = create<RuforgeStore>()(
             ),
           );
           if (myToken !== galleryFetchToken) return;
-          if (galleryPosterEpoch !== posterEpoch) return;
+          if (galleryPosterEpoch !== posterEpoch || galleryScrubEpoch !== scrubEpoch) return;
           set((s) => ({
             entries: unique,
             libraryScanRevision: s.libraryScanRevision + 1,
           }));
+          const mediaFiles = unique.flatMap((e) =>
+            e.kind === "media" ? [e as MediaFile] : (e as PlaylistCollection).items,
+          );
           if (!skipPosterBackfill) {
-            const mediaFiles = unique.flatMap((e) =>
-              e.kind === "media" ? [e as MediaFile] : (e as PlaylistCollection).items,
-            );
             const need = filesMissingPoster(mediaFiles);
-            if (need.length > 0) backfillList = need;
+            if (need.length > 0) posterBackfillList = need;
+          }
+          if (!skipScrubBackfill && settings.autoDownloadScrubberPreviews !== false) {
+            const need = filesMissingScrubSprites(mediaFiles);
+            if (need.length > 0) scrubBackfillList = need;
           }
         } catch (e) {
           console.error(e);
@@ -1078,15 +1137,32 @@ export const useRuforgeStore = create<RuforgeStore>()(
           if (myToken === galleryFetchToken) set({ galleryLoading: false });
         }
 
-        if (backfillList) {
+        if (posterBackfillList || scrubBackfillList) {
+          const state = get();
+          if (scrubBackfillList && playbackBlocksScrubBackfill(state)) {
+            queueDeferredScrubBackfill(scrubBackfillList);
+            scrubBackfillList = null;
+          }
           void (async () => {
-            await ensurePostersForFiles(backfillList!);
+            await Promise.all([
+              posterBackfillList
+                ? ensurePostersForFiles(posterBackfillList)
+                : Promise.resolve(),
+              scrubBackfillList
+                ? ensureScrubSpritesForFiles(scrubBackfillList, {
+                    onStart: (path) => get().addGalleryExtractingPath(path),
+                    onEnd: (path) => get().removeGalleryExtractingPath(path),
+                  })
+                : Promise.resolve(),
+            ]);
             if (myToken !== galleryFetchToken) return;
-            if (galleryPosterEpoch !== posterEpoch) return;
+            if (galleryPosterEpoch !== posterEpoch || galleryScrubEpoch !== scrubEpoch) return;
             await get().fetchEntries({
               manageLoadingStart: false,
               skipPosterBackfill: true,
+              skipScrubBackfill: true,
               posterEpoch,
+              scrubEpoch,
             });
           })();
         }
@@ -1102,9 +1178,28 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       setGalleryActiveMenu: (activeMenu) => set({ activeMenu }),
+      addGalleryExtractingPath: (path) =>
+        set((s) => {
+          const mediaPaths = s.entries.flatMap((e) =>
+            e.kind === "media" ? [e.path] : e.items.map((item) => item.path),
+          );
+          const canonical = mediaPaths.find((p) => mediaPathsMatch(p, path)) ?? path;
+          if (s.extractingByPath[canonical]) return s;
+          return { extractingByPath: { ...s.extractingByPath, [canonical]: true } };
+        }),
+      removeGalleryExtractingPath: (path) =>
+        set((s) => {
+          const key =
+            Object.keys(s.extractingByPath).find((p) => mediaPathsMatch(p, path)) ?? path;
+          if (!s.extractingByPath[key]) return s;
+          const next = { ...s.extractingByPath };
+          delete next[key];
+          return { extractingByPath: next };
+        }),
       setGalleryExtractingPath: (path) =>
-        set({
-          extractingByPath: path ? { [path]: true } : {},
+        set((s) => {
+          if (!path) return { extractingByPath: {} };
+          return { extractingByPath: { ...s.extractingByPath, [path]: true } };
         }),
     }),
     {

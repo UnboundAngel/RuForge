@@ -33,6 +33,7 @@ import { hydratePlatformDefaultPaths } from "./platformPaths";
 
 import { ScrubHoverPreview } from "./components/player/ScrubHoverPreview";
 import { useScrubberThumbs } from "./useScrubberThumbs";
+import { useScrubberHover } from "./hooks/useScrubberHover";
 import {
   readResumeSeconds,
   writePlaybackPos,
@@ -49,10 +50,9 @@ import { filterMainLibraryEntries } from "./mainLibraryFilter";
 import {
   readAudioAutoAdvanceFolder,
   readAudioPrefetchNext,
-  readAutoDownloadScrubberPreviews,
 } from "./audioPlaybackPrefs";
 import { applyMediaOutputState } from "./applyMediaOutputState";
-import { chapterAtTime, normalizeChapters, timeForScrubberClientX } from "./chapters";
+import { chapterAtTime, normalizeChapters, timeForScrubberClientX, timeForScrubberPercent } from "./chapters";
 import { ChapterScrubber } from "./components/player/ChapterScrubber";
 import { SponsorBlockScrubOverlay } from "./components/player/SponsorBlockScrubOverlay";
 import { SponsorBlockSkipButton } from "./components/player/SponsorBlockSkipButton";
@@ -449,7 +449,8 @@ export default function MiniPlayer() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [buffered, setBuffered] = useState(0);
-  const [hoverProgress, setHoverProgress] = useState<number | null>(null);
+  const { hoverPercent: scrubHoverPercent, isHovering: isScrubHovering, onMouseMove: onScrubberMouseMove, onMouseLeave: onScrubberMouseLeave, setHoverPercentDirect } = useScrubberHover();
+  const hoverProgress = isScrubHovering ? scrubHoverPercent / 100 : null;
   const [scrubPreviewRatio, setScrubPreviewRatio] = useState<number | null>(null);
   const [isCursorVisible, setIsCursorVisible] = useState(true);
   const [isHovering, setIsHovering] = useState(false);
@@ -466,13 +467,6 @@ export default function MiniPlayer() {
     };
   }, []);
   const cursorTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const autoScrubberPreviews = readAutoDownloadScrubberPreviews();
-
-  const scrubberThumbs = useScrubberThumbs(playingFile?.path, {
-    audioOnly: playingFile ? isAudioOnlyPath(playingFile.path) : true,
-    allowGenerate: autoScrubberPreviews,
-  });
 
   const [winSize, setWinSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -1164,6 +1158,48 @@ export default function MiniPlayer() {
     return normalizeChapters(playingFile.chapters, dur);
   }, [playingFile?.chapters, playingFile?.duration, duration]);
 
+  const [scrubberBarWidthPx, setScrubberBarWidthPx] = useState(0);
+  useEffect(() => {
+    const el = subtitleLayoutLimitRef.current;
+    if (!el) return;
+    const sync = () => setScrubberBarWidthPx(el.getBoundingClientRect().width);
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [playingFile?.path, isLargeMode, isSmallMode, isCompactMode]);
+
+  const spriteHover = useMemo(() => {
+    if (!isScrubHovering) return null;
+    const dur =
+      isFinite(duration) && duration > 0
+        ? duration
+        : playingFile && playingFile.duration > 0
+          ? playingFile.duration
+          : 0;
+    if (!isFinite(dur) || dur <= 0) return null;
+    const hoverTimeSec =
+      chapters && chapters.length >= 2 && scrubberBarWidthPx > 0
+        ? timeForScrubberPercent(chapters, dur, scrubHoverPercent, scrubberBarWidthPx)
+        : (scrubHoverPercent / 100) * dur;
+    return { hoverTimeSec, isActive: true as const };
+  }, [
+    isScrubHovering,
+    scrubHoverPercent,
+    duration,
+    playingFile?.duration,
+    chapters,
+    scrubberBarWidthPx,
+  ]);
+
+  const scrubberThumbs = useScrubberThumbs(playingFile?.path, {
+    audioOnly: playingFile ? isAudioOnlyPath(playingFile.path) : true,
+    allowGenerate: false,
+    initialPaths: playingFile?.scrubSpritePaths,
+    scrubSpritesComplete: playingFile?.scrubSpritesComplete,
+    spriteHover,
+  });
+
   const resolveScrubTime = useCallback(
     (clientX: number, bar: HTMLElement): number => {
       const rect = bar.getBoundingClientRect();
@@ -1207,12 +1243,12 @@ export default function MiniPlayer() {
     if (wasPlayingBeforeScrubRef.current) v.pause();
 
     const r0 = seekRatioFromClientX(e.clientX, bar);
-    setHoverProgress(r0);
+    setHoverPercentDirect(r0 * 100);
     applySeekTime(resolveScrubTime(e.clientX, bar));
 
     const onMove = (ev: MouseEvent) => {
       const r = seekRatioFromClientX(ev.clientX, bar);
-      setHoverProgress(r);
+      setHoverPercentDirect(r * 100);
       applySeekTime(resolveScrubTime(ev.clientX, bar));
     };
 
@@ -1244,10 +1280,10 @@ export default function MiniPlayer() {
     window.addEventListener("mouseup", onUp);
   };
 
-  const handleMouseMoveScrubber = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    setHoverProgress(x / rect.width);
+  const handleMouseMoveScrubber = onScrubberMouseMove;
+
+  const handleScrubberMouseLeave = () => {
+    onScrubberMouseLeave();
   };
 
   const scrubBarProgressPct = scrubPreviewRatio !== null ? scrubPreviewRatio * 100 : progress;
@@ -1944,7 +1980,7 @@ export default function MiniPlayer() {
                         className={`w-full ${isMini ? 'h-5' : 'h-8'} cursor-pointer relative group flex items-center`}
                         onMouseDown={handleScrubberBarMouseDown}
                         onMouseMove={handleMouseMoveScrubber}
-                        onMouseLeave={() => setHoverProgress(null)}
+                        onMouseLeave={handleScrubberMouseLeave}
                       >
                         <AnimatePresence>
                           {hoverProgress !== null &&
@@ -1979,7 +2015,7 @@ export default function MiniPlayer() {
                             formatTime={formatDuration}
                             onMouseDown={handleScrubberBarMouseDown}
                             onMouseMove={handleMouseMoveScrubber}
-                            onMouseLeave={() => setHoverProgress(null)}
+                            onMouseLeave={handleScrubberMouseLeave}
                             overlay={sbOverlayActive ? sponsorBlock.scrubOverlay : undefined}
                           />
                         ) : (

@@ -25,6 +25,7 @@ import {
 import { type FfprobeHint, type MediaFile } from "../types";
 import { ScrubHoverPreview } from "./player/ScrubHoverPreview";
 import { useScrubberThumbs } from "../useScrubberThumbs";
+import { useScrubberHover } from "../hooks/useScrubberHover";
 import { readResumeSeconds, writePlaybackPos } from "../playbackStorage";
 import { readPlaybackSpeed, writePlaybackSpeed } from "../playbackSpeedStorage";
 import { useVideoAmbientBackdrop } from "../useVideoAmbientBackdrop";
@@ -44,6 +45,7 @@ import {
   normalizeChapters,
   prevChapterIndex,
   timeForScrubberClientX,
+  timeForScrubberPercent,
 } from "../chapters";
 import { ChapterScrubber } from "./player/ChapterScrubber";
 import { AudioHeroStage } from "./player/AudioHeroStage";
@@ -215,8 +217,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   }));
   const [showControls, setShowControls] = useState(true);
   const [showVolume, setShowVolume] = useState(false);
-  const [scrubberHoverPos, setScrubberHoverPos] = useState(0);
-  const [isHoveringScrubber, setIsHoveringScrubber] = useState(false);
+  const { hoverPercent: scrubberHoverPos, isHovering: isHoveringScrubber, onMouseMove: onScrubberMouseMove, onMouseLeave: onScrubberMouseLeave } = useScrubberHover(scrubberRef);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubDragPercent, setScrubDragPercent] = useState<number | null>(null);
   const [isPressing, setIsPressing] = useState<"left" | "right" | null>(null);
@@ -273,15 +274,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     ambientCanvasRef,
     !audioOnly,
   );
-
-  const autoScrubberPreviews = useRuforgeStore(
-    (s) => s.settings.autoDownloadScrubberPreviews !== false,
-  );
-
-  const scrubberThumbs = useScrubberThumbs(file.path, {
-    audioOnly,
-    allowGenerate: autoScrubberPreviews,
-  });
 
   /** Warm ffprobe disk cache; results are not shown in the player UI. */
   useEffect(() => {
@@ -737,6 +729,48 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
           : 0;
     return normalizeChapters(file.chapters, dur);
   }, [file.chapters, file.duration, duration]);
+
+  const [scrubberBarWidthPx, setScrubberBarWidthPx] = useState(0);
+  useEffect(() => {
+    const el = scrubberRef.current;
+    if (!el) return;
+    const sync = () => setScrubberBarWidthPx(el.getBoundingClientRect().width);
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [file.path]);
+
+  const spriteHover = useMemo(() => {
+    if (!isHoveringScrubber) return null;
+    const dur =
+      isFinite(duration) && duration > 0
+        ? duration
+        : file.duration > 0
+          ? file.duration
+          : 0;
+    if (!isFinite(dur) || dur <= 0) return null;
+    const hoverTimeSec =
+      chapters && chapters.length >= 2 && scrubberBarWidthPx > 0
+        ? timeForScrubberPercent(chapters, dur, scrubberHoverPos, scrubberBarWidthPx)
+        : (scrubberHoverPos / 100) * dur;
+    return { hoverTimeSec, isActive: true as const };
+  }, [
+    isHoveringScrubber,
+    scrubberHoverPos,
+    duration,
+    file.duration,
+    chapters,
+    scrubberBarWidthPx,
+  ]);
+
+  const scrubberThumbs = useScrubberThumbs(file.path, {
+    audioOnly,
+    allowGenerate: false,
+    initialPaths: file.scrubSpritePaths,
+    scrubSpritesComplete: file.scrubSpritesComplete,
+    spriteHover,
+  });
 
   const activeChapter = useMemo(
     () => (chapters ? chapterAtTime(chapters, currentTime) : null),
@@ -1689,13 +1723,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               ref={scrubberRef}
               className={`w-full min-w-0 max-w-full relative cursor-pointer group/scrubber py-3 -my-3 pointer-events-auto ${isScrubbing ? "cursor-grabbing" : ""}`}
               onMouseDown={handleScrubMouseDown}
-              onMouseMove={(e) => {
-                const rect = scrubberRef.current?.getBoundingClientRect();
-                if (!rect) return;
-                setScrubberHoverPos(((e.clientX - rect.left) / rect.width) * 100);
-                setIsHoveringScrubber(true);
-              }}
-              onMouseLeave={() => setIsHoveringScrubber(false)}
+              onMouseMove={onScrubberMouseMove}
+              onMouseLeave={onScrubberMouseLeave}
             >
               {chapters && chapters.length >= 2 && (duration > 0 || file.duration > 0) ? (
                 <ChapterScrubber

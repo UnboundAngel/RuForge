@@ -1852,6 +1852,8 @@ fn collect_recent_video_paths(root: &Path, since: SystemTime) -> Vec<PathBuf> {
     out
 }
 
+const SCRUB_PREVIEW_CONCURRENCY: usize = 3;
+
 fn spawn_scrub_previews_for_recent_videos(
     app: AppHandle,
     listing_root: PathBuf,
@@ -1863,10 +1865,18 @@ fn spawn_scrub_previews_for_recent_videos(
         })
         .await
         .unwrap_or_default();
-        for path in paths {
-            let path_str = path.to_string_lossy().to_string();
-            let _ = extract_frames(app.clone(), path_str, Some(true)).await;
-        }
+        use futures_util::stream::{self, StreamExt};
+        stream::iter(paths)
+            .map(|path| {
+                let app = app.clone();
+                async move {
+                    let path_str = path.to_string_lossy().to_string();
+                    let _ = extract_frames(app, path_str, Some(true)).await;
+                }
+            })
+            .buffer_unordered(SCRUB_PREVIEW_CONCURRENCY)
+            .collect::<Vec<_>>()
+            .await;
     });
 }
 

@@ -2,6 +2,13 @@ import { normalizeChapters } from "./chapters";
 import { normalizeDurationSeconds } from "./components/downloader/downloaderFormat";
 import type { MediaFile } from "./types";
 
+function parseScrubSpritePaths(o: Record<string, unknown>): string[] | undefined {
+  const raw = o.scrubSpritePaths ?? o.scrub_sprite_paths;
+  if (!Array.isArray(raw)) return undefined;
+  const paths = raw.filter((p): p is string => typeof p === "string" && p.length > 0);
+  return paths.length > 0 ? paths : undefined;
+}
+
 /**
  * Converts one JSON object from `scan_gallery` into our `MediaFile` shape (camelCase, matching Rust serde).
  */
@@ -71,6 +78,9 @@ export function mediaFileFromGalleryJson(o: Record<string, unknown>): MediaFile 
         : typeof o.match_confidence === "number"
           ? o.match_confidence
           : null,
+    scrubSpritesComplete:
+      o.scrubSpritesComplete === true || o.scrub_sprites_complete === true,
+    scrubSpritePaths: parseScrubSpritePaths(o),
   };
 
   if (thumb != null && String(thumb) !== "") file.thumbnailPath = String(thumb);
