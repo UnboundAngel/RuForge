@@ -839,7 +839,7 @@ export const SettingsView: React.FC = () => {
                     settings.downloadAudioOnly
                       ? "Saved for video downloads. Not used while Download audio only is on."
                       : settings.autoDownloadScrubberPreviews
-                      ? "Sprite sheets for the player scrubber are built after each video download."
+                      ? "Sprite sheets for the player scrubber are built after each video download and for library videos still missing previews."
                       : "Use Generate Previews in the library to build scrubber sprites manually."
                   }
                   active={settings.autoDownloadScrubberPreviews}

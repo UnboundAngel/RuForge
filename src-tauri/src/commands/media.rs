@@ -116,9 +116,26 @@ fn sprite_sheets_required(duration_secs: f64) -> usize {
     ((duration_secs / SECONDS_PER_SHEET).ceil() as usize).max(1)
 }
 
-fn preview_sprites_complete(thumb_dir: &Path, duration_secs: f64) -> bool {
+pub fn preview_sprites_complete(thumb_dir: &Path, duration_secs: f64) -> bool {
     let n = collect_sprite_paths(thumb_dir).len();
     n >= sprite_sheets_required(duration_secs)
+}
+
+pub fn scrub_sprites_complete_for_path(video_path: &Path, duration_secs: f64) -> bool {
+    let video_dir = match video_path.parent() {
+        Some(d) => d,
+        None => return false,
+    };
+    let video_name = video_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown");
+    let thumb_dir = video_dir.join(THUMB_DIR_NAME).join(video_name);
+    preview_sprites_complete(&thumb_dir, duration_secs)
+}
+
+fn emit_scrub_sprite_event(app: &AppHandle, event: &str, video_path: &str) {
+    let _ = app.emit(event, serde_json::json!({ "videoPath": video_path }));
 }
 
 fn collect_sprite_paths(thumb_dir: &std::path::Path) -> Vec<std::path::PathBuf> {
@@ -217,10 +234,41 @@ async fn ensure_poster_if_missing_inner(
     write_poster_jpeg(&app, &slot, &video_path, &poster_dest).await
 }
 
-async fn extract_frames_inner(
+fn list_existing_sprite_paths(thumb_dir: &Path) -> Vec<String> {
+    collect_sprite_paths(thumb_dir)
+        .into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect()
+}
+
+pub fn list_scrub_sprite_paths_for_video(video_path: &Path) -> Vec<String> {
+    let video_dir = match video_path.parent() {
+        Some(d) => d,
+        None => return Vec::new(),
+    };
+    let video_name = video_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown");
+    let thumb_dir = video_dir.join(THUMB_DIR_NAME).join(video_name);
+    if !thumb_dir.is_dir() {
+        return Vec::new();
+    }
+    list_existing_sprite_paths(&thumb_dir)
+}
+
+#[tauri::command]
+pub fn list_scrub_sprite_paths(video_path: String) -> Result<Vec<String>, String> {
+    let path = Path::new(&video_path);
+    if !path.is_file() {
+        return Err("Invalid video path".into());
+    }
+    Ok(list_scrub_sprite_paths_for_video(path))
+}
+
+async fn extract_frames_generate_inner(
     app: AppHandle,
     video_path: String,
-    allow_generate: bool,
     slot: Arc<FfmpegVideoSlot>,
 ) -> Result<Vec<String>, String> {
     let video_file_path = Path::new(&video_path);
@@ -244,56 +292,50 @@ async fn extract_frames_inner(
     let poster_dest = thumb_dir.join(POSTER_FILE);
     let duration_secs = duration_from_ytdlp_info_json(video_file_path);
 
-    let existing: Vec<String> = collect_sprite_paths(&thumb_dir)
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
-
     if preview_sprites_complete(&thumb_dir, duration_secs) {
-        return Ok(existing);
+        return Ok(list_existing_sprite_paths(&thumb_dir));
     }
 
-    if !allow_generate {
-        return Ok(existing);
-    }
+    let output_pattern = thumb_dir.join("sprite_%03d.jpg");
+    emit_scrub_sprite_event(&app, "scrub-sprites-started", &video_path);
 
-    if !preview_sprites_complete(&thumb_dir, duration_secs) {
-        let output_pattern = thumb_dir.join("sprite_%03d.jpg");
+    let ffmpeg_result = run_ffmpeg_sidecar_unlocked(
+        &app,
+        &slot,
+        vec![
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-threads",
+            "0",
+            "-i",
+            video_path.as_str(),
+            "-an",
+            "-sn",
+            "-dn",
+            "-vf",
+            "fps=1/5,scale=160:90,tile=10x10",
+            "-q:v",
+            "5",
+            output_pattern.to_str().ok_or("Bad sprite path")?,
+        ],
+    )
+    .await;
 
-        run_ffmpeg_sidecar_unlocked(
-            &app,
-            &slot,
-            vec![
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-i",
-                video_path.as_str(),
-                "-vf",
-                "fps=1/5,scale=160:90,tile=10x10",
-                "-q:v",
-                "5",
-                output_pattern.to_str().ok_or("Bad sprite path")?,
-            ],
-        )
-        .await
-        .map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
+    emit_scrub_sprite_event(&app, "scrub-sprites-finished", &video_path);
 
-        let sprites = collect_sprite_paths(&thumb_dir);
-        if sprites.is_empty() {
-            return Err("ffmpeg sidecar produced no sprite sheets".to_string());
-        }
+    ffmpeg_result.map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
+
+    let sprites = collect_sprite_paths(&thumb_dir);
+    if sprites.is_empty() {
+        return Err("ffmpeg sidecar produced no sprite sheets".to_string());
     }
 
     if !poster_dest.is_file() {
         let _ = write_poster_jpeg(&app, &slot, &video_path, &poster_dest).await;
     }
 
-    let out: Vec<String> = collect_sprite_paths(&thumb_dir)
-        .into_iter()
-        .map(|p| p.to_string_lossy().to_string())
-        .collect();
-    Ok(out)
+    Ok(list_existing_sprite_paths(&thumb_dir))
 }
 
 #[tauri::command]
@@ -304,10 +346,31 @@ pub async fn extract_frames(
 ) -> Result<Vec<String>, String> {
     let allow_generate = allow_generate.unwrap_or(true);
     let vk = video_path.clone();
+    let video_file_path = Path::new(&video_path);
+    if !video_file_path.is_file() {
+        return Err("Invalid video path".into());
+    }
+    let video_dir = video_file_path.parent().ok_or("Invalid video path")?;
+    let video_name = video_file_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown");
+    let thumb_dir = video_dir.join(THUMB_DIR_NAME).join(video_name);
+    let duration_secs = duration_from_ytdlp_info_json(video_file_path);
+    let existing = if thumb_dir.is_dir() {
+        list_existing_sprite_paths(&thumb_dir)
+    } else {
+        Vec::new()
+    };
+
+    if preview_sprites_complete(&thumb_dir, duration_secs) || !allow_generate {
+        return Ok(existing);
+    }
+
     let result = with_per_video_ffmpeg_lock(&vk, |slot| {
         let app = app.clone();
         let video_path = video_path.clone();
-        async move { extract_frames_inner(app, video_path, allow_generate, slot).await }
+        async move { extract_frames_generate_inner(app, video_path, slot).await }
     })
     .await;
     if let Ok(ref paths) = result {

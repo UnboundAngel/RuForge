@@ -409,6 +409,10 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Scrub hover**: windowed sprite sheet preload (current ±1, direction-ahead on long videos; full preload when ≤2 sheets); wired to same hover time as thumb (`useScrubberThumbs.ts`, `PlayerView.tsx`, `MiniPlayer.tsx`).
+- **Scrub hover**: rAF-throttled hover state, scan-time sprite path cache, sheet preload, CSS background-position previews, defer library backfill during playback (`useScrubberHover.ts`, `useScrubberThumbs.ts`, `gallery.rs`, `ruforgeStore.ts`).
+- **Scrub previews**: player/mini load sprites read-only (no ffmpeg lock wait); list path skips lock; gallery refresh only after generation (`media.rs`, `PlayerView.tsx`).
+- **Scrub previews**: faster ffmpeg sprite generation (parallel jobs, skip audio/sub decode); library backfill when auto mode is on; per-card spinner via Rust events (`media.rs`, `scrubSpriteBackfill.ts`).
 - **Media chrome**: tab bulge SVG fillets and clip insets track `--rf-titlebar-h` again on Video Library and Settings tabs (`App.tsx`, `index.css`).
 - **Settings tabs**: scroll morph uses `RF_TITLEBAR_H_PX`; bulge fillets at scroll rest only (no strip clip).
 

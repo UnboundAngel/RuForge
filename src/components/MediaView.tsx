@@ -16,6 +16,7 @@ import { useRuforgeStore } from "../store/ruforgeStore";
 import { filterMainLibraryEntries } from "../mainLibraryFilter";
 import { formatDuration } from "./downloader/downloaderFormat";
 import { youtubeUrlsMatch } from "../youtubeUrl";
+import { useGalleryScrubExtracting } from "../scrubSpriteGallerySync";
 
 function deleteMediaErrorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
@@ -102,7 +103,7 @@ const VideoCard = ({
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
   const activeMenu = useRuforgeStore((s) => s.activeMenu);
   const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
-  const extracting = useRuforgeStore((s) => !!s.extractingByPath[file.path]);
+  const extracting = useGalleryScrubExtracting(file.path);
   const [isHovered, setIsHovered] = useState(false);
   const [previewMuted, setPreviewMuted] = useState(true);
   const [views, setViews] = useState(() => {
@@ -224,10 +225,19 @@ const VideoCard = ({
         })()}
 
         {extracting && (
-          <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center space-y-2 z-30">
-            <Loader2 className="animate-spin text-[color:var(--accent)]" size={24} />
-            <span className="text-[10px] font-black uppercase tracking-widest text-[color:var(--accent)]">Extracting...</span>
-          </div>
+          <>
+            <div className="absolute inset-0 z-40 bg-black/55 pointer-events-none" aria-hidden />
+            <div
+              className="absolute top-2 left-2 z-50 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-md border border-[color:color-mix(in_srgb,var(--accent),transparent_50%)] pointer-events-none shadow-lg"
+              aria-live="polite"
+              aria-label="Building scrubber previews"
+            >
+              <Loader2 className="animate-spin text-[color:var(--accent)] shrink-0" size={13} />
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[color:var(--accent)]">
+                Previews
+              </span>
+            </div>
+          </>
         )}
 
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none ring-1 ring-inset ring-white/20 rounded-2xl" />
@@ -291,7 +301,8 @@ export const MediaView = ({
   const activeMenu = useRuforgeStore((s) => s.activeMenu);
   const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
-  const setGalleryExtractingPath = useRuforgeStore((s) => s.setGalleryExtractingPath);
+  const addGalleryExtractingPath = useRuforgeStore((s) => s.addGalleryExtractingPath);
+  const removeGalleryExtractingPath = useRuforgeStore((s) => s.removeGalleryExtractingPath);
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
   const handlePlayPlaylist = useRuforgeStore((s) => s.handlePlayPlaylist);
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
@@ -348,16 +359,16 @@ export const MediaView = ({
   };
 
   const handleExtract = async (file: MediaFile) => {
-    setGalleryExtractingPath(file.path);
+    addGalleryExtractingPath(file.path);
     try {
       await invoke("extract_frames", { videoPath: file.path, allowGenerate: true });
       notify("Previews generated successfully.");
-      await fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true });
+      await fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true, skipScrubBackfill: true });
     } catch (e) {
       console.error(e);
       notify("Failed to generate previews.");
     } finally {
-      setGalleryExtractingPath(null);
+      removeGalleryExtractingPath(file.path);
       setGalleryActiveMenu(null);
     }
   };

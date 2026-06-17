@@ -24,6 +24,10 @@ export interface MediaFile {
   trackNo?: number | null;
   /** Path to extracted embedded cover art cached on disk. */
   embeddedCoverPath?: string | null;
+  /** True when ffmpeg scrubber sprite sheets cover the full video duration. */
+  scrubSpritesComplete?: boolean;
+  /** Sprite sheet paths collected at gallery scan (read-only, no ffmpeg). */
+  scrubSpritePaths?: string[];
   /** Canonical artist from musicmeta sidecar (tags > MB > YouTube > filename). */
   canonicalArtist?: string | null;
   /** Canonical album from musicmeta sidecar. */

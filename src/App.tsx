@@ -14,6 +14,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
+import { wireScrubSpriteGalleryIndicators } from "./scrubSpriteGallerySync";
 import { isDebugCategoryEnabled } from "./debug/debugCategories";
 import { debugLog } from "./debug/debugLog";
 import { useUrlDropIntake } from "./features/downloader/useUrlDropIntake";
@@ -909,6 +910,8 @@ function App() {
   }, [isSearchExpanded]);
 
   useEffect(() => setupTaskbarTransportBridge(), []);
+
+  useEffect(() => wireScrubSpriteGalleryIndicators(), []);
 
   // Tauri event listeners
   useEffect(() => {

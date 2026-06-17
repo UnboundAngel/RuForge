@@ -8,6 +8,20 @@ export const CELL_H = 90;
 export const SHEET_W = CELL_W * SPRITE_GRID;
 export const SHEET_H = CELL_H * SPRITE_GRID;
 
+export function spriteSheetIndexForHover(
+  hoverTimeSec: number,
+  spritePathCount: number,
+): number {
+  if (spritePathCount <= 0) return 0;
+  const maxFrame = spritePathCount * 100 - 1;
+  if (maxFrame < 0) return 0;
+  const frameIdx = Math.min(
+    Math.max(0, Math.floor(hoverTimeSec / SECONDS_PER_THUMB)),
+    maxFrame,
+  );
+  return Math.floor(frameIdx / 100);
+}
+
 export function pickSpriteCell(
   hoverTimeSec: number,
   videoDurationSec: number,
@@ -16,19 +30,18 @@ export function pickSpriteCell(
   if (spritePaths.length === 0 || !Number.isFinite(videoDurationSec) || videoDurationSec <= 0) {
     return null;
   }
-  const sorted = [...spritePaths].sort();
-  const maxFrame = sorted.length * 100 - 1;
+  const sheetIdx = spriteSheetIndexForHover(hoverTimeSec, spritePaths.length);
+  const maxFrame = spritePaths.length * 100 - 1;
   if (maxFrame < 0) return null;
   const frameIdx = Math.min(
     Math.max(0, Math.floor(hoverTimeSec / SECONDS_PER_THUMB)),
     maxFrame,
   );
-  const sheetIdx = Math.floor(frameIdx / 100);
   const cell = frameIdx % 100;
   const col = cell % SPRITE_GRID;
   const row = Math.floor(cell / SPRITE_GRID);
-  if (sheetIdx >= sorted.length) return null;
-  return { path: sorted[sheetIdx], col, row };
+  if (sheetIdx >= spritePaths.length) return null;
+  return { path: spritePaths[sheetIdx], col, row };
 }
 
 /** Hover preview: one cell from the ffmpeg sprite sheet, scaled to `displayWidth` px wide. */
@@ -54,21 +67,15 @@ export function ScrubberHoverThumb({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-xl bg-black ${className}`}
-      style={{ width: displayWidth, height: displayHeight }}
-    >
-      <img
-        src={url}
-        alt=""
-        width={SHEET_W * scale}
-        height={SHEET_H * scale}
-        className="max-w-none select-none pointer-events-none"
-        style={{
-          transform: `translate(${-col * CELL_W * scale}px, ${-row * CELL_H * scale}px)`,
-          transformOrigin: "0 0",
-        }}
-        draggable={false}
-      />
-    </div>
+      className={`overflow-hidden rounded-xl bg-black ${className}`}
+      style={{
+        width: displayWidth,
+        height: displayHeight,
+        backgroundImage: `url(${url})`,
+        backgroundSize: `${SHEET_W * scale}px ${SHEET_H * scale}px`,
+        backgroundPosition: `${-col * CELL_W * scale}px ${-row * CELL_H * scale}px`,
+        backgroundRepeat: "no-repeat",
+      }}
+    />
   );
 }

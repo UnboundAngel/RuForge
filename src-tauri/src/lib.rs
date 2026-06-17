@@ -47,7 +47,7 @@ use crate::commands::music_listen_log::{
 };
 use crate::commands::media::{
     delete_media, delete_media_batch, ensure_poster_if_missing, extract_frames, get_subtitle_tracks,
-    read_local_subtitle_vtt,
+    list_scrub_sprite_paths, read_local_subtitle_vtt,
 };
 use crate::commands::recently_deleted::{
     list_recently_deleted, remove_recently_deleted_entry, restore_recently_deleted,
@@ -213,6 +213,7 @@ pub fn run() {
             get_embedded_explorer_webview_url,
             update_tray_config,
             extract_frames,
+            list_scrub_sprite_paths,
             ensure_poster_if_missing,
             delete_media,
             delete_media_batch,
