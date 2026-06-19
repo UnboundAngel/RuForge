@@ -409,6 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Telemetry**: `main.rs` sets shared Tokio runtime before Aptabase plugin init so `npm run tauri dev` no longer panics on startup (`main.rs`).
 - **Crash recovery**: root React error boundary wraps every window from `main.tsx`; friendly fallback, reload, collapsible error details (`RootErrorBoundary.tsx`).
 - **Scrub previews**: hover thumb uses `<img>` instead of CSS `background-image` so `#` in item folder paths does not break asset URLs (`scrubSpritePreview.tsx`).
 - **Scrub previews**: Windows thumb subdirs strip trailing dots from yt-dlp stems (`...webm`); ffmpeg output paths now use the same sanitized name so sprite sheets write successfully (`utils.rs`, `media.rs`, `gallery.rs`).

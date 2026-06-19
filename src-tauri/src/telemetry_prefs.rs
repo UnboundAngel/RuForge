@@ -30,6 +30,7 @@ pub fn pref_path(identifier: &str) -> std::path::PathBuf {
         .join(TELEMETRY_PREF_FILE)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn read_telemetry_prefs(identifier: &str) -> TelemetryPrefsDisk {
     std::fs::read_to_string(pref_path(identifier))
         .ok()

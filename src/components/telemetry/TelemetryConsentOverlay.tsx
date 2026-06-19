@@ -98,8 +98,8 @@ export function TelemetryConsentOverlay({ onComplete }: TelemetryConsentOverlayP
               <div className="min-w-0 space-y-1">
                 <h3 className="text-sm font-semibold text-stone-100">Usage telemetry</h3>
                 <p className="text-[11px] leading-relaxed text-stone-500">
-                  Counts launches and grabs the basics: OS, app version, language. What you download
-                  never touches it.
+                    Counts launches and grabs basic info: OS, app version, language. Your downloads
+                    are never sent along with it.
                 </p>
               </div>
               <ConsentToggle active={usageOn} onClick={() => setUsageOn((v) => !v)} />
@@ -108,8 +108,8 @@ export function TelemetryConsentOverlay({ onComplete }: TelemetryConsentOverlayP
               <div className="min-w-0 space-y-1">
                 <h3 className="text-sm font-semibold text-stone-100">Crash reports</h3>
                 <p className="text-[11px] leading-relaxed text-stone-500">
-                  When something breaks, it sends me the crash, scrubbed clean first so no links or
-                  filenames ride along.
+                  When something breaks, it sends me the crash, with links and 
+                  filenames removed first so no sensitive info is sent alongside the report.
                 </p>
               </div>
               <ConsentToggle active={crashOn} onClick={() => setCrashOn((v) => !v)} />
