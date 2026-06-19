@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::media::scrub_sprites_complete_for_path;
 use crate::commands::media::list_scrub_sprite_paths_for_video;
-use crate::utils::{is_audio_only_ext, is_item_bucket, is_media_ext, is_playlist_bucket, primary_vtt_sidecar, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
+use crate::utils::{is_audio_only_ext, is_item_bucket, is_media_ext, is_playlist_bucket, primary_vtt_sidecar, thumb_dir_for_stem, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
 
 fn is_scrub_sprite_video_ext(ext: &str) -> bool {
     matches!(ext, "mp4" | "mkv" | "webm")
@@ -103,8 +103,9 @@ pub enum GalleryEntry {
     },
 }
 
-/// Strip yt-dlp per-stream suffix (`Title.f399` → `Title`) so sidecars and dedupe match the muxed output.
+/// Strip yt-dlp merge temp (`.temp`) and per-stream (`.f399`) suffixes so sidecars and dedupe match muxed output.
 fn strip_ytdlp_stream_suffix(stem: &str) -> &str {
+    let stem = strip_ytdlp_temp_suffix(stem);
     let Some(dot_f) = stem.rfind(".f") else {
         return stem;
     };
@@ -121,8 +122,46 @@ fn strip_ytdlp_stream_suffix(stem: &str) -> &str {
     stem
 }
 
-fn is_ytdlp_stream_intermediate_stem(stem: &str) -> bool {
+fn strip_ytdlp_temp_suffix(stem: &str) -> &str {
+    const TEMP: &str = ".temp";
+    if stem.ends_with(TEMP) && stem.len() > TEMP.len() {
+        return &stem[..stem.len() - TEMP.len()];
+    }
+    stem
+}
+
+pub(crate) fn is_ytdlp_stream_intermediate_stem(stem: &str) -> bool {
     strip_ytdlp_stream_suffix(stem) != stem
+}
+
+fn is_ytdlp_temp_merge_stem(stem: &str) -> bool {
+    strip_ytdlp_temp_suffix(stem) != stem
+}
+
+fn sibling_final_muxed_video_exists(parent: &std::path::Path, base_stem: &str) -> bool {
+    for ext in ["mp4", "mkv", "webm"] {
+        let candidate = parent.join(format!("{base_stem}.{ext}"));
+        if candidate.is_file() {
+            return true;
+        }
+    }
+    false
+}
+
+fn should_hard_skip_stranded_ytdlp_temp(path: &std::path::Path) -> bool {
+    let stem = match path.file_stem().and_then(|s| s.to_str()) {
+        Some(s) => s,
+        None => return false,
+    };
+    if !is_ytdlp_temp_merge_stem(stem) {
+        return false;
+    }
+    let parent = match path.parent() {
+        Some(p) => p,
+        None => return false,
+    };
+    let base = strip_ytdlp_stream_suffix(stem);
+    sibling_final_muxed_video_exists(parent, base)
 }
 
 fn resolve_info_json_path(parent: &std::path::Path, stem: &str) -> Option<std::path::PathBuf> {
@@ -487,6 +526,9 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
         if !is_media_ext(ext) {
             continue;
         }
+        if should_hard_skip_stranded_ytdlp_temp(&path) {
+            continue;
+        }
 
         let metadata = match std::fs::metadata(&path) {
             Ok(m) => m,
@@ -505,7 +547,7 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
         });
 
         let ruforge_poster_path = {
-            let p = parent.join(THUMB_DIR_NAME).join(stem).join(POSTER_FILE);
+            let p = thumb_dir_for_stem(parent, stem).join(POSTER_FILE);
             if p.is_file() {
                 Some(p.to_string_lossy().to_string())
             } else {
@@ -1021,6 +1063,47 @@ pub(crate) fn cleanup_orphan_downloads_under(root: &Path, since: std::time::Syst
     }
     for parent in parents {
         sweep_parent_dir_for_duplicate_outputs(&parent);
+        sweep_stranded_ytdlp_temp_files(&parent);
+    }
+}
+
+fn sweep_stranded_ytdlp_temp_files(parent: &Path) {
+    let Ok(rd) = std::fs::read_dir(parent) else {
+        return;
+    };
+    for ent in rd.flatten() {
+        let path = ent.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if ext != "mp4" {
+            continue;
+        }
+        let stem = match path.file_stem().and_then(|s| s.to_str()) {
+            Some(s) => s,
+            None => continue,
+        };
+        if !is_ytdlp_temp_merge_stem(stem) {
+            continue;
+        }
+        let base = strip_ytdlp_stream_suffix(stem);
+        let final_mp4 = parent.join(format!("{base}.mp4"));
+        if !final_mp4.is_file() {
+            continue;
+        }
+        crate::rf_log!(
+            "library.dedup",
+            log::Level::Info,
+            "removing stranded yt-dlp merge temp {:?} (kept {:?})",
+            path,
+            final_mp4
+        );
+        remove_media_download_artifacts(&path);
     }
 }
 
@@ -1063,6 +1146,7 @@ fn sweep_download_tree_for_duplicates(root: &Path) {
     collect_media_parent_dirs(root, 0, 8, &mut parents);
     for parent in parents {
         sweep_parent_dir_for_duplicate_outputs(&parent);
+        sweep_stranded_ytdlp_temp_files(&parent);
     }
 }
 
@@ -1109,7 +1193,7 @@ pub async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
 
         if path.is_file() {
             let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-            if is_media_ext(ext) {
+            if is_media_ext(ext) && !should_hard_skip_stranded_ytdlp_temp(&path) {
                 let media = scan_media_file_direct(&path)?;
                 out.push(GalleryEntry::Media { file: media });
             }
@@ -1206,7 +1290,7 @@ fn scan_item_bucket_dir(bucket_path: &std::path::Path) -> Result<Vec<GalleryEntr
         }
         if entry.is_file() {
             let ext = entry.extension().and_then(|s| s.to_str()).unwrap_or("");
-            if is_media_ext(ext) {
+            if is_media_ext(ext) && !should_hard_skip_stranded_ytdlp_temp(&entry) {
                 let media = scan_media_file_direct(&entry)?;
                 out.push(GalleryEntry::Media { file: media });
             }
@@ -1258,7 +1342,7 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
     });
 
     let ruforge_poster_path = {
-        let p = parent.join(THUMB_DIR_NAME).join(stem).join(POSTER_FILE);
+        let p = thumb_dir_for_stem(parent, stem).join(POSTER_FILE);
         if p.is_file() {
             Some(p.to_string_lossy().to_string())
         } else {
@@ -1587,6 +1671,62 @@ mod tests {
             "My Video"
         );
         assert_eq!(strip_ytdlp_stream_suffix("My Video"), "My Video");
+    }
+
+    #[test]
+    fn strip_ytdlp_stream_suffix_removes_temp_merge_tail() {
+        assert_eq!(
+            strip_ytdlp_stream_suffix("My Video.temp"),
+            "My Video"
+        );
+    }
+
+    #[test]
+    fn hard_skip_stranded_temp_when_final_mp4_exists() {
+        let tmp = std::env::temp_dir().join(format!(
+            "ruforge_gallery_temp_skip_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let _ = std::fs::create_dir_all(&tmp);
+        let final_mp4 = tmp.join("My Video.mp4");
+        let temp_mp4 = tmp.join("My Video.temp.mp4");
+        let _ = std::fs::write(&final_mp4, b"x");
+        let _ = std::fs::write(&temp_mp4, b"y");
+        assert!(should_hard_skip_stranded_ytdlp_temp(&temp_mp4));
+        assert!(!should_hard_skip_stranded_ytdlp_temp(&final_mp4));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn group_key_inherits_id_from_temp_stem_sidecar() {
+        let tmp = std::env::temp_dir().join(format!(
+            "ruforge_gallery_temp_key_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let _ = std::fs::create_dir_all(&tmp);
+        let info = tmp.join("My Video.info.json");
+        std::fs::write(
+            &info,
+            r#"{"id":"abc123","title":"My Video","webpage_url":"https://www.youtube.com/watch?v=abc123"}"#,
+        )
+        .expect("write info json");
+        let temp_path = tmp.join("My Video.temp.mp4");
+        let _ = std::fs::write(&temp_path, b"x").expect("write mp4");
+
+        let file = media_file_from_path_for_cleanup(&temp_path).expect("media file");
+        assert_eq!(file.source_id.as_deref(), Some("abc123"));
+        assert_eq!(
+            media_library_group_key(&temp_path, &file),
+            "id:abc123"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

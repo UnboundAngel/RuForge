@@ -1,4 +1,5 @@
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { CLEANUP_SUGGEST_USAGE_RATIO } from "@/cleanupCandidates";
 import { cn } from "@/lib/utils";
 
 type StorageGlyphProps = {
@@ -17,7 +18,7 @@ export function StorageGlyph({ size = 28, className }: StorageGlyphProps) {
   const usedGB = stats.total_bytes / (1024 * 1024 * 1024);
   const pct = Math.min((usedGB / limitGB) * 100, 100);
   const isFull = usedGB >= limitGB;
-  const isWarning = usedGB >= limitGB * 0.8;
+  const isWarning = usedGB >= limitGB * CLEANUP_SUGGEST_USAGE_RATIO;
   const tip = `${usedGB.toFixed(1)} / ${limitGB} GB`;
 
   const r = size / 2 - 2;

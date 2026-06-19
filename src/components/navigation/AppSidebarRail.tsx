@@ -1,4 +1,4 @@
-import logo from "@/assets/neotubeIcon.png";
+import logo from "@/assets/ruforgeAppIcon.png";
 import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";

@@ -8,10 +8,12 @@ import { youtubeUrlsMatch } from "../youtubeUrl";
 import { askConfirm } from "./ConfirmDialog";
 import {
   buildCleanupCandidates,
+  bytesGoalSelectionCount,
   bytesToFreeForHeadroom,
   clearPlaybackStateForDeletedPaths,
   defaultSelectedPaths,
   formatBytes,
+  formatCleanupBytes,
   type CleanupFilterMode,
   type CleanupCandidate,
 } from "../cleanupCandidates";
@@ -239,6 +241,27 @@ export function AuthorizeCleanupModal() {
   const shortfall =
     bytesNeeded !== null && bytesNeeded > 0 && selectedBytes < bytesNeeded ? bytesNeeded - selectedBytes : 0;
 
+  const hasByteGoal = bytesNeeded !== null && bytesNeeded > 0;
+  const goalItemCount = useMemo(
+    () => (hasByteGoal ? bytesGoalSelectionCount(candidates, bytesNeeded!) : 0),
+    [candidates, hasByteGoal, bytesNeeded],
+  );
+
+  const progressPct = useMemo(() => {
+    if (selected.size === 0) return 0;
+    if (hasByteGoal) return Math.min(100, (selectedBytes / bytesNeeded!) * 100);
+    if (candidates.length === 0) return 0;
+    return Math.min(100, (selected.size / candidates.length) * 100);
+  }, [selected.size, selectedBytes, hasByteGoal, bytesNeeded, candidates.length]);
+
+  const goalMet = hasByteGoal && selectedBytes >= bytesNeeded!;
+  const barFillColor =
+    selected.size === 0
+      ? "transparent"
+      : goalMet
+        ? "var(--accent)"
+        : "rgb(120 113 108)"; // stone-500 brown-gray
+
   return (
     <AnimatePresence>
       {open && (
@@ -297,26 +320,45 @@ export function AuthorizeCleanupModal() {
             </div>
 
             <div className="flex items-center gap-8 pointer-events-auto">
-              <div className="flex flex-col items-end gap-1.5">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">Goal progress</span>
+              <div className="flex flex-col items-end gap-1.5 min-w-[12rem]">
+                <div className="flex items-baseline gap-2 tabular-nums">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                    {hasByteGoal ? "Goal progress" : "Selected"}
+                  </span>
                   {bytesNeeded === null ? (
                     <Loader2 size={10} className="animate-spin text-stone-700" />
                   ) : (
-                    <span className={`text-[10px] font-black tracking-widest transition-colors ${shortfall === 0 ? 'text-[color:var(--accent)]' : 'text-stone-400'}`}>
-                      {formatBytes(selectedBytes)} / {formatBytes(bytesNeeded)}
+                    <span
+                      className={`text-[10px] font-black tracking-wide transition-colors ${
+                        goalMet ? "text-[color:var(--accent)]" : "text-stone-300"
+                      }`}
+                    >
+                      {selected.size}
+                      {hasByteGoal && goalItemCount > 0 ? ` / ${goalItemCount}` : ""} item
+                      {selected.size === 1 ? "" : "s"}
+                      {hasByteGoal ? (
+                        <span className="text-stone-600 font-semibold">
+                          {" "}
+                          · {formatCleanupBytes(selectedBytes)} / {formatCleanupBytes(bytesNeeded)}
+                        </span>
+                      ) : selectedBytes > 0 ? (
+                        <span className="text-stone-600 font-semibold">
+                          {" "}
+                          · {formatCleanupBytes(selectedBytes)}
+                        </span>
+                      ) : null}
                     </span>
                   )}
                 </div>
-                {/* Visual Goal Bar */}
-                <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
-                  <motion.div 
+                <div className="w-48 h-1 rounded-full overflow-hidden bg-stone-800/80">
+                  <motion.div
                     initial={false}
-                    animate={{ 
-                      width: bytesNeeded === null ? "0%" : `${Math.min(100, (selectedBytes / bytesNeeded) * 100)}%`,
-                      backgroundColor: shortfall === 0 && bytesNeeded !== null ? 'var(--accent)' : '#444'
+                    animate={{
+                      width: `${progressPct}%`,
+                      backgroundColor: barFillColor,
                     }}
-                    className="h-full"
+                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                    className="h-full rounded-full"
                   />
                 </div>
               </div>

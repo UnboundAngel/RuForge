@@ -35,7 +35,7 @@ export function explorerBoundsEqual(
   );
 }
 
-/** Child explorer webviews ignore DOM clip-path; shrink flush edges when the shell is rounded. */
+/** Child explorer webviews ignore DOM clip-path; shrink the right edge when the shell is rounded. */
 export function insetExplorerBoundsForRoundedWindow(
   bounds: ExplorerBounds,
   host: HTMLElement,
@@ -49,9 +49,6 @@ export function insetExplorerBoundsForRoundedWindow(
 
   if (rect.right >= window.innerWidth - 0.5) {
     width = Math.max(0, width - inset);
-  }
-  if (rect.bottom >= window.innerHeight - 0.5) {
-    height = Math.max(0, height - inset);
   }
 
   return { x, y, width, height };

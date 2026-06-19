@@ -86,7 +86,11 @@ pub fn run() {
     apply_hardware_acceleration_prefs_to_context(&mut context);
 
     #[cfg(windows)]
-    windows_audio_brand::set_explicit_app_user_model_id(&context.config().identifier);
+    {
+        let app_id =
+            windows_audio_brand::process_app_user_model_id(&context.config().identifier);
+        windows_audio_brand::set_explicit_app_user_model_id(&app_id);
+    }
 
     tauri::Builder::default()
         .manage(AppConfig {
@@ -104,6 +108,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(
+            tauri_plugin_snap_layout::init()
+                .button_id("ruforge-tb-maximize")
+                .build(),
+        )
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(crate::debug_log::plugin_max_level())
@@ -127,6 +136,9 @@ pub fn run() {
             });
 
             setup_tray(app)?;
+
+            #[cfg(windows)]
+            windows_audio_brand::apply_window_taskbar_icons(app.handle());
 
             if let Err(e) = crate::commands::music_listen_log::music_listen_startup_housekeeping(
                 app.handle(),

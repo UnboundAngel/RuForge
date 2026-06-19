@@ -38,6 +38,7 @@ tauri-plugin-autostart = "2"
 tauri-plugin-store = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
+tauri-plugin-snap-layout = "1.0.8"
 
 tauri-plugin-shell = "2.3.5"
 tauri-plugin-clipboard-manager = "2"
@@ -54,11 +55,21 @@ trash = "5"
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
 
+[features]
+default = []
+dev-verify-bins = []
+
 [dev-dependencies]
 
 [[bin]]
 name = "verify_track_enrich"
 path = "src/bin/verify_track_enrich.rs"
+required-features = ["dev-verify-bins"]
+
+[[bin]]
+name = "verify_gallery_folder"
+path = "src/bin/verify_gallery_folder.rs"
+required-features = ["dev-verify-bins"]
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [

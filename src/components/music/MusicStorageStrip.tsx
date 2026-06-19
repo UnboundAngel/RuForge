@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { CLEANUP_SUGGEST_USAGE_RATIO } from "@/cleanupCandidates";
 import { cn } from "@/lib/utils";
 
 export function MusicStorageStrip() {
@@ -19,7 +20,7 @@ export function MusicStorageStrip() {
   const hasLimit = saveToInternal && limitGB > 0;
   const pct = hasLimit ? Math.min((usedGB / limitGB) * 100, 100) : 0;
   const isFull = hasLimit && usedGB >= limitGB;
-  const isWarning = hasLimit && usedGB >= limitGB * 0.8;
+  const isWarning = hasLimit && usedGB >= limitGB * CLEANUP_SUGGEST_USAGE_RATIO;
 
   const detail = hasLimit
     ? `${usedGB.toFixed(1)} / ${limitGB} GB`

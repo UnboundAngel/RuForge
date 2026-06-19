@@ -6,7 +6,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import logo from "@/assets/neotubeIcon.png";
+import logo from "@/assets/ruforgeAppIcon.png";
 import { mainWindowPortalRoot } from "@/lib/mainWindowFrame";
 import type { OnboardingIslandStep } from "@/lib/onboardingSteps";
 import {

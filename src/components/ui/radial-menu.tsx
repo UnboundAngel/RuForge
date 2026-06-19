@@ -4,7 +4,7 @@ import { motion, AnimatePresence, type Transition } from "motion/react";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
 import { nextNavMode, type NavMode } from "@/store/types";
 import { NAV_MODE_ENTER_LABEL, RADIAL_PALETTE } from "@/lib/radialNavTheme";
-import logo from "@/assets/neotubeIcon.png";
+import logo from "@/assets/ruforgeAppIcon.png";
 
 export type RadialHintPlacement = "top" | "right" | "bottom" | "left";
 

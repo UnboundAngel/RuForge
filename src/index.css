@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant snap-hover (&.is-hovered);
+
 @keyframes slideSquiggle {
   from {
     transform: translateX(0);
@@ -220,6 +222,29 @@ html[data-rf-window-rounded="1"] #rf-boot {
 
 .controls-hidden .subtitle-overlay-host {
   padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* SponsorBlock skip button: anchor above player chrome, settle modestly when controls hide. */
+.rf-sb-skip-btn {
+  bottom: max(6.75rem, env(safe-area-inset-bottom, 0px));
+  transition:
+    background-color 0.3s,
+    transform 0.3s,
+    bottom 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.controls-hidden .rf-sb-skip-btn {
+  bottom: max(5rem, env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 640px) {
+  .rf-sb-skip-btn {
+    bottom: max(7.25rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .controls-hidden .rf-sb-skip-btn {
+    bottom: max(5.25rem, env(safe-area-inset-bottom, 0px));
+  }
 }
 
 @media (max-width: 450px) {
@@ -1155,6 +1180,29 @@ button.rf-yt-profile-pill {
     filter: blur(4px) saturate(1.2);
     transform: scale(1.15);
   }
+}
+
+.rf-comments-header {
+  position: relative;
+  z-index: 2;
+  background: #271c18;
+}
+
+.rf-comments-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 6px;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), transparent);
+}
+
+.rf-comments-header[data-scrolled="true"]::after {
+  opacity: 1;
 }
 
 .rf-comments-scroll {

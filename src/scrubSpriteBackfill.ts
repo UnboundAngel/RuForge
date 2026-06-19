@@ -1,13 +1,29 @@
 import { invoke } from "@tauri-apps/api/core";
+import { mediaPathsMatch } from "./lib/mediaPathMatch";
 import { isAudioOnlyPath } from "./mediaKind";
 import type { MediaFile } from "./types";
 
 const CONCURRENCY = 3;
 const SCRUB_VIDEO_EXT = /\.(mp4|mkv|webm)$/i;
+const scrubBackfillInFlight = new Set<string>();
+
+function markScrubInFlight(path: string): boolean {
+  for (const p of scrubBackfillInFlight) {
+    if (mediaPathsMatch(p, path)) return false;
+  }
+  scrubBackfillInFlight.add(path);
+  return true;
+}
+
+function clearScrubInFlight(path: string): void {
+  for (const p of [...scrubBackfillInFlight]) {
+    if (mediaPathsMatch(p, path)) scrubBackfillInFlight.delete(p);
+  }
+}
 
 export type ScrubSpritePathHooks = {
-  onStart: (path: string) => void;
-  onEnd: (path: string) => void;
+  /** Safety clear if Rust finished event was missed; spinners are driven by scrub-sprites-* events. */
+  onEnd?: (path: string) => void;
 };
 
 /** mp4/mkv/webm entries whose ffmpeg scrub sprite sheets are not complete yet. */
@@ -30,13 +46,17 @@ export async function ensureScrubSpritesForFiles(
     const batch = need.slice(i, i + CONCURRENCY);
     await Promise.all(
       batch.map(async (f) => {
-        hooks?.onStart(f.path);
+        if (!markScrubInFlight(f.path)) return;
         try {
-          await invoke("extract_frames", { videoPath: f.path, allowGenerate: true });
+          await invoke<string[]>("extract_frames", {
+            videoPath: f.path,
+            allowGenerate: true,
+          });
         } catch {
           /* ffmpeg missing or corrupt file — skip */
         } finally {
-          hooks?.onEnd(f.path);
+          clearScrubInFlight(f.path);
+          hooks?.onEnd?.(f.path);
         }
       }),
     );

@@ -108,6 +108,7 @@ import { MainPlaybackHost } from "./playback/MainPlaybackHost";
 import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
 import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
 import { RF_TITLEBAR_H_PX } from "./lib/chromeLayout";
+import { galleryScrollChromeAmount } from "./lib/galleryScrollChrome";
 import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
@@ -218,8 +219,9 @@ const WindowControls = ({
       </button>
 
       <button
+        id="ruforge-tb-maximize"
         onClick={() => appWindow.toggleMaximize()}
-        className="w-10 h-10 flex items-center justify-center text-stone-500 hover:text-stone-100 transition-colors"
+        className="w-10 h-10 flex items-center justify-center text-stone-500 hover:text-stone-100 snap-hover:text-stone-100 transition-colors"
       >
         <Icon icon={isMaximized ? "tabler:minimize" : "tabler:maximize"} fontSize={14} />
       </button>
@@ -252,6 +254,8 @@ function App() {
   const setSettingsTab = useRuforgeStore((s) => s.setSettingsTab);
   const galleryFilter = useRuforgeStore((s) => s.galleryFilter);
   const setGalleryFilter = useRuforgeStore((s) => s.setGalleryFilter);
+  const galleryLibraryScrollTop = useRuforgeStore((s) => s.galleryLibraryScrollTop);
+  const galleryScrollChrome = galleryScrollChromeAmount(galleryLibraryScrollTop);
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
   const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
@@ -1561,41 +1565,77 @@ function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="absolute left-6 top-0 z-20 flex items-start h-[var(--rf-tab-strip-h)] pointer-events-none"
+              className="absolute left-6 top-0 z-20 flex h-[var(--rf-tab-strip-h)] items-end pointer-events-none"
             >
-              {(['all', 'in-progress', 'watched'] as const).map((t) => {
-                const isActive = galleryFilter === t;
-                const label = t === 'all' ? 'All' : t === 'in-progress' ? 'In Progress' : 'Watched';
-                return (
-                  <button
-                    key={t}
-                    onClick={() => setGalleryFilter(t)}
-                    className="relative flex h-[var(--rf-tab-strip-h)] px-6 items-end pb-2 justify-center cursor-pointer pointer-events-auto group/tab"
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="galleryTabShape"
-                        className="absolute inset-0 bg-[#271C18] rounded-b-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.5)] z-0"
-                        style={{
-                          clipPath:
-                            "inset(var(--rf-titlebar-h) -100px -100px -100px)",
-                        }}
-                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                      >
-                        <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
-                        </div>
-                        <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
-                        </div>
-                      </motion.div>
-                    )}
-                    <span className={`font-black text-[10px] uppercase tracking-[0.2em] transition-colors relative z-10 ${isActive ? "text-[color:var(--accent)]" : "text-stone-500 group-hover/tab:text-stone-300"}`}>
-                      {label}
-                    </span>
-                  </button>
-                );
-              })}
+              <div className="relative flex h-[var(--rf-tab-strip-h)] items-end pointer-events-auto">
+                <motion.div
+                  className="pointer-events-none absolute inset-0 bg-[#271C18] rounded-b-[28px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+                  style={{
+                    clipPath: "inset(var(--rf-titlebar-h) -100px -100px -100px)",
+                  }}
+                  initial={false}
+                  animate={{ opacity: galleryScrollChrome }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  aria-hidden
+                />
+                <motion.div
+                  className="pointer-events-none absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]"
+                  initial={false}
+                  animate={{ opacity: galleryScrollChrome }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  aria-hidden
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
+                </motion.div>
+                <motion.div
+                  className="pointer-events-none absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]"
+                  initial={false}
+                  animate={{ opacity: galleryScrollChrome }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  aria-hidden
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
+                </motion.div>
+
+                <div className="relative flex items-end pb-1 px-6">
+                  <div className="flex items-end">
+                    {(['all', 'in-progress', 'watched'] as const).map((t) => {
+                      const isActive = galleryFilter === t;
+                      const label = t === 'all' ? 'All' : t === 'in-progress' ? 'In Progress' : 'Watched';
+                      const scrollBulge = galleryScrollChrome > 0.08;
+                      return (
+                        <button
+                          key={t}
+                          onClick={() => setGalleryFilter(t)}
+                          className="relative flex h-[var(--rf-tab-strip-h)] px-6 items-end pb-2 justify-center cursor-pointer pointer-events-auto group/tab"
+                        >
+                          {isActive && !scrollBulge && (
+                            <motion.div
+                              layoutId="galleryTabShape"
+                              className="absolute inset-0 bg-[#271C18] rounded-b-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.5)] z-0"
+                              style={{
+                                clipPath:
+                                  "inset(var(--rf-titlebar-h) -100px -100px -100px)",
+                              }}
+                              transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                            >
+                              <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
+                              </div>
+                              <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
+                              </div>
+                            </motion.div>
+                          )}
+                          <span className={`font-black text-[10px] uppercase tracking-[0.2em] transition-colors relative z-10 ${isActive ? "text-[color:var(--accent)]" : "text-stone-500 group-hover/tab:text-stone-300"}`}>
+                            {label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -1679,8 +1719,7 @@ function App() {
           {activeTab === "explorer" && !shellBlocked ? (
             <div
               ref={explorerWebviewHostRef}
-              className="fixed z-[1] top-10 bottom-0 right-0 pointer-events-none"
-              style={{ left: sidebarChromeLeft }}
+              className="absolute inset-0 z-[1] pointer-events-none"
               aria-hidden
             />
           ) : null}

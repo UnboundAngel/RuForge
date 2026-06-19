@@ -25,7 +25,34 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
 };
 use windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
 
+use tauri::Manager;
+
 static BRANDING_THREAD_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Debug builds use a distinct AppUserModelID so Windows does not reuse the
+/// installed app's cached taskbar icon while `target/debug/ruforge.exe` runs.
+pub fn process_app_user_model_id(base: &str) -> String {
+    if cfg!(debug_assertions) {
+        format!("{base}.dev")
+    } else {
+        base.to_string()
+    }
+}
+
+/// HWND icon for undecorated windows; without this the shell can keep showing a
+/// stale AppUserModelID icon even when `icons/icon.ico` in the exe is current.
+pub fn apply_window_taskbar_icons(app: &tauri::AppHandle) {
+    let Some(icon) = app.default_window_icon().cloned() else {
+        return;
+    };
+    for (label, window) in app.webview_windows() {
+        if let Err(e) = window.set_icon(icon.clone()) {
+            if crate::debug_log::is_category_enabled("core.platform") {
+                eprintln!("[ruforge] set_icon({label}): {e}");
+            }
+        }
+    }
+}
 
 /// Taskbar / toast identity; does not fix sndvol by itself but keeps Windows metadata consistent.
 pub fn set_explicit_app_user_model_id(app_id: &str) {

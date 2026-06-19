@@ -63,19 +63,25 @@ export function ScrubberHoverThumb({
   const { path, col, row } = picked;
   const scale = displayWidth / CELL_W;
   const displayHeight = CELL_H * scale;
-  const url = convertFileSrc(path);
 
   return (
     <div
       className={`overflow-hidden rounded-xl bg-black ${className}`}
-      style={{
-        width: displayWidth,
-        height: displayHeight,
-        backgroundImage: `url(${url})`,
-        backgroundSize: `${SHEET_W * scale}px ${SHEET_H * scale}px`,
-        backgroundPosition: `${-col * CELL_W * scale}px ${-row * CELL_H * scale}px`,
-        backgroundRepeat: "no-repeat",
-      }}
-    />
+      style={{ width: displayWidth, height: displayHeight }}
+    >
+      {/* img, not CSS background-image: item folders often end with # and url() treats # as a fragment */}
+      <img
+        src={convertFileSrc(path)}
+        alt=""
+        draggable={false}
+        className="max-w-none pointer-events-none select-none"
+        style={{
+          width: SHEET_W * scale,
+          height: SHEET_H * scale,
+          marginLeft: -col * CELL_W * scale,
+          marginTop: -row * CELL_H * scale,
+        }}
+      />
+    </div>
   );
 }

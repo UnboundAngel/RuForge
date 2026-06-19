@@ -1835,6 +1835,10 @@ fn collect_recent_video_paths(root: &Path, since: SystemTime) -> Vec<PathBuf> {
             if !is_media_ext(&ext) || !is_video_scrub_ext(&ext) {
                 continue;
             }
+            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if crate::commands::gallery::is_ytdlp_stream_intermediate_stem(stem) {
+                continue;
+            }
             let recent = std::fs::metadata(&p)
                 .and_then(|m| m.modified())
                 .map(|t| t >= cutoff)
