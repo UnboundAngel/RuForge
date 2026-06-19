@@ -4,11 +4,15 @@ pub mod debug_log;
 mod download_job_manager;
 mod process_tree;
 mod hardware_acceleration;
+mod telemetry_prefs;
 mod tray;
 mod media_bundle;
 mod utils;
 mod ytdlp_binary;
 mod ytdlp_rate_limit;
+pub mod telemetry_scrub {
+    pub use ::telemetry_scrub::*;
+}
 #[cfg(windows)]
 mod taskbar_thumbbar;
 #[cfg(windows)]
@@ -72,12 +76,23 @@ use crate::commands::removable_drives::{
     export_dest_dir_available, poll_removable_drives, RemovableDrivesState,
 };
 use crate::commands::system::{open_external_url, open_in_file_manager};
+use crate::commands::telemetry::sync_telemetry_prefs;
 use crate::commands::ytdlp_update::{
     download_ytdlp_update, get_ytdlp_update_status, warm_ytdlp_release_cache_spawn,
 };
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
 use crate::debug_log::sync_debug_log_categories;
 use crate::tray::{setup_tray, tray_front_debug, TRAY_SHOW_MAIN_EVENT};
+
+fn aptabase_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    let key = option_env!("APTABASE_APP_KEY").unwrap_or("");
+    let host = option_env!("APTABASE_HOST").unwrap_or("");
+    let mut opts = tauri_plugin_aptabase::InitOptions::default();
+    if !host.is_empty() {
+        opts.host = Some(host.to_string());
+    }
+    tauri_plugin_aptabase::Builder::new(key).with_options(opts).build()
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -119,6 +134,7 @@ pub fn run() {
                 .filter(|meta| crate::debug_log::log_filter(meta))
                 .build(),
         )
+        .plugin(aptabase_plugin())
         .setup(|app| {
             let handle = app.handle().clone();
             warm_ytdlp_release_cache_spawn(handle.clone());
@@ -202,6 +218,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             sync_debug_log_categories,
+            sync_telemetry_prefs,
             tray_front_debug,
             get_video_info,
             get_music_browse_info,

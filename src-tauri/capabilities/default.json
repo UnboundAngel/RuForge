@@ -83,6 +83,7 @@
     "core:webview:allow-webview-show",
     "core:webview:allow-webview-hide",
     "core:webview:allow-set-webview-position",
-    "core:webview:allow-set-webview-size"
+    "core:webview:allow-set-webview-size",
+    "aptabase:allow-track-event"
   ]
 }

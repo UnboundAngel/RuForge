@@ -113,6 +113,8 @@ import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
 import { writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
+import { clearTelemetryConsentSeen, hasSeenTelemetryConsent } from "./lib/telemetryConsentStorage";
+import { TelemetryConsentOverlay } from "./components/telemetry/TelemetryConsentOverlay";
 
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
 import {
@@ -415,7 +417,10 @@ function App() {
   const [updaterTeaserDismissed, setUpdaterTeaserDismissed] = useState(false);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const shellBlocked = Boolean(postInstall);
+  const [telemetryConsentPending, setTelemetryConsentPending] = useState(
+    () => !hasSeenTelemetryConsent(),
+  );
+  const shellBlocked = Boolean(postInstall) || telemetryConsentPending;
 
   const applyAvailableUpdate = useCallback((next: Update) => {
     if (updateRef.current) {
@@ -862,9 +867,10 @@ function App() {
 
   useEffect(() => {
     if (postInstall) return;
+    if (telemetryConsentPending) return;
     const steps = resolveActiveOnboardingSteps();
     if (steps.length > 0) setOnboardingOpen(true);
-  }, [postInstall]);
+  }, [postInstall, telemetryConsentPending]);
 
   useEffect(() => {
     try {
@@ -974,6 +980,13 @@ function App() {
       setOnboardingOpen(true);
     });
 
+    const unlistenDebugTelemetryConsent = listen("debug-replay-telemetry-consent", () => {
+      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      clearTelemetryConsentSeen();
+      setTelemetryConsentPending(true);
+      setOnboardingOpen(false);
+    });
+
     const unlistenDebugBootSplash = listen("debug-preview-boot-splash", () => {
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
       void import("./lib/bootSplash").then(({ showBootSplashPreview }) => {
@@ -1014,6 +1027,7 @@ function App() {
       unlistenHandoffSync.then((f) => f());
       unlistenManualUpdaterCheck.then((f) => f());
       unlistenDebugOnboarding.then((f) => f());
+      unlistenDebugTelemetryConsent.then((f) => f());
       unlistenDebugBootSplash.then((f) => f());
       unlistenDebugUpdater.then((f) => f());
     };
@@ -1878,7 +1892,10 @@ function App() {
           onOpenChangelog={() => void openUrl(RELEASES_PAGE)}
         />
       )}
-      {onboardingOpen && !postInstall && (
+      {!postInstall && telemetryConsentPending && (
+        <TelemetryConsentOverlay onComplete={() => setTelemetryConsentPending(false)} />
+      )}
+      {onboardingOpen && !postInstall && !telemetryConsentPending && (
         <OnboardingFlow onComplete={() => setOnboardingOpen(false)} />
       )}
 
