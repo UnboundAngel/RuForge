@@ -29,6 +29,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Telemetry: shared Tokio runtime in `main.rs` before Aptabase plugin init; fixes startup panic in `tauri dev`.
 - Crash recovery: root React error boundary on every window; friendly fallback UI, reload, collapsible error details.
 
 - Windows taskbar icon: dev builds use separate AppUserModelID (`.dev`) and HWND `set_icon` so taskbar matches bundled icon instead of a stale shell cache entry.
