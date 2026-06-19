@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-18
+Last updated: 2026-06-19
 Status: in progress
 
 ## Now
@@ -28,6 +28,8 @@ Closed release 0.1.11 (what users upgrading from 0.1.10 receive). The release-no
 reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
+
+- Crash recovery: root React error boundary on every window; friendly fallback UI, reload, collapsible error details.
 
 - Windows taskbar icon: dev builds use separate AppUserModelID (`.dev`) and HWND `set_icon` so taskbar matches bundled icon instead of a stale shell cache entry.
 - Window chrome: Win11 snap layout flyout on main maximize hover (`tauri-plugin-decorum`).

@@ -409,6 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Crash recovery**: root React error boundary wraps every window from `main.tsx`; friendly fallback, reload, collapsible error details (`RootErrorBoundary.tsx`).
 - **Scrub previews**: hover thumb uses `<img>` instead of CSS `background-image` so `#` in item folder paths does not break asset URLs (`scrubSpritePreview.tsx`).
 - **Scrub previews**: Windows thumb subdirs strip trailing dots from yt-dlp stems (`...webm`); ffmpeg output paths now use the same sanitized name so sprite sheets write successfully (`utils.rs`, `media.rs`, `gallery.rs`).
 - **Scrub previews**: ffmpeg sidecar uses `output()` (not spawn event loop) so sprite jobs complete; `-nostdin` added; library PREVIEWS badge driven by Rust started/finished events only (`media.rs`, `scrubSpriteBackfill.ts`, `ruforgeStore.ts`).

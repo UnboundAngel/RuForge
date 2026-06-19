@@ -1,0 +1,11 @@
+[package]
+name = "telemetry_scrub"
+version = "0.1.0"
+edition = "2021"
+description = "Client-side scrubbing for crash telemetry (no Tauri/WebView2)"
+
+[lib]
+path = "../src/telemetry_scrub.rs"
+
+[dependencies]
+regex = "1"
