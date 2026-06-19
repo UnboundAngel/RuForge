@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { AnimatePresence, motion } from "motion/react";
-import logo from "./assets/neotubeIcon.png";
+import logo from "./assets/ruforgeAppIcon.png";
 
 const PUSH_EVENT = "ruforge-background-notify";
 

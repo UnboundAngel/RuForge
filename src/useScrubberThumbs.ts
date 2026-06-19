@@ -127,7 +127,6 @@ export function useScrubberThumbs(
     audioOnly = false,
     allowGenerate,
     initialPaths,
-    scrubSpritesComplete,
     spriteHover = null,
   } = opts;
 
@@ -138,7 +137,7 @@ export function useScrubberThumbs(
   }, [initialPaths]);
 
   const [scrubberThumbs, setScrubberThumbs] = useState<string[]>(() =>
-    scrubSpritesComplete === true && cachedInitial ? cachedInitial : [],
+    cachedInitial ?? [],
   );
 
   usePreloadSpriteSheets(scrubberThumbs, spriteHover);
@@ -146,11 +145,6 @@ export function useScrubberThumbs(
   const reload = useCallback(async () => {
     if (!videoPath?.trim() || audioOnly) {
       setScrubberThumbs([]);
-      return;
-    }
-
-    if (scrubSpritesComplete === true && cachedInitial?.length) {
-      setScrubberThumbs(cachedInitial);
       return;
     }
 
@@ -164,7 +158,7 @@ export function useScrubberThumbs(
     } catch {
       setScrubberThumbs([]);
     }
-  }, [videoPath, audioOnly, allowGenerate, scrubSpritesComplete, cachedInitial]);
+  }, [videoPath, audioOnly, allowGenerate]);
 
   useEffect(() => {
     void reload();

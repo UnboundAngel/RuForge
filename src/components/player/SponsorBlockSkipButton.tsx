@@ -72,9 +72,7 @@ export const SponsorBlockSkipButton: React.FC<SkipButtonProps> = ({
       exit={{ opacity: 0, y: 8 }}
       transition={{ duration: 0.15 }}
       onClick={onClick}
-      className={`absolute z-[56] pointer-events-auto right-6 sm:right-8 rounded-xl bg-[#271C18]/95 border border-white/10 text-[11px] font-black tracking-widest text-white uppercase shadow-lg active:scale-95 transition-[background-color,transform,bottom] duration-300 overflow-hidden select-none hover:bg-[#2A1E1A] ${
-        showControls ? "bottom-36 sm:bottom-40" : "bottom-6 sm:bottom-8"
-      }`}
+      className="rf-sb-skip-btn absolute z-[56] pointer-events-auto right-6 sm:right-8 rounded-xl bg-[#271C18]/95 border border-white/10 text-[11px] font-black tracking-widest text-white uppercase shadow-lg active:scale-95 overflow-hidden select-none hover:bg-[#2A1E1A]"
     >
       {/* Background Fill Overlay (only when controls are hidden) */}
       {!showControls && (

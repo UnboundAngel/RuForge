@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import logo from "@/assets/neotubeIcon.png";
+import logo from "@/assets/ruforgeAppIcon.png";
 import { Icon } from "@iconify/react";
 import { Home, Library, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";

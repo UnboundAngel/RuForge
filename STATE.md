@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-17
+Last updated: 2026-06-18
 Status: in progress
 
 ## Now
@@ -29,6 +29,18 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Windows taskbar icon: dev builds use separate AppUserModelID (`.dev`) and HWND `set_icon` so taskbar matches bundled icon instead of a stale shell cache entry.
+- Window chrome: Win11 snap layout flyout on main maximize hover (`tauri-plugin-decorum`).
+- Authorize Cleanup: audio tracks show watched % from listen snapshot (not playbackStorage); video unchanged.
+- Authorize Cleanup: header item tally and goal progress bar (empty stone when none selected; accent when goal met); byte goal when library >=50% of cap.
+- Storage: sidebar glyph and music strip warn at 50% cap (was 80%).
+- Branding: in-app logo asset is `ruforgeAppIcon.png`; Tauri build reruns when `icons/icon.ico` changes so Windows taskbar/window icon embed updates.
+- Video Library: on scroll, one shared left bulge only (no compact title, no stacked active pill).
+- Explorer: YouTube webview bounds track the content shell below the 48px titlebar; flush to tab bottom (removed stale `top-10` host and bottom height inset).
+- SponsorBlock: skip button sits just above player chrome when controls show; stays elevated (not bottom-edge) when scrubber UI hides.
+- Downloads: `.temp.mp4` yt-dlp merge intermediates recognized, hard-skipped from gallery when sibling final `.mp4` exists, excluded from scrub spawn, deleted on post-download cleanup and manual sweep.
+- Scrub previews: hover thumb uses `<img>` not CSS `url()` so `#` in download folder names loads sprites correctly.
+- Scrub previews: thumb subdir names strip trailing dots on Windows so ffmpeg can write `sprite_*.jpg` for yt-dlp `...webm` titles.
 - Scrub hover: windowed sprite sheet preload on long videos (current sheet ±1, one ahead in travel direction); ≤2 sheets still preload all; gallery `scrubSpritePaths` fast path unchanged.
 - Scrub hover: rAF-throttled scrub bar hover, sprite paths cached at gallery scan (skip player IPC when complete), JPEG preload, CSS background-position previews, library scrub backfill deferred while player tab is active.
 - Scrub previews: faster parallel ffmpeg generation, library backfill when auto mode is on, per-card building-previews spinner on Video Library cards.

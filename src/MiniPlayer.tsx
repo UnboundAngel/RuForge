@@ -13,7 +13,7 @@ import {
 import { emitActivityHandoffSync } from "./lib/activityHandoffSync";
 import { registerVideoMiniHandoffSink } from "./lib/videoMiniHandoffBridge";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import logo from "./assets/neotubeIcon.png";
+import logo from "./assets/ruforgeAppIcon.png";
 import {
   Play,
   Pause,

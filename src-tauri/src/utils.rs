@@ -2,6 +2,25 @@ use std::path::{Path, PathBuf};
 
 pub const THUMB_DIR_NAME: &str = ".ruforge_thumbs";
 pub const POSTER_FILE: &str = "poster.jpg";
+
+/// Subfolder under `.ruforge_thumbs/` for one media file's poster/sprites.
+/// Windows `CreateDirectory` strips trailing dots and spaces; ffmpeg paths must match.
+pub fn thumb_subdir_name(stem: &str) -> String {
+    let mut s = stem.trim().to_string();
+    while s.ends_with('.') || s.ends_with(' ') {
+        s.pop();
+    }
+    if s.is_empty() {
+        "unknown".to_string()
+    } else {
+        s
+    }
+}
+
+pub fn thumb_dir_for_stem(parent: &Path, stem: &str) -> PathBuf {
+    parent.join(THUMB_DIR_NAME).join(thumb_subdir_name(stem))
+}
+
 pub const MEDIA_EXTS: &[&str] = &["mp4", "mkv", "webm", "mp3", "m4a", "flac", "opus", "ogg", "wav"];
 pub const AUDIO_ONLY_EXTS: &[&str] = &["mp3", "m4a", "flac", "opus", "ogg", "wav"];
 
@@ -170,4 +189,27 @@ pub fn primary_vtt_sidecar(parent: &Path, stem: &str) -> Option<PathBuf> {
     }
     sort_vtt_sidecars_lang_first(&mut pairs);
     pairs.into_iter().next().map(|(p, _)| p)
+}
+
+#[cfg(test)]
+mod thumb_subdir_tests {
+    use super::{thumb_dir_for_stem, thumb_subdir_name};
+    use std::path::Path;
+
+    #[test]
+    fn thumb_subdir_strips_trailing_dots_for_windows_create_dir() {
+        assert_eq!(
+            thumb_subdir_name("Firing the WRONG Calibers.."),
+            "Firing the WRONG Calibers"
+        );
+    }
+
+    #[test]
+    fn thumb_dir_for_stem_matches_sanitized_folder() {
+        let parent = Path::new(r"C:\Videos\Item..#");
+        assert_eq!(
+            thumb_dir_for_stem(parent, "Firing the WRONG Calibers.."),
+            parent.join(".ruforge_thumbs").join("Firing the WRONG Calibers")
+        );
+    }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music, FileText, FolderOutput, Shuffle, FolderOpen } from "lucide-react";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
@@ -17,6 +17,7 @@ import { filterMainLibraryEntries } from "../mainLibraryFilter";
 import { formatDuration } from "./downloader/downloaderFormat";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 import { useGalleryScrubExtracting } from "../scrubSpriteGallerySync";
+import { galleryScrollChromeAmount } from "../lib/galleryScrollChrome";
 
 function deleteMediaErrorMessage(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
@@ -308,6 +309,28 @@ export const MediaView = ({
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
 
   const [showTranscriptMenu, setShowTranscriptMenu] = useState(false);
+  const libraryScrollRef = useRef<HTMLDivElement>(null);
+  const setGalleryLibraryScrollTop = useRuforgeStore((s) => s.setGalleryLibraryScrollTop);
+  const galleryLibraryScrollTop = useRuforgeStore((s) => s.galleryLibraryScrollTop);
+  const galleryScrollChrome = galleryScrollChromeAmount(galleryLibraryScrollTop);
+  const largeHeaderOpacity = 1 - galleryScrollChrome;
+
+  const handleLibraryScroll = useCallback(() => {
+    const el = libraryScrollRef.current;
+    if (!el) return;
+    setGalleryLibraryScrollTop(el.scrollTop);
+  }, [setGalleryLibraryScrollTop]);
+
+  useEffect(() => {
+    setGalleryLibraryScrollTop(0);
+    const el = libraryScrollRef.current;
+    if (el) el.scrollTop = 0;
+  }, [filter, setGalleryLibraryScrollTop]);
+
+  useEffect(
+    () => () => setGalleryLibraryScrollTop(0),
+    [setGalleryLibraryScrollTop],
+  );
 
   const libraryEntries = useMemo(
     () => filterMainLibraryEntries(entries, hideAudioFromMainLibrary),
@@ -460,16 +483,26 @@ export const MediaView = ({
         setShowTranscriptMenu(false);
       }}
     >
-      {/* Header */}
-      <div className="px-10 pt-16 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-6 flex-shrink-0">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-stone-50">Video Library</h1>
-          <p className="text-stone-400 font-medium text-sm mt-1">Browse and manage your downloaded videos.</p>
+      <div
+        ref={libraryScrollRef}
+        onScroll={handleLibraryScroll}
+        className="flex-1 overflow-y-auto px-10 pb-32 rf-scrollbar"
+      >
+        <div
+          className="pt-16 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-6"
+          style={{
+            opacity: largeHeaderOpacity,
+            transform: largeHeaderOpacity < 1 ? `translateY(${-galleryScrollChrome * 12}px)` : undefined,
+            pointerEvents: largeHeaderOpacity < 0.05 ? "none" : undefined,
+          }}
+          aria-hidden={largeHeaderOpacity < 0.05}
+        >
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-stone-50">Video Library</h1>
+            <p className="text-stone-400 font-medium text-sm mt-1">Browse and manage your downloaded videos.</p>
+          </div>
         </div>
-      </div>
 
-      {/* Video Grid */}
-      <div className="flex-1 overflow-y-auto px-10 pb-32">
         <AnimatePresence mode="wait">
           <motion.div
             key={filter}

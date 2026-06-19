@@ -112,6 +112,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   activeTab: ActiveTab;
   settingsTab: SettingsTab;
   galleryFilter: GalleryFilter;
+  /** Video Library inner scroll offset (drives tab-strip chrome in App). */
+  galleryLibraryScrollTop: number;
   selectedPlaylist: PlaylistCollection | null;
   isSearchExpanded: boolean;
   searchValue: string;
@@ -272,6 +274,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setActiveTab: (tab: ActiveTab) => void;
   setSettingsTab: (tab: SettingsTab) => void;
   setGalleryFilter: (f: GalleryFilter) => void;
+  setGalleryLibraryScrollTop: (n: number) => void;
   setSelectedPlaylist: (p: PlaylistCollection | null) => void;
   setIsSearchExpanded: (v: boolean | ((p: boolean) => boolean)) => void;
   setSearchValue: (v: string) => void;
@@ -412,7 +415,6 @@ function tryFlushDeferredScrubBackfill(get: () => RuforgeStore) {
   deferredScrubBackfillQueue = [];
   void (async () => {
     await ensureScrubSpritesForFiles(list, {
-      onStart: (path) => get().addGalleryExtractingPath(path),
       onEnd: (path) => get().removeGalleryExtractingPath(path),
     });
     await get().fetchEntries({
@@ -448,6 +450,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       activeTab: "downloader",
       settingsTab: "general",
       galleryFilter: "all",
+      galleryLibraryScrollTop: 0,
       selectedPlaylist: null,
       isSearchExpanded: false,
       searchValue: "",
@@ -994,11 +997,15 @@ export const useRuforgeStore = create<RuforgeStore>()(
       resetExportOutcome: () => set({ exportOutcome: null, exportProgress: null }),
 
       setActiveTab: (tab) => {
-        set({ activeTab: tab });
+        set({
+          activeTab: tab,
+          ...(tab !== "media" ? { galleryLibraryScrollTop: 0 } : {}),
+        });
         if (tab !== "player") tryFlushDeferredScrubBackfill(get);
       },
       setSettingsTab: (tab) => set({ settingsTab: tab }),
-      setGalleryFilter: (f) => set({ galleryFilter: f }),
+      setGalleryFilter: (f) => set({ galleryFilter: f, galleryLibraryScrollTop: 0 }),
+      setGalleryLibraryScrollTop: (n) => set({ galleryLibraryScrollTop: Math.max(0, n) }),
       setSelectedPlaylist: (p) => set({ selectedPlaylist: p }),
       setIsSearchExpanded: (v) =>
         set((s) => ({
@@ -1150,7 +1157,6 @@ export const useRuforgeStore = create<RuforgeStore>()(
                 : Promise.resolve(),
               scrubBackfillList
                 ? ensureScrubSpritesForFiles(scrubBackfillList, {
-                    onStart: (path) => get().addGalleryExtractingPath(path),
                     onEnd: (path) => get().removeGalleryExtractingPath(path),
                   })
                 : Promise.resolve(),

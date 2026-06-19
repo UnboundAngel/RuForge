@@ -26,7 +26,8 @@ function createAudioContext(): AudioContext {
   const w = window as Window & { webkitAudioContext?: typeof AudioContext };
   const Ctor = window.AudioContext ?? w.webkitAudioContext;
   if (!Ctor) throw new Error("AudioContext unavailable");
-  return new Ctor();
+  const ctx = new Ctor();
+  return ctx;
 }
 
 function captureElementStream(el: HTMLMediaElement): MediaStream | null {

@@ -409,6 +409,19 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Scrub previews**: hover thumb uses `<img>` instead of CSS `background-image` so `#` in item folder paths does not break asset URLs (`scrubSpritePreview.tsx`).
+- **Scrub previews**: Windows thumb subdirs strip trailing dots from yt-dlp stems (`...webm`); ffmpeg output paths now use the same sanitized name so sprite sheets write successfully (`utils.rs`, `media.rs`, `gallery.rs`).
+- **Scrub previews**: ffmpeg sidecar uses `output()` (not spawn event loop) so sprite jobs complete; `-nostdin` added; library PREVIEWS badge driven by Rust started/finished events only (`media.rs`, `scrubSpriteBackfill.ts`, `ruforgeStore.ts`).
+- **Windows taskbar icon**: dev builds use `com.attic.ruforge.dev` AppUserModelID and call `set_icon` on HWND so the shell stops showing a stale cached icon while `target/debug/ruforge.exe` runs (`windows_audio_brand.rs`, `lib.rs`, `player.rs`).
+- **Comments panel**: thin fixed top scroll vignette on header (no slide-in) when threads scroll up (`CommentsPanel.tsx`, `index.css`).
+- **Window chrome**: Win11 snap layout flyout on main maximize hover via `tauri-plugin-decorum` (`App.tsx`, `lib.rs`, `capabilities/default.json`).
+- **Authorize Cleanup**: audio tracks use listen-snapshot % (musicListenStats) instead of playbackStorage; video path unchanged (`cleanupCandidates.ts`).
+- **Authorize Cleanup**: header tallies selected items (N / goal items + bytes); progress bar empty stone when none selected, fills toward goal; byte goal only when library is >=50% of cap (`AuthorizeCleanupModal.tsx`, `cleanupCandidates.ts`).
+- **Storage**: sidebar glyph and music storage strip warn at 50% cap usage (was 80%) (`StorageGlyph.tsx`, `MusicStorageStrip.tsx`).
+- **Video Library**: scroll bulge only (no compact title); per-tab active pill hidden while scroll bulge is up to avoid double pills (`App.tsx`).
+- **Explorer**: YouTube webview host fills `rf-main-content-shell` (`absolute inset-0`) instead of stale `fixed top-10` cutout; bottom stays flush (no rounded-window height shrink) (`App.tsx`, `explorerBoundsSync.ts`).
+- **SponsorBlock**: skip button vertical anchor tracks player chrome via `.rf-sb-skip-btn` CSS (no longer jumps to bottom edge when controls hide) (`SponsorBlockSkipButton.tsx`, `index.css`).
+- **Downloads**: stranded yt-dlp `.temp.mp4` files hard-skipped from gallery scan and swept on cleanup (post-download + manual), fixing phantom 2-item playlists with a dead 0:00 entry (`gallery.rs`, `downloader.rs`).
 - **Scrub hover**: windowed sprite sheet preload (current ±1, direction-ahead on long videos; full preload when ≤2 sheets); wired to same hover time as thumb (`useScrubberThumbs.ts`, `PlayerView.tsx`, `MiniPlayer.tsx`).
 - **Scrub hover**: rAF-throttled hover state, scan-time sprite path cache, sheet preload, CSS background-position previews, defer library backfill during playback (`useScrubberHover.ts`, `useScrubberThumbs.ts`, `gallery.rs`, `ruforgeStore.ts`).
 - **Scrub previews**: player/mini load sprites read-only (no ffmpeg lock wait); list path skips lock; gallery refresh only after generation (`media.rs`, `PlayerView.tsx`).

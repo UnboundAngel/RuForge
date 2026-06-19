@@ -2,6 +2,13 @@ use tauri::{AppHandle, Manager};
 
 use crate::hardware_acceleration::HardwareAccelerationDisk;
 
+#[cfg(windows)]
+fn apply_window_icon(app: &AppHandle, window: &tauri::WebviewWindow) {
+    if let Some(icon) = app.default_window_icon().cloned() {
+        let _ = window.set_icon(icon);
+    }
+}
+
 /// Current navigation URL of the embedded explorer webview (for main-window UI).
 #[tauri::command]
 pub fn get_embedded_explorer_webview_url(app: AppHandle) -> Result<String, String> {
@@ -50,7 +57,9 @@ pub async fn open_mini_player(app: AppHandle) -> Result<(), String> {
         mini_builder = mini_builder.additional_browser_args(&browser_args);
     }
 
-    let _window = mini_builder.build().map_err(|e| e.to_string())?;
+    let window = mini_builder.build().map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    apply_window_icon(&app, &window);
     Ok(())
 }
 
@@ -81,7 +90,9 @@ pub async fn open_music_mini_player(app: AppHandle) -> Result<(), String> {
         builder = builder.additional_browser_args(&browser_args);
     }
 
-    let _window = builder.build().map_err(|e| e.to_string())?;
+    let window = builder.build().map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    apply_window_icon(&app, &window);
     Ok(())
 }
 
@@ -161,7 +172,9 @@ pub async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
         builder = builder.additional_browser_args(&browser_args);
     }
 
-    builder.build().map_err(|e| e.to_string())?;
+    let window = builder.build().map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    apply_window_icon(&app, &window);
 
     Ok(())
 }

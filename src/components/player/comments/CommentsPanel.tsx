@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
+import { useScrollEdgeState } from "@/hooks/useScrollEdgeState";
 import {
   ChevronDown,
   ChevronUp,
@@ -440,10 +441,19 @@ export function CommentsPanel({
 }: CommentsPanelProps) {
   const sortedComments = sortComments(comments, filterType);
   const showCapLabel = viewState === "ready" || viewState === "empty";
+  const { scrollRef, edges, onScroll } = useScrollEdgeState([
+    sortedComments.length,
+    loading,
+    viewState,
+    filterType,
+  ]);
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-between px-6 pb-3 pt-5">
+      <div
+        className="rf-comments-header flex shrink-0 items-center justify-between px-6 pb-3 pt-5"
+        data-scrolled={edges.top ? "true" : undefined}
+      >
         <div className="flex items-baseline gap-3">
           <h2 className="text-[20px] font-bold tracking-tight text-white">Comments</h2>
           {showCapLabel ? (
@@ -463,7 +473,11 @@ export function CommentsPanel({
         </div>
       </div>
 
-      <div className="rf-comments-scroll flex-1 overflow-x-hidden overflow-y-auto px-6 pb-8 pt-2">
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="rf-comments-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 pb-8 pt-2"
+      >
         {loading ? (
           <p className="px-1 py-8 text-[13px] font-medium text-white/45">{loadingLabel}</p>
         ) : viewState === "error" ? (

@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
@@ -14,7 +13,7 @@ use tokio::sync::Mutex;
 use crate::commands::recently_deleted::append_manifest_entry;
 use crate::media_bundle::{collect_deletion_paths, prune_empty_dirs_after_media_delete};
 use crate::process_tree::kill_shell_child_tree;
-use crate::utils::{duration_from_ytdlp_info_json, POSTER_FILE, THUMB_DIR_NAME};
+use crate::utils::{duration_from_ytdlp_info_json, thumb_dir_for_stem, POSTER_FILE, THUMB_DIR_NAME};
 
 struct FfmpegVideoSlot {
     lock: Arc<Mutex<()>>,
@@ -68,42 +67,32 @@ where
 }
 
 /// Caller must already hold `slot.lock` (via [`with_per_video_ffmpeg_lock`]).
+/// Uses [`Command::output`] (same as ffprobe) so the sidecar always drains and exits cleanly;
+/// the spawn + event-channel path could hang with a live ffmpeg child and no Terminated event.
 async fn run_ffmpeg_sidecar_unlocked(
     app: &AppHandle,
-    slot: &Arc<FfmpegVideoSlot>,
+    _slot: &Arc<FfmpegVideoSlot>,
     args: Vec<&str>,
 ) -> Result<(), String> {
-    let (mut rx, child) = app
+    let output = app
         .shell()
         .sidecar("ffmpeg")
         .map_err(|e| e.to_string())?
         .args(args)
-        .spawn()
-        .map_err(|e| format!("Failed to start ffmpeg sidecar: {}", e))?;
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
 
-    *slot.child.lock().await = Some(child);
-
-    let mut success = false;
-    while let Some(event) = rx.recv().await {
-        match event {
-            CommandEvent::Terminated(payload) => {
-                success = payload.code == Some(0);
-                break;
-            }
-            CommandEvent::Error(err) => {
-                *slot.child.lock().await = None;
-                return Err(format!("ffmpeg sidecar error: {}", err));
-            }
-            CommandEvent::Stdout(_) | CommandEvent::Stderr(_) => {}
-            _ => {}
-        }
-    }
-
-    *slot.child.lock().await = None;
-    if success {
+    if output.status.success() {
         Ok(())
     } else {
-        Err("ffmpeg sidecar failed".into())
+        let err = String::from_utf8_lossy(&output.stderr);
+        let msg = err.trim();
+        Err(if msg.is_empty() {
+            "ffmpeg sidecar failed".into()
+        } else {
+            format!("ffmpeg sidecar failed: {}", msg)
+        })
     }
 }
 
@@ -130,7 +119,7 @@ pub fn scrub_sprites_complete_for_path(video_path: &Path, duration_secs: f64) ->
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown");
-    let thumb_dir = video_dir.join(THUMB_DIR_NAME).join(video_name);
+    let thumb_dir = thumb_dir_for_stem(video_dir, video_name);
     preview_sprites_complete(&thumb_dir, duration_secs)
 }
 
@@ -167,6 +156,7 @@ async fn write_poster_jpeg(
         slot,
         vec![
             "-hide_banner",
+            "-nostdin",
             "-loglevel",
             "error",
             "-y",
@@ -211,7 +201,7 @@ async fn ensure_poster_if_missing_inner(
         .and_then(|s| s.to_str())
         .unwrap_or("unknown");
     let thumb_root = video_dir.join(THUMB_DIR_NAME);
-    let thumb_dir = thumb_root.join(video_name);
+    let thumb_dir = thumb_dir_for_stem(video_dir, video_name);
     let poster_dest = thumb_dir.join(POSTER_FILE);
     if poster_dest.is_file() {
         return Ok(());
@@ -250,7 +240,7 @@ pub fn list_scrub_sprite_paths_for_video(video_path: &Path) -> Vec<String> {
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown");
-    let thumb_dir = video_dir.join(THUMB_DIR_NAME).join(video_name);
+    let thumb_dir = thumb_dir_for_stem(video_dir, video_name);
     if !thumb_dir.is_dir() {
         return Vec::new();
     }
@@ -276,7 +266,7 @@ async fn extract_frames_generate_inner(
     let video_name = video_file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
 
     let thumb_root = video_dir.join(THUMB_DIR_NAME);
-    let thumb_dir = thumb_root.join(video_name);
+    let thumb_dir = thumb_dir_for_stem(video_dir, video_name);
 
     if !thumb_root.exists() {
         std::fs::create_dir_all(&thumb_root).map_err(|e| e.to_string())?;
@@ -304,6 +294,7 @@ async fn extract_frames_generate_inner(
         &slot,
         vec![
             "-hide_banner",
+            "-nostdin",
             "-loglevel",
             "error",
             "-threads",
@@ -355,7 +346,7 @@ pub async fn extract_frames(
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown");
-    let thumb_dir = video_dir.join(THUMB_DIR_NAME).join(video_name);
+    let thumb_dir = thumb_dir_for_stem(video_dir, video_name);
     let duration_secs = duration_from_ytdlp_info_json(video_file_path);
     let existing = if thumb_dir.is_dir() {
         list_existing_sprite_paths(&thumb_dir)

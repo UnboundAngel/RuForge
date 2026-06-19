@@ -533,18 +533,21 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       setIsPaused(true);
       return;
     }
+    const advanceTo = (nextFile: MediaFile) => {
+      setPlayingFile(nextFile);
+    };
     const idx = folderAudioPlaylist.findIndex((f) => f.path === file.path);
     const folderNeighbor =
       idx >= 0 && idx < folderAudioPlaylist.length - 1 ? folderAudioPlaylist[idx + 1] : null;
     if (folderNeighbor) {
-      setPlayingFile(folderNeighbor);
+      advanceTo(folderNeighbor);
       return;
     }
     const libList = audioOnly ? audioLibrarySorted : videoLibrarySorted;
     const li = libList.findIndex((f) => f.path === file.path);
     const libNext = li >= 0 && li < libList.length - 1 ? libList[li + 1] : null;
     if (libNext) {
-      setPlayingFile(libNext);
+      advanceTo(libNext);
       return;
     }
     setIsPaused(true);
