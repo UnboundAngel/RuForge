@@ -24,6 +24,7 @@ import { SettingsDescription } from './settings/settingsDescription';
 import { RegroupPlaylistModal } from './RegroupPlaylistModal';
 import { MigrateLibraryModal } from './MigrateLibraryModal';
 import { MusicMetaBackfillModal } from './MusicMetaBackfillModal';
+import { DevCapturesSection } from './dev-captures/DevCapturesSection';
 import { galleryScanRoots } from '../libraryScanDirs';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
@@ -1208,6 +1209,11 @@ export const SettingsView: React.FC = () => {
 
           {activeTab === 'debugging' && (
             <div className="flex flex-col">
+              {import.meta.env.DEV && settings.showDebuggingSettings ? (
+                <SettingsSection title="Dev captures">
+                  <DevCapturesSection />
+                </SettingsSection>
+              ) : null}
               <RegroupPlaylistModal
                 open={regroupPlaylistOpen}
                 onClose={() => setRegroupPlaylistOpen(false)}

@@ -409,7 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
-- **Debugging**: dev capture toast compact: content-sized width, smaller thumb, tighter padding (`devCaptureToastLayout.ts`, `DevCaptureSavedToast.tsx`).
+- **Debugging**: dev capture fly waits for PNG decode, brief hold at icon, slower fly (`DevCaptureToastMorph.tsx`).
 - **Debugging**: dev capture from RuForge icon (DEV + showDebuggingSettings): native main-window PNG save, hover-swap capture icon, fly-to main-window toast, click opens annotate; spike removed (`capture_main_window_dev`, `DevCaptureChromeProvider.tsx`, `RuForgeCaptureTrigger.tsx`).
 - **Debugging**: dev capture annotate modal: thumb cache-bust on save, full titlebar drag region, copy toast animation, window-controls click shield, text box resize handles (`DevCaptureAnnotateModal.tsx`, `DevCapturesGrid.tsx`, `devCaptureAnnotateHit.ts`).
 - **Downloads**: multi-item carousel stays active between batch items (batch ID capture for playlist/auto jobs, no `anyDownloading` gate, queued-next index, immersive shell) (`useDownloaderView.ts`, `DownloaderView.tsx`).

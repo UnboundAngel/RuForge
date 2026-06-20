@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
-import logo from "@/assets/ruforgeAppIcon.png";
 import { Icon } from "@iconify/react";
+import { RuForgeCaptureTrigger } from "@/components/dev-captures/RuForgeCaptureTrigger";
 import { Home, Library, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +46,7 @@ const NAV_SHORTCUT_LABELS: Record<MusicView, string> = {
 
 type Props = {
   activeView: MusicView;
+  captureScreenLabel: string;
   onSelect: (view: MusicView) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -63,6 +64,7 @@ type Props = {
 
 export function MusicNav({
   activeView,
+  captureScreenLabel,
   onSelect,
   collapsed,
   onToggleCollapse,
@@ -92,17 +94,22 @@ export function MusicNav({
     >
       <div
         className={cn(
-          "flex items-center shrink-0 h-12",
+          "relative z-[100] pointer-events-auto flex items-center shrink-0 h-12",
           collapsed ? "justify-center px-2" : "justify-between px-4",
         )}
-        data-tauri-drag-region={collapsed ? undefined : true}
       >
         {collapsed ? (
-          <img src={logo} alt="RuForge" className="w-7 h-7 rounded-md object-cover shrink-0" />
+          <RuForgeCaptureTrigger
+            screenLabel={captureScreenLabel}
+            imgClassName="h-7 w-7 rounded-md object-cover"
+          />
         ) : (
           <>
             <div className="flex items-center gap-2.5 min-w-0">
-              <img src={logo} alt="RuForge" className="w-6 h-6 rounded-md object-cover shrink-0" />
+              <RuForgeCaptureTrigger
+                screenLabel={captureScreenLabel}
+                imgClassName="h-6 w-6 rounded-md object-cover"
+              />
               <span
                 className="font-semibold text-sm tracking-wide truncate"
                 style={{ color: "var(--music-accent)" }}

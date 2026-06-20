@@ -57,6 +57,8 @@ lofty = { version = "0.22", default-features = false }
 trash = "5"
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
+drag = "2.1.1"
+png = "0.18.1"
 
 [features]
 default = []

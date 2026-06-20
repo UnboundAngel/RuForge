@@ -1,3 +1,4 @@
+pub mod dev_captures;
 pub mod comments_sidecar;
 pub mod downloader;
 pub mod explorer_cookies;

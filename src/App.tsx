@@ -106,6 +106,7 @@ import { WindowResizeEdges } from "./components/window/WindowResizeEdges";
 import type { ActivityHandoffSyncPayload, ActivityMiniTeardownPayload } from "./lib/activityTypes";
 import { MainPlaybackHost } from "./playback/MainPlaybackHost";
 import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
+import { DevCaptureChromeProvider } from "./components/dev-captures/DevCaptureChromeProvider";
 import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
 import { RF_TITLEBAR_H_PX } from "./lib/chromeLayout";
 import { galleryScrollChromeAmount } from "./lib/galleryScrollChrome";
@@ -1416,6 +1417,7 @@ function App() {
   }
 
   return (
+    <DevCaptureChromeProvider>
     <MainPlaybackHost>
     <div
       className={`h-screen w-screen text-stone-50 font-sans flex overflow-hidden select-none relative ${
@@ -1458,9 +1460,10 @@ function App() {
 
       {!shellBlocked && <ActivityIsland />}
 
-      {/* Global Drag Region - Top strip except controls area */}
+      {/* Global Drag Region - Top strip except sidebar logo and window controls */}
       <div
-        className={`fixed top-0 left-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
+        className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
+        style={{ left: navMode === "music" ? 0 : SIDEBAR_RAIL_PX }}
         data-tauri-drag-region
       />
 
@@ -1473,6 +1476,7 @@ function App() {
       <AppSidebarRail
         activeTab={activeTab}
         navMode={navMode}
+        captureScreenLabel={activeTab}
         disabled={shellBlocked}
         onSelectTab={setActiveTab}
       />
@@ -1931,6 +1935,7 @@ function App() {
       <ConfirmDialogHost />
     </div>
     </MainPlaybackHost>
+    </DevCaptureChromeProvider>
   );
 }
 

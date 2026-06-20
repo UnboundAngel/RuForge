@@ -26,6 +26,10 @@ use tauri::{Listener, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::app_state::AppConfig;
+use crate::commands::dev_captures::{
+    capture_main_window_dev, delete_dev_captures, dev_captures_folder_path, list_dev_captures,
+    read_dev_capture_png, start_dev_capture_file_drag, write_dev_capture_png,
+};
 use crate::commands::downloader::{
     get_music_browse_info, get_playlist_items_page,
     get_video_info, pause_download_job, start_download_job, stop_all_active_download_jobs,
@@ -217,6 +221,13 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            capture_main_window_dev,
+            dev_captures_folder_path,
+            list_dev_captures,
+            read_dev_capture_png,
+            write_dev_capture_png,
+            delete_dev_captures,
+            start_dev_capture_file_drag,
             sync_debug_log_categories,
             sync_telemetry_prefs,
             tray_front_debug,
