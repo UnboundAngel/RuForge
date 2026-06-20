@@ -38,6 +38,7 @@ import {
   devBatchToolsEnabled,
   isDevReplayOutputCaptureActive,
 } from "../lib/devLastDownloadBatch";
+import { runDevSimulatedDownload } from "../lib/devSimulateDownloadTimeline";
 import type { RuforgeStore } from "./ruforgeStore";
 import {
   ytdlpFormatForDownloadJob,
@@ -519,18 +520,7 @@ export const createDownloadQueueSlice: StateCreator<
           import.meta.env.DEV &&
           get().settings.showDebuggingSettings === true
         ) {
-          get().applyDownloadProgress({
-            jobId,
-            percentage: 50,
-            speed: "0 B/s",
-            eta: "0:00",
-            status: "downloading",
-          });
-          get().onDownloadJobFinished({
-            jobId,
-            url,
-            success: true,
-          });
+          await runDevSimulatedDownload(get, jobId, url);
           return;
         }
         armDownloadJobWatchdog(jobId);
