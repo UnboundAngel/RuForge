@@ -84,8 +84,13 @@ fn ffmpeg_slot_map() -> &'static Mutex<HashMap<String, Arc<FfmpegVideoSlot>>> {
     FFMPEG_PER_VIDEO.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+// Matches TS mediaPathsMatch (backslashes + lowercase); Linux dev may fold distinct paths.
+fn normalize_media_key(path: &str) -> String {
+    path.replace('/', "\\").to_lowercase()
+}
+
 async fn ffmpeg_slot_for(video_path: &str) -> Arc<FfmpegVideoSlot> {
-    let key = video_path.to_string();
+    let key = normalize_media_key(video_path);
     let mut map = ffmpeg_slot_map().lock().await;
     map.entry(key)
         .or_insert_with(|| {
@@ -99,9 +104,10 @@ async fn ffmpeg_slot_for(video_path: &str) -> Arc<FfmpegVideoSlot> {
 
 /// Stop any in-flight RuForge ffmpeg sidecar for this file (preview sprites / poster).
 pub async fn cancel_ffmpeg_for_video(video_path: &str) {
+    let key = normalize_media_key(video_path);
     let slot = {
         let map = ffmpeg_slot_map().lock().await;
-        map.get(video_path).cloned()
+        map.get(&key).cloned()
     };
     let Some(slot) = slot else {
         return;
@@ -912,6 +918,24 @@ pub fn read_local_subtitle_vtt(path: String) -> Result<String, String> {
         ));
     }
     std::fs::read_to_string(&p).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod media_key_tests {
+    use super::normalize_media_key;
+
+    #[test]
+    fn normalize_media_key_matches_ts_media_paths_match() {
+        let a = r"C:/Videos/Clip.MP4";
+        let b = r"c:\videos\clip.mp4";
+        assert_eq!(normalize_media_key(a), normalize_media_key(b));
+    }
+
+    #[test]
+    fn normalize_media_key_is_idempotent() {
+        let path = r"c:\videos\clip.mp4";
+        assert_eq!(normalize_media_key(path), normalize_media_key(&normalize_media_key(path)));
+    }
 }
 
 #[cfg(test)]
