@@ -159,8 +159,6 @@ async function replayBatchRecord(
   record: LastDownloadBatchRecord,
   handlers: NonNullable<ReturnType<typeof getDownloaderReplayHandlers>>,
 ): Promise<void> {
-  useRuforgeStore.getState().setActiveTab("downloader");
-
   if (record.batchKind === "playlist") {
     restorePlaylistHero(record);
     await handlers.handleDownloadClick();
@@ -194,6 +192,13 @@ export async function replayLastDownloadBatch(): Promise<void> {
     notify("No last download batch record to replay.", "warning");
     return;
   }
+
+  useRuforgeStore.getState().setActiveTab("downloader");
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
 
   const handlers = getDownloaderReplayHandlers();
   if (!handlers) {

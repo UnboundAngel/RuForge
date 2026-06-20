@@ -409,6 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Debugging**: replay-batch switches to Download tab before handler registration so Settings REPLAY BATCH lands on visible replay UI (`replayLastDownloadBatch.ts`).
 - **Debugging**: dev-gated re-download last batch (capture at download start, replay via entry handlers, Mode A real download + resolved-path cleanup, Mode B simulate stub) (`devLastDownloadBatch.ts`, `replayLastDownloadBatch.ts`, `devReplayCleanup.ts`, `SettingsView.tsx`).
 - **Downloads**: batch/queue focus follows the actively downloading job so legacy progress bar + carousel advance item 1→N instead of staying on last Explorer add (`downloadQueueSlice.ts`, `useDownloaderView.ts`).
 - **Downloads**: Explorer multi-add uses playlist-style batch UI (aggregate hero + scroll list); batch view persists through release and concurrent downloads instead of collapsing to single-video progress (`useDownloaderView.ts`, `DownloaderView.tsx`).
