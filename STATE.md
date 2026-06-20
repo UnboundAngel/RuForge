@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-20 (dev captures icon trigger + fly-to-toast)
+Last updated: 2026-06-20 (dev capture clipboard + context menu)
 Status: in progress
 
 ## Now
@@ -29,6 +29,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Debugging: dev capture auto-copies PNG to clipboard on save; fly-toast border; capture icon right-click (Edit last, Dev captures).
 - Debugging: dev captures from RuForge icon (DEV + showDebuggingSettings): native HWND screenshot, annotate grid, fly-to-toast morph with decode hold; Settings Debugging section.
 - Downloads: multi-item carousel stays active between batch items when next row metadata is still loading.
 - Downloads: carousel card art/title fade in when metadata hydrates (shimmer crossfade).

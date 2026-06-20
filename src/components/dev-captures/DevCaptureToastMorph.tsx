@@ -96,8 +96,8 @@ export function DevCaptureToastMorph({
   return createPortal(
     <motion.article
       className={cn(
-        "rf-notify-card pointer-events-none fixed z-[9999] flex items-center overflow-hidden border border-white/10",
-        !imageReady && "ring-1 ring-white/20",
+        "rf-notify-card pointer-events-none fixed z-[9999] flex items-center overflow-hidden border-2 border-white/25 shadow-[0_8px_24px_rgba(0,0,0,0.35)]",
+        !imageReady && "ring-1 ring-white/30",
       )}
       style={{ transformOrigin: "left center" }}
       initial={{
@@ -170,7 +170,10 @@ export function DevCaptureToastMorph({
       }}
     >
       <div
-        className="shrink-0 overflow-hidden rounded-md bg-[#1D1613] ring-1 ring-white/10"
+        className={cn(
+          "shrink-0 overflow-hidden rounded-md bg-[#1D1613]",
+          !expanding && "border border-white/20 ring-2 ring-white/25",
+        )}
         style={{ width: thumb.w, height: thumb.h }}
       >
         <img

@@ -409,6 +409,9 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Debugging**: dev captures settings copy points to top-left RuForge icon capture, not Win+Shift+S folder workflow (`DevCapturesSection.tsx`, `DevCapturesGrid.tsx`).
+- **Debugging**: dev captures list no longer polls or focus-refreshes; silent cache + change-event refresh only (`useDevCapturesList.ts`, `devCapturesEvents.ts`).
+- **Debugging**: dev capture toast border + auto clipboard PNG on save; capture icon right-click menu (Edit last, Dev captures) (`copyDevCapturePng.ts`, `RuForgeCaptureTrigger.tsx`, `DevCaptureChromeProvider.tsx`).
 - **Debugging**: dev capture fly waits for PNG decode, brief hold at icon, slower fly (`DevCaptureToastMorph.tsx`).
 - **Debugging**: dev capture from RuForge icon (DEV + showDebuggingSettings): native main-window PNG save, hover-swap capture icon, fly-to main-window toast, click opens annotate; spike removed (`capture_main_window_dev`, `DevCaptureChromeProvider.tsx`, `RuForgeCaptureTrigger.tsx`).
 - **Debugging**: dev capture annotate modal: thumb cache-bust on save, full titlebar drag region, copy toast animation, window-controls click shield, text box resize handles (`DevCaptureAnnotateModal.tsx`, `DevCapturesGrid.tsx`, `devCaptureAnnotateHit.ts`).
