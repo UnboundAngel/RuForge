@@ -409,6 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Downloads**: `get_video_info` in-flight dedup keys use `normalizeYouTubeUrlForCompare` (same base as metadata cache) so tracking-param URL variants share one slot per lane (`downloadVideoInfoFetch.ts`).
 - **Downloads**: queue-row metadata hydration uses display-only `get_video_info` (one simulate, no dual-size merge); hero paste path unchanged (`downloadVideoInfoFetch.ts`, `downloadQueueSlice.ts`, `downloader.rs`).
 - **Downloads**: queue metadata hydration capped at 2 concurrent `get_video_info` invokes via `downloadQueueHydrationPool`; cache hits bypass the pool (`downloadQueueHydrationPool.ts`, `downloadQueueSlice.ts`).
 - **Downloads**: playlist batch enqueue copies hero per-item thumb/title/duration into job snapshots via `downloadJobSnapshotFromPlaylistItems` (same URL key as `buildPlaylistEnqueuePlan`); rows with item thumbs skip queue hydration (`playlistDownloadPlan.ts`, `useDownloaderView.ts`).

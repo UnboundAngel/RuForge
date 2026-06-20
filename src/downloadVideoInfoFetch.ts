@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { sanitizeVideoInfo } from "./components/downloader/downloaderFormat";
 import type { VideoInfo } from "./types";
+import { normalizeYouTubeUrlForCompare } from "./youtubeUrl";
 
 const METADATA_FETCH_TIMEOUT_MS = 120_000;
 
@@ -36,7 +37,7 @@ export function videoInfoFetchInflightKey(
   cookies?: VideoInfoCookieContext,
   displayOnly = false,
 ): string {
-  const key = url.trim();
+  const key = normalizeYouTubeUrlForCompare(url);
   if (!key) return "";
   return `${key}\x1f${videoFormat}${displayOnlyInflightSuffix(displayOnly)}${cookieInflightSuffix(cookies)}`;
 }
