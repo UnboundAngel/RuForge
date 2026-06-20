@@ -2139,13 +2139,6 @@ pub async fn start_download_job(
                                 total_bytes: last_total_bytes,
                             },
                         );
-                        if auto_scrub && !scrub_spawned.swap(true, Ordering::SeqCst) {
-                            spawn_scrub_previews_for_recent_videos(
-                                app.clone(),
-                                diag_root.clone(),
-                                download_started_at,
-                            );
-                        }
                     }
                 }
                 CommandEvent::Stderr(line_bytes) => {
@@ -2180,7 +2173,7 @@ pub async fn start_download_job(
                             log_post_download_files_written(&diag_root_log, started_log);
                             cleanup_orphan_downloads_under(&cleanup_root, started_log);
                         });
-                        if auto_scrub {
+                        if auto_scrub && !scrub_spawned.swap(true, Ordering::SeqCst) {
                             spawn_scrub_previews_for_recent_videos(
                                 app.clone(),
                                 diag_root.clone(),
