@@ -248,6 +248,9 @@ const MOCK_POST_INSTALL_JSON = JSON.stringify({
 function App() {
   const activeTab = useRuforgeStore((s) => s.activeTab);
   const setActiveTab = useRuforgeStore((s) => s.setActiveTab);
+  const restoreDownloadQueueFromSessionIfEmpty = useRuforgeStore(
+    (s) => s.restoreDownloadQueueFromSessionIfEmpty,
+  );
   const navMode = useRuforgeStore((s) => s.navMode);
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
@@ -377,6 +380,11 @@ function App() {
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
   const storageStats = useRuforgeStore((s) => s.storageStats);
+
+  /** DownloaderView unmounts off-tab; restore session queue if memory was cleared during churn. */
+  useEffect(() => {
+    restoreDownloadQueueFromSessionIfEmpty();
+  }, [activeTab, restoreDownloadQueueFromSessionIfEmpty]);
 
   useEffect(() => {
     void (async () => {
