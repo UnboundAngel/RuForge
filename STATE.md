@@ -29,6 +29,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Scrub previews: ffmpeg per-video lock keys normalized at map boundary (`normalize_media_key`, same rule as TS `mediaPathsMatch`) so spawn, cancel, and delete share one slot per file.
 - Scrub previews: `media.ffmpeg` debug category wired in Settings; fleet release log on guard Drop covers error/cancel paths (`debugCategories.ts`, `media.rs`).
 - Scrub previews: global ffmpeg fleet cap (semaphore max(1, cores/2) per spawn) and `-threads 1` on all RuForge sidecar invokes; `media.ffmpeg` acquire/release logs (`media.rs`).
 - Scrub previews: tail patch fills all blank trailing cells through floor(duration/5), one seek per gap cell; failures logged not swallowed (`media.rs`).
