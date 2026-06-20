@@ -186,6 +186,8 @@ export type DownloadJobFinishedPayload = {
   url?: string;
   /** Wall-clock or watchdog timeout; music batch shows warning UI and continues. */
   timedOut?: boolean;
+  /** Muxed output file when Rust resolved one at success; omitted when unknown. */
+  outputPath?: string;
 };
 
 export { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from "./store/types";
