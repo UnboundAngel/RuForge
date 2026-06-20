@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { Music, Video } from "lucide-react";
 
 function computeTooltipPlacement(
@@ -89,41 +89,122 @@ export const MarqueeText = ({
   );
 };
 
+export const DOWNLOAD_CARD_SIZE_CLASS =
+  "aspect-video w-80 shrink-0 sm:w-96 lg:w-[26rem]";
+
+const HYDRATE_FADE_EASE = [0.16, 1, 0.3, 1] as const;
+
 export const DownloadQueueItem = ({
   item,
   index,
   currentIndex,
   percentage,
+  speedLabel,
+  variant,
+  title,
+  needsHydration = false,
 }: {
-  item: { id?: string; thumbnail: string };
-  index: number;
+  item: { id?: string; thumbnail: string; title?: string };
+  index?: number;
   currentIndex?: number;
   percentage: number;
+  speedLabel?: string | null;
+  variant?: "active" | "preview";
+  title?: string;
+  needsHydration?: boolean;
 }) => {
-  const isCompleted = currentIndex !== undefined && index < currentIndex;
-  const isCurrent = currentIndex !== undefined && index === currentIndex;
-  const isPending = currentIndex !== undefined && index > currentIndex;
-  const opacityClass = isPending ? "opacity-60" : "opacity-100";
-  const progress = isCompleted ? 100 : isCurrent ? percentage : 0;
+  const isCurrent = variant
+    ? variant === "active"
+    : currentIndex !== undefined && index === currentIndex;
+  const isPending = variant
+    ? variant === "preview"
+    : currentIndex !== undefined && index !== undefined && index > currentIndex;
+  const opacityClass = isPending ? "opacity-55" : "opacity-100";
+
+  let progress = 0;
+  if (variant === "preview") {
+    progress = 0;
+  } else if (variant === "active") {
+    progress = percentage;
+  } else if (currentIndex !== undefined && index !== undefined) {
+    if (index < currentIndex) progress = 100;
+    else if (index === currentIndex) progress = percentage;
+  }
+  const label = needsHydration ? "" : (title ?? item.title ?? "").trim();
+  const showMedia = !needsHydration && Boolean(item.thumbnail?.trim());
+
   return (
     <motion.div
-      className={`relative aspect-video w-64 shrink-0 overflow-hidden rounded-3xl border border-white/5 bg-stone-900 shadow-2xl transition-all duration-500 ${isCurrent ? "z-10 scale-105 ring-2 ring-[color-mix(in_srgb,var(--accent),transparent_50%)]" : `scale-100 ${opacityClass}`}`}
+      data-download-card
+      className={`relative overflow-hidden rounded-3xl border border-white/[0.08] bg-stone-900/80 transition-all duration-500 ${DOWNLOAD_CARD_SIZE_CLASS} ${
+        isCurrent
+          ? "z-10 scale-[1.02] ring-2 ring-[color-mix(in_srgb,var(--accent),transparent_55%)]"
+          : `scale-100 ${opacityClass}`
+      }`}
     >
-      <img
-        src={item.thumbnail}
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover opacity-20 grayscale"
-      />
-      <motion.div
-        className="absolute inset-0"
-        style={{ clipPath: `inset(0 ${100 - progress}% 0 0)` }}
-      >
-        <img
-          src={item.thumbnail}
-          alt=""
-          className="h-full w-full object-cover shadow-[0_0_40px_var(--accent-glow)]"
-        />
-      </motion.div>
+      <AnimatePresence initial={false}>
+        {needsHydration ? (
+          <motion.div
+            key="shimmer"
+            className="rf-download-card-shimmer absolute inset-0 bg-stone-800/90"
+            aria-hidden
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: HYDRATE_FADE_EASE }}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence initial={false}>
+        {!needsHydration ? (
+          <motion.div
+            key="hydrated"
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4, ease: HYDRATE_FADE_EASE }}
+          >
+            {showMedia ? (
+              <>
+                <img
+                  src={item.thumbnail}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover opacity-20 grayscale"
+                />
+                <motion.div
+                  className="absolute inset-0"
+                  style={{ clipPath: `inset(0 ${100 - progress}% 0 0)` }}
+                >
+                  <img src={item.thumbnail} alt="" className="h-full w-full object-cover" />
+                </motion.div>
+              </>
+            ) : (
+              <div className="rf-download-card-shimmer absolute inset-0 bg-stone-800/90" aria-hidden />
+            )}
+            {label ? (
+              <motion.div
+                className={`pointer-events-none absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-4 pb-3.5 pt-10 ${
+                  isPending ? "opacity-70" : "opacity-100"
+                }`}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.36, ease: HYDRATE_FADE_EASE, delay: 0.08 }}
+              >
+                <p className="line-clamp-2 text-left text-sm font-semibold leading-snug text-white sm:text-[0.95rem]">
+                  {label}
+                </p>
+              </motion.div>
+            ) : null}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      {isCurrent && speedLabel ? (
+        <span className="absolute top-3 right-3 z-20 rounded-md bg-black/55 px-2 py-0.5 text-[10px] font-bold tabular-nums tracking-tight text-white backdrop-blur-sm">
+          {speedLabel}
+        </span>
+      ) : null}
     </motion.div>
   );
 };

@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-20 (re-download last batch dev tool)
+Last updated: 2026-06-20 (multi-item download hero UI)
 Status: in progress
 
 ## Now
@@ -29,6 +29,10 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Downloads: multi-item carousel stays active between batch items when next row metadata is still loading.
+- Downloads: carousel card art/title fade in when metadata hydrates (shimmer crossfade).
+- Downloads: multi-item carousel skeleton for unhydrated previews, vertical centering, batch remaining count in gap.
+- Downloads: multi-item download hero simplified (centered carousel, plain progress bar, whole-number MB/s on active card; removed item count, phase label, ETA, segmented bar).
 - Debugging: dev-gated re-download last batch tool (capture at download start, replay through entry handlers, Mode A real download with resolved-path cleanup, Mode B simulate stub without yt-dlp).
 - Downloads: Explorer add sets focusedJobId with mirrorHeroUrl so Download hero is not blank; session queue restore on tab change; duplicate-skip clears matching queued rows so Explorer in-queue matches store.
 - Docs: README refreshed from 0.1.7 brief to 0.1.11 scope (downloads, video library/player, music mode, housekeeping); ruforge.app link; build fences fixed.

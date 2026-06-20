@@ -12,6 +12,48 @@ export function normalizeDurationSeconds(seconds: number): number {
   return seconds;
 }
 
+/** Whole-number MB/s for the immersive downloader hero (rounded up from yt-dlp speed strings). */
+export function formatHeroDownloadSpeed(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const t = raw.trim();
+  if (!t || /^0\s/i.test(t)) return null;
+
+  const mib = t.match(/^([\d.]+)\s*MiB\/s$/i);
+  if (mib) {
+    const n = Number.parseFloat(mib[1]!);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return `${Math.ceil(n)} MB/s`;
+  }
+
+  const kib = t.match(/^([\d.]+)\s*KiB\/s$/i);
+  if (kib) {
+    const n = Number.parseFloat(kib[1]!);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const mibVal = n / 1024;
+    return mibVal >= 1 ? `${Math.ceil(mibVal)} MB/s` : "1 MB/s";
+  }
+
+  const mb = t.match(/^([\d.]+)\s*MB\/s$/i);
+  if (mb) {
+    const n = Number.parseFloat(mb[1]!);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    return `${Math.ceil(n)} MB/s`;
+  }
+
+  return null;
+}
+
+export function isHttpUrlString(raw: string | undefined | null): boolean {
+  return /^https?:\/\//i.test((raw ?? "").trim());
+}
+
+/** Title safe for carousel overlay; never returns a bare URL. */
+export function sanitizeCarouselDisplayTitle(raw: string | undefined | null): string {
+  const t = (raw ?? "").trim();
+  if (!t || isHttpUrlString(t)) return "";
+  return t;
+}
+
 export function formatDuration(seconds: number): string {
   const total = normalizeDurationSeconds(seconds);
   const h = Math.floor(total / 3600);

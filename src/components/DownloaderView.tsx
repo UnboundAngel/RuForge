@@ -15,24 +15,19 @@ import {
 } from "lucide-react";
 import { DuplicateDownloadDialog } from "./DuplicateDownloadDialog";
 import { downloadSubtitleLangLabel } from "../store/types";
-import { formatApproxFileSize, formatDuration } from "./downloader/downloaderFormat";
-import { BROWSER_OPTIONS, downloadProgressPhaseLabel } from "./downloader/downloaderConstants";
+import { formatApproxFileSize, formatDuration, formatHeroDownloadSpeed } from "./downloader/downloaderFormat";
+import { BROWSER_OPTIONS } from "./downloader/downloaderConstants";
 import {
   DownloadJobAudioToggle,
-  DownloadQueueItem,
   UrlInputPacer,
 } from "./downloader/DownloadJobQueuePanel";
+import { MultiDownloadSlotCarousel } from "./downloader/MultiDownloadSlotCarousel";
 import { downloadJobMediaNeedsHydration } from "../downloadQueue";
 import { downloadJobDisplayFileSizeBytes } from "../downloadJobFileSizes";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
 import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
 
 const CLIP_ICON_TRANSITION = { duration: 0.32, ease: [0.23, 1, 0.32, 1] as const };
-
-/** Matches the immersive downloader progress row: 40 flex slots + Tailwind `gap-2` (0.5rem). */
-const BIG_PROGRESS_SEGMENTS = 40;
-const BIG_PROGRESS_GAP_REM = 0.5;
-const BIG_PROGRESS_GAP_TOTAL_REM = (BIG_PROGRESS_SEGMENTS - 1) * BIG_PROGRESS_GAP_REM;
 
 function MainDownloaderUrlChip({
   url,
@@ -326,7 +321,7 @@ function QuickEnqueuePinnedChip({
 export const DownloaderView = (props: DownloaderViewProps) => {
   const d = useDownloaderView(props);
 
-  const idleHero = !d.focusShowsBigProgress
+  const idleHero = !d.showImmersiveDownload
     ? (() => {
       if (d.videoInfo && !d.metadataLoading) {
         return {
@@ -376,18 +371,26 @@ export const DownloaderView = (props: DownloaderViewProps) => {
   const heroThumb = d.heroBackdropThumb.trim();
 
   const bigProgressPctRaw = d.progress?.percentage ?? 0;
-  const bigProgressPct = Number.isFinite(bigProgressPctRaw) ? bigProgressPctRaw : 0;
-  const bigProgressFilledSegs =
-    bigProgressPct < 0
-      ? 0
-      : Math.min(
-          BIG_PROGRESS_SEGMENTS,
-          Math.floor((bigProgressPct / 100) * BIG_PROGRESS_SEGMENTS) + 1,
-        );
-  const bigProgressFillWidth =
-    bigProgressFilledSegs <= 0
-      ? "0%"
-      : `calc(${bigProgressFilledSegs} * (100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS} + ${bigProgressFilledSegs - 1} * ${BIG_PROGRESS_GAP_REM}rem)`;
+  const bigProgressPct = Number.isFinite(bigProgressPctRaw)
+    ? Math.min(100, Math.max(0, bigProgressPctRaw))
+    : 0;
+  const heroSpeedLabel = formatHeroDownloadSpeed(d.progress?.speed);
+
+  const downloadCarouselItems =
+    d.collectionDownloadCarousel?.items ??
+    (d.focusedJob?.metadata?.isPlaylist && d.focusedJob.metadata.playlistItems
+      ? d.focusedJob.metadata.playlistItems
+      : null);
+  const downloadCarouselCurrentIndex =
+    d.collectionDownloadCarousel?.currentIndex ?? d.progress?.currentIndex ?? 0;
+  const isMultiItemDownload = Boolean(downloadCarouselItems && downloadCarouselItems.length > 1);
+  const multiDownloadTitle =
+    (isMultiItemDownload
+      ? downloadCarouselItems?.[downloadCarouselCurrentIndex]?.title
+      : null) ||
+    d.progress?.currentItemTitle ||
+    downloadCarouselItems?.[downloadCarouselCurrentIndex]?.title ||
+    "";
 
   return (
     <div className="h-full flex flex-col relative overflow-hidden">
@@ -843,7 +846,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
               )}
             </AnimatePresence>
             <div className="w-full max-w-6xl mx-auto space-y-2 sm:space-y-8">
-              {!d.focusShowsBigProgress ? (
+              {!d.showImmersiveDownload ? (
                 <div className="space-y-4 sm:space-y-10">
                   <AnimatePresence mode="wait">
                     {displayHero ? (
@@ -1027,157 +1030,45 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   </AnimatePresence>
                 </div>
               ) : (
-                <motion.div className="relative h-full flex flex-col justify-center items-center">
-                  {(d.progress?.currentIndex !== undefined &&
-                    d.progress?.totalItems !== undefined) ||
-                  d.collectionDownloadCarousel ? (
-                    <motion.div
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="absolute top-0 right-0 text-right"
+                <motion.div className="relative flex h-full flex-col items-center justify-center gap-8 px-6">
+                  {!isMultiItemDownload ? (
+                    <motion.h3
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="max-w-4xl text-center text-4xl font-black uppercase leading-[0.9] tracking-tighter text-white drop-shadow-2xl line-clamp-2 lg:text-7xl"
                     >
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-black text-stone-600 uppercase tracking-[0.4em] mb-2">
-                          Item
-                        </span>
-                        <p className="text-xl font-black text-[color:var(--accent)] font-mono tracking-tighter leading-none">
-                          {d.collectionDownloadCarousel
-                            ? `${d.collectionDownloadCarousel.currentIndex + 1} / ${d.collectionDownloadCarousel.totalItems}`
-                            : `${d.progress!.currentIndex! + 1} / ${d.progress!.totalItems!}`}
-                        </p>
-                      </div>
-                    </motion.div>
+                      {d.progress?.currentItemTitle ||
+                        d.focusedJob?.metadata?.title ||
+                        d.focusedJob?.title ||
+                        d.focusedJob?.url}
+                    </motion.h3>
                   ) : null}
-                  <div className="w-full flex flex-col items-center">
-                    <div className="w-full max-w-4xl space-y-16 mb-20">
-                      <div className="space-y-8">
-                        <motion.h3
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="text-4xl lg:text-7xl font-black text-white uppercase tracking-tighter line-clamp-2 text-center leading-[0.9] drop-shadow-2xl"
-                        >
-                          {d.progress?.currentItemTitle ||
-                            d.focusedJob?.metadata?.title ||
-                            d.focusedJob?.title ||
-                            d.focusedJob?.url}
-                        </motion.h3>
-                        <motion.p
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="text-[11px] font-black text-[color:var(--accent)] uppercase tracking-[1em] text-center ml-[1em] opacity-60"
-                        >
-                          {downloadProgressPhaseLabel(
-                            d.progress,
-                            Boolean(
-                              d.collectionDownloadCarousel ||
-                                d.focusedJob?.metadata?.isPlaylist,
-                            ),
-                          )}
-                        </motion.p>
+                  {!isMultiItemDownload ? (
+                    <div className="w-full max-w-md">
+                      <div className="relative h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                        <motion.div
+                          className="absolute inset-y-0 left-0 rounded-full bg-[color:var(--accent)]"
+                          initial={false}
+                          animate={{ width: `${bigProgressPct}%` }}
+                          transition={{ duration: 0 }}
+                        />
                       </div>
-                      <div className="w-full max-w-2xl mx-auto">
-                        <div className="flex items-end gap-2 sm:gap-3">
-                          <span
-                            className="pointer-events-none w-5 shrink-0 text-right text-[10px] font-mono font-black tabular-nums leading-none text-stone-500/35"
-                            aria-hidden
-                          >
-                            0
-                          </span>
-                          <div className="relative h-1 min-w-0 flex-1">
-                            <div className="absolute inset-0">
-                              <div
-                                className="pointer-events-none absolute inset-0 rounded-full"
-                                aria-hidden
-                                style={{
-                                  backgroundImage: `repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS}), transparent calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS}), transparent calc((100% - ${BIG_PROGRESS_GAP_TOTAL_REM}rem) / ${BIG_PROGRESS_SEGMENTS} + ${BIG_PROGRESS_GAP_REM}rem))`,
-                                }}
-                              />
-                              <motion.div
-                                className={`absolute left-0 top-0 bottom-0 bg-[color:var(--accent)] shadow-[0_0_10px_var(--accent-glow)] origin-left ${
-                                  bigProgressFilledSegs <= 0
-                                    ? ""
-                                    : bigProgressFilledSegs >= BIG_PROGRESS_SEGMENTS
-                                      ? "rounded-full"
-                                      : "rounded-l-full"
-                                }`}
-                                initial={false}
-                                animate={{ width: bigProgressFillWidth }}
-                                transition={{ duration: 0 }}
-                              />
-                            </div>
-                          </div>
-                          <span
-                            className="pointer-events-none w-7 shrink-0 text-[10px] font-mono font-black tabular-nums leading-none text-stone-500/35"
-                            aria-hidden
-                          >
-                            100
-                          </span>
-                        </div>
-                        <div className="mt-4 flex min-h-[3.25rem] flex-wrap items-end justify-center gap-x-10 gap-y-2 text-center">
-                          {d.progress?.speed && d.progress.speed !== "0 MB/S" && (
-                            <div className="space-y-1">
-                              <p className="text-[9px] font-black text-stone-600 uppercase tracking-[0.3em]">
-                                Speed
-                              </p>
-                              <p className="text-lg font-black text-[color:var(--accent)] opacity-90 tabular-nums tracking-tighter sm:text-xl">
-                                {d.progress.speed}
-                              </p>
-                            </div>
-                          )}
-                          {d.progress?.eta && d.progress.eta !== "???" && (
-                            <div className="space-y-1">
-                              <p className="text-[9px] font-black text-stone-600 uppercase tracking-[0.3em]">
-                                Time
-                              </p>
-                              <p className="text-lg font-black text-white tabular-nums tracking-tighter sm:text-xl">
-                                {d.progress.eta}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      {heroSpeedLabel ? (
+                        <p className="mt-4 text-center text-sm font-bold tabular-nums tracking-tight text-[color:var(--accent)]">
+                          {heroSpeedLabel}
+                        </p>
+                      ) : null}
                     </div>
-                    {d.collectionDownloadCarousel ? (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="w-screen max-w-7xl flex gap-8 overflow-x-auto scrollbar-none px-20 py-10"
-                      >
-                        {d.collectionDownloadCarousel.items.map((item, i) => (
-                          <DownloadQueueItem
-                            key={`collection-card-${i}-${item.title}`}
-                            item={item}
-                            index={i}
-                            currentIndex={d.collectionDownloadCarousel!.currentIndex}
-                            percentage={
-                              i === d.collectionDownloadCarousel!.currentIndex
-                                ? d.progress?.percentage || 0
-                                : 0
-                            }
-                          />
-                        ))}
-                      </motion.div>
-                    ) : (
-                      d.focusedJob?.metadata?.isPlaylist &&
-                      d.focusedJob.metadata.playlistItems && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="w-screen max-w-7xl flex gap-8 overflow-x-auto scrollbar-none px-20 py-10"
-                      >
-                        {d.focusedJob.metadata.playlistItems.map((item, i) => (
-                          <DownloadQueueItem
-                            key={`playlist-card-${i}-${item.webpageUrl ?? item.title}`}
-                            item={item}
-                            index={i}
-                            currentIndex={d.progress?.currentIndex}
-                            percentage={d.progress?.percentage || 0}
-                          />
-                        ))}
-                      </motion.div>
-                    )
-                    )}
-                  </div>
+                  ) : null}
+                  {isMultiItemDownload && downloadCarouselItems ? (
+                    <MultiDownloadSlotCarousel
+                      items={downloadCarouselItems}
+                      currentIndex={downloadCarouselCurrentIndex}
+                      percentage={d.progress?.percentage || 0}
+                      speedLabel={heroSpeedLabel}
+                      currentTitle={multiDownloadTitle}
+                    />
+                  ) : null}
                 </motion.div>
               )}
             </div>

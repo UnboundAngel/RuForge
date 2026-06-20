@@ -57,6 +57,7 @@ import {
   youtubeUrlsMatch,
 } from "../../youtubeUrl";
 import { URL_PACER_EASE } from "./downloaderConstants";
+import { sanitizeCarouselDisplayTitle } from "./downloaderFormat";
 import { urlConflictsWithActiveDownloader } from "./downloaderUrlConflict";
 import {
   type YoutubeUrlDropHandler,
@@ -204,10 +205,34 @@ export function useDownloaderView({
   >({});
 
   useEffect(() => {
-    const held = downloadJobs.filter((j) => j.status === "queued" && j.approval === "held");
+    const held = downloadJobs
+      .filter((j) => j.status === "queued" && j.approval === "held")
+      .sort((a, b) => a.createdAt - b.createdAt);
     if (held.length > 1) {
       setBatchQueueJobIds(held.map((j) => j.id));
+      return;
     }
+
+    const pipeline = downloadJobs
+      .filter(
+        (j) =>
+          j.status === "queued" || j.status === "downloading" || j.status === "paused",
+      )
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    setBatchQueueJobIds((prev) => {
+      if (pipeline.length > 1) {
+        if (prev && prev.length > 1) {
+          const merged = [...prev];
+          for (const j of pipeline) {
+            if (!merged.includes(j.id)) merged.push(j.id);
+          }
+          return merged.length > 1 ? merged : prev;
+        }
+        return pipeline.map((j) => j.id);
+      }
+      return prev;
+    });
   }, [downloadJobs]);
 
   useEffect(() => {
@@ -356,14 +381,34 @@ export function useDownloaderView({
   }, [batchQueueJobIds, downloadJobs]);
 
   const batchDownloadCarousel = useMemo(() => {
-    if (!batchQueueJobIds || batchQueueJobIds.length <= 1 || !anyDownloading) return null;
+    if (!batchQueueJobIds || batchQueueJobIds.length <= 1) return null;
+
+    const finishedCount = batchQueueJobIds.filter(
+      (id) => !downloadJobs.some((j) => j.id === id),
+    ).length;
+    const pendingInBatch = batchQueueJobIds.some((id) => {
+      const j = downloadJobs.find((x) => x.id === id);
+      return (
+        j &&
+        (j.status === "queued" || j.status === "downloading" || j.status === "paused")
+      );
+    });
+    if (!pendingInBatch && finishedCount === 0) return null;
+    if (finishedCount >= batchQueueJobIds.length) return null;
 
     const items = batchQueueJobIds.map((id) => {
       const snap = batchQueueSnapshots[id];
       const job = downloadJobs.find((j) => j.id === id);
+      const rawTitle = snap?.title ?? job?.metadata?.title ?? job?.title ?? "";
+      const thumbnail = snap?.thumbnail ?? job?.metadata?.thumbnail ?? "";
+      const safeTitle = sanitizeCarouselDisplayTitle(rawTitle);
       return {
-        thumbnail: snap?.thumbnail ?? job?.metadata?.thumbnail ?? "",
-        title: snap?.title ?? job?.title ?? job?.metadata?.title ?? "",
+        thumbnail,
+        title: safeTitle,
+        needsHydration:
+          downloadJobMediaNeedsHydration(job?.metadata ?? null) ||
+          !thumbnail.trim() ||
+          !safeTitle,
       };
     });
 
@@ -371,10 +416,14 @@ export function useDownloaderView({
       (id) => downloadJobs.find((j) => j.id === id)?.status === "downloading",
     );
     if (currentIndex < 0) {
-      const finishedCount = batchQueueJobIds.filter(
-        (id) => !downloadJobs.some((j) => j.id === id),
-      ).length;
-      currentIndex = Math.min(finishedCount, batchQueueJobIds.length - 1);
+      const queuedNext = batchQueueJobIds.findIndex((id) => {
+        const j = downloadJobs.find((x) => x.id === id);
+        return j && (j.status === "queued" || j.status === "paused");
+      });
+      currentIndex =
+        queuedNext >= 0
+          ? queuedNext
+          : Math.min(finishedCount, batchQueueJobIds.length - 1);
     }
 
     return {
@@ -383,27 +432,39 @@ export function useDownloaderView({
       totalItems: batchQueueJobIds.length,
       collectionTitle: "Queued downloads",
     };
-  }, [anyDownloading, batchQueueJobIds, batchQueueSnapshots, downloadJobs]);
+  }, [batchQueueJobIds, batchQueueSnapshots, downloadJobs]);
 
   const playlistDownloadCarousel = useMemo(() => {
-    if (!anyDownloading || !videoInfo?.isPlaylist || !videoInfo.playlistItems?.length) {
+    if (!anyDownloading) return null;
+    const playlistItems =
+      videoInfo?.playlistItems ??
+      (focusedJob?.metadata?.isPlaylist ? focusedJob.metadata.playlistItems : undefined);
+    const isPlaylistJob =
+      Boolean(videoInfo?.isPlaylist) ||
+      Boolean(focusedJob?.metadata?.isPlaylist && focusedJob.status === "downloading");
+    if (!isPlaylistJob || !playlistItems?.length || playlistItems.length <= 1) {
       return null;
     }
     return {
-      items: videoInfo.playlistItems.map((item) => ({
+      items: playlistItems.map((item) => ({
         thumbnail: item.thumbnail,
-        title: item.title,
+        title: sanitizeCarouselDisplayTitle(item.title),
+        needsHydration:
+          !String(item.thumbnail ?? "").trim() ||
+          !sanitizeCarouselDisplayTitle(item.title),
       })),
       currentIndex: typeof progress?.currentIndex === "number" ? progress.currentIndex : 0,
       totalItems:
         typeof progress?.totalItems === "number"
           ? progress.totalItems
-          : videoInfo.playlistItems.length,
-      collectionTitle: videoInfo.title,
+          : playlistItems.length,
+      collectionTitle: videoInfo?.title ?? focusedJob?.metadata?.title ?? "Playlist",
     };
-  }, [anyDownloading, videoInfo, progress]);
+  }, [anyDownloading, videoInfo, focusedJob, progress]);
 
   const collectionDownloadCarousel = batchDownloadCarousel ?? playlistDownloadCarousel;
+  const showImmersiveDownload =
+    focusShowsBigProgress || Boolean(batchDownloadCarousel);
 
   const batchQueueHeroDisplayBytes = useMemo(() => {
     if (batchQueueJobs.length <= 1) return null;
@@ -1769,9 +1830,11 @@ export function useDownloaderView({
     pinnedQuickEnqueueUrls,
     batchQueueJobs,
     batchQueueActive,
+    batchQueueJobIds,
     batchDownloadCarousel,
     playlistDownloadCarousel,
     collectionDownloadCarousel,
+    showImmersiveDownload,
     batchQueuePlaylistView,
     batchQueueHeroDisplayBytes,
     toggleBatchQueueJobAudio,

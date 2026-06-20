@@ -20,6 +20,32 @@
   animation: marquee 15s linear infinite;
 }
 
+@keyframes rf-download-card-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.rf-download-card-shimmer {
+  background: linear-gradient(
+    105deg,
+    rgba(255, 255, 255, 0.015) 0%,
+    rgba(255, 255, 255, 0.055) 48%,
+    rgba(255, 255, 255, 0.015) 96%
+  );
+  background-size: 200% 100%;
+  animation: rf-download-card-shimmer 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-download-card-shimmer {
+    animation: none;
+  }
+}
+
 .rf-marquee-fade-left {
   mask-image: linear-gradient(to right, transparent 0, #000 1.25rem, #000 calc(100% - 0.35rem));
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 1.25rem, #000 calc(100% - 0.35rem));
