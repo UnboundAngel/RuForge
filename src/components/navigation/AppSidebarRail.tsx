@@ -1,4 +1,4 @@
-import logo from "@/assets/ruforgeAppIcon.png";
+import { RuForgeCaptureTrigger } from "@/components/dev-captures/RuForgeCaptureTrigger";
 import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
@@ -22,6 +22,7 @@ const RAIL_ITEMS: RailItem[] = [
 type AppSidebarRailProps = {
   activeTab: ActiveTab;
   navMode: NavMode;
+  captureScreenLabel: string;
   disabled?: boolean;
   onSelectTab: (tab: ActiveTab) => void;
 };
@@ -29,6 +30,7 @@ type AppSidebarRailProps = {
 export function AppSidebarRail({
   activeTab,
   navMode,
+  captureScreenLabel,
   disabled,
   onSelectTab,
 }: AppSidebarRailProps) {
@@ -41,11 +43,8 @@ export function AppSidebarRail({
       style={{ width: SIDEBAR_RAIL_PX }}
       data-nav-mode={navMode}
     >
-      <div
-        className="flex h-14 shrink-0 cursor-default items-center justify-center"
-        data-tauri-drag-region
-      >
-        <img src={logo} className="h-8 w-8 rounded-lg object-cover" alt="RuForge" />
+      <div className="pointer-events-auto relative z-[100] flex h-14 shrink-0 items-center justify-center">
+        <RuForgeCaptureTrigger screenLabel={captureScreenLabel} />
       </div>
 
       <nav className="flex flex-1 flex-col items-center gap-1 px-1 py-2">
