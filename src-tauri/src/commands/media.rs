@@ -127,6 +127,222 @@ fn emit_scrub_sprite_event(app: &AppHandle, event: &str, video_path: &str) {
     let _ = app.emit(event, serde_json::json!({ "videoPath": video_path }));
 }
 
+fn tail_sprite_cell_index(duration_secs: f64) -> Option<usize> {
+    if !duration_secs.is_finite() || duration_secs <= 0.0 {
+        return None;
+    }
+    Some((duration_secs / 5.0).floor() as usize)
+}
+
+const SPRITE_CELL_W: u32 = 160;
+const SPRITE_CELL_H: u32 = 90;
+const POPULATED_CELL_MIN_BYTES: u64 = 800;
+
+fn sprite_cell_overlay(cell_idx: usize) -> (usize, u32, u32) {
+    let sheet_idx = cell_idx / 100;
+    let cell_in_sheet = cell_idx % 100;
+    let overlay_x = (cell_in_sheet % 10) as u32 * SPRITE_CELL_W;
+    let overlay_y = (cell_in_sheet / 10) as u32 * SPRITE_CELL_H;
+    (sheet_idx, overlay_x, overlay_y)
+}
+
+fn sprite_sheet_path(thumb_dir: &Path, sheet_idx: usize) -> PathBuf {
+    thumb_dir.join(format!("sprite_{:03}.jpg", sheet_idx + 1))
+}
+
+async fn crop_sprite_cell_jpeg(
+    app: &AppHandle,
+    slot: &Arc<FfmpegVideoSlot>,
+    sheet_path: &Path,
+    overlay_x: u32,
+    overlay_y: u32,
+    dest: &Path,
+) -> Result<(), String> {
+    let sheet_str = sheet_path.to_str().ok_or("Bad sprite path")?;
+    let dest_str = dest.to_str().ok_or("Bad crop path")?;
+    let crop = format!("crop={SPRITE_CELL_W}:{SPRITE_CELL_H}:{overlay_x}:{overlay_y}");
+    run_ffmpeg_sidecar_unlocked(
+        app,
+        slot,
+        vec![
+            "-hide_banner",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            sheet_str,
+            "-vf",
+            &crop,
+            "-q:v",
+            "5",
+            dest_str,
+        ],
+    )
+    .await
+}
+
+async fn is_sprite_cell_populated(
+    app: &AppHandle,
+    slot: &Arc<FfmpegVideoSlot>,
+    thumb_dir: &Path,
+    sheet_path: &Path,
+    overlay_x: u32,
+    overlay_y: u32,
+) -> Result<bool, String> {
+    if !sheet_path.is_file() {
+        return Ok(false);
+    }
+    let probe = thumb_dir.join("_cell_probe.jpg");
+    crop_sprite_cell_jpeg(app, slot, sheet_path, overlay_x, overlay_y, &probe).await?;
+    let populated = std::fs::metadata(&probe)
+        .map(|m| m.len() > POPULATED_CELL_MIN_BYTES)
+        .unwrap_or(false);
+    let _ = std::fs::remove_file(&probe);
+    Ok(populated)
+}
+
+async fn ensure_sprite_sheet(
+    app: &AppHandle,
+    slot: &Arc<FfmpegVideoSlot>,
+    sprite_path: &Path,
+) -> Result<(), String> {
+    if sprite_path.is_file() {
+        return Ok(());
+    }
+    let sprite_str = sprite_path.to_str().ok_or("Bad sprite path")?;
+    run_ffmpeg_sidecar_unlocked(
+        app,
+        slot,
+        vec![
+            "-hide_banner",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=1600x900",
+            "-strict",
+            "unofficial",
+            "-frames:v",
+            "1",
+            "-q:v",
+            "5",
+            sprite_str,
+        ],
+    )
+    .await
+}
+
+async fn trailing_sprite_cells_to_patch(
+    app: &AppHandle,
+    slot: &Arc<FfmpegVideoSlot>,
+    thumb_dir: &Path,
+    tail_end: usize,
+) -> Result<Vec<usize>, String> {
+    let mut out = Vec::new();
+    for cell_idx in (0..=tail_end).rev() {
+        let (sheet_idx, overlay_x, overlay_y) = sprite_cell_overlay(cell_idx);
+        let sheet_path = sprite_sheet_path(thumb_dir, sheet_idx);
+        if is_sprite_cell_populated(app, slot, thumb_dir, &sheet_path, overlay_x, overlay_y).await?
+        {
+            break;
+        }
+        out.push(cell_idx);
+    }
+    out.reverse();
+    Ok(out)
+}
+
+async fn patch_trailing_sprite_cells(
+    app: &AppHandle,
+    slot: &Arc<FfmpegVideoSlot>,
+    video_path: &str,
+    thumb_dir: &Path,
+    duration_secs: f64,
+) -> Result<(), String> {
+    let tail_end = match tail_sprite_cell_index(duration_secs) {
+        Some(i) => i,
+        None => return Ok(()),
+    };
+    let cells = trailing_sprite_cells_to_patch(app, slot, thumb_dir, tail_end).await?;
+    if cells.is_empty() {
+        return Ok(());
+    }
+
+    let sprite_tmp = thumb_dir.join("_sprite_patch.jpg");
+    let sprite_tmp_str = sprite_tmp.to_str().ok_or("Bad sprite temp path")?;
+
+    for cell_idx in cells {
+        let (sheet_idx, overlay_x, overlay_y) = sprite_cell_overlay(cell_idx);
+        let sprite_path = sprite_sheet_path(thumb_dir, sheet_idx);
+        let tail_tmp = thumb_dir.join(format!("_tail_cell_{cell_idx:03}.jpg"));
+        let tail_tmp_str = tail_tmp.to_str().ok_or("Bad tail temp path")?;
+        let seek_str = format!("{:.3}", cell_idx as f64 * 5.0);
+
+        run_ffmpeg_sidecar_unlocked(
+            app,
+            slot,
+            vec![
+                "-hide_banner",
+                "-nostdin",
+                "-loglevel",
+                "error",
+                "-y",
+                "-ss",
+                &seek_str,
+                "-i",
+                video_path,
+                "-frames:v",
+                "1",
+                "-vf",
+                "scale=160:90",
+                "-q:v",
+                "5",
+                tail_tmp_str,
+            ],
+        )
+        .await?;
+
+        ensure_sprite_sheet(app, slot, &sprite_path).await?;
+
+        let overlay = format!(
+            "[1:v]scale=160:90[thumb];[0:v][thumb]overlay={}:{}",
+            overlay_x, overlay_y
+        );
+        let sprite_str = sprite_path.to_str().ok_or("Bad sprite path")?;
+
+        run_ffmpeg_sidecar_unlocked(
+            app,
+            slot,
+            vec![
+                "-hide_banner",
+                "-nostdin",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                sprite_str,
+                "-i",
+                tail_tmp_str,
+                "-filter_complex",
+                &overlay,
+                "-q:v",
+                "5",
+                sprite_tmp_str,
+            ],
+        )
+        .await?;
+
+        std::fs::rename(&sprite_tmp, &sprite_path).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&tail_tmp);
+    }
+
+    Ok(())
+}
+
 fn collect_sprite_paths(thumb_dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
     if let Ok(rd) = std::fs::read_dir(thumb_dir) {
@@ -289,6 +505,7 @@ async fn extract_frames_generate_inner(
     let output_pattern = thumb_dir.join("sprite_%03d.jpg");
     emit_scrub_sprite_event(&app, "scrub-sprites-started", &video_path);
 
+    let output_pattern_str = output_pattern.to_str().ok_or("Bad sprite path")?;
     let ffmpeg_result = run_ffmpeg_sidecar_unlocked(
         &app,
         &slot,
@@ -299,8 +516,12 @@ async fn extract_frames_generate_inner(
             "error",
             "-threads",
             "0",
+            "-skip_frame",
+            "nokey",
             "-i",
             video_path.as_str(),
+            "-vsync",
+            "passthrough",
             "-an",
             "-sn",
             "-dn",
@@ -308,14 +529,28 @@ async fn extract_frames_generate_inner(
             "fps=1/5,scale=160:90,tile=10x10",
             "-q:v",
             "5",
-            output_pattern.to_str().ok_or("Bad sprite path")?,
+            output_pattern_str,
         ],
     )
     .await;
 
-    emit_scrub_sprite_event(&app, "scrub-sprites-finished", &video_path);
-
     ffmpeg_result.map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
+
+    if duration_secs.is_finite() && duration_secs > 0.0 {
+        if let Err(e) = patch_trailing_sprite_cells(
+            &app,
+            &slot,
+            video_path.as_str(),
+            &thumb_dir,
+            duration_secs,
+        )
+        .await
+        {
+            log::warn!("scrub sprite tail patch: {e}");
+        }
+    }
+
+    emit_scrub_sprite_event(&app, "scrub-sprites-finished", &video_path);
 
     let sprites = collect_sprite_paths(&thumb_dir);
     if sprites.is_empty() {
