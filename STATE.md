@@ -29,6 +29,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Downloads: queue metadata hydration capped at 2 concurrent get_video_info invokes via downloadQueueHydrationPool; cache hits bypass the pool (`downloadQueueHydrationPool.ts`, `downloadQueueSlice.ts`).
 - Downloads: playlist batch enqueue copies hero per-item thumb/title/duration into job snapshots; rows with item thumbs skip queue hydration (`playlistDownloadPlan.ts`, `useDownloaderView.ts`).
 - Scrub previews: ffmpeg per-video lock keys normalized at map boundary (`normalize_media_key`, same rule as TS `mediaPathsMatch`) so spawn, cancel, and delete share one slot per file.
 - Scrub previews: `media.ffmpeg` debug category wired in Settings; fleet release log on guard Drop covers error/cancel paths (`debugCategories.ts`, `media.rs`).
