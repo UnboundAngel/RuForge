@@ -14,7 +14,10 @@ import {
   writeLibraryScanDirsToLs,
 } from "../libraryScanDirs";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
-import { ensureScrubSpritesForFiles, filesMissingScrubSprites } from "../scrubSpriteBackfill";
+import {
+  ensureScrubSpritesForFiles,
+  topNScrubBackfillCandidates,
+} from "../scrubSpriteBackfill";
 import { mediaPathsMatch } from "../lib/mediaPathMatch";
 import {
   DEFAULT_SETTINGS,
@@ -1134,7 +1137,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
             if (need.length > 0) posterBackfillList = need;
           }
           if (!skipScrubBackfill && settings.autoDownloadScrubberPreviews !== false) {
-            const need = filesMissingScrubSprites(mediaFiles);
+            const need = topNScrubBackfillCandidates(mediaFiles);
             if (need.length > 0) scrubBackfillList = need;
           }
         } catch (e) {

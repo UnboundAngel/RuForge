@@ -4,6 +4,8 @@ import { isAudioOnlyPath } from "./mediaKind";
 import type { MediaFile } from "./types";
 
 const CONCURRENCY = 3;
+/** Post-scan auto backfill cap; older missing items use manual Generate Previews. */
+export const SCRUB_BACKFILL_TOP_N = 3;
 const SCRUB_VIDEO_EXT = /\.(mp4|mkv|webm)$/i;
 const scrubBackfillInFlight = new Set<string>();
 
@@ -34,6 +36,14 @@ export function filesMissingScrubSprites(files: MediaFile[]): MediaFile[] {
       SCRUB_VIDEO_EXT.test(f.path) &&
       f.scrubSpritesComplete !== true,
   );
+}
+
+/** Missing scrub sprites, newest first, capped for post-scan auto backfill. */
+export function topNScrubBackfillCandidates(files: MediaFile[]): MediaFile[] {
+  return filesMissingScrubSprites(files)
+    .slice()
+    .sort((a, b) => b.created - a.created)
+    .slice(0, SCRUB_BACKFILL_TOP_N);
 }
 
 /** Build missing scrub sprite sheets, a few videos at a time. */

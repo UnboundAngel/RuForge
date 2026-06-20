@@ -430,6 +430,23 @@ export function loadInitialDownloadQueueState(): {
   return { downloadJobs, focusedJobId };
 }
 
+/** Rehydrate in-memory queue from sessionStorage when the store slice is empty (HMR / tab churn). */
+export function restoreDownloadQueueFromSessionIfEmpty(
+  currentJobs: readonly DownloadJob[],
+  currentFocus: string | null,
+): { downloadJobs: DownloadJob[]; focusedJobId: string | null } | null {
+  if (currentJobs.length > 0) return null;
+  const restored = loadPersistedDownloadJobs();
+  if (restored.length === 0) return null;
+  const focusedJobId =
+    currentFocus && restored.some((j) => j.id === currentFocus)
+      ? currentFocus
+      : restored.find((j) => j.status === "paused")?.id ??
+        restored.find((j) => j.status === "queued")?.id ??
+        null;
+  return { downloadJobs: restored, focusedJobId };
+}
+
 export function persistDownloadJobs(jobs: DownloadJob[]) {
   try {
     const toSave = jobs.filter(

@@ -29,6 +29,8 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Downloads: manual queue removal no longer evicts localStorage job metadata cache; hero paste after explorer toggle-off reuses cache; idle eviction after download finish + LRU cap.
+- Downloads: hero metadata effect restores in-memory queue from sessionStorage when empty before job/cache lookup.
 - Downloads: hero metadata seeds from matching queue job snapshot before cache/full fetch; background dual-size fill when job lacks sizes, never toggles metadataLoading (`useDownloaderView.ts`).
 - Downloads: get_video_info in-flight dedup keys use normalizeYouTubeUrlForCompare (same base as metadata cache) so tracking-param URL variants share one slot per lane (`downloadVideoInfoFetch.ts`).
 - Downloads: queue-row metadata hydration uses display-only get_video_info (one simulate, no dual-size merge); hero paste path unchanged (`downloadVideoInfoFetch.ts`, `downloadQueueSlice.ts`, `downloader.rs`).
