@@ -409,6 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Downloads**: hero metadata effect seeds display from matching queue job snapshot (title/thumb) before cache/full fetch; silent background dual-size fill when job lacks sizes, never toggles metadataLoading (`useDownloaderView.ts`).
 - **Downloads**: `get_video_info` in-flight dedup keys use `normalizeYouTubeUrlForCompare` (same base as metadata cache) so tracking-param URL variants share one slot per lane (`downloadVideoInfoFetch.ts`).
 - **Downloads**: queue-row metadata hydration uses display-only `get_video_info` (one simulate, no dual-size merge); hero paste path unchanged (`downloadVideoInfoFetch.ts`, `downloadQueueSlice.ts`, `downloader.rs`).
 - **Downloads**: queue metadata hydration capped at 2 concurrent `get_video_info` invokes via `downloadQueueHydrationPool`; cache hits bypass the pool (`downloadQueueHydrationPool.ts`, `downloadQueueSlice.ts`).
