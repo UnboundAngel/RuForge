@@ -20,9 +20,15 @@ import {
   jobHasDownloadTransferStarted,
   patchDownloadJobOptionsForAudio,
   videoInfoToDownloadJobSnapshot,
+  type DownloadJob,
+  type DownloadJobMediaSnapshot,
   type PlaylistBatchEnqueueMeta,
 } from "../../downloadQueue";
-import { mergeVideoInfoFileSizes, snapshotWithResolvedFileSize } from "../../downloadJobFileSizes";
+import {
+  downloadJobDualSizesReady,
+  mergeVideoInfoFileSizes,
+  snapshotWithResolvedFileSize,
+} from "../../downloadJobFileSizes";
 import {
   commitDownloadJobMetadataCache,
   downloadJobMetadataCacheKey,
@@ -59,6 +65,27 @@ import { ytdlpVideoFormatForMetadata } from "../../downloadFormat";
 
 const STORAGE_FULL_NOTIFY =
   "Library storage limit reached. Free space in Settings or switch to an external download folder.";
+
+function heroReuseJobSnapshot(
+  jobs: readonly DownloadJob[],
+  norm: string,
+): DownloadJobMediaSnapshot | null {
+  for (const j of jobs) {
+    if (!youtubeUrlsMatch(j.url, norm)) continue;
+    const reuseEligible =
+      j.status === "downloading" ||
+      j.status === "paused" ||
+      (j.status === "queued" &&
+        (j.approval === "held" ||
+          j.approval === "auto" ||
+          j.approval === "pending" ||
+          j.approval === "manual"));
+    if (!reuseEligible) continue;
+    if (downloadJobMediaNeedsHydration(j.metadata)) continue;
+    return j.metadata ?? null;
+  }
+  return null;
+}
 
 export type DownloaderViewProps = {
   internalDir: string;
@@ -1089,6 +1116,58 @@ export function useDownloaderView({
             active = false;
           };
         }
+      }
+
+      const fillHeroSizesInBackground = (seedSnap: DownloadJobMediaSnapshot) => {
+        if (downloadJobDualSizesReady(seedSnap)) return;
+        void (async () => {
+          try {
+            const scheduledUrl = norm;
+            const videoFormatBg = ytdlpVideoFormatForMetadata(
+              settingsRef.current.preferredQuality,
+            );
+            const audioOnlyBg = settingsRef.current.downloadAudioOnly;
+            const info = await fetchVideoInfoWithTimeout(
+              scheduledUrl,
+              videoFormatBg,
+              audioOnlyBg,
+              cookieContextFromSettings(settingsRef.current),
+            );
+            if (!active || useRuforgeStore.getState().url.trim() !== scheduledUrl) return;
+            const base = videoInfoToDownloadJobSnapshot(info, audioOnlyBg);
+            const snap = mergeVideoInfoFileSizes(base, info, audioOnlyBg);
+            const cacheKey = downloadJobMetadataCacheKey(scheduledUrl, videoFormatBg);
+            if (cacheKey) commitDownloadJobMetadataCache(cacheKey, snap);
+            const stAfter = useRuforgeStore.getState();
+            if (
+              !stAfter.videoInfoUrl ||
+              !youtubeUrlsMatch(scheduledUrl, stAfter.videoInfoUrl) ||
+              stAfter.videoInfoPreferredQuality !== settingsRef.current.preferredQuality
+            ) {
+              return;
+            }
+            setVideoInfo(
+              downloadJobSnapshotToVideoInfo(snapshotWithResolvedFileSize(snap, audioOnlyBg)),
+              {
+                sourceUrl: scheduledUrl,
+                preferredQuality: settingsRef.current.preferredQuality,
+              },
+            );
+          } catch (e: unknown) {
+            console.error(`[RuForge] hero size fill failed: ${e}`);
+          }
+        })();
+      };
+
+      const jobSnap = heroReuseJobSnapshot(st.downloadJobs, norm);
+      if (jobSnap) {
+        if (active) {
+          applyHeroFromSnapshot(jobSnap);
+          fillHeroSizesInBackground(jobSnap);
+        }
+        return () => {
+          active = false;
+        };
       }
 
       const videoFormat = ytdlpVideoFormatForMetadata(preferredQuality);
