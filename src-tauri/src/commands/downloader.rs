@@ -1570,14 +1570,32 @@ pub async fn get_video_info(
     audio_only: Option<bool>,
     browser_cookies: Option<String>,
     cookie_file: Option<String>,
+    display_only: Option<bool>,
 ) -> Result<VideoInfo, String> {
+    let cookie_fallback = video_info_cookie_probe(browser_cookies, cookie_file);
+    let cookie_ref = cookie_fallback.as_ref();
+
+    if display_only == Some(true) {
+        let json = yt_dlp_single_json_simulate_with_cookie_fallback(
+            &app,
+            &url,
+            cookie_ref,
+            None,
+        )
+        .await
+        .map_err(|e| get_video_info_simulate_failure_message(&e))?
+        .0;
+        let mut info = video_info_from_ytdlp_single_json(json);
+        info.file_size_bytes_audio = None;
+        info.file_size_bytes_video = None;
+        return Ok(info);
+    }
+
     // Prefer m4a source to avoid transcoding; pure audio streams only (no /best video fallback).
     const AUDIO_SIMULATE_FMT: &str = "bestaudio[ext=m4a]/bestaudio";
     let audio_primary = audio_only.unwrap_or(false);
     let video_fmt = effective_video_format_for_info_probe(format.as_deref());
     let video_fmt_ref = video_fmt.as_str();
-    let cookie_fallback = video_info_cookie_probe(browser_cookies, cookie_file);
-    let cookie_ref = cookie_fallback.as_ref();
 
     // Run sequentially — parallel simulates double the request rate on the same cookies.
     let json_video_res =

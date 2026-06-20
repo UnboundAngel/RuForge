@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { StateCreator, StoreApi } from "zustand";
-import { fetchVideoInfoWithTimeout, videoInfoFetchInflightKey } from "../downloadVideoInfoFetch";
+import {
+  fetchVideoInfoForQueueHydration,
+  videoInfoFetchInflightKey,
+} from "../downloadVideoInfoFetch";
 import { downloadQueueHydrationPool } from "../downloadQueueHydrationPool";
 import {
   mergeDownloadProgressWithSmoothing,
@@ -213,10 +216,10 @@ async function hydrateDownloadJobMetadata(
       browserCookies: seed.options.browserCookies,
       cookieFile: seed.options.cookieFile,
     };
-    const inflightKey = videoInfoFetchInflightKey(urlTrim, videoFormat, cookieCtx);
+    const inflightKey = videoInfoFetchInflightKey(urlTrim, videoFormat, cookieCtx, true);
 
     const info = await downloadQueueHydrationPool.run(inflightKey, () =>
-      fetchVideoInfoWithTimeout(urlTrim, videoFormat, audioOnly, cookieCtx),
+      fetchVideoInfoForQueueHydration(urlTrim, videoFormat, audioOnly, cookieCtx),
     );
     const base = videoInfoToDownloadJobSnapshot(info, audioOnly);
     const snap = mergeVideoInfoFileSizes(base, info, audioOnly);

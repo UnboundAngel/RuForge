@@ -9,7 +9,7 @@ export type VideoInfoCookieContext = {
   cookieFile?: string;
 };
 
-/** One in-flight `get_video_info` per URL + format + cookie context. */
+/** One in-flight `get_video_info` per URL + format + cookie context (+ display lane). */
 const inflightByKey = new Map<string, Promise<VideoInfo>>();
 
 function timeoutError(): Error {
@@ -26,29 +26,35 @@ function cookieInflightSuffix(cookies?: VideoInfoCookieContext): string {
   return `\x1f${browser}\x1f${file}`;
 }
 
+function displayOnlyInflightSuffix(displayOnly: boolean): string {
+  return displayOnly ? "\x1fdisplay" : "";
+}
+
 export function videoInfoFetchInflightKey(
   url: string,
   videoFormat: string,
   cookies?: VideoInfoCookieContext,
+  displayOnly = false,
 ): string {
   const key = url.trim();
   if (!key) return "";
-  return `${key}\x1f${videoFormat}${cookieInflightSuffix(cookies)}`;
+  return `${key}\x1f${videoFormat}${displayOnlyInflightSuffix(displayOnly)}${cookieInflightSuffix(cookies)}`;
 }
 
-export async function fetchVideoInfoWithTimeout(
+async function invokeGetVideoInfo(
   url: string,
   videoFormat: string,
-  audioOnly = false,
-  cookies?: VideoInfoCookieContext,
-  timeoutMs = METADATA_FETCH_TIMEOUT_MS,
+  audioOnly: boolean,
+  cookies: VideoInfoCookieContext | undefined,
+  displayOnly: boolean,
+  timeoutMs: number,
 ): Promise<VideoInfo> {
   const key = url.trim();
   if (!key) {
     throw new Error("URL is empty");
   }
 
-  const inflightKey = videoInfoFetchInflightKey(key, videoFormat, cookies);
+  const inflightKey = videoInfoFetchInflightKey(key, videoFormat, cookies, displayOnly);
   let p = inflightByKey.get(inflightKey);
   if (!p) {
     p = (async () => {
@@ -61,6 +67,7 @@ export async function fetchVideoInfoWithTimeout(
             audioOnly,
             browserCookies: cookies?.browserCookies ?? "",
             cookieFile: cookies?.cookieFile ?? "",
+            displayOnly,
           }),
           new Promise<VideoInfo>((_, reject) => {
             timer = setTimeout(() => reject(timeoutError()), timeoutMs);
@@ -78,4 +85,25 @@ export async function fetchVideoInfoWithTimeout(
   }
 
   return p;
+}
+
+export async function fetchVideoInfoWithTimeout(
+  url: string,
+  videoFormat: string,
+  audioOnly = false,
+  cookies?: VideoInfoCookieContext,
+  timeoutMs = METADATA_FETCH_TIMEOUT_MS,
+): Promise<VideoInfo> {
+  return invokeGetVideoInfo(url, videoFormat, audioOnly, cookies, false, timeoutMs);
+}
+
+/** Queue-row hydration: one unfiltered simulate; hero paste keeps full dual-size fetch. */
+export async function fetchVideoInfoForQueueHydration(
+  url: string,
+  videoFormat: string,
+  audioOnly = false,
+  cookies?: VideoInfoCookieContext,
+  timeoutMs = METADATA_FETCH_TIMEOUT_MS,
+): Promise<VideoInfo> {
+  return invokeGetVideoInfo(url, videoFormat, audioOnly, cookies, true, timeoutMs);
 }
