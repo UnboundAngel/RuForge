@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 
 use crate::commands::recently_deleted::append_manifest_entry;
 use crate::media_bundle::{collect_deletion_paths, prune_empty_dirs_after_media_delete};
@@ -23,6 +23,62 @@ struct FfmpegVideoSlot {
 /// One ffmpeg pipeline at a time per video path (avoids overlapping sidecars from
 /// Strict Mode double-mounts, main + mini player, or poster backfill + scrubber extract).
 static FFMPEG_PER_VIDEO: OnceLock<Mutex<HashMap<String, Arc<FfmpegVideoSlot>>>> = OnceLock::new();
+
+static FFMPEG_FLEET_PERMITS: OnceLock<usize> = OnceLock::new();
+static FFMPEG_FLEET: OnceLock<Arc<Semaphore>> = OnceLock::new();
+
+fn ffmpeg_fleet_max_permits() -> usize {
+    *FFMPEG_FLEET_PERMITS.get_or_init(|| {
+        std::thread::available_parallelism()
+            .map(|n| (n.get() / 2).max(1))
+            .unwrap_or(1)
+    })
+}
+
+fn ffmpeg_fleet_semaphore() -> &'static Arc<Semaphore> {
+    FFMPEG_FLEET.get_or_init(|| Arc::new(Semaphore::new(ffmpeg_fleet_max_permits())))
+}
+
+struct FfmpegFleetGuard {
+    sem: Arc<Semaphore>,
+    max: usize,
+    permit: Option<tokio::sync::OwnedSemaphorePermit>,
+}
+
+impl Drop for FfmpegFleetGuard {
+    fn drop(&mut self) {
+        self.permit.take();
+        let avail = self.sem.available_permits();
+        crate::rf_log!(
+            "media.ffmpeg",
+            log::Level::Info,
+            "ffmpeg fleet: released (max={} avail={avail} in_flight={})",
+            self.max,
+            self.max.saturating_sub(avail)
+        );
+    }
+}
+
+fn ffmpeg_args_with_thread_cap(args: Vec<&str>) -> Vec<String> {
+    if args.iter().any(|a| *a == "-threads") {
+        return args.into_iter().map(str::to_string).collect();
+    }
+    let mut out = Vec::with_capacity(args.len() + 2);
+    let mut inserted = false;
+    for arg in args {
+        out.push(arg.to_string());
+        if !inserted && arg == "-nostdin" {
+            out.push("-threads".to_string());
+            out.push("1".to_string());
+            inserted = true;
+        }
+    }
+    if !inserted {
+        out.insert(0, "1".to_string());
+        out.insert(0, "-threads".to_string());
+    }
+    out
+}
 
 fn ffmpeg_slot_map() -> &'static Mutex<HashMap<String, Arc<FfmpegVideoSlot>>> {
     FFMPEG_PER_VIDEO.get_or_init(|| Mutex::new(HashMap::new()))
@@ -67,6 +123,8 @@ where
 }
 
 /// Caller must already hold `slot.lock` (via [`with_per_video_ffmpeg_lock`]).
+/// Fleet permit is acquired here (per spawn), not in the per-video lock: one file's
+/// multi-step pipeline must not hold a fleet slot across its tail-patch loop.
 /// Uses [`Command::output`] (same as ffprobe) so the sidecar always drains and exits cleanly;
 /// the spawn + event-channel path could hang with a live ffmpeg child and no Terminated event.
 async fn run_ffmpeg_sidecar_unlocked(
@@ -74,11 +132,40 @@ async fn run_ffmpeg_sidecar_unlocked(
     _slot: &Arc<FfmpegVideoSlot>,
     args: Vec<&str>,
 ) -> Result<(), String> {
+    let sem = ffmpeg_fleet_semaphore();
+    let max = ffmpeg_fleet_max_permits();
+    if sem.available_permits() == 0 {
+        crate::rf_log!(
+            "media.ffmpeg",
+            log::Level::Info,
+            "ffmpeg fleet: waiting for permit (max={max} avail=0 in_flight={max})"
+        );
+    }
+    let permit = sem
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|e| format!("ffmpeg fleet semaphore closed: {e}"))?;
+    let _fleet = FfmpegFleetGuard {
+        sem: Arc::clone(sem),
+        max,
+        permit: Some(permit),
+    };
+    let in_flight = max.saturating_sub(sem.available_permits());
+    crate::rf_log!(
+        "media.ffmpeg",
+        log::Level::Info,
+        "ffmpeg fleet: acquired (max={max} avail={} in_flight={in_flight})",
+        sem.available_permits()
+    );
+
+    let argv = ffmpeg_args_with_thread_cap(args);
+    let argv_refs: Vec<&str> = argv.iter().map(String::as_str).collect();
     let output = app
         .shell()
         .sidecar("ffmpeg")
         .map_err(|e| e.to_string())?
-        .args(args)
+        .args(argv_refs)
         .output()
         .await
         .map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
@@ -514,8 +601,6 @@ async fn extract_frames_generate_inner(
             "-nostdin",
             "-loglevel",
             "error",
-            "-threads",
-            "0",
             "-skip_frame",
             "nokey",
             "-i",

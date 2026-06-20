@@ -409,6 +409,8 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Scrub previews**: `media.ffmpeg` debug category in Settings tree; fleet release log fires on Drop so error/cancel paths log released too (`debugCategories.ts`, `media.rs`).
+- **Scrub previews**: global ffmpeg fleet semaphore (max(1, cores/2) permits per spawn) and `-threads 1` on every RuForge sidecar invoke; acquire/release logged under `media.ffmpeg` (`media.rs`).
 - **Scrub previews**: tail patch fills every blank trailing cell from last grid sample through floor(duration/5), seeked per cell; patch errors logged (`media.rs`).
 - **Scrub previews**: sprite recipe uses `-skip_frame nokey` + `-vsync passthrough` (method A); tail cell at `floor(duration/5)` patched from end-of-file frame so hover reaches duration (`media.rs`).
 - **Downloads**: post-download scrub batch spawns on job termination only (`scrub_spawned` latch); post-process stdout no longer preempts before the muxed file exists (`downloader.rs`).

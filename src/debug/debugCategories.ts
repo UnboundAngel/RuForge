@@ -44,6 +44,7 @@ export const DEBUG_CATEGORY_TREE: DebugCategoryNode[] = [
       },
       { id: "library.dedup", label: "Duplicate download cleanup", side: "rust" },
       { id: "library.delete", label: "Delete and recycle bin", side: "rust" },
+      { id: "media.ffmpeg", label: "Scrub/poster ffmpeg fleet", side: "rust" },
     ],
   },
   {

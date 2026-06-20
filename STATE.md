@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-19
+Last updated: 2026-06-20
 Status: in progress
 
 ## Now
@@ -29,6 +29,8 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Scrub previews: `media.ffmpeg` debug category wired in Settings; fleet release log on guard Drop covers error/cancel paths (`debugCategories.ts`, `media.rs`).
+- Scrub previews: global ffmpeg fleet cap (semaphore max(1, cores/2) per spawn) and `-threads 1` on all RuForge sidecar invokes; `media.ffmpeg` acquire/release logs (`media.rs`).
 - Scrub previews: tail patch fills all blank trailing cells through floor(duration/5), one seek per gap cell; failures logged not swallowed (`media.rs`).
 - Scrub previews: sprite ffmpeg uses method A (`-skip_frame nokey`, `-vsync passthrough`); tail cell at floor(duration/5) patched from end frame so scrub hover reaches duration (`media.rs`).
 - Downloads: post-download scrub batch spawns on job termination only; post-process stdout no longer preempts before the muxed file is on disk (`downloader.rs`).
