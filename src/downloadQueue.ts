@@ -176,7 +176,17 @@ export interface DownloadJob {
   downloadingSince?: number;
   /** When true, next start uses yt-dlp `--continue` with stored cookie opts. */
   resumeOnStart?: boolean;
+  enqueueSource?: DownloadEnqueueSource;
 }
+
+export type DownloadEnqueueSource =
+  | "explorerAdd"
+  | "heroClipboardPaste"
+  | "heroSingleDownload"
+  | "heroPlaylistDownload"
+  | "heroUrlStaging"
+  | "quickEnqueueClipboard"
+  | "urlDrop";
 
 export type DownloadJobFinishedPayload = {
   jobId: string;
@@ -320,6 +330,7 @@ export type PlaylistBatchEnqueueMeta = {
   approval?: "auto" | "pending" | "held";
   playlistOutputFolder?: string;
   playlistIndex?: number;
+  enqueueSource?: DownloadEnqueueSource;
 };
 
 function normalizePersistedDownloadJob(j: DownloadJob): DownloadJob | null {
