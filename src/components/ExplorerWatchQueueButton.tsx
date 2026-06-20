@@ -162,7 +162,10 @@ export function ExplorerWatchQueueButton({
     }
     const outputPath = saveToInternal ? RUFORGE_INTERNAL_DIR : outputDir;
     const options = buildDownloadJobOptions(settings, outputPath, "replace");
-    enqueueDownload(canon, options, { approval: "held" });
+    enqueueDownload(canon, options, {
+      approval: "held",
+      enqueueSource: "explorerAdd",
+    });
     flashLeftHint("add");
   }, [
     entries,

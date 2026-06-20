@@ -22,6 +22,7 @@ import {
   videoInfoToDownloadJobSnapshot,
   type DownloadJob,
   type DownloadJobMediaSnapshot,
+  type DownloadEnqueueSource,
   type PlaylistBatchEnqueueMeta,
 } from "../../downloadQueue";
 import {
@@ -61,6 +62,7 @@ import {
   type YoutubeUrlDropHandler,
   setYoutubeUrlDropHandler,
 } from "../../features/downloader/youtubeUrlDropRegistry";
+import { setDownloaderReplayHandlers } from "../../features/downloader/downloaderReplayRegistry";
 import { deliverUserNotification } from "../../systemNotify";
 import { ytdlpVideoFormatForMetadata } from "../../downloadFormat";
 
@@ -522,6 +524,7 @@ export function useDownloaderView({
         snapshot,
         title: meta?.title,
         approval,
+        enqueueSource: meta?.enqueueSource,
       });
     },
     [storageBlocksNewDownloads, outputDir, internalDir, enqueueDownload],
@@ -539,7 +542,10 @@ export function useDownloaderView({
       setQuickEnqueueHint("wait_metadata");
       return;
     }
-    enqueueDownloadOnly(staged, "replace", { approval: "held" });
+    enqueueDownloadOnly(staged, "replace", {
+      approval: "held",
+      enqueueSource: "heroUrlStaging",
+    });
   }, [enqueueDownloadOnly, setQuickEnqueueHint]);
 
   const resolveHeroAudioOnly = useCallback(() => {
@@ -569,6 +575,7 @@ export function useDownloaderView({
         audioOnly?: boolean;
         playlistOutputFolder?: string;
         playlistIndex?: number;
+        enqueueSource?: DownloadEnqueueSource;
       },
     ) => {
       const replaced = await applyReplaceBeforeDownload(targetUrl, choice);
@@ -577,6 +584,14 @@ export function useDownloaderView({
         return;
       }
       const audioOnly = meta?.audioOnly ?? resolveHeroAudioOnly();
+      const stEnqueue = useRuforgeStore.getState();
+      const enqueueSource =
+        meta?.enqueueSource ??
+        (meta?.playlistOutputFolder != null
+          ? "heroPlaylistDownload"
+          : stEnqueue.urlSourceHint === "clipboard"
+            ? "heroClipboardPaste"
+            : "heroSingleDownload");
       const jobId = enqueueDownloadOnly(
         targetUrl,
         choice,
@@ -585,6 +600,7 @@ export function useDownloaderView({
           approval: "auto",
           playlistOutputFolder: meta?.playlistOutputFolder,
           playlistIndex: meta?.playlistIndex,
+          enqueueSource,
         },
         audioOnly,
       );
@@ -694,6 +710,7 @@ export function useDownloaderView({
           audioOnly: item.audioOnly,
           playlistOutputFolder: folder,
           playlistIndex: item.index,
+          enqueueSource: "heroPlaylistDownload",
         });
         started += 1;
       }
@@ -802,7 +819,10 @@ export function useDownloaderView({
           : ("held" as const);
 
         if (!duplicate) {
-          enqueueDownloadOnly(videoUrl, "replace", { approval });
+          enqueueDownloadOnly(videoUrl, "replace", {
+            approval,
+            enqueueSource: "urlDrop",
+          });
           insertPinnedQuickEnqueueUrl(videoUrl);
           return;
         }
@@ -819,7 +839,10 @@ export function useDownloaderView({
           notify(replaced.reason, "warning");
           return;
         }
-        enqueueDownloadOnly(videoUrl, choice, { approval });
+        enqueueDownloadOnly(videoUrl, choice, {
+          approval,
+          enqueueSource: "urlDrop",
+        });
         insertPinnedQuickEnqueueUrl(videoUrl);
       };
 
@@ -894,7 +917,10 @@ export function useDownloaderView({
       : ("held" as const);
 
     if (!duplicate) {
-      enqueueDownloadOnly(clipUrl, "replace", { approval });
+      enqueueDownloadOnly(clipUrl, "replace", {
+        approval,
+        enqueueSource: "quickEnqueueClipboard",
+      });
       insertPinnedQuickEnqueueUrl(clipUrl);
       setQuickEnqueueHint(null);
       return;
@@ -911,7 +937,10 @@ export function useDownloaderView({
       notify(replaced.reason, "warning");
       return;
     }
-    enqueueDownloadOnly(clipUrl, choice, { approval });
+    enqueueDownloadOnly(clipUrl, choice, {
+      approval,
+      enqueueSource: "quickEnqueueClipboard",
+    });
     insertPinnedQuickEnqueueUrl(clipUrl);
     setQuickEnqueueHint(null);
   }, [
@@ -1086,7 +1115,10 @@ export function useDownloaderView({
               notify,
             );
           } else {
-            enqueueDownloadOnly(prev, "replace", { approval: "held" });
+            enqueueDownloadOnly(prev, "replace", {
+              approval: "held",
+              enqueueSource: "heroUrlStaging",
+            });
           }
         }
       }
@@ -1102,6 +1134,25 @@ export function useDownloaderView({
     },
     [setDownloaderUrl, enqueueDownloadOnly, storageBlocksNewDownloads, notify],
   );
+
+  useEffect(() => {
+    setDownloaderReplayHandlers({
+      handleDownloadClick,
+      applyClipboardYoutubeUrl,
+      handleUrlChange,
+      promoteStagedBarToDownloadQueue,
+      handleQuickEnqueueFromClipboard,
+      handleDroppedYoutubeUrls,
+    });
+    return () => setDownloaderReplayHandlers(null);
+  }, [
+    handleDownloadClick,
+    applyClipboardYoutubeUrl,
+    handleUrlChange,
+    promoteStagedBarToDownloadQueue,
+    handleQuickEnqueueFromClipboard,
+    handleDroppedYoutubeUrls,
+  ]);
 
   useEffect(() => {
     let active = true;

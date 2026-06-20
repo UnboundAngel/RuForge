@@ -25,6 +25,7 @@ import {
   type DownloadJob,
   type DownloadJobApproval,
   type DownloadJobFinishedPayload,
+  type DownloadEnqueueSource,
   type DownloadJobMediaSnapshot,
   type DownloadJobOptions,
   DEFAULT_MAX_CONCURRENT_DOWNLOADS,
@@ -335,6 +336,7 @@ export type DownloadQueueSlice = {
       snapshot?: DownloadJobMediaSnapshot;
       title?: string;
       approval?: DownloadJobApproval;
+      enqueueSource?: DownloadEnqueueSource;
     },
   ) => string;
   pauseDownloadJob: (id: string) => Promise<void>;
@@ -634,6 +636,7 @@ export const createDownloadQueueSlice: StateCreator<
                     ? ("held" as const)
                     : approval,
               error: null,
+              ...(meta?.enqueueSource ? { enqueueSource: meta.enqueueSource } : {}),
             };
           });
           downloadJobs = collapseDownloadJobsByUrl(downloadJobs);
@@ -660,6 +663,7 @@ export const createDownloadQueueSlice: StateCreator<
         options,
         createdAt: Date.now(),
         resumeOnStart: false,
+        ...(meta?.enqueueSource ? { enqueueSource: meta.enqueueSource } : {}),
       };
       set((s) => {
         const downloadJobs = collapseDownloadJobsByUrl([...s.downloadJobs, job]);

@@ -73,3 +73,12 @@ For the next Cursor agent. Read `STATE.md` and `AGENTS.md` first (Shipped log un
 
 - Release ritual / version bump (still 0.1.12 unreleased)
 - Jim-style pure CSS pass (logic first)
+
+## Open flag: pre-existing TS build error (not re-download feature)
+
+Surfaced during Commit 1 build verify (`npm run build`). Do not fix inside re-download commits; standalone pass later.
+
+```
+src/components/DownloaderView.tsx(374,19): error TS2339: Property 'isPlaylist' does not exist on type 'false | { title: string; duration: number; fileSizeBytes: number | null; isPlaylist: boolean; playlistItems: PlaylistItem[] | undefined; }'.
+  Property 'isPlaylist' does not exist on type 'false'.
+```
