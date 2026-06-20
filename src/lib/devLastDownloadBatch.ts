@@ -9,6 +9,30 @@ import { useRuforgeStore } from "../store/ruforgeStore";
 
 const LS_KEY = "ruforge-dev-last-batch-v1";
 const REPLAY_MODE_KEY = "ruforge-dev-replay-mode";
+const DEV_SIMULATE_MS_LS_KEY = "ruforge-dev-simulate-ms";
+
+export const DEV_SIMULATE_DOWNLOAD_MIN_MS = 4000;
+export const DEV_SIMULATE_DOWNLOAD_MAX_MS = 8000;
+export const DEV_SIMULATE_PROCESSING_MS = 350;
+
+/** Fixed duration override from localStorage; null means roll per job. */
+export function getDevSimulateDownloadMs(): number | null {
+  try {
+    const raw = localStorage.getItem(DEV_SIMULATE_MS_LS_KEY);
+    if (raw != null) {
+      const n = Number.parseInt(raw, 10);
+      if (Number.isFinite(n) && n >= 200) return n;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+export function rollDevSimulateDownloadMs(): number {
+  const span = DEV_SIMULATE_DOWNLOAD_MAX_MS - DEV_SIMULATE_DOWNLOAD_MIN_MS;
+  return DEV_SIMULATE_DOWNLOAD_MIN_MS + Math.floor(Math.random() * (span + 1));
+}
 
 export type LastBatchItem = {
   url: string;
