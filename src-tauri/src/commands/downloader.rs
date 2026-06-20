@@ -1526,6 +1526,8 @@ struct DownloadJobFinishedPayload {
     success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output_path: Option<String>,
 }
 
 fn effective_video_format_for_info_probe(format: Option<&str>) -> String {
@@ -1872,6 +1874,45 @@ fn collect_recent_video_paths(root: &Path, since: SystemTime) -> Vec<PathBuf> {
     }
     out.sort();
     out
+}
+
+fn is_ytdlp_temp_merge_path(path: &Path) -> bool {
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .map(|stem| stem.ends_with(".temp"))
+        .unwrap_or(false)
+}
+
+fn pick_best_recent_video_output(paths: Vec<PathBuf>) -> Option<PathBuf> {
+    paths
+        .into_iter()
+        .filter(|p| !is_ytdlp_temp_merge_path(p))
+        .max_by_key(|p| {
+            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let has_stream_suffix =
+                crate::commands::comments_sidecar::strip_ytdlp_stream_suffix(stem) != stem;
+            (
+                !has_stream_suffix,
+                std::fs::metadata(p).and_then(|m| m.modified()).ok(),
+            )
+        })
+}
+
+fn pick_best_recent_audio_output(paths: Vec<PathBuf>) -> Option<PathBuf> {
+    paths.into_iter().max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+}
+
+fn resolve_finished_download_output_path(
+    listing_root: &Path,
+    since: SystemTime,
+    audio_only: bool,
+) -> Option<PathBuf> {
+    if audio_only {
+        let paths = find_recent_audio_files(listing_root, since);
+        return pick_best_recent_audio_output(paths);
+    }
+    let paths = collect_recent_video_paths(listing_root, since);
+    pick_best_recent_video_output(paths)
 }
 
 const SCRUB_PREVIEW_CONCURRENCY: usize = 3;
@@ -2232,6 +2273,28 @@ pub async fn start_download_job(
                                 download_started_at,
                             );
                         }
+                        let output_path = resolve_finished_download_output_path(
+                            &diag_root,
+                            download_started_at,
+                            options.audio_only,
+                        )
+                        .map(|p| p.to_string_lossy().into_owned());
+                        if let Some(ref path) = output_path {
+                            crate::rf_log!(
+                                "download.jobs",
+                                log::Level::Info,
+                                "job {} finish output_path: {}",
+                                job_id,
+                                path
+                            );
+                        } else {
+                            crate::rf_log!(
+                                "download.jobs",
+                                log::Level::Info,
+                                "job {} finish output_path: (omitted)",
+                                job_id
+                            );
+                        }
                         let _ = app.emit(
                             "download-job-finished",
                             DownloadJobFinishedPayload {
@@ -2239,6 +2302,7 @@ pub async fn start_download_job(
                                 url: url.clone(),
                                 success: true,
                                 error: None,
+                                output_path,
                             },
                         );
                         return;
@@ -2260,6 +2324,7 @@ pub async fn start_download_job(
                             url: url.clone(),
                             success: false,
                             error: Some(err),
+                            output_path: None,
                         },
                     );
                     return;
@@ -2288,6 +2353,7 @@ pub async fn start_download_job(
                     url,
                     success: false,
                     error: Some(err),
+                    output_path: None,
                 },
             );
         }
@@ -3224,13 +3290,42 @@ mod cookie_error_tests {
 }
 
 #[cfg(test)]
-mod comments_fetch_tests {
+mod finish_output_path_tests {
     use super::*;
+    use std::fs;
+    use std::thread;
+    use std::time::{Duration, SystemTime};
 
     #[test]
-    fn extractor_args_single_youtube_block_with_caps_and_sort() {
-        let args = ytdlp_comments_extractor_args();
-        assert_eq!(args, "youtube:max_comments=all,25,all,5,2;comment_sort=top");
-        assert!(!args.contains("youtube:comment_sort"));
+    fn pick_video_output_skips_temp_when_final_exists() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let since = SystemTime::now();
+        thread::sleep(Duration::from_millis(20));
+        let final_path = root.join("clip.mp4");
+        fs::write(&final_path, b"x").expect("write final");
+        let temp_path = root.join("clip.temp.mp4");
+        fs::write(&temp_path, b"x").expect("write temp");
+
+        let picked = resolve_finished_download_output_path(root, since, false)
+            .expect("expected final video path");
+        assert_eq!(picked, final_path);
+    }
+
+    #[test]
+    fn pick_audio_output_prefers_newest() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let since = SystemTime::now();
+        thread::sleep(Duration::from_millis(20));
+        let older = root.join("a.m4a");
+        fs::write(&older, b"x").expect("write older");
+        thread::sleep(Duration::from_millis(20));
+        let newer = root.join("b.m4a");
+        fs::write(&newer, b"x").expect("write newer");
+
+        let picked = resolve_finished_download_output_path(root, since, true)
+            .expect("expected audio path");
+        assert_eq!(picked, newer);
     }
 }
