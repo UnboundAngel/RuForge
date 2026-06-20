@@ -409,7 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
-- **Crash recovery**: error detail panels shrunk and docked at bottom; hero + Reload centered on full viewport (`CrashRecoveryScreen.tsx`, `index.css`, `parseCrashStack.ts`).
+- **Music**: artist context menu no longer crashes when display name lacks a feat. segment (`MusicRowContextMenu.tsx`).
 - **Crash recovery**: crash screen layout (website RuForge title animation, uh oh headline, Reload app CTA, error details pushed down) (`CrashRecoveryHero.tsx`, `AnimatedText.tsx`, `CrashRecoveryScreen.tsx`, `index.css`).
 - **Debugging**: crash recovery preview island capture uses invoking webview HWND (`capture_main_window_dev`); fixes main window not found during preview.
 - **Debugging**: dev captures list no longer polls or focus-refreshes; silent cache + change-event refresh only (`useDevCapturesList.ts`, `devCapturesEvents.ts`).
