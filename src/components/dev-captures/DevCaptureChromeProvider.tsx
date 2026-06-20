@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -9,6 +10,8 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { AnimatePresence } from "motion/react";
+import { copyDevCapturePngBytesToClipboard } from "@/lib/copyDevCapturePng";
+import { notifyDevCapturesChanged } from "@/lib/devCapturesEvents";
 import { isDevCaptureEnabled } from "@/lib/devCaptureGate";
 import type { DevCaptureEntry } from "@/lib/devCapturesTypes";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -30,6 +33,9 @@ type DevCaptureScreenshotResult = {
 type DevCaptureChromeContextValue = {
   captureFromTrigger: (fromRect: DOMRect, screenLabel: string) => Promise<void>;
   capturing: boolean;
+  hasLastCapture: boolean;
+  openLastCapture: () => Promise<void>;
+  goToDevCaptures: () => void;
 };
 
 const DevCaptureChromeContext = createContext<DevCaptureChromeContextValue | null>(
@@ -63,6 +69,7 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
   const [morph, setMorph] = useState<MorphState | null>(null);
   const [morphHandoffId, setMorphHandoffId] = useState<string | null>(null);
   const [annotateEntry, setAnnotateEntry] = useState<DevCaptureEntry | null>(null);
+  const [lastCapture, setLastCapture] = useState<DevCaptureEntry | null>(null);
   const [capturing, setCapturing] = useState(false);
 
   const dismissToast = useCallback((id: string) => {
@@ -70,8 +77,45 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
   }, []);
 
   const openAnnotate = useCallback((entry: DevCaptureEntry) => {
+    setLastCapture(entry);
     setAnnotateEntry(entry);
   }, []);
+
+  const openLastCapture = useCallback(async () => {
+    if (lastCapture) {
+      openAnnotate(lastCapture);
+      return;
+    }
+    try {
+      const list = await invoke<DevCaptureEntry[]>("list_dev_captures");
+      if (list.length === 0) return;
+      openAnnotate(list[0]);
+    } catch (e) {
+      console.error("[dev-capture] list for edit-last failed", e);
+    }
+  }, [lastCapture, openAnnotate]);
+
+  const goToDevCaptures = useCallback(() => {
+    const st = useRuforgeStore.getState();
+    st.setActiveTab("settings");
+    st.setSettingsTab("debugging");
+  }, []);
+
+  useEffect(() => {
+    if (!chromeEnabled) {
+      setLastCapture(null);
+      return;
+    }
+    let cancelled = false;
+    void invoke<DevCaptureEntry[]>("list_dev_captures")
+      .then((list) => {
+        if (!cancelled && list.length > 0) setLastCapture(list[0]);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [chromeEnabled]);
 
   const commitToast = useCallback((item: DevCaptureToastItem, blobUrl?: string) => {
     setToasts((prev) => [item, ...prev]);
@@ -101,10 +145,14 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
           width: result.width,
           height: result.height,
         };
-        const bytes = await invoke<number[]>("read_dev_capture_png", { path: result.path });
-        const blobUrl = URL.createObjectURL(
-          new Blob([Uint8Array.from(bytes)], { type: "image/png" }),
+        const pngBytes = Uint8Array.from(
+          await invoke<number[]>("read_dev_capture_png", { path: result.path }),
         );
+        void copyDevCapturePngBytesToClipboard(pngBytes).catch((e) => {
+          console.error("[dev-capture] clipboard copy failed", e);
+        });
+        setLastCapture(entry);
+        const blobUrl = URL.createObjectURL(new Blob([pngBytes], { type: "image/png" }));
         setMorph((prev) => {
           if (prev?.blobUrl) URL.revokeObjectURL(prev.blobUrl);
           return {
@@ -114,6 +162,7 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
             from: fromRect,
           };
         });
+        notifyDevCapturesChanged();
       } catch (e) {
         console.error("[dev-capture] capture failed", e);
       } finally {
@@ -128,8 +177,14 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
   }, [morph, commitToast]);
 
   const value = useMemo(
-    () => ({ captureFromTrigger, capturing }),
-    [captureFromTrigger, capturing],
+    () => ({
+      captureFromTrigger,
+      capturing,
+      hasLastCapture: lastCapture != null,
+      openLastCapture,
+      goToDevCaptures,
+    }),
+    [captureFromTrigger, capturing, lastCapture, openLastCapture, goToDevCaptures],
   );
 
   return (

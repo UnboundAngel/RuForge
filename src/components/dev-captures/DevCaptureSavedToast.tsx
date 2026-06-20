@@ -57,7 +57,7 @@ export function DevCaptureSavedToast({
       exit={{ opacity: 0, y: 4 }}
       transition={{ duration: 0.18, ease: "easeOut" }}
       data-dev-capture-toast
-      className="rf-notify-card pointer-events-auto flex w-max max-w-[calc(100vw-2rem)] cursor-pointer items-center gap-2 rounded-lg border border-white/10 px-2 py-1.5"
+      className="rf-notify-card pointer-events-auto flex w-max max-w-[calc(100vw-2rem)] cursor-pointer items-center gap-2 rounded-lg border-2 border-white/25 px-2 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
       onMouseEnter={() => {
         setHover(true);
         clearTimer();
@@ -74,7 +74,7 @@ export function DevCaptureSavedToast({
       }}
     >
       <div
-        className="shrink-0 overflow-hidden rounded-md ring-1 ring-white/10"
+        className="shrink-0 overflow-hidden rounded-md"
         style={{ width: w, height: h }}
       >
         <img

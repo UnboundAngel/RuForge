@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type MouseEvent } from "react";
 import { Trash2 } from "lucide-react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import type { DevCaptureEntry } from "../../lib/devCapturesTypes";
@@ -9,9 +9,12 @@ type DevCaptureThumbProps = {
   entry: DevCaptureEntry;
   previewRev: number;
   selected: boolean;
+  deleteMarked: boolean;
+  deleteAnchor: boolean;
   onSelect: (path: string, mods: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
   onDelete: (path: string) => void;
   onAnnotate: (path: string) => void;
+  onContextMenu: (path: string, e: MouseEvent) => void;
   selectedPaths: string[];
 };
 
@@ -19,9 +22,12 @@ export function DevCaptureThumb({
   entry,
   previewRev,
   selected,
+  deleteMarked,
+  deleteAnchor,
   onSelect,
   onDelete,
   onAnnotate,
+  onContextMenu,
   selectedPaths,
 }: DevCaptureThumbProps) {
   const dragStartedRef = useRef(false);
@@ -44,11 +50,17 @@ export function DevCaptureThumb({
     return [entry.path];
   };
 
+  const ringClass = deleteMarked
+    ? deleteAnchor
+      ? "ring-2 ring-red-400"
+      : "ring-2 ring-red-500/45"
+    : selected
+      ? "ring-2 ring-[color:var(--accent)]"
+      : "ring-1 ring-white/10";
+
   return (
     <div
-      className={`group relative aspect-video cursor-default overflow-hidden rounded-[var(--radius-input)] ${
-        selected ? "ring-2 ring-[color:var(--accent)]" : "ring-1 ring-white/10"
-      }`}
+      className={`group relative aspect-video cursor-default overflow-hidden rounded-[var(--radius-input)] ${ringClass}`}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         const target = e.target as HTMLElement;
@@ -80,6 +92,10 @@ export function DevCaptureThumb({
         e.preventDefault();
         onAnnotate(entry.path);
       }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu(entry.path, e);
+      }}
     >
       <img
         src={thumbSrc}
@@ -91,7 +107,7 @@ export function DevCaptureThumb({
         type="button"
         data-rf-capture-trash
         title="Delete"
-        className="absolute right-1 top-1 z-10 rounded-md bg-black/60 p-1 text-stone-200 opacity-0 transition-opacity hover:text-red-300 group-hover:opacity-100"
+        className="absolute right-1 top-1 z-10 rounded-md bg-black/60 p-1 text-stone-200 opacity-0 transition-opacity hover:bg-red-500/30 hover:text-red-300 group-hover:opacity-100"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
