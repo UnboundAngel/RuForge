@@ -30,11 +30,24 @@ type DevCaptureScreenshotResult = {
   modifiedMs: number;
 };
 
+export type DevCaptureDelivery = "toast" | "island";
+
+export type DevCaptureIslandResult = {
+  entry: DevCaptureEntry;
+  previewSrc: string;
+  contextLabel: string;
+};
+
 type DevCaptureChromeContextValue = {
-  captureFromTrigger: (fromRect: DOMRect, screenLabel: string) => Promise<void>;
+  captureFromTrigger: (
+    fromRect: DOMRect,
+    screenLabel: string,
+    delivery?: DevCaptureDelivery,
+  ) => Promise<DevCaptureEntry | DevCaptureIslandResult | null>;
   capturing: boolean;
   hasLastCapture: boolean;
   openLastCapture: () => Promise<void>;
+  openCapture: (entry: DevCaptureEntry) => void;
   goToDevCaptures: () => void;
 };
 
@@ -125,8 +138,12 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
   }, []);
 
   const captureFromTrigger = useCallback(
-    async (fromRect: DOMRect, screenLabel: string) => {
-      if (!chromeEnabled || capturing) return;
+    async (
+      fromRect: DOMRect,
+      screenLabel: string,
+      delivery: DevCaptureDelivery = "toast",
+    ): Promise<DevCaptureEntry | DevCaptureIslandResult | null> => {
+      if (!chromeEnabled || capturing) return null;
       setCapturing(true);
       try {
         const result = await invoke<DevCaptureScreenshotResult>(
@@ -138,13 +155,6 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
           name: result.name,
           modifiedMs: result.modifiedMs,
         };
-        const item: DevCaptureToastItem = {
-          id: nextToastId(),
-          entry,
-          contextLabel: screenLabel,
-          width: result.width,
-          height: result.height,
-        };
         const pngBytes = Uint8Array.from(
           await invoke<number[]>("read_dev_capture_png", { path: result.path }),
         );
@@ -152,7 +162,21 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
           console.error("[dev-capture] clipboard copy failed", e);
         });
         setLastCapture(entry);
+        notifyDevCapturesChanged();
+
         const blobUrl = URL.createObjectURL(new Blob([pngBytes], { type: "image/png" }));
+
+        if (delivery === "island") {
+          return { entry, previewSrc: blobUrl, contextLabel: screenLabel };
+        }
+
+        const item: DevCaptureToastItem = {
+          id: nextToastId(),
+          entry,
+          contextLabel: screenLabel,
+          width: result.width,
+          height: result.height,
+        };
         setMorph((prev) => {
           if (prev?.blobUrl) URL.revokeObjectURL(prev.blobUrl);
           return {
@@ -162,9 +186,10 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
             from: fromRect,
           };
         });
-        notifyDevCapturesChanged();
+        return entry;
       } catch (e) {
         console.error("[dev-capture] capture failed", e);
+        return null;
       } finally {
         setCapturing(false);
       }
@@ -182,9 +207,10 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
       capturing,
       hasLastCapture: lastCapture != null,
       openLastCapture,
+      openCapture: openAnnotate,
       goToDevCaptures,
     }),
-    [captureFromTrigger, capturing, lastCapture, openLastCapture, goToDevCaptures],
+    [captureFromTrigger, capturing, lastCapture, openLastCapture, openAnnotate, goToDevCaptures],
   );
 
   return (

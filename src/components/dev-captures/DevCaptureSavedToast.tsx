@@ -6,7 +6,7 @@ import { humanizeDevCaptureLabel } from "@/lib/devCaptureScreenLabel";
 import type { DevCaptureEntry } from "@/lib/devCapturesTypes";
 import { toastThumbSize } from "./devCaptureToastLayout";
 
-const AUTO_DISMISS_MS = 6000;
+import { DEV_CAPTURE_AUTO_DISMISS_MS } from "@/lib/devCaptureDismiss";
 
 export type DevCaptureToastItem = {
   id: string;
@@ -41,7 +41,7 @@ export function DevCaptureSavedToast({
 
   const armTimer = useCallback(() => {
     clearTimer();
-    timerRef.current = setTimeout(() => onDismiss(item.id), AUTO_DISMISS_MS);
+    timerRef.current = setTimeout(() => onDismiss(item.id), DEV_CAPTURE_AUTO_DISMISS_MS);
   }, [clearTimer, item.id, onDismiss]);
 
   useEffect(() => {

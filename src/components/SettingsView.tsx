@@ -1319,6 +1319,32 @@ export const SettingsView: React.FC = () => {
                   }
                 />
                 <SettingItem
+                  title="Preview UI crash screen"
+                  description="React error boundary fallback. Only the dynamic island stays above the overlay. Hover it for the in-pill capture icon; after capture the island widens with the filename. Tap that row to annotate. Reload or Escape dismisses."
+                  control={
+                    <button
+                      type="button"
+                      onClick={() => void emit("debug-preview-crash-ui")}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                    >
+                      PREVIEW
+                    </button>
+                  }
+                />
+                <SettingItem
+                  title="Preview fatal crash screen"
+                  description="Renderer or out-of-memory fallback. Only the dynamic island stays above the overlay. Hover it for the in-pill capture icon; after capture the island widens with the filename. Tap that row to annotate. Reload or Escape dismisses."
+                  control={
+                    <button
+                      type="button"
+                      onClick={() => void emit("debug-preview-crash-fatal")}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                    >
+                      PREVIEW
+                    </button>
+                  }
+                />
+                <SettingItem
                   title="Cycle updater UI"
                   description="Step through Available, Downloading, Installing, and Post-Install updater phases."
                   control={

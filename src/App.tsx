@@ -107,6 +107,12 @@ import type { ActivityHandoffSyncPayload, ActivityMiniTeardownPayload } from "./
 import { MainPlaybackHost } from "./playback/MainPlaybackHost";
 import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
 import { DevCaptureChromeProvider } from "./components/dev-captures/DevCaptureChromeProvider";
+import {
+  CrashRecoveryScreen,
+  CRASH_RECOVERY_PREVIEW_SAMPLES,
+  type CrashRecoveryVariant,
+} from "./components/crash-recovery/CrashRecoveryScreen";
+import { CrashRecoveryPreviewContext } from "./lib/crashRecoveryPreview";
 import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
 import { RF_TITLEBAR_H_PX } from "./lib/chromeLayout";
 import { galleryScrollChromeAmount } from "./lib/galleryScrollChrome";
@@ -429,6 +435,8 @@ function App() {
   const [telemetryConsentPending, setTelemetryConsentPending] = useState(
     () => !hasSeenTelemetryConsent(),
   );
+  const [crashRecoveryPreview, setCrashRecoveryPreview] =
+    useState<CrashRecoveryVariant | null>(null);
   const shellBlocked = Boolean(postInstall) || telemetryConsentPending;
 
   const applyAvailableUpdate = useCallback((next: Update) => {
@@ -1003,6 +1011,16 @@ function App() {
       });
     });
 
+    const unlistenDebugCrashUi = listen("debug-preview-crash-ui", () => {
+      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      setCrashRecoveryPreview("ui");
+    });
+
+    const unlistenDebugCrashFatal = listen("debug-preview-crash-fatal", () => {
+      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      setCrashRecoveryPreview("fatal");
+    });
+
     const unlistenDebugReplayDownloadBatch = listen("debug-replay-download-batch", () => {
       if (!import.meta.env.DEV) return;
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
@@ -1046,10 +1064,23 @@ function App() {
       unlistenDebugOnboarding.then((f) => f());
       unlistenDebugTelemetryConsent.then((f) => f());
       unlistenDebugBootSplash.then((f) => f());
+      unlistenDebugCrashUi.then((f) => f());
+      unlistenDebugCrashFatal.then((f) => f());
       unlistenDebugReplayDownloadBatch.then((f) => f());
       unlistenDebugUpdater.then((f) => f());
     };
   }, []);
+
+  useEffect(() => {
+    if (!crashRecoveryPreview) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setCrashRecoveryPreview(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [crashRecoveryPreview]);
 
   // Send-to-main handoff from video miniplayer
   useEffect(() => {
@@ -1418,6 +1449,7 @@ function App() {
 
   return (
     <DevCaptureChromeProvider>
+    <CrashRecoveryPreviewContext.Provider value={crashRecoveryPreview}>
     <MainPlaybackHost>
     <div
       className={`h-screen w-screen text-stone-50 font-sans flex overflow-hidden select-none relative ${
@@ -1933,8 +1965,20 @@ function App() {
       />
       <ExportBundleHost />
       <ConfirmDialogHost />
+
+      {crashRecoveryPreview ? (
+        <CrashRecoveryScreen
+          variant={crashRecoveryPreview}
+          message={CRASH_RECOVERY_PREVIEW_SAMPLES[crashRecoveryPreview].message}
+          detail={CRASH_RECOVERY_PREVIEW_SAMPLES[crashRecoveryPreview].detail}
+          preview
+          className="rf-crash-screen fixed inset-0 z-[100000] flex flex-col overflow-hidden"
+          onReload={() => setCrashRecoveryPreview(null)}
+        />
+      ) : null}
     </div>
     </MainPlaybackHost>
+    </CrashRecoveryPreviewContext.Provider>
     </DevCaptureChromeProvider>
   );
 }
