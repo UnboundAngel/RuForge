@@ -19,6 +19,7 @@ import {
   patchDownloadJobOptionsForAudio,
   patchDownloadJobOptionsFromSettings,
   persistDownloadJobs,
+  restoreDownloadQueueFromSessionIfEmpty,
   toInvokeDownloadOptions,
   videoInfoToDownloadJobSnapshot,
   type DownloadJob,
@@ -41,7 +42,6 @@ import {
 import {
   commitDownloadJobMetadataCache,
   downloadJobMetadataCacheKey,
-  evictDownloadJobMetadataCacheIfOrphaned,
   evictDownloadJobMetadataCacheWhenIdle,
   peekDownloadJobMetadataCache,
 } from "../downloadQueueMetadataCache";
@@ -325,6 +325,8 @@ export type DownloadQueueSlice = {
   releaseHeldDownloadJobs: () => void;
   /** After reload, re-fetch `get_video_info` for queued/paused rows with thin metadata. */
   queueHydrateOrphanMetadata: () => void;
+  /** When in-memory queue is empty but sessionStorage still has rows, restore into the store. */
+  restoreDownloadQueueFromSessionIfEmpty: () => void;
 
   enqueueDownload: (
     url: string,
@@ -535,6 +537,7 @@ export const createDownloadQueueSlice: StateCreator<
     },
 
     queueHydrateOrphanMetadata: () => {
+      get().restoreDownloadQueueFromSessionIfEmpty();
       for (const j of get().downloadJobs) {
         if (
           (j.status === "queued" || j.status === "paused") &&
@@ -543,6 +546,19 @@ export const createDownloadQueueSlice: StateCreator<
           void hydrateDownloadJobMetadata(get, set, j.id, j.url);
         }
       }
+    },
+
+    restoreDownloadQueueFromSessionIfEmpty: () => {
+      const s = get();
+      const patch = restoreDownloadQueueFromSessionIfEmpty(
+        s.downloadJobs,
+        s.focusedJobId,
+      );
+      if (!patch) return;
+      set({
+        downloadJobs: patch.downloadJobs,
+        focusedJobId: patch.focusedJobId,
+      });
     },
 
     confirmPendingDownloadJob: (jobId, approve) => {
@@ -573,6 +589,7 @@ export const createDownloadQueueSlice: StateCreator<
     },
 
     enqueueDownload: (url, options, meta) => {
+      get().restoreDownloadQueueFromSessionIfEmpty();
       const urlTrim = url.trim();
       const approval: DownloadJobApproval = meta?.approval ?? "auto";
       const snapshot =
@@ -849,7 +866,6 @@ export const createDownloadQueueSlice: StateCreator<
       disarmDownloadJobWatchdog(id);
       clearSkippedJobRemovalTimer(id);
       clearTimedOutJobRemovalTimer(id);
-      const removedUrl = job.url;
       if (job.status === "downloading") {
         await get().pauseDownloadJob(id);
       }
@@ -867,7 +883,9 @@ export const createDownloadQueueSlice: StateCreator<
           ...heroClearWhenUrlNotInQueue(s, downloadJobs),
         };
       });
-      evictDownloadJobMetadataCacheIfOrphaned(removedUrl, get().downloadJobs);
+      // Manual queue removal (explorer toggle, dismiss row, etc.) must not drop
+      // localStorage metadata; hero paste and re-add reuse it. Idle eviction after
+      // download finish + LRU cap handle cleanup instead.
       get().pumpDownloadQueue();
     },
 
@@ -1003,6 +1021,7 @@ export const createDownloadQueueSlice: StateCreator<
       const starts: { id: string; url: string; resume: boolean }[] = [];
       const skippedIds: string[] = [];
       let finishedUrl: string | undefined;
+      const heroUrlBeforeFinish = get().url.trim();
 
       set((s) => {
         const finishedJob = s.downloadJobs.find((j) => j.id === payload.jobId);
@@ -1066,7 +1085,11 @@ export const createDownloadQueueSlice: StateCreator<
       }
 
       if (finishedUrl) {
-        evictDownloadJobMetadataCacheWhenIdle(finishedUrl, get().downloadJobs);
+        evictDownloadJobMetadataCacheWhenIdle(
+          finishedUrl,
+          get().downloadJobs,
+          heroUrlBeforeFinish || get().url,
+        );
       }
 
       if (payload.success) {

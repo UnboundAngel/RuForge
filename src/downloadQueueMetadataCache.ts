@@ -1,5 +1,5 @@
 import type { DownloadJobMediaSnapshot } from "./downloadQueue";
-import { normalizeYouTubeUrlForCompare } from "./youtubeUrl";
+import { normalizeYouTubeUrlForCompare, youtubeUrlsMatch } from "./youtubeUrl";
 
 const LS_KEY = "ruforge-dl-jobmeta-v1";
 const MAX_ENTRIES = 36;
@@ -135,6 +135,19 @@ export function peekDownloadJobMetadataCache(
   return snap;
 }
 
+/** Hero display lane only: title + thumb, no size requirement (queue display-only hydrate rows). */
+export function peekDownloadJobMetadataCacheForHeroDisplay(
+  url: string,
+  videoFormat: string,
+): DownloadJobMediaSnapshot | null {
+  const snap = readCachedRow(url, videoFormat);
+  if (!snap) return null;
+  const t = String(snap.title ?? "").trim();
+  const th = String(snap.thumbnail ?? "").trim();
+  if (!t || !th) return null;
+  return snap;
+}
+
 export function commitDownloadJobMetadataCache(
   compareKey: string,
   snapshot: DownloadJobMediaSnapshot,
@@ -150,24 +163,36 @@ export function commitDownloadJobMetadataCache(
 export function evictDownloadJobMetadataCacheIfOrphaned(
   removedJobUrl: string,
   remainingJobs: readonly { url: string }[],
-): void {
+  keepForHeroUrl?: string | null,
+): boolean {
   const base = downloadJobMetadataUrlBase(removedJobUrl);
-  if (!base) return;
+  if (!base) return false;
+  if (keepForHeroUrl?.trim() && youtubeUrlsMatch(keepForHeroUrl, removedJobUrl)) {
+    return false;
+  }
   const stillUsed = remainingJobs.some(
     (j) => downloadJobMetadataUrlBase(j.url) === base,
   );
-  if (stillUsed) return;
+  if (stillUsed) return false;
   const data = readRaw();
-  if (deleteAllCacheRowsForUrl(data, removedJobUrl)) writeRaw(data);
+  if (deleteAllCacheRowsForUrl(data, removedJobUrl)) {
+    writeRaw(data);
+    return true;
+  }
+  return false;
 }
 
 /** Drop dual-size cache when no queued/paused/downloading job still needs the URL. */
 export function evictDownloadJobMetadataCacheWhenIdle(
   url: string,
   jobs: readonly { url: string; status: string }[],
-): void {
+  keepForHeroUrl?: string | null,
+): boolean {
   const base = downloadJobMetadataUrlBase(url);
-  if (!base) return;
+  if (!base) return false;
+  if (keepForHeroUrl?.trim() && youtubeUrlsMatch(keepForHeroUrl, url)) {
+    return false;
+  }
   const active = jobs.some(
     (j) =>
       downloadJobMetadataUrlBase(j.url) === base &&
@@ -175,7 +200,11 @@ export function evictDownloadJobMetadataCacheWhenIdle(
         j.status === "paused" ||
         j.status === "downloading"),
   );
-  if (active) return;
+  if (active) return false;
   const data = readRaw();
-  if (deleteAllCacheRowsForUrl(data, url)) writeRaw(data);
+  if (deleteAllCacheRowsForUrl(data, url)) {
+    writeRaw(data);
+    return true;
+  }
+  return false;
 }

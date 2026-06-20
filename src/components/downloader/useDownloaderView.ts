@@ -33,6 +33,7 @@ import {
   commitDownloadJobMetadataCache,
   downloadJobMetadataCacheKey,
   peekDownloadJobMetadataCache,
+  peekDownloadJobMetadataCacheForHeroDisplay,
 } from "../../downloadQueueMetadataCache";
 import { effectiveDownloadSubLangs } from "../../store/types";
 import { readClipboardYouTubeUrl } from "../../downloaderClipboardYoutube";
@@ -66,25 +67,47 @@ import { ytdlpVideoFormatForMetadata } from "../../downloadFormat";
 const STORAGE_FULL_NOTIFY =
   "Library storage limit reached. Free space in Settings or switch to an external download folder.";
 
+function heroReuseEligibleJob(j: DownloadJob): boolean {
+  return (
+    j.status === "downloading" ||
+    j.status === "paused" ||
+    (j.status === "queued" &&
+      (j.approval === "held" ||
+        j.approval === "auto" ||
+        j.approval === "pending" ||
+        j.approval === "manual"))
+  );
+}
+
+function jobsForHeroMetadataReuse(
+  memoryJobs: readonly DownloadJob[],
+): readonly DownloadJob[] {
+  return memoryJobs;
+}
+
 function heroReuseJobSnapshot(
   jobs: readonly DownloadJob[],
   norm: string,
 ): DownloadJobMediaSnapshot | null {
   for (const j of jobs) {
     if (!youtubeUrlsMatch(j.url, norm)) continue;
-    const reuseEligible =
-      j.status === "downloading" ||
-      j.status === "paused" ||
-      (j.status === "queued" &&
-        (j.approval === "held" ||
-          j.approval === "auto" ||
-          j.approval === "pending" ||
-          j.approval === "manual"));
-    if (!reuseEligible) continue;
+    if (!heroReuseEligibleJob(j)) continue;
     if (downloadJobMediaNeedsHydration(j.metadata)) continue;
     return j.metadata ?? null;
   }
   return null;
+}
+
+function heroHasMatchingJobPendingHydration(
+  jobs: readonly DownloadJob[],
+  norm: string,
+): boolean {
+  for (const j of jobs) {
+    if (!youtubeUrlsMatch(j.url, norm)) continue;
+    if (!heroReuseEligibleJob(j)) continue;
+    if (downloadJobMediaNeedsHydration(j.metadata)) return true;
+  }
+  return false;
 }
 
 export type DownloaderViewProps = {
@@ -116,6 +139,9 @@ export function useDownloaderView({
   const setDownloaderFocusedJobId = useRuforgeStore((s) => s.setDownloaderFocusedJobId);
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const queueHydrateOrphanMetadata = useRuforgeStore((s) => s.queueHydrateOrphanMetadata);
+  const restoreDownloadQueueFromSessionIfEmpty = useRuforgeStore(
+    (s) => s.restoreDownloadQueueFromSessionIfEmpty,
+  );
   const pumpDownloadQueue = useRuforgeStore((s) => s.pumpDownloadQueue);
   const skipDownloadJobAsLibraryDuplicate = useRuforgeStore(
     (s) => s.skipDownloadJobAsLibraryDuplicate,
@@ -1096,7 +1122,9 @@ export function useDownloaderView({
         setDownloaderMetadataLoading(false);
       };
 
+      restoreDownloadQueueFromSessionIfEmpty();
       const st = useRuforgeStore.getState();
+      const jobs = jobsForHeroMetadataReuse(st.downloadJobs);
       if (
         st.videoInfo &&
         st.videoInfoUrl &&
@@ -1159,7 +1187,7 @@ export function useDownloaderView({
         })();
       };
 
-      const jobSnap = heroReuseJobSnapshot(st.downloadJobs, norm);
+      const jobSnap = heroReuseJobSnapshot(jobs, norm);
       if (jobSnap) {
         if (active) {
           applyHeroFromSnapshot(jobSnap);
@@ -1171,9 +1199,27 @@ export function useDownloaderView({
       }
 
       const videoFormat = ytdlpVideoFormatForMetadata(preferredQuality);
+      const displayCached = peekDownloadJobMetadataCacheForHeroDisplay(norm, videoFormat);
+      if (displayCached) {
+        if (active) {
+          applyHeroFromSnapshot(displayCached);
+          fillHeroSizesInBackground(displayCached);
+        }
+        return () => {
+          active = false;
+        };
+      }
+
       const cached = peekDownloadJobMetadataCache(norm, videoFormat);
       if (cached) {
         if (active) applyHeroFromSnapshot(cached);
+        return () => {
+          active = false;
+        };
+      }
+
+      if (heroHasMatchingJobPendingHydration(jobs, norm)) {
+        if (active) setDownloaderMetadataLoading(false);
         return () => {
           active = false;
         };
@@ -1294,6 +1340,7 @@ export function useDownloaderView({
     setVideoInfo(null);
   }, [
     url,
+    downloadJobs,
     settings.preferredQuality,
     settings.downloadAudioOnly,
     settings.browserContext,
@@ -1301,6 +1348,7 @@ export function useDownloaderView({
     setMetadataError,
     setDownloaderMetadataLoading,
     setVideoInfo,
+    restoreDownloadQueueFromSessionIfEmpty,
   ]);
 
   return {
