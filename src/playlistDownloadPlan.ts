@@ -1,7 +1,10 @@
+import { normalizeDurationSeconds } from "./components/downloader/downloaderFormat";
 import {
   findLibraryMatchForPlaylistItem,
   type DuplicateMatch,
 } from "./duplicateDownload";
+import type { DownloadJobMediaSnapshot } from "./downloadQueue";
+import { snapshotWithResolvedFileSize } from "./downloadJobFileSizes";
 import type { GalleryEntry, PlaylistItem } from "./types";
 import {
   extractYouTubePlaylistId,
@@ -129,4 +132,65 @@ export function sumPlaylistDisplayBytes(
 
 export function isPlaylistDownloaderUrl(url: string): boolean {
   return extractYouTubePlaylistId(url) !== null;
+}
+
+function findPlaylistItemForWatchUrl(
+  watchUrl: string,
+  items: PlaylistItem[],
+): PlaylistItem | null {
+  const key = normalizeYouTubeUrlForCompare(watchUrl);
+  for (const item of items) {
+    const itemUrl = playlistItemWatchUrl(item);
+    if (!itemUrl) continue;
+    if (normalizeYouTubeUrlForCompare(itemUrl) === key) return item;
+  }
+  return null;
+}
+
+function snapshotFromPlaylistItem(
+  item: PlaylistItem,
+  audioOnly: boolean,
+): DownloadJobMediaSnapshot | null {
+  const thumbnail = item.thumbnail?.trim() ?? "";
+  if (!thumbnail) return null;
+
+  const audio =
+    typeof item.fileSizeBytesAudio === "number" && item.fileSizeBytesAudio > 0
+      ? item.fileSizeBytesAudio
+      : null;
+  const video =
+    typeof item.fileSizeBytesVideo === "number" && item.fileSizeBytesVideo > 0
+      ? item.fileSizeBytesVideo
+      : null;
+  const legacy =
+    typeof item.fileSizeBytes === "number" && item.fileSizeBytes > 0
+      ? item.fileSizeBytes
+      : null;
+  const fileSizeBytesAudio = audio ?? (audioOnly ? legacy : null);
+  const fileSizeBytesVideo = video ?? (!audioOnly ? legacy : null);
+  const fileSizeBytes = audioOnly
+    ? (fileSizeBytesAudio ?? legacy)
+    : (fileSizeBytesVideo ?? legacy);
+
+  const snap: DownloadJobMediaSnapshot = {
+    title: item.title?.trim() || "Unknown",
+    thumbnail,
+    duration: normalizeDurationSeconds(item.duration),
+    fileSizeBytes,
+    fileSizeBytesAudio,
+    fileSizeBytesVideo,
+    isPlaylist: false,
+  };
+  return snapshotWithResolvedFileSize(snap, audioOnly);
+}
+
+/** Hero playlist row metadata for queue enqueue; same URL keying as `buildPlaylistEnqueuePlan`. */
+export function downloadJobSnapshotFromPlaylistItems(
+  watchUrl: string,
+  items: PlaylistItem[],
+  audioOnly: boolean,
+): DownloadJobMediaSnapshot | null {
+  const item = findPlaylistItemForWatchUrl(watchUrl, items);
+  if (!item) return null;
+  return snapshotFromPlaylistItem(item, audioOnly);
 }
