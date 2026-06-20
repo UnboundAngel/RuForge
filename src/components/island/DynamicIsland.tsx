@@ -2,9 +2,14 @@ import { AnimatePresence, motion } from "motion/react";
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
 
 import { ActivityIslandWaveform } from "./ActivityIslandWaveform";
+import {
+  IslandCaptureSavedContent,
+  captureIslandWidthForCaption,
+} from "./IslandCaptureSavedContent";
+import { IslandIdleDevCaptureContent } from "./IslandIdleDevCaptureContent";
 import { IslandExpandedContent } from "./IslandExpandedContent";
 
-export type IslandState = "idle" | "compact" | "expanded";
+export type IslandState = "idle" | "compact" | "expanded" | "capture";
 
 const ISLAND_SPRING = {
   type: "spring" as const,
@@ -19,6 +24,7 @@ const ISLAND_DIMENSIONS: Record<
 > = {
   idle: { width: 120, height: 36, borderRadius: 18 },
   compact: { width: 220, height: 36, borderRadius: 18 },
+  capture: { width: 160, height: 36, borderRadius: 18 },
   expanded: { width: 350, height: 184, borderRadius: 40 },
 };
 
@@ -63,6 +69,14 @@ type DynamicIslandProps = {
   onMuted?: (m: boolean) => void;
   onToggleLoop?: (e: MouseEvent) => void;
   onPopOut?: (e: MouseEvent) => void;
+  devCaptureIdle?: {
+    hover: boolean;
+    busy: boolean;
+    onCapture: (e: MouseEvent) => void;
+  };
+  captureSavedCaption?: string;
+  captureSavedPreviewSrc?: string;
+  onCaptureSavedOpen?: (e: MouseEvent) => void;
 };
 
 function ContentShell({
@@ -144,9 +158,17 @@ export function DynamicIsland({
   onMuted,
   onToggleLoop,
   onPopOut,
+  devCaptureIdle,
+  captureSavedCaption,
+  captureSavedPreviewSrc,
+  onCaptureSavedOpen,
 }: DynamicIslandProps) {
-  const dims = ISLAND_DIMENSIONS[state];
-  const interactive = state !== "idle";
+  const baseDims = ISLAND_DIMENSIONS[state];
+  const dims =
+    state === "capture" && captureSavedCaption
+      ? { ...baseDims, width: captureIslandWidthForCaption(captureSavedCaption) }
+      : baseDims;
+  const interactive = state !== "idle" || Boolean(devCaptureIdle);
 
   return (
     <motion.div
@@ -164,10 +186,26 @@ export function DynamicIsland({
         style={{ borderRadius: dims.borderRadius }}
       >
         <AnimatePresence initial={false}>
-          {state === "idle" && <IdleContent key="idle" />}
+          {state === "idle" && devCaptureIdle ? (
+            <IslandIdleDevCaptureContent
+              key="idle"
+              hover={devCaptureIdle.hover}
+              busy={devCaptureIdle.busy}
+              onCapture={devCaptureIdle.onCapture}
+            />
+          ) : null}
+          {state === "idle" && !devCaptureIdle ? <IdleContent key="idle" /> : null}
           {state === "compact" && (
             <CompactContent key="compact" content={content} waveformLevels={waveformLevels} />
           )}
+          {state === "capture" && captureSavedCaption && captureSavedPreviewSrc && onCaptureSavedOpen ? (
+            <IslandCaptureSavedContent
+              key="capture"
+              caption={captureSavedCaption}
+              previewSrc={captureSavedPreviewSrc}
+              onOpen={onCaptureSavedOpen}
+            />
+          ) : null}
           {state === "expanded" && (
             <IslandExpandedContent
               key="expanded"

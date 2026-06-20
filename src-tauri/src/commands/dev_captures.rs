@@ -190,7 +190,7 @@ pub fn start_dev_capture_file_drag(app: AppHandle, paths: Vec<String>) -> Result
 mod native_capture {
     use std::path::Path;
 
-    use tauri::{AppHandle, Manager};
+    use tauri::AppHandle;
     use windows::Win32::Foundation::{HWND, RECT};
     use windows::Win32::Graphics::Gdi::{
         BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
@@ -310,12 +310,10 @@ mod native_capture {
     }
 
     pub fn capture_main_window_dev(
+        window: &tauri::WebviewWindow,
         app: AppHandle,
         context_label: String,
     ) -> Result<DevCaptureScreenshotResult, String> {
-        let window = app
-            .get_webview_window("main")
-            .ok_or_else(|| "main window not found".to_string())?;
         let hwnd = window.hwnd().map_err(|e| e.to_string())?;
 
         let (width, height, bgra) = capture_screen_region(hwnd)?;
@@ -346,17 +344,39 @@ mod native_capture {
 }
 
 #[cfg(windows)]
+fn resolve_main_capture_window(
+    app: &AppHandle,
+    caller: &tauri::WebviewWindow,
+) -> Result<tauri::WebviewWindow, String> {
+    if caller.label() == "main" {
+        return Ok(caller.clone());
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        return Ok(main);
+    }
+    for (label, window) in app.webview_windows() {
+        if label == "main" {
+            return Ok(window);
+        }
+    }
+    Err(format!("main window not found (caller={})", caller.label()))
+}
+
+#[cfg(windows)]
 #[tauri::command]
 pub fn capture_main_window_dev(
+    webview: tauri::WebviewWindow,
     app: AppHandle,
     context_label: String,
 ) -> Result<DevCaptureScreenshotResult, String> {
-    native_capture::capture_main_window_dev(app, context_label)
+    let window = resolve_main_capture_window(&app, &webview)?;
+    native_capture::capture_main_window_dev(&window, app, context_label)
 }
 
 #[cfg(not(windows))]
 #[tauri::command]
 pub fn capture_main_window_dev(
+    _webview: tauri::WebviewWindow,
     _app: AppHandle,
     _context_label: String,
 ) -> Result<DevCaptureScreenshotResult, String> {

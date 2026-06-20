@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
+import { useDevCaptureChrome } from "@/components/dev-captures/DevCaptureChromeProvider";
+import { isDevCaptureEnabled } from "@/lib/devCaptureGate";
+import { ISLAND_CAPTURE_AUTO_DISMISS_MS } from "@/lib/devCaptureDismiss";
+import {
+  crashPreviewCaptureContextLabel,
+  devCaptureIslandCaption,
+} from "@/lib/devCaptureScreenLabel";
+import { useCrashRecoveryPreview } from "@/lib/crashRecoveryPreview";
+import type { DevCaptureEntry } from "@/lib/devCapturesTypes";
 import {
   getMainPlaybackBridge,
   subscribeMainPlaybackBridge,
@@ -22,6 +31,12 @@ import { primaryArtist, rawArtistFromFile } from "@/components/music/musicArtist
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { DynamicIsland, type IslandState } from "./DynamicIsland";
 
+type IslandSavedCapture = {
+  entry: DevCaptureEntry;
+  previewSrc: string;
+  contextLabel: string;
+};
+
 export function ActivityIsland() {
   const activity = useCurrentActivity();
   const playback = useSyncExternalStore(
@@ -39,6 +54,15 @@ export function ActivityIsland() {
   const setVolume = useRuforgeStore((s) => s.setVolume);
   const setLooping = useRuforgeStore((s) => s.setLooping);
   const handlePopOut = useRuforgeStore((s) => s.handlePopOut);
+  const showDebuggingSettings = useRuforgeStore((s) => s.settings.showDebuggingSettings);
+  const crashRecoveryPreview = useCrashRecoveryPreview();
+  const devCaptureChrome = useDevCaptureChrome();
+  const devCaptureIsland =
+    isDevCaptureEnabled(showDebuggingSettings) && crashRecoveryPreview != null;
+  const [captureHover, setCaptureHover] = useState(false);
+  const [savedCaptureHover, setSavedCaptureHover] = useState(false);
+  const [savedCapture, setSavedCapture] = useState<IslandSavedCapture | null>(null);
+  const islandWrapRef = useRef<HTMLDivElement>(null);
   const [userExpanded, setUserExpanded] = useState(false);
   const onboardingOccupied = useSyncExternalStore(
     subscribeOnboardingIslandOccupiedChange,
@@ -66,12 +90,45 @@ export function ActivityIsland() {
     isExpanded ||
     (hasSession && livePaused && onOwningSurface);
 
-  const islandState: IslandState = !hasSession || !showIslandChrome
-    ? "idle"
-    : isExpanded
-      ? "expanded"
-      : "compact";
+  const islandState: IslandState = devCaptureIsland
+    ? savedCapture
+      ? "capture"
+      : "idle"
+    : !hasSession || !showIslandChrome
+      ? "idle"
+      : isExpanded
+        ? "expanded"
+        : "compact";
 
+  const dismissSavedCapture = useCallback(() => {
+    setSavedCapture((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewSrc);
+      return null;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!crashRecoveryPreview) {
+      dismissSavedCapture();
+      setCaptureHover(false);
+      setSavedCaptureHover(false);
+    }
+  }, [crashRecoveryPreview, dismissSavedCapture]);
+
+  useEffect(() => {
+    if (!savedCapture || savedCaptureHover) return;
+    const timer = window.setTimeout(dismissSavedCapture, ISLAND_CAPTURE_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [savedCapture, savedCaptureHover, dismissSavedCapture]);
+
+  useEffect(() => {
+    return () => {
+      setSavedCapture((prev) => {
+        if (prev) URL.revokeObjectURL(prev.previewSrc);
+        return null;
+      });
+    };
+  }, []);
   useEffect(() => {
     if (!canExpand) setUserExpanded(false);
   }, [canExpand]);
@@ -81,14 +138,18 @@ export function ActivityIsland() {
   }, [hasSession]);
 
   useEffect(() => {
-    if (!isExpanded) return;
+    if (!isExpanded && !savedCapture) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setUserExpanded(false);
+      if (e.key !== "Escape") return;
+      if (savedCapture) {
+        dismissSavedCapture();
+        return;
+      }
+      if (isExpanded) setUserExpanded(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isExpanded]);
-
+  }, [isExpanded, savedCapture, dismissSavedCapture]);
   const handlePlayPause = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -244,6 +305,7 @@ export function ActivityIsland() {
   );
 
   const handleShellClick = () => {
+    if (devCaptureIsland) return;
     if (isExpanded) {
       setUserExpanded(false);
       return;
@@ -251,6 +313,28 @@ export function ActivityIsland() {
     if (canExpand) setUserExpanded(true);
   };
 
+  const handleIslandCapture = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const el = islandWrapRef.current;
+      if (!el || devCaptureChrome.capturing || !crashRecoveryPreview) return;
+      const contextLabel = crashPreviewCaptureContextLabel(crashRecoveryPreview);
+      void devCaptureChrome
+        .captureFromTrigger(el.getBoundingClientRect(), contextLabel, "island")
+        .then((result) => {
+          if (!result || !("previewSrc" in result)) return;
+          setSavedCapture((prev) => {
+            if (prev) URL.revokeObjectURL(prev.previewSrc);
+            return {
+              entry: result.entry,
+              previewSrc: result.previewSrc,
+              contextLabel: result.contextLabel,
+            };
+          });
+        });
+    },
+    [devCaptureChrome, crashRecoveryPreview],
+  );
   if (onboardingOccupied) return null;
 
   return createPortal(
@@ -265,16 +349,49 @@ export function ActivityIsland() {
       ) : null}
 
       <div
-        className="rf-activity-island-portal pointer-events-none fixed top-0 left-1/2 z-[110] flex w-full max-w-lg -translate-x-1/2 justify-center overflow-visible pt-[6px]"
+        className={`rf-activity-island-portal pointer-events-none fixed top-0 left-1/2 flex w-full max-w-lg -translate-x-1/2 justify-center overflow-visible pt-[6px] ${
+          crashRecoveryPreview ? "z-[100001]" : "z-[110]"
+        }`}
         data-rf-nav-mode={navMode === "music" ? "music" : "media"}
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
-        <DynamicIsland
-          state={islandState}
-          content={content}
-          waveformLevels={waveformLevels}
-          onClick={handleShellClick}
-          onPlayPause={handlePlayPause}
+        <div
+          ref={islandWrapRef}
+          className="pointer-events-auto relative"
+          onMouseEnter={() => {
+            if (!devCaptureIsland) return;
+            if (savedCapture) setSavedCaptureHover(true);
+            else setCaptureHover(true);
+          }}
+          onMouseLeave={() => {
+            if (!devCaptureIsland) return;
+            setSavedCaptureHover(false);
+            if (!savedCapture) setCaptureHover(false);
+          }}
+        >
+          <DynamicIsland
+            state={islandState}
+            content={content}
+            waveformLevels={waveformLevels}
+            devCaptureIdle={
+              devCaptureIsland && !savedCapture
+                ? {
+                    hover: captureHover,
+                    busy: devCaptureChrome.capturing,
+                    onCapture: handleIslandCapture,
+                  }
+                : undefined
+            }
+            captureSavedCaption={
+              savedCapture ? devCaptureIslandCaption(savedCapture.contextLabel) : undefined
+            }
+            captureSavedPreviewSrc={savedCapture?.previewSrc}
+            onCaptureSavedOpen={(e) => {
+              e.stopPropagation();
+              if (savedCapture) devCaptureChrome.openCapture(savedCapture.entry);
+            }}
+            onClick={handleShellClick}
+            onPlayPause={handlePlayPause}
           onSeek={handleSeek}
           onBeginScrub={handleBeginScrub}
           onReleaseScrub={handleReleaseScrub}
@@ -293,6 +410,7 @@ export function ActivityIsland() {
           onToggleLoop={handleToggleLoop}
           onPopOut={handlePopOutClick}
         />
+        </div>
       </div>
     </>,
     mainWindowPortalRoot(),

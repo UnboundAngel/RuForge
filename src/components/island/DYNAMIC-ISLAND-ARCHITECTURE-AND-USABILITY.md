@@ -48,12 +48,13 @@ Tests for resolve/navigation rules: `src/lib/activityIslandResolve.test.ts`.
 
 ## State machine
 
-Three visual states (`IslandState`):
+Four visual states (`IslandState`); `capture` is dev-only (crash-recovery preview):
 
 | State | Size (px) | When |
 |-------|-----------|------|
 | `idle` | 120 × 36, radius 18 | No session, or session exists but user is on the owning surface and island chrome is hidden |
 | `compact` | 220 × 36, radius 18 | Active session and user is away from owning surface (pill) |
+| `capture` | fits label, height 36, radius 18 | Dev crash-recovery preview after a capture saves (wide pill with filename, not full expanded height) |
 | `expanded` | 350 × 184, radius 40 | Compact + user tapped pill + expand still allowed |
 
 ### Inputs that drive `islandState` (in `ActivityIsland`)
