@@ -35,6 +35,7 @@ import { applyReplaceBeforeDownload } from "../../replaceLibraryDownload";
 import type { DuplicateDownloadChoice } from "../DuplicateDownloadDialog";
 import {
   buildPlaylistEnqueuePlan,
+  downloadJobSnapshotFromPlaylistItems,
   isPlaylistDownloaderUrl,
   playlistItemKey,
   resolveAudioOnlyForPlaylistItem,
@@ -446,6 +447,14 @@ export function useDownloaderView({
         youtubeUrlsMatch(targetUrl, st.url) && st.videoInfo
           ? videoInfoToDownloadJobSnapshot(st.videoInfo, options.audioOnly)
           : undefined;
+      if (!snapshot && st.videoInfo?.playlistItems?.length) {
+        snapshot =
+          downloadJobSnapshotFromPlaylistItems(
+            targetUrl,
+            st.videoInfo.playlistItems,
+            options.audioOnly,
+          ) ?? undefined;
+      }
       const batchTitle = meta?.title?.trim();
       if (!snapshot && batchTitle) {
         snapshot = {

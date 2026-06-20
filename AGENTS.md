@@ -409,6 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Downloads**: playlist batch enqueue copies hero per-item thumb/title/duration into job snapshots via `downloadJobSnapshotFromPlaylistItems` (same URL key as `buildPlaylistEnqueuePlan`); rows with item thumbs skip queue hydration (`playlistDownloadPlan.ts`, `useDownloaderView.ts`).
 - **Scrub previews**: per-video ffmpeg lock keys normalized via `normalize_media_key` (TS `mediaPathsMatch` contract) at map insert and cancel lookup so mixed slash/casing and delete-path seeding share one slot (`media.rs`).
 - **Scrub previews**: `media.ffmpeg` debug category in Settings tree; fleet release log fires on Drop so error/cancel paths log released too (`debugCategories.ts`, `media.rs`).
 - **Scrub previews**: global ffmpeg fleet semaphore (max(1, cores/2) permits per spawn) and `-threads 1` on every RuForge sidecar invoke; acquire/release logged under `media.ffmpeg` (`media.rs`).
