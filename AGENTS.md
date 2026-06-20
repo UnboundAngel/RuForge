@@ -409,6 +409,14 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Debugging**: dev capture toast compact: content-sized width, smaller thumb, tighter padding (`devCaptureToastLayout.ts`, `DevCaptureSavedToast.tsx`).
+- **Debugging**: dev capture from RuForge icon (DEV + showDebuggingSettings): native main-window PNG save, hover-swap capture icon, fly-to main-window toast, click opens annotate; spike removed (`capture_main_window_dev`, `DevCaptureChromeProvider.tsx`, `RuForgeCaptureTrigger.tsx`).
+- **Debugging**: dev capture annotate modal: thumb cache-bust on save, full titlebar drag region, copy toast animation, window-controls click shield, text box resize handles (`DevCaptureAnnotateModal.tsx`, `DevCapturesGrid.tsx`, `devCaptureAnnotateHit.ts`).
+- **Downloads**: multi-item carousel stays active between batch items (batch ID capture for playlist/auto jobs, no `anyDownloading` gate, queued-next index, immersive shell) (`useDownloaderView.ts`, `DownloaderView.tsx`).
+- **Downloads**: carousel card art/title fade in when metadata hydrates (shimmer crossfade) (`DownloadJobQueuePanel.tsx`).
+- **Downloads**: multi-item carousel skeleton shimmer for unhydrated cards, vertical centering spacer, batch remaining eyebrow with fade (`MultiDownloadSlotCarousel.tsx`, `DownloadJobQueuePanel.tsx`, `downloaderFormat.ts`, `index.css`).
+- **Downloads**: multi-item download hero simplified: centered carousel, plain progress bar, whole-number MB/s on active card; removed item count, phase label, ETA, and segmented bar chrome (`DownloaderView.tsx`, `DownloadJobQueuePanel.tsx`, `downloaderFormat.ts`).
+- **Debugging**: dev captures library under Settings Debugging (DEV + showDebuggingSettings): flat PNG grid over `app_data/dev-captures/`, 2s poll + focus refresh, full-screen annotate (select + line/arrow/box/text/pin, blob load for untainted save, display-scale marks, flatten save), Explorer selection, native multi-file drag-out, delete with multi-confirm (`dev_captures.rs`, `dev-captures/*`).
 - **Debugging**: Mode B simulate replays paced fake progress (random 4-8s/item unless `ruforge-dev-simulate-ms` override, processing phase, playlist currentIndex) via `applyDownloadProgress` before finish (`devSimulateDownloadTimeline.ts`, `downloadQueueSlice.ts`, `devLastDownloadBatch.ts`).
 - **Debugging**: replay-batch switches to Download tab before handler registration so Settings REPLAY BATCH lands on visible replay UI (`replayLastDownloadBatch.ts`).
 - **Debugging**: dev-gated re-download last batch (capture at download start, replay via entry handlers, Mode A real download + resolved-path cleanup, Mode B simulate stub) (`devLastDownloadBatch.ts`, `replayLastDownloadBatch.ts`, `devReplayCleanup.ts`, `SettingsView.tsx`).

@@ -55,6 +55,7 @@ export function AppSidebarRail({
             <button
               key={item.id}
               type="button"
+              data-rail-tab={item.id}
               onClick={() => onSelectTab(item.id)}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
