@@ -71,6 +71,10 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
   const { context } = menu;
   const left = Math.min(menu.x, window.innerWidth - 224);
   const top = Math.min(menu.y, window.innerHeight - 240);
+  const menuAriaLabel =
+    context.kind === "song"
+      ? `Actions for ${context.file.name}`
+      : `Actions for ${context.displayName}`;
 
   function act(fn: () => void) {
     return () => { fn(); onClose(); };
@@ -177,6 +181,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
       transition={{ duration: 0.1, ease: "easeOut" }}
       style={{ position: "fixed", left, top, zIndex: 9999 }}
       className="w-52 bg-[#0f0f0f] border border-white/[0.11] rounded-[18px] shadow-2xl overflow-hidden"
+      aria-label={menuAriaLabel}
       onClick={(e) => e.stopPropagation()}
     >
       {rows}
