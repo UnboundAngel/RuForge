@@ -63,6 +63,12 @@ import {
   setYoutubeUrlDropHandler,
 } from "../../features/downloader/youtubeUrlDropRegistry";
 import { setDownloaderReplayHandlers } from "../../features/downloader/downloaderReplayRegistry";
+import {
+  commitLastDownloadBatchFromJobs,
+  commitLastDownloadBatchRecord,
+  devBatchToolsEnabled,
+  isDevReplaySimulateActive,
+} from "../../lib/devLastDownloadBatch";
 import { deliverUserNotification } from "../../systemNotify";
 import { ytdlpVideoFormatForMetadata } from "../../downloadFormat";
 
@@ -724,6 +730,7 @@ export function useDownloaderView({
         title: meta?.title,
         approval,
         enqueueSource: meta?.enqueueSource,
+        ...(isDevReplaySimulateActive() ? { devSimulateDownload: true } : {}),
       });
     },
     [storageBlocksNewDownloads, outputDir, internalDir, enqueueDownload],
@@ -775,6 +782,7 @@ export function useDownloaderView({
         playlistOutputFolder?: string;
         playlistIndex?: number;
         enqueueSource?: DownloadEnqueueSource;
+        skipBatchCapture?: boolean;
       },
     ) => {
       const replaced = await applyReplaceBeforeDownload(targetUrl, choice);
@@ -804,6 +812,21 @@ export function useDownloaderView({
         audioOnly,
       );
       if (!jobId) return;
+      const heldCount = stEnqueue.downloadJobs.filter(
+        (j) => j.status === "queued" && j.approval === "held",
+      ).length;
+      if (heldCount === 0 && devBatchToolsEnabled() && !meta?.skipBatchCapture) {
+        const job = useRuforgeStore.getState().downloadJobs.find((j) => j.id === jobId);
+        if (job) {
+          commitLastDownloadBatchFromJobs([job], {
+            heroUrl: stEnqueue.url,
+            heroVideoInfo:
+              stEnqueue.videoInfo != null
+                ? videoInfoToDownloadJobSnapshot(stEnqueue.videoInfo, audioOnly)
+                : null,
+          });
+        }
+      }
       releaseHeldDownloadJobs();
       const job = useRuforgeStore.getState().downloadJobs.find((j) => j.id === jobId);
       if (job?.status === "paused") {
@@ -899,6 +922,30 @@ export function useDownloaderView({
       }
 
       const folder = sanitizePlaylistFolderName(vi?.title ?? "playlist");
+      if (devBatchToolsEnabled() && vi) {
+        commitLastDownloadBatchRecord({
+          batchKind: "playlist",
+          heroUrl: barUrl || effectiveUrl,
+          heroVideoInfo: videoInfoToDownloadJobSnapshot(vi, resolveHeroAudioOnly()),
+          playlistItemAudioOverrides,
+          items: plan.toDownload.map((item) => ({
+            url: item.url,
+            source: "heroPlaylistDownload",
+            approval: "auto",
+            snapshot:
+              downloadJobSnapshotFromPlaylistItems(
+                item.url,
+                vi.playlistItems ?? [],
+                item.audioOnly,
+              ) ?? null,
+            options: {
+              playlistOutputFolder: folder,
+              playlistIndex: item.index,
+              audioOnly: item.audioOnly,
+            },
+          })),
+        });
+      }
       let batchChoice: Exclude<DuplicateDownloadChoice, "cancel"> | null = null;
       let started = 0;
       const skipped = settingsRef.current.skipDuplicatesAutomatically
@@ -923,6 +970,7 @@ export function useDownloaderView({
           playlistOutputFolder: folder,
           playlistIndex: item.index,
           enqueueSource: "heroPlaylistDownload",
+          skipBatchCapture: true,
         });
         started += 1;
       }
@@ -1108,13 +1156,13 @@ export function useDownloaderView({
     };
   }, [replaceDialogOpen, setDownloaderDuplicateDialogOpenInStore]);
 
-  const handleQuickEnqueueFromClipboard = useCallback(async () => {
+  const handleQuickEnqueueFromClipboard = useCallback(async (injectedUrl?: string) => {
     if (storageBlocksNewDownloads) {
       setQuickEnqueueHint("storage_full");
       return;
     }
 
-    const clipUrl = await readClipboardYouTubeUrl();
+    const clipUrl = injectedUrl ?? (await readClipboardYouTubeUrl());
     if (!clipUrl) {
       setQuickEnqueueHint("empty");
       return;
@@ -1371,6 +1419,22 @@ export function useDownloaderView({
     [setDownloaderUrl, setDownloaderUrlSourceHint, enqueueDownloadOnly, storageBlocksNewDownloads, notify],
   );
 
+  const replayExplorerAdd = useCallback(
+    (targetUrl: string) => {
+      const s = settingsRef.current;
+      const outputPath = saveToInternal ? internalDir : outputDir;
+      const options = buildDownloadJobOptions(s, outputPath, "replace");
+      enqueueDownload(targetUrl, options, {
+        approval: "held",
+        mirrorHeroUrl: true,
+        heroUrlSourceHint: "explorer",
+        enqueueSource: "explorerAdd",
+        ...(isDevReplaySimulateActive() ? { devSimulateDownload: true } : {}),
+      });
+    },
+    [enqueueDownload, saveToInternal, internalDir, outputDir],
+  );
+
   useEffect(() => {
     setDownloaderReplayHandlers({
       handleDownloadClick,
@@ -1379,6 +1443,9 @@ export function useDownloaderView({
       promoteStagedBarToDownloadQueue,
       handleQuickEnqueueFromClipboard,
       handleDroppedYoutubeUrls,
+      replayExplorerAdd,
+      setPlaylistItemAudioOverrides,
+      setClipboardPastedHint,
     });
     return () => setDownloaderReplayHandlers(null);
   }, [
@@ -1388,6 +1455,7 @@ export function useDownloaderView({
     promoteStagedBarToDownloadQueue,
     handleQuickEnqueueFromClipboard,
     handleDroppedYoutubeUrls,
+    replayExplorerAdd,
   ]);
 
   useEffect(() => {

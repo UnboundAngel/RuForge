@@ -3,8 +3,11 @@ export type DownloaderReplayHandlers = {
   applyClipboardYoutubeUrl: (clipUrl: string) => void;
   handleUrlChange: (value: string) => void;
   promoteStagedBarToDownloadQueue: () => void;
-  handleQuickEnqueueFromClipboard: () => void | Promise<void>;
+  handleQuickEnqueueFromClipboard: (injectedUrl?: string) => void | Promise<void>;
   handleDroppedYoutubeUrls: (urls: readonly string[]) => void | Promise<void>;
+  replayExplorerAdd: (url: string) => void;
+  setPlaylistItemAudioOverrides?: (overrides: Record<string, boolean>) => void;
+  setClipboardPastedHint?: (value: boolean) => void;
 };
 
 let handlers: DownloaderReplayHandlers | null = null;

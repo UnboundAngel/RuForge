@@ -31,6 +31,13 @@ import {
   DEFAULT_MAX_CONCURRENT_DOWNLOADS,
 } from "../downloadQueue";
 import type { ProgressPayload } from "../types";
+import {
+  appendOutputPathToLastBatch,
+  appendReplayOutputPath,
+  commitLastDownloadBatchFromJobs,
+  devBatchToolsEnabled,
+  isDevReplayOutputCaptureActive,
+} from "../lib/devLastDownloadBatch";
 import type { RuforgeStore } from "./ruforgeStore";
 import {
   ytdlpFormatForDownloadJob,
@@ -406,6 +413,7 @@ export type DownloadQueueSlice = {
       mirrorHeroUrl?: boolean;
       heroUrlSourceHint?: "explorer";
       enqueueSource?: DownloadEnqueueSource;
+      devSimulateDownload?: boolean;
     },
   ) => string;
   pauseDownloadJob: (id: string) => Promise<void>;
@@ -504,6 +512,25 @@ export const createDownloadQueueSlice: StateCreator<
         }
         if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
           get().pumpDownloadQueue();
+          return;
+        }
+        if (
+          job.devSimulateDownload &&
+          import.meta.env.DEV &&
+          get().settings.showDebuggingSettings === true
+        ) {
+          get().applyDownloadProgress({
+            jobId,
+            percentage: 50,
+            speed: "0 B/s",
+            eta: "0:00",
+            status: "downloading",
+          });
+          get().onDownloadJobFinished({
+            jobId,
+            url,
+            success: true,
+          });
           return;
         }
         armDownloadJobWatchdog(jobId);
@@ -648,6 +675,19 @@ export const createDownloadQueueSlice: StateCreator<
     },
 
     releaseHeldDownloadJobs: () => {
+      const held = get()
+        .downloadJobs.filter((j) => j.status === "queued" && j.approval === "held")
+        .sort((a, b) => a.createdAt - b.createdAt);
+      if (held.length > 0 && devBatchToolsEnabled()) {
+        const st = get();
+        commitLastDownloadBatchFromJobs(held, {
+          heroUrl: st.url,
+          heroVideoInfo:
+            st.videoInfo != null
+              ? videoInfoToDownloadJobSnapshot(st.videoInfo)
+              : null,
+        });
+      }
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
           j.status === "queued" && j.approval === "held"
@@ -706,6 +746,7 @@ export const createDownloadQueueSlice: StateCreator<
                     : approval,
               error: null,
               ...(meta?.enqueueSource ? { enqueueSource: meta.enqueueSource } : {}),
+              ...(meta?.devSimulateDownload ? { devSimulateDownload: true } : {}),
             };
           });
           downloadJobs = collapseDownloadJobsByUrl(downloadJobs);
@@ -736,6 +777,7 @@ export const createDownloadQueueSlice: StateCreator<
         createdAt: Date.now(),
         resumeOnStart: false,
         ...(meta?.enqueueSource ? { enqueueSource: meta.enqueueSource } : {}),
+        ...(meta?.devSimulateDownload ? { devSimulateDownload: true } : {}),
       };
       set((s) => {
         const downloadJobs = collapseDownloadJobsByUrl([...s.downloadJobs, job]);
@@ -1103,6 +1145,12 @@ export const createDownloadQueueSlice: StateCreator<
     onDownloadJobFinished: (payload) => {
       disarmDownloadJobWatchdog(payload.jobId);
       resetDownloadProgressEtaSmoothing(payload.jobId);
+      if (payload.success && payload.outputPath && payload.url?.trim()) {
+        if (isDevReplayOutputCaptureActive()) {
+          appendReplayOutputPath(payload.url, payload.outputPath);
+        }
+        appendOutputPathToLastBatch(payload.url, payload.outputPath);
+      }
       const starts: { id: string; url: string; resume: boolean }[] = [];
       const skippedIds: string[] = [];
       let finishedUrl: string | undefined;

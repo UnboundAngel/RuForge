@@ -10,6 +10,14 @@ import { invoke } from '@tauri-apps/api/core';
 import { emit } from "@tauri-apps/api/event";
 import { normalizeScanDirKey } from '../libraryScanDirs';
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR } from '../store/ruforgeStore';
+import {
+  clearLastDownloadBatchRecord,
+  formatLastBatchSummary,
+  getDevReplayMode,
+  readLastDownloadBatchRecord,
+  setDevReplayMode,
+  type DevReplayMode,
+} from '../lib/devLastDownloadBatch';
 import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
 import { DebugLogCategoryTree } from './settings/DebugLogCategoryTree';
 import { SettingsDescription } from './settings/settingsDescription';
@@ -399,10 +407,25 @@ export const SettingsView: React.FC = () => {
   const handleSetSaveToInternal = useRuforgeStore((s) => s.handleSetSaveToInternal);
   const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
   const notify = useRuforgeStore((s) => s.notify);
+  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const entries = useRuforgeStore((s) => s.entries);
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [updateCheckBusy, setUpdateCheckBusy] = useState(false);
+  const [devReplayMode, setDevReplayModeState] = useState<DevReplayMode>(() =>
+    getDevReplayMode(),
+  );
+  const [lastBatchSummary, setLastBatchSummary] = useState(() =>
+    formatLastBatchSummary(readLastDownloadBatchRecord()),
+  );
+  const downloadQueueBusy = downloadJobs.some(
+    (j) =>
+      j.status === "queued" ||
+      j.status === "downloading" ||
+      j.status === "paused",
+  );
+  const hasLastBatch =
+    (readLastDownloadBatchRecord()?.items.length ?? 0) > 0;
   const {
     status: ytdlpStatus,
     loading: ytdlpLoading,
@@ -420,6 +443,11 @@ export const SettingsView: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (activeTab !== "debugging") return;
+    setLastBatchSummary(formatLastBatchSummary(readLastDownloadBatchRecord()));
+  }, [activeTab, downloadJobs.length]);
+
+  useEffect(() => {
     const unlisten = listen<{ busy?: boolean }>("ruforge-updater-check-status", (event) => {
       setUpdateCheckBusy(!!event.payload.busy);
     });
@@ -427,6 +455,11 @@ export const SettingsView: React.FC = () => {
       void unlisten.then((fn) => fn());
     };
   }, []);
+
+  const handleDevReplayModeChange = (mode: DevReplayMode) => {
+    setDevReplayMode(mode);
+    setDevReplayModeState(mode);
+  };
 
   const handlePickDirectory = async () => {
     const selected = await open({ directory: true, multiple: false });
@@ -1292,6 +1325,70 @@ export const SettingsView: React.FC = () => {
                     </button>
                   }
                 />
+                {import.meta.env.DEV && (
+                  <>
+                    <SettingItem
+                      title="Re-download replay mode"
+                      description="Real download runs yt-dlp then deletes resolved output paths. Simulate replays queue/UI paths without bandwidth."
+                      control={
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleDevReplayModeChange("real")}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all border active:scale-95 ${
+                              devReplayMode === "real"
+                                ? "bg-[color:var(--accent)] text-[#1D1613] border-[color:var(--accent)]"
+                                : "bg-[#1D1613] text-stone-400 border-white/10 hover:bg-stone-800"
+                            }`}
+                          >
+                            REAL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDevReplayModeChange("simulate")}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all border active:scale-95 ${
+                              devReplayMode === "simulate"
+                                ? "bg-[color:var(--accent)] text-[#1D1613] border-[color:var(--accent)]"
+                                : "bg-[#1D1613] text-stone-400 border-white/10 hover:bg-stone-800"
+                            }`}
+                          >
+                            SIMULATE
+                          </button>
+                        </div>
+                      }
+                    />
+                    <SettingItem
+                      title="Re-download last batch"
+                      description={lastBatchSummary}
+                      control={
+                        <div className="flex flex-col items-end gap-2">
+                          <button
+                            type="button"
+                            disabled={!hasLastBatch || downloadQueueBusy}
+                            onClick={() => void emit("debug-replay-download-batch")}
+                            className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-40 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                          >
+                            REPLAY BATCH
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!hasLastBatch}
+                            onClick={() => {
+                              clearLastDownloadBatchRecord();
+                              setLastBatchSummary(
+                                formatLastBatchSummary(readLastDownloadBatchRecord()),
+                              );
+                              notify("Last batch record cleared.", "info");
+                            }}
+                            className="text-[10px] font-bold tracking-wide text-stone-500 hover:text-stone-300 transition-colors disabled:opacity-40"
+                          >
+                            Clear record
+                          </button>
+                        </div>
+                      }
+                    />
+                  </>
+                )}
               </SettingsSection>
             </div>
           )}

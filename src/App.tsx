@@ -1002,6 +1002,14 @@ function App() {
       });
     });
 
+    const unlistenDebugReplayDownloadBatch = listen("debug-replay-download-batch", () => {
+      if (!import.meta.env.DEV) return;
+      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      void import("./lib/replayLastDownloadBatch").then(({ replayLastDownloadBatch }) => {
+        void replayLastDownloadBatch();
+      });
+    });
+
     const unlistenDebugUpdater = listen("debug-cycle-updater", () => {
       setUpdaterTeaserDismissed(false); // Reset dismissal on debug cycle
       setUpdaterPhase((current) => {
@@ -1037,6 +1045,7 @@ function App() {
       unlistenDebugOnboarding.then((f) => f());
       unlistenDebugTelemetryConsent.then((f) => f());
       unlistenDebugBootSplash.then((f) => f());
+      unlistenDebugReplayDownloadBatch.then((f) => f());
       unlistenDebugUpdater.then((f) => f());
     };
   }, []);

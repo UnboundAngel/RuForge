@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-20
+Last updated: 2026-06-20 (re-download last batch dev tool)
 Status: in progress
 
 ## Now
@@ -19,7 +19,7 @@ Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
 hydrate from Tauri `downloadDir` / `homeDir` on non-Windows (`src/platformPaths.ts`).
 Sidecars: `src-tauri/binaries/*-x86_64-unknown-linux-gnu` (yt-dlp, ffmpeg, ffprobe).
-Run: `npm run tauri dev`. README still says Windows-only for end users; Linux is
+Run: `npm run tauri dev`. README states Windows-only for end users; Linux is
 local dev, not a shipped target yet.
 
 ## What is new since last user release
@@ -29,6 +29,11 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Debugging: dev-gated re-download last batch tool (capture at download start, replay through entry handlers, Mode A real download with resolved-path cleanup, Mode B simulate stub without yt-dlp).
+- Downloads: Explorer add sets focusedJobId with mirrorHeroUrl so Download hero is not blank; session queue restore on tab change; duplicate-skip clears matching queued rows so Explorer in-queue matches store.
+- Docs: README refreshed from 0.1.7 brief to 0.1.11 scope (downloads, video library/player, music mode, housekeeping); ruforge.app link; build fences fixed.
+- Downloads: floating download queue drawer removed; single videos and playlists use hero center UI (title, metadata, Download, inline playlist list).
+- Downloads: Explorer add mirrors URL into hero; metadata fetch shows center URL + spinner like paste.
 - Downloads: manual queue removal no longer evicts localStorage job metadata cache; hero paste after explorer toggle-off reuses cache; idle eviction after download finish + LRU cap.
 - Downloads: hero metadata effect restores in-memory queue from sessionStorage when empty before job/cache lookup.
 - Downloads: hero metadata seeds from matching queue job snapshot before cache/full fetch; background dual-size fill when job lacks sizes, never toggles metadataLoading (`useDownloaderView.ts`).

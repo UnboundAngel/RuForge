@@ -409,6 +409,13 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Debugging**: dev-gated re-download last batch (capture at download start, replay via entry handlers, Mode A real download + resolved-path cleanup, Mode B simulate stub) (`devLastDownloadBatch.ts`, `replayLastDownloadBatch.ts`, `devReplayCleanup.ts`, `SettingsView.tsx`).
+- **Downloads**: batch/queue focus follows the actively downloading job so legacy progress bar + carousel advance item 1→N instead of staying on last Explorer add (`downloadQueueSlice.ts`, `useDownloaderView.ts`).
+- **Downloads**: Explorer multi-add uses playlist-style batch UI (aggregate hero + scroll list); batch view persists through release and concurrent downloads instead of collapsing to single-video progress (`useDownloaderView.ts`, `DownloaderView.tsx`).
+- **Downloads**: Explorer mirrorHeroUrl enqueue sets `focusedJobId` so Download tab shows the held row; session queue restore runs on tab change; duplicate-skip hero path removes matching queued jobs so Explorer in-queue state stays aligned (`downloadQueueSlice.ts`, `App.tsx`, `useDownloaderView.ts`).
+- **Docs**: README refreshed from 0.1.7 brief to 0.1.11 scope (downloads, video library/player, music mode, housekeeping); ruforge.app link; build fences fixed (`README.md`).
+- **Downloads**: floating download queue drawer removed; staged jobs use hero metadata + playlist-style center UI only (`DownloaderView.tsx`, `DownloadJobQueuePanel.tsx`).
+- **Downloads**: Explorer add mirrors URL into hero (`mirrorHeroUrl` enqueue); pending queue hydrate drives center URL + animated spinner; queue drawer hidden until single held row finishes hydrating (`downloadQueue.ts`, `downloadQueueSlice.ts`, `useDownloaderView.ts`, `ExplorerWatchQueueButton.tsx`).
 - **Downloads**: manual queue removal no longer evicts localStorage job metadata cache; hero paste after explorer toggle-off reuses cache; idle eviction after download finish + LRU cap (`downloadQueueSlice.ts`, `downloadQueueMetadataCache.ts`).
 - **Downloads**: hero metadata effect restores in-memory queue from sessionStorage when empty before job/cache lookup (`downloadQueue.ts`, `downloadQueueSlice.ts`, `useDownloaderView.ts`).
 - **Downloads**: `get_video_info` in-flight dedup keys use `normalizeYouTubeUrlForCompare` (same base as metadata cache) so tracking-param URL variants share one slot per lane (`downloadVideoInfoFetch.ts`).
