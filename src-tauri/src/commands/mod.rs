@@ -17,4 +17,5 @@ pub mod removable_drives;
 pub mod settings;
 pub mod sponsorblock;
 pub mod system;
+pub mod telemetry;
 pub mod ytdlp_update;

@@ -161,6 +161,10 @@ export interface RuforgeSettings {
   stampTrackSidecarArtistTags: boolean;
   /** When true, single-video downloads fetch YouTube comments into `{stem}.comments.json`. */
   downloadComments: boolean;
+  /** When true, anonymous app-launch usage telemetry may be sent (off by default). */
+  telemetryUsageEnabled: boolean;
+  /** When true, scrubbed crash reports may be sent on failure (off by default). */
+  telemetryCrashEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -194,6 +198,8 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   autoDownloadPlayingSongs: true,
   stampTrackSidecarArtistTags: true,
   downloadComments: false,
+  telemetryUsageEnabled: false,
+  telemetryCrashEnabled: false,
 };
 
 /** Hidden legacy default was `"chrome"` (not in downloader UI). Treat as no cookie source. */
@@ -232,6 +238,8 @@ export function loadMergedSettings(): RuforgeSettings {
       sponsorBlockEnabled: merged.sponsorBlockEnabled === true,
       sponsorBlockCategoryModes: mergeCategoryModes(merged.sponsorBlockCategoryModes),
       sponsorBlockCategoryStats: mergeCategoryStats(merged.sponsorBlockCategoryStats),
+      telemetryUsageEnabled: merged.telemetryUsageEnabled === true,
+      telemetryCrashEnabled: merged.telemetryCrashEnabled === true,
     };
   } catch {
     return DEFAULT_SETTINGS;

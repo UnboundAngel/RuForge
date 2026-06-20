@@ -7,10 +7,11 @@ edition = "2021"
 default-run = "ruforge"
 
 [workspace]
-members = [".", "netscape_cookies"]
+members = [".", "netscape_cookies", "telemetry_scrub"]
 
 [workspace.dependencies]
 netscape_cookies = { path = "netscape_cookies" }
+telemetry_scrub = { path = "telemetry_scrub" }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -39,6 +40,7 @@ tauri-plugin-store = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-snap-layout = "1.0.8"
+tauri-plugin-aptabase = "1.0"
 
 tauri-plugin-shell = "2.3.5"
 tauri-plugin-clipboard-manager = "2"
@@ -50,6 +52,7 @@ sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 cookie = "0.18"
 netscape_cookies = { workspace = true }
+telemetry_scrub = { workspace = true }
 lofty = { version = "0.22", default-features = false }
 trash = "5"
 tempfile = "3"

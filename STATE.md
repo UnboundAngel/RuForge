@@ -32,6 +32,8 @@ reads this for the last shipped delta, not the git tree.
 - Scrub previews: tail patch fills all blank trailing cells through floor(duration/5), one seek per gap cell; failures logged not swallowed (`media.rs`).
 - Scrub previews: sprite ffmpeg uses method A (`-skip_frame nokey`, `-vsync passthrough`); tail cell at floor(duration/5) patched from end frame so scrub hover reaches duration (`media.rs`).
 - Downloads: post-download scrub batch spawns on job termination only; post-process stdout no longer preempts before the muxed file is on disk (`downloader.rs`).
+- Telemetry: shared Tokio runtime in `main.rs` before Aptabase plugin init; fixes startup panic in `tauri dev`.
+- Crash recovery: root React error boundary on every window; friendly fallback UI, reload, collapsible error details.
 - Windows taskbar icon: dev builds use separate AppUserModelID (`.dev`) and HWND `set_icon` so taskbar matches bundled icon instead of a stale shell cache entry.
 - Window chrome: Win11 snap layout flyout on main maximize hover (`tauri-plugin-decorum`).
 - Authorize Cleanup: audio tracks show watched % from listen snapshot (not playbackStorage); video unchanged.
