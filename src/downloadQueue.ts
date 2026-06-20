@@ -177,6 +177,8 @@ export interface DownloadJob {
   /** When true, next start uses yt-dlp `--continue` with stored cookie opts. */
   resumeOnStart?: boolean;
   enqueueSource?: DownloadEnqueueSource;
+  /** Dev replay Mode B only: skip yt-dlp and synthetic-finish through onDownloadJobFinished. */
+  devSimulateDownload?: boolean;
 }
 
 export type DownloadEnqueueSource =
