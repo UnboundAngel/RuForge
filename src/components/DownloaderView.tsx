@@ -19,15 +19,13 @@ import { formatApproxFileSize, formatDuration } from "./downloader/downloaderFor
 import { BROWSER_OPTIONS, downloadProgressPhaseLabel } from "./downloader/downloaderConstants";
 import {
   DownloadJobAudioToggle,
-  DownloadJobQueuePanel,
   DownloadQueueItem,
   UrlInputPacer,
 } from "./downloader/DownloadJobQueuePanel";
 import { downloadJobMediaNeedsHydration } from "../downloadQueue";
-import { ytdlpFormatForDownloadJob } from "../downloadFormat";
 import { downloadJobDisplayFileSizeBytes } from "../downloadJobFileSizes";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
-import { normalizeYouTubeUrlForCompare, youtubeUrlsMatch } from "../youtubeUrl";
+import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
 
 const CLIP_ICON_TRANSITION = { duration: 0.32, ease: [0.23, 1, 0.32, 1] as const };
 
@@ -328,72 +326,52 @@ function QuickEnqueuePinnedChip({
 export const DownloaderView = (props: DownloaderViewProps) => {
   const d = useDownloaderView(props);
 
-  const idleHero =
-    !d.focusShowsBigProgress &&
-    (d.focusedJob && d.focusedJob.status !== "downloading"
-      ? (() => {
-          const m = d.focusedJob!.metadata;
-          const needs = downloadJobMediaNeedsHydration(m);
-          const rawTitle = (m?.title ?? d.focusedJob!.title ?? "").trim();
-          const title =
-            rawTitle ||
-            (needs ? "Loading…" : (d.focusedJob!.url || "Video").trim());
-          const jobAudioOnly = d.focusedJob!.options.audioOnly === true;
-          const jobFormat = ytdlpFormatForDownloadJob(
-            d.focusedJob!.options,
-            d.settings,
-          );
-          const heroInfoMatchesJob =
-            d.videoInfo &&
-            !d.metadataLoading &&
-            youtubeUrlsMatch(d.url, d.focusedJob!.url) &&
-            jobAudioOnly === (d.settings.downloadAudioOnly === true) &&
-            (d.focusedJob!.options.format?.trim() || jobFormat) === jobFormat;
-          const fileSizeBytes =
-            downloadJobDisplayFileSizeBytes(m, jobAudioOnly) ??
-            (heroInfoMatchesJob
-              ? downloadJobDisplayFileSizeBytes(
-                  {
-                    title: d.videoInfo!.title,
-                    thumbnail: d.videoInfo!.thumbnail,
-                    duration: d.videoInfo!.duration,
-                    isPlaylist: d.videoInfo!.isPlaylist,
-                    fileSizeBytes: d.videoInfo!.fileSizeBytes ?? null,
-                    fileSizeBytesAudio: d.videoInfo!.fileSizeBytesAudio ?? null,
-                    fileSizeBytesVideo: d.videoInfo!.fileSizeBytesVideo ?? null,
-                  },
-                  jobAudioOnly,
-                )
-              : null);
-          return {
-            title,
-            duration: m?.duration ?? 0,
-            fileSizeBytes,
-            isPlaylist: Boolean(m?.isPlaylist),
-            playlistItems: m?.playlistItems,
-          };
-        })()
-      : d.videoInfo && !d.metadataLoading
-        ? {
-            title: d.videoInfo.title,
-            duration: d.videoInfo.duration,
-            fileSizeBytes:
-              downloadJobDisplayFileSizeBytes(
-                {
-                  title: d.videoInfo.title,
-                  thumbnail: d.videoInfo.thumbnail,
-                  duration: d.videoInfo.duration,
-                  isPlaylist: d.videoInfo.isPlaylist,
-                  fileSizeBytes: d.videoInfo.fileSizeBytes ?? null,
-                  fileSizeBytesAudio: d.videoInfo.fileSizeBytesAudio ?? null,
-                  fileSizeBytesVideo: d.videoInfo.fileSizeBytesVideo ?? null,
-                },
-                d.settings.downloadAudioOnly === true,
-              ) ?? null,
-            isPlaylist: d.videoInfo.isPlaylist,
-            playlistItems: d.videoInfo.playlistItems,
-          }
-        : null);
+  const idleHero = !d.focusShowsBigProgress
+    ? (() => {
+      if (d.videoInfo && !d.metadataLoading) {
+        return {
+          title: d.videoInfo.title,
+          duration: d.videoInfo.duration,
+          fileSizeBytes:
+            downloadJobDisplayFileSizeBytes(
+              {
+                title: d.videoInfo.title,
+                thumbnail: d.videoInfo.thumbnail,
+                duration: d.videoInfo.duration,
+                isPlaylist: d.videoInfo.isPlaylist,
+                fileSizeBytes: d.videoInfo.fileSizeBytes ?? null,
+                fileSizeBytesAudio: d.videoInfo.fileSizeBytesAudio ?? null,
+                fileSizeBytesVideo: d.videoInfo.fileSizeBytesVideo ?? null,
+              },
+              d.heroAudioOnly,
+            ) ?? null,
+          isPlaylist: d.videoInfo.isPlaylist,
+          playlistItems: d.videoInfo.playlistItems,
+        };
+      }
+      if (d.focusedJob && d.focusedJob.status !== "downloading") {
+        const m = d.focusedJob.metadata;
+        const needs = downloadJobMediaNeedsHydration(m);
+        const rawTitle = (d.focusedJob.title ?? m?.title ?? "").trim();
+        const title =
+          rawTitle || (needs ? "Loading…" : (d.focusedJob.url || "Video").trim());
+        const jobAudioOnly = d.focusedJob.options.audioOnly === true;
+        return {
+          title,
+          duration: m?.duration ?? 0,
+          fileSizeBytes: downloadJobDisplayFileSizeBytes(m, jobAudioOnly),
+          isPlaylist: Boolean(m?.isPlaylist),
+          playlistItems: m?.playlistItems,
+        };
+      }
+      return null;
+    })()
+    : null;
+
+  const displayHero = d.batchQueuePlaylistView ?? idleHero;
+  const displayHeroBytes =
+    d.batchQueueHeroDisplayBytes ??
+    (displayHero?.isPlaylist ? d.playlistHeroDisplayBytes : null);
 
   const heroThumb = d.heroBackdropThumb.trim();
 
@@ -686,7 +664,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   className="relative group mx-auto w-full max-w-2xl pt-2 sm:pt-6 hidden min-[700px]:block"
                 >
                   <AnimatePresence>
-                    {!d.showUrlBubble && d.clipboardPastedHint && (
+                    {!d.showUrlBubble && d.urlSourceHint === "clipboard" && d.clipboardPastedHint && (
                       <motion.p
                         key="clipboard-pasted-hint"
                         initial={{ opacity: 0, y: 6, scale: 0.96 }}
@@ -696,6 +674,18 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         className="pb-2 text-center text-[8px] font-black uppercase tracking-[0.25em] text-stone-500"
                       >
                         Pasted from clipboard
+                      </motion.p>
+                    )}
+                    {!d.showUrlBubble && d.urlSourceHint === "explorer" && (
+                      <motion.p
+                        key="explorer-added-hint"
+                        initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                        transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
+                        className="pb-2 text-center text-[8px] font-black uppercase tracking-[0.25em] text-stone-500"
+                      >
+                        Added from watch page
                       </motion.p>
                     )}
                   </AnimatePresence>
@@ -731,7 +721,10 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                     </div>
                   )}
                   <motion.div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
-                    <UrlInputPacer expanded={d.isFocused} loading={d.metadataLoading} />
+                    <UrlInputPacer
+                      expanded={d.isFocused || d.metadataLoading}
+                      loading={d.metadataLoading}
+                    />
                   </motion.div>
                   {d.metadataError && (
                     <motion.div
@@ -853,7 +846,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
               {!d.focusShowsBigProgress ? (
                 <div className="space-y-4 sm:space-y-10">
                   <AnimatePresence mode="wait">
-                    {idleHero ? (
+                    {displayHero ? (
                       <motion.div
                         key="video-details"
                         initial={{ opacity: 0, y: 30 }}
@@ -863,18 +856,18 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         className="text-center space-y-2 sm:space-y-6"
                       >
                         <h2 className="text-xl sm:text-4xl lg:text-6xl font-black text-white leading-[1.08] sm:leading-[1.1] tracking-tighter line-clamp-2 px-4 pb-0.5">
-                          {idleHero.title}
+                          {displayHero.title}
                         </h2>
                         <div className="hidden min-[600px]:flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-8 gap-y-2 text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--accent)] opacity-60">
                           <div className="flex items-center gap-1.5">
                             <Clock size={12} className="opacity-50" />
-                            <span>{formatDuration(idleHero.duration)}</span>
+                            <span>{formatDuration(displayHero.duration)}</span>
                           </div>
                           {(() => {
                             const bytes =
-                              idleHero.isPlaylist && d.playlistHeroDisplayBytes != null
-                                ? d.playlistHeroDisplayBytes
-                                : idleHero.fileSizeBytes;
+                              displayHero.isPlaylist && displayHeroBytes != null
+                                ? displayHeroBytes
+                                : displayHero.fileSizeBytes;
                             if (bytes == null || bytes <= 0) return null;
                             return (
                               <div className="flex items-center gap-1.5">
@@ -883,10 +876,10 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               </div>
                             );
                           })()}
-                          {idleHero.isPlaylist && (
+                          {displayHero.isPlaylist && (
                             <div className="flex items-center gap-1.5">
                               <List size={12} className="opacity-50" />
-                              <span>{idleHero.playlistItems?.length || 0} Videos</span>
+                              <span>{displayHero.playlistItems?.length || 0} Videos</span>
                             </div>
                           )}
                           <div className="flex items-center gap-1.5">
@@ -910,7 +903,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             </p>
                           </motion.div>
                         )}
-                        {d.playlistDuplicateSummary && (
+                        {d.playlistDuplicateSummary && !d.batchQueuePlaylistView && (
                           <p className="text-center text-[9px] font-black uppercase tracking-[0.28em] text-stone-500">
                             {d.playlistDuplicateSummary}
                             {d.playlistEnqueuePlan &&
@@ -957,16 +950,25 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             </div>
                           )}
                         </motion.div>
-                        {idleHero.isPlaylist && idleHero.playlistItems && (
+                        {displayHero.isPlaylist && displayHero.playlistItems && (
                           <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto space-y-1.5 hidden min-[750px]:block">
-                            {idleHero.playlistItems.map((item, idx) => {
-                              const rowKey = d.playlistItemKey(item, idx + 1);
-                              const rowAudio = d.resolveAudioOnlyForPlaylistItem(
-                                rowKey,
-                                d.playlistItemAudioOverrides,
-                                d.heroAudioOnly,
-                              );
-                              const dup = d.isPlaylistItemDuplicate(item);
+                            {displayHero.playlistItems.map((item, idx) => {
+                              const batchJob = d.batchQueuePlaylistView
+                                ? d.batchQueueJobs.find((j) => j.id === item.id)
+                                : null;
+                              const rowKey = batchJob
+                                ? batchJob.id
+                                : d.playlistItemKey(item, idx + 1);
+                              const rowAudio = batchJob
+                                ? batchJob.options.audioOnly === true
+                                : d.resolveAudioOnlyForPlaylistItem(
+                                    rowKey,
+                                    d.playlistItemAudioOverrides,
+                                    d.heroAudioOnly,
+                                  );
+                              const dup = batchJob
+                                ? d.isBatchQueueJobDuplicate(item.webpageUrl)
+                                : d.isPlaylistItemDuplicate(item);
                               const rowBytes = rowAudio
                                 ? (item.fileSizeBytesAudio ?? item.fileSizeBytes)
                                 : (item.fileSizeBytesVideo ?? item.fileSizeBytes);
@@ -975,14 +977,18 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                   key={`playlist-row-${idx}-${item.webpageUrl ?? item.title}`}
                                   className={`flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group ${
                                     dup ? "opacity-55" : ""
-                                  }`}
+                                  } ${batchJob?.status === "downloading" ? "bg-white/[0.04]" : ""}`}
                                 >
                                   <div className="w-24 aspect-video rounded-lg overflow-hidden bg-stone-900 flex-shrink-0 relative">
-                                    <img
-                                      src={item.thumbnail}
-                                      alt=""
-                                      className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
-                                    />
+                                    {item.thumbnail ? (
+                                      <img
+                                        src={item.thumbnail}
+                                        alt=""
+                                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
+                                      />
+                                    ) : (
+                                      <div className="h-full w-full bg-stone-800" />
+                                    )}
                                     {dup && (
                                       <span className="absolute top-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider text-[#EDD79C]">
                                         In library
@@ -1003,7 +1009,9 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                   <DownloadJobAudioToggle
                                     audioOnly={rowAudio}
                                     onToggle={() =>
-                                      d.togglePlaylistItemAudio(rowKey, !rowAudio)
+                                      batchJob
+                                        ? d.toggleBatchQueueJobAudio(batchJob.id, !rowAudio)
+                                        : d.togglePlaylistItemAudio(rowKey, !rowAudio)
                                     }
                                     className="shrink-0 scale-90"
                                   />
@@ -1020,7 +1028,9 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                 </div>
               ) : (
                 <motion.div className="relative h-full flex flex-col justify-center items-center">
-                  {d.progress?.currentIndex !== undefined && d.progress?.totalItems !== undefined && (
+                  {(d.progress?.currentIndex !== undefined &&
+                    d.progress?.totalItems !== undefined) ||
+                  d.collectionDownloadCarousel ? (
                     <motion.div
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -1031,11 +1041,13 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           Item
                         </span>
                         <p className="text-xl font-black text-[color:var(--accent)] font-mono tracking-tighter leading-none">
-                          {d.progress.currentIndex + 1} / {d.progress.totalItems}
+                          {d.collectionDownloadCarousel
+                            ? `${d.collectionDownloadCarousel.currentIndex + 1} / ${d.collectionDownloadCarousel.totalItems}`
+                            : `${d.progress!.currentIndex! + 1} / ${d.progress!.totalItems!}`}
                         </p>
                       </div>
                     </motion.div>
-                  )}
+                  ) : null}
                   <div className="w-full flex flex-col items-center">
                     <div className="w-full max-w-4xl space-y-16 mb-20">
                       <div className="space-y-8">
@@ -1056,7 +1068,10 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         >
                           {downloadProgressPhaseLabel(
                             d.progress,
-                            d.focusedJob?.metadata?.isPlaylist,
+                            Boolean(
+                              d.collectionDownloadCarousel ||
+                                d.focusedJob?.metadata?.isPlaylist,
+                            ),
                           )}
                         </motion.p>
                       </div>
@@ -1122,7 +1137,28 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         </div>
                       </div>
                     </div>
-                    {d.focusedJob?.metadata?.isPlaylist &&
+                    {d.collectionDownloadCarousel ? (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="w-screen max-w-7xl flex gap-8 overflow-x-auto scrollbar-none px-20 py-10"
+                      >
+                        {d.collectionDownloadCarousel.items.map((item, i) => (
+                          <DownloadQueueItem
+                            key={`collection-card-${i}-${item.title}`}
+                            item={item}
+                            index={i}
+                            currentIndex={d.collectionDownloadCarousel!.currentIndex}
+                            percentage={
+                              i === d.collectionDownloadCarousel!.currentIndex
+                                ? d.progress?.percentage || 0
+                                : 0
+                            }
+                          />
+                        ))}
+                      </motion.div>
+                    ) : (
+                      d.focusedJob?.metadata?.isPlaylist &&
                       d.focusedJob.metadata.playlistItems && (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -1139,6 +1175,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           />
                         ))}
                       </motion.div>
+                    )
                     )}
                   </div>
                 </motion.div>
@@ -1146,7 +1183,6 @@ export const DownloaderView = (props: DownloaderViewProps) => {
             </div>
           </LayoutGroup>
         </div>
-        <DownloadJobQueuePanel />
       </div>
     </div>
   );

@@ -164,6 +164,8 @@ export function ExplorerWatchQueueButton({
     const options = buildDownloadJobOptions(settings, outputPath, "replace");
     enqueueDownload(canon, options, {
       approval: "held",
+      mirrorHeroUrl: true,
+      heroUrlSourceHint: "explorer",
       enqueueSource: "explorerAdd",
     });
     flashLeftHint("add");

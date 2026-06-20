@@ -251,6 +251,7 @@ async function hydrateDownloadJobMetadata(
 /** Clear downloader hero fields when they still show a URL that just finished or was removed. */
 const HERO_CLEAR_FIELDS = {
   url: "",
+  urlSourceHint: null,
   videoInfo: null,
   videoInfoUrl: null,
   videoInfoPreferredQuality: null,
@@ -276,6 +277,57 @@ function heroClearWhenUrlNotInQueue(
   if (!heroUrl.startsWith("http")) return {};
   if (jobs.some((j) => youtubeUrlsMatch(j.url, heroUrl))) return {};
   return { ...HERO_CLEAR_FIELDS };
+}
+
+function heroMirrorPatchFromEnqueueMeta(
+  meta:
+    | {
+        mirrorHeroUrl?: boolean;
+        heroUrlSourceHint?: "explorer";
+      }
+    | undefined,
+  urlTrim: string,
+): Partial<Pick<RuforgeStore, "url" | "urlSourceHint">> {
+  if (!meta?.mirrorHeroUrl) return {};
+  return {
+    url: urlTrim,
+    urlSourceHint: meta.heroUrlSourceHint ?? "explorer",
+  };
+}
+
+/** Explorer add mirrors URL into hero; focus the new row so Download tab is not blank. */
+function heroEnqueueUiPatch(
+  meta:
+    | {
+        mirrorHeroUrl?: boolean;
+        heroUrlSourceHint?: "explorer";
+      }
+    | undefined,
+  urlTrim: string,
+  downloadJobs: DownloadJob[],
+): Partial<
+  Pick<RuforgeStore, "url" | "urlSourceHint" | "focusedJobId"> & {
+    downloading: boolean;
+    progress: ProgressPayload | null;
+    activeDownloadJobId: string | null;
+  }
+> {
+  const mirror = heroMirrorPatchFromEnqueueMeta(meta, urlTrim);
+  if (!meta?.mirrorHeroUrl) return mirror;
+  const job = downloadJobs.find(
+    (j) =>
+      youtubeUrlsMatch(j.url, urlTrim) &&
+      j.status !== "completed" &&
+      j.status !== "failed" &&
+      j.status !== "skipped" &&
+      j.status !== "timed_out",
+  );
+  const focusedJobId = job?.id ?? null;
+  return {
+    ...mirror,
+    focusedJobId,
+    ...syncLegacyDownloaderUi(downloadJobs, focusedJobId),
+  };
 }
 
 function syncLegacyDownloaderUi(
@@ -304,14 +356,28 @@ function resolveFocusAfterMutation(
   jobs: DownloadJob[],
   prevFocus: string | null,
 ): string | null {
+  const downloading = jobs.filter((j) => j.status === "downloading");
+  if (downloading.length > 0) {
+    if (prevFocus && downloading.some((j) => j.id === prevFocus)) {
+      return prevFocus;
+    }
+    return downloading[0]!.id;
+  }
   if (prevFocus) {
     const j = jobs.find((x) => x.id === prevFocus);
-    if (j && j.status !== "completed" && j.status !== "failed" && j.status !== "skipped" && j.status !== "timed_out") {
+    if (
+      j &&
+      j.status !== "completed" &&
+      j.status !== "failed" &&
+      j.status !== "skipped" &&
+      j.status !== "timed_out"
+    ) {
       return prevFocus;
     }
   }
-  const firstDl = jobs.find((x) => x.status === "downloading");
-  return firstDl?.id ?? null;
+  return (
+    jobs.find((j) => j.status === "queued" || j.status === "paused")?.id ?? null
+  );
 }
 
 export type DownloadQueueSlice = {
@@ -336,6 +402,9 @@ export type DownloadQueueSlice = {
       snapshot?: DownloadJobMediaSnapshot;
       title?: string;
       approval?: DownloadJobApproval;
+      /** Mirror URL into hero bar in the same store update (explorer add). */
+      mirrorHeroUrl?: boolean;
+      heroUrlSourceHint?: "explorer";
       enqueueSource?: DownloadEnqueueSource;
     },
   ) => string;
@@ -641,7 +710,10 @@ export const createDownloadQueueSlice: StateCreator<
           });
           downloadJobs = collapseDownloadJobsByUrl(downloadJobs);
           persistDownloadJobs(downloadJobs);
-          return { downloadJobs };
+          return {
+            downloadJobs,
+            ...heroEnqueueUiPatch(meta, urlTrim, downloadJobs),
+          };
         });
         const merged = get().downloadJobs.find((j) => j.id === existing.id);
         if (merged && downloadJobMediaNeedsHydration(merged.metadata)) {
@@ -668,7 +740,10 @@ export const createDownloadQueueSlice: StateCreator<
       set((s) => {
         const downloadJobs = collapseDownloadJobsByUrl([...s.downloadJobs, job]);
         persistDownloadJobs(downloadJobs);
-        return { downloadJobs };
+        return {
+          downloadJobs,
+          ...heroEnqueueUiPatch(meta, urlTrim, downloadJobs),
+        };
       });
       const kept = get().downloadJobs.find(
         (j) => youtubeUrlsMatch(j.url, urlTrim) && j.status !== "failed",
@@ -982,9 +1057,15 @@ export const createDownloadQueueSlice: StateCreator<
           );
           return { ...j, progress };
         });
-        const focus = s.focusedJobId;
+        let focus = s.focusedJobId;
+        const payloadJob = downloadJobs.find((j) => j.id === payload.jobId);
+        const focusedJob = focus ? downloadJobs.find((j) => j.id === focus) : null;
+        if (payloadJob?.status === "downloading" && focusedJob?.status !== "downloading") {
+          focus = payload.jobId;
+        }
         return {
           downloadJobs,
+          focusedJobId: focus,
           ...syncLegacyDownloaderUi(downloadJobs, focus),
         };
       });

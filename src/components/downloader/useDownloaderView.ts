@@ -112,6 +112,18 @@ function heroHasMatchingJobPendingHydration(
   return false;
 }
 
+function skipQueuedJobsForDuplicateHeroUrl(
+  norm: string,
+  skipDownloadJobAsLibraryDuplicate: (id: string) => void,
+): void {
+  const st = useRuforgeStore.getState();
+  for (const j of st.downloadJobs) {
+    if (!youtubeUrlsMatch(j.url, norm)) continue;
+    if (j.status !== "queued" && j.status !== "paused") continue;
+    skipDownloadJobAsLibraryDuplicate(j.id);
+  }
+}
+
 export type DownloaderViewProps = {
   internalDir: string;
   storageFull: boolean;
@@ -130,6 +142,8 @@ export function useDownloaderView({
   settingsRef.current = settings;
   const url = useRuforgeStore((s) => s.url);
   const setDownloaderUrl = useRuforgeStore((s) => s.setDownloaderUrl);
+  const urlSourceHint = useRuforgeStore((s) => s.urlSourceHint);
+  const setDownloaderUrlSourceHint = useRuforgeStore((s) => s.setDownloaderUrlSourceHint);
   const metadataLoading = useRuforgeStore((s) => s.metadataLoading);
   const setDownloaderMetadataLoading = useRuforgeStore((s) => s.setDownloaderMetadataLoading);
   const setDownloaderDuplicateDialogOpenInStore = useRuforgeStore(
@@ -151,6 +165,7 @@ export function useDownloaderView({
   const libraryScanRevision = useRuforgeStore((s) => s.libraryScanRevision);
   const releaseHeldDownloadJobs = useRuforgeStore((s) => s.releaseHeldDownloadJobs);
   const resumeDownloadJob = useRuforgeStore((s) => s.resumeDownloadJob);
+  const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
   const setDownloadJobAudioOnly = useRuforgeStore((s) => s.setDownloadJobAudioOnly);
   const videoInfo = useRuforgeStore((s) => s.videoInfo);
   const videoInfoUrl = useRuforgeStore((s) => s.videoInfoUrl);
@@ -177,9 +192,52 @@ export function useDownloaderView({
     if (!s.focusedJobId) return null;
     return s.downloadJobs.find((j) => j.id === s.focusedJobId) ?? null;
   });
+  const [batchQueueJobIds, setBatchQueueJobIds] = useState<string[] | null>(null);
+  const [batchQueueSnapshots, setBatchQueueSnapshots] = useState<
+    Record<string, { thumbnail: string; title: string }>
+  >({});
+
+  useEffect(() => {
+    const held = downloadJobs.filter((j) => j.status === "queued" && j.approval === "held");
+    if (held.length > 1) {
+      setBatchQueueJobIds(held.map((j) => j.id));
+    }
+  }, [downloadJobs]);
+
+  useEffect(() => {
+    if (!batchQueueJobIds || batchQueueJobIds.length === 0) return;
+    const stillActive = downloadJobs.some(
+      (j) =>
+        batchQueueJobIds.includes(j.id) &&
+        (j.status === "queued" || j.status === "downloading" || j.status === "paused"),
+    );
+    if (!stillActive) {
+      setBatchQueueJobIds(null);
+    }
+  }, [downloadJobs, batchQueueJobIds]);
+
+  const batchQueueJobs = useMemo(() => {
+    const active = (ids: string[]) => {
+      const jobs = downloadJobs.filter(
+        (j) =>
+          ids.includes(j.id) &&
+          (j.status === "queued" || j.status === "downloading" || j.status === "paused"),
+      );
+      return ids
+        .map((id) => jobs.find((j) => j.id === id))
+        .filter((j): j is DownloadJob => j != null);
+    };
+    if (batchQueueJobIds && batchQueueJobIds.length > 1) {
+      return active(batchQueueJobIds);
+    }
+    const held = downloadJobs.filter((j) => j.status === "queued" && j.approval === "held");
+    if (held.length > 1) return held;
+    return [];
+  }, [downloadJobs, batchQueueJobIds]);
+
+  const batchQueueActive = batchQueueJobs.length > 1;
   const focusShowsBigProgress = focusedJob?.status === "downloading";
   const duplicateChoiceResolverRef = useRef<((choice: DuplicateDownloadChoice) => void) | null>(null);
-  /** Last `libraryScanRevision` used for auto-skip duplicate checks; `null` = no scan cached yet. */
   const lastDupCheckLibraryScanRev = useRef<number | null>(null);
   const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
   const [replaceDialogMatch, setReplaceDialogMatch] = useState<DuplicateMatch | null>(null);
@@ -241,6 +299,139 @@ export function useDownloaderView({
     [downloadJobs],
   );
 
+  const batchQueuePlaylistView = useMemo(() => {
+    if (batchQueueJobs.length <= 1 || anyDownloading) return null;
+    const playlistItems = batchQueueJobs.map((job) => {
+      const m = job.metadata;
+      const rawTitle = (job.title ?? m?.title ?? "").trim();
+      return {
+        title: rawTitle || job.url,
+        thumbnail: m?.thumbnail ?? "",
+        duration: m?.duration ?? 0,
+        webpageUrl: job.url,
+        id: job.id,
+        fileSizeBytes: m?.fileSizeBytes ?? null,
+        fileSizeBytesAudio: m?.fileSizeBytesAudio ?? null,
+        fileSizeBytesVideo: m?.fileSizeBytesVideo ?? null,
+      };
+    });
+    const duration = playlistItems.reduce((sum, item) => sum + (item.duration || 0), 0);
+    return {
+      title: "Queued downloads",
+      duration,
+      fileSizeBytes: null as number | null,
+      isPlaylist: true as const,
+      playlistItems,
+    };
+  }, [anyDownloading, batchQueueJobs]);
+
+  useEffect(() => {
+    if (!batchQueueJobIds || batchQueueJobIds.length <= 1) {
+      setBatchQueueSnapshots({});
+      return;
+    }
+    setBatchQueueSnapshots((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const id of batchQueueJobIds) {
+        const job = downloadJobs.find((j) => j.id === id);
+        if (!job) continue;
+        const m = job.metadata;
+        const title = (job.title ?? m?.title ?? job.url).trim();
+        const thumbnail = m?.thumbnail ?? "";
+        const existing = next[id];
+        if (!existing || existing.thumbnail !== thumbnail || existing.title !== title) {
+          next[id] = { thumbnail, title };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [batchQueueJobIds, downloadJobs]);
+
+  const batchDownloadCarousel = useMemo(() => {
+    if (!batchQueueJobIds || batchQueueJobIds.length <= 1 || !anyDownloading) return null;
+
+    const items = batchQueueJobIds.map((id) => {
+      const snap = batchQueueSnapshots[id];
+      const job = downloadJobs.find((j) => j.id === id);
+      return {
+        thumbnail: snap?.thumbnail ?? job?.metadata?.thumbnail ?? "",
+        title: snap?.title ?? job?.title ?? job?.metadata?.title ?? "",
+      };
+    });
+
+    let currentIndex = batchQueueJobIds.findIndex(
+      (id) => downloadJobs.find((j) => j.id === id)?.status === "downloading",
+    );
+    if (currentIndex < 0) {
+      const finishedCount = batchQueueJobIds.filter(
+        (id) => !downloadJobs.some((j) => j.id === id),
+      ).length;
+      currentIndex = Math.min(finishedCount, batchQueueJobIds.length - 1);
+    }
+
+    return {
+      items,
+      currentIndex,
+      totalItems: batchQueueJobIds.length,
+      collectionTitle: "Queued downloads",
+    };
+  }, [anyDownloading, batchQueueJobIds, batchQueueSnapshots, downloadJobs]);
+
+  const playlistDownloadCarousel = useMemo(() => {
+    if (!anyDownloading || !videoInfo?.isPlaylist || !videoInfo.playlistItems?.length) {
+      return null;
+    }
+    return {
+      items: videoInfo.playlistItems.map((item) => ({
+        thumbnail: item.thumbnail,
+        title: item.title,
+      })),
+      currentIndex: typeof progress?.currentIndex === "number" ? progress.currentIndex : 0,
+      totalItems:
+        typeof progress?.totalItems === "number"
+          ? progress.totalItems
+          : videoInfo.playlistItems.length,
+      collectionTitle: videoInfo.title,
+    };
+  }, [anyDownloading, videoInfo, progress]);
+
+  const collectionDownloadCarousel = batchDownloadCarousel ?? playlistDownloadCarousel;
+
+  const batchQueueHeroDisplayBytes = useMemo(() => {
+    if (batchQueueJobs.length <= 1) return null;
+    let sum = 0;
+    let any = false;
+    for (const job of batchQueueJobs) {
+      const m = job.metadata;
+      const audio = job.options.audioOnly === true;
+      const pick = audio
+        ? (m?.fileSizeBytesAudio ?? m?.fileSizeBytes)
+        : (m?.fileSizeBytesVideo ?? m?.fileSizeBytes);
+      if (typeof pick === "number" && pick > 0) {
+        sum += pick;
+        any = true;
+      }
+    }
+    return any ? sum : null;
+  }, [batchQueueJobs]);
+
+  const toggleBatchQueueJobAudio = useCallback(
+    (jobId: string, audioOnly: boolean) => {
+      setDownloadJobAudioOnly(jobId, audioOnly);
+    },
+    [setDownloadJobAudioOnly],
+  );
+
+  const isBatchQueueJobDuplicate = useCallback(
+    (watchUrl: string | undefined) => {
+      if (!watchUrl?.trim()) return false;
+      return Boolean(findLibraryDuplicate(watchUrl, entries));
+    },
+    [entries],
+  );
+
   /**
    * Top-left paperclip / pinned chips / "Queue another" — not only when `showUrlBubble`
    * (needs hero `videoInfo`), but also after refresh with an empty bar and a restored queue.
@@ -259,12 +450,12 @@ export function useDownloaderView({
   const showMainUrlChip = useMemo(() => {
     const trimmed = url.trim();
     if (!trimmed.startsWith("http")) return false;
+    if (metadataLoading) return false;
     if (downloadJobs.some((j) => youtubeUrlsMatch(j.url, trimmed))) return true;
     if (focusedJob && youtubeUrlsMatch(focusedJob.url, trimmed)) return true;
     return Boolean(
       videoInfo &&
         videoInfoUrl &&
-        !metadataLoading &&
         youtubeUrlsMatch(trimmed, videoInfoUrl),
     );
   }, [url, downloadJobs, focusedJob, videoInfo, videoInfoUrl, metadataLoading]);
@@ -318,6 +509,7 @@ export function useDownloaderView({
   }, [playlistEnqueuePlan]);
 
   const showDuplicateBanner =
+    !batchQueueActive &&
     Boolean(libraryDuplicate) &&
     Boolean(videoInfo) &&
     !videoInfo?.isPlaylist &&
@@ -338,6 +530,9 @@ export function useDownloaderView({
   const showPrimaryDownload = useMemo(() => {
     if (metadataLoading) return false;
     if (focusShowsBigProgress) return false;
+    if (batchQueueActive && !anyDownloading) {
+      return batchQueueJobs.some((j) => !downloadJobMediaNeedsHydration(j.metadata));
+    }
     if (videoInfo?.isPlaylist && playlistEnqueuePlan) {
       return playlistEnqueuePlan.toDownload.length > 0;
     }
@@ -358,13 +553,17 @@ export function useDownloaderView({
     url,
     focusShowsBigProgress,
     playlistEnqueuePlan,
+    batchQueueJobs,
+    batchQueueActive,
+    anyDownloading,
   ]);
 
   const showHeroAudioToggle = useMemo(() => {
+    if (batchQueueActive) return false;
     if (metadataLoading || focusShowsBigProgress) return false;
     if (heroEditableJob) return true;
     return Boolean(videoInfo && url.startsWith("http"));
-  }, [metadataLoading, focusShowsBigProgress, heroEditableJob, videoInfo, url]);
+  }, [metadataLoading, focusShowsBigProgress, heroEditableJob, videoInfo, url, batchQueueActive]);
 
   const [showAudioWarning, setShowAudioWarning] = useState(false);
   const audioWarningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -653,6 +852,19 @@ export function useDownloaderView({
     }
 
     const st0 = useRuforgeStore.getState();
+    const heldBatch = st0.downloadJobs.filter(
+      (j) => j.status === "queued" && j.approval === "held",
+    );
+    if (heldBatch.length > 1) {
+      const first = [...heldBatch].sort((a, b) => a.createdAt - b.createdAt)[0]!;
+      releaseHeldDownloadJobs();
+      setDownloaderFocusedJobId(first.id);
+      setDownloaderUrl(first.url);
+      setDownloaderUrlSourceHint("explorer");
+      pumpDownloadQueue();
+      return;
+    }
+
     const barUrl = st0.url.trim();
     const focused = st0.focusedJobId
       ? st0.downloadJobs.find((j) => j.id === st0.focusedJobId)
@@ -753,6 +965,11 @@ export function useDownloaderView({
     promptDuplicateChoice,
     playlistItemAudioOverrides,
     resolveHeroAudioOnly,
+    releaseHeldDownloadJobs,
+    pumpDownloadQueue,
+    setDownloaderFocusedJobId,
+    setDownloaderUrl,
+    setDownloaderUrlSourceHint,
   ]);
 
   const insertPinnedQuickEnqueueUrl = useCallback((targetUrl: string) => {
@@ -959,6 +1176,7 @@ export function useDownloaderView({
       if (youtubeUrlsMatch(currentUrl, clipUrl)) return;
       if (!currentUrl.trim()) {
         setDownloaderUrl(clipUrl);
+        setDownloaderUrlSourceHint("clipboard");
         setPlaylistItemAudioOverrides({});
         setClipboardPastedHint(true);
         setClipboardOfferUrl(null);
@@ -966,7 +1184,7 @@ export function useDownloaderView({
       }
       setClipboardOfferUrl(clipUrl);
     },
-    [setDownloaderUrl],
+    [setDownloaderUrl, setDownloaderUrlSourceHint],
   );
 
   const readClipboardIntoUrl = useCallback(() => {
@@ -999,11 +1217,12 @@ export function useDownloaderView({
       if (!extracted) return;
       e.preventDefault();
       setDownloaderUrl(extracted);
+      setDownloaderUrlSourceHint("clipboard");
       setPlaylistItemAudioOverrides({});
       setClipboardPastedHint(true);
       setClipboardOfferUrl(null);
     },
-    [setDownloaderUrl],
+    [setDownloaderUrl, setDownloaderUrlSourceHint],
   );
 
   const handleUrlBlur = useCallback(() => {
@@ -1015,10 +1234,11 @@ export function useDownloaderView({
   const applyClipboardOffer = useCallback(() => {
     if (!clipboardOfferUrl) return;
     setDownloaderUrl(clipboardOfferUrl);
+    setDownloaderUrlSourceHint("clipboard");
     setPlaylistItemAudioOverrides({});
     setClipboardPastedHint(true);
     setClipboardOfferUrl(null);
-  }, [clipboardOfferUrl, setDownloaderUrl]);
+  }, [clipboardOfferUrl, setDownloaderUrl, setDownloaderUrlSourceHint]);
 
   const togglePlaylistItemAudio = useCallback((itemKey: string, audioOnly: boolean) => {
     setPlaylistItemAudioOverrides((prev) => ({ ...prev, [itemKey]: audioOnly }));
@@ -1070,25 +1290,40 @@ export function useDownloaderView({
   }, [url]);
 
   const handleClearUrl = useCallback(() => {
+    const trimmed = useRuforgeStore.getState().url.trim();
     clipboardReadGenRef.current += 1;
     setDownloaderUrl("");
     setDownloaderFocusedJobId(null);
     setVideoInfo(null);
     setMetadataError(null);
     setDownloaderMetadataLoading(false);
+    setDownloaderUrlSourceHint(null);
     setClipboardPastedHint(false);
     setClipboardOfferUrl(null);
     setPlaylistItemAudioOverrides({});
     clearUrlBubbleCopied();
     setQuickEnqueueHint(null);
     setPinnedQuickEnqueueUrls([]);
+    if (trimmed.startsWith("http")) {
+      for (const job of useRuforgeStore.getState().downloadJobs) {
+        if (
+          job.status === "queued" &&
+          job.approval === "held" &&
+          youtubeUrlsMatch(job.url, trimmed)
+        ) {
+          void removeDownloadJob(job.id);
+        }
+      }
+    }
   }, [
     setDownloaderUrl,
     setDownloaderFocusedJobId,
     setVideoInfo,
     setMetadataError,
     setDownloaderMetadataLoading,
+    setDownloaderUrlSourceHint,
     clearUrlBubbleCopied,
+    removeDownloadJob,
   ]);
 
   useEffect(() => {
@@ -1123,6 +1358,7 @@ export function useDownloaderView({
         }
       }
       setDownloaderUrl(value);
+      setDownloaderUrlSourceHint(null);
       setClipboardPastedHint(false);
       setClipboardOfferUrl(null);
       if (
@@ -1132,7 +1368,7 @@ export function useDownloaderView({
         setPlaylistItemAudioOverrides({});
       }
     },
-    [setDownloaderUrl, enqueueDownloadOnly, storageBlocksNewDownloads, notify],
+    [setDownloaderUrl, setDownloaderUrlSourceHint, enqueueDownloadOnly, storageBlocksNewDownloads, notify],
   );
 
   useEffect(() => {
@@ -1270,9 +1506,11 @@ export function useDownloaderView({
       }
 
       if (heroHasMatchingJobPendingHydration(jobs, norm)) {
-        if (active) setDownloaderMetadataLoading(false);
+        if (active) setDownloaderMetadataLoading(true);
+        loadingOwned = true;
         return () => {
           active = false;
+          if (loadingOwned) setDownloaderMetadataLoading(false);
         };
       }
 
@@ -1300,6 +1538,7 @@ export function useDownloaderView({
               const dup = findLibraryDuplicate(norm, list);
               if (dup) {
                 if (active && useRuforgeStore.getState().url.trim() === norm) {
+                  skipQueuedJobsForDuplicateHeroUrl(norm, skipDownloadJobAsLibraryDuplicate);
                   setDownloaderUrl("");
                   setDownloaderFocusedJobId(null);
                   setVideoInfo(null);
@@ -1349,6 +1588,7 @@ export function useDownloaderView({
                 plan.toDownload.length === 0 &&
                 plan.duplicates.length > 0
               ) {
+                skipQueuedJobsForDuplicateHeroUrl(norm, skipDownloadJobAsLibraryDuplicate);
                 setDownloaderUrl("");
                 setDownloaderFocusedJobId(null);
                 setVideoInfo(null);
@@ -1415,6 +1655,7 @@ export function useDownloaderView({
     replaceDialogOpen,
     replaceDialogMatch,
     clipboardPastedHint,
+    urlSourceHint,
     clipboardOfferUrl,
     urlBubbleCopied,
     showUrlBubble,
@@ -1458,6 +1699,15 @@ export function useDownloaderView({
     handleUrlChange,
     quickEnqueueHint,
     pinnedQuickEnqueueUrls,
+    batchQueueJobs,
+    batchQueueActive,
+    batchDownloadCarousel,
+    playlistDownloadCarousel,
+    collectionDownloadCarousel,
+    batchQueuePlaylistView,
+    batchQueueHeroDisplayBytes,
+    toggleBatchQueueJobAudio,
+    isBatchQueueJobDuplicate,
     removePinnedQuickEnqueueUrl,
     copyUrlToClipboard,
     handleQuickEnqueueFromClipboard,

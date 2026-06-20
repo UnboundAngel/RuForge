@@ -129,6 +129,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
 
   /** Downloader slice (not persisted). */
   url: string;
+  /** Where the hero URL last came from (paste vs explorer add). */
+  urlSourceHint: "clipboard" | "explorer" | null;
   /** True while Replace/Cancel duplicate dialog is open (`DuplicateDownloadDialog`). */
   downloaderDuplicateDialogOpen: boolean;
   metadataLoading: boolean;
@@ -291,6 +293,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   dismissNotification: (id: number) => void;
 
   setDownloaderUrl: (url: string) => void;
+  setDownloaderUrlSourceHint: (hint: RuforgeStore["urlSourceHint"]) => void;
   setDownloaderDuplicateDialogOpen: (v: boolean) => void;
   setDownloaderMetadataLoading: (v: boolean) => void;
   setDownloading: (v: boolean) => void;
@@ -469,6 +472,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       notifications: [],
 
       url: "",
+      urlSourceHint: null,
       downloaderDuplicateDialogOpen: false,
       metadataLoading: false,
       downloading: false,
@@ -1047,6 +1051,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       setDownloaderUrl: (url) => set({ url }),
+      setDownloaderUrlSourceHint: (urlSourceHint) => set({ urlSourceHint }),
       setDownloaderDuplicateDialogOpen: (downloaderDuplicateDialogOpen) =>
         set({ downloaderDuplicateDialogOpen }),
       setDownloaderMetadataLoading: (metadataLoading) => set({ metadataLoading }),
@@ -1073,6 +1078,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       resetDownloader: () =>
         set({
           url: "",
+          urlSourceHint: null,
           downloaderDuplicateDialogOpen: false,
           metadataLoading: false,
           downloading: false,
