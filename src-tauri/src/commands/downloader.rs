@@ -625,11 +625,35 @@ fn normalize_thumbnail_url(raw: &str) -> Option<String> {
     }
 }
 
+fn thumbnail_area(t: &serde_json::Value) -> u64 {
+    let w = t.get("width").and_then(|v| v.as_u64()).unwrap_or(0);
+    let h = t.get("height").and_then(|v| v.as_u64()).unwrap_or(0);
+    w.saturating_mul(h)
+}
+
 fn thumbnail_from_thumbnails_array(arr: &[serde_json::Value]) -> Option<String> {
-    arr.iter()
-        .rev()
-        .find_map(|t| t.get("url").and_then(|u| u.as_str()))
-        .and_then(|s| normalize_thumbnail_url(s))
+    // OLAK/s_p root art may list maxresdefault without CDN query params; that URL 200s with a
+    // gray placeholder. Prefer signed (?...) entries by declared width*height.
+    let mut best_signed: Option<(u64, String)> = None;
+    let mut best_any: Option<(u64, String)> = None;
+    for t in arr {
+        let Some(raw) = t.get("url").and_then(|u| u.as_str()) else {
+            continue;
+        };
+        let Some(norm) = normalize_thumbnail_url(raw) else {
+            continue;
+        };
+        let area = thumbnail_area(t);
+        if raw.contains('?') {
+            if best_signed.as_ref().is_none_or(|(best, _)| area >= *best) {
+                best_signed = Some((area, norm.clone()));
+            }
+        }
+        if best_any.as_ref().is_none_or(|(best, _)| area >= *best) {
+            best_any = Some((area, norm));
+        }
+    }
+    best_signed.or(best_any).map(|(_, u)| u)
 }
 
 fn ytdlp_entry_thumbnail(entry: &serde_json::Value) -> String {
@@ -2431,6 +2455,22 @@ pub struct MusicPlaylistPage {
     pub has_more: bool,
     pub total: Option<u32>,
     pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub playlist_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub declared_track_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub curator_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub curator_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub curator_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub browse_entity_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub release_year: Option<u32>,
 }
 
 fn best_thumbnail_url(entry: &serde_json::Value) -> Option<String> {
@@ -2975,7 +3015,7 @@ async fn fetch_album_tracks_page(
     )
     .await
     {
-        Ok(root) => Ok(playlist_page_from_root(&root, offset, limit)),
+        Ok(root) => Ok(playlist_page_from_root(&root, offset, limit, url)),
         Err(flat_err)
             if flat_err.contains("Failed to resolve album to playlist")
                 || flat_err.contains("resolve album") =>
@@ -3021,14 +3061,105 @@ async fn fetch_album_tracks_page(
                 });
             }
             let fetched = offset + items.len() as u32;
-            Ok(MusicPlaylistPage {
-                items,
-                has_more: fetched < total,
-                total: Some(total),
-                title: root["title"].as_str().map(String::from),
-            })
+            let mut page = playlist_root_meta_from_ytdlp(&root, url);
+            page.items = items;
+            page.has_more = fetched < total;
+            page.total = Some(total);
+            Ok(page)
         }
         Err(other) => Err(other),
+    }
+}
+
+fn extract_playlist_list_id(url: &str) -> Option<String> {
+    let lower = url.to_ascii_lowercase();
+    let marker = "list=";
+    let idx = lower.find(marker)?;
+    let tail = &url[idx + marker.len()..];
+    let end = tail
+        .find(['&', '#', '?'])
+        .map(|i| &tail[..i])
+        .unwrap_or(tail)
+        .trim();
+    if end.is_empty() {
+        None
+    } else {
+        Some(end.to_string())
+    }
+}
+
+fn infer_playlist_kind_ytdlp(root: &serde_json::Value, list_url: &str) -> String {
+    if is_music_album_browse_url(list_url) {
+        return "album".to_string();
+    }
+    if let Some(id) = extract_playlist_list_id(list_url) {
+        if id.starts_with("OLAK") || id.starts_with("OL") {
+            return "album".to_string();
+        }
+        if id.starts_with("RD") {
+            return "mix".to_string();
+        }
+        if id.starts_with("PL") {
+            return "userPlaylist".to_string();
+        }
+    }
+    if root["id"]
+        .as_str()
+        .map(|id| id.starts_with("MPAD"))
+        .unwrap_or(false)
+    {
+        return "album".to_string();
+    }
+    "unknown".to_string()
+}
+
+fn browse_entity_url_from_ytdlp(root: &serde_json::Value, list_url: &str) -> Option<String> {
+    if is_music_album_browse_url(list_url) {
+        return Some(list_url.trim().to_string());
+    }
+    if let Some(id) = root["id"].as_str() {
+        if is_youtube_music_browse_id(id) {
+            return Some(format!("https://music.youtube.com/browse/{}", id));
+        }
+    }
+    None
+}
+
+fn curator_fields_from_ytdlp_root(
+    root: &serde_json::Value,
+) -> (Option<String>, Option<String>, Option<String>) {
+    let name = root["uploader"]
+        .as_str()
+        .or_else(|| root["channel"].as_str())
+        .or_else(|| root["artist"].as_str())
+        .map(String::from);
+    let id = root["channel_id"]
+        .as_str()
+        .or_else(|| root["uploader_id"].as_str())
+        .map(String::from);
+    let url = root["channel_url"]
+        .as_str()
+        .or_else(|| root["uploader_url"].as_str())
+        .map(String::from);
+    (name, id, url)
+}
+
+fn playlist_root_meta_from_ytdlp(root: &serde_json::Value, list_url: &str) -> MusicPlaylistPage {
+    let declared_track_count = root["playlist_count"].as_u64().map(|n| n as u32);
+    let (curator_name, curator_id, curator_url) = curator_fields_from_ytdlp_root(root);
+    MusicPlaylistPage {
+        items: Vec::new(),
+        has_more: false,
+        total: declared_track_count,
+        title: root["title"].as_str().map(String::from),
+        cover_url: best_thumbnail_url(root),
+        playlist_kind: Some(infer_playlist_kind_ytdlp(root, list_url)),
+        declared_track_count,
+        curator_name,
+        curator_id,
+        curator_url,
+        browse_entity_url: browse_entity_url_from_ytdlp(root, list_url),
+        release_year: root["release_year"].as_u64().map(|n| n as u32),
     }
 }
 
@@ -3036,6 +3167,7 @@ fn playlist_page_from_root(
     root: &serde_json::Value,
     offset: u32,
     limit: u32,
+    list_url: &str,
 ) -> MusicPlaylistPage {
     let total = root["playlist_count"].as_u64().map(|n| n as u32);
     let mut items = Vec::new();
@@ -3070,13 +3202,10 @@ fn playlist_page_from_root(
         Some(t) => (offset + items.len() as u32) < t,
         None => items.len() as u32 == limit,
     };
-    let title = root["title"].as_str().map(String::from);
-    MusicPlaylistPage {
-        items,
-        has_more,
-        total,
-        title,
-    }
+    let mut page = playlist_root_meta_from_ytdlp(root, list_url);
+    page.items = items;
+    page.has_more = has_more;
+    page
 }
 
 /// Fetch a page of tracks from a playlist URL.
@@ -3122,6 +3251,7 @@ pub async fn get_playlist_items_page(
         "--playlist-end".into(),
         end.to_string(),
     ];
+    let list_url = url.clone();
     let root = run_ytdlp_json_with_cookie_fallback(
         &app,
         prefix_args,
@@ -3131,7 +3261,7 @@ pub async fn get_playlist_items_page(
         "playlist page",
     )
     .await?;
-    Ok(playlist_page_from_root(&root, offset, limit))
+    Ok(playlist_page_from_root(&root, offset, limit, &list_url))
 }
 
 #[cfg(test)]
@@ -3156,6 +3286,30 @@ mod music_browse_tests {
             best_thumbnail_url(&entry).as_deref(),
             Some("https://i.ytimg.com/vi/abc/hqdefault.jpg")
         );
+    }
+
+    #[test]
+    fn thumbnail_from_thumbnails_array_prefers_signed_s_p_art_over_bare_maxres() {
+        let arr = vec![
+            json!({
+                "url": "https://i9.ytimg.com/s_p/OLAK5uy_test/mqdefault.jpg?sqp=x&rs=y",
+                "width": 180,
+                "height": 180,
+            }),
+            json!({
+                "url": "https://i9.ytimg.com/s_p/OLAK5uy_test/sddefault.jpg?sqp=x&rs=y",
+                "width": 640,
+                "height": 640,
+            }),
+            json!({
+                "url": "https://i9.ytimg.com/s_p/OLAK5uy_test/maxresdefault.jpg",
+                "width": 1200,
+                "height": 1200,
+            }),
+        ];
+        let picked = thumbnail_from_thumbnails_array(&arr).expect("pick");
+        assert!(picked.contains("sddefault"));
+        assert!(picked.contains('?'));
     }
 
     #[test]

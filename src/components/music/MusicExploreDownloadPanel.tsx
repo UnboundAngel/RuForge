@@ -43,7 +43,13 @@ import type { MusicExploreShelfLink } from "@/lib/musicExplorePageContext";
 import type { MusicExploreHarvestedTracklist } from "@/lib/musicExploreTracklistHarvest";
 import {
   kickoffPlaylistDownloadSidecar,
+  mergePlaylistSidecarMetadata,
+  schedulePlaylistSidecarRootMetaBackfill,
+  sidecarCoverNeedsHeal,
+  sidecarMetadataFromHarvest,
+  sidecarMetadataFromPlaylistPage,
   sidecarTracksFromMusicTrackInfo,
+  type PlaylistSidecarMetadata,
 } from "@/lib/playlistDownloadSidecar";
 import {
   tryPlaylistPageFromHarvest,
@@ -81,6 +87,7 @@ type Phase =
       hasMore: boolean;
       total: number | null;
       loadingMore: boolean;
+      sidecarMetadata?: PlaylistSidecarMetadata;
     };
 
 function TrackRow({
@@ -420,6 +427,7 @@ export function MusicExploreDownloadPanel({
     tracks: MusicTrackInfo[],
     playlistTitle?: string,
     listUrl?: string,
+    sidecarMetadata?: PlaylistSidecarMetadata,
   ) => {
     const opts = buildAudioOpts();
     const folderName = playlistTitle ? sanitizePlaylistFolderName(playlistTitle) : undefined;
@@ -447,13 +455,24 @@ export function MusicExploreDownloadPanel({
         listUrl: listUrl.trim(),
         title: playlistTitle?.trim() || folderName,
         tracks: sidecarTracksFromMusicTrackInfo(tracks),
+        metadata: sidecarMetadata,
       }).catch(() => {
         /* sidecar is best-effort */
       });
+      if (sidecarCoverNeedsHeal(sidecarMetadata?.coverUrl)) {
+        schedulePlaylistSidecarRootMetaBackfill({
+          outputDir: opts.outputDir,
+          folderName,
+          listUrl: listUrl.trim(),
+          browserCookies: settings.browserContext ?? null,
+          cookieFile: settings.cookieFile ?? null,
+          known: sidecarMetadata,
+        });
+      }
     }
     releaseHeldDownloadJobs();
     pumpDownloadQueue();
-  }, [buildAudioOpts, enqueueDownload, releaseHeldDownloadJobs, pumpDownloadQueue]);
+  }, [buildAudioOpts, enqueueDownload, pumpDownloadQueue, releaseHeldDownloadJobs, settings.browserContext, settings.cookieFile]);
 
   const applyPlaylistPhase = useCallback((
     playlistTitle: string,
@@ -461,6 +480,10 @@ export function MusicExploreDownloadPanel({
     page: MusicPlaylistPage,
     fromCache = false,
   ) => {
+    const sidecarMetadata = mergePlaylistSidecarMetadata(
+      sidecarMetadataFromHarvest(playlistUrl, harvestedTracklist),
+      sidecarMetadataFromPlaylistPage(page, playlistUrl),
+    );
     const entry = {
       playlistTitle,
       playlistUrl,
@@ -481,8 +504,9 @@ export function MusicExploreDownloadPanel({
       hasMore: page.hasMore,
       total: page.total,
       loadingMore: false,
+      sidecarMetadata,
     });
-  }, []);
+  }, [harvestedTracklist]);
 
   // Destructure only the settings fields that affect doLoad so unrelated setting changes
   // (theme, volume, etc.) don't trigger a panel reload via the [url, doLoad] effect.
@@ -950,7 +974,7 @@ export function MusicExploreDownloadPanel({
           {phase.kind === "playlist" && selectedTracks.length > 0 && (
             <button
               type="button"
-              onClick={() => { enqueueTracks(selectedTracks, phase.playlistTitle, phase.playlistUrl); setSelected(new Set()); }}
+              onClick={() => { enqueueTracks(selectedTracks, phase.playlistTitle, phase.playlistUrl, phase.sidecarMetadata); setSelected(new Set()); }}
               className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold hover:opacity-80 transition-opacity"
               style={{ background: "var(--music-accent)", color: "#fff" }}
             >
@@ -961,7 +985,7 @@ export function MusicExploreDownloadPanel({
           {phase.kind === "playlist" && selectedTracks.length === 0 && (
             <button
               type="button"
-              onClick={() => enqueueTracks(phase.items, phase.playlistTitle, phase.playlistUrl)}
+              onClick={() => enqueueTracks(phase.items, phase.playlistTitle, phase.playlistUrl, phase.sidecarMetadata)}
               className="rf-music-tooltip-anchor flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold border hover:bg-white/10 transition-colors"
               style={{ borderColor: "var(--music-border)", color: "var(--music-text-primary)" }}
               data-tooltip="Download all loaded tracks"
@@ -1062,7 +1086,7 @@ export function MusicExploreDownloadPanel({
                     downloadUi={downloadUi}
                     animDelay={Math.min(i * 0.025, 0.35)}
                     onRowClick={(shift) => handleRowClick(i, key, shift)}
-                    onDownload={() => enqueueTracks([track], phase.playlistTitle, phase.playlistUrl)}
+                    onDownload={() => enqueueTracks([track], phase.playlistTitle, phase.playlistUrl, phase.sidecarMetadata)}
                   />
                 );
               })}

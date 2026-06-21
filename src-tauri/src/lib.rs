@@ -49,7 +49,9 @@ use crate::commands::musicmeta::{
     read_artist_meta_sidecar, read_music_meta,
 };
 use crate::commands::playlist_sidecar::{
-    kickoff_playlist_download_sidecar, update_playlist_download_sidecar_track,
+    find_playlist_sidecar_by_list_url, kickoff_playlist_download_sidecar,
+    read_playlist_download_sidecar, update_playlist_download_sidecar_metadata,
+    update_playlist_download_sidecar_track,
 };
 use crate::commands::music_listen_log::{
     music_listen_accumulate, music_listen_begin, music_listen_clear, music_listen_end,
@@ -254,6 +256,9 @@ pub fn run() {
             read_artist_meta_sidecar,
             ensure_artist_meta_sidecar,
             kickoff_playlist_download_sidecar,
+            read_playlist_download_sidecar,
+            find_playlist_sidecar_by_list_url,
+            update_playlist_download_sidecar_metadata,
             update_playlist_download_sidecar_track,
             open_mini_player,
             open_music_mini_player,

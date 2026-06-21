@@ -409,6 +409,9 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Music**: album view reads `.ruforge-playlist.json` cover via `read_playlist_download_sidecar`; signed `coverUrl` wins, stale bare maxres/unsigned `s_p` falls back to embedded art; lazy heal on album open (`usePlaylistSidecar`, `healPlaylistSidecarCover`, `isStalePlaylistCoverUrl`).
+- **Music**: Explore "playlist in library" badge reads sidecar `status: complete` by `listUrl` (`find_playlist_sidecar_by_list_url`, `usePlaylistSidecarByListUrl`); session ref kept for immediate feedback.
+- **Music**: playlist sidecar merge/backfill gates treat stale bare-maxres `coverUrl` as empty so signed patches persist (`playlistDownloadSidecar.ts`, `MusicExploreBottomBar.tsx`, `MusicExploreDownloadPanel.tsx`).
 - **Music**: playlist batch downloads write `.ruforge-playlist.json` under `Playlists/{folder}/` at kickoff (full roster, pending); track terminal updates from download queue (done/failed/skip); playlist status downloading/complete/incomplete (`playlist_sidecar.rs`, `playlistDownloadSidecar.ts`, `downloadQueueSlice.ts`, `MusicExploreBottomBar.tsx`, `MusicExploreDownloadPanel.tsx`).
 - **Music**: SPA nav polls YTM header title for up to 4s (100ms ticks) until responsive/immersive h1 title resolves, then re-emits page context; harvest download uses yt-dlp playlist title when webview title still empty at click (`explorerProfileScript.ts`, `MusicExploreBottomBar.tsx`).
 - **Music**: native YTM playlist/album pages read `pageTitle` from `ytmusic-responsive-header-renderer` `h1 yt-formatted-string.title` (not `.strapline-text` artist link); artist/channel pages from `ytmusic-immersive-header-renderer` h1 title; detail/playlist header reads kept as fallbacks (`explorerProfileScript.ts`).

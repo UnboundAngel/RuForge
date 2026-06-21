@@ -11,6 +11,11 @@ import { albumKeyFromFile, resolveDisplayAlbum } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicLikeButton } from "./MusicLikeButton";
+import { usePlaylistSidecarAtLocation } from "@/hooks/usePlaylistSidecar";
+import {
+  isUsablePlaylistCoverUrl,
+  playlistSidecarLocationFromTrackPath,
+} from "@/lib/playlistDownloadSidecar";
 
 type TrackRowProps = {
   file: MediaFile;
@@ -98,6 +103,12 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
     });
   }, [entries, albumKey]);
 
+  const sidecarLocation = useMemo(
+    () => (tracks[0] ? playlistSidecarLocationFromTrackPath(tracks[0].path) : null),
+    [tracks],
+  );
+  const playlistSidecar = usePlaylistSidecarAtLocation(sidecarLocation, { healStaleCover: true });
+
   const displayAlbum = useMemo(() => {
     const first = tracks[0];
     return first ? resolveDisplayAlbum(first) || albumKey : albumKey;
@@ -111,8 +122,14 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
     return artistKey;
   }, [tracks, artistKey]);
 
-  const cover = useMemo(() => bestCoverPath(tracks[0] ?? {}), [tracks]);
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = useMemo(() => {
+    const remote = isUsablePlaylistCoverUrl(playlistSidecar?.coverUrl)
+      ? playlistSidecar!.coverUrl!.trim()
+      : null;
+    if (remote) return remote;
+    const local = bestCoverPath(tracks[0] ?? {});
+    return local ? convertFileSrc(local) : null;
+  }, [playlistSidecar?.coverUrl, tracks]);
   const totalDuration = useMemo(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
 
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
