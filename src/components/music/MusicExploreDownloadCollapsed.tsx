@@ -867,7 +867,7 @@ export function ExploreDownloadDockChip({
             onClick={handleCancelAll}
             className="rf-music-tooltip-anchor absolute -top-0.5 -right-0.5 z-[2] flex h-5 w-5 shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity group-hover/dock-chip:opacity-100"
             style={{
-              color: "var(--music-text-secondary)",
+              color: "var(--music-accent)",
               background: "var(--music-surface-raised)",
             }}
             aria-label="Stop all downloads"

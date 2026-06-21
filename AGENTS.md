@@ -409,6 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Music**: minimized dock chip cancel badge uses `--music-accent` so stop control reads on hover (`MusicExploreDownloadCollapsed.tsx`).
 - **Music**: album view reads `.ruforge-playlist.json` cover via `read_playlist_download_sidecar`; signed `coverUrl` wins, stale bare maxres/unsigned `s_p` falls back to embedded art; lazy heal on album open (`usePlaylistSidecar`, `healPlaylistSidecarCover`, `isStalePlaylistCoverUrl`).
 - **Music**: Explore "playlist in library" badge reads sidecar `status: complete` by `listUrl` (`find_playlist_sidecar_by_list_url`, `usePlaylistSidecarByListUrl`); session ref kept for immediate feedback.
 - **Music**: playlist sidecar merge/backfill gates treat stale bare-maxres `coverUrl` as empty so signed patches persist (`playlistDownloadSidecar.ts`, `MusicExploreBottomBar.tsx`, `MusicExploreDownloadPanel.tsx`).
