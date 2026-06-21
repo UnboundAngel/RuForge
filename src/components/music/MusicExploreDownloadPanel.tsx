@@ -42,6 +42,10 @@ import {
 import type { MusicExploreShelfLink } from "@/lib/musicExplorePageContext";
 import type { MusicExploreHarvestedTracklist } from "@/lib/musicExploreTracklistHarvest";
 import {
+  kickoffPlaylistDownloadSidecar,
+  sidecarTracksFromMusicTrackInfo,
+} from "@/lib/playlistDownloadSidecar";
+import {
   tryPlaylistPageFromHarvest,
   waitForCompleteHarvestPlaylist,
 } from "@/lib/musicExploreTracklistHarvest";
@@ -412,7 +416,11 @@ export function MusicExploreDownloadPanel({
     return patchDownloadJobOptionsForAudio(base, true, settings);
   }, [settings, outputDir, saveToInternal]);
 
-  const enqueueTracks = useCallback((tracks: MusicTrackInfo[], playlistTitle?: string) => {
+  const enqueueTracks = useCallback((
+    tracks: MusicTrackInfo[],
+    playlistTitle?: string,
+    listUrl?: string,
+  ) => {
     const opts = buildAudioOpts();
     const folderName = playlistTitle ? sanitizePlaylistFolderName(playlistTitle) : undefined;
     for (let i = 0; i < tracks.length; i++) {
@@ -431,6 +439,17 @@ export function MusicExploreDownloadPanel({
           },
         },
       );
+    }
+    if (folderName && listUrl?.trim() && tracks.length > 0) {
+      void kickoffPlaylistDownloadSidecar({
+        outputDir: opts.outputDir,
+        folderName,
+        listUrl: listUrl.trim(),
+        title: playlistTitle?.trim() || folderName,
+        tracks: sidecarTracksFromMusicTrackInfo(tracks),
+      }).catch(() => {
+        /* sidecar is best-effort */
+      });
     }
     releaseHeldDownloadJobs();
     pumpDownloadQueue();
@@ -931,7 +950,7 @@ export function MusicExploreDownloadPanel({
           {phase.kind === "playlist" && selectedTracks.length > 0 && (
             <button
               type="button"
-              onClick={() => { enqueueTracks(selectedTracks, phase.playlistTitle); setSelected(new Set()); }}
+              onClick={() => { enqueueTracks(selectedTracks, phase.playlistTitle, phase.playlistUrl); setSelected(new Set()); }}
               className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold hover:opacity-80 transition-opacity"
               style={{ background: "var(--music-accent)", color: "#fff" }}
             >
@@ -942,7 +961,7 @@ export function MusicExploreDownloadPanel({
           {phase.kind === "playlist" && selectedTracks.length === 0 && (
             <button
               type="button"
-              onClick={() => enqueueTracks(phase.items, phase.playlistTitle)}
+              onClick={() => enqueueTracks(phase.items, phase.playlistTitle, phase.playlistUrl)}
               className="rf-music-tooltip-anchor flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold border hover:bg-white/10 transition-colors"
               style={{ borderColor: "var(--music-border)", color: "var(--music-text-primary)" }}
               data-tooltip="Download all loaded tracks"
@@ -1043,7 +1062,7 @@ export function MusicExploreDownloadPanel({
                     downloadUi={downloadUi}
                     animDelay={Math.min(i * 0.025, 0.35)}
                     onRowClick={(shift) => handleRowClick(i, key, shift)}
-                    onDownload={() => enqueueTracks([track], phase.playlistTitle)}
+                    onDownload={() => enqueueTracks([track], phase.playlistTitle, phase.playlistUrl)}
                   />
                 );
               })}

@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-21 (YTM header title SPA poll + harvest folder fallback)
+Last updated: 2026-06-21 (playlist download sidecar writer)
 Status: in progress
 
 ## Now
@@ -29,6 +29,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Music: playlist batch downloads write `.ruforge-playlist.json` under `Playlists/{folder}/` at kickoff with per-track pending/done/failed roster; queue finish hooks update terminal status and derive downloading/complete/incomplete (`playlist_sidecar.rs`, `playlistDownloadSidecar.ts`, `downloadQueueSlice.ts`, `MusicExploreBottomBar.tsx`, `MusicExploreDownloadPanel.tsx`).
 - Music: SPA nav polls YTM header title for up to 4s (100ms ticks) until responsive/immersive h1 title resolves, then re-emits page context; harvest download uses yt-dlp playlist title when webview title still empty at click (`explorerProfileScript.ts`, `MusicExploreBottomBar.tsx`).
 - Music: native YTM playlist/album pages read `pageTitle` from `ytmusic-responsive-header-renderer` `h1 yt-formatted-string.title` (not strapline artist link); artist/channel pages from `ytmusic-immersive-header-renderer` h1 title; detail/playlist headers kept as fallbacks (`explorerProfileScript.ts`).
 - Music: child webviews (YTM/explorer) no longer inherit main window local-only ACL; remote event emit/listen only via music-explore-webview capability.

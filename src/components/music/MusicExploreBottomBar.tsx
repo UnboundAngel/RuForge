@@ -17,7 +17,11 @@ import {
 } from "@/youtubeUrl";
 import { invoke } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
-import { playlistFolderTitle, type MusicPlaylistPage } from "@/lib/musicExploreTracks";
+import { playlistFolderTitle, type MusicPlaylistPage, type MusicTrackInfo } from "@/lib/musicExploreTracks";
+import {
+  kickoffPlaylistDownloadSidecar,
+  sidecarTracksFromMusicTrackInfo,
+} from "@/lib/playlistDownloadSidecar";
 import {
   MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION,
   throttleMusicExplorePageFetch,
@@ -241,6 +245,8 @@ export function MusicExploreBottomBar({
     setDownloadingPlaylist(true);
     try {
       let folderName: string | undefined;
+      let playlistTitle = pageContext.pageTitle?.trim() || "";
+      let enqueuedTracks: MusicTrackInfo[] = [];
       const harvest = pageContext.harvestedTracklist;
       const harvestReady =
         harvest != null
@@ -263,7 +269,9 @@ export function MusicExploreBottomBar({
         folderName = sanitizePlaylistFolderName(
           playlistFolderTitle(title ?? null, canonical),
         );
+        playlistTitle = title?.trim() || playlistFolderTitle(null, canonical);
         const page = harvestedTracklistToPlaylistPage(harvest, canonical, title ?? "");
+        enqueuedTracks = page.items;
         page.items.forEach((track, i) => {
           enqueueDownload(
             track.url,
@@ -287,10 +295,13 @@ export function MusicExploreBottomBar({
           });
           pagesFetched += 1;
           if (!folderName) {
+            const title = page.title ?? pageContext.pageTitle;
             folderName = sanitizePlaylistFolderName(
-              playlistFolderTitle(page.title ?? pageContext.pageTitle, canonical),
+              playlistFolderTitle(title, canonical),
             );
+            playlistTitle = title?.trim() || playlistFolderTitle(null, canonical);
           }
+          enqueuedTracks.push(...page.items);
           for (let i = 0; i < page.items.length; i++) {
             const track = page.items[i];
             enqueueDownload(
@@ -303,6 +314,18 @@ export function MusicExploreBottomBar({
           offset += page.items.length;
           if (!page.hasMore || page.items.length === 0) break;
         }
+      }
+
+      if (folderName && enqueuedTracks.length > 0) {
+        await kickoffPlaylistDownloadSidecar({
+          outputDir: dir,
+          folderName,
+          listUrl: canonical,
+          title: playlistTitle,
+          tracks: sidecarTracksFromMusicTrackInfo(enqueuedTracks),
+        }).catch((e) => {
+          debugLog("music.explore-download", "warn", "playlist sidecar kickoff failed", e);
+        });
       }
 
       releaseHeldDownloadJobs();
