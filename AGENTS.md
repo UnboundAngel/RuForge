@@ -409,7 +409,9 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
-- **Music**: music explore bridge injects on webview create and explicit reload only, not on bounds sync; stops re-inject storm stomping SPA context (`MusicShell.tsx`).
+- **Music**: SPA nav polls YTM header title for up to 4s (100ms ticks) until responsive/immersive h1 title resolves, then re-emits page context; harvest download uses yt-dlp playlist title when webview title still empty at click (`explorerProfileScript.ts`, `MusicExploreBottomBar.tsx`).
+- **Music**: native YTM playlist/album pages read `pageTitle` from `ytmusic-responsive-header-renderer` `h1 yt-formatted-string.title` (not `.strapline-text` artist link); artist/channel pages from `ytmusic-immersive-header-renderer` h1 title; detail/playlist header reads kept as fallbacks (`explorerProfileScript.ts`).
+- **Music**: download dock chip gains Ban cancel (expanded: trailing button; collapsed: hover on orb); calls `removeDownloadJob` on all active jobs without triggering expand (`MusicExploreDownloadCollapsed.tsx`).
 - **Music**: Explore SPA page context driven by History API (`pushState`/`replaceState`/`popstate`) because `yt-navigate-finish` does not fire in the embedded WebView2 child; immediate URL-based emit plus browse-data watcher for title/shelf (`explorerProfileScript.ts` MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL).
 - **Music**: default capability targets local `main` webview only (not all webviews in window `main`); remote YTM/explorer child webviews use `music-explore-webview` capability only (`capabilities/default.json`, `capabilities/music-explore-webview.json`).
 - **Music**: Explore reload uses live webview href (not host URL cache) and re-injects bridge; page-context refresh also emits URL on every SPA nav so bottom-bar context stays in sync (`MusicShell.tsx`, `explorerProfileScript.ts`, `MUSIC_EXPLORE_RELOAD_IN_PLACE_SCRIPT`).

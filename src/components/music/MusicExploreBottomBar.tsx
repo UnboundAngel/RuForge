@@ -248,8 +248,18 @@ export function MusicExploreBottomBar({
         && isHarvestTracklistComplete(harvest);
 
       if (harvestReady) {
-        // Webview already has the full track list — no yt-dlp call needed.
-        const title = pageContext.pageTitle?.trim() || undefined;
+        let title = pageContext.pageTitle?.trim() || undefined;
+        if (!title) {
+          await throttleMusicExplorePageFetch();
+          const titlePage = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
+            url: canonical,
+            offset: 0,
+            limit: 1,
+            browserCookies: settings.browserContext ?? null,
+            cookieFile: settings.cookieFile ?? null,
+          });
+          title = titlePage.title?.trim() || undefined;
+        }
         folderName = sanitizePlaylistFolderName(
           playlistFolderTitle(title ?? null, canonical),
         );
