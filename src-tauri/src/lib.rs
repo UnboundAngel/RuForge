@@ -132,6 +132,9 @@ pub fn run() {
                 .button_id("ruforge-tb-maximize")
                 .build(),
         )
+        .append_invoke_initialization_script(
+            r";(function(){try{var h=(window.location.hostname||'').toLowerCase();if(h==='tauri.localhost'||h==='localhost'||h==='127.0.0.1'||h.endsWith('.tauri.localhost'))return;if((window.location.protocol||'')==='tauri:')return;window.__snapLayoutInit=true;}catch(e){}})();",
+        )
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(crate::debug_log::plugin_max_level())

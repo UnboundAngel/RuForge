@@ -649,7 +649,7 @@ export const MUSIC_EXPLORE_NOW_PLAYING_EVENT = "music-explore-now-playing";
 /** Emitted on navigation with page kind, title, and playlist URL hints for the bottom bar. */
 export const MUSIC_EXPLORE_PAGE_CONTEXT_EVENT = "music-explore-page-context";
 
-/** Page-context probe ΓÇö safe to re-inject whenever the explore webview is shown. */
+/** Page-context probe; inject on webview create / reload (History hooks persist for SPA nav). */
 export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
   ${tauriEmitHelperCode()}
   if (!__rf_tauri_emit) return;
@@ -1016,7 +1016,13 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
       __rf_tauri_emit("music-explore-page-context", ctx);
     } catch (e) {}
   }
+  function emitUrlSync() {
+    try {
+      if (__rf_tauri_emit) __rf_tauri_emit("music-explore-url", window.location.href);
+    } catch (e) {}
+  }
   function refreshBrowseContext() {
+    emitUrlSync();
     window.__rf_emitPageContext();
     armBrowseDataWatcher();
   }
@@ -1024,7 +1030,26 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
   window.__rf_refreshBrowseContext = refreshBrowseContext;
   if (!window.__rf_ctx_ready) {
     window.__rf_ctx_ready = true;
-    window.addEventListener("yt-navigate-finish", function(){ refreshBrowseContext(); });
+    function onSpaNav() {
+      refreshBrowseContext();
+    }
+    if (!window.__rf_history_nav_patched) {
+      window.__rf_history_nav_patched = true;
+      var origPushState = history.pushState.bind(history);
+      var origReplaceState = history.replaceState.bind(history);
+      history.pushState = function(state, title, url) {
+        var ret = origPushState(state, title, url);
+        onSpaNav();
+        return ret;
+      };
+      history.replaceState = function(state, title, url) {
+        var ret = origReplaceState(state, title, url);
+        onSpaNav();
+        return ret;
+      };
+    }
+    window.addEventListener("popstate", onSpaNav);
+    window.addEventListener("yt-navigate-finish", onSpaNav);
   }
   refreshBrowseContext();
 })();`;
@@ -1126,8 +1151,6 @@ export const MUSIC_EXPLORE_NOW_PLAYING_INSTALL = `(function(){
 
 /** Injected into music-explore-view: URL bridge + profile re-probe on navigation. */
 export const MUSIC_EXPLORE_INIT_SCRIPT = `(function(){
-  if (window.__rf_mu__) return;
-  window.__rf_mu__ = true;
   ${tauriEmitHelperCode()}
   function emitUrl() {
     if (__rf_tauri_emit) {
@@ -1145,6 +1168,9 @@ export const MUSIC_EXPLORE_INIT_SCRIPT = `(function(){
       window.__rf_emitPageContext();
     }
   }
+  if (!window.__rf_mu_ready) {
+    window.__rf_mu_ready = true;
+    window.addEventListener("yt-navigate-finish", function() { tick(true); });
+  }
   tick(false);
-  window.addEventListener("yt-navigate-finish", function() { tick(true); });
 })();`;

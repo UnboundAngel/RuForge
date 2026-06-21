@@ -20,9 +20,57 @@ function fileStem(file: MediaFile): string {
   return stripYtdlpStreamSuffix(stem);
 }
 
+/**
+ * Strip leading date stamps from an album name for display.
+ * Live recordings from yt-dlp often carry a `YYYY-MM-DD: Venue Name` album tag.
+ * Returns empty string (not null) so callers can do `displayAlbumName(...) || fallback`.
+ */
+export function displayAlbumName(raw: string | null | undefined): string {
+  return (raw ?? "").trim().replace(/^\d{4}-\d{2}-\d{2}[:\s]+/, "").trim();
+}
+
+/**
+ * Derive album name from the immediate parent folder of the file path.
+ * Skips generic bucket folder names (music, downloads, etc.).
+ */
+export function albumFromFolderPath(filePath: string): string | null {
+  const parts = filePath.replace(/\\/g, "/").split("/");
+  if (parts.length >= 2) {
+    const parent = parts[parts.length - 2].trim();
+    if (parent && !/^(music|downloads|playlists|videos|audio)$/i.test(parent)) {
+      return parent;
+    }
+  }
+  return null;
+}
+
+function isLiveVenueAlbumString(s: string): boolean {
+  if (!s) return false;
+  // "Jiffy Lube Live, Bristow, VA, USA" — comma + two-letter state abbreviation
+  return /,\s*[A-Z]{2}[,\s]/.test(s) || /\b(Live|Concert|Tour)\b.*,.*[A-Z]{2}/i.test(s);
+}
+
+/**
+ * Resolve the best display album name for a file.
+ * Applies displayAlbumName first, then falls back to the parent folder name
+ * when the result is empty or looks like a live venue string.
+ */
+export function resolveDisplayAlbum(file: MediaFile): string {
+  const raw = file.canonicalAlbum || file.album;
+  const display = displayAlbumName(raw);
+  if (!display || isLiveVenueAlbumString(display)) {
+    const fromFolder = albumFromFolderPath(file.path);
+    if (fromFolder) return fromFolder;
+  }
+  return display;
+}
+
 /** Collapse "(Deluxe)" / "(Remastered)" album variants in shelf grouping. */
 export function normalizeAlbumShelfKey(album: string): string {
   let s = album.trim();
+  // Strip leading live-recording date stamps e.g. "2012-08-11: " or "2012-08-11 "
+  s = s.replace(/^\d{4}-\d{2}-\d{2}[:\s]+/, "").trim();
+  // Strip trailing parenthetical suffixes e.g. "(Deluxe)", "(Remastered 2023)"
   while (/\s*\([^)]*\)\s*$/.test(s)) {
     s = s.replace(/\s*\([^)]*\)\s*$/, "").trim();
   }
@@ -74,9 +122,9 @@ function artistShelfKey(file: MediaFile, primaryArtist: (raw: string) => string)
   return raw ? primaryArtist(raw).toLowerCase() : "_unknown";
 }
 
-/** Album dedup key for shelf grouping. Prefers canonical album from sidecar. */
+/** Album dedup key for shelf grouping. Uses resolved display album (with folder fallback). */
 export function albumKeyFromFile(file: MediaFile): string {
-  return normalizeAlbumShelfKey(file.canonicalAlbum ?? file.album ?? "");
+  return normalizeAlbumShelfKey(resolveDisplayAlbum(file));
 }
 
 export function rawAlbumNameFromFile(file: MediaFile): string {
@@ -98,7 +146,7 @@ export function buildMultiTrackAlbumGroups(
 ): AlbumGroup[] {
   const map = new Map<string, AlbumGroup>();
   for (const t of tracks) {
-    const albumName = rawAlbumNameFromFile(t);
+    const albumName = resolveDisplayAlbum(t);
     if (!albumName) continue;
     const artistKey = artistKeyFromFile(t);
     if (!artistKey) continue;
@@ -123,7 +171,7 @@ export function fileHasBrowsableAlbum(
   file: MediaFile,
   tracks: MediaFile[],
 ): boolean {
-  const albumName = rawAlbumNameFromFile(file);
+  const albumName = resolveDisplayAlbum(file);
   if (!albumName) return false;
   const artistKey = artistKeyFromFile(file);
   if (!artistKey) return false;
@@ -131,7 +179,7 @@ export function fileHasBrowsableAlbum(
   let count = 0;
   for (const t of tracks) {
     if (artistKeyFromFile(t) !== artistKey) continue;
-    const a = rawAlbumNameFromFile(t);
+    const a = resolveDisplayAlbum(t);
     if (!a || normalizeAlbumShelfKey(a) !== albumKey) continue;
     count += 1;
     if (count >= 2) return true;

@@ -487,6 +487,70 @@ function handleTimedOutDownloadJob(get: () => RuforgeStore): (jobId: string) => 
   };
 }
 
+/**
+ * Maximum total attempts per batch item (original + auto-retries).
+ * One repeatedly-failing track cannot exhaust retries for others because the counter is per-job.
+ */
+const BATCH_MAX_ATTEMPTS = 3;
+
+/**
+ * After a job finishes, check whether any playlistOutputFolder batch is now idle with
+ * remaining retries. Re-queues retriable failed items so the existing pump picks them up.
+ * Fires only when the batch is fully idle (no queued/downloading/paused jobs in the group).
+ */
+function sweepBatchRetries(
+  get: () => RuforgeStore,
+  set: StoreApi<RuforgeStore>["setState"],
+): void {
+  const jobs = get().downloadJobs;
+
+  const byFolder = new Map<string, DownloadJob[]>();
+  for (const job of jobs) {
+    const folder = job.options.playlistOutputFolder;
+    if (!folder) continue;
+    const group = byFolder.get(folder);
+    if (group) group.push(job);
+    else byFolder.set(folder, [job]);
+  }
+
+  const retryIds: string[] = [];
+  for (const groupJobs of byFolder.values()) {
+    const hasActive = groupJobs.some(
+      (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+    );
+    if (hasActive) continue;
+
+    for (const j of groupJobs) {
+      if (j.status === "failed" && (j.attemptCount ?? 1) < BATCH_MAX_ATTEMPTS) {
+        retryIds.push(j.id);
+      }
+    }
+  }
+
+  if (retryIds.length === 0) return;
+
+  const now = Date.now();
+  set((s) => {
+    const downloadJobs = s.downloadJobs.map((j) => {
+      if (!retryIds.includes(j.id)) return j;
+      return {
+        ...j,
+        status: "queued" as const,
+        approval: "auto" as const,
+        error: null,
+        progress: null,
+        resumeOnStart: false,
+        createdAt: now,
+        attemptCount: (j.attemptCount ?? 1) + 1,
+      };
+    });
+    persistDownloadJobs(downloadJobs);
+    return { downloadJobs };
+  });
+
+  get().pumpDownloadQueue();
+}
+
 export const createDownloadQueueSlice: StateCreator<
   RuforgeStore,
   [],
@@ -1206,6 +1270,8 @@ export const createDownloadQueueSlice: StateCreator<
       for (const st of starts) {
         startHydratedDownloadJob(st.id, st.url, st.resume);
       }
+
+      sweepBatchRetries(get, set);
 
       if (finishedUrl) {
         evictDownloadJobMetadataCacheWhenIdle(

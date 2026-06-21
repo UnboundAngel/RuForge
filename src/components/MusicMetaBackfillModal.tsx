@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Music } from "lucide-react";
 import { backfillMusicMeta } from "../lib/musicMeta";
+import { cn } from "@/lib/utils";
 import {
   SettingsModalBtnGhost,
   SettingsModalBtnPrimary,
@@ -28,6 +29,7 @@ export const MusicMetaBackfillModal = ({ open, onClose, roots }: Props) => {
   const [progress, setProgress] = useState<BackfillProgress | null>(null);
   const [enriched, setEnriched] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const [forceReenrich, setForceReenrich] = useState(false);
   const runningRef = useRef(false);
 
   const reset = useCallback(() => {
@@ -35,6 +37,7 @@ export const MusicMetaBackfillModal = ({ open, onClose, roots }: Props) => {
     setProgress(null);
     setEnriched(0);
     setError(null);
+    setForceReenrich(false);
     runningRef.current = false;
   }, []);
 
@@ -72,7 +75,7 @@ export const MusicMetaBackfillModal = ({ open, onClose, roots }: Props) => {
     setError(null);
     setProgress(null);
     try {
-      const count = await backfillMusicMeta(roots);
+      const count = await backfillMusicMeta(roots, forceReenrich || undefined);
       setEnriched(count);
       setPhase("done");
     } catch (e) {
@@ -81,7 +84,7 @@ export const MusicMetaBackfillModal = ({ open, onClose, roots }: Props) => {
     } finally {
       runningRef.current = false;
     }
-  }, [roots]);
+  }, [roots, forceReenrich]);
 
   const pct =
     progress && progress.total > 0
@@ -122,9 +125,35 @@ export const MusicMetaBackfillModal = ({ open, onClose, roots }: Props) => {
       footer={footer}
     >
       {phase === "idle" && (
-        <p className="text-[13px] leading-relaxed text-stone-400">
-          Creates sidecars for tracks without one, then patches existing sidecars missing artist genres. Rate-limited to one MusicBrainz request per second; artist lookups are cached per artist name.
-        </p>
+        <div className="space-y-4">
+          <p className="text-[13px] leading-relaxed text-stone-400">
+            Creates sidecars for tracks without one, then patches existing sidecars missing artist genres. Rate-limited to one MusicBrainz request per second; artist lookups are cached per artist name.
+          </p>
+          <button
+            type="button"
+            onClick={() => setForceReenrich((v) => !v)}
+            className="flex items-start gap-2.5 text-left group"
+          >
+            <span
+              className={cn(
+                "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                forceReenrich
+                  ? "border-[color:var(--accent)] bg-[color:var(--accent)]"
+                  : "border-stone-600 bg-transparent group-hover:border-stone-400",
+              )}
+            >
+              {forceReenrich && (
+                <svg viewBox="0 0 10 8" className="h-2.5 w-2.5 fill-none stroke-white stroke-2">
+                  <polyline points="1,4 4,7 9,1" />
+                </svg>
+              )}
+            </span>
+            <span className="text-[12px] leading-relaxed text-stone-400 group-hover:text-stone-300">
+              Re-process already-enriched files
+              <span className="ml-1 text-stone-600">(use after a metadata priority fix)</span>
+            </span>
+          </button>
+        </div>
       )}
 
       {phase === "running" && (
@@ -154,7 +183,7 @@ export const MusicMetaBackfillModal = ({ open, onClose, roots }: Props) => {
       {phase === "done" && (
         <p className="text-[13px] font-semibold text-green-400/90">
           Complete. {enriched} {enriched === 1 ? "file" : "files"} enriched.
-          {progress && progress.total > enriched
+          {!forceReenrich && progress && progress.total > enriched
             ? ` ${progress.total - enriched} already had sidecars.`
             : ""}
         </p>

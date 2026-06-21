@@ -7,7 +7,7 @@ import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import type { MediaFile } from "@/types";
 import { primaryArtist } from "./musicArtist";
-import { buildMultiTrackAlbumGroups } from "./musicShelfDedup";
+import { buildMultiTrackAlbumGroups, resolveDisplayAlbum } from "./musicShelfDedup";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
@@ -31,6 +31,7 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
   const cover = bestCoverPath(file);
   const coverSrc = cover ? convertFileSrc(cover) : null;
   const artist = file.artist ?? file.albumArtist ?? (file.name.includes(" - ") ? file.name.split(" - ")[0].trim() : "");
+  const displayAlbum = resolveDisplayAlbum(file);
   const playback = useOptionalMainAudioPlayback();
   const showPauseOnHover = isPlaying && playback != null && !playback.paused;
 
@@ -75,9 +76,9 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
           <div className="text-xs truncate mt-0.5" style={{ color: "var(--music-text-secondary)" }}>{artist}</div>
         )}
       </div>
-      {file.album && (
+      {displayAlbum && (
         <div className="text-xs truncate w-40 shrink-0 hidden lg:block" style={{ color: "var(--music-text-muted)" }}>
-          {file.album}
+          {displayAlbum}
         </div>
       )}
       <div className="text-xs shrink-0 w-12 text-right" style={{ color: "var(--music-text-muted)" }}>

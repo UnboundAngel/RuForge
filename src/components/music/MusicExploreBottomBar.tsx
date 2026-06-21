@@ -22,6 +22,11 @@ import {
   MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION,
   throttleMusicExplorePageFetch,
 } from "@/lib/ytdlpPageFetchThrottle";
+import {
+  harvestedTracklistAppliesToUrl,
+  isHarvestTracklistComplete,
+  harvestedTracklistToPlaylistPage,
+} from "@/lib/musicExploreTracklistHarvest";
 import type { MusicExplorePageContext } from "@/lib/musicExplorePageContext";
 import { debugLog } from "@/debug/debugLog";
 
@@ -235,35 +240,61 @@ export function MusicExploreBottomBar({
 
     setDownloadingPlaylist(true);
     try {
-      let offset = 0;
-      let hasMore = true;
       let folderName: string | undefined;
-      let pagesFetched = 0;
-      while (hasMore && pagesFetched < MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION) {
-        await throttleMusicExplorePageFetch();
-        const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
-          url: canonical,
-          offset,
-          limit: 50,
-          browserCookies: settings.browserContext ?? null,
-          cookieFile: settings.cookieFile ?? null,
-        });
-        pagesFetched += 1;
-        if (!folderName) {
-          folderName = sanitizePlaylistFolderName(playlistFolderTitle(page.title, canonical));
-        }
-        for (let i = 0; i < page.items.length; i++) {
-          const track = page.items[i];
+      const harvest = pageContext.harvestedTracklist;
+      const harvestReady =
+        harvest != null
+        && harvestedTracklistAppliesToUrl(harvest, canonical)
+        && isHarvestTracklistComplete(harvest);
+
+      if (harvestReady) {
+        // Webview already has the full track list — no yt-dlp call needed.
+        const title = pageContext.pageTitle?.trim() || undefined;
+        folderName = sanitizePlaylistFolderName(
+          playlistFolderTitle(title ?? null, canonical),
+        );
+        const page = harvestedTracklistToPlaylistPage(harvest, canonical, title ?? "");
+        page.items.forEach((track, i) => {
           enqueueDownload(
             track.url,
-            { ...opts, playlistOutputFolder: folderName, playlistIndex: offset + i + 1 },
+            { ...opts, playlistOutputFolder: folderName, playlistIndex: i + 1 },
             { title: track.title, approval: "held" },
           );
+        });
+      } else {
+        // Harvest incomplete or mismatched — fall back to yt-dlp.
+        let offset = 0;
+        let hasMore = true;
+        let pagesFetched = 0;
+        while (hasMore && pagesFetched < MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION) {
+          await throttleMusicExplorePageFetch();
+          const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
+            url: canonical,
+            offset,
+            limit: 50,
+            browserCookies: settings.browserContext ?? null,
+            cookieFile: settings.cookieFile ?? null,
+          });
+          pagesFetched += 1;
+          if (!folderName) {
+            folderName = sanitizePlaylistFolderName(
+              playlistFolderTitle(page.title ?? pageContext.pageTitle, canonical),
+            );
+          }
+          for (let i = 0; i < page.items.length; i++) {
+            const track = page.items[i];
+            enqueueDownload(
+              track.url,
+              { ...opts, playlistOutputFolder: folderName, playlistIndex: offset + i + 1 },
+              { title: track.title, approval: "held" },
+            );
+          }
+          hasMore = page.hasMore;
+          offset += page.items.length;
+          if (!page.hasMore || page.items.length === 0) break;
         }
-        hasMore = page.hasMore;
-        offset += page.items.length;
-        if (!page.hasMore || page.items.length === 0) break;
       }
+
       releaseHeldDownloadJobs();
       pumpDownloadQueue();
       downloadedUrlsRef.current.add(canonical);
@@ -277,6 +308,8 @@ export function MusicExploreBottomBar({
     enqueueDownload,
     outputDir,
     pageContext.actionUrl,
+    pageContext.harvestedTracklist,
+    pageContext.pageTitle,
     pumpDownloadQueue,
     releaseHeldDownloadJobs,
     saveToInternal,

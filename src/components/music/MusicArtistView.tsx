@@ -8,7 +8,7 @@ import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
 import { fileMatchesArtistKey, primaryArtist, rawArtistFromFile } from "./musicArtist";
-import { buildMultiTrackAlbumGroups } from "./musicShelfDedup";
+import { buildMultiTrackAlbumGroups, resolveDisplayAlbum } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicLikeButton } from "./MusicLikeButton";
@@ -17,6 +17,11 @@ import {
   readArtistMetaSidecar,
   type ArtistInfo,
 } from "@/lib/musicMeta";
+import {
+  buildCoverAmbienceTheme,
+  extractCoverBackdropFromPath,
+  type CoverAmbienceTheme,
+} from "@/prominentColor";
 
 const artistInfoInFlight = new Map<string, Promise<ArtistInfo | null>>();
 
@@ -165,13 +170,14 @@ type SongRowProps = {
   onContextMenu?: (e: React.MouseEvent) => void;
   menuOpen?: boolean;
   motionDelay: number;
+  rowHoverBg: string;
 };
 
-function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, motionDelay }: SongRowProps) {
+function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, motionDelay, rowHoverBg }: SongRowProps) {
   const cover = bestCoverPath(file);
   const coverSrc = cover ? convertFileSrc(cover) : null;
   const displayTitle = file.canonicalTitle || file.name;
-  const displayAlbum = file.canonicalAlbum || file.album;
+  const displayAlbum = resolveDisplayAlbum(file);
 
   return (
     <motion.div
@@ -179,8 +185,8 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, mot
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1], delay: motionDelay }}
       className="group/row flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer"
-      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--music-surface-raised)")}
-      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = rowHoverBg; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
       onClick={onClick}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
     >
@@ -262,28 +268,33 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, mot
   );
 }
 
-// ---- Hero mosaic backdrop --------------------------------------------------
-
-function ArtistHeroMosaic({ covers }: { covers: string[] }) {
-  if (covers.length === 0) return null;
-  return (
-    <div className="absolute inset-0 flex overflow-hidden" aria-hidden>
-      {covers.map((c, i) => (
-        <div key={i} className="flex-1 min-w-0">
-          <img src={convertFileSrc(c)} alt="" className="w-full h-full" style={{ objectFit: "cover" }} />
-        </div>
-      ))}
-    </div>
-  );
+function pickHeroCover(
+  albums: { cover: string | null; year?: number | null }[],
+  tracks: MediaFile[],
+): string | null {
+  const sorted = [...albums].sort((a, b) => {
+    if (a.year && b.year) return b.year - a.year;
+    if (a.year) return -1;
+    if (b.year) return 1;
+    return 0;
+  });
+  for (const album of sorted) {
+    if (album.cover) return album.cover;
+  }
+  for (const track of tracks) {
+    const cover = bestCoverPath(track);
+    if (cover) return cover;
+  }
+  return null;
 }
 
 // ---- Section header with left accent bar -----------------------------------
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, mutedColor }: { children: React.ReactNode; mutedColor: string }) {
   return (
     <div className="flex items-center gap-2 mb-3">
       <div className="w-[3px] h-4 rounded-full shrink-0" style={{ background: "var(--music-accent)" }} />
-      <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--music-text-muted)" }}>
+      <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: mutedColor }}>
         {children}
       </h2>
     </div>
@@ -305,6 +316,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
 
   const [artistInfo, setArtistInfo] = useState<ArtistInfo | null>(null);
+  const [ambience, setAmbience] = useState<CoverAmbienceTheme>(() => buildCoverAmbienceTheme(null));
 
   const tracks = useMemo(() => {
     const all = flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path));
@@ -336,25 +348,8 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
     });
   }, [tracks]);
 
-  // Mosaic: up to 3 distinct album covers.
-  const mosaicCovers = useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const a of albums) {
-      if (!a.cover || seen.has(a.cover)) continue;
-      seen.add(a.cover);
-      out.push(a.cover);
-      if (out.length >= 3) break;
-    }
-    if (out.length === 0) {
-      for (const t of tracks) {
-        const c = bestCoverPath(t);
-        if (c && !seen.has(c)) { seen.add(c); out.push(c); }
-        if (out.length >= 3) break;
-      }
-    }
-    return out;
-  }, [albums, tracks]);
+  const heroCover = useMemo(() => pickHeroCover(albums, tracks), [albums, tracks]);
+  const heroCoverSrc = heroCover ? convertFileSrc(heroCover) : null;
 
   const totalDuration = useMemo(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
 
@@ -389,6 +384,20 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
     };
   }, [artistKey, displayName]);
 
+  useEffect(() => {
+    if (!heroCover) {
+      setAmbience(buildCoverAmbienceTheme(null));
+      return;
+    }
+    let cancelled = false;
+    void extractCoverBackdropFromPath(heroCover).then((hex) => {
+      if (!cancelled) setAmbience(buildCoverAmbienceTheme(hex));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [heroCover]);
+
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
 
   const handleShuffle = () => {
@@ -422,109 +431,140 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
   const subtitle = artistInfo?.disambiguation
     ?? (artistInfo?.artistType === "Group" ? "Group" : null);
 
-  return (
-    <div className="flex flex-col h-full overflow-y-auto rf-scrollbar" style={{ background: "var(--music-bg)" }}>
+  const statsLine = [
+    `${tracks.length} ${tracks.length === 1 ? "song" : "songs"}`,
+    albums.length > 0 ? `${albums.length} ${albums.length === 1 ? "album" : "albums"}` : null,
+    totalDuration > 0 ? formatDuration(totalDuration) : null,
+  ].filter(Boolean).join(" · ");
 
-      {/* ---- Hero ---- */}
-      <div className="relative shrink-0 overflow-hidden" style={{ height: "228px" }}>
-        {mosaicCovers.length > 0 ? (
+  return (
+    <div
+      className="relative flex h-full min-h-0 flex-col overflow-y-auto rf-scrollbar"
+      style={{ backgroundColor: ambience.canvasColor }}
+    >
+      <header
+        className="relative w-full shrink-0 overflow-hidden"
+        style={{ minHeight: 320, backgroundColor: ambience.canvasColor }}
+      >
+        {heroCoverSrc && (
           <div
-            className="absolute inset-0"
-            style={{ filter: "blur(9px) brightness(0.28)", transform: "scale(1.06)" }}
-          >
-            <ArtistHeroMosaic covers={mosaicCovers} />
-          </div>
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{ background: "linear-gradient(135deg, #221717 0%, #0e0a0a 100%)" }}
+            className="absolute inset-0 origin-center"
+            style={{
+              backgroundImage: `url(${heroCoverSrc})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              transform: "scale(1.12)",
+            }}
+            aria-hidden
           />
         )}
-
-        {/* Gradient fade from backdrop into surface */}
         <div
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: "linear-gradient(to bottom, transparent 20%, rgba(14,10,10,0.82) 70%, var(--music-bg) 100%)" }}
+          className="pointer-events-none absolute inset-0"
+          style={{ background: ambience.headerScrim }}
         />
 
-        {/* Back button */}
         <button
           type="button"
           onClick={onBack}
-          className="absolute top-3 left-3 z-20 flex items-center gap-1 text-sm transition-opacity opacity-70 hover:opacity-100"
-          style={{ color: "var(--music-text-primary)" }}
+          className="absolute top-4 left-6 z-20 flex items-center gap-1 rounded-full px-3 py-1.5 text-sm transition-opacity opacity-90 hover:opacity-100"
+          style={{ color: "#fff", background: "rgba(0, 0, 0, 0.42)" }}
         >
           <ChevronLeft size={16} /> Back
         </button>
 
-        {/* Artist name + subtitle at hero bottom */}
-        <div className="absolute bottom-5 left-5 z-10 pointer-events-none">
-          {subtitle && (
-            <p
-              className="text-xs uppercase tracking-widest mb-1.5 font-medium"
-              style={{ color: "var(--music-text-muted)" }}
+        <div className="relative z-10 flex min-h-[320px] items-end gap-6 px-8 pb-6 pt-16">
+          {heroCoverSrc ? (
+            <img
+              src={heroCoverSrc}
+              alt=""
+              className="h-44 w-44 shrink-0"
+              style={{
+                borderRadius: "var(--music-card-radius, 14px)",
+                objectFit: "cover",
+                boxShadow: "0 12px 40px rgba(0, 0, 0, 0.35)",
+              }}
+            />
+          ) : (
+            <div
+              className="flex h-44 w-44 shrink-0 items-center justify-center"
+              style={{
+                borderRadius: "var(--music-card-radius, 14px)",
+                background: ambience.chipBg,
+                color: ambience.onCanvasMuted,
+              }}
             >
-              {subtitle}
-            </p>
+              <Disc3 size={48} />
+            </div>
           )}
-          <h1
-            className="font-bold leading-none"
-            style={{
-              fontSize: "clamp(2rem, 5vw, 2.75rem)",
-              color: "var(--music-text-primary)",
-              textShadow: "0 2px 16px rgba(0,0,0,0.6)",
-            }}
-          >
-            {displayName}
-          </h1>
-          <p className="text-xs mt-2" style={{ color: "var(--music-text-muted)" }}>
-            {tracks.length} {tracks.length === 1 ? "song" : "songs"}
-            {albums.length > 0 && ` · ${albums.length} ${albums.length === 1 ? "album" : "albums"}`}
-            {totalDuration > 0 && ` · ${formatDuration(totalDuration)}`}
-          </p>
-        </div>
-      </div>
 
-      {/* ---- Controls + artist meta ---- */}
-      <div className="flex flex-col gap-3 px-5 pt-4 pb-3 shrink-0">
-        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1 pb-1">
+            {subtitle && (
+              <p
+                className="mb-1 text-xs font-medium uppercase tracking-widest"
+                style={{ color: ambience.onCanvasMuted }}
+              >
+                {subtitle}
+              </p>
+            )}
+            <h1
+              className="font-bold leading-[1.05] tracking-tight"
+              style={{
+                fontSize: "clamp(1.75rem, 3vw, 2.5rem)",
+                color: ambience.onCanvasPrimary,
+              }}
+            >
+              {displayName}
+            </h1>
+            <p className="mt-1.5 text-sm tabular-nums" style={{ color: ambience.onCanvasMuted }}>
+              {statsLine}
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <div className="relative z-10 shrink-0 px-8 pb-5 pt-1">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => onPlayFile(tracks[0], tracks)}
-            className="flex items-center gap-2 px-6 py-2.5 text-sm font-semibold transition-opacity hover:opacity-85"
-            style={{ background: "var(--music-accent)", color: "#fff", borderRadius: "12px" }}
+            className="flex items-center gap-2 px-7 py-2.5 text-sm font-semibold transition-opacity hover:opacity-88"
+            style={{
+              background: ambience.onCanvasPrimary,
+              color: ambience.canvasColor,
+              borderRadius: "999px",
+            }}
           >
-            <Play size={14} fill="currentColor" /> Play
+            <Play size={15} fill="currentColor" /> Play
           </button>
           <button
             type="button"
             onClick={handleShuffle}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-colors hover:bg-white/10"
-            style={{ border: "1px solid var(--music-border)", color: "var(--music-text-primary)" }}
+            className="flex h-11 w-11 items-center justify-center rounded-full transition-opacity hover:opacity-90"
+            style={{ color: ambience.onCanvasPrimary, background: ambience.chipBg }}
+            aria-label="Shuffle"
           >
-            <Shuffle size={14} /> Shuffle
+            <Shuffle size={16} />
           </button>
         </div>
 
-        {/* Genre chips + origin — instant from cache on revisit */}
         {artistInfo && (artistInfo.genres.length > 0 || artistInfo.originCity) && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="flex flex-wrap items-center gap-2"
+            className="mt-4 flex flex-wrap items-center gap-2"
           >
             {artistInfo.genres.slice(0, 4).map((g) => (
               <span
                 key={g}
-                className="text-xs px-2.5 py-1 rounded-full capitalize"
-                style={{ background: "var(--music-surface-raised)", color: "var(--music-text-secondary)" }}
+                className="rounded-full px-2.5 py-1 text-xs capitalize"
+                style={{ background: ambience.chipBg, color: ambience.onCanvasMuted }}
               >
                 {g}
               </span>
             ))}
             {artistInfo.originCity && (
-              <span className="flex items-center gap-1 text-xs" style={{ color: "var(--music-text-muted)" }}>
+              <span className="flex items-center gap-1 text-xs" style={{ color: ambience.onCanvasMuted }}>
                 <MapPin size={11} />
                 {artistInfo.originCity}{artistInfo.country ? `, ${artistInfo.country}` : ""}
               </span>
@@ -535,8 +575,8 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
 
       {/* ---- Albums ---- */}
       {albums.length > 0 && (
-        <section className="px-5 mb-5 shrink-0">
-          <SectionLabel>Albums</SectionLabel>
+        <section className="relative z-10 mb-8 w-full shrink-0 px-8">
+          <SectionLabel mutedColor={ambience.onCanvasMuted}>Albums</SectionLabel>
           <div className="grid grid-cols-2 gap-3 pb-1 md:grid-cols-3 xl:grid-cols-4">
             {albums.map((a) => (
               <AlbumCard
@@ -558,10 +598,9 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
         </section>
       )}
 
-      {/* ---- Songs ---- */}
-      <section className="px-1 pb-6">
-        <div className="px-4 mb-2">
-          <SectionLabel>Songs</SectionLabel>
+      <section className="relative z-10 mb-10 w-full px-6 pb-6">
+        <div className="px-3 mb-2">
+          <SectionLabel mutedColor={ambience.onCanvasMuted}>Songs</SectionLabel>
         </div>
         {tracks.map((file, i) => (
           <SongRow
@@ -578,6 +617,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
               onPlay: () => onPlayFile(file, tracks),
             })}
             motionDelay={Math.min(i * 0.035, 0.4)}
+            rowHoverBg={ambience.rowHoverBg}
           />
         ))}
       </section>
