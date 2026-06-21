@@ -13,7 +13,17 @@ export interface MusicPlaylistPage {
   hasMore: boolean;
   total: number | null;
   title?: string | null;
+  coverUrl?: string | null;
+  playlistKind?: PlaylistKind | null;
+  declaredTrackCount?: number | null;
+  curatorName?: string | null;
+  curatorId?: string | null;
+  curatorUrl?: string | null;
+  browseEntityUrl?: string | null;
+  releaseYear?: number | null;
 }
+
+export type PlaylistKind = "album" | "userPlaylist" | "mix" | "unknown";
 
 export interface MusicPlaylistInfo {
   id: string;

@@ -20,8 +20,14 @@ import { cn } from "@/lib/utils";
 import { playlistFolderTitle, type MusicPlaylistPage, type MusicTrackInfo } from "@/lib/musicExploreTracks";
 import {
   kickoffPlaylistDownloadSidecar,
+  mergePlaylistSidecarMetadata,
+  schedulePlaylistSidecarRootMetaBackfill,
+  sidecarCoverNeedsHeal,
+  sidecarMetadataFromHarvest,
+  sidecarMetadataFromPlaylistPage,
   sidecarTracksFromMusicTrackInfo,
 } from "@/lib/playlistDownloadSidecar";
+import { usePlaylistSidecarByListUrl } from "@/hooks/usePlaylistSidecar";
 import {
   MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION,
   throttleMusicExplorePageFetch,
@@ -191,8 +197,12 @@ export function MusicExploreBottomBar({
     ),
   );
 
+  const playlistSidecarLookup = usePlaylistSidecarByListUrl(playlistCanonicalUrl);
+  const isPlaylistCompleteOnDisk = playlistSidecarLookup?.sidecar.status === "complete";
+
   const isPlaylistDownloading = downloadingPlaylist || isPlaylistDownloadingInQueue;
-  const isPlaylistInLibrary = isPlaylistQueued && !isPlaylistDownloading;
+  const isPlaylistInLibrary =
+    (isPlaylistQueued || isPlaylistCompleteOnDisk) && !isPlaylistDownloading;
 
   const submitPasteUrl = useCallback((raw?: string) => {
     const resolved = resolveMusicExplorePasteUrl((raw ?? pasteInputValue).trim());
@@ -247,6 +257,11 @@ export function MusicExploreBottomBar({
       let folderName: string | undefined;
       let playlistTitle = pageContext.pageTitle?.trim() || "";
       let enqueuedTracks: MusicTrackInfo[] = [];
+      let sidecarMetadata = sidecarMetadataFromHarvest(
+        canonical,
+        pageContext.harvestedTracklist,
+        pageContext,
+      );
       const harvest = pageContext.harvestedTracklist;
       const harvestReady =
         harvest != null
@@ -257,14 +272,22 @@ export function MusicExploreBottomBar({
         let title = pageContext.pageTitle?.trim() || undefined;
         if (!title) {
           await throttleMusicExplorePageFetch();
-          const titlePage = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
-            url: canonical,
-            offset: 0,
-            limit: 1,
-            browserCookies: settings.browserContext ?? null,
-            cookieFile: settings.cookieFile ?? null,
-          });
-          title = titlePage.title?.trim() || undefined;
+          try {
+            const titlePage = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
+              url: canonical,
+              offset: 0,
+              limit: 1,
+              browserCookies: settings.browserContext ?? null,
+              cookieFile: settings.cookieFile ?? null,
+            });
+            title = titlePage.title?.trim() || undefined;
+            sidecarMetadata = mergePlaylistSidecarMetadata(
+              sidecarMetadata,
+              sidecarMetadataFromPlaylistPage(titlePage, canonical),
+            );
+          } catch {
+            /* title/cover root fetch is best-effort */
+          }
         }
         folderName = sanitizePlaylistFolderName(
           playlistFolderTitle(title ?? null, canonical),
@@ -284,6 +307,7 @@ export function MusicExploreBottomBar({
         let offset = 0;
         let hasMore = true;
         let pagesFetched = 0;
+        let firstPageMetaCaptured = false;
         while (hasMore && pagesFetched < MUSIC_EXPLORE_MAX_PLAYLIST_PAGES_PER_ACTION) {
           await throttleMusicExplorePageFetch();
           const page = await invoke<MusicPlaylistPage>("get_playlist_items_page", {
@@ -294,6 +318,13 @@ export function MusicExploreBottomBar({
             cookieFile: settings.cookieFile ?? null,
           });
           pagesFetched += 1;
+          if (!firstPageMetaCaptured) {
+            sidecarMetadata = mergePlaylistSidecarMetadata(
+              sidecarMetadata,
+              sidecarMetadataFromPlaylistPage(page, canonical),
+            );
+            firstPageMetaCaptured = true;
+          }
           if (!folderName) {
             const title = page.title ?? pageContext.pageTitle;
             folderName = sanitizePlaylistFolderName(
@@ -323,9 +354,20 @@ export function MusicExploreBottomBar({
           listUrl: canonical,
           title: playlistTitle,
           tracks: sidecarTracksFromMusicTrackInfo(enqueuedTracks),
+          metadata: sidecarMetadata,
         }).catch((e) => {
           debugLog("music.explore-download", "warn", "playlist sidecar kickoff failed", e);
         });
+        if (harvestReady && sidecarCoverNeedsHeal(sidecarMetadata.coverUrl)) {
+          schedulePlaylistSidecarRootMetaBackfill({
+            outputDir: dir,
+            folderName,
+            listUrl: canonical,
+            browserCookies: settings.browserContext ?? null,
+            cookieFile: settings.cookieFile ?? null,
+            known: sidecarMetadata,
+          });
+        }
       }
 
       releaseHeldDownloadJobs();
