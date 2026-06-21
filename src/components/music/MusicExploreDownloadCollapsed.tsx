@@ -1,6 +1,6 @@
 ﻿import { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronDown, ChevronUp, Music2, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Music2, TriangleAlert, X } from "lucide-react";
 import type { DownloadJob } from "@/downloadQueue";
 import { jobHasDownloadTransferStarted } from "@/downloadQueue";
 import {
@@ -319,6 +319,20 @@ function itemOrderIndex(items: MusicTrackInfo[], url: string): number {
   return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
 }
 
+function synthesizeFromJobs(jobs: DownloadJob[]): MusicTrackInfo[] {
+  return jobs
+    .filter((j) => j.status === "queued" || j.status === "downloading" || j.status === "paused")
+    .map((j) => ({
+      id: j.url,
+      url: j.url,
+      title: j.metadata?.title ?? j.title ?? j.url,
+      thumbnail: j.metadata?.thumbnail?.trim() || null,
+      duration: null,
+      artist: null,
+      album: null,
+    }));
+}
+
 function visibleCollapsedTracks(
   items: MusicTrackInfo[],
   downloadJobs: DownloadJob[],
@@ -339,11 +353,15 @@ function visibleCollapsedTracks(
       },
     ];
   }
-  return items.filter((t) => {
-    return isActiveMusicExploreDownloadUi(
-      musicExploreTrackDownloadUi(downloadJobs, t.url),
-    );
-  });
+  const fromItems = items.filter((t) =>
+    isActiveMusicExploreDownloadUi(musicExploreTrackDownloadUi(downloadJobs, t.url)),
+  );
+  // When the panel has no loaded items (bottom-bar enqueue without panel open),
+  // synthesize orb stubs directly from active jobs so the sidebar isn't blank.
+  if (fromItems.length === 0 && items.length === 0) {
+    return synthesizeFromJobs(downloadJobs);
+  }
+  return fromItems;
 }
 
 function pickFocalTrack(
@@ -393,6 +411,7 @@ type CollapsedProps = {
   /** Multi-track playlist batch: one bubble until expanded. */
   playlistBatch?: boolean;
   onMinimize?: () => void;
+  onCancelAll?: () => void;
 };
 
 export function MusicExploreDownloadCollapsed({
@@ -402,6 +421,7 @@ export function MusicExploreDownloadCollapsed({
   loading = false,
   playlistBatch = false,
   onMinimize,
+  onCancelAll,
 }: CollapsedProps) {
   const [stackExpanded, setStackExpanded] = useState(false);
 
@@ -441,6 +461,19 @@ export function MusicExploreDownloadCollapsed({
         className="flex flex-col items-center w-full min-h-0 flex-1 overflow-y-auto rf-scrollbar justify-end p-1.5"
         style={{ gap: ORB_GAP }}
       >
+        {onCancelAll && visibleItems.length > 0 && (
+          <button
+            type="button"
+            onClick={onCancelAll}
+            className="rf-music-tooltip-anchor flex items-center justify-center w-6 h-4 opacity-30 hover:opacity-80 transition-opacity shrink-0"
+            style={{ color: "var(--music-text-secondary)" }}
+            aria-label="Cancel all downloads"
+            data-tooltip="Cancel all"
+          >
+            <X size={11} />
+          </button>
+        )}
+
         {onMinimize && (
           <button
             type="button"

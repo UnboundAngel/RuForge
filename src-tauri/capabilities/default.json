@@ -3,12 +3,14 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": [
-    "main",
     "mini",
     "music-mini",
     "explorer",
     "explorer-surface",
     "notify"
+  ],
+  "webviews": [
+    "main"
   ],
   "permissions": [
     "core:default",

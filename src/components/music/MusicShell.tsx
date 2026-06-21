@@ -32,6 +32,7 @@ import {
   EXPLORER_PAUSE_MEDIA_SCRIPT,
   explorerForceNavigateScript,
   getEmbeddedExplorerWebview,
+  MUSIC_EXPLORE_RELOAD_IN_PLACE_SCRIPT,
 } from "@/explorerWebviewLifecycle";
 import { youtubeMusicSearchUrl, extractYouTubeVideoId } from "@/youtubeUrl";
 import {
@@ -200,6 +201,9 @@ export function MusicShell() {
   const musicExploreLastBoundsRef = useRef<ExplorerBounds | null>(null);
   const musicExploreScheduleRef = useRef<(() => void) | null>(null);
   const musicExploreNavigatePendingRef = useRef<string | null>(null);
+  const injectMusicExploreBridgeRef = useRef<
+    ((opts?: { includeInit?: boolean }) => Promise<void>) | null
+  >(null);
   const runPendingMusicExploreNavigateRef = useRef<() => Promise<void>>(async () => {});
   const prevExploreWebviewActiveRef = useRef(false);
   /** Session-level dedup: videoIds already auto-queued this session. */
@@ -718,8 +722,14 @@ export function MusicShell() {
       } catch { /* not mounted */ }
     };
 
-    const injectMusicExploreBridge = async () => {
+    const injectMusicExploreBridge = async (opts?: { includeInit?: boolean }) => {
       try {
+        if (opts?.includeInit) {
+          await invoke("eval_in_webview", {
+            label: MUSIC_EXPLORE_WEBVIEW_LABEL,
+            script: MUSIC_EXPLORE_INIT_SCRIPT,
+          });
+        }
         await invoke("eval_in_webview", {
           label: MUSIC_EXPLORE_WEBVIEW_LABEL,
           script: MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL,
@@ -730,7 +740,7 @@ export function MusicShell() {
         });
         logMusicExploreNavigation("webview-bridge-injected", {
           label: MUSIC_EXPLORE_WEBVIEW_LABEL,
-          note: "Uses __TAURI_INTERNALS__.invoke — events should now reach main window",
+          includeInit: Boolean(opts?.includeInit),
         });
       } catch (e) {
         logMusicExploreNavigation("webview-bridge-inject-failed", {
@@ -739,6 +749,7 @@ export function MusicShell() {
         });
       }
     };
+    injectMusicExploreBridgeRef.current = injectMusicExploreBridge;
 
     const applyMusicExploreBounds = async (bounds: ExplorerBounds) => {
       if (!musicExploreWebviewRef.current) {
@@ -798,7 +809,6 @@ export function MusicShell() {
         wv.setPosition(new LogicalPosition(bounds.x, bounds.y)),
         wv.setSize(new LogicalSize(bounds.width, bounds.height)),
       ]);
-      await injectMusicExploreBridge();
     };
 
     const syncWebview = async () => {
@@ -878,6 +888,7 @@ export function MusicShell() {
 
     return () => {
       active = false;
+      injectMusicExploreBridgeRef.current = null;
       musicExploreCreatingRef.current = false;
       musicExploreScheduleRef.current = null;
       cancel();
@@ -906,10 +917,16 @@ export function MusicShell() {
     try {
       await invoke("eval_in_webview", {
         label: MUSIC_EXPLORE_WEBVIEW_LABEL,
-        script: `(function(){try{location.reload();}catch(e){}})();`,
+        script: MUSIC_EXPLORE_RELOAD_IN_PLACE_SCRIPT,
       });
     } catch {
       /* webview not mounted */
+    }
+
+    for (const ms of [600, 1800, 3500]) {
+      window.setTimeout(() => {
+        void injectMusicExploreBridgeRef.current?.({ includeInit: true });
+      }, ms);
     }
   }, []);
 

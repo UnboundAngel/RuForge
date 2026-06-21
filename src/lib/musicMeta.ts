@@ -42,8 +42,8 @@ export function readMusicMeta(mediaPath: string): Promise<MusicMetaSidecar | nul
   return invoke<MusicMetaSidecar | null>("read_music_meta", { mediaPath });
 }
 
-export function backfillMusicMeta(roots: string[]): Promise<number> {
-  return invoke<number>("backfill_music_meta", { roots });
+export function backfillMusicMeta(roots: string[], force?: boolean): Promise<number> {
+  return invoke<number>("backfill_music_meta", { roots, force });
 }
 
 export interface ArtistInfo {

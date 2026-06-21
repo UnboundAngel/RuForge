@@ -8,7 +8,7 @@
 
 Shipping version: 0.1.12 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-20 (crash screen hero layout)
+Last updated: 2026-06-21 (yt-dlp album wins canonical_album)
 Status: in progress
 
 ## Now
@@ -29,6 +29,14 @@ reads this for the last shipped delta, not the git tree.
 
 **0.1.12 (unreleased):**
 
+- Music: child webviews (YTM/explorer) no longer inherit main window local-only ACL; remote event emit/listen only via music-explore-webview capability.
+- Music: Explore reload uses live webview URL (not stale host cache); SPA nav syncs URL + page-context on every yt-navigate-finish / bridge refresh.
+- Music: `canonical_album` prefers yt-dlp `.info.json` album over embedded tags and MusicBrainz; MB album only when yt and tag are empty (`musicmeta.rs`).
+- Music: cancel all active downloads from music mode (Ban button in panel header, X button in collapsed orb stack).
+- Music: sidebar orbs show all active jobs even when panel was never opened (bottom-bar enqueue without panel).
+- Music: bottom-bar playlist download uses webview page title before OLAK5uy URL fragment as folder name.
+- Music: album key normalization strips leading date stamps so live recordings group correctly.
+- Music: artist view immersive hero (cover-driven backdrop, large art tile, controls in hero); album grid unchanged.
 - Crash recovery: hero uses website RuForge underline animation + uh oh headline; Reload app CTA; error details in lower section.
 - Debugging: crash recovery preview full-screen; island-only capture (in-pill hover icon, widens with filename after save, no bottom-right toast).
 - Debugging: dev capture auto-copies PNG to clipboard on save; fly-toast border; capture icon right-click (Edit last, Dev captures).

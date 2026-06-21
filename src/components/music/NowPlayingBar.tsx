@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
+import { Ban, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -71,6 +71,19 @@ export function NowPlayingBar({
   const setLooping = useRuforgeStore((s) => s.setLooping);
   const handlePopOut = useRuforgeStore((s) => s.handlePopOut);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
+  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
+  const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
+
+  const activeJobs = downloadJobs.filter(
+    (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+  );
+  const hasActiveDownloads = activeJobs.length > 0;
+
+  const handleCancelAllDownloads = useCallback(() => {
+    for (const job of activeJobs) {
+      void removeDownloadJob(job.id);
+    }
+  }, [activeJobs, removeDownloadJob]);
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [morePanel, setMorePanel] = useState<"main" | "speed">("main");
@@ -349,6 +362,18 @@ export function NowPlayingBar({
           ref={utilitiesRef}
           className="flex items-center justify-end gap-0.5"
         >
+          {hasActiveDownloads && (
+            <button
+              type="button"
+              onClick={handleCancelAllDownloads}
+              className={cn(barBtnClass, "opacity-50 hover:opacity-100")}
+              style={{ color: "var(--music-text-primary)" }}
+              aria-label="Stop all downloads"
+            >
+              <Ban size={15} />
+            </button>
+          )}
+
           <button
             type="button"
             onClick={toggleLoop}

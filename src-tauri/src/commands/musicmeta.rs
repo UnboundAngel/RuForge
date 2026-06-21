@@ -493,6 +493,44 @@ async fn fetch_caa_cover(release_id: &str) -> Option<Vec<u8>> {
 // ---- Identity resolution -------------------------------------------------
 
 /// Returns (value, from_tags, from_mb, from_yt) for one field.
+fn album_folder_fallback(media: &Path) -> Option<String> {
+    let track_dir = media.parent()?;
+    let album_dir = track_dir.parent()?;
+    let raw = album_dir.file_name()?.to_str()?.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    match raw {
+        "Playlists" | "Music" | "Videos" | THUMB_DIR_NAME => None,
+        s => {
+            let name = s.strip_prefix("Album - ").unwrap_or(s).trim();
+            if name.is_empty() {
+                None
+            } else {
+                Some(name.to_string())
+            }
+        }
+    }
+}
+
+fn resolve_canonical_album(
+    yt: Option<String>,
+    tag: Option<String>,
+    mb: Option<String>,
+    folder: Option<String>,
+) -> (Option<String>, bool, bool, bool) {
+    if let Some(v) = yt.filter(|s| !s.trim().is_empty()) {
+        return (Some(v), false, false, true);
+    }
+    if let Some(v) = tag.filter(|s| !s.trim().is_empty()) {
+        return (Some(v), true, false, false);
+    }
+    if let Some(v) = mb.filter(|s| !s.trim().is_empty()) {
+        return (Some(v), false, true, false);
+    }
+    (folder.filter(|s| !s.trim().is_empty()), false, false, false)
+}
+
 fn resolve_field(
     tag: Option<String>,
     mb: Option<String>,
@@ -642,11 +680,11 @@ pub async fn enrich_music_meta_at(
         yt.artist.clone(),
         artist_from_stem(stem),
     );
-    let (canonical_album, al_tag, al_mb, al_yt) = resolve_field(
+    let (canonical_album, al_tag, al_mb, al_yt) = resolve_canonical_album(
+        yt.album.clone(),
         tags.album.clone(),
         mb_match.as_ref().and_then(|m| m.album.clone()),
-        yt.album.clone(),
-        None,
+        album_folder_fallback(media),
     );
     let canonical_album = drop_single_track_pseudo_album(canonical_album, &canonical_title);
 
@@ -819,21 +857,29 @@ pub async fn read_music_meta(media_path: String) -> Option<MusicMetaSidecarDto> 
 }
 
 /// Scan library audio: full enrich for missing sidecars, then patch artist tags on legacy sidecars.
+/// When `force` is true, re-runs full enrichment on ALL audio files even if a sidecar already
+/// exists. Use this after an album-resolution priority fix to correct already-written sidecars
+/// without deleting files.
 /// Emits `music-meta-backfill-progress` with {done, total, currentTitle}.
 #[tauri::command]
-pub async fn backfill_music_meta(app: AppHandle, roots: Vec<String>) -> Result<u32, String> {
+pub async fn backfill_music_meta(
+    app: AppHandle,
+    roots: Vec<String>,
+    force: Option<bool>,
+) -> Result<u32, String> {
+    let force = force.unwrap_or(false);
     let all = library_audio_files(&roots);
     let backfill_opts = EnrichOpts { artist_tags: true };
 
-    let mut missing_sidecar: Vec<PathBuf> = Vec::new();
+    let mut to_enrich_full: Vec<PathBuf> = Vec::new();
     let mut needs_tag_patch: Vec<PathBuf> = Vec::new();
 
     for p in all {
         let Some(parent) = p.parent() else { continue };
         let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else { continue };
         let sp = sidecar_path_for(parent, stem);
-        if !sp.is_file() {
-            missing_sidecar.push(p);
+        if force || !sp.is_file() {
+            to_enrich_full.push(p);
             continue;
         }
         if read_sidecar(&sp)
@@ -844,7 +890,7 @@ pub async fn backfill_music_meta(app: AppHandle, roots: Vec<String>) -> Result<u
         }
     }
 
-    let total = (missing_sidecar.len() + needs_tag_patch.len()) as u32;
+    let total = (to_enrich_full.len() + needs_tag_patch.len()) as u32;
     let mut done: u32 = 0;
     let mut enriched: u32 = 0;
 
@@ -857,12 +903,12 @@ pub async fn backfill_music_meta(app: AppHandle, roots: Vec<String>) -> Result<u
         },
     );
 
-    for path in &missing_sidecar {
+    for path in &to_enrich_full {
         let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
         if enrich_music_meta_path(
             &app,
             path,
-            EnrichMode::Full { force: false },
+            EnrichMode::Full { force },
             backfill_opts,
         )
         .await

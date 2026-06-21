@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
-import { Download, Loader, Loader2, X } from "lucide-react";
+import { Ban, Download, Loader, Loader2, X } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import {
   countActivePlaylistDownloads,
@@ -352,6 +352,7 @@ export function MusicExploreDownloadPanel({
   const enqueueDownload = useRuforgeStore((s) => s.enqueueDownload);
   const releaseHeldDownloadJobs = useRuforgeStore((s) => s.releaseHeldDownloadJobs);
   const pumpDownloadQueue = useRuforgeStore((s) => s.pumpDownloadQueue);
+  const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
 
   const [phase, setPhase] = useState<Phase>(url ? { kind: "loading", url } : { kind: "idle" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -542,7 +543,7 @@ export function MusicExploreDownloadPanel({
         );
         if (ac.signal.aborted) return;
         applyPlaylistPhase(
-          playlistFolderTitle(page.title, canonical),
+          playlistFolderTitle(page.title ?? pageTitle, canonical),
           canonical,
           page,
         );
@@ -810,6 +811,33 @@ export function MusicExploreDownloadPanel({
     return countActivePlaylistDownloads(downloadJobs, phase.items);
   }, [phase, downloadJobs]);
 
+  const isRetrying = useMemo(() => {
+    if (phase.kind !== "playlist") return false;
+    const folder = sanitizePlaylistFolderName(phase.playlistTitle);
+    if (!folder) return false;
+    return downloadJobs.some(
+      (j) =>
+        j.options.playlistOutputFolder === folder &&
+        (j.attemptCount ?? 1) > 1 &&
+        (j.status === "queued" || j.status === "downloading"),
+    );
+  }, [phase, downloadJobs]);
+
+  const totalActiveJobCount = useMemo(
+    () => downloadJobs.filter(
+      (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+    ).length,
+    [downloadJobs],
+  );
+
+  const handleCancelAll = useCallback(() => {
+    for (const job of downloadJobs) {
+      if (job.status === "queued" || job.status === "downloading" || job.status === "paused") {
+        void removeDownloadJob(job.id);
+      }
+    }
+  }, [downloadJobs, removeDownloadJob]);
+
   const {
     scrollRef: contentScrollRef,
     edges: contentScrollEdges,
@@ -828,9 +856,13 @@ export function MusicExploreDownloadPanel({
           items={playlistItems}
           downloadJobs={downloadJobs}
           celebrating={celebrating}
-          loading={phase.kind === "loading" || phase.kind === "idle"}
-          playlistBatch={phase.kind === "playlist" && playlistItems.length > 1}
+          loading={phase.kind === "loading"}
+          playlistBatch={
+            (phase.kind === "playlist" && playlistItems.length > 1) ||
+            (playlistItems.length === 0 && totalActiveJobCount > 1)
+          }
           onMinimize={onMinimize}
+          onCancelAll={totalActiveJobCount > 0 ? handleCancelAll : undefined}
         />
       </div>
     );
@@ -874,6 +906,17 @@ export function MusicExploreDownloadPanel({
                   Downloading {activeDownloadCount}…
                 </motion.span>
               )}
+              {isRetrying && (
+                <motion.span
+                  initial={{ opacity: 0, y: -2 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-1 text-[10px]"
+                  style={{ color: "var(--music-text-muted)" }}
+                >
+                  <Loader2 size={10} className="animate-spin shrink-0" />
+                  Retrying failed items…
+                </motion.span>
+              )}
             </div>
           ) : phase.kind === "browse" ? (
             <span className="text-[11px] font-semibold truncate">{phase.result.title || "Pick a playlist"}</span>
@@ -906,6 +949,18 @@ export function MusicExploreDownloadPanel({
             >
               <Download size={10} />
               All
+            </button>
+          )}
+          {totalActiveJobCount > 0 && (
+            <button
+              type="button"
+              onClick={handleCancelAll}
+              className="rf-music-tooltip-anchor w-6 h-6 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity rounded"
+              style={{ color: "var(--music-text-secondary)" }}
+              aria-label="Stop all downloads"
+              data-tooltip="Stop all"
+            >
+              <Ban size={12} />
             </button>
           )}
           <button

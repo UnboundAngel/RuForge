@@ -179,6 +179,11 @@ export interface DownloadJob {
   enqueueSource?: DownloadEnqueueSource;
   /** Dev replay Mode B only: skip yt-dlp and synthetic-finish through onDownloadJobFinished. */
   devSimulateDownload?: boolean;
+  /**
+   * How many times this job has been attempted (1 = first try). Auto-retry sweep increments
+   * this before re-queuing so the sweep can enforce the per-item attempt cap.
+   */
+  attemptCount?: number;
 }
 
 export type DownloadEnqueueSource =

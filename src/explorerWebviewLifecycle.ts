@@ -12,6 +12,10 @@ export function explorerNavigateOrReloadScript(url: string): string {
   return `(function(){try{var t=${encoded};if(location.href!==t)location.href=t;else location.reload();}catch(e){}})();`;
 }
 
+/** Reload the current YTM page using live webview location.href (not host-side URL cache). */
+export const MUSIC_EXPLORE_RELOAD_IN_PLACE_SCRIPT =
+  `(function(){try{var t=location.href;if(!t)return;if(location.href!==t)location.href=t;else location.reload();}catch(e){}})();`;
+
 /** Always navigate (used when switching YTM search from Home). */
 export function explorerForceNavigateScript(url: string): string {
   const encoded = JSON.stringify(url);

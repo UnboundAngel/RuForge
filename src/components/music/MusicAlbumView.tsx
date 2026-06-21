@@ -7,7 +7,7 @@ import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
 import { artistKeyFromFile, primaryArtist, rawArtistFromFile } from "./musicArtist";
-import { normalizeAlbumShelfKey, rawAlbumNameFromFile } from "./musicShelfDedup";
+import { albumKeyFromFile, resolveDisplayAlbum } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicLikeButton } from "./MusicLikeButton";
@@ -88,9 +88,7 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
     const all = flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path));
     const albumTracks = all.filter((t) => {
       if (artistKeyFromFile(t) !== artistKey.trim().toLowerCase()) return false;
-      const album = rawAlbumNameFromFile(t);
-      if (!album) return false;
-      return normalizeAlbumShelfKey(album) === albumKey.trim().toLowerCase();
+      return albumKeyFromFile(t) === albumKey.trim().toLowerCase();
     });
     return albumTracks.sort((a, b) => {
       const na = a.trackNo ?? 9999;
@@ -102,7 +100,7 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
 
   const displayAlbum = useMemo(() => {
     const first = tracks[0];
-    return (first?.canonicalAlbum ?? first?.album) || albumKey;
+    return first ? resolveDisplayAlbum(first) || albumKey : albumKey;
   }, [tracks, albumKey]);
   const displayArtist = useMemo(() => {
     const first = tracks[0];
