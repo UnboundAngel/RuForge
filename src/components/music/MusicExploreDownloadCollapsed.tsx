@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronDown, ChevronUp, Music2, TriangleAlert, X } from "lucide-react";
+import { Ban, Check, ChevronDown, ChevronUp, Music2, TriangleAlert, X } from "lucide-react";
+import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { DownloadJob } from "@/downloadQueue";
 import { jobHasDownloadTransferStarted } from "@/downloadQueue";
 import {
@@ -693,7 +694,22 @@ export function ExploreDownloadDockChip({
       (activeJob.status === "downloading" &&
         !jobHasDownloadTransferStarted(activeJob)));
 
+  const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
+
+  const handleCancelAll = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      for (const job of activeJobs) {
+        void removeDownloadJob(job.id);
+      }
+    },
+    [activeJobs, removeDownloadJob],
+  );
+
   if (!present) return null;
+
+  const showCancel = count > 0;
 
   const ariaLabel = showCompleteIcon || celebrating
     ? warningVisual
@@ -702,25 +718,34 @@ export function ExploreDownloadDockChip({
     : `${count} download${count !== 1 ? "s" : ""} in progress. Click to expand.`;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       className={cn(
-        "rf-dock-chip rf-music-tooltip-anchor relative flex items-center rounded-full",
-        navCollapsed ? "overflow-visible justify-center gap-0 px-0 w-11" : "overflow-hidden w-full gap-2 pl-1 pr-2.5",
-        "transition-[width,padding,gap,opacity,transform] ease-out hover:opacity-90",
+        "group/dock-chip relative flex items-center min-w-0",
+        navCollapsed ? "justify-center w-full" : "w-full gap-1",
         fadingOut ? "opacity-0 scale-[0.96]" : "opacity-100 scale-100",
+        "transition-[opacity,transform] ease-out",
       )}
-      style={{
-        height: navCollapsed ? CHIP_SIZE + ORB_RING_OUTSET * 2 : CHIP_SIZE,
-        minWidth: navCollapsed ? CHIP_SIZE + ORB_RING_OUTSET * 2 : CHIP_SIZE,
-        transitionDuration: `${SIDEBAR_MS}ms`,
-        background: "var(--music-surface-raised)",
-        color: "var(--music-text-primary)",
-      }}
-      aria-label={ariaLabel}
-      data-tooltip={navCollapsed ? "Expand downloads" : undefined}
+      style={{ transitionDuration: `${SIDEBAR_MS}ms` }}
     >
+      <div className={cn("relative min-w-0", navCollapsed ? "shrink-0" : "flex flex-1 min-w-0")}>
+        <button
+          type="button"
+          onClick={onClick}
+          className={cn(
+            "rf-dock-chip rf-music-tooltip-anchor relative flex min-w-0 items-center rounded-full",
+            navCollapsed ? "overflow-visible justify-center gap-0 px-0 w-11" : "w-full overflow-hidden gap-2 pl-1 pr-2.5",
+            "transition-[width,padding,gap,opacity] ease-out hover:opacity-90",
+          )}
+          style={{
+            height: navCollapsed ? CHIP_SIZE + ORB_RING_OUTSET * 2 : CHIP_SIZE,
+            minWidth: navCollapsed ? CHIP_SIZE + ORB_RING_OUTSET * 2 : CHIP_SIZE,
+            transitionDuration: `${SIDEBAR_MS}ms`,
+            background: "var(--music-surface-raised)",
+            color: "var(--music-text-primary)",
+          }}
+          aria-label={ariaLabel}
+          data-tooltip={navCollapsed ? "Expand downloads" : undefined}
+        >
       <div
         className={cn(
           "pointer-events-none absolute inset-0 transition-opacity ease-out",
@@ -835,6 +860,35 @@ export function ExploreDownloadDockChip({
       >
         {title}
       </span>
-    </button>
+        </button>
+        {showCancel && navCollapsed && (
+          <button
+            type="button"
+            onClick={handleCancelAll}
+            className="rf-music-tooltip-anchor absolute -top-0.5 -right-0.5 z-[2] flex h-5 w-5 shrink-0 items-center justify-center rounded-full opacity-0 transition-opacity group-hover/dock-chip:opacity-100"
+            style={{
+              color: "var(--music-text-secondary)",
+              background: "var(--music-surface-raised)",
+            }}
+            aria-label="Stop all downloads"
+            data-tooltip="Stop all"
+          >
+            <Ban size={10} />
+          </button>
+        )}
+      </div>
+      {showCancel && !navCollapsed && (
+        <button
+          type="button"
+          onClick={handleCancelAll}
+          className="rf-music-tooltip-anchor z-[2] flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-50 transition-opacity hover:opacity-100"
+          style={{ color: "var(--music-text-secondary)" }}
+          aria-label="Stop all downloads"
+          data-tooltip="Stop all"
+        >
+          <Ban size={12} />
+        </button>
+      )}
+    </div>
   );
 }

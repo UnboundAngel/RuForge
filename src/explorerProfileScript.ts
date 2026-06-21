@@ -829,6 +829,17 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
     } catch (e) {}
     return null;
   }
+  function rfReadH1HeaderTitle(headerRoot) {
+    if (!headerRoot) return null;
+    try {
+      var h1Title = headerRoot.querySelector("h1 .title, h1 yt-formatted-string.title");
+      if (h1Title) {
+        var t = (h1Title.textContent || "").trim();
+        if (t) return t;
+      }
+    } catch (e) {}
+    return null;
+  }
   function readPageContext() {
     var href = window.location.href;
     var path = (window.location.pathname || "/").replace(/\\/+$/, "") || "/";
@@ -896,6 +907,42 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
       if (document.querySelector('[page-type="MUSIC_PAGE_TYPE_PLAYLIST"], ytmusic-playlist-header-renderer')) {
         kind = "playlist";
         isPlaylistPage = true;
+      }
+      if (!pageTitle) {
+        var playlistHeader = document.querySelector("ytmusic-playlist-header-renderer");
+        if (playlistHeader) {
+          kind = "playlist";
+          isPlaylistPage = true;
+          var plTitleEl = playlistHeader.querySelector(".title, h2, yt-formatted-string.title");
+          if (plTitleEl) {
+            var plTitle = (plTitleEl.textContent || "").trim();
+            if (plTitle) pageTitle = plTitle;
+          }
+        }
+      }
+    } catch (e) {}
+
+    try {
+      if (!pageTitle) {
+        var responsiveHeader = document.querySelector("ytmusic-responsive-header-renderer");
+        if (responsiveHeader) {
+          var rhTitle = rfReadH1HeaderTitle(responsiveHeader);
+          if (rhTitle) pageTitle = rhTitle;
+          if (document.querySelector('[page-type="MUSIC_PAGE_TYPE_PLAYLIST"]')) {
+            kind = "playlist";
+            isPlaylistPage = true;
+          }
+        }
+      }
+    } catch (e) {}
+
+    try {
+      if (!pageTitle && (kind === "artist" || kind === "channel")) {
+        var immersiveHeader = document.querySelector("ytmusic-immersive-header-renderer");
+        if (immersiveHeader) {
+          var imTitle = rfReadH1HeaderTitle(immersiveHeader);
+          if (imTitle) pageTitle = imTitle;
+        }
       }
     } catch (e) {}
 
@@ -971,6 +1018,21 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
     } catch (e) {}
     return false;
   }
+  function pageKindNeedsHeaderTitle(kind) {
+    return kind === "playlist" || kind === "album" || kind === "artist" || kind === "channel";
+  }
+  function pageKindNeedsTrackShelf(kind) {
+    return kind === "playlist" || kind === "album";
+  }
+  function browseContextPollSatisfied() {
+    try {
+      var ctx = readPageContext();
+      var titleOk = !pageKindNeedsHeaderTitle(ctx.kind) || !!ctx.pageTitle;
+      var shelfOk = !pageKindNeedsTrackShelf(ctx.kind) || browseDataHasTrackShelf();
+      return titleOk && shelfOk;
+    } catch (e) {}
+    return true;
+  }
   function clearBrowseDataWatcher() {
     if (window.__rf_browse_poll) {
       clearInterval(window.__rf_browse_poll);
@@ -979,20 +1041,15 @@ export const MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL = `(function(){
   }
   function armBrowseDataWatcher() {
     clearBrowseDataWatcher();
-    if (browseDataHasTrackShelf()) {
-      window.__rf_emitPageContext();
+    if (browseContextPollSatisfied()) {
       return;
     }
     var started = Date.now();
     var maxMs = 4000;
     var intervalMs = 100;
     window.__rf_browse_poll = setInterval(function() {
-      if (browseDataHasTrackShelf()) {
-        clearBrowseDataWatcher();
-        window.__rf_emitPageContext();
-        return;
-      }
-      if (Date.now() - started >= maxMs) {
+      window.__rf_emitPageContext();
+      if (browseContextPollSatisfied() || Date.now() - started >= maxMs) {
         clearBrowseDataWatcher();
       }
     }, intervalMs);
