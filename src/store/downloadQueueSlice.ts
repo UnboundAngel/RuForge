@@ -63,6 +63,7 @@ import {
 } from "../downloadJobWatchdog";
 import { deliverUserNotification } from "../systemNotify";
 import { findLibraryDuplicate } from "../duplicateDownload";
+import { updatePlaylistDownloadSidecarFromJob } from "../lib/playlistDownloadSidecar";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 
 /** Coalesce `persistDownloadJobs` when many hydrates finish back-to-back (e.g. startup sweep). */
@@ -873,6 +874,9 @@ export const createDownloadQueueSlice: StateCreator<
           ...syncLegacyDownloaderUi(downloadJobs, focus),
         };
       });
+      if (job.options.playlistOutputFolder?.trim()) {
+        updatePlaylistDownloadSidecarFromJob(get().downloadJobs, job, "done");
+      }
       scheduleSkippedJobRemoval(get, id);
     },
 
@@ -1209,11 +1213,18 @@ export const createDownloadQueueSlice: StateCreator<
       const skippedIds: string[] = [];
       let finishedUrl: string | undefined;
       const heroUrlBeforeFinish = get().url.trim();
+      let playlistSidecarJob: DownloadJob | undefined;
+      let playlistSidecarStatus: "done" | "failed" | undefined;
 
       set((s) => {
         const finishedJob = s.downloadJobs.find((j) => j.id === payload.jobId);
         finishedUrl =
           payload.url?.trim() || finishedJob?.url?.trim() || undefined;
+
+        if (finishedJob?.options.playlistOutputFolder?.trim()) {
+          playlistSidecarJob = finishedJob;
+          playlistSidecarStatus = payload.success ? "done" : "failed";
+        }
 
         let downloadJobs = s.downloadJobs.map((j) =>
           j.id === payload.jobId
@@ -1272,6 +1283,14 @@ export const createDownloadQueueSlice: StateCreator<
       }
 
       sweepBatchRetries(get, set);
+
+      if (playlistSidecarJob && playlistSidecarStatus) {
+        updatePlaylistDownloadSidecarFromJob(
+          get().downloadJobs,
+          playlistSidecarJob,
+          playlistSidecarStatus,
+        );
+      }
 
       if (finishedUrl) {
         evictDownloadJobMetadataCacheWhenIdle(
