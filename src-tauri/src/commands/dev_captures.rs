@@ -6,6 +6,14 @@ use tauri::{AppHandle, Manager};
 
 const CAPTURES_SUBDIR: &str = "dev-captures";
 
+pub struct DevCaptureMainWindow(pub tauri::WebviewWindow);
+
+fn resolve_dev_capture_main_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
+    app.try_state::<DevCaptureMainWindow>()
+        .map(|st| st.0.clone())
+        .ok_or_else(|| "main window not found".to_string())
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DevCaptureEntry {
@@ -169,9 +177,7 @@ pub fn start_dev_capture_file_drag(app: AppHandle, paths: Vec<String>) -> Result
     #[cfg(not(target_os = "linux"))]
     {
         let icon_path = files[0].clone();
-        let window = app
-            .get_webview_window("main")
-            .ok_or_else(|| "main window not found".to_string())?;
+        let window = resolve_dev_capture_main_window(&app)?;
 
         drag::start_drag(
             &window,
@@ -344,39 +350,18 @@ mod native_capture {
 }
 
 #[cfg(windows)]
-fn resolve_main_capture_window(
-    app: &AppHandle,
-    caller: &tauri::WebviewWindow,
-) -> Result<tauri::WebviewWindow, String> {
-    if caller.label() == "main" {
-        return Ok(caller.clone());
-    }
-    if let Some(main) = app.get_webview_window("main") {
-        return Ok(main);
-    }
-    for (label, window) in app.webview_windows() {
-        if label == "main" {
-            return Ok(window);
-        }
-    }
-    Err(format!("main window not found (caller={})", caller.label()))
-}
-
-#[cfg(windows)]
 #[tauri::command]
 pub fn capture_main_window_dev(
-    webview: tauri::WebviewWindow,
     app: AppHandle,
     context_label: String,
 ) -> Result<DevCaptureScreenshotResult, String> {
-    let window = resolve_main_capture_window(&app, &webview)?;
+    let window = resolve_dev_capture_main_window(&app)?;
     native_capture::capture_main_window_dev(&window, app, context_label)
 }
 
 #[cfg(not(windows))]
 #[tauri::command]
 pub fn capture_main_window_dev(
-    _webview: tauri::WebviewWindow,
     _app: AppHandle,
     _context_label: String,
 ) -> Result<DevCaptureScreenshotResult, String> {
