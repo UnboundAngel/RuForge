@@ -1,17 +1,17 @@
 import { useMemo, useRef, useState, type MouseEvent } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { trackEvent } from "@aptabase/tauri";
 import { Copy, Check, ExternalLink } from "lucide-react";
 
 import { CodeSnippetPanel } from "@/components/ui/CodeSnippetPanel";
 import { copyPlainText } from "@/lib/copyPlainText";
-import { getOrCreateInstallId } from "@/lib/telemetryInstallId";
 import {
   crashBodyHtml,
   formatCrashMessage,
   parseCrashDetails,
 } from "@/lib/parseCrashStack";
+import { getOrCreateInstallId } from "@/lib/telemetryInstallId";
+import { trackTelemetryEvent } from "@/lib/telemetryTrack";
 import { loadMergedSettings } from "@/store/types";
 
 const ISSUES_NEW = "https://github.com/UnboundAngel/RuForge/issues/new";
@@ -81,8 +81,8 @@ export function CrashErrorDetails({
   const handleReport = async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     const settings = loadMergedSettings();
-    if (settings.telemetryCrashEnabled) {
-      void trackEvent("crash_report_manual", {
+    if (settings.showDebuggingSettings && settings.telemetryCrashEnabled) {
+      void trackTelemetryEvent("crash_report_manual", {
         install_id: getOrCreateInstallId(),
         message: formatCrashMessage(message, errorName).slice(0, 200),
       });
