@@ -3,6 +3,7 @@ use tauri::{AppHandle, State};
 
 use crate::app_state::AppConfig;
 use crate::commands::ffprobe::probe_ffprobe_cache_dir;
+use crate::dev_gate::DevGateDisk;
 use crate::hardware_acceleration::HardwareAccelerationDisk;
 use crate::utils::is_media_ext;
 
@@ -19,6 +20,22 @@ pub fn set_hardware_acceleration_pref(app: AppHandle, hardware_acceleration: boo
 #[tauri::command]
 pub fn get_hardware_acceleration_browser_args(app: AppHandle) -> Option<String> {
     HardwareAccelerationDisk::load(&app.config().identifier).webview_additional_browser_args()
+}
+
+#[tauri::command]
+pub fn get_show_debugging_settings_pref(app: AppHandle) -> Result<bool, String> {
+    Ok(DevGateDisk::load(&app.config().identifier).show_debugging_settings)
+}
+
+#[tauri::command]
+pub fn set_show_debugging_settings_pref(
+    app: AppHandle,
+    show_debugging_settings: bool,
+) -> Result<(), String> {
+    DevGateDisk {
+        show_debugging_settings,
+    }
+    .save_to_app_disk(&app)
 }
 
 #[tauri::command]
