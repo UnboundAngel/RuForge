@@ -30,6 +30,7 @@ use crate::app_state::AppConfig;
 use crate::commands::dev_captures::{
     capture_main_window_dev, delete_dev_captures, dev_captures_folder_path, list_dev_captures,
     read_dev_capture_png, start_dev_capture_file_drag, write_dev_capture_png,
+    DevCaptureMainWindow,
 };
 use crate::commands::downloader::{
     get_music_browse_info, get_playlist_items_page,
@@ -202,6 +203,7 @@ pub fn run() {
             }
 
             if let Some(main) = app.get_webview_window("main") {
+                app.manage(DevCaptureMainWindow(main.clone()));
                 let _ = main.listen(TRAY_SHOW_MAIN_EVENT, |_event| {
                     crate::rf_log!(
                         "core.tray",
