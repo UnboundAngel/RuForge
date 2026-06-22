@@ -4,6 +4,7 @@ pub mod debug_log;
 mod download_job_manager;
 mod process_tree;
 mod hardware_acceleration;
+mod dev_gate;
 mod telemetry_prefs;
 mod tray;
 mod media_bundle;
@@ -78,8 +79,9 @@ use crate::commands::player::{
 };
 use crate::commands::settings::{
     authorize_cleanup, clear_ruforge_cache, get_hardware_acceleration_browser_args,
-    get_hardware_acceleration_pref, get_storage_stats, open_windows_sound_settings,
-    set_hardware_acceleration_pref, update_tray_config,
+    get_hardware_acceleration_pref, get_show_debugging_settings_pref, get_storage_stats,
+    open_windows_sound_settings, set_hardware_acceleration_pref,
+    set_show_debugging_settings_pref, update_tray_config,
 };
 use crate::commands::removable_drives::{
     export_dest_dir_available, poll_removable_drives, RemovableDrivesState,
@@ -90,6 +92,7 @@ use crate::commands::ytdlp_update::{
     download_ytdlp_update, get_ytdlp_update_status, warm_ytdlp_release_cache_spawn,
 };
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
+use crate::dev_gate::DevGateDisk;
 use crate::debug_log::sync_debug_log_categories;
 use crate::tray::{setup_tray, tray_front_debug, TRAY_SHOW_MAIN_EVENT};
 
@@ -116,7 +119,11 @@ pub fn run() {
         windows_audio_brand::set_explicit_app_user_model_id(&app_id);
     }
 
-    tauri::Builder::default()
+    let identifier = context.config().identifier.clone();
+    // WebView localStorage is unavailable at this point; read the on-disk mirror of showDebuggingSettings so Aptabase registers only when the dev gate was enabled at last quit.
+    let aptabase_dev_gate = DevGateDisk::load(&identifier).show_debugging_settings;
+
+    let mut builder = tauri::Builder::default()
         .manage(AppConfig {
             minimize_to_tray: Mutex::new(true),
         })
@@ -145,8 +152,13 @@ pub fn run() {
                 .level(crate::debug_log::plugin_max_level())
                 .filter(|meta| crate::debug_log::log_filter(meta))
                 .build(),
-        )
-        .plugin(aptabase_plugin())
+        );
+
+    if aptabase_dev_gate {
+        builder = builder.plugin(aptabase_plugin());
+    }
+
+    builder
         .setup(|app| {
             let handle = app.handle().clone();
             warm_ytdlp_release_cache_spawn(handle.clone());
@@ -280,6 +292,8 @@ pub fn run() {
             set_embedded_explorer_visible,
             get_hardware_acceleration_pref,
             set_hardware_acceleration_pref,
+            get_show_debugging_settings_pref,
+            set_show_debugging_settings_pref,
             get_hardware_acceleration_browser_args,
             open_windows_sound_settings,
             probe_local_media_ffprobe,
