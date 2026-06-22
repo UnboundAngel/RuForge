@@ -120,8 +120,6 @@ import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
 import { writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
-import { clearTelemetryConsentSeen, hasSeenTelemetryConsent } from "./lib/telemetryConsentStorage";
-import { TelemetryConsentOverlay } from "./components/telemetry/TelemetryConsentOverlay";
 
 import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
 import {
@@ -432,12 +430,9 @@ function App() {
   const [updaterTeaserDismissed, setUpdaterTeaserDismissed] = useState(false);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const [telemetryConsentPending, setTelemetryConsentPending] = useState(
-    () => !hasSeenTelemetryConsent(),
-  );
   const [crashRecoveryPreview, setCrashRecoveryPreview] =
     useState<CrashRecoveryVariant | null>(null);
-  const shellBlocked = Boolean(postInstall) || telemetryConsentPending;
+  const shellBlocked = Boolean(postInstall);
 
   const applyAvailableUpdate = useCallback((next: Update) => {
     if (updateRef.current) {
@@ -526,6 +521,14 @@ function App() {
   useEffect(() => {
     invoke<boolean>("get_hardware_acceleration_pref")
       .then((hw) => {        useRuforgeStore.getState().mergeHardwareAccelerationFromBackend(hw);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    invoke<boolean>("get_show_debugging_settings_pref")
+      .then((showDebugging) => {
+        useRuforgeStore.getState().mergeShowDebuggingSettingsFromBackend(showDebugging);
       })
       .catch(() => {});
   }, []);
@@ -884,10 +887,9 @@ function App() {
 
   useEffect(() => {
     if (postInstall) return;
-    if (telemetryConsentPending) return;
     const steps = resolveActiveOnboardingSteps();
     if (steps.length > 0) setOnboardingOpen(true);
-  }, [postInstall, telemetryConsentPending]);
+  }, [postInstall]);
 
   useEffect(() => {
     try {
@@ -997,13 +999,6 @@ function App() {
       setOnboardingOpen(true);
     });
 
-    const unlistenDebugTelemetryConsent = listen("debug-replay-telemetry-consent", () => {
-      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
-      clearTelemetryConsentSeen();
-      setTelemetryConsentPending(true);
-      setOnboardingOpen(false);
-    });
-
     const unlistenDebugBootSplash = listen("debug-preview-boot-splash", () => {
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
       void import("./lib/bootSplash").then(({ showBootSplashPreview }) => {
@@ -1062,7 +1057,6 @@ function App() {
       unlistenHandoffSync.then((f) => f());
       unlistenManualUpdaterCheck.then((f) => f());
       unlistenDebugOnboarding.then((f) => f());
-      unlistenDebugTelemetryConsent.then((f) => f());
       unlistenDebugBootSplash.then((f) => f());
       unlistenDebugCrashUi.then((f) => f());
       unlistenDebugCrashFatal.then((f) => f());
@@ -1945,10 +1939,7 @@ function App() {
           onOpenChangelog={() => void openUrl(RELEASES_PAGE)}
         />
       )}
-      {!postInstall && telemetryConsentPending && (
-        <TelemetryConsentOverlay onComplete={() => setTelemetryConsentPending(false)} />
-      )}
-      {onboardingOpen && !postInstall && !telemetryConsentPending && (
+      {onboardingOpen && !postInstall && (
         <OnboardingFlow onComplete={() => setOnboardingOpen(false)} />
       )}
 

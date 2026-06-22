@@ -604,40 +604,6 @@ export const SettingsView: React.FC = () => {
                   }
                 />
               </SettingsSection>
-              <SettingsSection title="Privacy">
-                <SettingItem
-                  title="Usage telemetry"
-                  description="Counts launches and grabs the basics: OS, app version, language. What you download never touches it."
-                  active={settings.telemetryUsageEnabled}
-                  control={
-                    <ToggleSlot
-                      active={settings.telemetryUsageEnabled}
-                      onClick={() =>
-                        void updateSetting(
-                          "telemetryUsageEnabled",
-                          !settings.telemetryUsageEnabled,
-                        )
-                      }
-                    />
-                  }
-                />
-                <SettingItem
-                  title="Crash reports"
-                  description="When something breaks, it sends me the crash, scrubbed clean first so no links or filenames ride along."
-                  active={settings.telemetryCrashEnabled}
-                  control={
-                    <ToggleSlot
-                      active={settings.telemetryCrashEnabled}
-                      onClick={() =>
-                        void updateSetting(
-                          "telemetryCrashEnabled",
-                          !settings.telemetryCrashEnabled,
-                        )
-                      }
-                    />
-                  }
-                />
-              </SettingsSection>
               <SettingsSection title="Developer">
                 <SettingItem
                   title="Debugging settings"
@@ -1214,6 +1180,42 @@ export const SettingsView: React.FC = () => {
                   <DevCapturesSection />
                 </SettingsSection>
               ) : null}
+              {settings.showDebuggingSettings ? (
+                <SettingsSection title="Telemetry">
+                  <SettingItem
+                    title="Usage telemetry"
+                    description="Counts launches and grabs the basics: OS, app version, language. What you download never touches it."
+                    active={settings.telemetryUsageEnabled}
+                    control={
+                      <ToggleSlot
+                        active={settings.telemetryUsageEnabled}
+                        onClick={() =>
+                          void updateSetting(
+                            "telemetryUsageEnabled",
+                            !settings.telemetryUsageEnabled,
+                          )
+                        }
+                      />
+                    }
+                  />
+                  <SettingItem
+                    title="Crash reports"
+                    description="When something breaks, it sends me the crash, scrubbed clean first so no links or filenames ride along."
+                    active={settings.telemetryCrashEnabled}
+                    control={
+                      <ToggleSlot
+                        active={settings.telemetryCrashEnabled}
+                        onClick={() =>
+                          void updateSetting(
+                            "telemetryCrashEnabled",
+                            !settings.telemetryCrashEnabled,
+                          )
+                        }
+                      />
+                    }
+                  />
+                </SettingsSection>
+              ) : null}
               <RegroupPlaylistModal
                 open={regroupPlaylistOpen}
                 onClose={() => setRegroupPlaylistOpen(false)}
@@ -1286,19 +1288,6 @@ export const SettingsView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => void emit("debug-replay-onboarding")}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                    >
-                      REPLAY
-                    </button>
-                  }
-                />
-                <SettingItem
-                  title="Replay telemetry consent"
-                  description="Open the privacy consent overlay again."
-                  control={
-                    <button
-                      type="button"
-                      onClick={() => void emit("debug-replay-telemetry-consent")}
                       className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
                     >
                       REPLAY

@@ -247,6 +247,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
 
   updateSetting: (key: keyof RuforgeSettings, value: RuforgeSettings[keyof RuforgeSettings]) => Promise<void>;
   mergeHardwareAccelerationFromBackend: (hw: boolean) => void;
+  mergeShowDebuggingSettingsFromBackend: (showDebugging: boolean) => void;
 
   setOutputDir: (dir: string) => void;
   addLibraryScanDir: (dir: string) => void;
@@ -877,6 +878,17 @@ export const useRuforgeStore = create<RuforgeStore>()(
           }
         }
 
+        if (key === "showDebuggingSettings") {
+          try {
+            await invoke("set_show_debugging_settings_pref", {
+              showDebuggingSettings: resolvedValue === true,
+            });
+            await relaunch();
+          } catch (e) {
+            console.error("Failed to update dev gate preference:", e);
+          }
+        }
+
         if (key === "debugLogEnabledCategories") {
           try {
             await invoke("sync_debug_log_categories", {
@@ -892,6 +904,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const { settings } = get();
         if (settings.hardwareAcceleration === hw) return;
         set({ settings: { ...settings, hardwareAcceleration: hw } });
+      },
+
+      mergeShowDebuggingSettingsFromBackend: (showDebugging) => {
+        const { settings } = get();
+        if (settings.showDebuggingSettings === showDebugging) return;
+        set({ settings: { ...settings, showDebuggingSettings: showDebugging } });
       },
 
       setOutputDir: (dir) => {
