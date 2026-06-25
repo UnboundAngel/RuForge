@@ -10,6 +10,7 @@ mod tray;
 mod media_bundle;
 mod utils;
 mod ytdlp_binary;
+mod deno_binary;
 mod ytdlp_rate_limit;
 pub mod telemetry_scrub {
     pub use ::telemetry_scrub::*;
@@ -92,6 +93,7 @@ use crate::commands::telemetry::sync_telemetry_prefs;
 use crate::commands::ytdlp_update::{
     download_ytdlp_update, get_ytdlp_update_status, warm_ytdlp_release_cache_spawn,
 };
+use crate::commands::deno_update::{download_deno, get_deno_status};
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
 use crate::dev_gate::DevGateDisk;
 use crate::debug_log::sync_debug_log_categories;
@@ -307,6 +309,8 @@ pub fn run() {
             crate::commands::comments_sidecar::ensure_video_comments_sidecar,
             get_ytdlp_update_status,
             download_ytdlp_update,
+            get_deno_status,
+            download_deno,
             push_background_notify,
             sync_notify_overlay_bounds,
             hide_notify_overlay_window,

@@ -123,6 +123,21 @@ export interface YtdlpUpdateDownloadProgressPayload {
   percent?: number | null;
 }
 
+export interface DenoStatusPayload {
+  present: boolean;
+  path?: string | null;
+  version?: string | null;
+}
+
+/** Emitted during `download_deno`; phase: "downloading" | "extracting" | "verifying" | "done". */
+export interface DenoDownloadProgressPayload {
+  phase: string;
+  percent?: number | null;
+}
+
+/** Prefix on error strings when yt-dlp reports no supported JavaScript runtime. */
+export const JS_RUNTIME_MISSING_PREFIX = "JS_RUNTIME_MISSING: " as const;
+
 function finiteNonNegativeNumber(n: unknown): n is number {
   return typeof n === "number" && Number.isFinite(n) && n >= 0;
 }

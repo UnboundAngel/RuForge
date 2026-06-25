@@ -72,3 +72,20 @@ pub fn ytdlp_shell_command(app: &AppHandle) -> Result<Command, String> {
 pub fn bundled_ytdlp_command(app: &AppHandle) -> Result<Command, String> {
     app.shell().sidecar("yt-dlp").map_err(|e| e.to_string())
 }
+
+/// If the user has installed Deno into `app_data/bin/`, appends `--js-runtimes deno:<path>` to `args`.
+///
+/// Called immediately after [`ytdlp_push_politeness_args`] at every yt-dlp spawn site so YouTube's
+/// n-challenge can be solved without the user having to install Deno manually.
+pub fn ytdlp_push_js_runtime_args(app: &AppHandle, args: &mut Vec<String>) {
+    if let Some(deno_path) = crate::deno_binary::resolved_deno_path_if_present(app) {
+        crate::rf_log!(
+            "download.binary",
+            log::Level::Debug,
+            "yt-dlp: injecting --js-runtimes deno:{}",
+            deno_path.display()
+        );
+        args.push("--js-runtimes".into());
+        args.push(format!("deno:{}", deno_path.display()));
+    }
+}

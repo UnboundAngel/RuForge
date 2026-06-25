@@ -21,3 +21,4 @@ pub mod sponsorblock;
 pub mod system;
 pub mod telemetry;
 pub mod ytdlp_update;
+pub mod deno_update;

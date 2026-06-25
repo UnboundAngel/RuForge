@@ -56,7 +56,8 @@ import { ExportBundleHost } from "./components/ExportBundleModal";
 import { useRemovableDrivesPoll } from "./hooks/useRemovableDrivesPoll";
 import { buildEntireLibraryExportPreset } from "./lib/exportSelection";
 import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
-import { ConfirmDialogHost } from "./components/ConfirmDialog";
+import { askConfirm, ConfirmDialogHost } from "./components/ConfirmDialog";
+import { JS_RUNTIME_MISSING_PREFIX } from "./types";
 import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff";
 import { stageHandoffListenEventId } from "./lib/musicListenSession";
 
@@ -380,7 +381,12 @@ function App() {
   const applyDownloadProgress = useRuforgeStore((s) => s.applyDownloadProgress);
   const onDownloadJobFinished = useRuforgeStore((s) => s.onDownloadJobFinished);
   const onDownloadJobPaused = useRuforgeStore((s) => s.onDownloadJobPaused);
+  const retryDownloadJob = useRuforgeStore((s) => s.retryDownloadJob);
   const playerViewRef = useRef<PlayerViewHandle>(null);
+  /** Prevents re-prompting if multiple jobs fail before the user responds. */
+  const jsRuntimePromptedRef = useRef(false);
+  /** jobIds that hit JS_RUNTIME_MISSING while the install prompt was pending; retried after install. */
+  const jsRuntimeFailedJobIdsRef = useRef<string[]>([]);
   const refreshStorageStats = useRuforgeStore((s) => s.refreshStorageStats);
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
@@ -542,15 +548,20 @@ function App() {
     void refreshStorageStats();
   }, [refreshStorageStats, outputDir, saveToInternal]);
 
+  const notifyRef = useRef(notify);
+  notifyRef.current = notify;
+
   const downloadIpcHandlersRef = useRef({
     applyDownloadProgress,
     onDownloadJobFinished,
     onDownloadJobPaused,
+    retryDownloadJob,
   });
   downloadIpcHandlersRef.current = {
     applyDownloadProgress,
     onDownloadJobFinished,
     onDownloadJobPaused,
+    retryDownloadJob,
   };
 
   // Register once for the app lifetime (stable refs — avoids duplicate listeners on dep churn).
@@ -585,6 +596,42 @@ function App() {
           success: raw.success,
           error: raw.error,
         });
+
+        if (
+          !raw.success &&
+          typeof raw.error === "string" &&
+          raw.error.startsWith(JS_RUNTIME_MISSING_PREFIX)
+        ) {
+          jsRuntimeFailedJobIdsRef.current.push(jobId);
+
+          if (!jsRuntimePromptedRef.current) {
+            jsRuntimePromptedRef.current = true;
+            void (async () => {
+              const approved = await askConfirm({
+                title: "JavaScript runtime needed",
+                message:
+                  "Downloads need a small runtime to solve YouTube's n-challenge. Install Deno automatically? (~100 MB, stored in app data — not a system install).",
+                confirmLabel: "Install",
+                cancelLabel: "Later",
+              });
+              if (!approved) return;
+              try {
+                await invoke("download_deno");
+                notifyRef.current(
+                  "JavaScript runtime installed, resuming your download.",
+                );
+                const failedJobIds = jsRuntimeFailedJobIdsRef.current;
+                jsRuntimeFailedJobIdsRef.current = [];
+                for (const failedJobId of failedJobIds) {
+                  downloadIpcHandlersRef.current.retryDownloadJob(failedJobId);
+                }
+              } catch (e) {
+                const msg = typeof e === "string" ? e : "Deno install failed.";
+                notifyRef.current(msg, "error");
+              }
+            })();
+          }
+        }
       });
       if (disposed) {
         uFinished();

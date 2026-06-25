@@ -27,6 +27,7 @@ import { MusicMetaBackfillModal } from './MusicMetaBackfillModal';
 import { DevCapturesSection } from './dev-captures/DevCapturesSection';
 import { galleryScanRoots } from '../libraryScanDirs';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
+import { useDenoStatus } from '../hooks/useDenoStatus';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
 
 interface SettingItemProps {
@@ -437,6 +438,15 @@ export const SettingsView: React.FC = () => {
     checkAndUpdate: checkAndUpdateYtdlp,
   } = useYtdlpUpdate(activeTab === 'downloads');
 
+  const {
+    status: denoStatus,
+    loading: denoLoading,
+    installing: denoInstalling,
+    percent: denoPercent,
+    invokeError: denoError,
+    install: installDeno,
+  } = useDenoStatus(activeTab === 'downloads');
+
   const accentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -546,6 +556,32 @@ export const SettingsView: React.FC = () => {
       return;
     }
     notify(`yt-dlp is up to date (${result.status?.activeVersion ?? "current"}).`);
+  };
+
+  const denoBusy = denoLoading || denoInstalling;
+
+  const denoVersionDescription = (() => {
+    if (denoLoading && !denoStatus) {
+      return "Checking JavaScript runtime…";
+    }
+    if (denoError && !denoStatus) {
+      return denoError;
+    }
+    if (!denoStatus?.present) {
+      return "Not installed. Required to solve YouTube's download challenge. Install automatically below.";
+    }
+    return denoStatus.version
+      ? `Installed: ${denoStatus.version}`
+      : "Installed at " + (denoStatus.path ?? "unknown path");
+  })();
+
+  const handleDenoInstall = async () => {
+    const result = await installDeno();
+    if (!result.ok) {
+      notify(result.error ?? "Could not install Deno.", "error");
+      return;
+    }
+    notify("JavaScript runtime installed. Downloads will now solve the n-challenge automatically.");
   };
 
   return (
@@ -984,6 +1020,41 @@ export const SettingsView: React.FC = () => {
                           : ytdlpChecking
                             ? "CHECKING…"
                             : "CHECK & UPDATE"}
+                      </button>
+                    </motion.div>
+                  }
+                />
+                <SettingItem
+                  title="JavaScript runtime (Deno)"
+                  description={denoVersionDescription}
+                  active={!denoBusy}
+                  control={
+                    <motion.div layout className="flex flex-col items-end gap-2 min-w-[140px]">
+                      {typeof denoPercent === "number" && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          className="w-full h-1 rounded-full bg-white/10 overflow-hidden"
+                        >
+                          <div
+                            className="h-full bg-[color:var(--accent)] transition-[width] duration-200"
+                            style={{
+                              width: `${Math.min(100, Math.max(0, denoPercent))}%`,
+                            }}
+                          />
+                        </motion.div>
+                      )}
+                      <button
+                        type="button"
+                        disabled={denoBusy}
+                        onClick={() => void handleDenoInstall()}
+                        className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                      >
+                        {denoInstalling
+                          ? "INSTALLING…"
+                          : denoStatus?.present
+                            ? "REINSTALL"
+                            : "INSTALL"}
                       </button>
                     </motion.div>
                   }
