@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DownloadJob } from "@/downloadQueue";
+import { jobHasDownloadTransferStarted } from "@/downloadQueue";
 import { jobWasActive } from "@/lib/musicExploreDownloadStatus";
+import { takeMusicDownloadManualCancel } from "@/lib/musicDownloadManualCancel";
 import { extractYouTubeVideoId, youtubeUrlsMatch } from "@/youtubeUrl";
 import type { CollapsedCelebrate } from "@/components/music/MusicExploreDownloadCollapsed";
 
@@ -16,6 +18,28 @@ function thumbForJob(job: DownloadJob): string | null {
   if (fromMeta) return fromMeta;
   const videoId = extractYouTubeVideoId(job.url);
   return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
+}
+
+function jobShowedIndeterminateProgress(job: DownloadJob): boolean {
+  const pct = job.progress?.percentage ?? 0;
+  if (pct >= 100) return false;
+  return (
+    job.status === "queued" ||
+    job.status === "paused" ||
+    (job.status === "downloading" && !jobHasDownloadTransferStarted(job))
+  );
+}
+
+function terminalPayload(prevJob: DownloadJob, kind: CollapsedCelebrate["kind"]): CollapsedCelebrate {
+  const holdIndeterminate = kind === "cancel" && jobShowedIndeterminateProgress(prevJob);
+  return {
+    kind,
+    url: prevJob.url,
+    title: prevJob.title?.trim() || prevJob.metadata?.title?.trim() || "Track",
+    thumbnail: thumbForJob(prevJob),
+    startPct: clampStartPct(prevJob.progress?.percentage ?? 0),
+    ...(holdIndeterminate ? { holdIndeterminate: true } : {}),
+  };
 }
 
 export function detectDownloadJobCelebrations(
@@ -42,12 +66,15 @@ export function detectDownloadJobCelebrations(
     }
 
     handled.add(key);
+
+    if (takeMusicDownloadManualCancel(prevJob.url)) {
+      out.push(terminalPayload(prevJob, "cancel"));
+      continue;
+    }
+
     out.push({
-      url: prevJob.url,
-      title: prevJob.title?.trim() || prevJob.metadata?.title?.trim() || "Track",
-      thumbnail: thumbForJob(prevJob),
+      ...terminalPayload(prevJob, "complete"),
       warning: cur?.status === "timed_out",
-      startPct: clampStartPct(prevJob.progress?.percentage ?? 0),
     });
   }
 

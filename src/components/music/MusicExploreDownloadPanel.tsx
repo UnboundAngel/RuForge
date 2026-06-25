@@ -409,13 +409,13 @@ export function MusicExploreDownloadPanel({
   }, []);
 
   useEffect(() => {
-    if (!celebrating) return;
+    if (!celebrating || celebrating.kind !== "complete") return;
     const url = celebrating.url;
     const t = window.setTimeout(() => {
       removeCompletedFromPlaylist([url]);
     }, 2100);
     return () => window.clearTimeout(t);
-  }, [celebrating?.url, removeCompletedFromPlaylist]);
+  }, [celebrating?.url, celebrating?.kind, removeCompletedFromPlaylist]);
 
   const buildAudioOpts = useCallback(() => {
     const dir = resolveDownloadOutputDir(saveToInternal, outputDir);
@@ -876,7 +876,7 @@ export function MusicExploreDownloadPanel({
   const handleCancelAll = useCallback(() => {
     for (const job of downloadJobs) {
       if (job.status === "queued" || job.status === "downloading" || job.status === "paused") {
-        void removeDownloadJob(job.id);
+        void removeDownloadJob(job.id, { manual: true });
       }
     }
   }, [downloadJobs, removeDownloadJob]);

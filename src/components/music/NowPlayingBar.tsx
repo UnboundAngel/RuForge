@@ -81,7 +81,7 @@ export function NowPlayingBar({
 
   const handleCancelAllDownloads = useCallback(() => {
     for (const job of activeJobs) {
-      void removeDownloadJob(job.id);
+      void removeDownloadJob(job.id, { manual: true });
     }
   }, [activeJobs, removeDownloadJob]);
 
