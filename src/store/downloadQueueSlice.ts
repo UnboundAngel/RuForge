@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { StateCreator, StoreApi } from "zustand";
+import { markMusicDownloadManualCancel } from "../lib/musicDownloadManualCancel";
 import {
   fetchVideoInfoForQueueHydration,
   videoInfoFetchInflightKey,
@@ -421,7 +422,7 @@ export type DownloadQueueSlice = {
   pauseDownloadJob: (id: string) => Promise<void>;
   resumeDownloadJob: (id: string) => Promise<void>;
   retryDownloadJob: (id: string) => void;
-  removeDownloadJob: (id: string) => Promise<void>;
+  removeDownloadJob: (id: string, opts?: { manual?: boolean }) => Promise<void>;
   /** Auto-skip duplicates: show `skipped` row briefly, then remove. */
   skipDownloadJobAsLibraryDuplicate: (id: string) => void;
   reorderDownloadJobs: (fromIndex: number, toIndex: number) => void;
@@ -588,7 +589,6 @@ export const createDownloadQueueSlice: StateCreator<
           await runDevSimulatedDownload(get, jobId, url);
           return;
         }
-        armDownloadJobWatchdog(jobId);
         const invokeOptions = toInvokeDownloadOptions(job.options);
         await invoke("start_download_job", {
           jobId,
@@ -596,6 +596,8 @@ export const createDownloadQueueSlice: StateCreator<
           options: invokeOptions,
           resume,
         });
+        // start_download_job resolves only after yt-dlp spawns; pre-transfer clock starts here.
+        armDownloadJobWatchdog(jobId);
       } catch (e) {
         const msg = String(e);
         if (isYtDlpStartCancelledError(msg)) {
@@ -989,13 +991,14 @@ export const createDownloadQueueSlice: StateCreator<
           get().pumpDownloadQueue();
           return;
         }
-        armDownloadJobWatchdog(id);
         await invoke("start_download_job", {
           jobId: id,
           url: job.url,
           options: toInvokeDownloadOptions(job.options),
           resume: true,
         });
+        // start_download_job resolves only after yt-dlp spawns; pre-transfer clock starts here.
+        armDownloadJobWatchdog(id);
       } catch (e) {
         disarmDownloadJobWatchdog(id);
         const msg = String(e);
@@ -1039,9 +1042,12 @@ export const createDownloadQueueSlice: StateCreator<
       get().pumpDownloadQueue();
     },
 
-    removeDownloadJob: async (id) => {
+    removeDownloadJob: async (id, opts) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job) return;
+      if (opts?.manual) {
+        markMusicDownloadManualCancel(job.url);
+      }
       disarmDownloadJobWatchdog(id);
       clearSkippedJobRemovalTimer(id);
       clearTimedOutJobRemovalTimer(id);

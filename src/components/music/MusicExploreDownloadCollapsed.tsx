@@ -1,5 +1,5 @@
-﻿import { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+﻿import { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Ban, Check, ChevronDown, ChevronUp, Music2, TriangleAlert, X } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { DownloadJob } from "@/downloadQueue";
@@ -13,11 +13,14 @@ import { extractYouTubeVideoId, youtubeUrlsMatch } from "@/youtubeUrl";
 import { cn } from "@/lib/utils";
 
 export type CollapsedCelebrate = {
+  kind: "complete" | "cancel";
   url: string;
   title: string;
   thumbnail: string | null;
   warning?: boolean;
   startPct?: number;
+  /** Cancel hold: keep the pre-transfer spinner instead of a 0% stroke. */
+  holdIndeterminate?: boolean;
 };
 
 function resolveTrackThumb(thumbnail: string | null | undefined, url: string): string | null {
@@ -36,7 +39,11 @@ const CHIP_SIZE = 36;
 const CHIP_THUMB = 28;
 const SIDEBAR_MS = 200;
 const ORB_COMPLETE_FILL_MS = 520;
+const ORB_CANCEL_POP_MS = 450;
+const ORB_CANCEL_PARTICLE_MS = 520;
 const CHIP_EXIT_MS = 320;
+const CANCEL_POP_EASE = "cubic-bezier(0.4, 0, 1, 1)";
+const CANCEL_POP_PARTICLE_COUNT = 10;
 
 function clampPct(value: number): number {
   return Math.min(100, Math.max(0, value));
@@ -81,11 +88,126 @@ function useOrbCompleteSequence(active: boolean, startPct: number) {
   return { ringPct, completeVisual, iconOpacity, iconScale };
 }
 
+function useOrbCancelSequence(active: boolean, startPct: number) {
+  const reducedMotion = useReducedMotion();
+  const [ringPct, setRingPct] = useState(() => clampPct(startPct));
+  const [popScale, setPopScale] = useState(1);
+  const [popOpacity, setPopOpacity] = useState(1);
+  const [popping, setPopping] = useState(false);
+  const [popped, setPopped] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!active) {
+      setRingPct(clampPct(startPct));
+      setPopScale(1);
+      setPopOpacity(1);
+      setPopping(false);
+      setPopped(false);
+      return;
+    }
+
+    const start = clampPct(startPct);
+    setRingPct(start);
+    setPopScale(1);
+    setPopOpacity(1);
+    setPopping(false);
+    setPopped(false);
+
+    let fillKick2 = 0;
+    const fillKick1 = requestAnimationFrame(() => {
+      fillKick2 = requestAnimationFrame(() => {
+        setRingPct(100);
+      });
+    });
+
+    let popKick = 0;
+    const popStartTimer = window.setTimeout(() => {
+      setPopping(true);
+      popKick = requestAnimationFrame(() => {
+        if (reducedMotion) {
+          setPopOpacity(0);
+          return;
+        }
+        setPopScale(0);
+        setPopOpacity(0);
+      });
+    }, ORB_COMPLETE_FILL_MS);
+
+    const popDoneTimer = window.setTimeout(() => {
+      if (!reducedMotion) {
+        setPopped(true);
+      }
+    }, ORB_COMPLETE_FILL_MS + ORB_CANCEL_POP_MS);
+
+    return () => {
+      cancelAnimationFrame(fillKick1);
+      cancelAnimationFrame(fillKick2);
+      cancelAnimationFrame(popKick);
+      window.clearTimeout(popStartTimer);
+      window.clearTimeout(popDoneTimer);
+    };
+  }, [active, startPct, reducedMotion]);
+
+  return { ringPct, popScale, popOpacity, popping, popped };
+}
+
+function cancelPopStyle(
+  popping: boolean,
+  popScale: number,
+  popOpacity: number,
+  reducedMotion: boolean | null,
+): CSSProperties {
+  return {
+    transform: `scale(${popScale})`,
+    opacity: popOpacity,
+    transformOrigin: "center center",
+    transition: popping
+      ? reducedMotion
+        ? `opacity ${ORB_CANCEL_POP_MS}ms ease-out`
+        : `transform ${ORB_CANCEL_POP_MS}ms ${CANCEL_POP_EASE}, opacity ${ORB_CANCEL_POP_MS}ms ${CANCEL_POP_EASE}`
+      : undefined,
+  };
+}
+
+function CancelPopParticles({ active }: { active: boolean }) {
+  const reducedMotion = useReducedMotion();
+  if (!active || reducedMotion) return null;
+
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center overflow-visible rf-cancel-pop-burst"
+      style={{ "--rf-cancel-particle-ms": `${ORB_CANCEL_PARTICLE_MS}ms` } as CSSProperties}
+      aria-hidden
+    >
+      {Array.from({ length: CANCEL_POP_PARTICLE_COUNT }, (_, i) => {
+        const angle = (i / CANCEL_POP_PARTICLE_COUNT) * Math.PI * 2;
+        const dist = 14 + (i % 3) * 5;
+        const dx = Math.cos(angle) * dist;
+        const dy = Math.sin(angle) * dist;
+        return (
+          <span
+            key={i}
+            className="rf-cancel-pop-particle"
+            style={
+              {
+                "--rf-particle-x": `${dx}px`,
+                "--rf-particle-y": `${dy}px`,
+                animationDelay: `${(i % 4) * 18}ms`,
+              } as CSSProperties
+            }
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function OrbRing({
   pct,
   indeterminate,
   success,
   warning,
+  cancel,
   orbSize,
   progressClassName = "rf-dock-chip-progress-stroke",
 }: {
@@ -93,6 +215,7 @@ function OrbRing({
   indeterminate?: boolean;
   success?: boolean;
   warning?: boolean;
+  cancel?: boolean;
   orbSize: number;
   progressClassName?: string;
 }) {
@@ -105,7 +228,9 @@ function OrbRing({
     ? "rgb(234 179 8 / 0.2)"
     : success
       ? "rgb(34 197 94 / 0.2)"
-      : "rgb(255 255 255 / 0.12)";
+      : cancel
+        ? "rgb(255 0 51 / 0.2)"
+        : "rgb(255 255 255 / 0.12)";
 
   const svg = (
     <svg
@@ -134,7 +259,13 @@ function OrbRing({
   return (
     <div
       className={cn("pointer-events-none", indeterminate && "animate-spin")}
-      style={{ position: "absolute", top: -4, left: -4, width: ringSz, height: ringSz }}
+      style={{
+        position: "absolute",
+        top: -4,
+        left: -4,
+        width: ringSz,
+        height: ringSz,
+      }}
     >
       {svg}
     </div>
@@ -188,12 +319,14 @@ function PillProgressBorder({
   indeterminate,
   success,
   warning,
+  cancel,
   progressClassName = "rf-dock-chip-progress-stroke",
 }: {
   pct: number;
   indeterminate?: boolean;
   success?: boolean;
   warning?: boolean;
+  cancel?: boolean;
   progressClassName?: string;
 }) {
   const stroke = warning ? "#eab308" : success ? "#22c55e" : "var(--music-accent)";
@@ -201,7 +334,9 @@ function PillProgressBorder({
     ? "rgb(234 179 8 / 0.2)"
     : success
       ? "rgb(34 197 94 / 0.2)"
-      : "rgb(255 255 255 / 0.12)";
+      : cancel
+        ? "rgb(255 0 51 / 0.2)"
+        : "rgb(255 255 255 / 0.12)";
   const clamped = Math.min(100, Math.max(0, pct));
   const dash = indeterminate ? "28 72" : `${clamped} ${100 - clamped}`;
 
@@ -253,6 +388,8 @@ function TrackOrb({
   indeterminate,
   completing,
   completeStartPct,
+  cancelling,
+  cancelStartPct,
   warning,
   size,
 }: {
@@ -262,41 +399,63 @@ function TrackOrb({
   indeterminate?: boolean;
   completing?: boolean;
   completeStartPct?: number;
+  cancelling?: boolean;
+  cancelStartPct?: number;
   warning?: boolean;
   size: number;
 }) {
-  const seq = useOrbCompleteSequence(!!completing, completeStartPct ?? pct);
-  const displayPct = completing ? seq.ringPct : pct;
+  const reducedMotion = useReducedMotion();
+  const completeSeq = useOrbCompleteSequence(!!completing, completeStartPct ?? pct);
+  const cancelSeq = useOrbCancelSequence(!!cancelling, cancelStartPct ?? pct);
+  const displayPct = completing
+    ? completeSeq.ringPct
+    : cancelling
+      ? cancelSeq.ringPct
+      : pct;
   const ringSuccess = !!completing && !warning;
   const ringWarning = !!completing && !!warning;
+  const ringCancel = !!cancelling;
   const showIcon = !!completing;
   const frame = size + ORB_RING_OUTSET * 2;
   const iconSize = Math.round(size * 0.38);
+  const progressClassName = completing
+    ? "rf-orb-complete-stroke"
+    : cancelling
+      ? "rf-orb-cancel-stroke"
+      : "rf-dock-chip-progress-stroke";
+  const popStyle = cancelling
+    ? cancelPopStyle(cancelSeq.popping, cancelSeq.popScale, cancelSeq.popOpacity, reducedMotion)
+    : undefined;
 
   return (
     <div
       className="relative shrink-0 overflow-visible flex items-center justify-center"
       style={{ width: frame, height: frame }}
     >
-      <div className="relative" style={{ width: size, height: size }}>
-        <TrackThumb thumbnail={thumbnail} title={title} size={size} />
+      <div
+        className="relative flex items-center justify-center"
+        style={{ width: frame, height: frame, ...popStyle }}
+      >
+        <div className="relative" style={{ width: size, height: size }}>
+          <TrackThumb thumbnail={thumbnail} title={title} size={size} />
 
-        <OrbRing
-          pct={displayPct}
-          indeterminate={indeterminate && !completing}
-          success={ringSuccess}
-          warning={ringWarning}
-          orbSize={size}
-          progressClassName={completing ? "rf-orb-complete-stroke" : "rf-dock-chip-progress-stroke"}
-        />
+          <OrbRing
+            pct={displayPct}
+            indeterminate={indeterminate && !completing && !cancelling}
+            success={ringSuccess}
+            warning={ringWarning}
+            cancel={ringCancel}
+            orbSize={size}
+            progressClassName={progressClassName}
+          />
 
         {showIcon && (
           <div
             className="absolute inset-0 z-[1] flex items-center justify-center rounded-full pointer-events-none"
             style={{
               background: "rgb(0 0 0 / 0.5)",
-              opacity: seq.iconOpacity,
-              transform: `scale(${seq.iconScale})`,
+              opacity: completeSeq.iconOpacity,
+              transform: `scale(${completeSeq.iconScale})`,
               transition: `
                 transform ${ORB_COMPLETE_FILL_MS}ms cubic-bezier(0.16, 1, 0.3, 1),
                 opacity ${ORB_COMPLETE_FILL_MS}ms ease-out
@@ -310,7 +469,9 @@ function TrackOrb({
             )}
           </div>
         )}
+        </div>
       </div>
+      <CancelPopParticles active={!!cancelling && cancelSeq.popped} />
     </div>
   );
 }
@@ -522,33 +683,43 @@ export function MusicExploreDownloadCollapsed({
             </motion.div>
           ) : (
             stackTracks.map((track, index) => {
-              const isCelebrating =
+              const isTerminalHold =
                 !!celebrating && youtubeUrlsMatch(track.url, celebrating.url);
-              const isWarningCelebrate = isCelebrating && !!celebrating?.warning;
+              const isCompleteTerminal =
+                isTerminalHold && celebrating!.kind === "complete";
+              const isCancelTerminal =
+                isTerminalHold && celebrating!.kind === "cancel";
+              const isWarningCelebrate =
+                isCompleteTerminal && !!celebrating?.warning;
               const isFocal =
                 !!focalTrack && youtubeUrlsMatch(track.url, focalTrack.url);
               const job = jobForTrack(downloadJobs, track.url);
               const rawLivePct = clampPct(job?.progress?.percentage ?? 0);
               const livePct =
-                !isCelebrating && job?.status === "downloading"
+                !isTerminalHold && job?.status === "downloading"
                   ? Math.min(rawLivePct, 99)
                   : rawLivePct;
               const indeterminate =
-                !isCelebrating &&
-                livePct < 100 &&
-                !!job &&
-                (job.status === "queued" ||
-                  job.status === "paused" ||
-                  (job.status === "downloading" &&
-                    !jobHasDownloadTransferStarted(job)));
+                (isCancelTerminal && !!celebrating?.holdIndeterminate) ||
+                (!isTerminalHold &&
+                  livePct < 100 &&
+                  !!job &&
+                  (job.status === "queued" ||
+                    job.status === "paused" ||
+                    (job.status === "downloading" &&
+                      !jobHasDownloadTransferStarted(job))));
               const opacity = stackOrbOpacity(index, stackTracks.length, isFocal);
               const canToggleStack =
                 playlistBatch && isFocal && visibleItems.length > 1;
-              const completeStartPct = isCelebrating
+              const completeStartPct = isCompleteTerminal
                 ? Math.min(clampPct(celebrating?.startPct ?? livePct), 99)
                 : livePct;
+              const cancelStartPct = isCancelTerminal
+                ? Math.min(clampPct(celebrating?.startPct ?? livePct), 99)
+                : livePct;
+              const orbPct = isCancelTerminal ? cancelStartPct : livePct;
               const thumbSrc = resolveTrackThumb(
-                isCelebrating
+                isTerminalHold
                   ? celebrating?.thumbnail ?? track.thumbnail
                   : track.thumbnail,
                 track.url,
@@ -589,11 +760,13 @@ export function MusicExploreDownloadCollapsed({
                 >
                   <TrackOrb
                     thumbnail={thumbSrc}
-                    title={isCelebrating ? celebrating?.title ?? track.title : track.title}
-                    pct={livePct}
+                    title={isTerminalHold ? celebrating?.title ?? track.title : track.title}
+                    pct={orbPct}
                     indeterminate={indeterminate}
-                    completing={isCelebrating}
+                    completing={isCompleteTerminal}
                     completeStartPct={completeStartPct}
+                    cancelling={isCancelTerminal}
+                    cancelStartPct={cancelStartPct}
                     warning={isWarningCelebrate}
                     size={ORB_SIZE}
                   />
@@ -642,17 +815,37 @@ export function ExploreDownloadDockChip({
     celebrating?.thumbnail ?? activeJob?.metadata?.thumbnail ?? null,
     celebrating?.url ?? activeJob?.url ?? "",
   );
-  const warningVisual = !!celebrating?.warning;
-  const completeStartPct = celebrating
+  const warningVisual = celebrating?.kind === "complete" && !!celebrating.warning;
+  const isCompleteTerminal = celebrating?.kind === "complete";
+  const isCancelTerminal = celebrating?.kind === "cancel";
+  const reducedMotion = useReducedMotion();
+  const completeStartPct = isCompleteTerminal
     ? Math.min(clampPct(celebrating.startPct ?? lastPctRef.current), 99)
     : livePct;
-  const completeSeq = useOrbCompleteSequence(!!celebrating, completeStartPct);
-  const displayPct = celebrating ? completeSeq.ringPct : livePct;
-  const ringSuccess = !!celebrating && !warningVisual;
-  const ringWarning = !!celebrating && warningVisual;
-  const showCompleteIcon = !!celebrating;
+  const cancelStartPct = isCancelTerminal
+    ? Math.min(clampPct(celebrating.startPct ?? lastPctRef.current), 99)
+    : livePct;
+  const completeSeq = useOrbCompleteSequence(isCompleteTerminal, completeStartPct);
+  const cancelSeq = useOrbCancelSequence(isCancelTerminal, cancelStartPct);
+  const displayPct = isCompleteTerminal
+    ? completeSeq.ringPct
+    : isCancelTerminal
+      ? cancelSeq.ringPct
+      : livePct;
+  const ringSuccess = isCompleteTerminal && !warningVisual;
+  const ringWarning = isCompleteTerminal && warningVisual;
+  const ringCancel = isCancelTerminal;
+  const showCompleteIcon = isCompleteTerminal;
+  const pillProgressClassName = isCompleteTerminal
+    ? "rf-orb-complete-stroke"
+    : isCancelTerminal
+      ? "rf-orb-cancel-stroke"
+      : "rf-dock-chip-progress-stroke";
+  const cancelPopTargetStyle = isCancelTerminal
+    ? cancelPopStyle(cancelSeq.popping, cancelSeq.popScale, cancelSeq.popOpacity, reducedMotion)
+    : undefined;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (hasWork) {
       setPresent(true);
       setFadingOut(false);
@@ -667,7 +860,7 @@ export function ExploreDownloadDockChip({
       lastPctRef.current = 0;
     }, CHIP_EXIT_MS);
     return () => window.clearTimeout(t);
-  }, [hasWork, present]);
+  }, [hasWork, present, celebrating]);
 
   useEffect(() => {
     if (celebrating) return;
@@ -686,13 +879,15 @@ export function ExploreDownloadDockChip({
   ]);
 
   const indeterminate =
-    !celebrating &&
-    !!activeJob &&
-    livePct < 100 &&
-    (activeJob.status === "queued" ||
-      activeJob.status === "paused" ||
-      (activeJob.status === "downloading" &&
-        !jobHasDownloadTransferStarted(activeJob)));
+    (isCancelTerminal && !!celebrating?.holdIndeterminate) ||
+    (!celebrating &&
+      !!activeJob &&
+      livePct < 100 &&
+      (activeJob.status === "queued" ||
+        activeJob.status === "paused" ||
+        (activeJob.status === "downloading" &&
+          !jobHasDownloadTransferStarted(activeJob))));
+  const ringIndeterminate = indeterminate && !isCompleteTerminal && !isCancelTerminal;
 
   const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
 
@@ -701,7 +896,7 @@ export function ExploreDownloadDockChip({
       e.stopPropagation();
       e.preventDefault();
       for (const job of activeJobs) {
-        void removeDownloadJob(job.id);
+        void removeDownloadJob(job.id, { manual: true });
       }
     },
     [activeJobs, removeDownloadJob],
@@ -711,11 +906,13 @@ export function ExploreDownloadDockChip({
 
   const showCancel = count > 0;
 
-  const ariaLabel = showCompleteIcon || celebrating
+  const ariaLabel = showCompleteIcon
     ? warningVisual
       ? "Download timed out. Click to expand."
       : "Download complete. Click to expand."
-    : `${count} download${count !== 1 ? "s" : ""} in progress. Click to expand.`;
+    : isCancelTerminal
+      ? "Download cancelled. Click to expand."
+      : `${count} download${count !== 1 ? "s" : ""} in progress. Click to expand.`;
 
   return (
     <div
@@ -733,7 +930,12 @@ export function ExploreDownloadDockChip({
           onClick={onClick}
           className={cn(
             "rf-dock-chip rf-music-tooltip-anchor relative flex min-w-0 items-center rounded-full",
-            navCollapsed ? "overflow-visible justify-center gap-0 px-0 w-11" : "w-full overflow-hidden gap-2 pl-1 pr-2.5",
+            navCollapsed
+              ? "overflow-visible justify-center gap-0 px-0 w-11"
+              : cn(
+                  "w-full gap-2 pl-1 pr-2.5",
+                  isCancelTerminal ? "overflow-visible" : "overflow-hidden",
+                ),
             "transition-[width,padding,gap,opacity] ease-out hover:opacity-90",
           )}
           style={{
@@ -742,24 +944,27 @@ export function ExploreDownloadDockChip({
             transitionDuration: `${SIDEBAR_MS}ms`,
             background: "var(--music-surface-raised)",
             color: "var(--music-text-primary)",
+            ...cancelPopTargetStyle,
           }}
           aria-label={ariaLabel}
           data-tooltip={navCollapsed ? "Expand downloads" : undefined}
         >
       <div
         className={cn(
-          "pointer-events-none absolute inset-0 transition-opacity ease-out",
-          navCollapsed ? "opacity-0" : "opacity-100",
+          "pointer-events-none absolute inset-0",
+          !isCancelTerminal && "transition-opacity ease-out",
+          !isCancelTerminal && (navCollapsed ? "opacity-0" : "opacity-100"),
         )}
-        style={{ transitionDuration: `${SIDEBAR_MS}ms` }}
+        style={!isCancelTerminal ? { transitionDuration: `${SIDEBAR_MS}ms` } : undefined}
         aria-hidden={navCollapsed}
       >
         <PillProgressBorder
           pct={displayPct}
-          indeterminate={indeterminate}
+          indeterminate={ringIndeterminate}
           success={ringSuccess}
           warning={ringWarning}
-          progressClassName={celebrating ? "rf-orb-complete-stroke" : "rf-dock-chip-progress-stroke"}
+          cancel={ringCancel}
+          progressClassName={pillProgressClassName}
         />
       </div>
 
@@ -796,11 +1001,12 @@ export function ExploreDownloadDockChip({
           >
             <OrbRing
               pct={displayPct}
-              indeterminate={indeterminate}
+              indeterminate={ringIndeterminate}
               success={ringSuccess}
               warning={ringWarning}
+              cancel={ringCancel}
               orbSize={CHIP_SIZE}
-              progressClassName={celebrating ? "rf-orb-complete-stroke" : "rf-dock-chip-progress-stroke"}
+              progressClassName={pillProgressClassName}
             />
           </div>
 
@@ -860,6 +1066,7 @@ export function ExploreDownloadDockChip({
       >
         {title}
       </span>
+      <CancelPopParticles active={isCancelTerminal && cancelSeq.popped} />
         </button>
         {showCancel && navCollapsed && (
           <button
