@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::download_job_manager::{kill_ytdlp_tree, DownloadJobManager};
-use crate::ytdlp_binary::ytdlp_shell_command;
+use crate::ytdlp_binary::{ytdlp_push_js_runtime_args, ytdlp_shell_command};
 use crate::ytdlp_rate_limit::{
     ytdlp_push_politeness_args, ytdlp_register_rate_limit_from_stderr,
     ytdlp_subprocess_rate_gate_wait, ytdlp_stderr_is_rate_limited,
@@ -851,6 +851,17 @@ fn ytdlp_stderr_is_cookie_export_failure(err: &str) -> bool {
         || (lower.contains("permission denied") && lower.contains("cookie"))
 }
 
+/// Returns true when yt-dlp stderr indicates no JS runtime is available for YouTube's n-challenge.
+pub(crate) fn ytdlp_stderr_is_missing_js_runtime(err: &str) -> bool {
+    let lower = err.to_ascii_lowercase();
+    lower.contains("no supported javascript runtime")
+        || lower.contains("javascript interpreter")
+        || lower.contains("install node, deno")
+}
+
+/// Marker prefix on errors caused by a missing JS runtime so the frontend can distinguish them.
+pub(crate) const JS_RUNTIME_MISSING_PREFIX: &str = "JS_RUNTIME_MISSING: ";
+
 fn ytdlp_browser_cookie_arg(app: &AppHandle, browser: &str) -> Result<String, String> {
     if browser == "ruforge" {
         let data_dir = app
@@ -1023,6 +1034,9 @@ fn format_download_job_failure(
     code: Option<i32>,
     browser_cookies: Option<&str>,
 ) -> String {
+    if ytdlp_stderr_is_missing_js_runtime(error_log) {
+        return format!("{}Download failed: no JavaScript runtime installed. Open Settings > Downloads to install Deno automatically.", JS_RUNTIME_MISSING_PREFIX);
+    }
     if ytdlp_stderr_is_cookie_export_failure(error_log) {
         let humanized = humanize_ytdlp_cookie_error(error_log, browser_cookies);
         let trimmed = error_log.trim();
@@ -1069,6 +1083,7 @@ async fn yt_dlp_single_json_simulate(
     }
     args.push(url.to_string());
     ytdlp_push_politeness_args(&mut args);
+    ytdlp_push_js_runtime_args(app, &mut args);
 
     ytdlp_subprocess_rate_gate_wait().await?;
     let output = ytdlp_shell_command(app)?
@@ -1081,6 +1096,9 @@ async fn yt_dlp_single_json_simulate(
         let err_msg = String::from_utf8_lossy(&output.stderr).to_string();
         ytdlp_register_rate_limit_from_stderr(&err_msg).await;
         crate::rf_log!("download.ytdlp", log::Level::Error, "yt-dlp failed: {}", err_msg);
+        if ytdlp_stderr_is_missing_js_runtime(&err_msg) {
+            return Err(format!("{}{}", JS_RUNTIME_MISSING_PREFIX, err_msg));
+        }
         return Err(err_msg);
     }
     serde_json::from_slice(&output.stdout).map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))
@@ -1171,6 +1189,7 @@ async fn yt_dlp_comments_json_fetch(
     }
     args.push(url.to_string());
     ytdlp_push_politeness_args(&mut args);
+    ytdlp_push_js_runtime_args(app, &mut args);
 
     ytdlp_subprocess_rate_gate_wait().await?;
     let output = ytdlp_shell_command(app)?
@@ -1188,6 +1207,9 @@ async fn yt_dlp_comments_json_fetch(
             "yt-dlp comments fetch failed: {}",
             err_msg.lines().next().unwrap_or(&err_msg)
         );
+        if ytdlp_stderr_is_missing_js_runtime(&err_msg) {
+            return Err(format!("{}{}", JS_RUNTIME_MISSING_PREFIX, err_msg));
+        }
         return Err(err_msg);
     }
     let parsed: serde_json::Value = serde_json::from_slice(&output.stdout)
@@ -2069,7 +2091,7 @@ pub async fn start_download_job(
         ));
     }
 
-    let args = match build_ytdlp_download_args(
+    let mut args = match build_ytdlp_download_args(
         &app,
         &url,
         &download_options,
@@ -2082,6 +2104,7 @@ pub async fn start_download_job(
             return Err(e);
         }
     };
+    ytdlp_push_js_runtime_args(&app, &mut args);
 
     let shell = match ytdlp_shell_command(&app) {
         Ok(c) => c,
@@ -2901,6 +2924,7 @@ async fn run_ytdlp_json(
     timeout_label: &str,
 ) -> Result<serde_json::Value, String> {
     ytdlp_push_politeness_args(&mut args);
+    ytdlp_push_js_runtime_args(app, &mut args);
     ytdlp_subprocess_rate_gate_wait().await?;
 
     let output = tokio::time::timeout(
@@ -2914,6 +2938,9 @@ async fn run_ytdlp_json(
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr).to_string();
         ytdlp_register_rate_limit_from_stderr(&err).await;
+        if ytdlp_stderr_is_missing_js_runtime(&err) {
+            return Err(format!("{}{}", JS_RUNTIME_MISSING_PREFIX, err));
+        }
         return Err(humanize_music_ytdlp_error(&err));
     }
 

@@ -409,7 +409,9 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.1.12 (unreleased)
 
+- **Downloads**: Deno JS runtime auto-install + auto-resume: detects "No supported JavaScript runtime" stderr, prompts once per session, downloads and extracts deno.exe to app_data/bin/, wires --js-runtimes flag at all 4 yt-dlp spawn sites; on install every failed job in the batch re-queues in place through the normal pump path with original options intact; Settings → Downloads shows Deno status + install button (`deno_binary.rs`, `deno_update.rs`, `downloader.rs`, `useDenoStatus.ts`, `SettingsView.tsx`, `App.tsx`, `downloadQueueSlice.ts`).
 - **Debugging**: dev capture and file drag now resolve main window via boot-cached managed state (`DevCaptureMainWindow`); fixes "main window not found" when invoke context is a child webview (`dev_captures.rs`, `lib.rs`).
+
 - **Music**: minimized dock chip cancel badge uses `--music-accent` so stop control reads on hover (`MusicExploreDownloadCollapsed.tsx`).
 - **Music**: album view reads `.ruforge-playlist.json` cover via `read_playlist_download_sidecar`; signed `coverUrl` wins, stale bare maxres/unsigned `s_p` falls back to embedded art; lazy heal on album open (`usePlaylistSidecar`, `healPlaylistSidecarCover`, `isStalePlaylistCoverUrl`).
 - **Music**: Explore "playlist in library" badge reads sidecar `status: complete` by `listUrl` (`find_playlist_sidecar_by_list_url`, `usePlaylistSidecarByListUrl`); session ref kept for immediate feedback.
