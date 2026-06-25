@@ -473,6 +473,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 - **Scrub previews**: sprite recipe uses `-skip_frame nokey` + `-vsync passthrough` (method A); tail cell at `floor(duration/5)` patched from end-of-file frame so hover reaches duration (`media.rs`).
 - **Downloads**: post-download scrub batch spawns on job termination only (`scrub_spawned` latch); post-process stdout no longer preempts before the muxed file exists (`downloader.rs`).
 - **Telemetry**: `main.rs` sets shared Tokio runtime before Aptabase plugin init so `npm run tauri dev` no longer panics on startup (`main.rs`).
+- **Telemetry**: Aptabase gated on Debugging via `dev-gate.json` disk mirror of showDebuggingSettings, conditional plugin init in `lib.rs`, get/set pref commands with relaunch on toggle, and dynamic `@aptabase/tauri` import in `telemetryTrack.ts` (`dev_gate.rs`, `lib.rs`, `settings.rs`, `telemetryTrack.ts`, `ruforgeStore.ts`).
 - **Crash recovery**: root React error boundary wraps every window from `main.tsx`; friendly fallback, reload, collapsible error details (`RootErrorBoundary.tsx`).
 - **Scrub previews**: hover thumb uses `<img>` instead of CSS `background-image` so `#` in item folder paths does not break asset URLs (`scrubSpritePreview.tsx`).
 - **Scrub previews**: Windows thumb subdirs strip trailing dots from yt-dlp stems (`...webm`); ffmpeg output paths now use the same sanitized name so sprite sheets write successfully (`utils.rs`, `media.rs`, `gallery.rs`).
