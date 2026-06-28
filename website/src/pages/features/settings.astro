@@ -22,12 +22,12 @@ const sections: FeatureSection[] = [
   },
   {
     heading: 'Downloads tab',
-    body: 'Controls parallel job count, output folder overrides, and auto scrubber previews (ffmpeg sprite generation after download). The yt-dlp Check and Update button queries GitHub for the latest release and auto-installs a user-local copy if newer.',
+    body: 'Controls parallel job count, output folder overrides, and auto scrubber previews (ffmpeg sprite generation after download). The yt-dlp Check and Update button queries GitHub for the latest release and auto-installs a user-local copy if newer. When yt-dlp needs a JavaScript runtime, RuForge can install Deno from Settings and re-queue failed batch jobs after install.',
     bullets: [
       'Auto scrubber previews: toggle ffmpeg sprite sheet generation on/off',
       'yt-dlp update: checks GitHub releases, downloads to user-local path',
+      'Deno install button when yt-dlp reports no supported JS runtime',
       'Parallel jobs: how many downloads run concurrently (default 2)',
-      'Browser context for cookies: None (default), or path to cookie file',
     ],
     image: settingsStep2,
     imageAlt: 'Settings Downloads tab with yt-dlp update and preview toggles',

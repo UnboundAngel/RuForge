@@ -8,12 +8,12 @@
 
 Shipping version: 0.2.1 (unreleased)
 Last shipped to users: 0.2.0
-Last updated: 2026-06-28 (0.2.0 release shipped)
-Status: 0.2.0 live on GitHub and updater.json
+Last updated: 2026-06-28 (website 0.2.0 marketing sync)
+Status: 0.2.0 live on GitHub, updater.json, and ruforge.app (changelog + download v0.2.0)
 
 ## Now
 
-0.2.0 shipped. Headline delta for users upgrading from 0.1.11: music playlist sidecars with Explore harvest, multi-item download carousel hero, Deno auto-install for yt-dlp, scrub preview speed/preload, crash recovery screen, dev captures under Debugging, Authorize Cleanup listen stats for audio. NSIS-only signed builds (no MSI). Fresh cycle open at 0.2.1.
+0.2.0 shipped. Headline delta for users upgrading from 0.1.11: music playlist sidecars with Explore harvest, multi-item download carousel hero, Deno auto-install for yt-dlp, scrub preview speed/preload, crash recovery screen, dev captures under Debugging, Authorize Cleanup listen stats for audio. NSIS-only signed builds (no MSI). Website feature/marketing copy synced for 0.2.0 (Music hub, batch carousel, Deno). Fresh cycle open at 0.2.1.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
