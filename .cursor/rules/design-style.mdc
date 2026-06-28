@@ -1,7 +1,7 @@
 ---
 description: Angel's house design system for any UI an agent builds. Use whenever generating, styling, refactoring, or reviewing user-facing interface so output matches Angel's aesthetic instead of generic flat AI defaults. Covers RuForge, Finch, and new projects. Not for pure backend or non-visual logic.
 globs: "{src,website}/**/*.{tsx,css,astro}"
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Angel's Design Style

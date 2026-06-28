@@ -1980,7 +1980,7 @@
     z-index: 1;
     max-width: 65rem;
     margin: 0 auto;
-    padding: 3.5rem 2rem 2.25rem;
+    padding: 9.5rem 2rem 2.25rem;
   }
 
   .rf-roadmap-hero-inner {
@@ -2184,6 +2184,7 @@
     position: relative;
     display: inline-block;
     padding-bottom: 0.875rem;
+    color: var(--color-rf-text);
   }
 
   .rf-roadmap-heading {
@@ -2228,7 +2229,7 @@
   .rf-roadmap-grid--shipped {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0;
+    gap: 0.5rem 2.75rem;
   }
 
   .rf-roadmap-item {
@@ -2255,8 +2256,7 @@
 
   .rf-roadmap-item--shipped {
     gap: 0.625rem;
-    padding: 0.625rem 0.875rem 0.625rem 0;
-    border-top: 1px solid rgb(237 215 156 / 0.06);
+    padding: 0.5rem 0.875rem 0.5rem 0;
   }
 
   .rf-roadmap-planned-icon,
@@ -2317,6 +2317,7 @@
 
   .rf-roadmap-item--planned .rf-roadmap-item-meta {
     gap: 0.625rem;
+    margin-top: 0.3125rem;
   }
 
   .rf-roadmap-area {
@@ -2348,11 +2349,20 @@
     position: relative;
     display: inline-flex;
     cursor: default;
+    outline: none;
+  }
+
+  .rf-roadmap-priority-trig svg {
+    display: block;
   }
 
   .rf-roadmap-priority-trig--lead {
     flex-shrink: 0;
     align-self: center;
+    padding: 2px;
+    border-radius: 50%;
+    background: rgb(29 22 19 / 0.8);
+    line-height: 0;
   }
 
   .rf-roadmap-priority-trig--essential {
@@ -2380,38 +2390,58 @@
   }
 
   .rf-roadmap-priority-trig:focus-visible {
-    outline: 2px solid color-mix(in srgb, currentColor 45%, transparent);
+    outline: 2px solid rgb(237 215 156 / 0.35);
     outline-offset: 3px;
     border-radius: 4px;
   }
 
   .rf-roadmap-priority-tt {
-    --rf-tt-border: color-mix(in srgb, currentColor 62%, #231916);
-    --rf-tt-bg: #231916;
+    --rf-tt-border: color-mix(in srgb, currentColor 50%, rgb(44 34 30));
+    --rf-tt-bg: #2c221e;
     position: absolute;
-    bottom: calc(100% + 12px);
+    bottom: calc(100% + 8px);
     left: 50%;
     z-index: 30;
-    padding: 6px 11px;
+    padding: 6px;
     border: 1px solid var(--rf-tt-border);
     border-radius: 8px;
     background: var(--rf-tt-bg);
     color: currentColor;
     font-family: var(--font-sans);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     white-space: nowrap;
     opacity: 0;
     pointer-events: none;
     transform: translateX(-50%) translateY(4px);
-    box-shadow: 0 4px 14px rgb(0 0 0 / 0.5);
+    box-shadow: 0 8px 20px rgb(0 0 0 / 0.4);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     transition:
       opacity 0.18s ease,
       transform 0.18s ease;
+  }
+
+  .rf-roadmap-priority-trig:not(.rf-roadmap-priority-trig--lead) .rf-roadmap-priority-tt {
+    bottom: calc(100% + 6px);
+    padding: 4px;
+    border-radius: 6px;
+    font-size: 0.5625rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.05em;
+    box-shadow: 0 6px 14px rgb(0 0 0 / 0.35);
+  }
+
+  .rf-roadmap-priority-trig:not(.rf-roadmap-priority-trig--lead) .rf-roadmap-priority-tt::before {
+    border-width: 5px;
+  }
+
+  .rf-roadmap-priority-trig:not(.rf-roadmap-priority-trig--lead) .rf-roadmap-priority-tt::after {
+    border-width: 4px;
   }
 
   .rf-roadmap-priority-tt::before {
@@ -2465,7 +2495,7 @@
 
   @media (max-width: 720px) {
     .rf-roadmap-hero {
-      padding-top: 2.5rem;
+      padding-top: 8.5rem;
       padding-inline: 1.25rem;
     }
 
@@ -2553,6 +2583,15 @@
   .rf-roadmap--mobile .rf-roadmap-grid--planned,
   .rf-roadmap--mobile .rf-roadmap-grid--shipped {
     grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .rf-roadmap--mobile .rf-roadmap-grid--shipped {
+    gap: 0.625rem;
+  }
+
+  .rf-roadmap--mobile .rf-roadmap-item--shipped {
+    padding: 0.5rem 0.875rem 0.5rem 0;
   }
 
   .rf-roadmap--mobile .rf-roadmap-grid--progress {
