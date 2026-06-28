@@ -6,14 +6,14 @@
 > this header. If this file and the code disagree, the code wins and this
 > file is stale: fix it forward, do not trust it blindly.
 
-Shipping version: 0.1.12 (unreleased)
+Shipping version: 0.2.0 (unreleased)
 Last shipped to users: 0.1.11
-Last updated: 2026-06-21 (playlist sidecar schema v2 metadata capture)
-Status: in progress
+Last updated: 2026-06-28 (0.2.0 release prep: version bump, updater notes, website changelog)
+Status: awaiting signed build
 
 ## Now
 
-0.1.11 shipped. Open cycle is 0.1.12. Player comments drawer, music sidecar v2, activity island scrub/transport pass, Windows taskbar transport toolbar. Media tab bulge fillets realigned to 48px titlebar.
+0.1.11 shipped. 0.2.0 release prep committed: version triplet, updater.json notes (empty signature), website changelog. Angel runs signed build next; post-build agent finishes signature, GitHub Release, Shipped log drain. Media tab bulge fillets realigned to 48px titlebar.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -27,8 +27,9 @@ local dev, not a shipped target yet.
 Closed release 0.1.11 (what users upgrading from 0.1.10 receive). The release-note drafter
 reads this for the last shipped delta, not the git tree.
 
-**0.1.12 (unreleased):**
+**0.2.0 (unreleased):**
 
+- Docs: privacy policy and legal notice updated (MusicBrainz, Cover Art Archive, optional Deno, debugging telemetry wording); website meta/llms telemetry copy tightened; README refreshed for 0.2.0; release ritual step 1 version-sizing rule added.
 - Music: album view reads playlist sidecar `coverUrl` (signed only); stale bare maxres falls back to embedded art; lazy heal on album open.
 - Music: Explore playlist-in-library badge reads sidecar `status: complete` by listUrl (survives restart).
 - Music: sidecar merge/backfill treats stale bare-maxres coverUrl as empty so signed patches persist.

@@ -2,7 +2,7 @@
 
 
 
-Last updated: May 21, 2026
+Last updated: June 28, 2026
 
 
 
@@ -145,6 +145,12 @@ RuForge bundles or relies on:
 \- yt-dlp (Unlicense). https://github.com/yt-dlp/yt-dlp
 
 \- ffmpeg (LGPL/GPL depending on build). https://ffmpeg.org
+
+\- ffprobe (LGPL/GPL depending on build, bundled with ffmpeg). https://ffmpeg.org
+
+\- SponsorBlock segment database (community data; SponsorBlock license). https://gist.github.com/ajayyy/4b27dfc66e33941a45aeaadccb51de71
+
+\- Deno (MIT, optional). Not bundled in the installer. If you install it from Settings, RuForge downloads a copy to your app data folder for yt-dlp's YouTube JS challenge support. https://github.com/denoland/deno
 
 \- Tauri (Apache-2.0 / MIT). https://tauri.app
 
