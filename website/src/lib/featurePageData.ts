@@ -55,16 +55,16 @@ export const FEATURE_PAGES: FeaturePageDef[] = [
         imageAlt: 'RuForge playlist download with per-row controls',
       },
       {
-        heading: 'Queue and format control',
-        body: 'The floating queue drawer lives in the bottom-right corner. Thumbnails crossfade as jobs advance. Pause, resume, reorder, or replace a job without leaving the page. Format selection picks between video (best muxed) or audio-only (m4a extraction, not a re-encode).',
+        heading: 'Batch carousel and queue',
+        body: 'Multi-item batches keep you on the download screen with a centered card carousel: plain progress on each row, MB/s on the active job, and focus that follows what is actually transferring. The corner queue drawer still holds pause, resume, reorder, and replace. Format selection picks video (best muxed) or audio-only (m4a extraction, not a re-encode).',
         bullets: [
-          'Audio-only uses `-f bestaudio[ext=m4a]/bestaudio`, not video re-encode',
-          'Stall watchdog: if yt-dlp idles too long, kills the process and marks failed',
-          'Replace button re-downloads over an existing library file in place',
-          'Cookie/session support for age-restricted or members-only content',
+          'Batch UI persists through playlist picks and Explorer multi-add',
+          'Deno JS runtime auto-install when yt-dlp reports no supported runtime',
+          'Failed music batch tracks retry up to three times at batch end',
+          'Stall watchdog kills idle yt-dlp processes and marks the job failed',
         ],
         imageFile: 'download2.png',
-        imageAlt: 'RuForge download queue drawer with active jobs',
+        imageAlt: 'RuForge download batch carousel with active jobs',
       },
       {
         heading: 'Post-download processing',
@@ -310,12 +310,12 @@ export const FEATURE_PAGES: FeaturePageDef[] = [
       },
       {
         heading: 'Downloads tab',
-        body: 'Controls parallel job count, output folder overrides, and auto scrubber previews (ffmpeg sprite generation after download). The yt-dlp Check and Update button queries GitHub for the latest release and auto-installs a user-local copy if newer.',
+        body: 'Controls parallel job count, output folder overrides, and auto scrubber previews (ffmpeg sprite generation after download). The yt-dlp Check and Update button queries GitHub for the latest release and auto-installs a user-local copy if newer. When yt-dlp needs a JavaScript runtime, RuForge can install Deno from Settings and re-queue failed batch jobs after install.',
         bullets: [
           'Auto scrubber previews: toggle ffmpeg sprite sheet generation on/off',
           'yt-dlp update: checks GitHub releases, downloads to user-local path',
+          'Deno install button when yt-dlp reports no supported JS runtime',
           'Parallel jobs: how many downloads run concurrently (default 2)',
-          'Browser context for cookies: None (default), or path to cookie file',
         ],
         imageFile: 'settingsStep2.png',
         imageAlt: 'Settings Downloads tab with yt-dlp update and preview toggles',

@@ -30,9 +30,9 @@ export const landingFeatureRows: LandingFeatureRow[] = [
     pill: 'Downloader',
     headline: ['Paste a link and walk away.', 'Playlists, formats, stall watchdog, all of it.'],
     paragraph:
-      'Queue lives in a corner drawer with thumbnails that crossfade as jobs move. If something hangs too long, RuForge kills it and tells you why. Playlists land in their own numbered folder. Flip audio-only and the size preview is actually audio size, not a full video file playing dress-up.',
+      'Multi-item batches stay on a centered card carousel with MB/s on the active row. The corner queue still crossfades thumbnails as jobs move. Music playlist downloads write `.ruforge-playlist.json` sidecars with per-track status. If something hangs too long, RuForge kills it and tells you why.',
     bullets: [
-      'yt-dlp stays current; Windows installer is signed',
+      'Deno auto-install when yt-dlp needs a JS runtime',
       'Tells you when the file is already in your library',
       'Pause, resume, reorder, or replace a job in place',
     ],

@@ -23,9 +23,9 @@ const hubs: FeatureHubEntry[] = [
       },
       {
         imageSrc: '/tutorials/downloadstep3.webp',
-        title: 'Queue and walk away',
+        title: 'Batch carousel or queue',
         description:
-          'Jobs land in the corner drawer. Stall watchdog kills hung jobs. Duplicates get caught before wasting bandwidth.',
+          'Multi-item batches show a centered card carousel with MB/s on the active row. Single jobs still use the corner drawer and stall watchdog.',
       },
     ],
   },
@@ -102,6 +102,30 @@ const hubs: FeatureHubEntry[] = [
     ],
   },
   {
+    eyebrow: 'Music mode',
+    href: featureDetailHref('media-library'),
+    cards: [
+      {
+        imageSrc: '/tutorials/music-mode.webp',
+        title: 'YouTube Music Explore',
+        description:
+          'Embedded music.youtube.com webview with a download dock, per-track orb progress, and batch audio-only saves.',
+      },
+      {
+        imageSrc: '/tutorials/playlists.webp',
+        title: 'Playlist sidecars',
+        description:
+          'Batch downloads write `.ruforge-playlist.json` rosters under Playlists with complete, incomplete, and downloading status.',
+      },
+      {
+        imageSrc: '/tutorials/medialibrarystep2.webp',
+        title: 'Albums and artists',
+        description:
+          'Vinyl album shelves, artist heroes, listen history, and signed cover art on album pages.',
+      },
+    ],
+  },
+  {
     eyebrow: 'Mini Player',
     href: featureDetailHref('mini-player'),
     cards: [
@@ -152,7 +176,7 @@ const hubs: FeatureHubEntry[] = [
 ];
 ---
 
-<BaseLayout title="Features: RuForge open-source media library" description="What RuForge ships today: persistent download queue, audio-only mode, chapter scrubber, SponsorBlock, mini player.">
+<BaseLayout title="Features: RuForge open-source media library" description="What RuForge ships today: music playlists, batch download carousel, Deno auto-install, chapter scrubber, SponsorBlock, and mini player.">
   <div class="features-index rf-container">
     <header class="features-index__hero">
       <h1 class="features-index__title">Everything you need. Offline.</h1>

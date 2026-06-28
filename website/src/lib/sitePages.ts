@@ -46,8 +46,8 @@ export const NAV_SECTIONS: NavSection[] = [
         slug: 'download-queue',
         title: 'Download queue',
         description:
-          'Floating queue drawer with thumbnails, pause and resume, and status at a glance while you keep browsing.',
-        outline: ['Floating drawer', 'Job controls', 'Thumbnails and marquee titles', 'Stall watchdog'],
+          'Batch carousel hero for multi-item downloads, corner queue drawer for controls, and stall watchdog while you keep browsing.',
+        outline: ['Batch carousel', 'Floating drawer', 'Job controls', 'Stall watchdog'],
       },
       {
         slug: 'media-library',

@@ -409,6 +409,8 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.1 (unreleased)
 
+- **Website**: 0.2.0 marketing sync on landing, features index (Music mode hub), downloader/settings feature pages, nav IA copy, and llms.txt; prep:website-release verified with installer copy and Astro build.
+
 
 ## Release ritual
 
