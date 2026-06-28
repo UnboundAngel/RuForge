@@ -1,0 +1,98 @@
+---
+description: Roadmap workflow. Fires when a new feature idea comes up, when work starts on something that exists in the roadmap, or when a version ships and completed items need to be marked finished in roadmap.json.
+globs:
+alwaysApply: false
+---
+
+# Roadmap Workflow
+
+Two triggers. Both result in changes to `website/src/content/roadmap.json`.
+
+---
+
+## Trigger 1: New idea or starting work on something roadmap-worthy
+
+When Angel mentions a new feature idea, or starts work on something not yet in `roadmap.json`, run this flow before touching any code.
+
+### Step 1: Ask scoping questions
+
+Ask Angel these questions one at a time. Do not dump them all at once.
+
+1. What problem does this solve for the user?
+2. Who specifically hits this problem? (power users, casual users, music mode users, etc.)
+3. Is there an OSS project that already solved this or something close? (yt-dlp, Jellyfin, mpv, Plex, etc.)
+4. What's the rough effort — is this a weekend pass or a multi-week feature?
+5. What would make this feel done vs "good enough for now"?
+
+### Step 2: Draft a Claude research prompt
+
+Once you have Angel's answers, draft a ready-to-paste prompt for Claude. The prompt goes to Claude (claude.ai), not Perplexity. Use this structure:
+
+```
+I'm building [feature] for RuForge, a free open-source Windows desktop app (Tauri v2 + Rust backend, React 19 frontend, yt-dlp + ffmpeg, local media library). Apache-2.0 licensed.
+
+Research goal: find OSS projects that have already solved [specific sub-problem]. I want:
+1. Real GitHub repos or projects implementing this, with links
+2. Which parts of their implementation I can legally reference and reimplement (Apache/MIT only — no GPL code can enter the repo)
+3. The key technical decision that makes or breaks this feature
+4. Any gotchas specific to Windows + Tauri + WebView2 that other projects don't hit
+
+Be specific. Cite only sources you are confident exist. If uncertain on anything, say [uncertain].
+```
+
+Tell Angel: "Paste this into Claude, then bring back what it finds. I'll use it to scope the JSON entry and any implementation plan."
+
+### Step 3: Create the JSON entry
+
+After research comes back, add an entry to `website/src/content/roadmap.json` using this schema:
+
+```json
+{
+  "featureName": "Short, plain-English title",
+  "appArea": "Download Screen | Player | Music Library | Explorer | Infra | Settings Screen | Video Library",
+  "priority": "Low | Medium | High | Extremely important",
+  "difficulty": "Low | Medium | High",
+  "status": "To-Do",
+  "roadmapStatus": "progress"
+}
+```
+
+Bucketing rules:
+- Omit `roadmapStatus` → lands in **On the horizon** (planned)
+- Set `roadmapStatus: "progress"` → lands in **Brewing now** (active)
+- Set `status: "Finished"` → lands in **Shipped** (done)
+
+If the feature is being actively worked on right now, set `roadmapStatus: "progress"`. If it's a future idea, omit it.
+
+Do NOT edit any other file. Do NOT touch the Astro page or any components.
+
+---
+
+## Trigger 2: A version just shipped
+
+When Angel says a version shipped or the release ritual completes, run this flow.
+
+### Step 1: Read the shipped log
+
+Read the `### vX.Y.Z` block in `AGENTS.md` that was just released. Extract every feature or fix that has a corresponding entry in `roadmap.json`.
+
+### Step 2: Flip completed entries
+
+For every matched entry in `website/src/content/roadmap.json`:
+- Set `"status": "Finished"`
+- Remove `"roadmapStatus"` if present
+
+Do not add new entries for things that shipped without a roadmap row. Do not touch entries that are still in progress or planned.
+
+### Step 3: Confirm
+
+List every entry you flipped. Show old vs new status. Do not run a build — the release ritual already verified the build.
+
+---
+
+## Hard rules
+
+- No em-dashes anywhere in JSON values or any file you touch
+- `additionalProperties: false` is set on the schema — do not add fields that aren't in the schema above
+- Never edit `roadmapBadges.ts`, `roadmap.astro`, or any component file as part of this workflow
+- If Angel's idea overlaps an existing entry, rename and update the existing one — do not create a duplicate

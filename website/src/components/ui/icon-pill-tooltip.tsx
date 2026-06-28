@@ -26,6 +26,9 @@ export function IconPillTooltip({
   className,
   uppercase = true,
   variant = 'icon',
+  tabIndex,
+  role,
+  ariaLabel,
 }: {
   label: string;
   children: ReactNode;
@@ -33,6 +36,9 @@ export function IconPillTooltip({
   /** Docs icons use uppercase pill labels; file paths stay readable. */
   uppercase?: boolean;
   variant?: 'icon' | 'path';
+  tabIndex?: number;
+  role?: string;
+  ariaLabel?: string;
 }) {
   const anchorRef = useRef<HTMLSpanElement>(null);
   const tipRef = useRef<HTMLSpanElement>(null);
@@ -68,6 +74,9 @@ export function IconPillTooltip({
       <span
         ref={anchorRef}
         className={className}
+        tabIndex={tabIndex}
+        role={role}
+        aria-label={ariaLabel}
         onMouseEnter={show}
         onMouseLeave={hide}
         onFocus={show}

@@ -2,147 +2,71 @@
 import MobileShell from '../../layouts/MobileShell.astro';
 import MobileHeader from '../../components/mobile/MobileHeader';
 import MobileFooter from '../../components/mobile/MobileFooter.astro';
+import RoadmapFieldNotes from '../../components/RoadmapFieldNotes';
 import { getImage } from 'astro:assets';
 import ruforgeLogo from '../../assets/ruforge-logo.png';
-import { getCollection } from 'astro:content';
 import { SITE } from '../../lib/site';
+import { loadRoadmapEntries, transformRoadmapItems } from '../../lib/roadmapFieldNotes';
 
 const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
-const items = await getCollection('roadmap');
-const appAreas = [...new Set(items.map((i) => i.data.appArea))].sort();
-const rows = items.map((entry) => ({
-  id: entry.id,
-  ...entry.data,
-}));
+const items = transformRoadmapItems(loadRoadmapEntries());
 ---
 
-<MobileShell title="RuForge roadmap" description="Public feature roadmap. What is shipped, what is in progress, what is next.">
+<MobileShell
+  title="RuForge roadmap"
+  description="Public feature roadmap. What is shipped, what is in progress, and what is on the horizon."
+>
   <MobileHeader client:load logoSrc={logoImage.src} />
 
-  <main class="pt-20 pb-12 px-5 min-h-screen">
-    <div class="mb-8">
-      <a href="/m/" class="rf-m-btn inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text mb-4">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M15 18l-6-6 6-6" />
+  <main class="rf-roadmap--mobile pt-20 pb-12 min-h-screen">
+    <div class="px-5 mb-2">
+      <a
+        href="/m/"
+        class="rf-m-btn inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text mb-4"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 18l-6-6 6-6"></path>
         </svg>
         Back
       </a>
       <h1 class="font-display text-2xl font-bold tracking-tight text-rf-text">Roadmap</h1>
-      <p class="mt-2 text-sm text-rf-text-muted/80 leading-relaxed">
-        What we are building next. Finished items stay visible but muted.
+      <p class="mt-2 text-sm text-rf-text-muted/80 leading-relaxed max-w-md">
+        What's shipped, what we're hammering on now, and what's on the horizon.
       </p>
       <a
         href={SITE.discussions}
         target="_blank"
         rel="noopener noreferrer"
-        class="rf-m-link inline-flex items-center gap-1.5 text-sm text-rf-accent font-medium no-underline mt-3"
+        class="rf-roadmap-ghost-cta rf-m-link no-underline mt-4 text-sm"
       >
-        Suggest a feature
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-          <polyline points="15 3 21 3 21 9" />
-          <line x1="10" y1="14" x2="21" y2="3" />
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
         </svg>
+        suggest a feature
       </a>
     </div>
 
-    <div class="mb-6 space-y-3">
-      <div class="flex flex-wrap gap-2" id="m-status-filter">
-        <button type="button" data-status="all" class="m-filter-pill is-active">All</button>
-        <button type="button" data-status="To-Do" class="m-filter-pill">To-Do</button>
-        <button type="button" data-status="Finished" class="m-filter-pill">Finished</button>
-      </div>
-      <select id="m-area-filter" class="w-full rounded-lg border border-rf-border/30 bg-rf-surface/30 px-3 py-2.5 text-sm text-rf-text">
-        <option value="all">All areas</option>
-        {appAreas.map((area) => <option value={area}>{area}</option>)}
-      </select>
-    </div>
-
-    <ul class="space-y-2" id="m-roadmap-list">
-      {rows.map((row) => (
-        <li
-          data-status={row.status}
-          data-area={row.appArea}
-          class:list={[
-            'rounded-xl border border-rf-border/20 bg-rf-surface/20 px-4 py-3',
-            row.status === 'Finished' && 'opacity-50',
-          ]}
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0 flex-1">
-              <p class="text-[15px] font-semibold text-rf-text truncate">{row.featureName}</p>
-              <p class="text-xs text-rf-text-muted/60 mt-0.5">{row.appArea}</p>
-            </div>
-            <span class:list={[
-              'shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-md',
-              row.status === 'Finished'
-                ? 'bg-rf-done-bg text-rf-done'
-                : 'bg-rf-todo-bg text-rf-todo',
-            ]}>
-              {row.status === 'Finished' ? (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-              ) : (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10" /></svg>
-              )}
-              {row.status}
-            </span>
-          </div>
-          <div class="flex items-center gap-3 mt-1.5 text-[10px] text-rf-text-muted/50">
-            <span>{row.priority}</span>
-            <span>·</span>
-            <span>{row.difficulty}</span>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <RoadmapFieldNotes client:load items={items} touchTooltips />
   </main>
 
   <MobileFooter />
-
-  <script>
-    const pills = document.querySelectorAll<HTMLButtonElement>('#m-status-filter button');
-    const areaSelect = document.getElementById('m-area-filter') as HTMLSelectElement;
-    const items = document.querySelectorAll<HTMLLIElement>('#m-roadmap-list > li');
-
-    let activeStatus = 'all';
-
-    function applyFilters() {
-      const area = areaSelect?.value ?? 'all';
-      items.forEach((item) => {
-        const s = item.dataset.status ?? '';
-        const a = item.dataset.area ?? '';
-        const show = (activeStatus === 'all' || s === activeStatus) && (area === 'all' || a === area);
-        item.hidden = !show;
-      });
-    }
-
-    pills.forEach((pill) => {
-      pill.addEventListener('click', () => {
-        activeStatus = pill.dataset.status ?? 'all';
-        pills.forEach((p) => p.classList.toggle('is-active', p === pill));
-        applyFilters();
-      });
-    });
-
-    areaSelect?.addEventListener('change', applyFilters);
-  </script>
-
-  <style>
-    .m-filter-pill {
-      padding: 0.375rem 0.875rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      border: 1px solid rgb(237 215 156 / 0.12);
-      background: transparent;
-      color: var(--color-rf-text-muted);
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-    .m-filter-pill.is-active {
-      background: rgb(237 215 156 / 0.1);
-      color: var(--color-rf-text);
-      border-color: rgb(237 215 156 / 0.25);
-    }
-  </style>
 </MobileShell>

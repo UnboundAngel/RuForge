@@ -545,6 +545,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
       for that version, and clear that section's unreleased mirror so it
       reflects only the new empty cycle. Refresh `Now`, `Next 3`, and
       `Open P0` to current reality. Update `Last updated:` to today.
+   d. In `website/src/content/roadmap.json`: for every entry whose `featureName` maps to shipped work in the drained Shipped log block, set `"status": "Finished"` and remove `"roadmapStatus"` if present. List every entry flipped. If no entries match, write "No roadmap entries to flip." Do not add new entries for shipped work that never had a roadmap row.
    STATE.md and the AGENTS.md Shipped log must agree on what is shipped vs
    unreleased after this step. If they do not, step 8 is not complete.
 9. **HARD BLOCK: verify live, or it did not ship.** Fetch the live raw URL:

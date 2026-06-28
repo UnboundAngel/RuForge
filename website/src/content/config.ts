@@ -18,6 +18,8 @@ const roadmapItemSchema = z.object({
   featureName: z.string(),
   priority: z.string(),
   status: z.enum(['Finished', 'To-Do']),
+  roadmapStatus: z.enum(['shipped', 'progress', 'planned']).optional(),
+  phase: z.enum(['progress', 'planned']).optional(),
 });
 
 const roadmap = defineCollection({
