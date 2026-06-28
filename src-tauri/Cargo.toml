@@ -69,12 +69,12 @@ dev-verify-bins = []
 
 [[bin]]
 name = "verify_track_enrich"
-path = "src/bin/verify_track_enrich.rs"
+path = "dev-bin/verify_track_enrich.rs"
 required-features = ["dev-verify-bins"]
 
 [[bin]]
 name = "verify_gallery_folder"
-path = "src/bin/verify_gallery_folder.rs"
+path = "dev-bin/verify_gallery_folder.rs"
 required-features = ["dev-verify-bins"]
 
 [target.'cfg(windows)'.dependencies]
