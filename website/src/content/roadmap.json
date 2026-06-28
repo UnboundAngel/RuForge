@@ -216,8 +216,7 @@
     "difficulty": "Medium",
     "featureName": "Explore download dock and batch retry polish",
     "priority": "Medium",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
+    "status": "Finished"
   },
   {
     "appArea": "Settings Screen",

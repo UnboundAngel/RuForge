@@ -6,14 +6,14 @@
 > this header. If this file and the code disagree, the code wins and this
 > file is stale: fix it forward, do not trust it blindly.
 
-Shipping version: 0.2.0 (unreleased)
-Last shipped to users: 0.1.11
-Last updated: 2026-06-28 (0.2.0 release prep: version bump, updater notes, website changelog)
-Status: awaiting signed build
+Shipping version: 0.2.1 (unreleased)
+Last shipped to users: 0.2.0
+Last updated: 2026-06-28 (0.2.0 release shipped)
+Status: 0.2.0 live on GitHub and updater.json
 
 ## Now
 
-0.1.11 shipped. 0.2.0 release prep committed: version triplet, updater.json notes (empty signature), website changelog. Angel runs signed build next; post-build agent finishes signature, GitHub Release, Shipped log drain. Media tab bulge fillets realigned to 48px titlebar.
+0.2.0 shipped. Headline delta for users upgrading from 0.1.11: music playlist sidecars with Explore harvest, multi-item download carousel hero, Deno auto-install for yt-dlp, scrub preview speed/preload, crash recovery screen, dev captures under Debugging, Authorize Cleanup listen stats for audio. NSIS-only signed builds (no MSI). Fresh cycle open at 0.2.1.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -24,72 +24,30 @@ local dev, not a shipped target yet.
 
 ## What is new since last user release
 
-Closed release 0.1.11 (what users upgrading from 0.1.10 receive). The release-note drafter
+Closed release 0.2.0 (what users upgrading from 0.1.11 receive). The release-note drafter
 reads this for the last shipped delta, not the git tree.
 
-**0.2.0 (unreleased):**
+**0.2.0 shipped:**
 
-- Docs: privacy policy and legal notice updated (MusicBrainz, Cover Art Archive, optional Deno, debugging telemetry wording); website meta/llms telemetry copy tightened; README refreshed for 0.2.0; release ritual step 1 version-sizing rule added.
-- Music: album view reads playlist sidecar `coverUrl` (signed only); stale bare maxres falls back to embedded art; lazy heal on album open.
-- Music: Explore playlist-in-library badge reads sidecar `status: complete` by listUrl (survives restart).
-- Music: sidecar merge/backfill treats stale bare-maxres coverUrl as empty so signed patches persist.
-- Music: OLAK Pass 2 `coverUrl` prefers highest signed CDN thumbnail from yt-dlp root array; skips bare `maxresdefault` that 200s as gray placeholder (`downloader.rs`).
-- Music: playlist batch downloads write `.ruforge-playlist.json` under `Playlists/{folder}/` at kickoff with per-track pending/done/failed roster; queue finish hooks update terminal status and derive downloading/complete/incomplete (`playlist_sidecar.rs`, `playlistDownloadSidecar.ts`, `downloadQueueSlice.ts`, `MusicExploreBottomBar.tsx`, `MusicExploreDownloadPanel.tsx`).
-- Music: SPA nav polls YTM header title for up to 4s (100ms ticks) until responsive/immersive h1 title resolves, then re-emits page context; harvest download uses yt-dlp playlist title when webview title still empty at click (`explorerProfileScript.ts`, `MusicExploreBottomBar.tsx`).
-- Music: native YTM playlist/album pages read `pageTitle` from `ytmusic-responsive-header-renderer` `h1 yt-formatted-string.title` (not strapline artist link); artist/channel pages from `ytmusic-immersive-header-renderer` h1 title; detail/playlist headers kept as fallbacks (`explorerProfileScript.ts`).
-- Music: child webviews (YTM/explorer) no longer inherit main window local-only ACL; remote event emit/listen only via music-explore-webview capability.
-- Music: Explore reload uses live webview URL (not stale host cache); SPA nav syncs URL + page-context on every yt-navigate-finish / bridge refresh.
-- Music: `canonical_album` prefers yt-dlp `.info.json` album over embedded tags and MusicBrainz; MB album only when yt and tag are empty (`musicmeta.rs`).
-- Music: download dock chip gains Ban cancel (expanded: trailing button; collapsed: hover on orb); stops all active jobs without expanding the panel.
-- Music: sidebar orbs show all active jobs even when panel was never opened (bottom-bar enqueue without panel).
-- Music: bottom-bar playlist download uses webview page title before OLAK5uy URL fragment as folder name.
-- Music: album key normalization strips leading date stamps so live recordings group correctly.
-- Music: artist view immersive hero (cover-driven backdrop, large art tile, controls in hero); album grid unchanged.
-- Crash recovery: hero uses website RuForge underline animation + uh oh headline; Reload app CTA; error details in lower section.
-- Debugging: crash recovery preview full-screen; island-only capture (in-pill hover icon, widens with filename after save, no bottom-right toast).
-- Debugging: dev capture auto-copies PNG to clipboard on save; fly-toast border; capture icon right-click (Edit last, Dev captures).
-- Debugging: dev captures from RuForge icon (DEV + showDebuggingSettings): native HWND screenshot, annotate grid, fly-to-toast morph with decode hold; Settings Debugging section.
-- Downloads: multi-item carousel stays active between batch items when next row metadata is still loading.
-- Downloads: carousel card art/title fade in when metadata hydrates (shimmer crossfade).
-- Downloads: multi-item carousel skeleton for unhydrated previews, vertical centering, batch remaining count in gap.
-- Downloads: multi-item download hero simplified (centered carousel, plain progress bar, whole-number MB/s on active card; removed item count, phase label, ETA, segmented bar).
-- Debugging: dev-gated re-download last batch tool (capture at download start, replay through entry handlers, Mode A real download with resolved-path cleanup, Mode B simulate stub without yt-dlp).
-- Downloads: Explorer add sets focusedJobId with mirrorHeroUrl so Download hero is not blank; session queue restore on tab change; duplicate-skip clears matching queued rows so Explorer in-queue matches store.
-- Docs: README refreshed from 0.1.7 brief to 0.1.11 scope (downloads, video library/player, music mode, housekeeping); ruforge.app link; build fences fixed.
-- Downloads: floating download queue drawer removed; single videos and playlists use hero center UI (title, metadata, Download, inline playlist list).
-- Downloads: Explorer add mirrors URL into hero; metadata fetch shows center URL + spinner like paste.
-- Downloads: manual queue removal no longer evicts localStorage job metadata cache; hero paste after explorer toggle-off reuses cache; idle eviction after download finish + LRU cap.
-- Downloads: hero metadata effect restores in-memory queue from sessionStorage when empty before job/cache lookup.
-- Downloads: hero metadata seeds from matching queue job snapshot before cache/full fetch; background dual-size fill when job lacks sizes, never toggles metadataLoading (`useDownloaderView.ts`).
-- Downloads: get_video_info in-flight dedup keys use normalizeYouTubeUrlForCompare (same base as metadata cache) so tracking-param URL variants share one slot per lane (`downloadVideoInfoFetch.ts`).
-- Downloads: queue-row metadata hydration uses display-only get_video_info (one simulate, no dual-size merge); hero paste path unchanged (`downloadVideoInfoFetch.ts`, `downloadQueueSlice.ts`, `downloader.rs`).
-- Downloads: queue metadata hydration capped at 2 concurrent get_video_info invokes via downloadQueueHydrationPool; cache hits bypass the pool (`downloadQueueHydrationPool.ts`, `downloadQueueSlice.ts`).
-- Downloads: playlist batch enqueue copies hero per-item thumb/title/duration into job snapshots; rows with item thumbs skip queue hydration (`playlistDownloadPlan.ts`, `useDownloaderView.ts`).
-- Scrub previews: ffmpeg per-video lock keys normalized at map boundary (`normalize_media_key`, same rule as TS `mediaPathsMatch`) so spawn, cancel, and delete share one slot per file.
-- Scrub previews: `media.ffmpeg` debug category wired in Settings; fleet release log on guard Drop covers error/cancel paths (`debugCategories.ts`, `media.rs`).
-- Scrub previews: global ffmpeg fleet cap (semaphore max(1, cores/2) per spawn) and `-threads 1` on all RuForge sidecar invokes; `media.ffmpeg` acquire/release logs (`media.rs`).
-- Scrub previews: tail patch fills all blank trailing cells through floor(duration/5), one seek per gap cell; failures logged not swallowed (`media.rs`).
-- Scrub previews: sprite ffmpeg uses method A (`-skip_frame nokey`, `-vsync passthrough`); tail cell at floor(duration/5) patched from end frame so scrub hover reaches duration (`media.rs`).
-- Downloads: post-download scrub batch spawns on job termination only; post-process stdout no longer preempts before the muxed file is on disk (`downloader.rs`).
-- Telemetry: shared Tokio runtime in `main.rs` before Aptabase plugin init; fixes startup panic in `tauri dev`.
-- Crash recovery: root React error boundary on every window; friendly fallback UI, reload, collapsible error details.
-- Windows taskbar icon: dev builds use separate AppUserModelID (`.dev`) and HWND `set_icon` so taskbar matches bundled icon instead of a stale shell cache entry.
-- Window chrome: Win11 snap layout flyout on main maximize hover (`tauri-plugin-decorum`).
-- Authorize Cleanup: audio tracks show watched % from listen snapshot (not playbackStorage); video unchanged.
-- Authorize Cleanup: header item tally and goal progress bar (empty stone when none selected; accent when goal met); byte goal when library >=50% of cap.
-- Storage: sidebar glyph and music strip warn at 50% cap (was 80%).
-- Branding: in-app logo asset is `ruforgeAppIcon.png`; Tauri build reruns when `icons/icon.ico` changes so Windows taskbar/window icon embed updates.
-- Video Library: on scroll, one shared left bulge only (no compact title, no stacked active pill).
-- Explorer: YouTube webview bounds track the content shell below the 48px titlebar; flush to tab bottom (removed stale `top-10` host and bottom height inset).
-- SponsorBlock: skip button sits just above player chrome when controls show; stays elevated (not bottom-edge) when scrubber UI hides.
-- Downloads: `.temp.mp4` yt-dlp merge intermediates recognized, hard-skipped from gallery when sibling final `.mp4` exists, excluded from scrub spawn, deleted on post-download cleanup and manual sweep.
-- Scrub previews: hover thumb uses `<img>` not CSS `url()` so `#` in download folder names loads sprites correctly.
-- Scrub previews: thumb subdir names strip trailing dots on Windows so ffmpeg can write `sprite_*.jpg` for yt-dlp `...webm` titles.
-- Scrub hover: windowed sprite sheet preload on long videos (current sheet ±1, one ahead in travel direction); ≤2 sheets still preload all; gallery `scrubSpritePaths` fast path unchanged.
-- Scrub hover: rAF-throttled scrub bar hover, sprite paths cached at gallery scan (skip player IPC when complete), JPEG preload, CSS background-position previews, library scrub backfill deferred while player tab is active.
-- Scrub previews: faster parallel ffmpeg generation, library backfill when auto mode is on, per-card building-previews spinner on Video Library cards.
-- Media chrome: tab bulge corner SVGs and clip insets follow `--rf-titlebar-h` on Video Library and Settings.
-- Settings scroll morph: numeric titlebar offset; bulge at rest only (reverted strip clip/overflow).
+Additions:
+- Music playlists: batch downloads write `.ruforge-playlist.json` under Playlists with per-track roster; Explore harvest when webview roster is complete; signed coverUrl on album view; playlist-in-library badge by listUrl.
+- Music Explore: SPA page context via History API in WebView2; YTM header title polling; music-explore-webview capability split.
+- Music download dock: Ban cancel on expanded chip and collapsed orb; sidebar orbs for all active jobs; cancel-all; red cancel celebration; batch retry up to 3 attempts.
+- Music library: artist view immersive hero; canonical_album prefers yt-dlp info.json; album grouping strips date stamps; metadata backfill force re-process.
+- Downloads: multi-item carousel hero; batch UI persists through playlist and Explorer multi-add; Deno JS runtime auto-install; queue metadata hydration pool.
+- Scrub previews: parallel ffmpeg, fleet cap, tail patch, windowed preload, library backfill.
+- Debugging: dev captures library; replay last download batch (Mode A/B).
+- Crash recovery: root error boundary; friendly hero with Reload app.
+- Telemetry: Aptabase gated behind showDebuggingSettings; public consent overlay removed.
+- Authorize Cleanup: audio listen-snapshot percent; goal progress bar; storage warn at 50% cap.
+- Window chrome: Win11 snap layout flyout; Explorer webview fills content shell.
+
+Fixes:
+- Music sidecar stale coverUrl, cancel celebration timing, artist context menu crash.
+- Downloads watchdog after spawn, .temp.mp4 gallery sweep, queue hydration dedup.
+- Scrub previews trailing dots on Windows, img hover for # in paths.
+- SponsorBlock skip button tracks player chrome; Video Library scroll bulge only.
+- Dev capture main window resolve via boot-cached state.
 
 **0.1.11 shipped:**
 
@@ -113,23 +71,6 @@ Fixes:
 - Player: video play/pause icon not overwritten by music host sync.
 - Window chrome: rounded shell when not maximized; edge resize strips.
 
-**0.1.10 shipped:**
-
-Additions:
-- Website release automation (`prep:website-release`, site version from package.json).
-- Listen-event log (Rust JSONL, dual-surface sessions, stats from snapshot).
-- Music profile screen (YouTube identity, stats, liked, recent plays, storage).
-- Music storage strip on Home/Library.
-- YouTube titlebar profile chip (Log in pill, spinner, @handle hover).
-
-Fixes:
-- Music Explore auto-save 15s listen gate.
-- Download complete celebrations and watchdog timeout/batch advance pass.
-- Listen log integrity (v2 events, cutover marker).
-- Music mini corners and skip autoplay.
-- Music stats/profile/home layout and copy polish.
-- Storage glyph opens cleanup; YouTube @handle probe scoped to topbar.
-
 ## Open P0 (blocks release)
 
 (none)
@@ -147,6 +88,7 @@ Fixes:
 - Authorize Cleanup (#8) is shipped and works via AuthorizeCleanupModal +
   delete_media_batch toward ~75% of the storage cap. The legacy Rust
   authorize_cleanup command is not used by the UI. Do not list this as broken.
+- `docs/changes.html` is not in the repo (never committed). Version graph uses `docs/versioner.html` + `docs/versions/version-*.json` only.
 
 ## Project reference (static, rarely changes)
 
