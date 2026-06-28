@@ -407,8 +407,9 @@ Steps that highlight or drive the activity island: read **`src/components/island
 **This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see `## Release ritual`). That is the only time the graph JSON / `changes.html` get touched. Prefer one line per user-visible feature or fix; batch incremental polish passes into one line instead of ten `(fix)` breakpoints.
 
 
-### v0.1.12 (unreleased)
+### v0.2.0 (unreleased)
 
+- **Docs**: Privacy policy and legal notice updated (MusicBrainz, Cover Art Archive, optional Deno, debugging telemetry wording); website meta/llms telemetry copy tightened; README refreshed for 0.2.0; release ritual step 1 version-sizing rule added (`docs/legal/PRIVACY.md`, `docs/legal/LEGAL.md`, `AGENTS.md`, `README.md`).
 - **Downloads**: Deno JS runtime auto-install + auto-resume: detects "No supported JavaScript runtime" stderr, prompts once per session, downloads and extracts deno.exe to app_data/bin/, wires --js-runtimes flag at all 4 yt-dlp spawn sites; on install every failed job in the batch re-queues in place through the normal pump path with original options intact; Settings → Downloads shows Deno status + install button (`deno_binary.rs`, `deno_update.rs`, `downloader.rs`, `useDenoStatus.ts`, `SettingsView.tsx`, `App.tsx`, `downloadQueueSlice.ts`).
 - **Music**: cancel terminal pop animates whole pill/orb (thumb + ring + chrome) inward; red particle burst fires after collapse completes, not on ring alone (`MusicExploreDownloadCollapsed.tsx`, `index.css`).
 - **Debugging**: dev capture and file drag now resolve main window via boot-cached managed state (`DevCaptureMainWindow`); fixes "main window not found" when invoke context is a child webview (`dev_captures.rs`, `lib.rs`).
@@ -505,7 +506,19 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 **Hard rule (branching):** RuForge is a solo-dev repo. **All release commits go directly to `main`.** Do **not** create, switch to, or commit on any branch for a release. If you are not on `main`, stop and say so. Do not "fix" it with git surgery on a possibly-dirty tree; ask Angel.
 
-1. **Drain the Shipped log â†’ version bump decision (+ onboarding gate).** Read the entire `### vX.Y.Z (unreleased)` block. Decide PATCH vs MINOR from its contents (behavior change = at least PATCH; new feature / new persisted setting / new command = MINOR). State the chosen version and why, one line. Then run the **Onboarding contract** release gate on the same block: any new user-facing feature that needs a walkthrough must have a row in `src/lib/onboardingSteps.ts` with `introducedIn` matching the release version and art under `src/assets/onboarding/` if Angel provided it. If warranted and missing, ask Angel before continuing. Bug-fix-only releases add no steps.
+1. **Drain the Shipped log → version bump decision (+ onboarding gate).** Read the entire `### vX.Y.Z (unreleased)` block. **Do not default to patch +1.** Apply the sizing rule below, state the chosen version and why in one line in the release report (step 10), then run the onboarding gate on the same block.
+
+   **Version sizing rule (pre-1.0, semver):**
+
+   - **PATCH** (`0.M.(N+1)`): bug fixes, polish, refactors, and behavior tweaks only. No new user-facing features, no new Tauri commands, no new persisted settings keys, no new on-disk sidecar schemas users rely on.
+
+   - **MINOR** (`0.(M+1).0`, reset patch to 0): the unreleased block contains **any** of: a new user-facing feature or surface, a new Rust `#[tauri::command]`, a new persisted setting or sidecar schema, or a batch large enough that release notes need a "what's new" story (rule of thumb: **3+ distinct addition bullets** in the drained notes, or **one headline feature** such as a new mode tab, new download UX, or new sidecar type).
+
+   - **MAJOR**: not used until 1.0. Do not bump to `1.0.0` without an explicit Angel decision.
+
+   **How to decide in practice:** Scan the unreleased block and count MINOR triggers. If count ≥ 1, bump minor and zero patch. If count = 0, patch +1. When in doubt between patch and minor, choose **minor** for pre-1.0 user-visible work.
+
+   **Onboarding gate (unchanged):** Any new user-facing feature that needs a walkthrough must have a row in `src/lib/onboardingSteps.ts` with `introducedIn` matching the **chosen release version** and art under `src/assets/onboarding/` if Angel provided it. If warranted and missing, ask Angel before continuing. Bug-fix-only releases add no steps.
 2. **Bump all three version files together:** `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version`. A mismatch here is a known past failure. Confirm all three match.
 3. **Prep `updater.json` notes (agent, before build).** Write structured JSON in `notes`: markdown **teaser** (header + three bullets for the pre-download card; full markdown supported), plus `additions` and `fixes` arrays for post-install. Set `version`, `url` (`.../releases/download/v<semver>/RuForge_<semver>_x64-setup.exe`), leave `signature` empty until step 5.
 4. **Signed build (Angel only).** Angel runs `Build-signed-windows.bat` or `npm run build:signed`. Agent then reads NSIS `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/` (do not ask Angel to paste base64 unless the file is missing).

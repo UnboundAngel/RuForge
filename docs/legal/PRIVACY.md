@@ -2,7 +2,7 @@
 
 
 
-Last updated: May 21, 2026
+Last updated: June 28, 2026
 
 
 
@@ -52,7 +52,7 @@ data exists, where it lives, and what leaves the machine.
 
 
 
-Five things, all initiated by you or by features you can turn off.
+Seven things. Most are automatic only when a feature runs; Deno and music enrichment run only when you trigger them. SponsorBlock is on by default but can be turned off.
 
 
 
@@ -118,23 +118,33 @@ opens in your default browser like any other link.
 
 
 
+\*\*6. Music metadata (music mode, when enrichment runs).\*\* When you download audio with metadata stamping, run Enrich music metadata, or open artist pages that need a lookup, RuForge sends search queries to MusicBrainz: artist and title strings taken from your local files or sidecars, not account data or other personally identifying information. Requests are rate-limited to about one per second. The User-Agent identifies RuForge and its version (`RuForge/{version} ( https://ruforge.app )`). When a confident match includes a release, RuForge may fetch cover art from Cover Art Archive using the MusicBrainz release ID only. Results are cached in local `{stem}.musicmeta.json` and artist sidecars next to your files. This does not run on every launch.
+
+\*\*7. Deno JavaScript runtime (optional).\*\* YouTube sometimes requires a JS runtime for yt-dlp. If you install Deno from Settings → Downloads, RuForge checks GitHub's API for the latest Deno release and downloads the binary into your app data folder (about 100 MB). Deno does not ship inside the RuForge installer. No upload, no install without your tap on Install or Reinstall.
+
+
+
 \## Domains RuForge contacts automatically
 
 
 
 \- `raw.githubusercontent.com` — app update manifest, once per launch
 
-\- `api.github.com` — yt-dlp release check, every 12 hours
+\- `api.github.com` — yt-dlp release check every 12 hours; Deno release check when you install the JS runtime
 
 \- `github.com` — release downloads when you tap install
 
 \- `sponsor.ajay.app` — SponsorBlock segments when enabled
 
+\- `musicbrainz.org` — music metadata search when enrichment or artist lookup runs
+
+\- `coverartarchive.org` — album cover art when a MusicBrainz match includes a release
+
+\- `github.com/denoland` — Deno binary download when you install the JS runtime from Settings
 
 
-Everything else on the network is initiated by you: yt-dlp connecting
 
-to a site you queued, or the in-app browser loading a page you opened.
+MusicBrainz and Cover Art Archive traffic runs only when music enrichment or artist lookup is active, not on every launch. Everything else on the network is either listed above or initiated by you: yt-dlp connecting to a site you queued, or the in-app browser loading a page you opened.
 
 
 
@@ -148,7 +158,7 @@ to a site you queued, or the in-app browser loading a page you opened.
 
 &#x20; sites you use, the same way any browser or downloader does.
 
-\- No analytics. No event tracking. No crash reporting back to us.
+\- No analytics or telemetry in a standard session. Optional debugging telemetry exists and is off by default; it is only accessible via developer tools.
 
 \- No account. No login. No cloud sync.
 
