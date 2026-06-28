@@ -2,71 +2,228 @@
   {
     "appArea": "Download Screen",
     "difficulty": "High",
-    "featureName": "Audio Only option",
+    "featureName": "Audio-only downloads",
     "priority": "High",
     "status": "Finished"
   },
   {
     "appArea": "Download Screen",
     "difficulty": "Low",
-    "featureName": "Make mini player minier",
+    "featureName": "Mini player compact layout",
     "priority": "High",
     "status": "Finished"
   },
   {
     "appArea": "Download Screen",
     "difficulty": "High",
-    "featureName": "ETA smoothing",
+    "featureName": "Download progress carousel and batch hero",
     "priority": "Medium",
     "status": "Finished"
   },
   {
     "appArea": "Download Screen",
-    "difficulty": "Medium",
-    "featureName": "Queue layout, paperclip strip, declutter",
+    "difficulty": "Low",
+    "featureName": "Hero art crossfade on metadata hydrate",
     "priority": "Low",
     "status": "Finished"
   },
   {
     "appArea": "Download Screen",
-    "difficulty": "Low",
-    "featureName": "Hero art crossfade",
-    "priority": "Low",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Settings Screen",
-    "difficulty": "Low",
-    "featureName": "Auto scrubber previews on download (Settings, default on)",
-    "priority": "Medium",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Settings Screen",
     "difficulty": "Medium",
-    "featureName": "Add Chapter support",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Settings Screen",
-    "difficulty": "Low",
-    "featureName": "Delay between job starts",
-    "priority": "Medium",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Medium",
-    "featureName": "Import SponsorBlock",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "High",
-    "featureName": "Add Playlist Creation",
+    "featureName": "Player comments drawer and comments sidecar",
     "priority": "Extremely important",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Medium",
+    "featureName": "SponsorBlock import, skip, and scrub segments",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "High",
+    "featureName": "Deno JS runtime auto-install for yt-dlp",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Settings Screen",
+    "difficulty": "Low",
+    "featureName": "Auto scrubber previews on download (default on)",
+    "priority": "Medium",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Settings Screen",
+    "difficulty": "Medium",
+    "featureName": "Chapter markers in player",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Player",
+    "difficulty": "Medium",
+    "featureName": "Scrub hover preview sprites",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Player",
+    "difficulty": "Low",
+    "featureName": "Custom subtitle overlay with drag positioning",
+    "priority": "Medium",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Video Library",
+    "difficulty": "Medium",
+    "featureName": "Scrub preview generation and library backfill",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Video Library",
+    "difficulty": "Low",
+    "featureName": "Authorize Cleanup storage modal",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Music Library",
+    "difficulty": "High",
+    "featureName": "Music mode (Explore, Library, Now Playing)",
+    "priority": "Extremely important",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Music Library",
+    "difficulty": "High",
+    "featureName": "YTM playlist batch download with sidecar roster",
+    "priority": "Extremely important",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Music Library",
+    "difficulty": "Medium",
+    "featureName": "Music metadata enrichment and album grouping",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "Medium",
+    "featureName": "Auto-updater with signed releases",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "Medium",
+    "featureName": "Crash recovery screen and root error boundary",
+    "priority": "High",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "Medium",
+    "featureName": "Windows taskbar transport controls",
+    "priority": "Medium",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "Low",
+    "featureName": "Website /features/library redirect to media-library",
+    "priority": "Low",
+    "status": "Finished"
+  },
+  {
+    "appArea": "Settings Screen",
+    "difficulty": "High",
+    "featureName": "Crash reporting (opt-in, Aptabase)",
+    "priority": "High",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "High",
+    "featureName": "Storage estimate before enqueue",
+    "priority": "High",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Medium",
+    "featureName": "Download history log",
+    "priority": "Extremely important",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Video Library",
+    "difficulty": "High",
+    "featureName": "User-created playlists from library items",
+    "priority": "Extremely important",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Music Library",
+    "difficulty": "Medium",
+    "featureName": "Delay between batch job starts (rate-limit guard)",
+    "priority": "Medium",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Video Library",
+    "difficulty": "Medium",
+    "featureName": "Playlist folder right-click menu (Play all, shuffle, delete, ...)",
+    "priority": "Low",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Medium",
+    "featureName": "Accurate file size on download card preview",
+    "priority": "High",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "High",
+    "featureName": "WinGet manifest auto-update on release",
+    "priority": "Medium",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Player",
+    "difficulty": "Medium",
+    "featureName": "In-app onboarding walkthrough for new features",
+    "priority": "High",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Music Library",
+    "difficulty": "Medium",
+    "featureName": "Explore download dock and batch retry polish",
+    "priority": "Medium",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Settings Screen",
+    "difficulty": "Low",
+    "featureName": "Storage target vs download path clarity in Settings",
+    "priority": "Low",
     "status": "To-Do"
   },
   {
@@ -77,100 +234,79 @@
     "status": "To-Do"
   },
   {
-    "appArea": "Video Library",
-    "difficulty": "Medium",
-    "featureName": "Media view playlist right-click menu (Play all, shuffle, delete, ...)",
+    "appArea": "Infra",
+    "difficulty": "Low",
+    "featureName": "Release checklist automation (updater.json + signatures)",
+    "priority": "High",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Infra",
+    "difficulty": "High",
+    "featureName": "SmartScreen reputation and Azure Trusted Signing",
+    "priority": "Medium",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Download Screen",
+    "difficulty": "Low",
+    "featureName": "Move video catalog metadata from JSON sidecars to SQLite",
     "priority": "Low",
+    "status": "To-Do"
+  },
+  {
+    "appArea": "Player",
+    "difficulty": "High",
+    "featureName": "Movie and TV show mode (posters, episode progress, continue watching)",
+    "priority": "Extremely important",
     "status": "To-Do"
   },
   {
     "appArea": "Download Screen",
     "difficulty": "High",
-    "featureName": "Storage estimate before enqueue",
+    "featureName": "Scheduled and overnight downloads",
     "priority": "High",
     "status": "To-Do"
   },
   {
-    "appArea": "Settings Screen",
-    "difficulty": "Low",
-    "featureName": "Storage Target vs Download Path clarity",
-    "priority": "Low",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Infra",
+    "appArea": "Video Library",
     "difficulty": "Medium",
-    "featureName": "Updater E2E — real release test",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "Low",
-    "featureName": "Release checklist (updater.json + signatures)",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "High",
-    "featureName": "SmartScreen / first-install trust",
+    "featureName": "Drag-and-drop import into library scan paths",
     "priority": "Medium",
     "status": "To-Do"
   },
   {
     "appArea": "Settings Screen",
-    "difficulty": "High",
-    "featureName": "Crash reporting (opt-in)",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Video Library",
     "difficulty": "Medium",
-    "featureName": "Fix scrubber no longer working to extract preview images",
-    "priority": "High",
+    "featureName": "Theme and accent picker",
+    "priority": "Medium",
     "status": "To-Do"
   },
   {
-    "appArea": "Video Library",
+    "appArea": "Settings Screen",
     "difficulty": "Low",
-    "featureName": "Fix negative scroll values from appearing on time bar",
+    "featureName": "Custom keyboard shortcuts",
     "priority": "Low",
     "status": "To-Do"
   },
   {
-    "appArea": "Download Screen",
+    "appArea": "Explorer",
     "difficulty": "Medium",
-    "featureName": "Download history",
-    "priority": "Extremely important",
+    "featureName": "Channel watchlist and new-upload notifications",
+    "priority": "Medium",
     "status": "To-Do"
   },
   {
-    "appArea": "Video Library",
-    "difficulty": "Low",
-    "featureName": "Storage not updating after video deleted",
-    "priority": "High",
+    "appArea": "Infra",
+    "difficulty": "High",
+    "featureName": "Linux packaging (dev builds exist, no user installer yet)",
+    "priority": "Low",
     "status": "To-Do"
   },
   {
-    "appArea": "Download Screen",
-    "difficulty": "Medium",
-    "featureName": "Fix file size accuracy on card preview",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Medium",
-    "featureName": "Comments toggle",
-    "priority": "Extremely important",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Low",
-    "featureName": "Move video data into json file temp - SQLite database longterm",
+    "appArea": "Infra",
+    "difficulty": "High",
+    "featureName": "macOS port",
     "priority": "Low",
     "status": "To-Do"
   }
