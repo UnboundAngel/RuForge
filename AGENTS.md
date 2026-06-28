@@ -409,6 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.0 (unreleased)
 
+- **Build**: dev verify bins moved from `src/bin/` to `dev-bin/` so Tauri bundle stage-2 disk scan stops re-adding `required-features` targets not built in release; signed NSIS build no longer fails on missing `verify_gallery_folder.exe` (`Cargo.toml`, `dev-bin/`).
 - **Build**: bundle `targets` set to `nsis` only so signed release skips WiX MSI (LGHT0103 on dev-only `verify_gallery_folder` bin not built in release); NSIS is the updater artifact (`tauri.conf.json`).
 - **Docs**: Privacy policy and legal notice updated (MusicBrainz, Cover Art Archive, optional Deno, debugging telemetry wording); website meta/llms telemetry copy tightened; README refreshed for 0.2.0; release ritual step 1 version-sizing rule added (`docs/legal/PRIVACY.md`, `docs/legal/LEGAL.md`, `AGENTS.md`, `README.md`).
 - **Downloads**: Deno JS runtime auto-install + auto-resume: detects "No supported JavaScript runtime" stderr, prompts once per session, downloads and extracts deno.exe to app_data/bin/, wires --js-runtimes flag at all 4 yt-dlp spawn sites; on install every failed job in the batch re-queues in place through the normal pump path with original options intact; Settings → Downloads shows Deno status + install button (`deno_binary.rs`, `deno_update.rs`, `downloader.rs`, `useDenoStatus.ts`, `SettingsView.tsx`, `App.tsx`, `downloadQueueSlice.ts`).
