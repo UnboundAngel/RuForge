@@ -1,0 +1,187 @@
+{
+  "nodes": [
+    {
+      "id": "t-music-playlist-sidecar",
+      "type": "task",
+      "label": "YTM playlist batch download and sidecar roster",
+      "agent": "chad",
+      "details": [
+        "Writes .ruforge-playlist.json under Playlists at kickoff with per-track pending/done/failed roster; Explore harvest path when webview roster is complete; signed coverUrl on album view with lazy heal; playlist-in-library badge by listUrl."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/playlist_sidecar.rs", "reason": "Sidecar read/write and listUrl lookup." },
+        { "path": "src/lib/playlistDownloadSidecar.ts", "reason": "TS merge, backfill, stale coverUrl gates." },
+        { "path": "src/components/music/MusicExploreBottomBar.tsx", "reason": "Harvest download and bottom-bar enqueue." }
+      ]
+    },
+    {
+      "id": "t-music-explore-spa",
+      "type": "task",
+      "label": "Music Explore SPA page context in WebView2",
+      "agent": "chad",
+      "details": [
+        "History API pushState/replaceState/popstate because yt-navigate-finish does not fire in child webview; YTM header title polling; music-explore-webview capability split from main."
+      ],
+      "fileEdits": [
+        { "path": "src/lib/explorerProfileScript.ts", "reason": "MUSIC_EXPLORE_PAGE_CONTEXT_INSTALL bridge." },
+        { "path": "src-tauri/capabilities/music-explore-webview.json", "reason": "Remote child webview ACL." }
+      ]
+    },
+    {
+      "id": "t-music-download-dock",
+      "type": "task",
+      "label": "Music download dock cancel and sidebar orbs",
+      "agent": "chad",
+      "details": [
+        "Ban cancel on expanded chip and collapsed orb; cancel-all in panel header; red cancel celebration; sidebar orbs for all active jobs when panel never opened; batch retry up to 3 attempts at end."
+      ],
+      "fileEdits": [
+        { "path": "src/components/music/MusicExploreDownloadCollapsed.tsx", "reason": "Orb stack, cancel anim, job stubs." },
+        { "path": "src/hooks/useMusicDownloadCelebrations.ts", "reason": "Cancel vs success celebration detector." }
+      ]
+    },
+    {
+      "id": "t-download-carousel",
+      "type": "task",
+      "label": "Multi-item download carousel hero",
+      "agent": "chad",
+      "details": [
+        "Centered carousel persists through playlist and Explorer multi-add; batch focus follows actively downloading job; skeleton shimmer and art/title crossfade on hydrate; queue drawer removed."
+      ],
+      "fileEdits": [
+        { "path": "src/components/DownloaderView.tsx", "reason": "Immersive batch shell." },
+        { "path": "src/components/downloader/DownloadJobQueuePanel.tsx", "reason": "Carousel cards and progress." },
+        { "path": "src/store/downloadQueueSlice.ts", "reason": "focusedJobId, mirrorHeroUrl, session restore." }
+      ]
+    },
+    {
+      "id": "t-deno-runtime",
+      "type": "task",
+      "label": "Deno JS runtime auto-install for yt-dlp",
+      "agent": "chad",
+      "details": [
+        "Detects no supported JavaScript runtime stderr; downloads deno.exe to app_data/bin; wires --js-runtimes at all yt-dlp spawn sites; re-queues failed batch jobs after install."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/deno_binary.rs", "reason": "Install and path resolution." },
+        { "path": "src-tauri/src/commands/downloader.rs", "reason": "Spawn sites with js-runtimes flag." },
+        { "path": "src/hooks/useDenoStatus.ts", "reason": "Settings Downloads status UI." }
+      ]
+    },
+    {
+      "id": "t-scrub-previews",
+      "type": "task",
+      "label": "Scrub preview sprites and hover preload",
+      "agent": "chad",
+      "details": [
+        "Parallel ffmpeg generation with global fleet cap; tail cell patch to duration; windowed sheet preload; gallery backfill when auto mode on; img hover thumb for # in paths."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/media.rs", "reason": "Sprite recipe, semaphore, tail patch." },
+        { "path": "src/hooks/useScrubberThumbs.ts", "reason": "Windowed preload and rAF throttle." }
+      ]
+    },
+    {
+      "id": "t-dev-captures",
+      "type": "task",
+      "label": "Dev captures library under Settings Debugging",
+      "agent": "chad",
+      "details": [
+        "Native main-window PNG save; annotate modal; flat grid over app_data/dev-captures; replay last download batch Mode A/B."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/dev_captures.rs", "reason": "Capture, save, drag-out." },
+        { "path": "src/components/dev-captures/DevCapturesGrid.tsx", "reason": "Grid and annotate entry." }
+      ]
+    },
+    {
+      "id": "t-crash-recovery",
+      "type": "task",
+      "label": "Crash recovery screen and root error boundary",
+      "agent": "chad",
+      "details": [
+        "RootErrorBoundary on every window; CrashRecoveryHero with website title animation, Reload app CTA, collapsible details."
+      ],
+      "fileEdits": [
+        { "path": "src/components/RootErrorBoundary.tsx", "reason": "Error boundary wrapper." },
+        { "path": "src/components/CrashRecoveryScreen.tsx", "reason": "Recovery UI shell." }
+      ]
+    },
+    {
+      "id": "t-authorize-cleanup",
+      "type": "task",
+      "label": "Authorize Cleanup listen stats and goal bar",
+      "agent": "chad",
+      "details": [
+        "Audio tracks use musicListenStats percent; header item tally and goal progress bar; storage glyph warns at 50% cap."
+      ],
+      "fileEdits": [
+        { "path": "src/lib/cleanupCandidates.ts", "reason": "Listen snapshot for audio." },
+        { "path": "src/components/AuthorizeCleanupModal.tsx", "reason": "Goal bar and tally UI." }
+      ]
+    },
+    {
+      "id": "f-music-sidecar-cover",
+      "type": "fix",
+      "label": "Stale playlist coverUrl and cancel celebration",
+      "agent": "chad",
+      "details": [
+        "Bare maxres coverUrl treated as empty; manual cancel shows red cancel celebration; expanded cancel hold ring timing fixed."
+      ],
+      "fileEdits": [
+        { "path": "src/lib/isStalePlaylistCoverUrl.ts", "reason": "Signed vs stale URL gate." }
+      ]
+    },
+    {
+      "id": "f-download-watchdog",
+      "type": "fix",
+      "label": "Download watchdog and gallery temp sweep",
+      "agent": "chad",
+      "details": [
+        "Watchdog pre-transfer clock arms after yt-dlp spawn; stranded .temp.mp4 hard-skipped from gallery and swept on cleanup."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/gallery.rs", "reason": "Temp file skip in scan." }
+      ]
+    },
+    {
+      "id": "f-telemetry-gate",
+      "type": "fix",
+      "label": "Aptabase gated on Debugging settings",
+      "agent": "chad",
+      "details": [
+        "dev-gate.json boot mirror; conditional plugin init; public consent overlay removed; shared Tokio runtime before plugin init."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/dev_gate.rs", "reason": "Disk mirror of showDebuggingSettings." },
+        { "path": "src/lib/telemetryTrack.ts", "reason": "Dynamic import when enabled." }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-music-playlist-sidecar" },
+    { "source": "t-music-playlist-sidecar", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-explore-spa" },
+    { "source": "t-music-explore-spa", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-download-dock" },
+    { "source": "t-music-download-dock", "target": "ruforge" },
+    { "source": "chad", "target": "t-download-carousel" },
+    { "source": "t-download-carousel", "target": "ruforge" },
+    { "source": "chad", "target": "t-deno-runtime" },
+    { "source": "t-deno-runtime", "target": "ruforge" },
+    { "source": "chad", "target": "t-scrub-previews" },
+    { "source": "t-scrub-previews", "target": "ruforge" },
+    { "source": "chad", "target": "t-dev-captures" },
+    { "source": "t-dev-captures", "target": "ruforge" },
+    { "source": "chad", "target": "t-crash-recovery" },
+    { "source": "t-crash-recovery", "target": "ruforge" },
+    { "source": "chad", "target": "t-authorize-cleanup" },
+    { "source": "t-authorize-cleanup", "target": "ruforge" },
+    { "source": "chad", "target": "f-music-sidecar-cover" },
+    { "source": "f-music-sidecar-cover", "target": "ruforge" },
+    { "source": "chad", "target": "f-download-watchdog" },
+    { "source": "f-download-watchdog", "target": "ruforge" },
+    { "source": "chad", "target": "f-telemetry-gate" },
+    { "source": "f-telemetry-gate", "target": "ruforge" }
+  ]
+}
