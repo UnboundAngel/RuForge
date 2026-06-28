@@ -4,8 +4,8 @@
   "pub_date": "2026-06-28T21:04:52Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "kEItBy2RZXcSFFr0W5fLUjwJW/SfpS1rnSQ57hHArOZ90JeSWiqJB5vqWKTqJmwvU4xD0hDQ5g/eyCdVsCUStDAA==",
-      "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.2.0/RuForge_0.2.0_x64-setup.exe"
+      "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.2.0/RuForge_0.2.0_x64-setup.exe",
+      "signature": "kEItBy2RZXcSFFr0W5fLUjwJW/SfpS1rnSQ57hHArOZ90JeSWiqJB5vqWKTqJmwvU4xD0hDQ5g/eyCdVsCUStDAA=="
     }
   }
 }
