@@ -8,12 +8,12 @@
 
 Shipping version: 0.2.1 (unreleased)
 Last shipped to users: 0.2.0
-Last updated: 2026-06-28 (website 0.2.0 marketing sync)
-Status: 0.2.0 live on GitHub, updater.json, and ruforge.app (changelog + download v0.2.0)
+Last updated: 2026-06-28 (0.2.1 patch fix pass from PROBLEMS.md)
+Status: 0.2.0 live on GitHub, updater.json, and ruforge.app. 0.2.1 fixes implemented locally; not released until Angel runs signed build and release ritual.
 
 ## Now
 
-0.2.0 shipped. Headline delta for users upgrading from 0.1.11: music playlist sidecars with Explore harvest, multi-item download carousel hero, Deno auto-install for yt-dlp, scrub preview speed/preload, crash recovery screen, dev captures under Debugging, Authorize Cleanup listen stats for audio. NSIS-only signed builds (no MSI). Website feature/marketing copy synced for 0.2.0 (Music hub, batch carousel, Deno). Fresh cycle open at 0.2.1.
+0.2.1 patch pass landed in tree: updater install watchdogs + failed state, update-available island aligned to playback typography and CTA tokens (compact centering, expanded header/button layout), download pause/timeout/403 fixes, music playlist local cover alignment. `npm run build` clean. Ready for Angel in-app verification, then signed build + release ritual when requested.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -26,6 +26,14 @@ local dev, not a shipped target yet.
 
 Closed release 0.2.0 (what users upgrading from 0.1.11 receive). The release-note drafter
 reads this for the last shipped delta, not the git tree.
+
+**0.2.1 (unreleased, in tree):**
+
+Fixes:
+- Updater: download/install timeouts, failed screen with GitHub link, post-install version verify, no debug mock on overlay click.
+- Updater UX: update available in expanded Dynamic Island (no floating card or titlebar pill); island compact/expanded layout aligned to playback typography and CTA tokens.
+- Downloads: pause during pre-spawn simulate no longer marks failed; 2-minute watchdog audio-only; yt-dlp retries and 403 guidance; manual retry resumes partial downloads.
+- Music: playlist cover saved locally at download; shelf and album detail use same local path.
 
 **0.2.0 shipped:**
 
@@ -73,16 +81,17 @@ Fixes:
 
 ## Open P0 (blocks release)
 
-(none)
+(none in code; Angel in-app verify on updater, pause-during-simulate, long download, music cover, optional 720p 403 with cookies)
 
 ## Next 3 (priority order)
 
-1. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
-2. Downloader UI polish (#12 Jim pass) or mid-download drop E2E verify (#15).
+1. Angel verify 0.2.1 fixes in-app, then signed build + release ritual when ready.
+2. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
 3. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell (cut from Music Phase A/B plan; needs its own pass).
 
 ## Notes (not P0)
 
+- P2 mid-download 403 was not reproduced on CLI without cookies. Fix adds yt-dlp retries, resume-on-retry, and clearer 403 copy. Re-test in-app at 720p with your cookie mode on https://www.youtube.com/watch?v=rkdzxRaI68g.
 - Music Explore: Download Playlist button disables only on local `downloadingPlaylist`, not when the queue already has active jobs for that playlist. Re-click re-runs enqueue (redundant work; per-track `enqueueDownload` dedup prevents duplicate rows). Cosmetic polish, not a blocker.
 - SponsorBlock is fully integrated and polished. The master toggle is enabled by default. Spec: `.cursor/plans/sponsorblock_player_polish_9c15f856.plan.md`.
 - Authorize Cleanup (#8) is shipped and works via AuthorizeCleanupModal +

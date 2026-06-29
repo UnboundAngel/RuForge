@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Clock, Play } from "lucide-react";
 import type { MediaFile } from "@/types";
-import { bestCoverPath } from "@/mediaKind";
+import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { buildRecentAddedGroups } from "@/lib/musicRecentGroups";
 import { MUSIC_ALBUM_SHELF_GAP_RECENT_PX } from "@/lib/musicAlbumShelfLayout";
 import { formatRelativePlayed } from "@/lib/musicRelativeTime";
@@ -210,11 +210,14 @@ export function MusicHomeRecentSection({
                     items={added.albums}
                     gap={MUSIC_ALBUM_SHELF_GAP_RECENT_PX}
                     keyFn={(a) => `${a.artistKey}::${a.albumKey}`}
-                    renderItem={(a) => (
+                    renderItem={(a) => {
+                      const paths = albumCoverPathWithFallback(a.tracks[0]!);
+                      return (
                       <MusicAlbumCard
                         title={a.album}
                         subtitle={a.artist}
-                        cover={bestCoverPath(a.tracks[0]!)}
+                        cover={paths.primary}
+                        coverFallback={paths.fallback}
                         onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
                         onContextMenu={(e) =>
                           setMenu({
@@ -234,7 +237,8 @@ export function MusicHomeRecentSection({
                           })
                         }
                       />
-                    )}
+                      );
+                    }}
                   />
                 </div>
               )}

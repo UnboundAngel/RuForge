@@ -20,11 +20,11 @@ import { debugLog } from "./debug/debugLog";
 import { useUrlDropIntake } from "./features/downloader/useUrlDropIntake";
 import { getYoutubeUrlDropHandler } from "./features/downloader/youtubeUrlDropRegistry";
 import { Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
+import { getVersion } from "@tauri-apps/api/app";
 import { runUpdateCheck } from "./updaterCheck";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   UpdaterStatusIndicator,
-  UpdaterMainOverlays,
   UpdaterFullWindowUpdate,
   UpdaterPostInstallStack,
   RELEASES_PAGE,
@@ -34,10 +34,17 @@ import {
   buildPostInstallPayload,
   clearPendingPostInstall,
   consumePendingPostInstall,
+  readPendingPostInstall,
   setPendingPostInstall,
   teaserNotesFromUpdaterBody,
   type PostInstallPayload,
 } from "./updatePostInstall";
+import {
+  UPDATER_DOWNLOAD_CONNECT_MS,
+  UPDATER_DOWNLOAD_STALL_MS,
+  UPDATER_INSTALL_TIMEOUT_MS,
+} from "./updaterInstall";
+import { semverGreater } from "./lib/onboardingStorage";
 import { Icon } from "@iconify/react";
 import MiniPlayer from "./MiniPlayer";
 import MusicMiniPlayer from "./components/music-mini/MusicMiniPlayer";
@@ -433,11 +440,24 @@ function App() {
   const [, setUpdaterNotes] = useState("");
   const [updaterDownloaded, setUpdaterDownloaded] = useState(0);
   const [updaterContentLength, setUpdaterContentLength] = useState<number | undefined>(undefined);
-  const [updaterTeaserDismissed, setUpdaterTeaserDismissed] = useState(false);
+  const [updaterIslandCollapsed, setUpdaterIslandCollapsed] = useState(false);
+  const [updaterInstallError, setUpdaterInstallError] = useState<string | null>(null);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [crashRecoveryPreview, setCrashRecoveryPreview] =
     useState<CrashRecoveryVariant | null>(null);
+  const updaterTimersRef = useRef<{
+    install: ReturnType<typeof setTimeout> | null;
+    watchdog: ReturnType<typeof setInterval> | null;
+  }>({ install: null, watchdog: null });
+
+  const clearUpdaterTimers = useCallback(() => {
+    const t = updaterTimersRef.current;
+    if (t.install) clearTimeout(t.install);
+    if (t.watchdog) clearInterval(t.watchdog);
+    updaterTimersRef.current = { install: null, watchdog: null };
+  }, []);
+
   const shellBlocked = Boolean(postInstall);
 
   const applyAvailableUpdate = useCallback((next: Update) => {
@@ -447,7 +467,7 @@ function App() {
     updateRef.current = next;
     setUpdaterVersion(next.version);
     setUpdaterNotes(teaserNotesFromUpdaterBody(next.body ?? ""));
-    setUpdaterTeaserDismissed(false);
+    setUpdaterIslandCollapsed(false);
     setUpdaterPhase("available");
   }, []);
 
@@ -489,34 +509,75 @@ function App() {
   const handleInstallRestart = useCallback(async () => {
     const u = updateRef.current;
     if (!u) return;
+    clearUpdaterTimers();
     setUpdaterDownloaded(0);
     setUpdaterContentLength(undefined);
+    setUpdaterInstallError(null);
     setUpdaterPhase("downloading");
     setPendingPostInstall(buildPostInstallPayload(u.version, u.body ?? ""));
+
     let installFinished = false;
+    let downloadStarted = false;
+    let lastProgressMs = Date.now();
+    const startedMs = Date.now();
+
+    const failUpdate = (message: string) => {
+      clearUpdaterTimers();
+      void u.close().catch(() => {});
+      clearPendingPostInstall();
+      setUpdaterInstallError(message);
+      setUpdaterPhase("failed");
+      notify(message, "error");
+    };
+
+    updaterTimersRef.current.watchdog = setInterval(() => {
+      if (installFinished) return;
+      const now = Date.now();
+      if (!downloadStarted && now - startedMs > UPDATER_DOWNLOAD_CONNECT_MS) {
+        failUpdate(
+          "Update download did not start. Check your connection, or install from GitHub Releases.",
+        );
+        return;
+      }
+      if (downloadStarted && now - lastProgressMs > UPDATER_DOWNLOAD_STALL_MS) {
+        failUpdate(
+          "Update download stalled. Check your connection, or install from GitHub Releases.",
+        );
+      }
+    }, 5000);
+
     try {
       await u.downloadAndInstall((event: DownloadEvent) => {
         if (event.event === "Started") {
+          downloadStarted = true;
+          lastProgressMs = Date.now();
           setUpdaterContentLength(event.data.contentLength);
         } else if (event.event === "Progress") {
+          lastProgressMs = Date.now();
           setUpdaterDownloaded((d) => d + event.data.chunkLength);
         } else if (event.event === "Finished") {
           installFinished = true;
+          clearUpdaterTimers();
           setUpdaterPhase("installing");
+          updaterTimersRef.current.install = setTimeout(() => {
+            failUpdate(
+              "Update install timed out. Download the latest build from GitHub Releases.",
+            );
+          }, UPDATER_INSTALL_TIMEOUT_MS);
         }
       });
     } catch (e) {
-      // Installer often succeeds then kills the app; the promise rejects on shutdown.
+      clearUpdaterTimers();
       if (installFinished) return;
       console.error(e);
       clearPendingPostInstall();
-      setUpdaterPhase("available");
-      notify(
-        "Update failed. Check your connection, or install the latest build from GitHub Releases.",
-        "error",
-      );
+      const message =
+        "Update failed. Check your connection, or install the latest build from GitHub Releases.";
+      setUpdaterInstallError(message);
+      setUpdaterPhase("failed");
+      notify(message, "error");
     }
-  }, [notify]);
+  }, [notify, clearUpdaterTimers]);
   handleInstallRestartRef.current = handleInstallRestart;
 
   const availableUpdatePayload = useMemo(() => {
@@ -928,8 +989,22 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const pending = consumePendingPostInstall();
-    if (pending) setPostInstall(pending);
+    void (async () => {
+      const pending = readPendingPostInstall();
+      if (!pending) return;
+      try {
+        const currentVersion = await getVersion();
+        if (semverGreater(pending.version, currentVersion)) {
+          clearPendingPostInstall();
+          return;
+        }
+      } catch {
+        clearPendingPostInstall();
+        return;
+      }
+      const consumed = consumePendingPostInstall();
+      if (consumed) setPostInstall(consumed);
+    })();
   }, []);
 
   useEffect(() => {
@@ -1072,10 +1147,11 @@ function App() {
     });
 
     const unlistenDebugUpdater = listen("debug-cycle-updater", () => {
-      setUpdaterTeaserDismissed(false); // Reset dismissal on debug cycle
+      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      setUpdaterIslandCollapsed(false);
       setUpdaterPhase((current) => {
         if (current === "idle") {
-          setUpdaterVersion("9.9.9-mock");
+          setUpdaterVersion("9.9.9");
           setUpdaterNotes("### Mock Release Notes\n- Polished UI & Transitions\n- Enhanced accent color integration\n- Fixed subtitle ghosting bug\n- Improved MiniPlayer sizing logic");
           return "available";
         }
@@ -1089,7 +1165,7 @@ function App() {
         }
         if (current === "installing") {
           setPostInstall(
-            buildPostInstallPayload("9.9.9-mock", MOCK_POST_INSTALL_JSON),
+            buildPostInstallPayload("9.9.9", MOCK_POST_INSTALL_JSON),
           );
           return "idle";
         }
@@ -1528,10 +1604,25 @@ function App() {
         updaterVersion={updaterVersion}
         showExplorerQueueToolbar={showExplorerToolbar}
         storageBlocksNewDownloads={storageBlocksNewDownloads}
-        onUpdaterStatusClick={() => setUpdaterTeaserDismissed(false)}
+        onUpdaterStatusClick={undefined}
       />
 
-      {!shellBlocked && <ActivityIsland />}
+      {!shellBlocked && (
+        <ActivityIsland
+          updateAvailable={
+            updaterPhase === "available" && updaterVersion
+              ? {
+                  version: updaterVersion,
+                  notes: availableUpdatePayload?.notes ?? "",
+                  collapsed: updaterIslandCollapsed,
+                  onInstallRestart: () => void handleInstallRestart(),
+                  onCollapse: () => setUpdaterIslandCollapsed(true),
+                  onExpand: () => setUpdaterIslandCollapsed(false),
+                }
+              : null
+          }
+        />
+      )}
 
       {/* Global Drag Region - Top strip except sidebar logo and window controls */}
       <div
@@ -1835,16 +1926,6 @@ function App() {
             className="rf-main-content-vignette pointer-events-none absolute inset-0 z-[15] rounded-tl-[32px]"
             aria-hidden
           />
-          <UpdaterMainOverlays
-            phase={updaterPhase}
-            version={updaterVersion}
-            notes={availableUpdatePayload?.notes ?? ""}
-            additions={availableUpdatePayload?.additions}
-            fixes={availableUpdatePayload?.fixes}
-            onInstallRestart={() => void handleInstallRestart()}
-            onDismiss={() => setUpdaterTeaserDismissed(true)}
-            dismissed={updaterTeaserDismissed}
-          />
           {isMainUrlDropHover ? (
             <div
               aria-hidden
@@ -1994,6 +2075,13 @@ function App() {
         phase={updaterPhase}
         downloaded={updaterDownloaded}
         contentLength={updaterContentLength}
+        errorMessage={updaterInstallError}
+        onRetry={() => void handleInstallRestart()}
+        onDismissFailed={() => {
+          clearUpdaterTimers();
+          setUpdaterInstallError(null);
+          setUpdaterPhase("available");
+        }}
       />
 
       <AuthorizeCleanupModal />

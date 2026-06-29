@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Play, Pause, MoreHorizontal, Shuffle } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
+import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import type { MediaFile } from "@/types";
 import { primaryArtist } from "./musicArtist";
@@ -103,13 +104,27 @@ type AlbumRowProps = {
   album: string;
   artist: string;
   cover: string | null;
+  coverFallback?: string | null;
   trackCount: number;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
 
-function AlbumRow({ album, artist, cover, trackCount, onClick, onContextMenu }: AlbumRowProps) {
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+function AlbumRow({ album, artist, cover, coverFallback = null, trackCount, onClick, onContextMenu }: AlbumRowProps) {
+  const [coverSrc, setCoverSrc] = useState<string | null>(() => (cover ? convertFileSrc(cover) : null));
+
+  useEffect(() => {
+    setCoverSrc(cover ? convertFileSrc(cover) : null);
+  }, [cover]);
+
+  const handleCoverError = () => {
+    if (coverFallback) {
+      setCoverSrc(convertFileSrc(coverFallback));
+    } else {
+      setCoverSrc(null);
+    }
+  };
+
   return (
     <button
       type="button"
@@ -120,7 +135,7 @@ function AlbumRow({ album, artist, cover, trackCount, onClick, onContextMenu }: 
       onMouseLeave={(e) => (e.currentTarget.style.background = "")}
     >
       {coverSrc ? (
-        <img src={coverSrc} alt="" className="w-14 h-14 rounded shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
+        <img src={coverSrc} alt="" onError={handleCoverError} className="w-14 h-14 rounded shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
       ) : (
         <div
           className="w-14 h-14 rounded shrink-0 flex items-center justify-center"
@@ -369,12 +384,15 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                 No albums found. Download music with album tags to see them here.
               </p>
             )}
-            {albums.map((a) => (
+            {albums.map((a) => {
+              const paths = albumCoverPathWithFallback(a.tracks[0]!);
+              return (
               <AlbumRow
                 key={`${a.artistKey}::${a.albumKey}`}
                 album={a.album}
                 artist={a.artist}
-                cover={bestCoverPath(a.tracks[0]!)}
+                cover={paths.primary}
+                coverFallback={paths.fallback}
                 trackCount={a.tracks.length}
                 onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
                 onContextMenu={(e) => setMenu({
@@ -384,7 +402,8 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                   onPlay: a.tracks.length > 0 ? () => onPlayFile(a.tracks[0], a.tracks) : undefined,
                 })}
               />
-            ))}
+              );
+            })}
           </div>
         )}
 

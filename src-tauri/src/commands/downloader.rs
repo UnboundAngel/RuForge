@@ -1045,6 +1045,12 @@ fn format_download_job_failure(
         }
         return format!("{}\n\nFull yt-dlp log:\n{}", humanized, trimmed);
     }
+    if error_log.contains("HTTP Error 403") || error_log.contains("403: Forbidden") {
+        return format!(
+            "Download failed (HTTP 403): signed stream URL may have expired. Retry the job to resume with fresh cookies, or refresh cookies in Settings then retry. Full log:\n{}",
+            error_log.trim()
+        );
+    }
     let trimmed = error_log.trim();
     if trimmed.is_empty() {
         format!("Download failed (exit code {:?})", code)
@@ -1859,6 +1865,10 @@ fn build_ytdlp_download_args(
     }
 
     push_ytdlp_download_cookie_args(app, &mut args, options)?;
+    args.push("--retries".to_string());
+    args.push("10".to_string());
+    args.push("--fragment-retries".to_string());
+    args.push("10".to_string());
     args.push(url.to_string());
     Ok(args)
 }

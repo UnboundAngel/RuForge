@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 const SIDECAR_SCHEMA_VERSION: u32 = 2;
 const SIDECAR_FILENAME: &str = ".ruforge-playlist.json";
+const PLAYLIST_COVER_FILENAME: &str = ".ruforge-playlist-cover.jpg";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -86,6 +87,46 @@ pub fn sidecar_path_for(output_dir: &str, folder_name: &str) -> PathBuf {
         .join("Playlists")
         .join(folder_name)
         .join(SIDECAR_FILENAME)
+}
+
+pub fn playlist_cover_path_for(output_dir: &str, folder_name: &str) -> PathBuf {
+    PathBuf::from(output_dir)
+        .join("Playlists")
+        .join(folder_name)
+        .join(PLAYLIST_COVER_FILENAME)
+}
+
+fn schedule_playlist_cover_persist(cover_url: String, output_dir: String, folder_name: String) {
+    tauri::async_runtime::spawn(async move {
+        let dest = playlist_cover_path_for(&output_dir, &folder_name);
+        if dest.is_file() {
+            return;
+        }
+        let client = match reqwest::Client::builder()
+            .user_agent("RuForge/1.0 (+https://github.com/UnboundAngel/RuForge)")
+            .timeout(std::time::Duration::from_secs(45))
+            .build()
+        {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let Ok(resp) = client.get(&cover_url).send().await else {
+            return;
+        };
+        if !resp.status().is_success() {
+            return;
+        }
+        let Ok(bytes) = resp.bytes().await else {
+            return;
+        };
+        if bytes.is_empty() {
+            return;
+        }
+        if let Some(parent) = dest.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&dest, &bytes);
+    });
 }
 
 fn normalize_youtube_id(raw: &str) -> Option<String> {
@@ -330,6 +371,13 @@ pub fn kickoff_playlist_download_sidecar(
 
     if let Some(meta) = metadata {
         apply_metadata_patch(&mut dto, &meta);
+        if let Some(url) = trim_opt(meta.cover_url.clone()) {
+            schedule_playlist_cover_persist(
+                url,
+                output_dir.trim().to_string(),
+                folder.to_string(),
+            );
+        }
     }
 
     let path = sidecar_path_for(output_dir.trim(), folder);
@@ -407,7 +455,15 @@ pub fn update_playlist_download_sidecar_metadata(
     let mut dto = read_sidecar(&path).ok_or_else(|| "Playlist sidecar not found.".to_string())?;
     dto.schema_version = SIDECAR_SCHEMA_VERSION;
     apply_metadata_patch(&mut dto, &metadata);
-    write_json_sidecar(&path, &dto)
+    write_json_sidecar(&path, &dto)?;
+    if let Some(url) = trim_opt(metadata.cover_url.clone()) {
+        schedule_playlist_cover_persist(
+            url,
+            output_dir.trim().to_string(),
+            folder.to_string(),
+        );
+    }
+    Ok(())
 }
 
 #[tauri::command]

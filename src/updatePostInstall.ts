@@ -86,11 +86,10 @@ export function clearPendingPostInstall(): void {
   localStorage.removeItem(KEY);
 }
 
-/** Read and remove so the celebration UI only arms once per successful install handoff. */
-export function consumePendingPostInstall(): PostInstallPayload | null {
+/** Peek without removing; used to verify version before showing What's New. */
+export function readPendingPostInstall(): PostInstallPayload | null {
   const raw = localStorage.getItem(KEY);
   if (!raw) return null;
-  localStorage.removeItem(KEY);
   try {
     const o = JSON.parse(raw) as Record<string, unknown>;
     if (typeof o.version !== "string") return null;
@@ -103,4 +102,12 @@ export function consumePendingPostInstall(): PostInstallPayload | null {
   } catch {
     return null;
   }
+}
+
+/** Read and remove so the celebration UI only arms once per successful install handoff. */
+export function consumePendingPostInstall(): PostInstallPayload | null {
+  const pending = readPendingPostInstall();
+  if (!pending) return null;
+  localStorage.removeItem(KEY);
+  return pending;
 }
