@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Play } from "lucide-react";
 
@@ -5,12 +6,25 @@ type Props = {
   title: string;
   subtitle: string;
   cover: string | null;
+  coverFallback?: string | null;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
 
-export function MusicAlbumCard({ title, subtitle, cover, onClick, onContextMenu }: Props) {
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+export function MusicAlbumCard({ title, subtitle, cover, coverFallback = null, onClick, onContextMenu }: Props) {
+  const [coverSrc, setCoverSrc] = useState<string | null>(() => (cover ? convertFileSrc(cover) : null));
+
+  useEffect(() => {
+    setCoverSrc(cover ? convertFileSrc(cover) : null);
+  }, [cover]);
+
+  const handleCoverError = () => {
+    if (coverFallback) {
+      setCoverSrc(convertFileSrc(coverFallback));
+    } else {
+      setCoverSrc(null);
+    }
+  };
   return (
     <button
       type="button"
@@ -29,7 +43,7 @@ export function MusicAlbumCard({ title, subtitle, cover, onClick, onContextMenu 
           <div className="absolute inset-8 rounded-full border border-neutral-900/60" />
           <div className="w-10 h-10 rounded-full overflow-hidden bg-stone-900 border border-neutral-850 flex items-center justify-center relative">
             {coverSrc ? (
-              <img src={coverSrc} alt="" className="w-full h-full object-cover" />
+              <img src={coverSrc} alt="" className="w-full h-full object-cover" onError={handleCoverError} />
             ) : (
               <div className="w-full h-full bg-neutral-800" />
             )}
@@ -39,7 +53,7 @@ export function MusicAlbumCard({ title, subtitle, cover, onClick, onContextMenu 
 
         <div className="relative z-10 w-full h-full rounded-xl overflow-hidden bg-stone-950 border border-white/5 transition-all duration-300 ease-out group-hover/card:-translate-x-2 group-hover/card:scale-[0.97] group-hover/card:rotate-[-2deg]">
           {coverSrc ? (
-            <img src={coverSrc} alt="" className="w-full h-full object-cover" />
+            <img src={coverSrc} alt="" className="w-full h-full object-cover" onError={handleCoverError} />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-[var(--music-text-muted)]">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.35 }}>

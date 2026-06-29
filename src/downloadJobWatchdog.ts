@@ -100,6 +100,7 @@ function jobWallClockAgeMs(job: DownloadJob): number {
 }
 
 function jobExceededWallClock(job: DownloadJob): boolean {
+  if (job.options?.audioOnly !== true) return false;
   return jobWallClockAgeMs(job) >= MAX_DOWNLOAD_WALL_CLOCK_MS;
 }
 
@@ -226,7 +227,9 @@ async function evaluateStall(jobId: string, generation: number): Promise<void> {
     generation,
     Math.max(
       1000,
-      Math.min(threshold - idleMs, MAX_DOWNLOAD_WALL_CLOCK_MS - jobWallClockAgeMs(job)),
+      job.options?.audioOnly === true
+        ? Math.min(threshold - idleMs, MAX_DOWNLOAD_WALL_CLOCK_MS - jobWallClockAgeMs(job))
+        : threshold - idleMs,
     ),
   );
 }
@@ -234,7 +237,9 @@ async function evaluateStall(jobId: string, generation: number): Promise<void> {
 function scheduleWatchdogCheck(jobId: string, generation: number, job: DownloadJob | undefined): void {
   const idleDelay = job ? computeDownloadJobStallThresholdMs(job) : PRE_TRANSFER_MAX_MS;
   const wallRemaining =
-    job != null ? MAX_DOWNLOAD_WALL_CLOCK_MS - jobWallClockAgeMs(job) : MAX_DOWNLOAD_WALL_CLOCK_MS;
+    job != null && job.options?.audioOnly === true
+      ? MAX_DOWNLOAD_WALL_CLOCK_MS - jobWallClockAgeMs(job)
+      : Number.POSITIVE_INFINITY;
   scheduleCheck(jobId, generation, Math.max(1000, Math.min(idleDelay, wallRemaining)));
 }
 

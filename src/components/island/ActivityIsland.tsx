@@ -37,7 +37,20 @@ type IslandSavedCapture = {
   contextLabel: string;
 };
 
-export function ActivityIsland() {
+export type ActivityIslandUpdateAvailable = {
+  version: string;
+  notes: string;
+  collapsed: boolean;
+  onInstallRestart: () => void;
+  onCollapse: () => void;
+  onExpand: () => void;
+};
+
+type ActivityIslandProps = {
+  updateAvailable?: ActivityIslandUpdateAvailable | null;
+};
+
+export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) {
   const activity = useCurrentActivity();
   const playback = useSyncExternalStore(
     subscribeMainPlaybackBridge,
@@ -90,10 +103,17 @@ export function ActivityIsland() {
     isExpanded ||
     (hasSession && livePaused && onOwningSurface);
 
+  const updateMode = Boolean(updateAvailable);
+  const updateExpanded = updateMode && !updateAvailable!.collapsed;
+
   const islandState: IslandState = devCaptureIsland
     ? savedCapture
       ? "capture"
       : "idle"
+    : updateMode
+      ? updateAvailable!.collapsed
+        ? "idle"
+        : "expanded"
     : !hasSession || !showIslandChrome
       ? "idle"
       : isExpanded
@@ -306,6 +326,14 @@ export function ActivityIsland() {
 
   const handleShellClick = () => {
     if (devCaptureIsland) return;
+    if (updateMode && updateAvailable) {
+      if (updateAvailable.collapsed) {
+        updateAvailable.onExpand();
+      } else {
+        updateAvailable.onCollapse();
+      }
+      return;
+    }
     if (isExpanded) {
       setUserExpanded(false);
       return;
@@ -339,12 +367,18 @@ export function ActivityIsland() {
 
   return createPortal(
     <>
-      {isExpanded ? (
+      {isExpanded || updateExpanded ? (
         <button
           type="button"
           className="pointer-events-auto fixed inset-0 z-[109] bg-transparent"
-          aria-label="Dismiss now playing"
-          onClick={() => setUserExpanded(false)}
+          aria-label={updateExpanded ? "Collapse update details" : "Dismiss now playing"}
+          onClick={() => {
+            if (updateExpanded && updateAvailable) {
+              updateAvailable.onCollapse();
+              return;
+            }
+            setUserExpanded(false);
+          }}
         />
       ) : null}
 
@@ -373,6 +407,16 @@ export function ActivityIsland() {
             state={islandState}
             content={content}
             waveformLevels={waveformLevels}
+            updateAvailable={
+              updateAvailable
+                ? {
+                    version: updateAvailable.version,
+                    notes: updateAvailable.notes,
+                    collapsed: updateAvailable.collapsed,
+                    onInstallRestart: updateAvailable.onInstallRestart,
+                  }
+                : undefined
+            }
             devCaptureIdle={
               devCaptureIsland && !savedCapture
                 ? {

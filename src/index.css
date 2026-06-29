@@ -107,6 +107,8 @@
   /* Activity island shell: darker espresso pocket on #271C18 chrome (portal sets data-rf-nav-mode). */
   --rf-island-shell-media: #181210;
   --rf-island-shell-music: #000000;
+  --rf-island-update-accent: 190 75 55;
+  --rf-island-update-brown: 120 68 52;
 }
 
 html,
@@ -1249,6 +1251,64 @@ button.rf-yt-profile-pill {
 
 .rf-activity-island-portal[data-rf-nav-mode="music"] .rf-island-shell {
   background-color: var(--rf-island-shell-music);
+}
+
+@property --rf-island-update-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.rf-island-shell--update {
+  position: relative;
+  isolation: isolate;
+  border: none;
+  box-shadow: none;
+}
+
+.rf-island-shell--update::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--rf-island-update-angle),
+    rgb(190 75 55),
+    rgb(140 85 65),
+    rgb(96 52 42),
+    rgb(168 72 54),
+    rgb(190 75 55)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: rf-island-update-rim-rotate 5s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rf-island-shell--update > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes rf-island-update-rim-rotate {
+  to {
+    --rf-island-update-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-island-shell--update::before {
+    animation: none;
+    background: rgb(140 85 65);
+  }
 }
 
 .rf-island-waveform-art-bg {

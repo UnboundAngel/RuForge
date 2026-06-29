@@ -8,6 +8,12 @@ import {
 } from "./IslandCaptureSavedContent";
 import { IslandIdleDevCaptureContent } from "./IslandIdleDevCaptureContent";
 import { IslandExpandedContent } from "./IslandExpandedContent";
+import {
+  IslandUpdateCompactContent,
+  IslandUpdateExpandedContent,
+  islandUpdateCollapsedWidth,
+  type IslandUpdateContentProps,
+} from "./IslandUpdateContent";
 
 export type IslandState = "idle" | "compact" | "expanded" | "capture";
 
@@ -77,6 +83,7 @@ type DynamicIslandProps = {
   captureSavedCaption?: string;
   captureSavedPreviewSrc?: string;
   onCaptureSavedOpen?: (e: MouseEvent) => void;
+  updateAvailable?: Omit<IslandUpdateContentProps, "compact"> & { collapsed: boolean };
 };
 
 function ContentShell({
@@ -162,13 +169,26 @@ export function DynamicIsland({
   captureSavedCaption,
   captureSavedPreviewSrc,
   onCaptureSavedOpen,
+  updateAvailable,
 }: DynamicIslandProps) {
-  const baseDims = ISLAND_DIMENSIONS[state];
+  const updateMode = Boolean(updateAvailable);
+  const effectiveState: IslandState = updateMode
+    ? updateAvailable!.collapsed
+      ? "idle"
+      : "expanded"
+    : state;
+  const baseDims = ISLAND_DIMENSIONS[effectiveState];
   const dims =
-    state === "capture" && captureSavedCaption
-      ? { ...baseDims, width: captureIslandWidthForCaption(captureSavedCaption) }
-      : baseDims;
-  const interactive = state !== "idle" || Boolean(devCaptureIdle);
+    updateMode && updateAvailable?.collapsed
+      ? {
+          width: islandUpdateCollapsedWidth(updateAvailable.version),
+          height: 36,
+          borderRadius: 18,
+        }
+      : effectiveState === "capture" && captureSavedCaption
+        ? { ...baseDims, width: captureIslandWidthForCaption(captureSavedCaption) }
+        : baseDims;
+  const interactive = effectiveState !== "idle" || Boolean(devCaptureIdle) || updateMode;
 
   return (
     <motion.div
@@ -181,12 +201,29 @@ export function DynamicIsland({
     >
       <div
         className={`rf-island-shell relative h-full w-full ${
-          state === "expanded" ? "overflow-visible shadow-2xl" : "overflow-hidden"
+          updateMode ? "rf-island-shell--update" : ""
+        } ${
+          effectiveState === "expanded" ? "overflow-visible shadow-2xl" : "overflow-hidden"
         } ${interactive ? "cursor-pointer" : "cursor-default"}`}
         style={{ borderRadius: dims.borderRadius }}
       >
         <AnimatePresence initial={false}>
-          {state === "idle" && devCaptureIdle ? (
+          {updateMode && updateAvailable ? (
+            updateAvailable.collapsed ? (
+              <ContentShell key="update-compact">
+                <IslandUpdateCompactContent version={updateAvailable.version} />
+              </ContentShell>
+            ) : (
+              <ContentShell key="update-expanded" enterScale={0.95}>
+                <IslandUpdateExpandedContent
+                  version={updateAvailable.version}
+                  notes={updateAvailable.notes}
+                  onInstallRestart={updateAvailable.onInstallRestart}
+                />
+              </ContentShell>
+            )
+          ) : null}
+          {!updateMode && state === "idle" && devCaptureIdle ? (
             <IslandIdleDevCaptureContent
               key="idle"
               hover={devCaptureIdle.hover}
@@ -194,11 +231,11 @@ export function DynamicIsland({
               onCapture={devCaptureIdle.onCapture}
             />
           ) : null}
-          {state === "idle" && !devCaptureIdle ? <IdleContent key="idle" /> : null}
-          {state === "compact" && (
+          {!updateMode && state === "idle" && !devCaptureIdle ? <IdleContent key="idle" /> : null}
+          {!updateMode && state === "compact" && (
             <CompactContent key="compact" content={content} waveformLevels={waveformLevels} />
           )}
-          {state === "capture" && captureSavedCaption && captureSavedPreviewSrc && onCaptureSavedOpen ? (
+          {!updateMode && state === "capture" && captureSavedCaption && captureSavedPreviewSrc && onCaptureSavedOpen ? (
             <IslandCaptureSavedContent
               key="capture"
               caption={captureSavedCaption}
@@ -206,7 +243,7 @@ export function DynamicIsland({
               onOpen={onCaptureSavedOpen}
             />
           ) : null}
-          {state === "expanded" && (
+          {!updateMode && state === "expanded" && (
             <IslandExpandedContent
               key="expanded"
               content={content}

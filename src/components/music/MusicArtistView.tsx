@@ -4,6 +4,7 @@ import { Shuffle, Play, ChevronLeft, MapPin, Music2, Disc3 } from "lucide-react"
 import { motion } from "framer-motion";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
+import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
@@ -39,14 +40,27 @@ function artistInfoKeysFor(artistKey: string, displayName: string): string[] {
 type AlbumCardProps = {
   album: string;
   cover: string | null;
+  coverFallback?: string | null;
   trackCount: number;
   year?: number | null;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
 
-function AlbumCard({ album, cover, trackCount, year, onClick, onContextMenu }: AlbumCardProps) {
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+function AlbumCard({ album, cover, coverFallback = null, trackCount, year, onClick, onContextMenu }: AlbumCardProps) {
+  const [coverSrc, setCoverSrc] = useState<string | null>(() => (cover ? convertFileSrc(cover) : null));
+
+  useEffect(() => {
+    setCoverSrc(cover ? convertFileSrc(cover) : null);
+  }, [cover]);
+
+  const handleCoverError = () => {
+    if (coverFallback) {
+      setCoverSrc(convertFileSrc(coverFallback));
+    } else {
+      setCoverSrc(null);
+    }
+  };
   const metaLabel = `${trackCount} ${trackCount === 1 ? "song" : "songs"}`;
 
   return (
@@ -62,6 +76,7 @@ function AlbumCard({ album, cover, trackCount, year, onClick, onContextMenu }: A
           <img
             src={coverSrc}
             alt=""
+            onError={handleCoverError}
             className="h-full w-full transition-transform duration-200 group-hover/album:scale-[1.04]"
             style={{ objectFit: "cover" }}
           />
@@ -334,13 +349,17 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
 
   const albums = useMemo(() => {
     const groups = buildMultiTrackAlbumGroups(tracks, primaryArtist);
-    return groups.map((g) => ({
-      key: g.albumKey,
-      display: g.album,
-      cover: bestCoverPath(g.tracks[0]!),
-      year: g.tracks.find((t) => t.year)?.year ?? null,
-      tracks: g.tracks,
-    })).sort((a, b) => {
+    return groups.map((g) => {
+      const paths = albumCoverPathWithFallback(g.tracks[0]!);
+      return {
+        key: g.albumKey,
+        display: g.album,
+        cover: paths.primary,
+        coverFallback: paths.fallback,
+        year: g.tracks.find((t) => t.year)?.year ?? null,
+        tracks: g.tracks,
+      };
+    }).sort((a, b) => {
       if (a.year && b.year) return a.year - b.year;
       if (a.year) return -1;
       if (b.year) return 1;
@@ -583,6 +602,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
                 key={a.key}
                 album={a.display}
                 cover={a.cover}
+                coverFallback={a.coverFallback}
                 trackCount={a.tracks.length}
                 year={a.year}
                 onClick={() => onOpenAlbum(a.key)}

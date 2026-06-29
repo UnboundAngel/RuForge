@@ -30,6 +30,7 @@ import {
   type DownloadJobMediaSnapshot,
   type DownloadJobOptions,
   DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+  jobHasDownloadTransferStarted,
 } from "../downloadQueue";
 import type { ProgressPayload } from "../types";
 import {
@@ -475,9 +476,6 @@ function handleTimedOutDownloadJob(get: () => RuforgeStore): (jobId: string) => 
         console.warn("[RuForge] timeout cleanup pause_download_job:", e);
       }
 
-      const latest = get().downloadJobs.find((j) => j.id === jobId);
-      if (!latest || latest.status !== "downloading") return;
-
       get().onDownloadJobFinished({
         jobId,
         url: job.url,
@@ -601,6 +599,11 @@ export const createDownloadQueueSlice: StateCreator<
       } catch (e) {
         const msg = String(e);
         if (isYtDlpStartCancelledError(msg)) {
+          const latest = get().downloadJobs.find((j) => j.id === jobId);
+          if (latest?.status === "paused") {
+            disarmDownloadJobWatchdog(jobId);
+            return;
+          }
           if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
             disarmDownloadJobWatchdog(jobId);
             get().pumpDownloadQueue();
@@ -1002,12 +1005,15 @@ export const createDownloadQueueSlice: StateCreator<
       } catch (e) {
         disarmDownloadJobWatchdog(id);
         const msg = String(e);
-        if (
-          isYtDlpStartCancelledError(msg) &&
-          (await trySkipLibraryDuplicateJob(get, id, job.url))
-        ) {
-          get().pumpDownloadQueue();
-          return;
+        if (isYtDlpStartCancelledError(msg)) {
+          const latest = get().downloadJobs.find((j) => j.id === id);
+          if (latest?.status === "paused") {
+            return;
+          }
+          if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
+            get().pumpDownloadQueue();
+            return;
+          }
         }
         get().onDownloadJobFinished({
           jobId: id,
@@ -1022,6 +1028,7 @@ export const createDownloadQueueSlice: StateCreator<
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job || (job.status !== "failed" && job.status !== "timed_out")) return;
       clearTimedOutJobRemovalTimer(id);
+      const resume = jobHasDownloadTransferStarted(job);
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
           j.id === id
@@ -1031,7 +1038,7 @@ export const createDownloadQueueSlice: StateCreator<
                 approval: "auto" as const,
                 error: null,
                 progress: null,
-                resumeOnStart: false,
+                resumeOnStart: resume,
                 createdAt: Date.now(),
               }
             : j,

@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Shuffle, Play, ChevronLeft } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
-import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
+import { isAudioOnlyPath } from "@/mediaKind";
+import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
@@ -11,11 +12,6 @@ import { albumKeyFromFile, resolveDisplayAlbum } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicLikeButton } from "./MusicLikeButton";
-import { usePlaylistSidecarAtLocation } from "@/hooks/usePlaylistSidecar";
-import {
-  isUsablePlaylistCoverUrl,
-  playlistSidecarLocationFromTrackPath,
-} from "@/lib/playlistDownloadSidecar";
 
 type TrackRowProps = {
   file: MediaFile;
@@ -103,12 +99,6 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
     });
   }, [entries, albumKey]);
 
-  const sidecarLocation = useMemo(
-    () => (tracks[0] ? playlistSidecarLocationFromTrackPath(tracks[0].path) : null),
-    [tracks],
-  );
-  const playlistSidecar = usePlaylistSidecarAtLocation(sidecarLocation, { healStaleCover: true });
-
   const displayAlbum = useMemo(() => {
     const first = tracks[0];
     return first ? resolveDisplayAlbum(first) || albumKey : albumKey;
@@ -122,14 +112,21 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
     return artistKey;
   }, [tracks, artistKey]);
 
-  const coverSrc = useMemo(() => {
-    const remote = isUsablePlaylistCoverUrl(playlistSidecar?.coverUrl)
-      ? playlistSidecar!.coverUrl!.trim()
-      : null;
-    if (remote) return remote;
-    const local = bestCoverPath(tracks[0] ?? {});
-    return local ? convertFileSrc(local) : null;
-  }, [playlistSidecar?.coverUrl, tracks]);
+  const [coverSrc, setCoverSrc] = useState<string | null>(null);
+  useEffect(() => {
+    const paths = tracks[0]
+      ? albumCoverPathWithFallback(tracks[0])
+      : { primary: null, fallback: null };
+    setCoverSrc(paths.primary ? convertFileSrc(paths.primary) : null);
+  }, [tracks]);
+  const handleCoverError = () => {
+    const fallback = tracks[0] ? albumCoverPathWithFallback(tracks[0]).fallback : null;
+    if (fallback) {
+      setCoverSrc(convertFileSrc(fallback));
+    } else {
+      setCoverSrc(null);
+    }
+  };
   const totalDuration = useMemo(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
 
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
@@ -155,6 +152,7 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
           <img
             src={coverSrc}
             alt=""
+            onError={handleCoverError}
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             style={{ filter: "blur(40px) brightness(0.35)", transform: "scale(1.15)" }}
           />
@@ -177,6 +175,7 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
             <img
               src={coverSrc}
               alt=""
+              onError={handleCoverError}
               className="w-32 h-32 rounded-lg shrink-0"
               style={{
                 borderRadius: "var(--music-card-radius)",

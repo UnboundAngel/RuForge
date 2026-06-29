@@ -409,6 +409,14 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.1 (unreleased)
 
+- **Island**: Update island compact pill centers readable zinc label; expanded matches playback type hierarchy (muted eyebrow, white title), bare download icon, soft-rect accent CTA pinned bottom (`IslandUpdateContent.tsx`, `index.css`).
+- **Island**: Update island collapsed pill shows `update {version}` text with auto width; rim stays rotating red-brown (`IslandUpdateContent.tsx`, `DynamicIsland.tsx`).
+- **Island**: Expanded update-available island simplified to playback-style header, scrollable notes, single fallback line, full-width install button; removed perk cards, rings, and gradient filler (`IslandUpdateContent.tsx`, `index.css`).
+- **Updater**: Install/download watchdogs, failed full-window state with GitHub Releases link, post-install version verify; removed production debug overlay click (`App.tsx`, `UpdaterLayers.tsx`, `updatePostInstall.ts`, `updaterInstall.ts`).
+- **Updater UX**: Update available uses expanded Dynamic Island instead of side card and titlebar pill (`ActivityIsland.tsx`, `DynamicIsland.tsx`, `IslandUpdateContent.tsx`).
+- **Downloads**: Pause during pre-spawn simulate stays paused, not failed (`downloadQueueSlice.ts`); 2-minute wall clock scoped to audio-only auto-save jobs (`downloadJobWatchdog.ts`); yt-dlp `--retries` / `--fragment-retries`, 403 guidance, resume on manual retry (`downloader.rs`, `downloadQueueSlice.ts`).
+- **Music**: Playlist cover persisted to `.ruforge-playlist-cover.jpg` at download; album shelf and detail share local cover path, no lazy heal on album open (`playlist_sidecar.rs`, `albumCoverPath.ts`, `MusicAlbumView.tsx`).
+
 - **Website**: 0.2.0 marketing sync on landing, features index (Music mode hub), downloader/settings feature pages, nav IA copy, and llms.txt; prep:website-release verified with installer copy and Astro build.
 
 

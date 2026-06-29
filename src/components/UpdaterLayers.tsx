@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Loader2, AlertTriangle, ExternalLink, X } from "lucide-react";
-import { emit } from "@tauri-apps/api/event";
 import Markdown from "markdown-to-jsx";
 import { ChangeItem } from "../updatePostInstall";
 
@@ -46,7 +46,7 @@ function UpdaterReleaseNotesMarkdown({
   );
 }
 
-export type UpdaterPhase = "idle" | "available" | "downloading" | "installing";
+export type UpdaterPhase = "idle" | "available" | "downloading" | "installing" | "failed";
 
 const RELEASES_PAGE = "https://github.com/UnboundAngel/RuForge/releases";
 
@@ -61,7 +61,7 @@ type SidebarBadgeProps = {
 };
 
 /** Top-right status pill for the window controls area. */
-export function UpdaterStatusIndicator({ phase, version, onClick }: SidebarBadgeProps) {
+export function UpdaterStatusIndicator({ phase }: SidebarBadgeProps) {
   if (phase === "downloading") {
     return (
       <motion.div 
@@ -71,19 +71,6 @@ export function UpdaterStatusIndicator({ phase, version, onClick }: SidebarBadge
       >
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         <span>Downloading Update</span>
-      </motion.div>
-    );
-  }
-  if (phase === "available" && version) {
-    return (
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        onClick={onClick}
-        className="flex cursor-pointer items-center gap-1.5 rounded-full border border-[color:var(--accent)]/20 bg-[color-mix(in_srgb,var(--accent),transparent_95%)] px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-[color:var(--accent)] transition-all"
-      >
-        <AlertTriangle className="h-2.5 w-2.5 shrink-0" aria-hidden />
-        <span>Update Available</span>
       </motion.div>
     );
   }
@@ -262,13 +249,23 @@ type FullWindowUpdateProps = {
   phase: UpdaterPhase;
   downloaded: number;
   contentLength?: number;
+  errorMessage?: string | null;
+  onRetry?: () => void;
+  onDismissFailed?: () => void;
 };
 
 /**
  * Replaces the entire app window while an update downloads or installs (not a tab or main-pane overlay).
  */
-export function UpdaterFullWindowUpdate({ phase, downloaded, contentLength }: FullWindowUpdateProps) {
-  if (phase !== "downloading" && phase !== "installing") return null;
+export function UpdaterFullWindowUpdate({
+  phase,
+  downloaded,
+  contentLength,
+  errorMessage,
+  onRetry,
+  onDismissFailed,
+}: FullWindowUpdateProps) {
+  if (phase !== "downloading" && phase !== "installing" && phase !== "failed") return null;
 
   const hasTotal = typeof contentLength === "number" && contentLength > 0;
   const pct = hasTotal ? Math.min(100, Math.round((downloaded / contentLength) * 100)) : null;
@@ -278,8 +275,7 @@ export function UpdaterFullWindowUpdate({ phase, downloaded, contentLength }: Fu
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      onClick={() => void emit("debug-cycle-updater")}
-      className="fixed inset-0 z-[600] flex flex-col items-center justify-center bg-[#1D1613] cursor-pointer"
+      className="fixed inset-0 z-[600] flex flex-col items-center justify-center bg-[#1D1613]"
       aria-live="polite"
       aria-modal="true"
       role="alertdialog"
@@ -299,32 +295,91 @@ export function UpdaterFullWindowUpdate({ phase, downloaded, contentLength }: Fu
         className="relative z-10 flex w-full max-w-lg flex-col items-center px-12"
       >
         <AnimatePresence mode="wait">
-          <motion.div
-            key={phase}
-            initial={{ y: 10, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -10, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="flex flex-col items-center"
-          >
-            <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5 shadow-inner backdrop-blur-md">
-              {phase === "installing" ? (
-                <Icon icon="line-md:folder-check-twotone" className="h-8 w-8 text-[color:var(--accent)]" />
-              ) : (
-                <Icon icon="line-md:downloading-loop" className="h-8 w-8 text-[color:var(--accent)]" />
-              )}
-            </div>
+          {phase === "failed" ? (
+            <motion.div
+              key="failed"
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -10, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center"
+            >
+              <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 shadow-inner backdrop-blur-md">
+                <AlertTriangle className="h-8 w-8 text-red-400" aria-hidden />
+              </div>
 
-            <h1 id="ruforge-update-screen-title" className="text-center text-2xl font-black tracking-tight text-stone-100 uppercase">
-              {phase === "installing" ? "Applying update" : "Downloading update"}
-            </h1>
-            
-            <p className="mt-4 max-w-xs text-center text-[13px] leading-relaxed font-medium text-stone-500">
-              {phase === "installing"
-                ? "Finalizing the latest version of RuForge. The app will restart automatically in a moment."
-                : "A new version of RuForge is being prepared. The app will be unavailable until the download completes."}
-            </p>
-          </motion.div>
+              <h1 id="ruforge-update-screen-title" className="text-center text-2xl font-black tracking-tight text-stone-100 uppercase">
+                Update failed
+              </h1>
+
+              <p className="mt-4 max-w-sm text-center text-[13px] leading-relaxed font-medium text-stone-500">
+                {errorMessage?.trim()
+                  || "RuForge could not finish installing the update. Try again or install manually from GitHub Releases."}
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                {onRetry ? (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="button"
+                    onClick={onRetry}
+                    className="rounded-lg bg-[color:var(--accent)] px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[#1D1613]"
+                  >
+                    Try again
+                  </motion.button>
+                ) : null}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  onClick={() => void openUrl(RELEASES_PAGE)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-stone-300"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  GitHub Releases
+                </motion.button>
+                {onDismissFailed ? (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="button"
+                    onClick={onDismissFailed}
+                    className="rounded-lg px-4 py-2 text-[10px] font-black uppercase tracking-widest text-stone-500"
+                  >
+                    Dismiss
+                  </motion.button>
+                ) : null}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key={phase}
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -10, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center"
+            >
+              <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5 shadow-inner backdrop-blur-md">
+                {phase === "installing" ? (
+                  <Icon icon="line-md:folder-check-twotone" className="h-8 w-8 text-[color:var(--accent)]" />
+                ) : (
+                  <Icon icon="line-md:downloading-loop" className="h-8 w-8 text-[color:var(--accent)]" />
+                )}
+              </div>
+
+              <h1 id="ruforge-update-screen-title" className="text-center text-2xl font-black tracking-tight text-stone-100 uppercase">
+                {phase === "installing" ? "Applying update" : "Downloading update"}
+              </h1>
+
+              <p className="mt-4 max-w-xs text-center text-[13px] leading-relaxed font-medium text-stone-500">
+                {phase === "installing"
+                  ? "Finalizing the latest version of RuForge. The app will restart automatically in a moment."
+                  : "A new version of RuForge is being prepared. The app will be unavailable until the download completes."}
+              </p>
+            </motion.div>
+          )}
         </AnimatePresence>
 
         <div className="mt-12 w-full">

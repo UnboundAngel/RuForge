@@ -4,6 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Play, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
+import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { readFurthestPlaybackSec } from "@/playbackStorage";
 import type { MediaFile } from "@/types";
@@ -287,15 +288,19 @@ export function MusicHomeView({
   const albums = useMemo(() => {
     return buildMultiTrackAlbumGroups(filteredTracks, primaryArtist)
       .slice(0, 12)
-      .map((g) => ({
-        albumKey: g.albumKey,
-        artistKey: g.artistKey,
-        album: g.album,
-        artist: g.artist,
-        cover: bestCoverPath(g.tracks[0]!),
-        isSquare: hasSquareCover(g.tracks[0]!),
-        tracks: g.tracks,
-      }));
+      .map((g) => {
+        const paths = albumCoverPathWithFallback(g.tracks[0]!);
+        return {
+          albumKey: g.albumKey,
+          artistKey: g.artistKey,
+          album: g.album,
+          artist: g.artist,
+          cover: paths.primary,
+          coverFallback: paths.fallback,
+          isSquare: hasSquareCover(g.tracks[0]!),
+          tracks: g.tracks,
+        };
+      });
   }, [filteredTracks]);
 
   // Artists: group by PRIMARY artist only so "Juice WRLD, Trippie Redd" and
@@ -509,6 +514,7 @@ export function MusicHomeView({
                     title={a.album}
                     subtitle={a.artist}
                     cover={a.cover}
+                    coverFallback={a.coverFallback}
                     onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
                     onContextMenu={(e) => setMenu({
                       context: { kind: "album", artistKey: a.artistKey, albumKey: a.albumKey, displayName: a.album, artistName: a.artist },
