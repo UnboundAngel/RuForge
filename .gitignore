@@ -43,6 +43,12 @@ src-tauri/target/
 # Removed bundled browser extension (do not re-add)
 src-tauri/extensions/ublock/
 
+# Local History extension snapshots
+.history/
+
+# Agent scratch copies of updater.json
+_live-updater-check*.json
+
 # Ad-hoc archives and large optional FFmpeg binaries (see AGENTS.md; do not commit multi-hundred-MB exes)
 ffmpeg.7z
 src-tauri/binaries/ffmpeg*.exe

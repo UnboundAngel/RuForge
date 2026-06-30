@@ -40,8 +40,13 @@ type IslandSavedCapture = {
 export type ActivityIslandUpdateAvailable = {
   version: string;
   notes: string;
+  installableVersion: string;
+  versionOptions: readonly string[];
+  selectedVersion: string;
+  onSelectVersion: (version: string) => void;
   collapsed: boolean;
   onInstallRestart: () => void;
+  onHideUntilRestart: () => void;
   onCollapse: () => void;
   onExpand: () => void;
 };
@@ -412,8 +417,13 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
                 ? {
                     version: updateAvailable.version,
                     notes: updateAvailable.notes,
+                    installableVersion: updateAvailable.installableVersion,
+                    versionOptions: updateAvailable.versionOptions,
+                    selectedVersion: updateAvailable.selectedVersion,
+                    onSelectVersion: updateAvailable.onSelectVersion,
                     collapsed: updateAvailable.collapsed,
                     onInstallRestart: updateAvailable.onInstallRestart,
+                    onHideUntilRestart: updateAvailable.onHideUntilRestart,
                   }
                 : undefined
             }
