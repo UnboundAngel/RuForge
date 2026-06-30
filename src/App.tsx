@@ -44,6 +44,7 @@ import {
   UPDATER_DOWNLOAD_STALL_MS,
   UPDATER_INSTALL_TIMEOUT_MS,
 } from "./updaterInstall";
+import { fetchReleaseCatalog, type ReleaseCatalogEntry } from "./updaterReleaseCatalog";
 import { semverGreater } from "./lib/onboardingStorage";
 import { Icon } from "@iconify/react";
 import MiniPlayer from "./MiniPlayer";
@@ -441,6 +442,11 @@ function App() {
   const [updaterDownloaded, setUpdaterDownloaded] = useState(0);
   const [updaterContentLength, setUpdaterContentLength] = useState<number | undefined>(undefined);
   const [updaterIslandCollapsed, setUpdaterIslandCollapsed] = useState(false);
+  const updaterIslandHiddenUntilRestartRef = useRef(false);
+  const [updateReleaseCatalog, setUpdateReleaseCatalog] = useState<ReleaseCatalogEntry[]>([]);
+  const [selectedUpdateReleaseVersion, setSelectedUpdateReleaseVersion] = useState<string | null>(
+    null,
+  );
   const [updaterInstallError, setUpdaterInstallError] = useState<string | null>(null);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -467,7 +473,8 @@ function App() {
     updateRef.current = next;
     setUpdaterVersion(next.version);
     setUpdaterNotes(teaserNotesFromUpdaterBody(next.body ?? ""));
-    setUpdaterIslandCollapsed(false);
+    setSelectedUpdateReleaseVersion(next.version);
+    setUpdaterIslandCollapsed(updaterIslandHiddenUntilRestartRef.current);
     setUpdaterPhase("available");
   }, []);
 
@@ -584,6 +591,48 @@ function App() {
     if (!updateRef.current) return null;
     return buildPostInstallPayload(updateRef.current.version, updateRef.current.body ?? "");
   }, [updaterVersion]); // updaterVersion changes when updateRef is set
+
+  useEffect(() => {
+    if (updaterPhase !== "available" || !updaterVersion) {
+      setUpdateReleaseCatalog([]);
+      setSelectedUpdateReleaseVersion(null);
+      return;
+    }
+    const fallbackNotes = availableUpdatePayload?.notes ?? "";
+    void fetchReleaseCatalog().then((entries) => {
+      if (entries.length > 0) {
+        setUpdateReleaseCatalog(entries);
+        return;
+      }
+      setUpdateReleaseCatalog([{ version: updaterVersion, notes: fallbackNotes }]);
+    });
+  }, [updaterPhase, updaterVersion, availableUpdatePayload?.notes]);
+
+  const updateVersionOptions = useMemo(() => {
+    if (updateReleaseCatalog.length > 0) {
+      return updateReleaseCatalog.map((entry) => entry.version);
+    }
+    return updaterVersion ? [updaterVersion] : [];
+  }, [updateReleaseCatalog, updaterVersion]);
+
+  const islandUpdateNotes = useMemo(() => {
+    const pick = selectedUpdateReleaseVersion ?? updaterVersion;
+    if (!pick) return "";
+    const fromCatalog = updateReleaseCatalog.find((entry) => entry.version === pick);
+    if (fromCatalog) return fromCatalog.notes;
+    if (pick === updaterVersion) return availableUpdatePayload?.notes ?? "";
+    return "";
+  }, [
+    selectedUpdateReleaseVersion,
+    updaterVersion,
+    updateReleaseCatalog,
+    availableUpdatePayload?.notes,
+  ]);
+
+  const handleHideUpdateUntilRestart = useCallback(() => {
+    updaterIslandHiddenUntilRestartRef.current = true;
+    setUpdaterIslandCollapsed(true);
+  }, []);
 
   useEffect(() => {
     invoke<boolean>("get_hardware_acceleration_pref")
@@ -1152,6 +1201,7 @@ function App() {
       setUpdaterPhase((current) => {
         if (current === "idle") {
           setUpdaterVersion("9.9.9");
+          setSelectedUpdateReleaseVersion("9.9.9");
           setUpdaterNotes("### Mock Release Notes\n- Polished UI & Transitions\n- Enhanced accent color integration\n- Fixed subtitle ghosting bug\n- Improved MiniPlayer sizing logic");
           return "available";
         }
@@ -1613,9 +1663,14 @@ function App() {
             updaterPhase === "available" && updaterVersion
               ? {
                   version: updaterVersion,
-                  notes: availableUpdatePayload?.notes ?? "",
+                  notes: islandUpdateNotes,
+                  installableVersion: updaterVersion,
+                  versionOptions: updateVersionOptions,
+                  selectedVersion: selectedUpdateReleaseVersion ?? updaterVersion,
+                  onSelectVersion: setSelectedUpdateReleaseVersion,
                   collapsed: updaterIslandCollapsed,
                   onInstallRestart: () => void handleInstallRestart(),
+                  onHideUntilRestart: handleHideUpdateUntilRestart,
                   onCollapse: () => setUpdaterIslandCollapsed(true),
                   onExpand: () => setUpdaterIslandCollapsed(false),
                 }

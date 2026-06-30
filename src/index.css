@@ -1294,7 +1294,6 @@ button.rf-yt-profile-pill {
 }
 
 .rf-island-shell--update > * {
-  position: relative;
   z-index: 1;
 }
 
@@ -1309,6 +1308,16 @@ button.rf-yt-profile-pill {
     animation: none;
     background: rgb(140 85 65);
   }
+}
+
+.rf-island-update-version-menu {
+  scrollbar-width: none;
+}
+
+.rf-island-update-version-menu::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .rf-island-waveform-art-bg {

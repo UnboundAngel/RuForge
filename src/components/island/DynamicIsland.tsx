@@ -181,7 +181,7 @@ export function DynamicIsland({
   const dims =
     updateMode && updateAvailable?.collapsed
       ? {
-          width: islandUpdateCollapsedWidth(updateAvailable.version),
+          width: islandUpdateCollapsedWidth(updateAvailable.selectedVersion),
           height: 36,
           borderRadius: 18,
         }
@@ -211,13 +211,17 @@ export function DynamicIsland({
           {updateMode && updateAvailable ? (
             updateAvailable.collapsed ? (
               <ContentShell key="update-compact">
-                <IslandUpdateCompactContent version={updateAvailable.version} />
+                <IslandUpdateCompactContent version={updateAvailable.selectedVersion} />
               </ContentShell>
             ) : (
               <ContentShell key="update-expanded" enterScale={0.95}>
                 <IslandUpdateExpandedContent
-                  version={updateAvailable.version}
                   notes={updateAvailable.notes}
+                  installableVersion={updateAvailable.installableVersion}
+                  versionOptions={updateAvailable.versionOptions}
+                  selectedVersion={updateAvailable.selectedVersion}
+                  onSelectVersion={updateAvailable.onSelectVersion}
+                  onHideUntilRestart={updateAvailable.onHideUntilRestart}
                   onInstallRestart={updateAvailable.onInstallRestart}
                 />
               </ContentShell>
