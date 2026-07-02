@@ -480,6 +480,8 @@ function App() {
   const performUpdateCheck = useCallback(
     async (userInitiated: boolean) => {
       if (userInitiated) {
+        updaterIslandHiddenUntilRestartRef.current = false;
+        setUpdaterIslandCollapsed(false);
         await emit("ruforge-updater-check-status", { busy: true });
       }
       const result = await runUpdateCheck();
@@ -1670,7 +1672,9 @@ function App() {
       {!shellBlocked && (
         <ActivityIsland
           updateAvailable={
-            updaterPhase === "available" && updaterVersion
+            updaterPhase === "available" &&
+            updaterVersion &&
+            !updaterIslandHiddenUntilRestartRef.current
               ? {
                   version: updaterVersion,
                   notes: islandUpdateNotes,

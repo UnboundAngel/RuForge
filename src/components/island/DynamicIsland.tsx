@@ -11,6 +11,7 @@ import { IslandExpandedContent } from "./IslandExpandedContent";
 import {
   IslandUpdateCompactContent,
   IslandUpdateExpandedContent,
+  ISLAND_UPDATE_EXPANDED_DIMENSIONS,
   islandUpdateCollapsedWidth,
   type IslandUpdateContentProps,
 } from "./IslandUpdateContent";
@@ -181,10 +182,12 @@ export function DynamicIsland({
   const dims =
     updateMode && updateAvailable?.collapsed
       ? {
-          width: islandUpdateCollapsedWidth(updateAvailable.selectedVersion),
+          width: islandUpdateCollapsedWidth(),
           height: 36,
           borderRadius: 18,
         }
+      : updateMode && !updateAvailable?.collapsed
+        ? { ...ISLAND_UPDATE_EXPANDED_DIMENSIONS }
       : effectiveState === "capture" && captureSavedCaption
         ? { ...baseDims, width: captureIslandWidthForCaption(captureSavedCaption) }
         : baseDims;
@@ -203,24 +206,26 @@ export function DynamicIsland({
         className={`rf-island-shell relative h-full w-full ${
           updateMode ? "rf-island-shell--update" : ""
         } ${
-          effectiveState === "expanded" ? "overflow-visible shadow-2xl" : "overflow-hidden"
-        } ${interactive ? "cursor-pointer" : "cursor-default"}`}
+          updateMode || effectiveState !== "expanded"
+            ? "overflow-hidden"
+            : "overflow-visible shadow-2xl"
+        } ${updateMode && !updateAvailable?.collapsed ? "shadow-2xl" : ""} ${
+          interactive ? "cursor-pointer" : "cursor-default"
+        }`}
         style={{ borderRadius: dims.borderRadius }}
       >
         <AnimatePresence initial={false}>
           {updateMode && updateAvailable ? (
             updateAvailable.collapsed ? (
               <ContentShell key="update-compact">
-                <IslandUpdateCompactContent version={updateAvailable.selectedVersion} />
+                <IslandUpdateCompactContent />
               </ContentShell>
             ) : (
               <ContentShell key="update-expanded" enterScale={0.95}>
                 <IslandUpdateExpandedContent
                   notes={updateAvailable.notes}
                   installableVersion={updateAvailable.installableVersion}
-                  versionOptions={updateAvailable.versionOptions}
                   selectedVersion={updateAvailable.selectedVersion}
-                  onSelectVersion={updateAvailable.onSelectVersion}
                   onHideUntilRestart={updateAvailable.onHideUntilRestart}
                   onInstallRestart={updateAvailable.onInstallRestart}
                 />

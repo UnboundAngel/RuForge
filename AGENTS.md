@@ -409,6 +409,8 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.1 (unreleased)
 
+- **Island**: Update island expanded polish: hidden notes scrollbar, bare download icon, dismiss via Later only (`IslandUpdateContent.tsx`).
+- **Island**: Update island expanded layout rebuilt as flex column (header, scrollable notes, pinned footer with version picker + Hide/Install group); full-width footer divider; compact pill shows Update available + version badge without ellipsis (`IslandUpdateContent.tsx`, `DynamicIsland.tsx`).
 - **Updater**: VERIFY_ON_BOOT strict equality only (`verifyPendingUpdateOnBoot`); corrupted pending LS cleared; same-session handoff naming/copy demoted (`updatePostInstall.ts`, `App.tsx`).
 - **Island**: Update island mini pill vertical clip fixed: rim z-index rule no longer overrides ContentShell `absolute inset-0`; compact label uses `h-full` flex center like capture pill (`index.css`, `IslandUpdateContent.tsx`).
 - **Island**: Update island collapsed pill shows `update {version}` text with auto width; rim stays rotating red-brown (`IslandUpdateContent.tsx`, `DynamicIsland.tsx`).

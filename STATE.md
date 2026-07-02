@@ -8,12 +8,12 @@
 
 Shipping version: 0.2.1 (unreleased)
 Last shipped to users: 0.2.0
-Last updated: 2026-07-02 (updater single restart authority)
+Last updated: 2026-07-02 (update island layout flex rebuild)
 Status: 0.2.0 live on GitHub, updater.json, and ruforge.app. 0.2.1 fixes implemented locally; not released until Angel runs signed build and release ritual.
 
 ## Now
 
-0.2.1 patch pass landed in tree: updater install watchdogs + failed state, update-available island aligned to playback typography and CTA tokens (compact centering, expanded header/button layout), download pause/timeout/403 fixes, music playlist local cover alignment. `npm run build` clean. Ready for Angel in-app verification, then signed build + release ritual when requested.
+0.2.1 patch pass landed in tree: updater install watchdogs + failed state, update-available island flex layout (header/body/footer inside 350x184 shell, compact pill with version badge), download pause/timeout/403 fixes, music playlist local cover alignment. `npm run build` clean. Ready for Angel in-app verification, then signed build + release ritual when requested.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -32,7 +32,7 @@ reads this for the last shipped delta, not the git tree.
 Fixes:
 - Updater: boot verify strict `getVersion() === pending.version` only; handoff session never declares success.
 - Updater: download/install timeouts, failed screen with GitHub link, post-install version verify, no debug mock on overlay click.
-- Updater UX: update available in expanded Dynamic Island (no floating card or titlebar pill); island compact/expanded layout aligned to playback typography and CTA tokens.
+- Updater UX: update available in expanded Dynamic Island (no floating card or titlebar pill); island flex layout with pinned footer and compact version badge.
 - Downloads: pause during pre-spawn simulate no longer marks failed; 2-minute watchdog audio-only; yt-dlp retries and 403 guidance; manual retry resumes partial downloads.
 - Music: playlist cover saved locally at download; shelf and album detail use same local path.
 
