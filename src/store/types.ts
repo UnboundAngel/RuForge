@@ -165,6 +165,8 @@ export interface RuforgeSettings {
   telemetryUsageEnabled: boolean;
   /** When true, scrubbed crash reports may be sent on failure (off by default). */
   telemetryCrashEnabled: boolean;
+  /** User accepted the LAN companion disclosure before enabling the server. */
+  companionServerDisclosureAcknowledged: boolean;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -200,6 +202,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   downloadComments: false,
   telemetryUsageEnabled: false,
   telemetryCrashEnabled: false,
+  companionServerDisclosureAcknowledged: false,
 };
 
 /** Hidden legacy default was `"chrome"` (not in downloader UI). Treat as no cookie source. */
@@ -240,6 +243,8 @@ export function loadMergedSettings(): RuforgeSettings {
       sponsorBlockCategoryStats: mergeCategoryStats(merged.sponsorBlockCategoryStats),
       telemetryUsageEnabled: merged.telemetryUsageEnabled === true,
       telemetryCrashEnabled: merged.telemetryCrashEnabled === true,
+      companionServerDisclosureAcknowledged:
+        merged.companionServerDisclosureAcknowledged === true,
     };
   } catch {
     return DEFAULT_SETTINGS;

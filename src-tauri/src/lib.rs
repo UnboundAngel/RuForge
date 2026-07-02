@@ -1,5 +1,6 @@
 mod app_state;
 pub mod commands;
+pub mod companion;
 pub mod debug_log;
 mod download_job_manager;
 mod process_tree;
@@ -133,6 +134,7 @@ pub fn run() {
         .manage(DownloadJobManager::default())
         .manage(ExportBundleState::default())
         .manage(RemovableDrivesState::default())
+        .manage(crate::companion::CompanionState::new())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -332,6 +334,13 @@ pub fn run() {
             music_listen_rebuild_snapshot,
             music_listen_import_legacy,
             music_listen_clear,
+            crate::companion::commands::companion_start,
+            crate::companion::commands::companion_stop,
+            crate::companion::commands::companion_status,
+            crate::companion::commands::companion_qr_payload,
+            crate::companion::commands::companion_sessions,
+            crate::companion::commands::companion_revoke_all,
+            crate::companion::commands::companion_rebuild_catalog,
             #[cfg(windows)]
             taskbar_thumbbar::sync_taskbar_transport,
         ])
