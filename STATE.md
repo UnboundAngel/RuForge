@@ -82,7 +82,7 @@ Fixes:
 
 ## Open P0 (blocks release)
 
-(none in code; Angel in-app verify on updater, pause-during-simulate, long download, music cover, optional 720p 403 with cookies)
+(none in code; Angel in-app verify on updater, pause-during-simulate, long download, music cover, optional 720p 403 with cookies, companion server start/stop + pairing on LAN)
 
 ## Next 3 (priority order)
 

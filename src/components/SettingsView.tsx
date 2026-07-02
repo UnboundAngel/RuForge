@@ -29,6 +29,7 @@ import { galleryScanRoots } from '../libraryScanDirs';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { useDenoStatus } from '../hooks/useDenoStatus';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
+import { CompanionSettingsSection } from './settings/CompanionSettingsSection';
 
 interface SettingItemProps {
   title: string;
@@ -1192,6 +1193,7 @@ export const SettingsView: React.FC = () => {
 
           {activeTab === 'advanced' && (
             <div className="flex flex-col">
+              <CompanionSettingsSection active={activeTab === 'advanced'} />
               <SettingsSection title="Performance">
                 <SettingItem
                   title="Hardware Acceleration"
