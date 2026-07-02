@@ -8,7 +8,7 @@
 
 Shipping version: 0.2.1 (unreleased)
 Last shipped to users: 0.2.0
-Last updated: 2026-06-28 (0.2.1 patch fix pass from PROBLEMS.md)
+Last updated: 2026-07-02 (updater single restart authority)
 Status: 0.2.0 live on GitHub, updater.json, and ruforge.app. 0.2.1 fixes implemented locally; not released until Angel runs signed build and release ritual.
 
 ## Now
@@ -30,6 +30,7 @@ reads this for the last shipped delta, not the git tree.
 **0.2.1 (unreleased, in tree):**
 
 Fixes:
+- Updater: boot verify strict `getVersion() === pending.version` only; handoff session never declares success.
 - Updater: download/install timeouts, failed screen with GitHub link, post-install version verify, no debug mock on overlay click.
 - Updater UX: update available in expanded Dynamic Island (no floating card or titlebar pill); island compact/expanded layout aligned to playback typography and CTA tokens.
 - Downloads: pause during pre-spawn simulate no longer marks failed; 2-minute watchdog audio-only; yt-dlp retries and 403 guidance; manual retry resumes partial downloads.

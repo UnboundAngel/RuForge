@@ -409,7 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.1 (unreleased)
 
-- **Island**: Update island version picker compact width, downward chrome dropdown with soft shadow; install CTA uses sidebar brown not gold; notes fallback no phantom scrollbar (`IslandUpdateVersionPicker.tsx`, `IslandUpdateContent.tsx`, `index.css`).
+- **Updater**: VERIFY_ON_BOOT strict equality only (`verifyPendingUpdateOnBoot`); corrupted pending LS cleared; same-session handoff naming/copy demoted (`updatePostInstall.ts`, `App.tsx`).
 - **Island**: Update island mini pill vertical clip fixed: rim z-index rule no longer overrides ContentShell `absolute inset-0`; compact label uses `h-full` flex center like capture pill (`index.css`, `IslandUpdateContent.tsx`).
 - **Island**: Update island collapsed pill shows `update {version}` text with auto width; rim stays rotating red-brown (`IslandUpdateContent.tsx`, `DynamicIsland.tsx`).
 - **Island**: Expanded update-available island simplified to playback-style header, scrollable notes, single fallback line, full-width install button; removed perk cards, rings, and gradient filler (`IslandUpdateContent.tsx`, `index.css`).

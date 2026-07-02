@@ -21,6 +21,7 @@ import { useUrlDropIntake } from "./features/downloader/useUrlDropIntake";
 import { getYoutubeUrlDropHandler } from "./features/downloader/youtubeUrlDropRegistry";
 import { Update, type DownloadEvent } from "@tauri-apps/plugin-updater";
 import { getVersion } from "@tauri-apps/api/app";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { runUpdateCheck } from "./updaterCheck";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -33,10 +34,9 @@ import {
 import {
   buildPostInstallPayload,
   clearPendingPostInstall,
-  consumePendingPostInstall,
-  readPendingPostInstall,
   setPendingPostInstall,
   teaserNotesFromUpdaterBody,
+  verifyPendingUpdateOnBoot,
   type PostInstallPayload,
 } from "./updatePostInstall";
 import {
@@ -45,7 +45,6 @@ import {
   UPDATER_INSTALL_TIMEOUT_MS,
 } from "./updaterInstall";
 import { fetchReleaseCatalog, type ReleaseCatalogEntry } from "./updaterReleaseCatalog";
-import { semverGreater } from "./lib/onboardingStorage";
 import { Icon } from "@iconify/react";
 import MiniPlayer from "./MiniPlayer";
 import MusicMiniPlayer from "./components/music-mini/MusicMiniPlayer";
@@ -523,12 +522,15 @@ function App() {
     setUpdaterPhase("downloading");
     setPendingPostInstall(buildPostInstallPayload(u.version, u.body ?? ""));
 
-    let installFinished = false;
+    let installHandoffStarted = false;
     let downloadStarted = false;
     let lastProgressMs = Date.now();
     const startedMs = Date.now();
+    let lifecycleTerminal = false;
 
     const failUpdate = (message: string) => {
+      if (lifecycleTerminal) return;
+      lifecycleTerminal = true;
       clearUpdaterTimers();
       void u.close().catch(() => {});
       clearPendingPostInstall();
@@ -537,8 +539,23 @@ function App() {
       notify(message, "error");
     };
 
+    const restartAfterUpdateHandoff = async () => {
+      if (lifecycleTerminal) return;
+      lifecycleTerminal = true;
+      clearUpdaterTimers();
+      try {
+        await relaunch();
+      } catch (e) {
+        console.error(e);
+        lifecycleTerminal = false;
+        failUpdate(
+          "RuForge could not restart to verify the update. Close the app and reopen it, or install from GitHub Releases.",
+        );
+      }
+    };
+
     updaterTimersRef.current.watchdog = setInterval(() => {
-      if (installFinished) return;
+      if (installHandoffStarted) return;
       const now = Date.now();
       if (!downloadStarted && now - startedMs > UPDATER_DOWNLOAD_CONNECT_MS) {
         failUpdate(
@@ -563,7 +580,7 @@ function App() {
           lastProgressMs = Date.now();
           setUpdaterDownloaded((d) => d + event.data.chunkLength);
         } else if (event.event === "Finished") {
-          installFinished = true;
+          installHandoffStarted = true;
           clearUpdaterTimers();
           setUpdaterPhase("installing");
           updaterTimersRef.current.install = setTimeout(() => {
@@ -573,16 +590,19 @@ function App() {
           }, UPDATER_INSTALL_TIMEOUT_MS);
         }
       });
+      if (!installHandoffStarted) {
+        failUpdate(
+          "Update did not complete. Check your connection, or install the latest build from GitHub Releases.",
+        );
+        return;
+      }
+      await restartAfterUpdateHandoff();
     } catch (e) {
-      clearUpdaterTimers();
-      if (installFinished) return;
       console.error(e);
-      clearPendingPostInstall();
-      const message =
-        "Update failed. Check your connection, or install the latest build from GitHub Releases.";
-      setUpdaterInstallError(message);
-      setUpdaterPhase("failed");
-      notify(message, "error");
+      const message = installHandoffStarted
+        ? "Update handoff failed after download. Download the latest build from GitHub Releases."
+        : "Update failed. Check your connection, or install the latest build from GitHub Releases.";
+      failUpdate(message);
     }
   }, [notify, clearUpdaterTimers]);
   handleInstallRestartRef.current = handleInstallRestart;
@@ -1039,20 +1059,10 @@ function App() {
 
   useEffect(() => {
     void (async () => {
-      const pending = readPendingPostInstall();
-      if (!pending) return;
-      try {
-        const currentVersion = await getVersion();
-        if (semverGreater(pending.version, currentVersion)) {
-          clearPendingPostInstall();
-          return;
-        }
-      } catch {
-        clearPendingPostInstall();
-        return;
+      const result = await verifyPendingUpdateOnBoot(getVersion);
+      if (result.status === "verified") {
+        setPostInstall(result.payload);
       }
-      const consumed = consumePendingPostInstall();
-      if (consumed) setPostInstall(consumed);
     })();
   }, []);
 
