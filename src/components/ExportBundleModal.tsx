@@ -255,6 +255,7 @@ function ExportBundleDialog({
   const entries = useRuforgeStore((s) => s.entries);
   const closeExportPanel = useRuforgeStore((s) => s.closeExportPanel);
   const libraryScanDirs = useRuforgeStore((s) => s.libraryScanDirs);
+  const internalVault = useRuforgeStore((s) => s.internalVault);
   const addLibraryScanDir = useRuforgeStore((s) => s.addLibraryScanDir);
   const notify = useRuforgeStore((s) => s.notify);
 
@@ -358,7 +359,10 @@ function ExportBundleDialog({
   const showAddExportFolderToLibrary =
     phase === "done" &&
     exportDestParent.length > 0 &&
-    !isDirInLibraryScanList(exportDestParent, libraryScanDirs);
+    !isDirInLibraryScanList(exportDestParent, {
+      internalVault,
+      extraScanDirs: libraryScanDirs,
+    });
 
   const footer = (
     <>

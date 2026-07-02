@@ -359,6 +359,7 @@ export function MusicExploreDownloadPanel({
   const settings = useRuforgeStore((s) => s.settings);
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const internalVault = useRuforgeStore((s) => s.internalVault);
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const enqueueDownload = useRuforgeStore((s) => s.enqueueDownload);
   const releaseHeldDownloadJobs = useRuforgeStore((s) => s.releaseHeldDownloadJobs);
@@ -418,10 +419,10 @@ export function MusicExploreDownloadPanel({
   }, [celebrating?.url, celebrating?.kind, removeCompletedFromPlaylist]);
 
   const buildAudioOpts = useCallback(() => {
-    const dir = resolveDownloadOutputDir(saveToInternal, outputDir);
+    const dir = resolveDownloadOutputDir(saveToInternal, outputDir, internalVault);
     const base = buildDownloadJobOptions(settings, dir);
     return patchDownloadJobOptionsForAudio(base, true, settings);
-  }, [settings, outputDir, saveToInternal]);
+  }, [settings, outputDir, saveToInternal, internalVault]);
 
   const enqueueTracks = useCallback((
     tracks: MusicTrackInfo[],

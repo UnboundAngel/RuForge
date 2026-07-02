@@ -409,6 +409,8 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.1 (unreleased)
 
+- **Library**: Canonical Rust-owned library (`src-tauri/src/library/`): config + index single authority, `scanner.rs` only ingestion layer, desktop store and companion are read-only projections (`get_library_snapshot`, `library::resolver`); removed `scan_gallery` and companion `catalog.rs` OS-dir scanner; one-shot localStorage config import (`libraryConfig.ts`, `ruforgeStore.ts`).
+- **Companion**: Companion server binds HTTP immediately; library index builds in background (no longer blocks port 8787 on ffprobe/remux); remux deferred to first stream (`companion/mod.rs`, `library/scanner.rs`, `library/resolver.rs`).
 - **Companion**: Embedded axum LAN server added (`src-tauri/src/companion/`), user-controlled start/stop from Settings > Advanced (no auto-bind on launch). Disclosure gate before controls; QR pairing to cookie session, HMAC session-bound signed URLs for media, Range streaming via `ServeFile`, ffprobe-gated playable catalog with stream-copy remux fallback for MKV. Blueprint: `.cursor/plans/companion_lan_server_IMPLEMENTATION_FINAL.md`.
 - **Island**: Update island expanded polish: hidden notes scrollbar, bare download icon, dismiss via Later only (`IslandUpdateContent.tsx`).
 - **Island**: Update island expanded layout rebuilt as flex column (header, scrollable notes, pinned footer with version picker + Hide/Install group); full-width footer divider; compact pill shows Update available + version badge without ellipsis (`IslandUpdateContent.tsx`, `DynamicIsland.tsx`).

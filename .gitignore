@@ -32,6 +32,9 @@ src-tauri/target/
 .env.*
 !.env.example
 
+# Private Discord bot (local only, not shipped)
+ruforge-discord-bot/
+
 # Local-only Tauri signing helper (optional one-line password for scripts/build-signed-windows.ps1)
 .tauri-signing-password
 

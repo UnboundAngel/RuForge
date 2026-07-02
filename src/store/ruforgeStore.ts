@@ -8,11 +8,13 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { sanitizeVideoInfo } from "../components/downloader/downloaderFormat";
 import type { GalleryEntry, MediaFile, PlaylistCollection, ProgressPayload, VideoInfo } from "../types";
 import {
-  galleryScanRoots,
+  galleryScanRootsFromStore,
+  hydrateLibraryFromRust,
   isDirInLibraryScanList,
+  libraryConfigToStoreFields,
   normalizeScanDirKey,
-  writeLibraryScanDirsToLs,
-} from "../libraryScanDirs";
+  type LibraryConfig,
+} from "../lib/libraryConfig";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
 import {
   ensureScrubSpritesForFiles,
@@ -20,6 +22,7 @@ import {
 } from "../scrubSpriteBackfill";
 import { mediaPathsMatch } from "../lib/mediaPathMatch";
 import {
+  DEFAULT_OUTPUT_DIR,
   DEFAULT_SETTINGS,
   LS_MINI_LOOP,
   LS_MINI_VOLUME,
@@ -68,7 +71,6 @@ import { readPlaybackSpeed } from "../playbackSpeedStorage";
 import type { PlayInMiniPayload, PlayInMusicMiniPayload } from "../playerHandoff";
 import { writePlaybackPos } from "../playbackStorage";
 import { parkAndStopVideoPlayback } from "../lib/videoPlaybackPark";
-import { dedupeGalleryEntriesCombined } from "../galleryDedupe";
 import {
   buildMusicEffectivePlaylist,
   musicEffectivePlaylistIndex,
@@ -104,6 +106,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   settings: RuforgeSettings;
   outputDir: string;
   saveToInternal: boolean;
+  /** Rust-owned internal vault path (always scanned). */
+  internalVault: string;
   /** Extra folders scanned for the library (internal vault is always included). */
   libraryScanDirs: string[];
   isSidebarExpanded: boolean;
@@ -144,7 +148,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   metadataError: string | null;
   isFocused: boolean;
 
-  /** Gallery slice (not persisted). Library list matches `MediaView` / `scan_gallery` shape. */
+  /** Gallery slice (not persisted). Library list from Rust `get_library_snapshot`. */
   entries: GalleryEntry[];
   /**
    * Scan roots already passed through `sweep_library_download_duplicates` this app session.
@@ -445,9 +449,10 @@ export const useRuforgeStore = create<RuforgeStore>()(
       focusedJobId: initialDownloadQueue.focusedJobId,
 
       settings: DEFAULT_SETTINGS,
-      outputDir: pathsInit.outputDir,
-      saveToInternal: pathsInit.saveToInternal,
-      libraryScanDirs: pathsInit.libraryScanDirs,
+      outputDir: DEFAULT_OUTPUT_DIR,
+      saveToInternal: true,
+      internalVault: RUFORGE_INTERNAL_DIR,
+      libraryScanDirs: [],
       isSidebarExpanded: pathsInit.isSidebarExpanded,
       navMode: pathsInit.navMode,
       musicView: "home",
@@ -913,30 +918,75 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       setOutputDir: (dir) => {
-        set({ outputDir: dir });
+        void (async () => {
+          try {
+            const cfg = await invoke<LibraryConfig>("library_set_config", {
+              patch: { outputDir: dir },
+            });
+            set(libraryConfigToStoreFields(cfg));
+          } catch (e) {
+            console.error(e);
+            get().notify("Failed to update download path.");
+          }
+        })();
       },
 
       addLibraryScanDir: (dir) => {
         const trimmed = dir.trim();
         if (!trimmed) return;
-        const { libraryScanDirs } = get();
-        if (isDirInLibraryScanList(trimmed, libraryScanDirs)) return;
+        const { internalVault, libraryScanDirs } = get();
+        if (
+          isDirInLibraryScanList(trimmed, {
+            internalVault,
+            extraScanDirs: libraryScanDirs,
+          })
+        ) {
+          return;
+        }
         const next = [...libraryScanDirs, trimmed];
-        writeLibraryScanDirsToLs(next);
-        set({ libraryScanDirs: next });
-        void get().fetchEntries({ manageLoadingStart: false });
+        void (async () => {
+          try {
+            const cfg = await invoke<LibraryConfig>("library_set_config", {
+              patch: { extraScanDirs: next },
+            });
+            set(libraryConfigToStoreFields(cfg));
+            void get().fetchEntries({ manageLoadingStart: false });
+          } catch (e) {
+            console.error(e);
+            get().notify("Failed to add library scan folder.");
+          }
+        })();
       },
 
       removeLibraryScanDir: (dir) => {
         const key = normalizeScanDirKey(dir);
         const next = get().libraryScanDirs.filter((d) => normalizeScanDirKey(d) !== key);
-        writeLibraryScanDirsToLs(next);
-        set({ libraryScanDirs: next });
-        void get().fetchEntries({ manageLoadingStart: false });
+        void (async () => {
+          try {
+            const cfg = await invoke<LibraryConfig>("library_set_config", {
+              patch: { extraScanDirs: next },
+            });
+            set(libraryConfigToStoreFields(cfg));
+            void get().fetchEntries({ manageLoadingStart: false });
+          } catch (e) {
+            console.error(e);
+            get().notify("Failed to remove library scan folder.");
+          }
+        })();
       },
 
       handleSetSaveToInternal: (val) => {
-        set({ saveToInternal: val });
+        void (async () => {
+          try {
+            const cfg = await invoke<LibraryConfig>("library_set_config", {
+              patch: { saveToInternal: val },
+            });
+            set(libraryConfigToStoreFields(cfg));
+          } catch (e) {
+            console.error(e);
+            get().notify("Failed to update storage target.");
+          }
+        })();
       },
 
       toggleSidebar: () => {
@@ -981,9 +1031,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
       closeMusicDetail: () => set({ musicDetail: null }),
 
       refreshStorageStats: async () => {
-        const { saveToInternal, outputDir } = get();
+        const { saveToInternal, outputDir, internalVault } = get();
         try {
-          const dir = saveToInternal ? RUFORGE_INTERNAL_DIR : outputDir;
+          const dir = saveToInternal ? internalVault : outputDir;
           const stats = await invoke<{ total_bytes: number; file_count: number }>("get_storage_stats", { dir });
           set({ storageStats: stats });
         } catch (e) {
@@ -1120,12 +1170,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const scrubEpoch =
           opts?.scrubEpoch ??
           (skipScrubBackfill ? galleryScrubEpoch : (++galleryScrubEpoch, galleryScrubEpoch));
-        const { libraryScanDirs, notify, settings } = get();
+        const { internalVault, libraryScanDirs, notify, settings } = get();
         if (manageLoadingStart) set({ galleryLoading: true });
         let posterBackfillList: MediaFile[] | null = null;
         let scrubBackfillList: MediaFile[] | null = null;
         try {
-          const dirs = galleryScanRoots(libraryScanDirs);
+          const dirs = galleryScanRootsFromStore({ internalVault, libraryScanDirs });
           const forceSweep = opts?.sweepDuplicates === true;
           const sweptSet = new Set(get().galleryDedupeSweptRoots);
           let sweptRootsUpdated = false;
@@ -1140,13 +1190,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
           if (sweptRootsUpdated) {
             set({ galleryDedupeSweptRoots: Array.from(sweptSet) });
           }
-          const scans = await Promise.all(dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d })));
-          const combined = scans.flat();
-          const unique = dedupeGalleryEntriesCombined(
-            combined.filter(
-              (entry, index, self) => index === self.findIndex((t) => t.path === entry.path),
-            ),
-          );
+          const snapshot = await invoke<{
+            version: string;
+            ready: boolean;
+            entries: GalleryEntry[];
+          }>("get_library_snapshot");
+          const unique = snapshot.entries;
           if (myToken !== galleryFetchToken) return;
           if (galleryPosterEpoch !== posterEpoch || galleryScrubEpoch !== scrubEpoch) return;
           set((s) => ({
@@ -1240,9 +1289,6 @@ export const useRuforgeStore = create<RuforgeStore>()(
       storage: createRuforgePersistStorage(),
       partialize: (s): RuforgePersistedSubset => ({
         settings: s.settings,
-        outputDir: s.outputDir,
-        saveToInternal: s.saveToInternal,
-        libraryScanDirs: s.libraryScanDirs,
       }),
       /** Must match `version` returned from `getItem` in `createRuforgePersistStorage` (both 0). */
       version: 0,
@@ -1275,6 +1321,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
               }
             } catch (e) {
               console.error("Autostart sync failed:", e);
+            }
+            try {
+              const cfg = await hydrateLibraryFromRust();
+              useRuforgeStore.setState(libraryConfigToStoreFields(cfg));
+            } catch (e) {
+              console.error("Library config hydrate failed:", e);
             }
           })();
         };

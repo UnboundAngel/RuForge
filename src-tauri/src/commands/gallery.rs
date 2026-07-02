@@ -18,7 +18,7 @@ pub struct Chapter {
     pub end_time: f64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaFile {
     pub name: String,
@@ -78,7 +78,7 @@ pub struct MediaFile {
     pub scrub_sprite_paths: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaylistCollection {
     pub title: String,
@@ -90,7 +90,7 @@ pub struct PlaylistCollection {
     pub items: Vec<MediaFile>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum GalleryEntry {
     Media {
@@ -818,7 +818,7 @@ pub(crate) fn dedupe_media_files(files: Vec<MediaFile>) -> Vec<MediaFile> {
     out
 }
 
-fn dedupe_gallery_entries(entries: Vec<GalleryEntry>) -> Vec<GalleryEntry> {
+pub(crate) fn dedupe_gallery_entries(entries: Vec<GalleryEntry>) -> Vec<GalleryEntry> {
     let mut best_idx_by_key: HashMap<String, usize> = HashMap::new();
     let mut remove_indices: HashSet<usize> = HashSet::new();
 
@@ -1163,9 +1163,12 @@ pub async fn sweep_library_download_duplicates(dir: String) -> Result<(), String
     Ok(())
 }
 
-#[tauri::command]
-pub async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
-    let dir_path = std::path::Path::new(&dir);
+/// Scan one root directory. Internal ingestion primitive: the only callers are
+/// `library::scanner` (canonical multi-root index) and the single-folder neighbor
+/// lookup used by player auto-advance. Not a `#[tauri::command]`; nothing outside
+/// Rust may trigger an ad hoc filesystem scan directly.
+pub fn scan_gallery_dir(dir: &str) -> Result<Vec<GalleryEntry>, String> {
+    let dir_path = std::path::Path::new(dir);
     if !dir_path.exists() {
         return Ok(vec![]);
     }
@@ -1235,6 +1238,41 @@ pub async fn scan_gallery(dir: String) -> Result<Vec<GalleryEntry>, String> {
     }
 
     Ok(dedupe_gallery_entries(out))
+}
+
+/// Canonical multi-root ingestion: scans every root, drops exact-path duplicates
+/// (overlapping roots), then collapses same-item duplicates across roots (e.g. a
+/// video that exists in both the internal vault and a user-added scan dir). This
+/// is the sole entry point `library::scanner` uses to build the desktop snapshot;
+/// no other layer walks these directories independently.
+pub fn build_gallery_entries_for_roots(roots: &[String]) -> Result<Vec<GalleryEntry>, String> {
+    let mut combined: Vec<GalleryEntry> = Vec::new();
+    for root in roots {
+        combined.extend(scan_gallery_dir(root)?);
+    }
+
+    let mut seen_paths: HashSet<String> = HashSet::new();
+    let deduped_by_path: Vec<GalleryEntry> = combined
+        .into_iter()
+        .filter(|entry| {
+            let path = match entry {
+                GalleryEntry::Media { file } => file.path.clone(),
+                GalleryEntry::Playlist { playlist } => playlist.path.clone(),
+            };
+            seen_paths.insert(path)
+        })
+        .collect();
+
+    Ok(dedupe_gallery_entries(deduped_by_path))
+}
+
+/// Single-folder scan for player auto-advance neighbor lookup (e.g. "what else is
+/// in this bucket folder"). Not the library index: a narrow, ad hoc directory read
+/// that still goes through the one shared ingestion primitive (`scan_gallery_dir`)
+/// rather than a second independent walk.
+#[tauri::command]
+pub fn scan_dir_for_neighbors(dir: String) -> Result<Vec<GalleryEntry>, String> {
+    scan_gallery_dir(&dir)
 }
 
 fn sorted_dir_entries(dir: &std::path::Path) -> Vec<std::path::PathBuf> {

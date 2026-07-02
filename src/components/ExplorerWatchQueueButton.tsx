@@ -7,7 +7,7 @@ import {
   type DownloadJob,
 } from "../downloadQueue";
 import { findLibraryDuplicate } from "../duplicateDownload";
-import { useRuforgeStore, RUFORGE_INTERNAL_DIR } from "../store/ruforgeStore";
+import { useRuforgeStore } from "../store/ruforgeStore";
 import {
   canonicalYouTubeWatchUrl,
   isYouTubeDotComWatchPageUrl,
@@ -71,6 +71,7 @@ export function ExplorerWatchQueueButton({
   const settings = useRuforgeStore((s) => s.settings);
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const internalVault = useRuforgeStore((s) => s.internalVault);
   const entries = useRuforgeStore((s) => s.entries);
   const notify = useRuforgeStore((s) => s.notify);
   const enqueueDownload = useRuforgeStore((s) => s.enqueueDownload);
@@ -160,7 +161,7 @@ export function ExplorerWatchQueueButton({
         return;
       }
     }
-    const outputPath = saveToInternal ? RUFORGE_INTERNAL_DIR : outputDir;
+    const outputPath = saveToInternal ? internalVault : outputDir;
     const options = buildDownloadJobOptions(settings, outputPath, "replace");
     enqueueDownload(canon, options, {
       approval: "held",

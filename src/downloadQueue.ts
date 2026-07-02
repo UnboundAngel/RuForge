@@ -19,8 +19,9 @@ import {
 export function resolveDownloadOutputDir(
   saveToInternal: boolean,
   customOutputDir: string,
+  internalVault: string = RUFORGE_INTERNAL_DIR,
 ): string {
-  return saveToInternal ? RUFORGE_INTERNAL_DIR : customOutputDir;
+  return saveToInternal ? internalVault : customOutputDir;
 }
 
 /** Snapshot from `get_video_info` at enqueue time; drives downloader hero while this job is active. */

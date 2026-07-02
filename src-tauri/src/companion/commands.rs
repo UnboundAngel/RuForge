@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use crate::companion::{catalog, CompanionState};
+use crate::companion::CompanionState;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,14 +32,6 @@ pub struct SessionInfo {
     pub label: String,
     pub created_at: i64,
     pub last_seen: i64,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CatalogStats {
-    pub total: u32,
-    pub playable: u32,
-    pub remuxed: u32,
 }
 
 #[tauri::command]
@@ -112,24 +104,4 @@ pub async fn companion_sessions(state: State<'_, CompanionState>) -> Result<Vec<
 pub async fn companion_revoke_all(state: State<'_, CompanionState>) -> Result<(), String> {
     state.revoke_all().await;
     Ok(())
-}
-
-#[tauri::command]
-pub async fn companion_rebuild_catalog(
-    app: AppHandle,
-    state: State<'_, CompanionState>,
-) -> Result<CatalogStats, String> {
-    catalog::rebuild(&app, &state.inner).await;
-    let catalog = state.inner.catalog.read().await;
-    let total = catalog.len() as u32;
-    let playable = catalog.values().filter(|e| e.playable).count() as u32;
-    let remuxed = catalog
-        .values()
-        .filter(|e| e.serve_path != e.path)
-        .count() as u32;
-    Ok(CatalogStats {
-        total,
-        playable,
-        remuxed,
-    })
 }

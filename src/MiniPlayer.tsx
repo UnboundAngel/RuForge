@@ -28,7 +28,7 @@ import {
   Layers,
 } from "lucide-react";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "./types";
-import { galleryScanRoots, readLibraryScanDirsFromLs } from "./libraryScanDirs";
+import type { LibrarySnapshot } from "./lib/libraryConfig";
 import { hydratePlatformDefaultPaths } from "./platformPaths";
 
 import { ScrubHoverPreview } from "./components/player/ScrubHoverPreview";
@@ -766,8 +766,45 @@ export default function MiniPlayer() {
     subtitleTracks,
   });
 
-  const [libraryScanDirs] = useState(() => readLibraryScanDirsFromLs());
-  const scanRootsKey = libraryScanDirs.join("\0");
+  useEffect(() => {
+    const run = async () => {
+      const posterEpoch = ++libraryPosterBackfillEpochRef.current;
+      try {
+        const snapshot = await invoke<LibrarySnapshot>("get_library_snapshot");
+        const data = snapshot.entries;
+        if (libraryPosterBackfillEpochRef.current !== posterEpoch) return;
+        setLibrary(data);
+
+        const mediaFiles = data.flatMap((e) => (e.kind === "media" ? [e] : e.items));
+        const missing = filesMissingPoster(mediaFiles);
+        if (missing.length === 0) return;
+
+        void (async () => {
+          await ensurePostersForFiles(missing);
+          if (libraryPosterBackfillEpochRef.current !== posterEpoch) return;
+          try {
+            const refreshed = await invoke<LibrarySnapshot>("get_library_snapshot");
+            if (libraryPosterBackfillEpochRef.current !== posterEpoch) return;
+            setLibrary(refreshed.entries);
+          } catch (e) {
+            console.error(e);
+          }
+        })();
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    void run();
+    let unlisten: (() => void) | undefined;
+    void listen("library-changed", () => {
+      void run();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   const videoLibraryEntries = useMemo(
     () => filterMainLibraryEntries(library, settings.hideAudioFromMainLibrary !== false),
@@ -810,55 +847,6 @@ export default function MiniPlayer() {
 
     return groups;
   };
-
-  useEffect(() => {
-    const run = async () => {
-      const posterEpoch = ++libraryPosterBackfillEpochRef.current;
-      try {
-        const dirs = galleryScanRoots(libraryScanDirs);
-
-        const scans = await Promise.all(
-          dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d }))
-        );
-        
-        const combined = scans.flat();
-        const uniqueMap = new Map<string, GalleryEntry>();
-        for (const entry of combined) {
-          uniqueMap.set(entry.path, entry);
-        }
-        
-        const data = Array.from(uniqueMap.values());
-        if (libraryPosterBackfillEpochRef.current !== posterEpoch) return;
-        setLibrary(data);
-
-        const mediaFiles = data.flatMap(e => e.kind === 'media' ? [e] : e.items);
-        const missing = filesMissingPoster(mediaFiles);
-        if (missing.length === 0) return;
-        
-        void (async () => {
-          await ensurePostersForFiles(missing);
-          if (libraryPosterBackfillEpochRef.current !== posterEpoch) return;
-          try {
-            const scans2 = await Promise.all(
-              dirs.map((d) => invoke<GalleryEntry[]>("scan_gallery", { dir: d }))
-            );
-            const combined2 = scans2.flat();
-            const uniqueMap2 = new Map<string, GalleryEntry>();
-            for (const entry of combined2) {
-              uniqueMap2.set(entry.path, entry);
-            }
-            if (libraryPosterBackfillEpochRef.current !== posterEpoch) return;
-            setLibrary(Array.from(uniqueMap2.values()));
-          } catch (e) {
-            console.error(e);
-          }
-        })();
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    run();
-  }, [scanRootsKey]);
 
   useEffect(() => {
     const win = getCurrentWindow();

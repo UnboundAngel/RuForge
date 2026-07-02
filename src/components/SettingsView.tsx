@@ -8,8 +8,8 @@ import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel, CUSTOM_CONCU
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from "@tauri-apps/api/event";
-import { normalizeScanDirKey } from '../libraryScanDirs';
-import { useRuforgeStore, RUFORGE_INTERNAL_DIR } from '../store/ruforgeStore';
+import { galleryScanRootsFromStore, normalizeScanDirKey } from '../lib/libraryConfig';
+import { useRuforgeStore } from '../store/ruforgeStore';
 import {
   clearLastDownloadBatchRecord,
   formatLastBatchSummary,
@@ -25,11 +25,10 @@ import { RegroupPlaylistModal } from './RegroupPlaylistModal';
 import { MigrateLibraryModal } from './MigrateLibraryModal';
 import { MusicMetaBackfillModal } from './MusicMetaBackfillModal';
 import { DevCapturesSection } from './dev-captures/DevCapturesSection';
-import { galleryScanRoots } from '../libraryScanDirs';
+import { CompanionSettingsSection } from './settings/CompanionSettingsSection';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { useDenoStatus } from '../hooks/useDenoStatus';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
-import { CompanionSettingsSection } from './settings/CompanionSettingsSection';
 
 interface SettingItemProps {
   title: string;
@@ -399,6 +398,7 @@ export const SettingsView: React.FC = () => {
   const setSettingsTab = useRuforgeStore((s) => s.setSettingsTab);
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const internalVault = useRuforgeStore((s) => s.internalVault);
   const libraryScanDirs = useRuforgeStore((s) => s.libraryScanDirs);
   const addLibraryScanDir = useRuforgeStore((s) => s.addLibraryScanDir);
   const removeLibraryScanDir = useRuforgeStore((s) => s.removeLibraryScanDir);
@@ -484,7 +484,7 @@ export const SettingsView: React.FC = () => {
     const selected = await open({ directory: true, multiple: false });
     if (!selected || typeof selected !== "string") return;
     const key = normalizeScanDirKey(selected);
-    if (key === normalizeScanDirKey(RUFORGE_INTERNAL_DIR)) {
+    if (key === normalizeScanDirKey(internalVault)) {
       notify("Internal vault is always scanned.", "info");
       return;
     }
@@ -726,7 +726,7 @@ export const SettingsView: React.FC = () => {
                 />
                 <SettingItem
                   title="Internal vault"
-                  description={RUFORGE_INTERNAL_DIR || "Internal media folder"}
+                  description={internalVault || "Internal media folder"}
                   control={
                     <span className="text-[9px] font-black uppercase tracking-widest text-stone-600">
                       Always on
@@ -1297,12 +1297,12 @@ export const SettingsView: React.FC = () => {
               <MigrateLibraryModal
                 open={migrateLibraryOpen}
                 onClose={() => setMigrateLibraryOpen(false)}
-                libraryRoot={RUFORGE_INTERNAL_DIR}
+                libraryRoot={internalVault}
               />
               <MusicMetaBackfillModal
                 open={musicMetaBackfillOpen}
                 onClose={() => setMusicMetaBackfillOpen(false)}
-                roots={galleryScanRoots(libraryScanDirs)}
+                roots={galleryScanRootsFromStore({ internalVault, libraryScanDirs })}
               />
               <SettingsSection title="Debug logging">
                 <DebugLogCategoryTree />

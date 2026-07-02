@@ -9,7 +9,6 @@ import {
   mergeCategoryModes,
   mergeCategoryStats,
 } from "../sponsorBlock";
-import { readLibraryScanDirsFromLs } from "../libraryScanDirs";
 import {
   DEFAULT_OUTPUT_DIR,
   RUFORGE_INTERNAL_DIR,
@@ -262,16 +261,10 @@ function readNavMode(): NavMode {
 }
 
 export function readInitialPathsFromLs(): {
-  outputDir: string;
-  saveToInternal: boolean;
-  libraryScanDirs: string[];
   isSidebarExpanded: boolean;
   navMode: NavMode;
 } {
   return {
-    outputDir: localStorage.getItem("ruforge-output-dir") || DEFAULT_OUTPUT_DIR,
-    saveToInternal: localStorage.getItem("ruforge-save-internal") !== "false",
-    libraryScanDirs: readLibraryScanDirsFromLs(),
     isSidebarExpanded: readSidebarExpanded(),
     navMode: readNavMode(),
   };

@@ -91,8 +91,13 @@
         return res.json();
       })
       .then(function (data) {
+        if (data.ready === false) {
+          setStatus('Building library index...');
+          window.setTimeout(loadLibrary, 2000);
+          return;
+        }
         setStatus(data.items.length + ' items');
-        renderLibrary(data.items);
+        renderLibrary(data.items || []);
       })
       .catch(function () { setStatus('Could not load library.'); });
   }

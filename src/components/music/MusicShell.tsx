@@ -572,7 +572,7 @@ export function MusicShell() {
 
           const s = useRuforgeStore.getState();
           const watchUrl = `https://www.youtube.com/watch?v=${payload.videoId}`;
-          const dir = resolveDownloadOutputDir(s.saveToInternal, s.outputDir);
+          const dir = resolveDownloadOutputDir(s.saveToInternal, s.outputDir, s.internalVault);
           const base = buildDownloadJobOptions(s.settings, dir);
           const opts = patchDownloadJobOptionsForAudio(base, true, s.settings);
 

@@ -8,7 +8,7 @@ import {
   findLibraryMatchForPlaylistItem,
   isFlatMediaAtGalleryRoot,
 } from "../duplicateDownload";
-import { useRuforgeStore, RUFORGE_INTERNAL_DIR } from "../store/ruforgeStore";
+import { useRuforgeStore } from "../store/ruforgeStore";
 import { extractYouTubeVideoId, sanitizePlaylistFolderName } from "../youtubeUrl";
 import type { GalleryEntry, PlaylistItem, VideoInfo } from "../types";
 import {
@@ -75,7 +75,9 @@ export function RegroupPlaylistModal({
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
   const notify = useRuforgeStore((s) => s.notify);
 
-  const searchRoots = [RUFORGE_INTERNAL_DIR, customOutputDir].filter(
+  const internalVault = useRuforgeStore((s) => s.internalVault);
+
+  const searchRoots = [internalVault, customOutputDir].filter(
     (d, i, arr) => d.trim() !== "" && arr.indexOf(d) === i,
   );
 

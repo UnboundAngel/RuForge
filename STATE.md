@@ -8,12 +8,12 @@
 
 Shipping version: 0.2.1 (unreleased)
 Last shipped to users: 0.2.0
-Last updated: 2026-07-02 (update island layout flex rebuild)
-Status: 0.2.0 live on GitHub, updater.json, and ruforge.app. 0.2.1 fixes implemented locally; not released until Angel runs signed build and release ritual.
+Last updated: 2026-07-02 (canonical library architecture)
+Status: 0.2.0 live on GitHub, updater.json, and ruforge.app. 0.2.1 fixes and canonical library cutover implemented locally; not released until Angel runs signed build and release ritual.
 
 ## Now
 
-0.2.1 patch pass landed in tree: updater install watchdogs + failed state, update-available island flex layout (header/body/footer inside 350x184 shell, compact pill with version badge), download pause/timeout/403 fixes, music playlist local cover alignment. `npm run build` clean. Ready for Angel in-app verification, then signed build + release ritual when requested.
+0.2.1 in tree: canonical Rust library module owns config + index (`src-tauri/src/library/`); desktop store and companion are projections only (no per-layer filesystem scans). Updater island polish, download fixes, music playlist cover alignment still in cycle. `npm run build` and `cargo check --lib` clean. Ready for Angel in-app verify (library parity desktop vs companion, config persist, download reindex), then signed build when requested.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -28,6 +28,9 @@ Closed release 0.2.0 (what users upgrading from 0.1.11 receive). The release-not
 reads this for the last shipped delta, not the git tree.
 
 **0.2.1 (unreleased, in tree):**
+
+Additions:
+- Library: Rust `library::` module is single authority for scan roots + media index; companion `/library` matches desktop Media view; config persisted in tauri_plugin_store with one-shot localStorage import.
 
 Fixes:
 - Updater: boot verify strict `getVersion() === pending.version` only; handoff session never declares success.

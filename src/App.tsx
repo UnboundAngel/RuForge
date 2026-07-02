@@ -14,6 +14,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
+import { hydrateLibraryFromRust, libraryConfigToStoreFields } from "./lib/libraryConfig";
 import { wireScrubSpriteGalleryIndicators } from "./scrubSpriteGallerySync";
 import { isDebugCategoryEnabled } from "./debug/debugCategories";
 import { debugLog } from "./debug/debugLog";
@@ -97,7 +98,7 @@ import {
   maybeScheduleIdentityFollowupProbe,
   scheduleExplorerProfileProbeAfterShow,
 } from "./lib/youtubeProfileProbeRunner";
-import { MediaFile } from "./types";
+import { MediaFile, type GalleryEntry } from "./types";
 import {
   Settings,
   Search,
@@ -129,7 +130,7 @@ import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
 import { writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
 
-import { useRuforgeStore, RUFORGE_INTERNAL_DIR, type ActiveTab } from "./store/ruforgeStore";
+import { useRuforgeStore, type ActiveTab } from "./store/ruforgeStore";
 import {
   hydratePlatformDefaultPaths,
   shouldReplaceStaleWindowsOutputDir,
@@ -267,6 +268,7 @@ function App() {
   const navMode = useRuforgeStore((s) => s.navMode);
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const internalVault = useRuforgeStore((s) => s.internalVault);
   const settings = useRuforgeStore((s) => s.settings);
   const settingsTab = useRuforgeStore((s) => s.settingsTab);
   const setSettingsTab = useRuforgeStore((s) => s.setSettingsTab);
@@ -669,6 +671,30 @@ function App() {
         useRuforgeStore.getState().mergeShowDebuggingSettingsFromBackend(showDebugging);
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    void hydrateLibraryFromRust()
+      .then((cfg) => {
+        useRuforgeStore.setState(libraryConfigToStoreFields(cfg));
+      })
+      .catch((e) => console.error("Library config hydrate failed:", e));
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen("library-changed", () => {
+      void useRuforgeStore.getState().fetchEntries({
+        manageLoadingStart: false,
+        skipPosterBackfill: true,
+        skipScrubBackfill: true,
+      });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -1394,7 +1420,7 @@ function App() {
         // Under the bucketed layout, scan the bucket dir so siblings from other item folders are found.
         // Under the legacy flat layout, scan the immediate parent.
         const scanDir = BUCKET_NAMES.includes(bucketName) ? bucketDir : itemDir;
-        const scannedRaw = await invoke("scan_gallery", { dir: scanDir });
+        const scannedRaw = await invoke<GalleryEntry[]>("scan_dir_for_neighbors", { dir: scanDir });
         if (cancel) return;
         const scanned = flattenGalleryScanToMediaFiles(scannedRaw);
         
@@ -2009,7 +2035,7 @@ function App() {
               {activeTab === "downloader" && (
                 <DownloaderView
                   key="downloader"
-                  internalDir={RUFORGE_INTERNAL_DIR}
+                  internalDir={internalVault}
                   storageFull={storageBlocksNewDownloads}
                 />
               )}

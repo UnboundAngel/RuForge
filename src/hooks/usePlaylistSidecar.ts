@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { galleryScanRoots } from "@/libraryScanDirs";
+import { galleryScanRootsFromStore } from "@/lib/libraryConfig";
 import {
   findPlaylistSidecarByListUrl,
   healPlaylistSidecarCover,
@@ -13,6 +13,7 @@ import {
 import { useRuforgeStore } from "@/store/ruforgeStore";
 
 export function usePlaylistSidecarByListUrl(listUrl: string | null): PlaylistSidecarLookup | null {
+  const internalVault = useRuforgeStore((s) => s.internalVault);
   const libraryScanDirs = useRuforgeStore((s) => s.libraryScanDirs);
   const libraryScanRevision = useRuforgeStore((s) => s.libraryScanRevision);
   const [lookup, setLookup] = useState<PlaylistSidecarLookup | null>(null);
@@ -23,14 +24,14 @@ export function usePlaylistSidecarByListUrl(listUrl: string | null): PlaylistSid
       return;
     }
     let cancelled = false;
-    const roots = galleryScanRoots(libraryScanDirs);
+    const roots = galleryScanRootsFromStore({ internalVault, libraryScanDirs });
     void findPlaylistSidecarByListUrl(roots, listUrl).then((result) => {
       if (!cancelled) setLookup(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [listUrl, libraryScanDirs, libraryScanRevision]);
+  }, [listUrl, internalVault, libraryScanDirs, libraryScanRevision]);
 
   return lookup;
 }
