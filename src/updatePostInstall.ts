@@ -5,7 +5,7 @@ export type ChangeItem = {
   handle?: string;
 };
 
-/** Written before `downloadAndInstall`; consumed on next launch for the post-update stack. */
+/** Written before handoff; verified on next launch before What's New. */
 export type PostInstallPayload = {
   version: string;
   /** Freeform summary or intro; shown with structured lists when `additions` / `fixes` are set. */
@@ -13,6 +13,13 @@ export type PostInstallPayload = {
   additions?: ChangeItem[];
   fixes?: ChangeItem[];
 };
+
+export type BootUpdateVerifyResult =
+  | { status: "none" }
+  | { status: "verified"; payload: PostInstallPayload }
+  | { status: "failed" };
+
+let bootVerifyPromise: Promise<BootUpdateVerifyResult> | null = null;
 
 /**
  * Copy for the small “update available” card (`UpdaterMainOverlays`).
@@ -86,15 +93,14 @@ export function clearPendingPostInstall(): void {
   localStorage.removeItem(KEY);
 }
 
-/** Peek without removing; used to verify version before showing What's New. */
-export function readPendingPostInstall(): PostInstallPayload | null {
-  const raw = localStorage.getItem(KEY);
-  if (!raw) return null;
+function parsePendingPostInstallRaw(raw: string): PostInstallPayload | null {
   try {
     const o = JSON.parse(raw) as Record<string, unknown>;
     if (typeof o.version !== "string") return null;
+    const version = o.version.trim();
+    if (!version) return null;
     return {
-      version: o.version,
+      version,
       notes: typeof o.notes === "string" ? o.notes : "",
       additions: normalizeChangeItems(o.additions),
       fixes: normalizeChangeItems(o.fixes),
@@ -104,10 +110,58 @@ export function readPendingPostInstall(): PostInstallPayload | null {
   }
 }
 
-/** Read and remove so the celebration UI only arms once per successful install handoff. */
+/** Peek without removing; invalid LS entries are cleared. */
+export function readPendingPostInstall(): PostInstallPayload | null {
+  const raw = localStorage.getItem(KEY);
+  if (!raw) return null;
+  const pending = parsePendingPostInstallRaw(raw);
+  if (!pending) {
+    clearPendingPostInstall();
+    return null;
+  }
+  return pending;
+}
+
+/** Read and remove; invalid LS entries are cleared. */
 export function consumePendingPostInstall(): PostInstallPayload | null {
   const pending = readPendingPostInstall();
   if (!pending) return null;
-  localStorage.removeItem(KEY);
+  clearPendingPostInstall();
   return pending;
+}
+
+async function runBootUpdateVerify(
+  readRunningVersion: () => Promise<string>,
+): Promise<BootUpdateVerifyResult> {
+  const pending = readPendingPostInstall();
+  if (!pending) return { status: "none" };
+
+  let currentVersion: string;
+  try {
+    currentVersion = (await readRunningVersion()).trim();
+  } catch {
+    clearPendingPostInstall();
+    return { status: "failed" };
+  }
+
+  if (!currentVersion || currentVersion !== pending.version) {
+    clearPendingPostInstall();
+    return { status: "failed" };
+  }
+
+  clearPendingPostInstall();
+  return { status: "verified", payload: pending };
+}
+
+/**
+ * Sole install-success authority: running version must exactly match pending target.
+ * Single-flight per process; does not read updaterPhase.
+ */
+export function verifyPendingUpdateOnBoot(
+  readRunningVersion: () => Promise<string>,
+): Promise<BootUpdateVerifyResult> {
+  if (!bootVerifyPromise) {
+    bootVerifyPromise = runBootUpdateVerify(readRunningVersion);
+  }
+  return bootVerifyPromise;
 }
