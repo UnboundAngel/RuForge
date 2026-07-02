@@ -1,23 +1,20 @@
 pub mod auth;
-pub mod catalog;
 pub mod commands;
-pub mod remux;
 pub mod routes;
 pub mod spa;
 
 use std::collections::HashMap;
 use std::net::UdpSocket;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rand::rngs::OsRng;
 use rand::RngCore;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tokio::sync::{oneshot, RwLock};
 
-use crate::companion::catalog::CatalogEntry;
+use crate::library::LibraryState;
 
 pub const DEFAULT_PORT: u16 = 8787;
 
@@ -46,10 +43,10 @@ pub struct CompanionInner {
     pub session_secret: RwLock<[u8; 32]>,
     pub sessions: RwLock<HashMap<String, Session>>,
     pub pairing: RwLock<Option<PairingCode>>,
-    pub catalog: RwLock<HashMap<String, CatalogEntry>>,
-    pub catalog_version: RwLock<String>,
-    pub media_roots: Vec<PathBuf>,
-    pub cache_root: RwLock<Option<PathBuf>>,
+    /// Set once at `start()`. Companion routes resolve media exclusively through
+    /// `library::resolver` against this handle; the companion never scans disk or
+    /// holds its own notion of "what exists."
+    pub app_handle: RwLock<Option<AppHandle>>,
     pub bind_port: RwLock<u16>,
     pub lan_ip: RwLock<Option<String>>,
     pub running: AtomicBool,
@@ -74,29 +71,6 @@ pub fn detect_lan_ip() -> Option<String> {
     socket.local_addr().ok().map(|addr| addr.ip().to_string())
 }
 
-pub async fn path_is_allowed(state: &CompanionInner, canonical: &PathBuf) -> bool {
-    if state.media_roots.iter().any(|root| canonical.starts_with(root)) {
-        return true;
-    }
-    if let Some(cache) = state.cache_root.read().await.as_ref() {
-        if canonical.starts_with(cache) {
-            return true;
-        }
-    }
-    false
-}
-
-fn default_media_roots() -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Some(dir) = dirs::video_dir() {
-        roots.push(dir.canonicalize().unwrap_or(dir));
-    }
-    if let Some(dir) = dirs::download_dir() {
-        roots.push(dir.canonicalize().unwrap_or(dir));
-    }
-    roots
-}
-
 impl CompanionState {
     pub fn new() -> Self {
         Self {
@@ -104,10 +78,7 @@ impl CompanionState {
                 session_secret: RwLock::new(generate_secret()),
                 sessions: RwLock::new(HashMap::new()),
                 pairing: RwLock::new(None),
-                catalog: RwLock::new(HashMap::new()),
-                catalog_version: RwLock::new(String::from("empty")),
-                media_roots: default_media_roots(),
-                cache_root: RwLock::new(None),
+                app_handle: RwLock::new(None),
                 bind_port: RwLock::new(DEFAULT_PORT),
                 lan_ip: RwLock::new(detect_lan_ip()),
                 running: AtomicBool::new(false),
@@ -121,15 +92,13 @@ impl CompanionState {
             return;
         }
 
-        if let Ok(cache_dir) = tauri::Manager::path(&app).app_cache_dir() {
-            let remux_dir = cache_dir.join("companion-remux");
+        if let Ok(cache_dir) = app.path().app_cache_dir() {
+            let remux_dir = cache_dir.join("library-remux");
             let _ = std::fs::create_dir_all(&remux_dir);
-            if let Ok(canonical) = remux_dir.canonicalize() {
-                *self.inner.cache_root.write().await = Some(canonical);
-            }
+            app.state::<LibraryState>().set_remux_cache_dir(remux_dir).await;
         }
 
-        catalog::rebuild(&app, &self.inner).await;
+        *self.inner.app_handle.write().await = Some(app.clone());
 
         let listener = match tokio::net::TcpListener::bind(("0.0.0.0", DEFAULT_PORT)).await {
             Ok(l) => l,
@@ -177,6 +146,30 @@ impl CompanionState {
             log::Level::Info,
             "companion server listening on 0.0.0.0:{bound_port}"
         );
+
+        let app_reindex = app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Some(lib) = app_reindex.try_state::<LibraryState>() {
+                crate::rf_log!(
+                    "companion.server",
+                    log::Level::Info,
+                    "companion library index build started (background)"
+                );
+                if let Err(e) = lib.reindex(&app_reindex).await {
+                    crate::rf_log!(
+                        "companion.server",
+                        log::Level::Warn,
+                        "companion background reindex failed: {e}"
+                    );
+                } else {
+                    crate::rf_log!(
+                        "companion.server",
+                        log::Level::Info,
+                        "companion library index ready"
+                    );
+                }
+            }
+        });
     }
 
     pub fn stop(&self) {

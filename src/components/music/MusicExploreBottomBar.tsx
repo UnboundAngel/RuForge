@@ -156,6 +156,7 @@ export function MusicExploreBottomBar({
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const internalVault = useRuforgeStore((s) => s.internalVault);
   const enqueueDownload = useRuforgeStore((s) => s.enqueueDownload);
   const releaseHeldDownloadJobs = useRuforgeStore((s) => s.releaseHeldDownloadJobs);
   const pumpDownloadQueue = useRuforgeStore((s) => s.pumpDownloadQueue);
@@ -248,7 +249,7 @@ export function MusicExploreBottomBar({
       ? `https://music.youtube.com/playlist?list=${listId}`
       : (canonicalMusicYouTubeUrl(targetUrl) ?? targetUrl.trim());
     if (!canonical) return;
-    const dir = resolveDownloadOutputDir(saveToInternal, outputDir);
+    const dir = resolveDownloadOutputDir(saveToInternal, outputDir, internalVault);
     const base = buildDownloadJobOptions(settings, dir);
     const opts = patchDownloadJobOptionsForAudio(base, true, settings);
 
@@ -388,6 +389,7 @@ export function MusicExploreBottomBar({
     pumpDownloadQueue,
     releaseHeldDownloadJobs,
     saveToInternal,
+    internalVault,
     settings,
   ]);
 

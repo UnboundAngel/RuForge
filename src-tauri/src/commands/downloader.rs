@@ -2352,6 +2352,12 @@ pub async fn start_download_job(
                                 job_id
                             );
                         }
+                        let app_reindex = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Some(lib) = app_reindex.try_state::<crate::library::LibraryState>() {
+                                let _ = lib.reindex(&app_reindex).await;
+                            }
+                        });
                         let _ = app.emit(
                             "download-job-finished",
                             DownloadJobFinishedPayload {

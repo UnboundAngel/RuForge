@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { PlaySquare, History, Loader2, Play, HardDrive, Clock, Video, Volume2, VolumeX, Layers } from "lucide-react";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
+import type { LibrarySnapshot } from "../lib/libraryConfig";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
 import { getPlaybackThumbnailBar } from "../playbackStorage";
 import { formatDuration } from "./downloader/downloaderFormat";
@@ -66,7 +67,8 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
     const posterEpoch = ++posterBackfillEpochRef.current;
     setLoading(true);
     try {
-      const data = await invoke<GalleryEntry[]>("scan_gallery", { dir: outputDir });
+      const snapshot = await invoke<LibrarySnapshot>("get_library_snapshot");
+      const data = snapshot.entries;
       if (posterBackfillEpochRef.current !== posterEpoch) return;
       setEntries(data);
       
@@ -76,9 +78,9 @@ export const GalleryView = ({ outputDir, onPlay }: { outputDir: string, onPlay: 
           await ensurePostersForFiles(mediaFiles);
           if (posterBackfillEpochRef.current !== posterEpoch) return;
           try {
-            const refreshed = await invoke<GalleryEntry[]>("scan_gallery", { dir: outputDir });
+            const refreshed = await invoke<LibrarySnapshot>("get_library_snapshot");
             if (posterBackfillEpochRef.current !== posterEpoch) return;
-            setEntries(refreshed);
+            setEntries(refreshed.entries);
           } catch (e) { console.error(e); }
         })();
       }

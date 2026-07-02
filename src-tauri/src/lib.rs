@@ -2,6 +2,7 @@ mod app_state;
 pub mod commands;
 pub mod companion;
 pub mod debug_log;
+pub mod library;
 mod download_job_manager;
 mod process_tree;
 mod hardware_acceleration;
@@ -44,8 +45,12 @@ use crate::commands::export::{
 use crate::download_job_manager::DownloadJobManager;
 use crate::commands::ffprobe::probe_local_media_ffprobe;
 use crate::commands::gallery::{
-    regroup_playlist_downloads, scan_gallery, sweep_library_download_duplicates,
+    regroup_playlist_downloads, scan_dir_for_neighbors, sweep_library_download_duplicates,
 };
+use crate::library::commands::{
+    get_library_snapshot, library_get_config, library_reindex, library_set_config,
+};
+use crate::library::LibraryState;
 use crate::commands::migrate::migrate_library_layout;
 use crate::commands::sponsorblock::ensure_sponsorblock_segments;
 use crate::commands::musicmeta::{
@@ -166,6 +171,14 @@ pub fn run() {
     builder
         .setup(|app| {
             let handle = app.handle().clone();
+
+            // Rust is the sole authority for library config + index. Seed/load
+            // persisted config now, before any command can race the first
+            // `get_library_snapshot` / companion start call.
+            let library_config = crate::library::config::load_or_init(&handle)
+                .map_err(|e| format!("failed to load library config: {e}"))?;
+            app.manage(LibraryState::new(library_config));
+
             warm_ytdlp_release_cache_spawn(handle.clone());
             tauri::async_runtime::spawn(async move {
                 if let Ok(updater) = handle.updater() {
@@ -263,9 +276,13 @@ pub fn run() {
             start_download_job,
             pause_download_job,
             stop_all_active_download_jobs,
-            scan_gallery,
+            scan_dir_for_neighbors,
             sweep_library_download_duplicates,
             regroup_playlist_downloads,
+            get_library_snapshot,
+            library_get_config,
+            library_set_config,
+            library_reindex,
             ensure_sponsorblock_segments,
             ensure_music_meta,
             read_music_meta,
@@ -340,7 +357,6 @@ pub fn run() {
             crate::companion::commands::companion_qr_payload,
             crate::companion::commands::companion_sessions,
             crate::companion::commands::companion_revoke_all,
-            crate::companion::commands::companion_rebuild_catalog,
             #[cfg(windows)]
             taskbar_thumbbar::sync_taskbar_transport,
         ])

@@ -7,11 +7,13 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::json;
+use tauri::{AppHandle, Manager};
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
 use crate::companion::auth::{self, SESSION_COOKIE};
 use crate::companion::{now_unix, CompanionStateHandle};
+use crate::library::{resolver, LibraryState};
 
 pub fn build_router(state: CompanionStateHandle) -> Router {
     Router::new()
@@ -30,6 +32,18 @@ pub fn build_router(state: CompanionStateHandle) -> Router {
 
 fn error_response(status: StatusCode, code: &str) -> Response {
     (status, Json(json!({ "error": code }))).into_response()
+}
+
+/// Companion never holds its own copy of the library; every request that needs
+/// media data resolves it fresh from `library::resolver` against the app handle
+/// captured at `CompanionState::start()`.
+async fn require_app_handle(state: &CompanionStateHandle) -> Result<AppHandle, Response> {
+    state
+        .app_handle
+        .read()
+        .await
+        .clone()
+        .ok_or_else(|| error_response(StatusCode::SERVICE_UNAVAILABLE, "companion_not_ready"))
 }
 
 async fn same_origin_guard(req: Request, next: Next) -> Response {
@@ -126,26 +140,31 @@ async fn library(State(state): State<CompanionStateHandle>, headers: HeaderMap) 
     if let Err(e) = require_session(&state, &headers).await {
         return e;
     }
-    let catalog = state.catalog.read().await;
-    let version = state.catalog_version.read().await.clone();
-    let items: Vec<_> = catalog
-        .values()
-        .map(|e| {
+    let app = match require_app_handle(&state).await {
+        Ok(a) => a,
+        Err(e) => return e,
+    };
+    let lib = app.state::<LibraryState>();
+    let (version, ready, items) = resolver::snapshot(&lib).await;
+
+    let payload: Vec<_> = items
+        .into_iter()
+        .map(|p| {
             json!({
-                "id": e.id,
-                "title": e.title,
-                "durationSecs": e.duration_secs,
-                "container": e.container,
-                "videoCodec": e.video_codec,
-                "audioCodec": e.audio_codec,
-                "playable": e.playable,
-                "hasThumb": e.thumb_path.is_some(),
-                "sizeBytes": e.size_bytes,
+                "id": p.id,
+                "title": p.title,
+                "durationSecs": p.duration_secs,
+                "container": p.container,
+                "videoCodec": p.video_codec,
+                "audioCodec": p.audio_codec,
+                "playable": p.playable,
+                "hasThumb": p.has_thumb,
+                "sizeBytes": p.size_bytes,
             })
         })
         .collect();
 
-    let mut res = Json(json!({ "catalogVersion": version, "items": items })).into_response();
+    let mut res = Json(json!({ "catalogVersion": version, "ready": ready, "items": payload })).into_response();
     res.headers_mut().insert(
         header::CACHE_CONTROL,
         HeaderValue::from_static("private, max-age=30"),
@@ -164,8 +183,12 @@ async fn sidecar(
     if let Err(e) = require_session(&state, &headers).await {
         return e;
     }
-    let catalog = state.catalog.read().await;
-    if !catalog.contains_key(&id) {
+    let app = match require_app_handle(&state).await {
+        Ok(a) => a,
+        Err(e) => return e,
+    };
+    let lib = app.state::<LibraryState>();
+    if !resolver::is_known_id(&lib, &id).await {
         return error_response(StatusCode::NOT_FOUND, "unknown_id");
     }
     Json(json!({ "id": id, "chapters": [], "subtitles": [], "comments": null })).into_response()
@@ -191,18 +214,20 @@ async fn stream_token(
         _ => "stream",
     };
 
-    let catalog = state.catalog.read().await;
-    let entry = match catalog.get(&id) {
-        Some(e) => e,
-        None => return error_response(StatusCode::NOT_FOUND, "unknown_id"),
+    let app = match require_app_handle(&state).await {
+        Ok(a) => a,
+        Err(e) => return e,
     };
-    if kind == "stream" && !entry.playable {
+    let lib = app.state::<LibraryState>();
+    if !resolver::is_known_id(&lib, &id).await {
+        return error_response(StatusCode::NOT_FOUND, "unknown_id");
+    }
+    if kind == "stream" && !resolver::is_playable(&lib, &id).await {
         return error_response(StatusCode::FORBIDDEN, "not_playable");
     }
-    if kind == "thumb" && entry.thumb_path.is_none() {
+    if kind == "thumb" && !resolver::has_thumb(&lib, &id).await {
         return error_response(StatusCode::NOT_FOUND, "no_thumb");
     }
-    drop(catalog);
 
     let exp = now_unix() + 300;
     let secret = *state.session_secret.read().await;
@@ -257,30 +282,22 @@ async fn serve_signed_media(
         return error_response(StatusCode::FORBIDDEN, "session_revoked");
     }
 
-    let resolved_path = {
-        let catalog = state.catalog.read().await;
-        match catalog.get(&id) {
-            Some(entry) if kind == "stream" => Some(entry.serve_path.clone()),
-            Some(entry) if kind == "thumb" => entry.thumb_path.clone(),
-            _ => None,
-        }
+    let app = match require_app_handle(&state).await {
+        Ok(a) => a,
+        Err(e) => return e,
     };
-    let Some(path) = resolved_path else {
-        return error_response(StatusCode::NOT_FOUND, "unknown_id");
-    };
+    let lib = app.state::<LibraryState>();
 
-    let canonical = match path.canonicalize() {
-        Ok(p) => p,
-        Err(_) => {
-            state.catalog.write().await.remove(&id);
-            return error_response(StatusCode::NOT_FOUND, "file_missing");
-        }
+    // `resolver` already canonicalizes and allowlist-checks the resolved path;
+    // routes never touch a raw path directly.
+    let resolved_path = if kind == "stream" {
+        resolver::resolve_stream_path(&app, &lib, &id).await
+    } else {
+        resolver::resolve_thumb_path(&lib, &id).await
     };
-
-    let within_root = crate::companion::path_is_allowed(&state, &canonical).await;
-    if !within_root {
-        return error_response(StatusCode::FORBIDDEN, "path_escape");
-    }
+    let Some(canonical) = resolved_path else {
+        return error_response(StatusCode::NOT_FOUND, "file_missing");
+    };
 
     let service = ServeFile::new(&canonical);
     match service.oneshot(req).await {

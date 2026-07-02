@@ -1,3 +1,7 @@
+//! Stream-copy remux for companion streaming. Ingestion-time concern: computed once
+//! by `library::scanner` when a file's container is not browser-playable but its
+//! codecs are, cached on disk under the app cache dir, never re-run per HTTP request.
+
 use std::path::{Path, PathBuf};
 
 use tauri::AppHandle;
