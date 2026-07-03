@@ -10,7 +10,12 @@ interface Props {
 const { releases, compact = false } = Astro.props;
 
 const formatDate = (date: Date) =>
-  date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 ---
 
 <div class:list={[compact ? 'space-y-8' : 'space-y-16']}>

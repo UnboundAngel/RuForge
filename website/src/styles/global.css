@@ -77,7 +77,7 @@
   }
 
   .rf-btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-rf-border px-4 py-2 text-sm text-rf-text no-underline transition-all duration-200 ease-out hover:opacity-100 hover:bg-rf-surface/65 hover:border-rf-accent/30 hover:shadow-[0_0_12px_rgba(237,215,156,0.05)] active:scale-[0.98];
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-rf-border px-4 py-2 text-sm text-rf-text no-underline transition-colors duration-200 ease-out hover:bg-rf-surface/65 hover:border-rf-accent/25 active:scale-[0.98];
   }
 
   .rf-version {
