@@ -1,6 +1,6 @@
 # Copy the signed NSIS installer into website/public/releases/ for same-origin /download streaming.
 param(
-  [string]$Version = (Get-Content (Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'package.json') -Raw | ConvertFrom-Json).version
+  [string]$Version = (Get-Content (Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'updater.json') -Raw | ConvertFrom-Json).version
 )
 
 $ErrorActionPreference = 'Stop'

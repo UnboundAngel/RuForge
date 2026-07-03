@@ -90,17 +90,17 @@ function runWebsiteBuild() {
 
 const pkg = readJson(join(repoRoot, 'package.json'));
 const updater = readJson(join(repoRoot, 'updater.json'));
+const shippedVersion = updater.version;
 
-if (pkg.version !== updater.version) {
-  console.error(
-    `Version mismatch: package.json=${pkg.version}, updater.json=${updater.version}`,
+if (pkg.version !== shippedVersion) {
+  console.warn(
+    `package.json=${pkg.version} differs from shipped updater.json=${shippedVersion}; using updater.json for website release sync.`,
   );
-  process.exit(1);
 }
 
 const { additions, fixes } = parseUpdaterNotes(updater.notes);
 const date = releaseDate(updater.pub_date);
-const outPath = writeReleaseMarkdown(pkg.version, date, additions, fixes);
+const outPath = writeReleaseMarkdown(shippedVersion, date, additions, fixes);
 console.log(`Wrote ${outPath}`);
 
 if (!skipInstaller) {

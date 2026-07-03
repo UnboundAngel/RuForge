@@ -40,6 +40,7 @@ Output: `website/dist/`
 ## Content
 
 - **Releases:** generated from root `updater.json` structured `notes` via `npm run prep:website-release` (writes `src/content/releases/v0-1-x.md` with frontmatter `version`, `date`, `additions`, `fixes`). Do not hand-author release markdown at ship time.
+- **Download version badge and installer URLs:** `astro.config.mjs` reads `updater.json` `version` at build time (last shipped release), not unreleased `package.json` during the dev cycle.
 - **Roadmap:** edit `src/content/roadmap.json`, then rebuild.
 - **Legal:** edit files under repo `docs/legal/`; no copy in `website/`.
 

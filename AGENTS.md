@@ -409,7 +409,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.2 (unreleased)
 
-
+- **Website**: Download page and installer URLs use `updater.json` shipped version instead of unreleased `package.json` (`astro.config.mjs`, `copy-installer-for-website.ps1`, `sync-website-release.mjs`).
 ## Release ritual
 
 **Why this exists:** "Push and commit everything" is ambiguous to an agent. The failure mode (observed): Chad invented a feature branch, committed there, and stranded `updater.json` off `main`. Then produced a flawless postmortem of the problem it had just caused. Chad's knowledge was never the gap. The gap was no defined, ordered, verified sequence. This is that sequence.
@@ -439,7 +439,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 3. **Prep `updater.json` notes (agent, before build).** Write structured JSON in `notes`: markdown **teaser** (header + three bullets for the pre-download card; full markdown supported), plus `additions` and `fixes` arrays for post-install. Set `version`, `url` (`.../releases/download/v<semver>/RuForge_<semver>_x64-setup.exe`), leave `signature` empty until step 5.
 4. **Signed build (Angel only).** Angel runs `Build-signed-windows.bat` or `npm run build:signed`. Agent then reads NSIS `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/` (do not ask Angel to paste base64 unless the file is missing).
 5. **Finish `updater.json` (agent).** Paste `.sig` base64 into `signature`, set `pub_date` from the build time or minisign timestamp. The `signature` value is the literal base64 CONTENTS of the `.sig` file, never a path or URL. That mistake breaks every install silently.
-5b. **Sync website release assets (agent).** Run `npm run prep:website-release` from repo root (requires signed NSIS at `src-tauri/target/release/bundle/nsis/`). Commits: generated `website/src/content/releases/v0-1-x.md`. Site version comes from root `package.json` at Astro build time; no `site.ts` edit. Include the generated changelog in the release commit. Cloudflare Pages redeploys on push. Same-origin installer streaming needs the copied exe in the deploy artifact (gitignored; GitHub fallback works without it). Use `npm run prep:website-release:changelog-only` if the signed build is not ready yet.
+5b. **Sync website release assets (agent).** Run `npm run prep:website-release` from repo root (requires signed NSIS at `src-tauri/target/release/bundle/nsis/`). Commits: generated `website/src/content/releases/v0-1-x.md`. Public site version and download URLs come from `updater.json` at Astro build time (`website/astro.config.mjs`); `package.json` may be ahead during the dev cycle. Include the generated changelog in the release commit. Cloudflare Pages redeploys on push. Same-origin installer streaming needs the copied exe in the deploy artifact (gitignored; GitHub fallback works without it). Use `npm run prep:website-release:changelog-only` if the signed build is not ready yet.
 6. **Commit + push to `main` (agent).** Confirm current branch is `main`. Write a clear commit message (version + one-line summary). The commit MUST include `updater.json`, all three version files, generated website changelog when applicable, and any unreleased code. Push to `origin main`. State the pushed commit hash.
 7. **GitHub Release (agent, `gh`).** Use GitHub CLI on `UnboundAngel/RuForge`. Tag **`v<semver>`** must match the `updater.json` download path. Example:
 
