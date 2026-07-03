@@ -9,8 +9,8 @@ import sitemap from '@astrojs/sitemap';
 import { qrcode } from 'vite-plugin-qrcode';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const appVersion = JSON.parse(
-  readFileSync(join(repoRoot, 'package.json'), 'utf-8'),
+const shippedVersion = JSON.parse(
+  readFileSync(join(repoRoot, 'updater.json'), 'utf-8'),
 ).version;
 
 // https://astro.build/config
@@ -27,7 +27,7 @@ export default defineConfig({
   ],
   vite: {
     define: {
-      __APP_VERSION__: JSON.stringify(appVersion),
+      __APP_VERSION__: JSON.stringify(shippedVersion),
     },
     plugins: [tailwindcss(), qrcode()],
     server: {
