@@ -148,68 +148,68 @@
     "roadmapStatus": "progress"
   },
   {
+    "appArea": "Browser",
+    "difficulty": "High",
+    "featureName": "Browser companion support for phone, desktop, and TV",
+    "priority": "High",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
     "appArea": "Download Screen",
     "difficulty": "High",
     "featureName": "Storage estimate before enqueue",
     "priority": "High",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
+    "status": "To-Do"
   },
   {
     "appArea": "Download Screen",
     "difficulty": "Medium",
     "featureName": "Download history log",
     "priority": "Extremely important",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
+    "status": "To-Do"
   },
   {
     "appArea": "Video Library",
     "difficulty": "High",
     "featureName": "User-created playlists from library items",
     "priority": "Extremely important",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
+    "status": "To-Do"
   },
   {
     "appArea": "Music Library",
     "difficulty": "Medium",
     "featureName": "Delay between batch job starts (rate-limit guard)",
     "priority": "Medium",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
+    "status": "To-Do"
   },
   {
     "appArea": "Video Library",
     "difficulty": "Medium",
     "featureName": "Playlist folder right-click menu (Play all, shuffle, delete, ...)",
     "priority": "Low",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
+    "status": "To-Do"
   },
   {
     "appArea": "Download Screen",
     "difficulty": "Medium",
     "featureName": "Accurate file size on download card preview",
     "priority": "High",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
+    "status": "To-Do"
   },
   {
     "appArea": "Infra",
     "difficulty": "High",
     "featureName": "WinGet manifest auto-update on release",
     "priority": "Medium",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
+    "status": "To-Do"
   },
   {
     "appArea": "Player",
     "difficulty": "Medium",
     "featureName": "In-app onboarding walkthrough for new features",
     "priority": "High",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
+    "status": "To-Do"
   },
   {
     "appArea": "Music Library",
