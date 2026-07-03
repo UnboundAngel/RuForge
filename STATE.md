@@ -18,7 +18,7 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-02 (0.2.1 released)
+Last updated: 2026-07-03 (companion LAN security + audio/session fixes in tree)
 
 Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. LAN companion remains dev-gated only in tree.
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow upda
 
 
 
-0.2.2 in tree: website OG preview image (`ruforge-og.png`). Fresh cycle otherwise open. Companion LAN server in tree behind `showDebuggingSettings` only.
+0.2.2 in tree: companion LAN dev instrumentation; audio-only playable fix; session cookie survives tab refresh/reopen; thumb token wiring in companion web when `hasThumb`. Website OG preview image (`ruforge-og.png`). Fresh cycle otherwise open. Companion LAN server in tree behind `showDebuggingSettings` only.
 
 
 
@@ -58,11 +58,8 @@ reads this for the last shipped delta, not the git tree.
 
 **0.2.2 (unreleased, in tree):**
 
-
-
-(none yet)
-
-
+- Companion LAN: audio-only playable detection; session cookie reuse on refresh; thumb display when indexed; security route tests added.
+- Companion LAN: dev-gated stderr instrumentation for HTTP request, pairing, session, and media routes when debugging settings are on.
 
 **0.2.1 shipped:**
 

@@ -96,6 +96,7 @@ export const DEBUG_CATEGORY_TREE: DebugCategoryNode[] = [
       { id: "devtools.export", label: "Export bundle helpers", side: "javascript" },
       { id: "devtools.screenshot", label: "Screenshot frame", side: "javascript" },
       { id: "devtools.drop", label: "URL drop intake", side: "javascript" },
+      { id: "companion.server", label: "LAN companion HTTP trace", side: "rust" },
     ],
   },
 ];

@@ -1,10 +1,11 @@
 pub mod auth;
 pub mod commands;
+pub mod trace_log;
 pub mod routes;
 pub mod spa;
 
 use std::collections::HashMap;
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -14,6 +15,7 @@ use rand::RngCore;
 use tauri::{AppHandle, Manager};
 use tokio::sync::{oneshot, RwLock};
 
+use crate::companion::trace_log as companion_log;
 use crate::library::LibraryState;
 
 pub const DEFAULT_PORT: u16 = 8787;
@@ -92,6 +94,8 @@ impl CompanionState {
             return;
         }
 
+        *self.inner.lan_ip.write().await = detect_lan_ip();
+
         if let Ok(cache_dir) = app.path().app_cache_dir() {
             let remux_dir = cache_dir.join("library-remux");
             let _ = std::fs::create_dir_all(&remux_dir);
@@ -105,6 +109,7 @@ impl CompanionState {
             Err(_) => match tokio::net::TcpListener::bind(("0.0.0.0", 0)).await {
                 Ok(l) => l,
                 Err(e) => {
+                    companion_log::error(format!("server failed to bind: {e}"));
                     crate::rf_log!(
                         "companion.server",
                         log::Level::Warn,
@@ -126,12 +131,27 @@ impl CompanionState {
         *self.shutdown_tx.lock().unwrap() = Some(tx);
         self.inner.running.store(true, Ordering::SeqCst);
 
+        let lan_ip = self.inner.lan_ip.read().await.clone();
+        let display_url = lan_ip
+            .as_ref()
+            .map(|ip| format!("http://{ip}:{bound_port}/"))
+            .unwrap_or_else(|| format!("http://<lan-ip-unavailable>:{bound_port}/"));
+        companion_log::info(format!(
+            "server start bind=0.0.0.0:{bound_port} display_url={display_url} pairing=enabled trace_logs={}",
+            companion_log::instrumentation_enabled()
+        ));
+
         let running_flag = self.inner.clone();
         tauri::async_runtime::spawn(async move {
-            let server = axum::serve(listener, router).with_graceful_shutdown(async {
+            let server = axum::serve(
+                listener,
+                router.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .with_graceful_shutdown(async {
                 let _ = rx.await;
             });
             if let Err(e) = server.await {
+                companion_log::error(format!("server exited: {e}"));
                 crate::rf_log!(
                     "companion.server",
                     log::Level::Warn,
@@ -139,13 +159,8 @@ impl CompanionState {
                 );
             }
             running_flag.running.store(false, Ordering::SeqCst);
+            companion_log::info("server stopped");
         });
-
-        crate::rf_log!(
-            "companion.server",
-            log::Level::Info,
-            "companion server listening on 0.0.0.0:{bound_port}"
-        );
 
         let app_reindex = app.clone();
         tauri::async_runtime::spawn(async move {
@@ -173,6 +188,7 @@ impl CompanionState {
     }
 
     pub fn stop(&self) {
+        companion_log::info("server stop requested");
         if let Some(tx) = self.shutdown_tx.lock().unwrap().take() {
             let _ = tx.send(());
         }

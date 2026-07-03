@@ -98,9 +98,24 @@ pub(crate) fn remux_eligible(container: &str, video_codec: &str, audio_codec: &s
         && (audio_codec.is_empty() || PLAYABLE_AUDIO_CODECS.contains(&audio_codec))
 }
 
-/// Companion `playable` flag: native container or remux-eligible (remux runs on first stream).
-fn companion_playable(container: &str, video_codec: &str, audio_codec: &str) -> bool {
-    is_playable(container, video_codec, audio_codec) || remux_eligible(container, video_codec, audio_codec)
+/// Audio-only files have no video track; browser `<video>`/`<audio>` can play them when the
+/// audio codec (or extension) is natively decodable. Video container rules do not apply.
+fn audio_only_playable(container: &str, video_codec: &str, audio_codec: &str, ext: &str) -> bool {
+    if !video_codec.is_empty() || !is_audio_only_ext(ext) {
+        return false;
+    }
+    if !audio_codec.is_empty() {
+        return PLAYABLE_AUDIO_CODECS.contains(&audio_codec) || (audio_codec == "flac" && ext == "flac");
+    }
+    matches!(ext, "mp3" | "m4a" | "ogg" | "opus" | "wav" | "flac")
+        || matches!(container, "mp3" | "m4a" | "ogg" | "wav" | "flac")
+}
+
+/// Companion `playable` flag: native container, remux-eligible, or audio-only.
+fn companion_playable(container: &str, video_codec: &str, audio_codec: &str, ext: &str) -> bool {
+    is_playable(container, video_codec, audio_codec)
+        || remux_eligible(container, video_codec, audio_codec)
+        || audio_only_playable(container, video_codec, audio_codec, ext)
 }
 
 struct ProbeResult {
@@ -181,8 +196,14 @@ async fn probe_and_cache(
         None => (String::new(), String::new(), String::new(), 0),
     };
 
+    let ext = canonical
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
     let mut serve_path = canonical.to_path_buf();
-    let mut playable = companion_playable(&container, &video_codec, &audio_codec);
+    let mut playable = companion_playable(&container, &video_codec, &audio_codec, &ext);
 
     if allow_remux && remux_eligible(&container, &video_codec, &audio_codec) {
         if let Some(dir) = remux_dir {
@@ -342,4 +363,31 @@ pub async fn reindex(
 #[allow(dead_code)]
 pub fn playlist_items(playlist: &PlaylistCollection) -> &[MediaFile] {
     &playlist.items
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn audio_only_mp3_is_playable() {
+        assert!(audio_only_playable("mp3", "", "mp3", "mp3"));
+        assert!(companion_playable("mp3", "", "mp3", "mp3"));
+    }
+
+    #[test]
+    fn audio_only_m4a_aac_is_playable() {
+        assert!(audio_only_playable("mp4", "", "aac", "m4a"));
+        assert!(companion_playable("mp4", "", "aac", "m4a"));
+    }
+
+    #[test]
+    fn video_mkv_h264_still_remux_eligible() {
+        assert!(companion_playable("mkv", "h264", "aac", "mkv"));
+    }
+
+    #[test]
+    fn video_with_track_not_audio_only() {
+        assert!(!audio_only_playable("mp4", "h264", "aac", "mp4"));
+    }
 }

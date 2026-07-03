@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
+use crate::companion::trace_log as companion_log;
 use crate::companion::CompanionState;
 use crate::dev_gate;
 
@@ -90,6 +91,11 @@ pub async fn companion_qr_payload(
         .clone()
         .ok_or_else(|| "lan_ip_unavailable".to_string())?;
     let port = *inner.bind_port.read().await;
+    companion_log::info(format!(
+        "pairing code minted code={} exp={} display_ip={ip} port={port}",
+        companion_log::redact_secret(&pairing.code),
+        pairing.expires_at
+    ));
     let url = format!("http://{ip}:{port}/?c={}", pairing.code);
     Ok(QrPayload {
         url,

@@ -12,9 +12,11 @@
   main { padding: 16px 20px; }
   #status { color: #999; font-size: 14px; margin-bottom: 16px; }
   #video-shell { display: none; margin-bottom: 20px; }
-  #video-shell video { width: 100%; max-height: 60vh; background: #000; border-radius: 8px; }
+  #video-shell video, #video-shell audio { width: 100%; max-height: 60vh; background: #000; border-radius: 8px; }
   ul#library { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #17171d; border-radius: 8px; cursor: pointer; }
+  .item { display: flex; gap: 12px; align-items: center; padding: 10px 14px; background: #17171d; border-radius: 8px; cursor: pointer; }
+  .item .thumb { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; background: #222; flex-shrink: 0; }
+  .item .body { flex: 1; display: flex; justify-content: space-between; align-items: center; min-width: 0; }
   .item.disabled { opacity: 0.4; cursor: not-allowed; }
   .item .title { font-size: 14px; }
   .item .meta { font-size: 12px; color: #888; }
@@ -24,7 +26,7 @@
 <header><h1>RuForge Companion</h1></header>
 <main>
   <div id="status">Pairing...</div>
-  <div id="video-shell"><video id="player" controls playsinline></video></div>
+  <div id="video-shell"><video id="player" controls playsinline></video><audio id="audio-player" controls style="display:none"></audio></div>
   <ul id="library"></ul>
 </main>
 <script>
@@ -33,6 +35,7 @@
   var libraryEl = document.getElementById('library');
   var videoShell = document.getElementById('video-shell');
   var videoEl = document.getElementById('player');
+  var audioEl = document.getElementById('audio-player');
 
   function setStatus(text) { statusEl.textContent = text; }
 
@@ -50,66 +53,87 @@
     return (mb / 1024).toFixed(1) + ' GB';
   }
 
+  function isAudioItem(item) {
+    return item.mediaType === 'audio';
+  }
+
   function renderLibrary(items) {
     libraryEl.innerHTML = '';
     items.forEach(function (item) {
       var li = document.createElement('li');
       li.className = 'item' + (item.playable ? '' : ' disabled');
+      if (item.hasThumb) {
+        var img = document.createElement('img');
+        img.className = 'thumb';
+        img.alt = '';
+        li.appendChild(img);
+        fetch('/stream-token/' + encodeURIComponent(item.id) + '?kind=thumb', { method: 'POST' })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) { if (data && data.url) img.src = data.url; })
+          .catch(function () {});
+      }
+      var body = document.createElement('div');
+      body.className = 'body';
       var title = document.createElement('span');
       title.className = 'title';
       title.textContent = item.title;
       var meta = document.createElement('span');
       meta.className = 'meta';
       meta.textContent = fmtDuration(item.durationSecs) + (item.sizeBytes ? '  ' + fmtSize(item.sizeBytes) : '') + (item.playable ? '' : '  unsupported format');
-      li.appendChild(title);
-      li.appendChild(meta);
+      body.appendChild(title);
+      body.appendChild(meta);
+      li.appendChild(body);
       if (item.playable) {
-        li.addEventListener('click', function () { playItem(item.id); });
+        li.addEventListener('click', function () { playItem(item); });
       }
       libraryEl.appendChild(li);
     });
   }
 
-  function playItem(id) {
-    fetch('/stream-token/' + encodeURIComponent(id), { method: 'POST' })
+  function playItem(item) {
+    fetch('/stream-token/' + encodeURIComponent(item.id), { method: 'POST' })
       .then(function (res) {
         if (!res.ok) throw new Error('stream-token failed');
         return res.json();
       })
       .then(function (data) {
         videoShell.style.display = 'block';
-        videoEl.src = data.url;
-        videoEl.play().catch(function () {});
+        if (isAudioItem(item)) {
+          videoEl.style.display = 'none';
+          audioEl.style.display = 'block';
+          audioEl.src = data.url;
+          audioEl.play().catch(function () {});
+        } else {
+          audioEl.style.display = 'none';
+          videoEl.style.display = 'block';
+          videoEl.src = data.url;
+          videoEl.play().catch(function () {});
+        }
       })
       .catch(function () { setStatus('Could not start playback.'); });
   }
 
   function loadLibrary() {
-    fetch('/library')
+    return fetch('/library')
       .then(function (res) {
+        if (res.status === 401) throw new Error('unauthorized');
         if (!res.ok) throw new Error('library fetch failed');
         return res.json();
       })
       .then(function (data) {
         if (data.ready === false) {
           setStatus('Building library index...');
-          window.setTimeout(loadLibrary, 2000);
-          return;
+          return new Promise(function (resolve) {
+            window.setTimeout(function () { resolve(loadLibrary()); }, 2000);
+          });
         }
         setStatus(data.items.length + ' items');
         renderLibrary(data.items || []);
-      })
-      .catch(function () { setStatus('Could not load library.'); });
+      });
   }
 
-  function pairThenLoad() {
-    var params = new URLSearchParams(window.location.search);
-    var code = params.get('c');
-    if (!code) {
-      setStatus('Missing pairing code. Scan the QR code from the RuForge desktop app.');
-      return;
-    }
-    fetch('/pair', {
+  function pairWithCode(code) {
+    return fetch('/pair', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: code }),
@@ -117,15 +141,30 @@
       .then(function (res) {
         if (!res.ok) throw new Error('pair failed');
         return res.json();
-      })
-      .then(function () {
-        setStatus('Paired. Loading library...');
-        loadLibrary();
-      })
-      .catch(function () { setStatus('Pairing failed or expired. Rescan the QR code.'); });
+      });
   }
 
-  pairThenLoad();
+  function boot() {
+    setStatus('Loading...');
+    loadLibrary()
+      .catch(function (err) {
+        var code = new URLSearchParams(window.location.search).get('c');
+        if (code) {
+          setStatus('Pairing...');
+          return pairWithCode(code).then(function () {
+            setStatus('Paired. Loading library...');
+            return loadLibrary();
+          });
+        }
+        if (err && err.message === 'unauthorized') {
+          setStatus('Session expired. Scan the QR code from the RuForge desktop app.');
+          return;
+        }
+        setStatus('Could not load library.');
+      });
+  }
+
+  boot();
 })();
 </script>
 </body>

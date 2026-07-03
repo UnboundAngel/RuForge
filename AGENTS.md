@@ -409,6 +409,8 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.2 (unreleased)
 
+- **Companion LAN**: Audio-only playable detection; companion web reuses session cookie on refresh/reopen; thumb tokens wired when `hasThumb`; `mediaType` in `/library` (`scanner.rs`, `routes.rs`, `companion-web/index.html`).
+- **Companion LAN**: Dev-gated stderr instrumentation for every companion HTTP request, pairing, session, and media route (`trace_log.rs`, `routes.rs`, `mod.rs`); toggled via Settings > Debugging > LAN companion HTTP trace; LAN IP re-detected at server start; `companion.server` debug category.
 - **Website**: Social/Open Graph preview image is sanitized `ruforge-og.png` on ruforge.app (`site.ts`, `BaseLayout.astro`).
 - **Website**: Download page and installer URLs use `updater.json` shipped version instead of unreleased `package.json` (`astro.config.mjs`, `copy-installer-for-website.ps1`, `sync-website-release.mjs`).
 
