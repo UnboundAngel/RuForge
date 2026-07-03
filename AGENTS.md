@@ -409,7 +409,9 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.2 (unreleased)
 
+- **Website**: Social/Open Graph preview image is sanitized `ruforge-og.png` on ruforge.app (`site.ts`, `BaseLayout.astro`).
 - **Website**: Download page and installer URLs use `updater.json` shipped version instead of unreleased `package.json` (`astro.config.mjs`, `copy-installer-for-website.ps1`, `sync-website-release.mjs`).
+
 ## Release ritual
 
 **Why this exists:** "Push and commit everything" is ambiguous to an agent. The failure mode (observed): Chad invented a feature branch, committed there, and stranded `updater.json` off `main`. Then produced a flawless postmortem of the problem it had just caused. Chad's knowledge was never the gap. The gap was no defined, ordered, verified sequence. This is that sequence.

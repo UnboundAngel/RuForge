@@ -20,7 +20,7 @@ Last shipped to users: 0.2.1
 
 Last updated: 2026-07-02 (0.2.1 released)
 
-Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time (not unreleased package.json). LAN companion remains dev-gated only in tree.
+Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. LAN companion remains dev-gated only in tree.
 
 
 
