@@ -407,24 +407,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 **This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see `## Release ritual`). That is the only time the graph JSON / `changes.html` get touched. Prefer one line per user-visible feature or fix; batch incremental polish passes into one line instead of ten `(fix)` breakpoints.
 
 
-### v0.2.1 (unreleased)
-
-- **Companion**: LAN companion server and pairing UI gated behind `showDebuggingSettings` (Settings > Debugging tab only); `companion_start` and `companion_qr_payload` reject when dev gate off; companion stops when dev gate disabled (`CompanionSettingsSection.tsx`, `SettingsView.tsx`, `companion/commands.rs`, `commands/settings.rs`, `dev_gate.rs`).
-- **Library**: Canonical Rust-owned library (`src-tauri/src/library/`): config + index single authority, `scanner.rs` only ingestion layer, desktop store and companion are read-only projections (`get_library_snapshot`, `library::resolver`); removed `scan_gallery` and companion `catalog.rs` OS-dir scanner; one-shot localStorage config import (`libraryConfig.ts`, `ruforgeStore.ts`).
-- **Companion (internal)**: Companion server binds HTTP immediately; library index builds in background (no longer blocks port 8787 on ffprobe/remux); remux deferred to first stream (`companion/mod.rs`, `library/scanner.rs`, `library/resolver.rs`).
-- **Companion (internal)**: Embedded axum LAN server added (`src-tauri/src/companion/`), developer-gated start/stop from Settings > Debugging (no auto-bind on launch). Disclosure gate before controls; QR pairing to cookie session, HMAC session-bound signed URLs for media, Range streaming via `ServeFile`, ffprobe-gated playable catalog with stream-copy remux fallback for MKV. Blueprint: `.cursor/plans/companion_lan_server_IMPLEMENTATION_FINAL.md`.
-- **Island**: Update island expanded polish: hidden notes scrollbar, bare download icon, dismiss via Later only (`IslandUpdateContent.tsx`).
-- **Island**: Update island expanded layout rebuilt as flex column (header, scrollable notes, pinned footer with version picker + Hide/Install group); full-width footer divider; compact pill shows Update available + version badge without ellipsis (`IslandUpdateContent.tsx`, `DynamicIsland.tsx`).
-- **Updater**: VERIFY_ON_BOOT strict equality only (`verifyPendingUpdateOnBoot`); corrupted pending LS cleared; same-session handoff naming/copy demoted (`updatePostInstall.ts`, `App.tsx`).
-- **Island**: Update island mini pill vertical clip fixed: rim z-index rule no longer overrides ContentShell `absolute inset-0`; compact label uses `h-full` flex center like capture pill (`index.css`, `IslandUpdateContent.tsx`).
-- **Island**: Update island collapsed pill shows `update {version}` text with auto width; rim stays rotating red-brown (`IslandUpdateContent.tsx`, `DynamicIsland.tsx`).
-- **Island**: Expanded update-available island simplified to playback-style header, scrollable notes, single fallback line, full-width install button; removed perk cards, rings, and gradient filler (`IslandUpdateContent.tsx`, `index.css`).
-- **Updater**: Install/download watchdogs, failed full-window state with GitHub Releases link, post-install version verify; removed production debug overlay click (`App.tsx`, `UpdaterLayers.tsx`, `updatePostInstall.ts`, `updaterInstall.ts`).
-- **Updater UX**: Update available uses expanded Dynamic Island instead of side card and titlebar pill (`ActivityIsland.tsx`, `DynamicIsland.tsx`, `IslandUpdateContent.tsx`).
-- **Downloads**: Pause during pre-spawn simulate stays paused, not failed (`downloadQueueSlice.ts`); 2-minute wall clock scoped to audio-only auto-save jobs (`downloadJobWatchdog.ts`); yt-dlp `--retries` / `--fragment-retries`, 403 guidance, resume on manual retry (`downloader.rs`, `downloadQueueSlice.ts`).
-- **Music**: Playlist cover persisted to `.ruforge-playlist-cover.jpg` at download; album shelf and detail share local cover path, no lazy heal on album open (`playlist_sidecar.rs`, `albumCoverPath.ts`, `MusicAlbumView.tsx`).
-
-- **Website**: 0.2.0 marketing sync on landing, features index (Music mode hub), downloader/settings feature pages, nav IA copy, and llms.txt; prep:website-release verified with installer copy and Astro build.
+### v0.2.2 (unreleased)
 
 
 ## Release ritual
@@ -441,13 +424,15 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
    **Version sizing rule (pre-1.0, semver):**
 
-   - **PATCH** (`0.M.(N+1)`): bug fixes, polish, refactors, and behavior tweaks only. No new user-facing features, no new Tauri commands, no new persisted settings keys, no new on-disk sidecar schemas users rely on.
+   - **PATCH** (`0.M.(N+1)`): bug fixes, polish, refactors, and behavior tweaks on existing public surfaces. PATCH may also include internal `#[tauri::command]` wiring, internal persisted config migrations, and backend authority refactors when they preserve an existing normal-user surface (same tab, same workflow, no new headline feature).
 
-   - **MINOR** (`0.(M+1).0`, reset patch to 0): the unreleased block contains **any** of: a new user-facing feature or surface, a new Rust `#[tauri::command]`, a new persisted setting or sidecar schema, or a batch large enough that release notes need a "what's new" story (rule of thumb: **3+ distinct addition bullets** in the drained notes, or **one headline feature** such as a new mode tab, new download UX, or new sidecar type).
+   - **MINOR** (`0.(M+1).0`, reset patch to 0): the unreleased block contains **any** of: a new normal-user surface or user-visible workflow, a new user-facing Settings control or persisted key users set themselves, a new on-disk sidecar schema users rely on, or a public feature with release-note headline status (rule of thumb: **3+ distinct public addition bullets**, or **one headline feature** such as a new mode tab, new download UX, or new sidecar type).
+
+   - **Developer-gated unfinished surfaces** (e.g. behind `showDebuggingSettings`, not in release notes or onboarding): do **not** count toward public semver sizing.
 
    - **MAJOR**: not used until 1.0. Do not bump to `1.0.0` without an explicit Angel decision.
 
-   **How to decide in practice:** Scan the unreleased block and count MINOR triggers. If count ≥ 1, bump minor and zero patch. If count = 0, patch +1. When in doubt between patch and minor, choose **minor** for pre-1.0 user-visible work.
+   **How to decide in practice:** Scan the unreleased block for **public** MINOR triggers only. Exclude dev-gated and internal-only rows. If count ≥ 1, bump minor and zero patch. If count = 0, patch +1. When in doubt between patch and minor for **user-visible** work, choose **minor** for pre-1.0 headline features.
 
    **Onboarding gate (unchanged):** Any new user-facing feature that needs a walkthrough must have a row in `src/lib/onboardingSteps.ts` with `introducedIn` matching the **chosen release version** and art under `src/assets/onboarding/` if Angel provided it. If warranted and missing, ask Angel before continuing. Bug-fix-only releases add no steps.
 2. **Bump all three version files together:** `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version`. A mismatch here is a known past failure. Confirm all three match.

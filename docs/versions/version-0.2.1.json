@@ -1,0 +1,82 @@
+{
+  "nodes": [
+    {
+      "id": "t-library-canonical",
+      "type": "task",
+      "label": "Canonical Rust library module",
+      "agent": "chad",
+      "details": [
+        "library:: owns config + index; scanner.rs only ingestion; desktop store and companion read get_library_snapshot; one-shot localStorage import; removed scan_gallery."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/library/mod.rs", "reason": "Module root and LibraryState." },
+        { "path": "src-tauri/src/library/scanner.rs", "reason": "Single ingestion layer." },
+        { "path": "src/lib/libraryConfig.ts", "reason": "One-shot LS import bridge." }
+      ]
+    },
+    {
+      "id": "t-updater-island",
+      "type": "task",
+      "label": "Update available in Dynamic Island",
+      "agent": "chad",
+      "details": [
+        "Expanded island replaces floating card and titlebar pill; flex layout, pinned footer, compact version badge; install watchdogs and post-install verify."
+      ],
+      "fileEdits": [
+        { "path": "src/components/island/IslandUpdateContent.tsx", "reason": "Expanded update UI." },
+        { "path": "src/updatePostInstall.ts", "reason": "Boot verify and handoff." }
+      ]
+    },
+    {
+      "id": "t-download-hardening",
+      "type": "task",
+      "label": "Download queue hardening",
+      "agent": "chad",
+      "details": [
+        "Pause during pre-spawn simulate stays paused; audio-only 2-minute watchdog; yt-dlp retries and resume on manual retry."
+      ],
+      "fileEdits": [
+        { "path": "src/store/downloadQueueSlice.ts", "reason": "Pause and retry behavior." },
+        { "path": "src-tauri/src/commands/downloader.rs", "reason": "yt-dlp retry flags." }
+      ]
+    },
+    {
+      "id": "f-music-playlist-cover",
+      "type": "fix",
+      "label": "Music playlist cover local path",
+      "agent": "chad",
+      "details": [
+        "Cover persisted to .ruforge-playlist-cover.jpg at download; album shelf and detail share path."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/playlist_sidecar.rs", "reason": "Sidecar cover write." },
+        { "path": "src/components/music/MusicAlbumView.tsx", "reason": "Local cover path." }
+      ]
+    },
+    {
+      "id": "f-companion-dev-gate",
+      "type": "fix",
+      "label": "Companion dev-gated for release",
+      "agent": "chad",
+      "details": [
+        "UI on Debugging tab only; companion_start and companion_qr_payload require showDebuggingSettings; stop on dev gate disable."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/companion/commands.rs", "reason": "require_dev_gate on start/pairing." },
+        { "path": "src/components/SettingsView.tsx", "reason": "CompanionSettingsSection placement." }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-library-canonical" },
+    { "source": "t-library-canonical", "target": "ruforge" },
+    { "source": "chad", "target": "t-updater-island" },
+    { "source": "t-updater-island", "target": "ruforge" },
+    { "source": "chad", "target": "t-download-hardening" },
+    { "source": "t-download-hardening", "target": "ruforge" },
+    { "source": "chad", "target": "f-music-playlist-cover" },
+    { "source": "f-music-playlist-cover", "target": "ruforge" },
+    { "source": "chad", "target": "f-companion-dev-gate" },
+    { "source": "f-companion-dev-gate", "target": "ruforge" }
+  ]
+}
