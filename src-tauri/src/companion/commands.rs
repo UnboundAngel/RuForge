@@ -4,6 +4,15 @@ use serde::Serialize;
 use tauri::{AppHandle, State};
 
 use crate::companion::CompanionState;
+use crate::dev_gate;
+
+fn require_dev_gate(app: &AppHandle) -> Result<(), String> {
+    if dev_gate::dev_gate_enabled(&app.config().identifier) {
+        Ok(())
+    } else {
+        Err("companion_dev_gate_disabled".to_string())
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +48,7 @@ pub async fn companion_start(
     app: AppHandle,
     state: State<'_, CompanionState>,
 ) -> Result<CompanionStatus, String> {
+    require_dev_gate(&app)?;
     state.start(app).await;
     companion_status(state).await
 }
@@ -63,7 +73,11 @@ pub async fn companion_status(state: State<'_, CompanionState>) -> Result<Compan
 }
 
 #[tauri::command]
-pub async fn companion_qr_payload(state: State<'_, CompanionState>) -> Result<QrPayload, String> {
+pub async fn companion_qr_payload(
+    app: AppHandle,
+    state: State<'_, CompanionState>,
+) -> Result<QrPayload, String> {
+    require_dev_gate(&app)?;
     if !state.inner.running.load(Ordering::SeqCst) {
         return Err("companion_not_running".to_string());
     }

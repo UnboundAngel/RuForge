@@ -3,6 +3,7 @@ use tauri::{AppHandle, State};
 
 use crate::app_state::AppConfig;
 use crate::commands::ffprobe::probe_ffprobe_cache_dir;
+use crate::companion::CompanionState;
 use crate::dev_gate::DevGateDisk;
 use crate::hardware_acceleration::HardwareAccelerationDisk;
 use crate::utils::is_media_ext;
@@ -31,7 +32,11 @@ pub fn get_show_debugging_settings_pref(app: AppHandle) -> Result<bool, String> 
 pub fn set_show_debugging_settings_pref(
     app: AppHandle,
     show_debugging_settings: bool,
+    companion: State<'_, CompanionState>,
 ) -> Result<(), String> {
+    if !show_debugging_settings {
+        companion.stop();
+    }
     DevGateDisk {
         show_debugging_settings,
     }
