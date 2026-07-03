@@ -8,12 +8,12 @@
 
 Shipping version: 0.2.1 (unreleased)
 Last shipped to users: 0.2.0
-Last updated: 2026-07-02 (canonical library architecture)
-Status: 0.2.0 live on GitHub, updater.json, and ruforge.app. 0.2.1 fixes and canonical library cutover implemented locally; not released until Angel runs signed build and release ritual.
+Last updated: 2026-07-02 (companion dev-gated for 0.2.1 release)
+Status: 0.2.0 live on GitHub, updater.json, and ruforge.app. 0.2.1 fixes and canonical library cutover implemented locally; LAN companion server is developer-gated (not a normal user-facing 0.2.1 feature). Not released until Angel runs signed build and release ritual.
 
 ## Now
 
-0.2.1 in tree: canonical Rust library module owns config + index (`src-tauri/src/library/`); desktop store and companion are projections only (no per-layer filesystem scans). Updater island polish, download fixes, music playlist cover alignment still in cycle. `npm run build` and `cargo check --lib` clean. Ready for Angel in-app verify (library parity desktop vs companion, config persist, download reindex), then signed build when requested.
+0.2.1 in tree: canonical Rust library module owns config + index (`src-tauri/src/library/`); desktop store is a read-only projection (no per-layer filesystem scans). LAN companion server remains in tree for dev testing only, gated behind Settings > General > Debugging settings (`showDebuggingSettings`). Updater island polish, download fixes, music playlist cover alignment still in cycle. `npm run build` and `cargo check --lib` clean. Ready for Angel in-app verify (library config persist, download reindex), then signed build when requested.
 
 Linux dev: `tauri.conf.json` asset scopes cover `$HOME`, `/home`, `/media`,
 `/mnt`, and drive letters `C:` through `F:`. Default download/internal paths
@@ -30,7 +30,10 @@ reads this for the last shipped delta, not the git tree.
 **0.2.1 (unreleased, in tree):**
 
 Additions:
-- Library: Rust `library::` module is single authority for scan roots + media index; companion `/library` matches desktop Media view; config persisted in tauri_plugin_store with one-shot localStorage import.
+- Library: Rust `library::` module is single authority for scan roots + media index; config persisted in tauri_plugin_store with one-shot localStorage import.
+
+Internal (developer-gated, not in 0.2.1 release notes):
+- Companion: embedded LAN server and TV browser pairing live in tree; UI and `companion_start` require `showDebuggingSettings`. Angel can test via Settings > General > Debugging settings.
 
 Fixes:
 - Updater: boot verify strict `getVersion() === pending.version` only; handoff session never declares success.
@@ -85,7 +88,7 @@ Fixes:
 
 ## Open P0 (blocks release)
 
-(none in code; Angel in-app verify on updater, pause-during-simulate, long download, music cover, optional 720p 403 with cookies, companion server start/stop + pairing on LAN)
+(none in code; Angel in-app verify on updater, pause-during-simulate, long download, music cover, optional 720p 403 with cookies; companion LAN pairing is dev-gated only until a future release)
 
 ## Next 3 (priority order)
 

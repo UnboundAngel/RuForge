@@ -38,6 +38,10 @@ impl DevGateDisk {
     }
 }
 
+pub fn dev_gate_enabled(identifier: &str) -> bool {
+    DevGateDisk::load(identifier).show_debugging_settings
+}
+
 pub fn pref_path(identifier: &str) -> std::path::PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)

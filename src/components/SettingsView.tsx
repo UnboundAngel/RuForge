@@ -1193,7 +1193,6 @@ export const SettingsView: React.FC = () => {
 
           {activeTab === 'advanced' && (
             <div className="flex flex-col">
-              <CompanionSettingsSection active={activeTab === 'advanced'} />
               <SettingsSection title="Performance">
                 <SettingItem
                   title="Hardware Acceleration"
@@ -1248,6 +1247,9 @@ export const SettingsView: React.FC = () => {
 
           {activeTab === 'debugging' && (
             <div className="flex flex-col">
+              {settings.showDebuggingSettings ? (
+                <CompanionSettingsSection active={activeTab === 'debugging'} />
+              ) : null}
               {import.meta.env.DEV && settings.showDebuggingSettings ? (
                 <SettingsSection title="Dev captures">
                   <DevCapturesSection />
