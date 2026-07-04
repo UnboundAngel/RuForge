@@ -18,6 +18,7 @@ use crate::library::{resolver, LibraryState};
 pub fn build_router(state: CompanionStateHandle) -> Router {
     Router::new()
         .route("/", get(crate::companion::spa::index))
+        .route("/paired", get(crate::companion::spa::index))
         .route("/assets/*path", get(crate::companion::spa::asset))
         .route("/healthz", get(healthz))
         .route("/pair", post(pair))
@@ -153,6 +154,10 @@ async fn library(State(state): State<CompanionStateHandle>, headers: HeaderMap) 
             json!({
                 "id": p.id,
                 "title": p.title,
+                "mediaType": match p.media_type {
+                    crate::library::types::MediaType::Audio => "audio",
+                    crate::library::types::MediaType::Video => "video",
+                },
                 "durationSecs": p.duration_secs,
                 "container": p.container,
                 "videoCodec": p.video_codec,

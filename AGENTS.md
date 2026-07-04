@@ -409,6 +409,16 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.2 (unreleased)
 
+- **Companion LAN (dev-gated)**: companion loading visual polish with PS5-inspired progress rail (`companion-web/index.html`).
+
+- **Companion LAN (dev-gated)**: minimal black-and-red full-screen loading with red accent rail, status rotator, and segmented pulse bar (`companion-web/index.html`).
+- **Companion LAN (dev-gated)**: paired sessions normalize address bar to `/paired` via replaceState; SPA fallback route for refresh; compact paired reassurance copy (`companion-web/index.html`, `companion/routes.rs`).
+- **Companion LAN (dev-gated)**: companion-web mobile-first responsive layout, collapsible debug stats, gate cards, no horizontal overflow (`companion-web/index.html`).
+- **Companion LAN (dev-gated)**: QR modal URL wrap, smaller center logo for scan margin, clearer one-time link copy (`CompanionPairingModal.tsx`).
+- **Companion LAN (dev-gated)**: pairing QR uses ECC H, 4-module quiet zone, and centered RuForge icon overlay on cream plate (`companionQr.ts`, `CompanionPairingModal.tsx`).
+- **Companion LAN (dev-gated)**: companion-web branded loading card; desktop pairing modal with QR, copy/open/refresh actions, and Open in web / Show QR controls (`companion-web/index.html`, `CompanionSettingsSection.tsx`, `CompanionPairingModal.tsx`, `companionQr.ts`).
+- **Companion LAN (dev-gated)**: companion-web dev strip, filters, search, copy-debug, RuForge tokens, and `mediaType` in library payload (`companion-web/index.html`, `companion/routes.rs`).
+- **Companion LAN (dev-gated)**: companion-web library rows show media type, container, and playable dev info with audio/video row styling (`companion-web/index.html`).
 - **Website**: Social/Open Graph preview image is sanitized `ruforge-og.png` on ruforge.app (`site.ts`, `BaseLayout.astro`).
 - **Website**: Download page and installer URLs use `updater.json` shipped version instead of unreleased `package.json` (`astro.config.mjs`, `copy-installer-for-website.ps1`, `sync-website-release.mjs`).
 

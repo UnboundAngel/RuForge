@@ -1,6 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRuforgeStore } from "../../store/ruforgeStore";
+import {
+  CompanionPairingModal,
+  type CompanionQrPayload,
+} from "./CompanionPairingModal";
+
+const companionAccentBtn =
+  "px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95";
+
+const companionNeutralBtn =
+  "px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95";
 
 type CompanionStatus = {
   running: boolean;
@@ -10,14 +21,6 @@ type CompanionStatus = {
   sessionCount: number;
 };
 
-type QrPayload = {
-  url: string;
-  ip: string;
-  port: number;
-  code: string;
-  expSecs: number;
-};
-
 export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active }) => {
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
@@ -25,7 +28,8 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
 
   const [status, setStatus] = useState<CompanionStatus | null>(null);
   const [busy, setBusy] = useState(false);
-  const [pairing, setPairing] = useState<QrPayload | null>(null);
+  const [pairing, setPairing] = useState<CompanionQrPayload | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -54,6 +58,7 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
       if (status?.running) {
         await invoke("companion_stop");
         setPairing(null);
+        setQrOpen(false);
       } else {
         await invoke("companion_start");
       }
@@ -65,11 +70,17 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
     }
   };
 
+  const mintPairing = useCallback(async () => {
+    const payload = await invoke<CompanionQrPayload>("companion_qr_payload");
+    setPairing(payload);
+    return payload;
+  }, []);
+
   const handleRefreshPairing = async () => {
     setBusy(true);
     try {
-      const payload = await invoke<QrPayload>("companion_qr_payload");
-      setPairing(payload);
+      await mintPairing();
+      notify("Pairing link refreshed.");
     } catch (e) {
       notify(typeof e === "string" ? e : "Could not mint pairing link.");
     } finally {
@@ -84,6 +95,39 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
       notify("Pairing link copied.");
     } catch {
       notify("Could not copy pairing link.");
+    }
+  };
+
+  const handleOpenWeb = async () => {
+    setBusy(true);
+    try {
+      const payload = pairing ?? (await mintPairing());
+      await openUrl(payload.url);
+    } catch (e) {
+      notify(typeof e === "string" ? e : "Could not open companion link.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleShowQr = async () => {
+    setBusy(true);
+    try {
+      if (!pairing) await mintPairing();
+      setQrOpen(true);
+    } catch (e) {
+      notify(typeof e === "string" ? e : "Could not show pairing QR.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleOpenLocal = async () => {
+    if (!pairing?.url) return;
+    try {
+      await openUrl(pairing.url);
+    } catch {
+      notify("Could not open companion link.");
     }
   };
 
@@ -143,35 +187,46 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
             </div>
 
             {running ? (
-              <div className="flex flex-col gap-2 max-w-2xl">
+              <div className="flex flex-wrap gap-2 max-w-2xl">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handleOpenWeb()}
+                  className={companionAccentBtn}
+                >
+                  OPEN IN WEB
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void handleShowQr()}
+                  className={companionAccentBtn}
+                >
+                  SHOW QR CODE
+                </button>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void handleRefreshPairing()}
-                  className="self-start px-4 py-2 rounded-xl text-[10px] font-black tracking-widest bg-[#1D1613] border border-white/10 text-stone-300 hover:bg-stone-800 disabled:opacity-50 transition-colors"
+                  className={companionNeutralBtn}
                 >
-                  {pairing ? "REFRESH PAIRING LINK" : "SHOW PAIRING LINK"}
+                  REFRESH PAIRING LINK
                 </button>
-                {pairing ? (
-                  <div className="rounded-xl border border-white/10 bg-[#12100f] p-3">
-                    <p className="text-[10px] uppercase tracking-widest text-stone-500 mb-2">
-                      Open on your TV browser
-                    </p>
-                    <p className="text-xs font-mono text-stone-300 break-all">{pairing.url}</p>
-                    <button
-                      type="button"
-                      onClick={() => void handleCopyUrl()}
-                      className="mt-2 text-[10px] font-black tracking-widest text-[color:var(--accent)] hover:underline"
-                    >
-                      COPY LINK
-                    </button>
-                  </div>
-                ) : null}
               </div>
             ) : null}
           </>
         )}
       </div>
+
+      <CompanionPairingModal
+        open={qrOpen}
+        onClose={() => setQrOpen(false)}
+        pairing={pairing}
+        busy={busy}
+        onRefresh={() => void handleRefreshPairing()}
+        onCopyLink={() => void handleCopyUrl()}
+        onOpenLocal={() => void handleOpenLocal()}
+      />
     </section>
   );
 };

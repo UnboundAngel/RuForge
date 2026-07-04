@@ -18,9 +18,9 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-02 (0.2.1 released)
+Last updated: 2026-07-03 (companion session refresh + mobile layout)
 
-Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. LAN companion remains dev-gated only in tree.
+Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. LAN companion remains dev-gated only in tree; companion-web session survives refresh while RuForge stays running.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow upda
 
 
 
-0.2.2 in tree: website OG preview image (`ruforge-og.png`). Fresh cycle otherwise open. Companion LAN server in tree behind `showDebuggingSettings` only.
+0.2.2 in tree: website OG preview image (`ruforge-og.png`). Companion LAN server in tree behind `showDebuggingSettings` only; companion-web probes session cookie on boot (refresh and bare `/` work while RuForge runs), mobile-first layout, QR modal polish.
 
 
 
@@ -58,9 +58,9 @@ reads this for the last shipped delta, not the git tree.
 
 **0.2.2 (unreleased, in tree):**
 
-
-
-(none yet)
+- Companion LAN (dev-gated): cinematic loading scene (glass layers, breathe-accent sidebar, PS5-inspired progress rail) in companion-web.
+- Companion LAN (dev-gated): paired URL normalizes to `/paired` after session confirm; reassurance copy in debug strip.
+- Companion LAN (dev-gated): companion-web branded loading card; desktop QR pairing modal with copy/open/refresh; Open in web and Show QR controls in Settings debugging.
 
 
 
