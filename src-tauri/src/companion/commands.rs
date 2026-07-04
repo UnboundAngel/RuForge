@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use crate::companion::CompanionState;
+use crate::companion::{browser_base_url, CompanionState};
 use crate::dev_gate;
 
 fn require_dev_gate(app: &AppHandle) -> Result<(), String> {
@@ -19,6 +19,9 @@ fn require_dev_gate(app: &AppHandle) -> Result<(), String> {
 pub struct CompanionStatus {
     pub running: bool,
     pub port: u16,
+    /// Same-PC browser URL when the server is running (`http://localhost:<port>`).
+    pub browser_url: Option<String>,
+    /// Reserved for future LAN mode; not used by V1 Browser Companion UI.
     pub lan_ip: Option<String>,
     pub lan_reachable: bool,
     pub session_count: u32,
@@ -62,10 +65,13 @@ pub async fn companion_stop(state: State<'_, CompanionState>) -> Result<(), Stri
 #[tauri::command]
 pub async fn companion_status(state: State<'_, CompanionState>) -> Result<CompanionStatus, String> {
     let inner = &state.inner;
+    let running = inner.running.load(Ordering::SeqCst);
+    let port = *inner.bind_port.read().await;
     let lan_ip = inner.lan_ip.read().await.clone();
     Ok(CompanionStatus {
-        running: inner.running.load(Ordering::SeqCst),
-        port: *inner.bind_port.read().await,
+        running,
+        port,
+        browser_url: running.then(|| browser_base_url(port)),
         lan_reachable: lan_ip.is_some(),
         lan_ip,
         session_count: inner.sessions.read().await.len() as u32,
@@ -83,17 +89,12 @@ pub async fn companion_qr_payload(
     }
     let inner = &state.inner;
     let pairing = state.mint_pairing_code().await;
-    let ip = inner
-        .lan_ip
-        .read()
-        .await
-        .clone()
-        .ok_or_else(|| "lan_ip_unavailable".to_string())?;
     let port = *inner.bind_port.read().await;
-    let url = format!("http://{ip}:{port}/?c={}", pairing.code);
+    let base = browser_base_url(port);
+    let url = format!("{base}/?c={}", pairing.code);
     Ok(QrPayload {
         url,
-        ip,
+        ip: "localhost".to_string(),
         port,
         code: pairing.code,
         exp_secs: pairing.expires_at,

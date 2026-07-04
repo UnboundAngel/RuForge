@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use axum::body::Body;
 use axum::extract::{Path as AxumPath, Query, Request, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
@@ -7,12 +9,13 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::json;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::oneshot;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
 use crate::companion::auth::{self, SESSION_COOKIE};
-use crate::companion::{now_unix, CompanionStateHandle};
+use crate::companion::{now_unix, CompanionStateHandle, ProgressSnapshot};
 use crate::library::{resolver, LibraryState};
 
 pub fn build_router(state: CompanionStateHandle) -> Router {
@@ -27,6 +30,7 @@ pub fn build_router(state: CompanionStateHandle) -> Router {
         .route("/stream-token/:id", post(stream_token))
         .route("/stream/:id", get(stream_media))
         .route("/thumb/:id", get(thumb_media))
+        .route("/progress/:id", get(progress_get).post(progress_post))
         .layer(middleware::from_fn(same_origin_guard))
         .with_state(state)
 }
@@ -197,6 +201,155 @@ async fn sidecar(
         return error_response(StatusCode::NOT_FOUND, "unknown_id");
     }
     Json(json!({ "id": id, "chapters": [], "subtitles": [], "comments": null })).into_response()
+}
+
+#[derive(Deserialize)]
+struct ProgressBody {
+    #[serde(rename = "positionSecs")]
+    position_secs: f64,
+    #[serde(rename = "durationSecs")]
+    duration_secs: f64,
+    #[serde(rename = "playbackState")]
+    playback_state: Option<String>,
+}
+
+fn parse_progress_secs(raw: f64) -> Option<f64> {
+    if !raw.is_finite() || raw < 0.0 {
+        return None;
+    }
+    Some(raw)
+}
+
+fn parse_playback_state(raw: &Option<String>) -> Result<Option<String>, Response> {
+    match raw.as_deref() {
+        None => Ok(None),
+        Some("playing") | Some("paused") | Some("ended") => Ok(raw.clone()),
+        Some(_) => Err(error_response(StatusCode::BAD_REQUEST, "invalid_playback_state")),
+    }
+}
+
+async fn progress_post(
+    State(state): State<CompanionStateHandle>,
+    headers: HeaderMap,
+    AxumPath(id): AxumPath<String>,
+    Json(body): Json<ProgressBody>,
+) -> Response {
+    if let Err(e) = require_session(&state, &headers).await {
+        return e;
+    }
+    let position_secs = match parse_progress_secs(body.position_secs) {
+        Some(v) => v,
+        None => return error_response(StatusCode::BAD_REQUEST, "invalid_position"),
+    };
+    let duration_secs = match parse_progress_secs(body.duration_secs) {
+        Some(v) => v,
+        None => return error_response(StatusCode::BAD_REQUEST, "invalid_duration"),
+    };
+    let playback_state = match parse_playback_state(&body.playback_state) {
+        Ok(v) => v,
+        Err(e) => return e,
+    };
+
+    let app = match require_app_handle(&state).await {
+        Ok(a) => a,
+        Err(e) => return e,
+    };
+    let lib = app.state::<LibraryState>();
+    if !resolver::is_known_id(&lib, &id).await {
+        return error_response(StatusCode::NOT_FOUND, "unknown_id");
+    }
+    let Some(path) = resolver::resolve_progress_path(&lib, &id).await else {
+        return error_response(StatusCode::NOT_FOUND, "file_missing");
+    };
+
+    let snapshot = ProgressSnapshot {
+        position_secs,
+        duration_secs,
+        playback_state: playback_state.clone(),
+    };
+    state.progress_cache.write().await.insert(id.clone(), snapshot);
+
+    let _ = app.emit(
+        "companion-playback-progress",
+        json!({
+            "videoPath": path.to_string_lossy(),
+            "positionSecs": position_secs,
+            "durationSecs": duration_secs,
+            "playbackState": playback_state,
+        }),
+    );
+
+    Json(json!({ "ok": true, "id": id })).into_response()
+}
+
+async fn progress_get(
+    State(state): State<CompanionStateHandle>,
+    headers: HeaderMap,
+    AxumPath(id): AxumPath<String>,
+) -> Response {
+    if let Err(e) = require_session(&state, &headers).await {
+        return e;
+    }
+
+    if let Some(cached) = state.progress_cache.read().await.get(&id).cloned() {
+        return progress_json(&id, cached.position_secs, cached.duration_secs);
+    }
+
+    let app = match require_app_handle(&state).await {
+        Ok(a) => a,
+        Err(e) => return e,
+    };
+    let lib = app.state::<LibraryState>();
+    if !resolver::is_known_id(&lib, &id).await {
+        return error_response(StatusCode::NOT_FOUND, "unknown_id");
+    }
+    let Some(path) = resolver::resolve_progress_path(&lib, &id).await else {
+        return error_response(StatusCode::NOT_FOUND, "file_missing");
+    };
+
+    let request_id = uuid::Uuid::new_v4().to_string();
+    let (tx, rx) = oneshot::channel::<(f64, f64)>();
+    state
+        .progress_read_pending
+        .write()
+        .await
+        .insert(request_id.clone(), tx);
+    let _ = app.emit(
+        "companion-progress-query",
+        json!({
+            "requestId": request_id,
+            "videoPath": path.to_string_lossy(),
+        }),
+    );
+
+    let (position_secs, duration_secs) = match tokio::time::timeout(Duration::from_millis(500), rx).await
+    {
+        Ok(Ok(pair)) => pair,
+        _ => {
+            state.progress_read_pending.write().await.remove(&request_id);
+            (0.0, 0.0)
+        }
+    };
+
+    state.progress_cache.write().await.insert(
+        id.clone(),
+        ProgressSnapshot {
+            position_secs,
+            duration_secs,
+            playback_state: None,
+        },
+    );
+
+    progress_json(&id, position_secs, duration_secs)
+}
+
+fn progress_json(id: &str, position_secs: f64, duration_secs: f64) -> Response {
+    Json(json!({
+        "id": id,
+        "positionSecs": position_secs,
+        "durationSecs": duration_secs,
+    }))
+    .into_response()
 }
 
 #[derive(Deserialize)]

@@ -16,6 +16,7 @@ const companionNeutralBtn =
 type CompanionStatus = {
   running: boolean;
   port: number;
+  browserUrl: string | null;
   lanIp: string | null;
   lanReachable: boolean;
   sessionCount: number;
@@ -134,21 +135,20 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
   const running = status?.running === true;
   const acked = settings.companionServerDisclosureAcknowledged === true;
   const statusLine = running
-    ? status?.lanIp
-      ? `Running on ${status.lanIp}:${status.port} (${status.sessionCount} paired)`
-      : `Running on port ${status?.port ?? "?"} (LAN IP unavailable)`
+    ? `${status?.browserUrl ?? `http://localhost:${status?.port ?? "?"}`} (${status?.sessionCount ?? 0} paired)`
     : "Stopped";
 
   return (
     <section className="rf-settings-section">
-      <h3 className="rf-settings-section-header">LAN companion (TV browser)</h3>
+      <h3 className="rf-settings-section-header">Browser companion (same PC)</h3>
       <div className="flex flex-col gap-4 px-1">
         <p className="text-[11px] leading-relaxed text-stone-400 max-w-2xl">
-          When enabled, RuForge opens a small HTTP server on your local network so a TV or
-          phone browser on the same Wi-Fi can browse and stream files you already downloaded.
-          It does not expose RuForge to the internet. Windows may ask to allow RuForge through
-          the firewall the first time you enable this. Pairing requires scanning a link from
-          this screen; nothing is reachable until you turn the server on.
+          When enabled, RuForge runs a small HTTP server on this PC only
+          (`127.0.0.1`). Your default browser can browse and stream files you
+          already downloaded. Nothing is exposed to your Wi-Fi or the internet.
+          Use Open in web from this screen; RuForge opens the correct localhost
+          URL with a one-time pairing link. LAN, phone, and TV access are not
+          part of V1.
         </p>
 
         {!acked ? (
@@ -187,30 +187,36 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
             </div>
 
             {running ? (
-              <div className="flex flex-wrap gap-2 max-w-2xl">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleOpenWeb()}
-                  className={companionAccentBtn}
-                >
-                  OPEN IN WEB
-                </button>
+              <div className="flex flex-col gap-2 max-w-2xl">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleOpenWeb()}
+                    className={companionAccentBtn}
+                  >
+                    OPEN IN WEB
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void handleRefreshPairing()}
+                    className={companionNeutralBtn}
+                  >
+                    REFRESH PAIRING LINK
+                  </button>
+                </div>
+                <p className="text-[10px] leading-relaxed text-stone-600">
+                  Advanced: QR encodes the same localhost pairing link for manual
+                  open or future LAN work. Not required for same-PC use.
+                </p>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => void handleShowQr()}
-                  className={companionAccentBtn}
+                  className={`self-start ${companionNeutralBtn}`}
                 >
-                  SHOW QR CODE
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleRefreshPairing()}
-                  className={companionNeutralBtn}
-                >
-                  REFRESH PAIRING LINK
+                  SHOW PAIRING QR
                 </button>
               </div>
             ) : null}

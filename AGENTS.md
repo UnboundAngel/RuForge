@@ -167,6 +167,9 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.2 (unreleased)
 
+- **Companion (dev-gated)**: companion-web disconnected and session-lost gates with quiet reconnect backoff, manual Try again, and re-pair copy after RuForge restart (`companion-web/index.html`).
+- **Companion (dev-gated)**: progress sync via `POST/GET /progress/:id` (session auth, ID-only HTTP); server resolves library ID to desktop path and bridges writes/reads through Tauri events into `playbackStorage.ts` (`companion/routes.rs`, `companion/mod.rs`, `companionProgressSync.ts`, `companion-web/index.html`).
+- **Companion (dev-gated)**: Browser Companion V1 slice binds `127.0.0.1` only, opens `http://localhost:<port>`, and Settings/companion-web copy no longer presents LAN/phone/TV V1 (`companion/mod.rs`, `companion/commands.rs`, `CompanionSettingsSection.tsx`, `CompanionPairingModal.tsx`, `companion-web/index.html`).
 - **Docs**: root AGENTS.md de-bloated; extended agent context moved to `docs/agents/AGENT-REFERENCE.md`; Codex-only paths removed from Cursor routing (`AGENTS.md`).
 - **Docs**: Codex audit workspace and agent-neutral skill routing added (`docs/agents/codex/AGENTS.md`, `docs/agents/skills/README.md`, `AGENTS.md`, `STATE.md`).
 - **Docs**: Codex memory surface added and research skill routing tightened (`docs/agents/codex/MEMORY.md`, `docs/agents/codex/AGENTS.md`, `docs/agents/skills/README.md`).
