@@ -156,6 +156,13 @@
     "roadmapStatus": "progress"
   },
   {
+    "appArea": "Browser",
+    "difficulty": "Medium",
+    "featureName": "Migrate Companion from the single-file HTML client to a more compatible, performant, and expandable app client",
+    "priority": "Medium",
+    "status": "To-Do"
+  },
+  {
     "appArea": "Download Screen",
     "difficulty": "High",
     "featureName": "Storage estimate before enqueue",

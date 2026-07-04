@@ -16,6 +16,7 @@ import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
 import { hydrateLibraryFromRust, libraryConfigToStoreFields } from "./lib/libraryConfig";
 import { wireScrubSpriteGalleryIndicators } from "./scrubSpriteGallerySync";
+import { wireCompanionProgressSync } from "./lib/companionProgressSync";
 import { isDebugCategoryEnabled } from "./debug/debugCategories";
 import { debugLog } from "./debug/debugLog";
 import { useUrlDropIntake } from "./features/downloader/useUrlDropIntake";
@@ -1150,6 +1151,8 @@ function App() {
   useEffect(() => setupTaskbarTransportBridge(), []);
 
   useEffect(() => wireScrubSpriteGalleryIndicators(), []);
+
+  useEffect(() => wireCompanionProgressSync(), []);
 
   // Tauri event listeners
   useEffect(() => {

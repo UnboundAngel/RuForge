@@ -136,7 +136,9 @@
   .session-loading .session-dot { background: var(--accent); }
   .session-unpaired .session-dot,
   .session-expired .session-dot,
-  .session-error .session-dot { background: var(--music-accent); }
+  .session-error .session-dot,
+  .session-disconnected .session-dot,
+  .session-session-lost .session-dot { background: var(--music-accent); }
   .session-row {
     display: flex;
     align-items: center;
@@ -185,6 +187,40 @@
     font-size: 13px;
     line-height: 1.5;
     color: var(--text-muted);
+  }
+  .gate-actions {
+    margin-top: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .gate-actions.hidden { display: none; }
+  .gate-btn {
+    padding: 10px 18px;
+    border: none;
+    border-radius: var(--r-cta);
+    background: var(--surface-2);
+    color: var(--accent);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  }
+  .gate-btn:active { transform: scale(0.97); }
+  .gate-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .gate-note {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-muted);
+    max-width: 28rem;
   }
   .main-tools.hidden { display: none; }
   .session-dot {
@@ -539,7 +575,7 @@
 </div>
 <div class="page">
   <header class="hero">
-    <p class="eyebrow">dev lan skeleton</p>
+    <p class="eyebrow">browser companion · localhost</p>
     <h1>RuForge Companion</h1>
   </header>
 
@@ -562,7 +598,11 @@
 
   <div id="gate-card" class="gate-card hidden" aria-live="polite">
     <h2 id="gate-title">Not paired</h2>
-    <p id="gate-body">Scan a fresh QR from RuForge Settings while on the same Wi-Fi.</p>
+    <p id="gate-body">Open in web from RuForge Settings on this PC, or paste a fresh pairing link.</p>
+    <div id="gate-actions" class="gate-actions hidden">
+      <button type="button" id="gate-retry" class="gate-btn">Try again</button>
+      <p id="gate-note" class="gate-note hidden"></p>
+    </div>
   </div>
 
   <div class="main-tools" id="main-tools">
@@ -602,12 +642,22 @@
   var gateCard = document.getElementById('gate-card');
   var gateTitle = document.getElementById('gate-title');
   var gateBody = document.getElementById('gate-body');
+  var gateActions = document.getElementById('gate-actions');
+  var gateRetryBtn = document.getElementById('gate-retry');
+  var gateNote = document.getElementById('gate-note');
   var mainTools = document.getElementById('main-tools');
   var sessionHint = document.getElementById('session-hint');
   var pairedReassurance = document.getElementById('paired-reassurance');
 
   var FETCH_OPTS = { credentials: 'same-origin' };
   var PAIRED_PATH = '/paired';
+  var PROGRESS_DEBOUNCE_MS = 8000;
+  var progressFlushTimer = null;
+  var RECONNECT_BASE_MS = 5000;
+  var RECONNECT_MAX_MS = 30000;
+  var reconnectTimer = null;
+  var reconnectDelayMs = RECONNECT_BASE_MS;
+  var reconnectInFlight = false;
   var debugExpanded = window.matchMedia('(min-width: 541px)').matches;
 
   var state = {
@@ -667,29 +717,114 @@
     } catch (_) {}
   }
 
+  function clearReconnectTimer() {
+    if (reconnectTimer) {
+      window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+  }
+
+  function scheduleReconnect() {
+    if (state.session !== 'disconnected') return;
+    clearReconnectTimer();
+    gateNote.textContent = 'Checking again in ' + Math.round(reconnectDelayMs / 1000) + 's…';
+    gateNote.classList.remove('hidden');
+    reconnectTimer = window.setTimeout(function () {
+      reconnectTimer = null;
+      tryReconnect(false);
+    }, reconnectDelayMs);
+    reconnectDelayMs = Math.min(reconnectDelayMs * 2, RECONNECT_MAX_MS);
+  }
+
+  function resetReconnectBackoff() {
+    reconnectDelayMs = RECONNECT_BASE_MS;
+    gateNote.classList.add('hidden');
+    gateNote.textContent = '';
+  }
+
+  function isFetchNetworkError(err) {
+    if (!err) return false;
+    if (err.name === 'TypeError') return true;
+    var msg = String(err.message || err);
+    return msg.indexOf('Failed to fetch') !== -1 || msg.indexOf('NetworkError') !== -1;
+  }
+
+  function fetchHealthz() {
+    return fetch('/healthz', FETCH_OPTS).then(function (res) {
+      setLastRequest('healthz', res.status);
+      if (!res.ok) throw new Error('healthz ' + res.status);
+      return res.json();
+    });
+  }
+
+  function enterSessionLost(reason) {
+    clearReconnectTimer();
+    resetReconnectBackoff();
+    setSession('session-lost');
+    setError(reason || 'session lost');
+    setLoading(false);
+    showGate('session-lost');
+  }
+
+  function enterDisconnected(reason) {
+    if (state.session === 'session-lost' || state.session === 'unpaired' || state.session === 'expired') return;
+    clearReconnectTimer();
+    setSession('disconnected');
+    setError(reason || 'server unreachable');
+    setLoading(false);
+    showGate('disconnected');
+    scheduleReconnect();
+  }
+
   function showGate(kind) {
-    normalizePublicUrl();
     mainTools.classList.add('hidden');
     gateCard.classList.remove('hidden');
-    if (kind === 'expired') {
+    gateActions.classList.remove('hidden');
+    gateRetryBtn.disabled = false;
+    gateNote.classList.add('hidden');
+    if (kind === 'expired') normalizePublicUrl();
+    if (kind === 'disconnected') {
+      gateTitle.textContent = 'RuForge is closed or disconnected';
+      gateBody.textContent = 'RuForge is not reachable on this PC. Start RuForge, enable Browser companion in Settings, then try again. This page will retry quietly in the background.';
+      gateRetryBtn.textContent = 'Try again';
+    } else if (kind === 'session-lost') {
+      gateTitle.textContent = 'Session ended';
+      gateBody.textContent = 'RuForge restarted or revoked this browser session. Use Open in web from RuForge Settings on this PC to pair again.';
+      gateRetryBtn.textContent = 'Check connection';
+    } else if (kind === 'expired') {
       gateTitle.textContent = 'Link expired';
-      gateBody.textContent = 'This pairing link was already used or timed out. Scan a fresh QR from RuForge Settings. Sessions also clear when RuForge restarts.';
+      gateBody.textContent = 'This pairing link was already used or timed out. Use Open in web from RuForge Settings. Sessions also clear when RuForge restarts.';
+      gateRetryBtn.textContent = 'Try again';
     } else {
       gateTitle.textContent = 'Not paired';
-      gateBody.textContent = 'Open a fresh pairing link from RuForge Settings on the same Wi-Fi. Your session stays active until RuForge restarts.';
+      gateBody.textContent = 'Open in web from RuForge Settings on this PC, or use a fresh pairing link. Your session stays active until RuForge restarts.';
+      gateRetryBtn.textContent = 'Try again';
     }
   }
 
   function hideGate() {
     gateCard.classList.add('hidden');
+    gateActions.classList.add('hidden');
     mainTools.classList.remove('hidden');
+    clearReconnectTimer();
+    resetReconnectBackoff();
   }
 
   function fetchLibraryRaw() {
     return fetch('/library', FETCH_OPTS).then(function (res) {
       setLastRequest('library', res.status);
+      if (res.status === 401) return res;
+      if (!res.ok) throw new Error('library ' + res.status);
       return res;
     });
+  }
+
+  function loadLibraryJson(res) {
+    if (res.status === 401) {
+      enterSessionLost('session lost');
+      return null;
+    }
+    return res.json();
   }
 
   function handleLibraryData(data) {
@@ -698,24 +833,19 @@
       setLoading(true, 'Loading your RuForge library', 'Building library index');
       window.setTimeout(function () {
         fetchLibraryRaw()
-          .then(function (res) {
-            if (res.status === 401) {
-              setSession('unpaired');
-              setError('session lost');
-              setLoading(false);
-              showGate('unpaired');
-              return null;
-            }
-            if (!res.ok) throw new Error('library ' + res.status);
-            return res.json();
-          })
+          .then(loadLibraryJson)
           .then(function (retryData) {
             if (retryData) handleLibraryData(retryData);
           })
           .catch(function (err) {
+            if (isFetchNetworkError(err)) {
+              enterDisconnected(err.message || 'library failed');
+              return;
+            }
             setError(err.message || 'library failed');
             setSession('error');
             setLoading(false);
+            showGate('disconnected');
           });
       }, 2000);
       return;
@@ -730,7 +860,7 @@
 
   function pairWithCode(code) {
     setSession('loading');
-    setLoading(true, 'Pairing with RuForge', 'Checking your link on this Wi-Fi');
+    setLoading(true, 'Pairing with RuForge', 'Checking your link on this PC');
     return fetch('/pair', {
       method: 'POST',
       credentials: 'same-origin',
@@ -751,23 +881,68 @@
       })
       .then(function (data) {
         if (!data) return;
-        return fetchLibraryRaw().then(function (res) {
-          if (!res.ok) throw new Error('library ' + res.status);
-          return res.json();
-        }).then(handleLibraryData);
+        return fetchLibraryRaw()
+          .then(loadLibraryJson)
+          .then(function (libData) {
+            if (libData) handleLibraryData(libData);
+          });
       })
       .catch(function (err) {
-        if (state.session !== 'expired') {
-          setSession('error');
-          setError(err.message || 'pair failed');
-          setLoading(false);
+        if (state.session === 'expired') return;
+        if (isFetchNetworkError(err)) {
+          enterDisconnected(err.message || 'pair failed');
+          return;
         }
+        setSession('error');
+        setError(err.message || 'pair failed');
+        setLoading(false);
+        showGate('disconnected');
       });
   }
 
-  function boot() {
+  function tryReconnect(manual) {
+    if (reconnectInFlight) return;
+    if (state.session === 'unpaired' || state.session === 'expired') {
+      if (manual) boot(true);
+      return;
+    }
+    reconnectInFlight = true;
+    if (manual) {
+      gateRetryBtn.disabled = true;
+      setLoading(true, 'Reconnecting to RuForge', 'Checking localhost server');
+    }
+    fetchHealthz()
+      .then(function () {
+        return fetchLibraryRaw();
+      })
+      .then(loadLibraryJson)
+      .then(function (data) {
+        if (!data) return;
+        resetReconnectBackoff();
+        handleLibraryData(data);
+      })
+      .catch(function (err) {
+        if (isFetchNetworkError(err)) {
+          enterDisconnected(err.message || 'reconnect failed');
+          return;
+        }
+        setError(err.message || 'reconnect failed');
+        setSession('error');
+        setLoading(false);
+        showGate('disconnected');
+      })
+      .finally(function () {
+        reconnectInFlight = false;
+        gateRetryBtn.disabled = false;
+        if (manual) setLoading(false);
+      });
+  }
+
+  function boot(manual) {
+    clearReconnectTimer();
+    resetReconnectBackoff();
     setSession('loading');
-    setLoading(true, 'Connecting to RuForge', 'Checking your session on this Wi-Fi');
+    setLoading(true, 'Connecting to RuForge', 'Checking your session on this PC');
     fetchLibraryRaw()
       .then(function (res) {
         if (res.ok) {
@@ -785,9 +960,14 @@
         throw new Error('library ' + res.status);
       })
       .catch(function (err) {
+        if (isFetchNetworkError(err)) {
+          enterDisconnected(err.message || 'connection failed');
+          return;
+        }
         setError(err.message || 'connection failed');
         setSession('error');
         setLoading(false);
+        showGate('disconnected');
       });
   }
 
@@ -941,10 +1121,15 @@
     fetch('/stream-token/' + encodeURIComponent(id), { method: 'POST', credentials: 'same-origin' })
       .then(function (res) {
         setLastRequest('stream-token', res.status);
+        if (res.status === 401) {
+          enterSessionLost('stream auth failed');
+          return null;
+        }
         if (!res.ok) throw new Error('stream-token ' + res.status);
         return res.json();
       })
       .then(function (data) {
+        if (!data) return;
         if (data.url) {
           fetch(data.url, { credentials: 'same-origin', headers: { Range: 'bytes=0-1' } })
             .then(function (r) { setLastRequest('stream', r.status); })
@@ -952,12 +1137,80 @@
         }
         videoShell.style.display = 'block';
         videoEl.src = data.url;
-        videoEl.play().catch(function () {});
+        fetch('/progress/' + encodeURIComponent(id), FETCH_OPTS)
+          .then(function (res) {
+            setLastRequest('progress-get', res.status);
+            if (!res.ok) return null;
+            return res.json();
+          })
+          .then(function (progress) {
+            if (progress && Number.isFinite(progress.positionSecs) && progress.positionSecs > 0.25) {
+              videoEl.currentTime = progress.positionSecs;
+            }
+            videoEl.play().catch(function () {});
+          })
+          .catch(function () {
+            videoEl.play().catch(function () {});
+          });
       })
       .catch(function (err) {
+        if (isFetchNetworkError(err)) {
+          enterDisconnected(err.message || 'playback failed');
+          return;
+        }
         setError(err.message || 'playback failed');
       });
   }
+
+  function flushProgress() {
+    if (progressFlushTimer) {
+      clearTimeout(progressFlushTimer);
+      progressFlushTimer = null;
+    }
+    if (!state.activeId || state.session !== 'paired') return;
+    var pos = videoEl.currentTime;
+    var dur = videoEl.duration;
+    if (!Number.isFinite(pos) || pos < 0) return;
+    if (!Number.isFinite(dur) || dur < 0) dur = 0;
+    var playbackState = 'playing';
+    if (videoEl.ended) playbackState = 'ended';
+    else if (videoEl.paused) playbackState = 'paused';
+    fetch('/progress/' + encodeURIComponent(state.activeId), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        positionSecs: pos,
+        durationSecs: dur,
+        playbackState: playbackState
+      })
+    })
+      .then(function (res) {
+        setLastRequest('progress', res.status);
+        if (res.status === 401) enterSessionLost('progress auth failed');
+      })
+      .catch(function (err) {
+        if (isFetchNetworkError(err)) enterDisconnected(err.message || 'progress failed');
+      });
+  }
+
+  function scheduleProgressFlush() {
+    if (!state.activeId || state.session !== 'paired') return;
+    if (progressFlushTimer) return;
+    progressFlushTimer = window.setTimeout(function () {
+      progressFlushTimer = null;
+      flushProgress();
+    }, PROGRESS_DEBOUNCE_MS);
+  }
+
+  function wireProgressSync() {
+    videoEl.addEventListener('timeupdate', scheduleProgressFlush);
+    videoEl.addEventListener('pause', flushProgress);
+    videoEl.addEventListener('ended', flushProgress);
+    window.addEventListener('pagehide', flushProgress);
+  }
+
+  wireProgressSync();
 
   function debugSummary() {
     var counts = computeCounts(state.items);
@@ -979,6 +1232,30 @@
     lines.push('last-error: ' + (state.lastError || '(none)'));
     return lines.join('\n');
   }
+
+  gateRetryBtn.addEventListener('click', function () {
+    clearReconnectTimer();
+    resetReconnectBackoff();
+    if (state.session === 'session-lost') {
+      tryReconnect(true);
+      return;
+    }
+    if (state.session === 'disconnected') {
+      tryReconnect(true);
+      return;
+    }
+    boot(true);
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    if (state.session === 'disconnected') {
+      resetReconnectBackoff();
+      tryReconnect(false);
+    } else if (state.session === 'session-lost') {
+      tryReconnect(false);
+    }
+  });
 
   debugToggle.addEventListener('click', function () {
     setDebugExpanded(!debugExpanded);
@@ -1033,7 +1310,7 @@
 
   setDebugExpanded(debugExpanded);
   updateDebugUI();
-  boot();
+  boot(false);
 })();
 </script>
 </body>

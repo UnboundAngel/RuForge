@@ -82,16 +82,16 @@ export const CompanionPairingModal: React.FC<CompanionPairingModalProps> = ({
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-              LAN companion
+              Browser companion
             </p>
             <h2
               id="companion-pairing-title"
               className="text-[15px] font-semibold leading-snug text-stone-100"
             >
-              Pair a phone or TV
+              Pairing link (localhost)
             </h2>
             <p className="text-[11px] leading-relaxed text-stone-500">
-              Same Wi-Fi only · one-time link · code expires in {remaining}
+              Same PC only · one-time link · code expires in {remaining}
             </p>
           </div>
           <button

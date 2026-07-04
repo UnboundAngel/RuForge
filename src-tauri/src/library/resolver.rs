@@ -45,6 +45,17 @@ pub async fn has_thumb(state: &LibraryState, id: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Canonical library path for desktop playback progress (`source_path`). Only
+/// companion progress routes may call this; the path never crosses the HTTP boundary.
+pub async fn resolve_progress_path(state: &LibraryState, id: &str) -> Option<PathBuf> {
+    let item = state.companion_item(id).await?;
+    let canonical = item.source_path.canonicalize().ok()?;
+    if !state.is_root_allowed(&canonical).await {
+        return None;
+    }
+    Some(canonical)
+}
+
 /// Real, allowlist-checked path to stream. Only the `/stream/:id` byte-serving
 /// route may call this. Remux (when needed) runs here on first playback, not
 /// during library indexing, so companion startup stays fast.

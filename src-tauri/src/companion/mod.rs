@@ -11,12 +11,20 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rand::rngs::OsRng;
 use rand::RngCore;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Listener, Manager};
 use tokio::sync::{oneshot, RwLock};
 
 use crate::library::LibraryState;
 
 pub const DEFAULT_PORT: u16 = 8787;
+
+/// V1 Browser Companion binds loopback only. LAN bind (`0.0.0.0`) stays deferred
+/// behind the V2 threat-model gate; `detect_lan_ip` is kept for future status UI.
+pub const LOOPBACK_BIND: &str = "127.0.0.1";
+
+pub fn browser_base_url(port: u16) -> String {
+    format!("http://localhost:{port}")
+}
 
 pub fn now_unix() -> i64 {
     SystemTime::now()
@@ -39,10 +47,28 @@ pub struct PairingCode {
     pub used: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct ProgressSnapshot {
+    pub position_secs: f64,
+    pub duration_secs: f64,
+    pub playback_state: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProgressQueryResult {
+    pub request_id: String,
+    pub position_secs: f64,
+    pub duration_secs: f64,
+}
+
 pub struct CompanionInner {
     pub session_secret: RwLock<[u8; 32]>,
     pub sessions: RwLock<HashMap<String, Session>>,
     pub pairing: RwLock<Option<PairingCode>>,
+    /// In-memory mirror for companion resume reads; never serialized with paths.
+    pub progress_cache: RwLock<HashMap<String, ProgressSnapshot>>,
+    pub progress_read_pending: RwLock<HashMap<String, oneshot::Sender<(f64, f64)>>>,
     /// Set once at `start()`. Companion routes resolve media exclusively through
     /// `library::resolver` against this handle; the companion never scans disk or
     /// holds its own notion of "what exists."
@@ -78,6 +104,8 @@ impl CompanionState {
                 session_secret: RwLock::new(generate_secret()),
                 sessions: RwLock::new(HashMap::new()),
                 pairing: RwLock::new(None),
+                progress_cache: RwLock::new(HashMap::new()),
+                progress_read_pending: RwLock::new(HashMap::new()),
                 app_handle: RwLock::new(None),
                 bind_port: RwLock::new(DEFAULT_PORT),
                 lan_ip: RwLock::new(detect_lan_ip()),
@@ -100,9 +128,9 @@ impl CompanionState {
 
         *self.inner.app_handle.write().await = Some(app.clone());
 
-        let listener = match tokio::net::TcpListener::bind(("0.0.0.0", DEFAULT_PORT)).await {
+        let listener = match tokio::net::TcpListener::bind((LOOPBACK_BIND, DEFAULT_PORT)).await {
             Ok(l) => l,
-            Err(_) => match tokio::net::TcpListener::bind(("0.0.0.0", 0)).await {
+            Err(_) => match tokio::net::TcpListener::bind((LOOPBACK_BIND, 0)).await {
                 Ok(l) => l,
                 Err(e) => {
                     crate::rf_log!(
@@ -144,7 +172,7 @@ impl CompanionState {
         crate::rf_log!(
             "companion.server",
             log::Level::Info,
-            "companion server listening on 0.0.0.0:{bound_port}"
+            "companion server listening on {LOOPBACK_BIND}:{bound_port}"
         );
 
         let app_reindex = app.clone();
@@ -200,7 +228,29 @@ impl CompanionState {
         *self.inner.session_secret.write().await = generate_secret();
         self.inner.sessions.write().await.clear();
         *self.inner.pairing.write().await = None;
+        self.inner.progress_cache.write().await.clear();
     }
+}
+
+/// Main window answers desktop `localStorage` reads for companion GET /progress.
+pub fn register_progress_query_listener(app: &AppHandle) {
+    let inner = app.state::<CompanionState>().inner.clone();
+    app.listen("companion-progress-query-result", move |event| {
+        let Ok(payload) = serde_json::from_str::<ProgressQueryResult>(event.payload()) else {
+            return;
+        };
+        let inner = inner.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Some(tx) = inner
+                .progress_read_pending
+                .write()
+                .await
+                .remove(&payload.request_id)
+            {
+                let _ = tx.send((payload.position_secs, payload.duration_secs));
+            }
+        });
+    });
 }
 
 impl Default for CompanionState {

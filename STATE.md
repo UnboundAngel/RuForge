@@ -18,9 +18,9 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-04 (root AGENTS.md de-bloated for Cursor agents)
+Last updated: 2026-07-04 (companion-web disconnected/reconnect polish)
 
-Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. LAN companion remains dev-gated only in tree; companion-web session survives refresh while RuForge stays running.
+Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. Browser Companion (dev-gated) binds localhost only with progress sync and disconnected/session-lost reconnect UX in companion-web; dev gate unchanged.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow upda
 
 
 
-0.2.2 in tree: website OG preview image (`ruforge-og.png`). Companion LAN server in tree behind `showDebuggingSettings` only; companion-web probes session cookie on boot (refresh and bare `/` work while RuForge runs), mobile-first layout, QR modal polish. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
+0.2.2 in tree: website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) binds `127.0.0.1`, progress sync into desktop `playbackStorage`, and companion-web disconnected/session-lost gates with quiet reconnect backoff. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
 
 
 
@@ -57,6 +57,12 @@ reads this for the last shipped delta, not the git tree.
 
 
 **0.2.2 (unreleased, in tree):**
+
+- Companion (dev-gated): companion-web disconnected and session-lost gates with reconnect backoff and re-pair guidance after RuForge restart.
+
+- Companion (dev-gated): progress sync via authenticated `POST/GET /progress/:id` (media ID only over HTTP; path bridged internally to `playbackStorage.ts`).
+
+- Companion (dev-gated): Browser Companion V1 slice binds loopback only, opens localhost URL, Settings and companion-web copy no longer present LAN/phone/TV V1.
 
 - Docs: root `AGENTS.md` de-bloated for Cursor; extended context in `docs/agents/AGENT-REFERENCE.md`.
 
@@ -204,7 +210,7 @@ Fixes:
 
 2. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell.
 
-3. Companion LAN pairing: finish and ship when ready (currently dev-gated).
+3. Companion Browser V1: ship when ready (dev gate removal only when Angel approves public ship); disconnected-state polish is in tree.
 
 
 
@@ -226,9 +232,9 @@ Fixes:
 
 - `docs/changes.html` is not in the repo (never committed). Version graph uses `docs/agents/release/versioner.html` + `docs/agents/release/versions/version-*.json` only.
 
-- Companion LAN server is in tree but dev-gated (`showDebuggingSettings`). Not in 0.2.1 public release notes.
+- Companion server is in tree but dev-gated (`showDebuggingSettings`). V1 binds `127.0.0.1` only; progress sync and disconnected reconnect UX are in tree. Not in 0.2.1 public release notes.
 
-- Companion scope is locked in `docs/ruforge/plans/companion-action-plan.md`: V1 is same-PC browser Companion on `localhost` only (Videos + Songs, playback, mandatory progress sync as the only write path). Current code binds `0.0.0.0` (LAN) and has no progress write path yet, both flagged there as implementation reconciliation / new work, not shipped V1.
+- Companion scope is locked in `docs/ruforge/plans/companion-action-plan.md`: V1 is same-PC browser Companion on `localhost` only (Videos + Songs, playback, mandatory progress sync as the only write path). Loopback bind, progress sync, and disconnected-state polish are reconciled in tree; public ship still blocked on dev gate until Angel approves.
 
 
 

@@ -179,6 +179,8 @@ pub fn run() {
                 .map_err(|e| format!("failed to load library config: {e}"))?;
             app.manage(LibraryState::new(library_config));
 
+            crate::companion::register_progress_query_listener(&handle);
+
             warm_ytdlp_release_cache_spawn(handle.clone());
             tauri::async_runtime::spawn(async move {
                 if let Ok(updater) = handle.updater() {
