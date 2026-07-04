@@ -113,6 +113,7 @@ Phase 2 work (distribution, content, README polish) is authorized separately.
 
 - **Shipped log (THIS FILE, bottom, `## Shipped log`):** the **first and mandatory** place every shipped change is recorded. One appended line per change, no format ceremony. This is the cheap, vague-input-proof capture surface. **If you change behavior, append here before you consider the task done.** See `## Shipped log` for the rule.
 - **Living roadmap / ideas (in-repo, canonical for agents):** `docs/RuForge.md`. Update when shipped work lands. Optional mirror outside the repo: `c:\Random things i dont want deleted\markdown files\RuForge.md` (keep in sync by hand if you use both).
+- **Companion + competitor doc index (agents):** `docs/COMPANION-AND-COMPETITOR-INDEX.md`. Trigger-word routing to companion architecture research, yt-dlp GUI competitive audit, SEO rivals, and live code paths. Read before companion LAN or "how competitors lay out their server" tasks.
 - **Graph surfaces (`docs/changes.html`, `docs/versions/version-<semver>.json`, `docs/versioner.html`):** Angel's project-tracking + release-note source. These are **drained from the Shipped log at release time only** (see `## Release ritual`, step 8). **Never** edited per-change mid-cycle. The gap between the Shipped log and the last version present in the graph surfaces IS the release-prep to-do; do not wait to be told.
 - **In-repo machine plans:** `.cursor/plans/` (e.g. Zustand migration audit). Implementation detail, may lag; trust code + this `AGENTS.md` for "what shipped."
 - **Dynamic Island (architecture & usability):** `src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`. Read before island, motion, playback-bridge, or island-onboarding edits. Extend that file when you learn something future agents must not break; do not duplicate long island animation rules here.
@@ -409,6 +410,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.2 (unreleased)
 
+- **Docs**: companion and competitor index with trigger-word routing for agents (`docs/COMPANION-AND-COMPETITOR-INDEX.md`, `AGENTS.md` pointer).
 - **Companion LAN (dev-gated)**: companion loading visual polish with PS5-inspired progress rail (`companion-web/index.html`).
 
 - **Companion LAN (dev-gated)**: minimal black-and-red full-screen loading with red accent rail, status rotator, and segmented pulse bar (`companion-web/index.html`).
