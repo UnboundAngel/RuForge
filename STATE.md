@@ -1,4 +1,4 @@
-# RuForge — STATE
+# RuForge: STATE
 
 
 
@@ -18,7 +18,7 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-04 (companion action plan moved into plans; doc routing cleanup)
+Last updated: 2026-07-04 (root AGENTS.md de-bloated for Cursor agents)
 
 Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. LAN companion remains dev-gated only in tree; companion-web session survives refresh while RuForge stays running.
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow upda
 
 
 
-0.2.2 in tree: website OG preview image (`ruforge-og.png`). Companion LAN server in tree behind `showDebuggingSettings` only; companion-web probes session cookie on boot (refresh and bare `/` work while RuForge runs), mobile-first layout, QR modal polish.
+0.2.2 in tree: website OG preview image (`ruforge-og.png`). Companion LAN server in tree behind `showDebuggingSettings` only; companion-web probes session cookie on boot (refresh and bare `/` work while RuForge runs), mobile-first layout, QR modal polish. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
 
 
 
@@ -57,6 +57,14 @@ reads this for the last shipped delta, not the git tree.
 
 
 **0.2.2 (unreleased, in tree):**
+
+- Docs: root `AGENTS.md` de-bloated for Cursor; extended context in `docs/agents/AGENT-REFERENCE.md`.
+
+- Docs: Codex audit workspace and packaged skill routing added under `docs/agents/codex/` and `docs/agents/skills/`.
+
+- Docs: Codex memory surface added and research-skill routing tightened for explicit research tasks.
+
+- Docs: Codex memory compacted with durable Claude imports and stale context labels.
 
 - Docs: second-pass doc layout (`docs/agents/`, `docs/ruforge/`), AGENTS Doc routing table, reference pointer updates.
 
