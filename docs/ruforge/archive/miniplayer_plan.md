@@ -1,5 +1,7 @@
 # NeoTube Miniplayer Feature Plan
 
+> **ARCHIVED / STALE — do not use for project state.** Read `STATE.md` then `AGENTS.md`. Code wins on conflict. Kept for history only.
+
 ## The 10 Features
 1. **Smart Transparency (Ghost Mode):** Allow the miniplayer to automatically drop to 20% opacity (or become fully translucent glass) when the mouse is outside the window, blending it seamlessly into the user's desktop background. It instantly snaps back to 100% opacity on hover or when a new video starts.
 2. **Global Media Hotkeys:** Implement global keyboard shortcuts (e.g., `Alt + Space` for play/pause, `Alt + Arrow Keys` for next/previous) that control the miniplayer even when the user is actively typing in another application.

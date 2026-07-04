@@ -1,7 +1,8 @@
 # RuForge — Roadmap to Product Ready
 
-> Living document tracking everything between current state and shippable v1.0.  
-> **Canonical copy for this repo:** `docs/RuForge.md` (agents: update here when work ships).  
+> **ARCHIVED / STALE — do not use for project state.** Read `STATE.md` then `AGENTS.md`. Code wins on conflict. Kept for history only.
+
+> Historical roadmap archive (not live state). For priorities use `STATE.md` and `website/src/content/roadmap.json`.
 > Last updated: 2026-05-18  
 > **Shipping version:** `0.1.5` (`package.json`, `tauri.conf.json`, `updater.json`)
 

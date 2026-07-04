@@ -356,7 +356,7 @@ Main music queue state lives in Zustand on **main** only. Options:
 
 Copy-paste for Gemini visual pass:
 
-> Style `src/components/music-mini/*` only. Music mini: black/red token shell, cover-forward, 8-dot drag header, pin + back + close (no library icon). Three resize tiers per `docs/plans/music_mini_player.plan.md`. Do not change props, events, or store. Do not edit `MiniPlayer.tsx`. Follow `design-style.mdc`: no divider lines, no glow shadows, cover not letterbox, `--music-accent` for active states.
+> Style `src/components/music-mini/*` only. Music mini: black/red token shell, cover-forward, 8-dot drag header, pin + back + close (no library icon). Three resize tiers per `docs/ruforge/plans/music_mini_player.plan.md`. Do not change props, events, or store. Do not edit `MiniPlayer.tsx`. Follow `design-style.mdc`: no divider lines, no glow shadows, cover not letterbox, `--music-accent` for active states.
 
 ---
 

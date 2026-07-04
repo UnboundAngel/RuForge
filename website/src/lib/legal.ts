@@ -3,13 +3,13 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { marked } from 'marked';
 
-const legalDir = fileURLToPath(new URL('../../../docs/legal/', import.meta.url));
+const legalDir = fileURLToPath(new URL('../../../docs/ruforge/legal/', import.meta.url));
 
 const blockLine =
   /^(#{1,6}\s|[-*+]\s|\d+\.\s|>\s|```| {4}|\t|\|)/;
 
 /**
- * Legal docs in docs/legal/ use escaped markdown and hard line breaks per line.
+ * Legal docs in docs/ruforge/legal/ use escaped markdown and hard line breaks per line.
  * Unescape and reflow into normal paragraphs before marked parses them.
  */
 export function normalizeLegalMarkdown(raw: string): string {

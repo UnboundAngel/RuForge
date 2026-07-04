@@ -1,5 +1,7 @@
 # Handoff: Downloader metadata cache + UI parity (Jun 2026)
 
+> **ARCHIVED / STALE — do not use for project state.** Read `STATE.md` then `AGENTS.md`. Code wins on conflict. Kept for history only.
+
 For the next Cursor agent. Read `STATE.md` and `AGENTS.md` first (Shipped log under v0.1.12 unreleased).
 
 ## What we just finished (shipped in this push)

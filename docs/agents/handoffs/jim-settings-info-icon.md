@@ -1,5 +1,7 @@
 # Jim handoff: Settings info-icon descriptions
 
+> **ARCHIVED / STALE — do not use for project state.** Read `STATE.md` then `AGENTS.md`. Code wins on conflict. Kept for history only.
+
 Chad landed click-to-toggle descriptions on the **Playback** tab (`SettingsTreeRow`, SponsorBlock tree). Legacy tabs still use inline descriptions on `SettingItem`.
 
 ## Apply globally (no logic changes)

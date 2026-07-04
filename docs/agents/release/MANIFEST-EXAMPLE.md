@@ -6,7 +6,7 @@ For **every key and alias**, read **`MANIFEST-SCHEMA.md`** in this folder. Below
 
 ## 1. Add a new task row to an existing `version-X.Y.Z.json`
 
-Open `docs/versions/version-0.1.3.json` (or the semver you are working on). Inside the top-level `"nodes": [ ... ]` array, **add a new object** after the last entry (keep prior entries):
+Open `docs/agents/release/versions/version-0.1.3.json` (or the semver you are working on). Inside the top-level `"nodes": [ ... ]` array, **add a new object** after the last entry (keep prior entries):
 
 ```json
 {
@@ -33,7 +33,7 @@ You can keep `files` **or** use only `fileEdits`. To **add** reasons without rem
 ```json
 "fileEdits": [
   {
-    "path": "docs/versioner.html",
+    "path": "docs/agents/release/versioner.html",
     "reason": "Tweaked loader so manifests are the single source of truth."
   },
   {
@@ -88,8 +88,8 @@ Same as a task, but **`"type": "fix"`**:
 ## 5. New app version (new JSON file + registry row)
 
 1. Align **`package.json`**, **`src-tauri/tauri.conf.json`**, **`src-tauri/Cargo.toml`** with the new triplet.
-2. Create **`docs/versions/version-X.Y.Z.json`** with `{ "nodes": [], "edges": [] }`, then add `nodes` as above.
-3. In **`docs/versioner.html`**, inside `<script id="changelog-data">` → **`versions`**, add a **new first element** (newest on top):
+2. Create **`docs/agents/release/versions/version-X.Y.Z.json`** with `{ "nodes": [], "edges": [] }`, then add `nodes` as above.
+3. In **`docs/agents/release/versioner.html`**, inside `<script id="changelog-data">` → **`versions`**, add a **new first element** (newest on top):
 
 ```json
 {
@@ -100,7 +100,7 @@ Same as a task, but **`"type": "fix"`**:
 }
 ```
 
-**`manifest`** is relative to **`docs/versioner.html`**. You do **not** copy `nodes` into HTML — the page loads the JSON file.
+**`manifest`** is relative to **`docs/agents/release/versioner.html`**. You do **not** copy `nodes` into HTML — the page loads the JSON file.
 
 ---
 

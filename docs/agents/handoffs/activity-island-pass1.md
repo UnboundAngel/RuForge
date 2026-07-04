@@ -1,5 +1,7 @@
 # Context handoff: Activity Island Pass 1 (persistent audio)
 
+> **ARCHIVED / STALE — do not use for project state.** Read `STATE.md` then `AGENTS.md`. Code wins on conflict. Kept for history only.
+
 For a new agent chat continuing **review** or **implementation** on this workstream.
 Read `STATE.md` and `AGENTS.md` first; this doc is the slice-specific cursor.
 

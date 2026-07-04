@@ -1,5 +1,7 @@
 # Roadmap Field Notes — handoff
 
+> **ARCHIVED / STALE — do not use for project state.** Read `STATE.md` then `AGENTS.md`. Code wins on conflict. Kept for history only.
+
 Brief context for the next Cursor chat. Data layer and mobile are done. **Next up: desktop visual refinement only** on `/roadmap`.
 
 ---
@@ -7,7 +9,7 @@ Brief context for the next Cursor chat. Data layer and mobile are done. **Next u
 ## Handdown (copy for next chat)
 
 ```
-Handoff doc updated at `website/ROADMAP-FIELD-NOTES-HANDOFF.md`. Short version:
+Handoff doc updated at `docs/agents/handoffs/roadmap-field-notes.md`. Short version:
 
 ### What we did (already shipped)
 - Field Notes layout on desktop `/roadmap` and mobile `/m/roadmap` against `Roadmap.dc.html` Concept C

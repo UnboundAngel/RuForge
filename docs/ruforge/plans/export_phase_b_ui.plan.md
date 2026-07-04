@@ -151,7 +151,7 @@ Grounded in **existing** handlers only. Export is in scope; others are proposals
 | **Rename playlist** | Rename folder/title | No command | **Defer** (net-new backend) |
 | **Regroup** | Move flat files into folder | `regroup_playlist_downloads` via [`RegroupPlaylistModal`](src/components/RegroupPlaylistModal.tsx) | Wrong UX from stack card (expects URL + flat files). **Do not add** |
 
-**Honest minimum for Phase B playlist menu:** Open, Play All, Shuffle, Export, Open folder (5 items). Matches [`docs/RuForge.md`](docs/RuForge.md) L124 backlog minus Rename/Delete until backend exists.
+**Honest minimum for Phase B playlist menu:** Open, Play All, Shuffle, Export, Open folder (5 items). Matches [`RuForge.md`](../RuForge.md) L124 backlog minus Rename/Delete until backend exists.
 
 **Implementation note:** Net-new menu on `PlaylistStackCard` ([`MediaView.tsx`](src/components/MediaView.tsx) L34–80). Extend `activeMenu` renderer (L508+) to branch `entry.kind === 'playlist'`. Add `onContextMenu` on stack card (currently click-only L46). Style matches existing media menu (L501–507).
 

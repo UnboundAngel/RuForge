@@ -10,11 +10,11 @@ Agent-facing map of where companion LAN architecture, competitor research, and r
 
 | If the task mentions… | Open first | Then |
 |----------------------|------------|------|
-| companion, LAN server, QR pair, session cookie, `/pair`, `/library`, `/stream`, HMAC signed URL, companion-web, phone browser, axum companion | **`docs/research/companion-architecture-extraction.md`** Part 2 | Code: `src-tauri/src/companion/` |
-| Jellyfin, Navidrome, PairDrop, Snapdrop, go2rtc, MediaMTX, PlaybackInfo, Subsonic, Quick Connect, embed.FS, ServeContent, range 206 | **`docs/research/companion-architecture-extraction.md`** Part 1 (+ Part 3 borrow table) | Part 2 for RuForge target design |
-| what to copy vs not copy from upstream servers | **`docs/research/companion-architecture-extraction.md`** Part 3 | Part 2 reconciliation section |
-| Parabolic, imsyy, ytdlp-interface, dsymbol, yt-dlp GUI comparison, downloader-only competitor, feature matrix | **`docs/research/ruforge-competitive-audit.md`** | Not for companion LAN |
-| 4K Video Downloader, winget competitors, SEO rivals, "alternative to", marketing competitors | **`docs/research/google-seo-and-domain-strategy.md`** §7 | **`docs/research/ruforge-competitive-audit.md`** for product features |
+| companion, LAN server, QR pair, session cookie, `/pair`, `/library`, `/stream`, HMAC signed URL, companion-web, phone browser, axum companion | **`docs/ruforge/research/companion-architecture-extraction.md`** Part 2 | Code: `src-tauri/src/companion/` |
+| Jellyfin, Navidrome, PairDrop, Snapdrop, go2rtc, MediaMTX, PlaybackInfo, Subsonic, Quick Connect, embed.FS, ServeContent, range 206 | **`docs/ruforge/research/companion-architecture-extraction.md`** Part 1 (+ Part 3 borrow table) | Part 2 for RuForge target design |
+| what to copy vs not copy from upstream servers | **`docs/ruforge/research/companion-architecture-extraction.md`** Part 3 | Part 2 reconciliation section |
+| Parabolic, imsyy, ytdlp-interface, dsymbol, yt-dlp GUI comparison, downloader-only competitor, feature matrix | **`docs/ruforge/research/ruforge-competitive-audit.md`** | Not for companion LAN |
+| 4K Video Downloader, winget competitors, SEO rivals, "alternative to", marketing competitors | **`docs/ruforge/research/google-seo-and-domain-strategy.md`** §7 | **`docs/ruforge/research/ruforge-competitive-audit.md`** for product features |
 | public roadmap status for browser companion | **`website/src/content/roadmap.json`** (search `Browser companion`) | **`STATE.md`** / **`AGENTS.md`** Shipped log for in-tree reality |
 | companion UI polish, loading screen, pairing modal, QR styling | **`src-tauri/companion-web/index.html`**, **`CompanionPairingModal.tsx`**, **`companionQr.ts`** | Design taste: **`.cursor/rules/design-style.mdc`** |
 | companion dev gate, debugging settings | **`CompanionSettingsSection.tsx`**, `showDebuggingSettings` in store | Companion is dev-gated only until released |
@@ -23,7 +23,7 @@ Agent-facing map of where companion LAN architecture, competitor research, and r
 
 ## Canonical companion architecture doc
 
-**Path:** `docs/research/companion-architecture-extraction.md`
+**Path:** `docs/ruforge/research/companion-architecture-extraction.md`
 
 **What it is:** Competitive architecture extraction for RuForge companion LAN v1 (browser-only). Compares four upstream server projects, synthesizes RuForge's target design, and lists patterns to borrow or reject.
 
@@ -119,7 +119,7 @@ These are **not** RuForge product competitors. They are **upstream server projec
 
 ## yt-dlp GUI competitive audit (product competitors)
 
-**Path:** `docs/research/ruforge-competitive-audit.md`
+**Path:** `docs/ruforge/research/ruforge-competitive-audit.md`
 
 **What it is:** Feature comparison of **four yt-dlp desktop GUIs vs RuForge** (downloader product surface, not LAN companion). Dated 2026-05-21; version header may lag `STATE.md`.
 
@@ -142,7 +142,7 @@ These are **not** RuForge product competitors. They are **upstream server projec
 
 ## SEO / acquisition competitors
 
-**Path:** `docs/research/google-seo-and-domain-strategy.md` (§7 Competitor Analysis)
+**Path:** `docs/ruforge/research/google-seo-and-domain-strategy.md` (§7 Competitor Analysis)
 
 **What it is:** Market and SEO rivals for **website discovery**, not codebase layout.
 
@@ -150,7 +150,7 @@ These are **not** RuForge product competitors. They are **upstream server projec
 
 **Trigger words:** `SEO competitor`, `4kdownload`, `parasite SEO`, `AlternativeTo`, `winget`, `comparison page`, `yt-dlp gui windows keyword`, `GitHub-only competitor`, `aggregateRating` (do not fake)
 
-**Related:** `docs/research/ai-llm-discoverability.md` (llms.txt, IndexNow, AI citation). `website/public/llms.txt` (live site index).
+**Related:** `docs/ruforge/research/ai-llm-discoverability.md` (llms.txt, IndexNow, AI citation). `website/public/llms.txt` (live site index).
 
 ---
 
@@ -181,7 +181,7 @@ Dev-gated behind `showDebuggingSettings` until released. **`STATE.md`** and **`A
 | `website/src/content/roadmap.json` | Public row: **"Browser companion support for phone, desktop, and TV"** (`appArea`: Browser, `roadmapStatus`: progress) |
 | `STATE.md` | What is in tree vs last shipped |
 | `AGENTS.md` → Shipped log | Per-change companion LAN lines under `v0.2.2 (unreleased)` |
-| `docs/RuForge.md` | Living roadmap/ideas (may lag companion detail; trust code + this index) |
+| `docs/ruforge/RuForge.md` | Historical roadmap archive (may lag companion detail; trust code + this index) |
 
 ---
 
@@ -189,7 +189,7 @@ Dev-gated behind `showDebuggingSettings` until released. **`STATE.md`** and **`A
 
 | Path | Why agents open it by mistake |
 |------|-------------------------------|
-| `docs/research/ruforge-website-brief.md` | Website/marketing research; sampled competitor **pages**, not server architecture |
+| `docs/ruforge/research/ruforge-website-brief.md` | Website/marketing research; sampled competitor **pages**, not server architecture |
 | `src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md` | Main-window Dynamic Island only |
 | `README.md` | User-facing product overview; no companion architecture |
 
@@ -198,7 +198,7 @@ Dev-gated behind `showDebuggingSettings` until released. **`STATE.md`** and **`A
 ## Suggested read order for new companion work
 
 1. **`STATE.md`** (what exists today)
-2. **`docs/research/companion-architecture-extraction.md`** Part 2 (target design)
+2. **`docs/ruforge/research/companion-architecture-extraction.md`** Part 2 (target design)
 3. **`src-tauri/src/companion/`** + **`companion-web/index.html`** (actual behavior)
 4. Part 1 or Part 3 of the extraction doc only when designing auth, streaming, or pairing changes
 5. **`ruforge-competitive-audit.md`** only if the question is "how do other yt-dlp GUIs compare" (different problem)

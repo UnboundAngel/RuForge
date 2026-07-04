@@ -20,6 +20,8 @@ todos:
 isProject: false
 ---
 
+> **ARCHIVED / STALE — do not use for project state.** Read `STATE.md` then `AGENTS.md`. Code wins on conflict. Kept for history only.
+
 # Downloader: ETA smoothing and quality-accurate size
 
 ## Current data flow
