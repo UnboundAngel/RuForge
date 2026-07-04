@@ -22,12 +22,22 @@ type CompanionStatus = {
   sessionCount: number;
 };
 
+type LocalNameExperiment = {
+  host: string;
+  resolvable: boolean;
+  loopbackOk: boolean;
+  resolvedIps: string[];
+  hostsFileLine: string;
+  friendlyBrowserUrl: string | null;
+};
+
 export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active }) => {
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const notify = useRuforgeStore((s) => s.notify);
 
   const [status, setStatus] = useState<CompanionStatus | null>(null);
+  const [localName, setLocalName] = useState<LocalNameExperiment | null>(null);
   const [busy, setBusy] = useState(false);
   const [pairing, setPairing] = useState<CompanionQrPayload | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
@@ -41,12 +51,24 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
     }
   }, []);
 
+  const refreshLocalName = useCallback(async () => {
+    try {
+      const next = await invoke<LocalNameExperiment>("companion_local_name_experiment");
+      setLocalName(next);
+    } catch {
+      setLocalName(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (!active) return;
     void refreshStatus();
-    const id = window.setInterval(() => void refreshStatus(), 5000);
+    void refreshLocalName();
+    const id = window.setInterval(() => {
+      void refreshStatus();
+    }, 5000);
     return () => window.clearInterval(id);
-  }, [active, refreshStatus]);
+  }, [active, refreshStatus, refreshLocalName]);
 
   const handleAcknowledge = () => {
     void updateSetting("companionServerDisclosureAcknowledged", true);
@@ -64,6 +86,7 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
         await invoke("companion_start");
       }
       await refreshStatus();
+      await refreshLocalName();
     } catch (e) {
       notify(typeof e === "string" ? e : "Companion server request failed.");
     } finally {
@@ -129,6 +152,34 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
       await openUrl(pairing.url);
     } catch {
       notify("Could not open companion link.");
+    }
+  };
+
+  const handleOpenFriendly = async () => {
+    if (!localName?.friendlyBrowserUrl) return;
+    setBusy(true);
+    try {
+      const payload = pairing ?? (await mintPairing());
+      const port = status?.port ?? payload.port;
+      const url = payload.url.replace(
+        `http://localhost:${port}`,
+        localName.friendlyBrowserUrl,
+      );
+      await openUrl(url);
+    } catch (e) {
+      notify(typeof e === "string" ? e : "Could not open ruforge.local link.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCopyHostsLine = async () => {
+    const line = localName?.hostsFileLine ?? "127.0.0.1 ruforge.local";
+    try {
+      await navigator.clipboard.writeText(line);
+      notify("Hosts file line copied.");
+    } catch {
+      notify("Could not copy hosts line.");
     }
   };
 
@@ -218,6 +269,56 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
                 >
                   SHOW PAIRING QR
                 </button>
+
+                <div className="mt-4 pt-4 border-t border-white/5 flex flex-col gap-2">
+                  <p className="text-[10px] font-black tracking-widest text-stone-500 uppercase">
+                    ruforge.local experiment
+                  </p>
+                  <p className="text-[10px] leading-relaxed text-stone-600 max-w-2xl">
+                    Dev-only name probe. Same-PC hosts file entry only; no LAN bind,
+                    no mDNS registration, localhost stays default. Add the line below
+                    to{" "}
+                    <span className="text-stone-500">C:\Windows\System32\drivers\etc\hosts</span>{" "}
+                    as Administrator, then re-check.
+                  </p>
+                  {localName ? (
+                    <p className="text-[10px] text-stone-500 font-mono">
+                      {localName.resolvable
+                        ? localName.loopbackOk
+                          ? `Resolved to loopback: ${localName.resolvedIps.join(", ")}`
+                          : `Resolved but not loopback: ${localName.resolvedIps.join(", ")} (blocked)`
+                        : "Not resolved yet"}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void refreshLocalName()}
+                      className={companionNeutralBtn}
+                    >
+                      CHECK RESOLUTION
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleCopyHostsLine()}
+                      className={companionNeutralBtn}
+                    >
+                      COPY HOSTS LINE
+                    </button>
+                    {localName?.friendlyBrowserUrl ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleOpenFriendly()}
+                        className={companionAccentBtn}
+                      >
+                        OPEN VIA RUFORGE.LOCAL
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             ) : null}
           </>

@@ -373,6 +373,7 @@ pub fn run() {
             crate::companion::commands::companion_qr_payload,
             crate::companion::commands::companion_sessions,
             crate::companion::commands::companion_revoke_all,
+            crate::companion::commands::companion_local_name_experiment,
             #[cfg(windows)]
             taskbar_thumbbar::sync_taskbar_transport,
         ])

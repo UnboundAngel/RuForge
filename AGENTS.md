@@ -167,6 +167,8 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.2 (unreleased)
 
+- **Companion (dev-gated)**: `ruforge.local` same-PC experiment probes OS resolution, shows manual hosts-file line, optional friendly open when loopback-only; no mDNS, no LAN bind (`local_name.rs`, `companion/commands.rs`, `CompanionSettingsSection.tsx`, `docs/ruforge/research/ruforge-local-experiment.md`).
+
 - **Companion V1.1**: focus-only `ruforge://focus` deep link raises the main window; fail-closed parsing in Rust (`focus_protocol.rs`, `tauri-plugin-deep-link`, `tauri-plugin-single-instance`, `tauri.conf.json`).
 - **Companion (dev-gated)**: companion-web disconnected and session-lost gates with quiet reconnect backoff, manual Try again, and re-pair copy after RuForge restart (`companion-web/index.html`).
 - **Companion (dev-gated)**: progress sync via `POST/GET /progress/:id` (session auth, ID-only HTTP); server resolves library ID to desktop path and bridges writes/reads through Tauri events into `playbackStorage.ts` (`companion/routes.rs`, `companion/mod.rs`, `companionProgressSync.ts`, `companion-web/index.html`).

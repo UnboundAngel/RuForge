@@ -58,6 +58,8 @@ reads this for the last shipped delta, not the git tree.
 
 **0.2.2 (unreleased, in tree):**
 
+- Companion (dev-gated): `ruforge.local` same-PC experiment (hosts-file probe, loopback-only friendly URL; no mDNS, no LAN bind).
+
 - Companion V1.1: `ruforge://focus` deep link raises the main window only (fail-closed; no library or download actions).
 
 - Companion (dev-gated): companion-web disconnected and session-lost gates with reconnect backoff and re-pair guidance after RuForge restart.
