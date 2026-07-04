@@ -1,6 +1,8 @@
 # RuForge — Product feature catalogue (source-verified)
 
-**Generated from implementation** (React/TypeScript + Tauri v2). `docs/RuForge.md` and `AGENTS.md` are hints only; this document reflects what the code actually does as of inventory date **2026-05-18** (**shipping `0.1.5`**).
+> **ARCHIVED / STALE — do not use for project state.** Read `STATE.md` then `AGENTS.md`. Code wins on conflict. Kept for history only.
+
+**Generated from implementation** (React/TypeScript + Tauri v2). `docs/ruforge/RuForge.md` and `AGENTS.md` are hints only; this document reflects what the code actually does as of inventory date **2026-05-18** (**shipping `0.1.5`**).
 
 **Tier legend**
 

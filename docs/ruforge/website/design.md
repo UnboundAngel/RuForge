@@ -153,7 +153,7 @@ Defined in `src/components/Icon.astro`, typed in `src/lib/icons.ts`.
 
 ### Optional assets
 
-See `docs/ICON-WISHLIST.md` for swap-in files and unused marks (SponsorBlock SVG in app repo, etc.).
+See [`icon-wishlist.md`](icon-wishlist.md) for swap-in files and unused marks (SponsorBlock SVG in app repo, etc.).
 
 ---
 
@@ -207,7 +207,7 @@ Testimonial cards use rotating rim hues derived from avatar sets; default rim fa
 | Tech icons | `src/lib/techTickerIcons.ts`, `public/icons/tech/` |
 | Logo | `src/components/Logo.astro`, `src/assets/ruforge-logo.png` |
 | Code colors | `src/lib/ruforgeShikiTheme.ts` |
-| Icon wishlist | `docs/ICON-WISHLIST.md` |
+| Icon wishlist | [`icon-wishlist.md`](icon-wishlist.md) |
 
 ---
 

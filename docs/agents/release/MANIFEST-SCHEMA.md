@@ -2,11 +2,11 @@
 
 Copy-paste **additive** patterns: **`MANIFEST-EXAMPLE.md`** in this folder.
 
-Implementation lives in **`docs/versioner.html`** (`VersionGraphFormat`, `loadManifestDocument`, layout, export). This doc is the **contract** agents should follow.
+Implementation lives in **`docs/agents/release/versioner.html`** (`VersionGraphFormat`, `loadManifestDocument`, layout, export). This doc is the **contract** agents should follow.
 
 ---
 
-## A. Per-version file: `docs/versions/version-<semver>.json`
+## A. Per-version file: `docs/agents/release/versions/version-<semver>.json`
 
 ### A.1 Top-level keys
 
@@ -47,7 +47,7 @@ Strings in `fileEdits` (instead of objects) are treated as `{ path: "<string>" }
 
 ### A.4 Versioner canvas (derived nodes — **not authored in JSON**)
 
-**`docs/versioner.html`** may **synthesize extra graph nodes** for layout only:
+**`docs/agents/release/`** may **synthesize extra graph nodes** for layout only:
 
 When a manifest row has **`files` + `fileEdits` combining to ≥2 unique paths**, the renderer **may** add one derived **file-ref** circle per path, linked from the parent by **fork** edges — **only while that parent task/fix is expanded on the canvas** (click the parent node to toggle; version change / background click clears expansions). **`action`/create** semantics ⇒ **green** ring in the diagram; updated files use a **muted** ring.
 
@@ -55,7 +55,7 @@ These nodes **do not** exist in **`version-*.json`**; keep editing paths and rea
 
 ---
 
-## B. Registry row: `docs/versioner.html` → `changelog-data` → `versions[]`
+## B. Registry row: `docs/agents/release/` → `changelog-data` → `versions[]`
 
 These entries **do not** contain graph `nodes`; they only **point** at the JSON file.
 

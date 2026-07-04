@@ -18,7 +18,7 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-04 (companion action plan doc added)
+Last updated: 2026-07-04 (companion action plan; doc layout second pass)
 
 Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. LAN companion remains dev-gated only in tree; companion-web session survives refresh while RuForge stays running.
 
@@ -57,6 +57,10 @@ reads this for the last shipped delta, not the git tree.
 
 
 **0.2.2 (unreleased, in tree):**
+
+- Docs: second-pass doc layout (`docs/agents/`, `docs/ruforge/`), AGENTS Doc routing table, reference pointer updates.
+
+- Docs: agent-doc cleanup (Shipped log authority, stale banners, pointer fixes; `AGENTS.md`, `STATE.md`).
 
 - Companion LAN (dev-gated): cinematic loading scene (glass layers, breathe-accent sidebar, PS5-inspired progress rail) in companion-web.
 - Companion LAN (dev-gated): paired URL normalizes to `/paired` after session confirm; reassurance copy in debug strip.
@@ -202,7 +206,7 @@ Fixes:
 
 - Music Explore: Download Playlist button disables only on local `downloadingPlaylist`, not when the queue already has active jobs for that playlist. Re-click re-runs enqueue (redundant work; per-track `enqueueDownload` dedup prevents duplicate rows). Cosmetic polish, not a blocker.
 
-- SponsorBlock is fully integrated and polished. The master toggle is enabled by default. Spec: `.cursor/plans/sponsorblock_player_polish_9c15f856.plan.md`.
+- SponsorBlock is fully integrated and polished. The master toggle is enabled by default. See shipped code and AGENTS.md Shipped log history.
 
 - Authorize Cleanup (#8) is shipped and works via AuthorizeCleanupModal +
 
@@ -210,7 +214,7 @@ Fixes:
 
   authorize_cleanup command is not used by the UI. Do not list this as broken.
 
-- `docs/changes.html` is not in the repo (never committed). Version graph uses `docs/versioner.html` + `docs/versions/version-*.json` only.
+- `docs/changes.html` is not in the repo (never committed). Version graph uses `docs/agents/release/versioner.html` + `docs/agents/release/versions/version-*.json` only.
 
 - Companion LAN server is in tree but dev-gated (`showDebuggingSettings`). Not in 0.2.1 public release notes.
 
@@ -244,13 +248,5 @@ Zustand audit doc (cite, do not restate inline):
 
 c:\Users\Attic\.cursor\plans\zustand_migration_audit_53cd5b61.plan.md
 
-
-
-## Shipped log
-
-- Redesigned track detail page with parsed masonry credits grid and interactive explorer button
-
-- Polished track detail view buttons (removed Back/Heart outer circles, reduced Play Now button size)
-
-- Redesigned the music detail description and track credits into a two-column alignment style, avoiding flat left-aligned text, and polished the file path link footer icon.
+Per-change Shipped log: `AGENTS.md` only. This file mirrors unreleased work under "What is new since last user release" for release-note drafting.
 

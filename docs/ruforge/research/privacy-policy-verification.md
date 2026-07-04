@@ -28,7 +28,7 @@ Core claims hold: no first-party analytics, accounts, cloud library sync, or RuF
 | **3.** no analytics, crash reporting, accounts, cloud sync, ads, background upload of files/library/watch history | **true** (RuForge) | No sentry/posthog/analytics/oauth matches in app source. No remote gallery sync API. `plugin-store` is a dependency but unused in `src/`. |
 | **3.** no telemetry on downloads/sites/content | **partial** | RuForge does not run telemetry SDKs. **yt-dlp** and **embedded YouTube** still contact those sites for downloads, metadata, and browsing. Policy should say RuForge does not **collect** that activity, not that the machine does not talk to those hosts. |
 | **4.** SmartScreen on installer; WebView2 Edge behavior for explorer logins | **true** (OS/browser) | NSIS Windows bundle. `tauri.conf.json` 60-67. Explorer uses external YouTube + WebView2 data dir. `player.rs` 72-79. Microsoft network behavior is outside app code. |
-| **5.** no automatic crash collection; GitHub issues manual | **true** | `tauri-plugin-log` only; no crash upload pipeline. `lib.rs` 74. Roadmap mentions future Sentry as opt-in only. `docs/RuForge.md` 136 (not shipped). |
+| **5.** no automatic crash collection; GitHub issues manual | **true** | `tauri-plugin-log` only; no crash upload pipeline. `lib.rs` 74. Roadmap mentions future Sentry as opt-in only. `docs/ruforge/RuForge.md` 136 (not shipped). |
 | **6.** Children / Changes / Contact sanity | **n/a** | No in-repo policy text to compare; standard static-page claims assumed OK if maintained by maintainer. |
 
 ---

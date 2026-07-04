@@ -23,6 +23,8 @@ todos:
 isProject: false
 ---
 
+> **ARCHIVED / STALE — do not use for project state.** Read `STATE.md` then `AGENTS.md`. Code wins on conflict. Kept for history only.
+
 # Export Phase B — B1 Implementation Plan
 
 **Note:** [`.cursor/plans/export phase b ui`](.cursor/plans/) was not found in the repo. This plan follows your locked decisions and the shipped Phase A API in [`src-tauri/src/commands/export.rs`](src-tauri/src/commands/export.rs).

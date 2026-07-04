@@ -1,7 +1,7 @@
 # RuForge competitive audit
 
 **Date:** 2026-05-21  
-**RuForge versions:** 0.1.7 shipped (`package.json`, `updater.json`); 0.1.8 unreleased (see `STATE.md`, `AGENTS.md` Shipped log).  
+**RuForge versions:** 0.1.7 shipped (`package.json`, `updater.json`); 0.1.8 unreleased (see `STATE.md`, `AGENTS.md` Shipped log). Version header is a research snapshot; verify current version in `STATE.md`.  
 **Method:** Live workspace code is source of truth; competitor columns use maintainer audit summaries plus public READMEs/releases (Parabolic, imsyy/yt-dlp-gui, ErrorFlynn/ytdlp-interface, dsymbol/yt-dlp-gui).  
 **Scope:** Four named yt-dlp GUIs vs RuForge. Not Motrix, FreeTube, or CLI.
 
@@ -219,7 +219,7 @@ Structured to match the maintainer audit depth. Public docs only where noted.
 - SponsorBlock on layouts with scrub bar (0.1.7); subtitles when not compact.
 - **0.1.8 unreleased:** Large mode video not washed by cover/gradient/ambient/control blur layers.
 - **Keyboard (mini):** Space, ←/→ ±15s; **no** input-field guard (differs from main).
-- **No global hotkeys** (planned in `miniplayer_plan.md`, not implemented).
+- **No global hotkeys** (planned in `docs/ruforge/archive/miniplayer_plan.md`, not implemented).
 
 ### Settings panels
 
@@ -402,7 +402,7 @@ Features competitors have that RuForge lacks, ranked by how many of the four als
 
 | Feature | Count | RuForge should… | Reason |
 |---------|:-----:|-----------------|--------|
-| Download history (incl. failed filter) | 3+ | **Defer** | Useful for downloader-only workflows; RuForge library + queue session is the retention model. High UI cost, low wedge value per `docs/RuForge.md`. |
+| Download history (incl. failed filter) | 3+ | **Defer** | Useful for downloader-only workflows; RuForge library + queue session is the retention model. High UI cost, low wedge value per `docs/ruforge/RuForge.md`. |
 | Per-URL granular format list UI | 3+ | **Defer** | Quality presets + audio toggle cover most users; full format grid is complexity solo dev should not chase before #10–#11 P0s in `STATE.md`. |
 | Cross-platform macOS/Linux **ship** | 3+ | **Defer** | Linux dev exists; ship when maintainer widens release ritual, not for parity alone. |
 | Proxy support | 3+ | **Defer** | Niche for RuForge audience; yt-dlp flag can wait until support tickets justify UI. |
@@ -435,7 +435,7 @@ Features competitors have that RuForge lacks, ranked by how many of the four als
 | Queue table column toggles | 1 | **Skip** | ytdlp-interface density; RuForge floating drawer trades columns for focus. |
 | Plugin manager | 1 | **Defer** | Only YDLG; consider if cookie unlock plugins become necessary. |
 | Live chat archiver | 1 | **Skip** | Narrow use case. |
-| Global media hotkeys | 1 | **Defer** | Planned in `miniplayer_plan.md`; good mini player upgrade, not downloader table stakes. |
+| Global media hotkeys | 1 | **Defer** | Planned in `docs/ruforge/archive/miniplayer_plan.md`; good mini player upgrade, not downloader table stakes. |
 | ReplayGain / loudness norm | 1 | **Defer** | Placeholder already in settings; ship when audio wedge deepens. |
 | Right-click on queue rows | 1 | **Defer** | Nice QoL; queue already has hover actions. |
 | `sleeping` queue state label | 1 | **Skip** | RuForge uses `held`/`manual`; rename docs only if users confuse.stall |

@@ -611,7 +611,7 @@
 
     <script>
       /**
-       * RuForge version graph — per-version data lives ONLY in docs/versions/version-x.y.z.json.
+       * RuForge version graph — per-version data lives ONLY in docs/agents/release/versions/version-x.y.z.json.
        * changelog-data.versions[] lists id, label, status, manifest (registry). The loader pulls
        * JSON via fetch (HTTP) or dynamic import (helps some file:// cases).
        */
@@ -815,7 +815,7 @@
         if (anyLoadFailed && hasManifestUrls) {
           manifestBanner.hidden = false;
           manifestBanner.textContent =
-            'Could not load one or more version JSON files. From repo root run: npx --yes serve docs — then open the served /versioner.html URL. Only docs/versions/version-*.json holds graph nodes (no copy in HTML).';
+            'Could not load one or more version JSON files. From repo root run: npx --yes serve docs/agents/release — then open the served /versioner.html URL. Only docs/agents/release/versions/version-*.json holds graph nodes (no copy in HTML).';
         } else {
           manifestBanner.hidden = true;
         }

@@ -1,5 +1,7 @@
 # RuForge — Changelog & version-graph authoring
 
+**Note:** `docs/changes.html` is **not in the repo**. Release authoring uses `docs/agents/release/versioner.html` and `docs/agents/release/versions/version-*.json` until/unless `changes.html` returns.
+
 You are reading this because the release ritual (AGENTS.md, step 6) sent you
 here, or you are extending the version graph. This is authoring detail only.
 It is deliberately NOT in AGENTS.md so the per-task agent path stays thin.
@@ -10,26 +12,26 @@ Output law still applies here: no emdashes, no AI filler, in any copy or
 template you emit from these instructions.
 
 Three parts below, moved verbatim from AGENTS.md with no content change:
-1. Version graph manifests (docs/versioner.html + docs/versions/)
+1. Version graph manifests (docs/agents/release/versioner.html + docs/agents/release/versions/)
 2. Changelog source (docs/changes.html), including the Canvas Architecture
    Workflow and the Category icons (in-app, Iconify) table
 3. Structured version block (for agents), including the DOM template
 
 ---
 
-## Version graph manifests (`docs/versioner.html` + `docs/versions/`)
+## Version graph manifests (`docs/agents/release/versioner.html` + `docs/agents/release/versions/`)
 
-**Purpose:** Internal per-release **dependency graph** (not the shipping “What’s new”). **Graph rows** are stored **only** in **`docs/versions/version-<semver>.json`**. **`docs/versioner.html`** keeps a small **`versions`** registry (`id`, `label`, `status`, `manifest`) plus the shared **`base`** agent/tool matrix, and **loads** each manifest at runtime.
+**Purpose:** Internal per-release **dependency graph** (not the shipping “What’s new”). **Graph rows** are stored **only** in **`docs/agents/release/versions/version-<semver>.json`**. **`docs/agents/release/versioner.html`** keeps a small **`versions`** registry (`id`, `label`, `status`, `manifest`) plus the shared **`base`** agent/tool matrix, and **loads** each manifest at runtime.
 
 **How to create or extend JSON (additive), registry rows, `fileEdits`, created files, preview:**  
-→ **`docs/versions/MANIFEST-EXAMPLE.md`**
+→ **`docs/agents/release/MANIFEST-EXAMPLE.md`**
 
 **Every field, alias, loader rule, and registry key:**  
-→ **`docs/versions/MANIFEST-SCHEMA.md`**
+→ **`docs/agents/release/MANIFEST-SCHEMA.md`**
 
-**New semver:** Align **`package.json`**, **`src-tauri/tauri.conf.json`**, and **`src-tauri/Cargo.toml`** (`## Versions (keep aligned)` above), add the JSON file under **`docs/versions/`**, add the **`versions`** row in **`versioner.html`** — checklist in **MANIFEST-SCHEMA.md** §B.
+**New semver:** Align **`package.json`**, **`src-tauri/tauri.conf.json`**, and **`src-tauri/Cargo.toml`** (`## Versions (keep aligned)` above), add the JSON file under **`docs/agents/release/versions/`**, add the **`versions`** row in **`versioner.html`** — checklist in **MANIFEST-SCHEMA.md** §B.
 
-**Preview:** `npx --yes serve docs` from repo root, then open **`/versioner.html`**.
+**Preview:** `npx --yes serve docs/agents/release` from repo root, then open **`/versioner.html`**.
 
 **Roles:** **Chad** — manifests, registry, loader, **`VersionGraphFormat`**. **Jim** — CSS-only on **`versioner.html`** (avoid changing **`VersionGraphFormat`** wiring unless coordinated).
 
@@ -61,7 +63,7 @@ Three parts below, moved verbatim from AGENTS.md with no content change:
   - Create nodes for tasks (`"type": "task"`) or fixes (`"type": "fix"`), add `details` and modified `files` to those nodes, and create `"edges"` connecting the agent(s) who did the work to the task, and the task to the `ruforge` core node.
 - **Exporting for Release:** The HTML UI includes an "Export Release Notes" button. When clicked, the JavaScript parses the JSON graph and generates a cleanly formatted Markdown summary of the selected version, ready to be copied into `updater.json` or GitHub Releases.
 
-**Related internal graph (`docs/versioner.html`):** Authoring rules and examples live in **`docs/versions/MANIFEST-EXAMPLE.md`** and **`docs/versions/MANIFEST-SCHEMA.md`** (see **`## Version graph manifests`**). Do not assume the same editing rules as **changes.html**.
+**Related internal graph (`docs/agents/release/versioner.html`):** Authoring rules and examples live in **`docs/agents/release/MANIFEST-EXAMPLE.md`** and **`docs/agents/release/MANIFEST-SCHEMA.md`** (see **`## Version graph manifests`**). Do not assume the same editing rules as **changes.html**.
 
 ### Category icons (in-app, Iconify)
 

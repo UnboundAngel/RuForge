@@ -404,6 +404,6 @@ if (onboardingOccupied) return null;
 
 - `AGENTS.md`: Shipped log, onboarding contract, pointer to this file.
 - `STATE.md`: Current release focus.
-- `docs/plans/`: Feature specs (if any island-specific plan exists).
+- `docs/ruforge/plans/`: Feature specs (if any island-specific plan exists).
 
 When you change expand behavior or animation constants, append one line to the `AGENTS.md` Shipped log under the current `(unreleased)` version. If you discover a new invariant or usability rule, append it **here** (see `AGENTS.md` Dynamic Island section).

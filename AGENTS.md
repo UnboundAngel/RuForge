@@ -1,6 +1,6 @@
-﻿# RuForge: notes for IDE agents (Cursor / automation)
+﻿# RuForge: notes for IDE agents (Cursor, Codex, and other automation)
 
-Concise context for agents working **inside this repo's IDE workspace**. This is **not** a full architecture audit; use it as an onboarding + guardrails doc.
+Concise context for agents working **inside this repo's IDE workspace**. Same read order and guardrails for Cursor, Codex, and other IDE automation. This is **not** a full architecture audit; use it as an onboarding + guardrails doc.
 
 ## Read first, write last (every agent, every task)
 
@@ -10,13 +10,62 @@ user release, open P0s, next items. Do not reconstruct project state from the
 git tree or by asking Angel what was last shipped. STATE.md is that answer.
 
 After any task that changed shipped behavior or moved the project: update
-STATE.md last, before you report done. At minimum refresh Now, add a line to
-the Shipped log (see Shipped log section), and mirror it into STATE.md's
-"What is new since last user release". Skipping this is the single failure
-that has cost the most rework in this repo.
+STATE.md last, before you report done. At minimum refresh Now, append one line
+to the Shipped log in **this file** (`AGENTS.md`, see Shipped log section),
+and mirror it into STATE.md's "What is new since last user release". Do not
+append per-change lines to STATE.md. Skipping this is the single failure that
+has cost the most rework in this repo.
 
 If STATE.md and the code disagree, the code wins. Fix STATE.md forward. Never
 git-restore a dirty tree to "match" it.
+
+## Agent read order
+
+1. **`STATE.md`** — live project cursor (version, Now, Next 3, Open P0).
+2. **`AGENTS.md`** — rules, roles, Shipped log, release ritual, **Doc routing** table below.
+3. **Task-specific only:** one row from **Doc routing** when trigger words match.
+
+Do not start from `docs/agents/handoffs/`, `docs/ruforge/RuForge.md`, or `docs/ruforge/product-feature-catalogue.md` unless Angel explicitly points you there.
+
+## Doc routing (trigger words)
+
+**Every task:** read [`STATE.md`](STATE.md) then this file.
+
+**Then:** if any trigger word matches, read that doc before writing code or suggesting product direction. Live code wins over all docs.
+
+| Path | Purpose | Trigger words |
+|------|---------|---------------|
+| [`STATE.md`](STATE.md) | Live version, Now, Next 3, Open P0, unreleased delta | always; project state; what shipped; priorities; P0 |
+| [`AGENTS.md`](AGENTS.md) | Rules, Shipped log, release ritual, Chad/Jim split, editing guardrails | always; agent rules; shipped log; release ritual; Codex; Cursor; agent instructions; context files |
+| [`docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`](docs/agents/COMPANION-AND-COMPETITOR-INDEX.md) | Companion LAN + competitor doc map | companion; LAN; QR; pair; pairing; session cookie; stream-token; signed URL; HMAC; `/pair`; `/library`; `/stream`; companion-web; browser companion; axum companion; phone browser |
+| [`docs/ruforge/research/companion-architecture-extraction.md`](docs/ruforge/research/companion-architecture-extraction.md) | Companion v1 target design + upstream server patterns | (after index) Jellyfin; Navidrome; PairDrop; Snapdrop; go2rtc; MediaMTX; range 206; embed SPA; no transcode |
+| [`src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`](src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md) | Activity Island motion, portal, playback bridge, onboarding constraints | Activity Island; dynamic island; island onboarding; playback bridge; activityOwner; shellBlocked; island expand |
+| [`.cursor/rules/design-style.mdc`](.cursor/rules/design-style.mdc) | House visual taste (tokens, spacing, anti-patterns) | visual; UI polish; card; layout; motion; spacing; tokens; typography; divider; glow |
+| [`.cursor/rules/design-style-ruforge-tokens.mdc`](.cursor/rules/design-style-ruforge-tokens.mdc) | RuForge `--color-rf-*` / app token mapping | RuForge tokens; `--accent`; desktop palette |
+| [`.cursor/rules/design-style-media-cards.mdc`](.cursor/rules/design-style-media-cards.mdc) | Media card layout rules | media card; thumbnail; library grid; poster |
+| [`.cursor/rules/design-style-checklist.mdc`](.cursor/rules/design-style-checklist.mdc) | Pre-ship visual checklist | design review; checklist; Jim handoff QA |
+| [`.cursor/rules/design-style-anti-patterns.mdc`](.cursor/rules/design-style-anti-patterns.mdc) | Banned UI patterns | anti-pattern; generic AI UI; flat card |
+| [`AGENTS.md` → Who does what / Handoff rule](AGENTS.md) | Jim vs Chad; copy-paste Jim prompts | Jim; Gemini; visuals only; styling handoff; do not change logic |
+| [`docs/agents/handoffs/jim-settings-info-icon.md`](docs/agents/handoffs/jim-settings-info-icon.md) | Stale Jim pass: settings info icons | Jim; settings info icon; SettingItem description toggle |
+| [`docs/agents/release/CHANGELOG-AUTHORING.md`](docs/agents/release/CHANGELOG-AUTHORING.md) | Version graph + changelog authoring contract | release; changelog; version graph; versioner; MANIFEST; ship step 8 |
+| [`docs/agents/release/versioner.html`](docs/agents/release/versioner.html) + [`docs/agents/release/versions/`](docs/agents/release/versions/) | Interactive version graph (release only) | versioner.html; version JSON; fileEdits; registry row |
+| [`AGENTS.md` → Release ritual](AGENTS.md) | Ordered ship sequence, updater.json, gh release | release; ship; push it out; updater.json; signed build; gh release; WinGet |
+| [`docs/ruforge/research/google-seo-and-domain-strategy.md`](docs/ruforge/research/google-seo-and-domain-strategy.md) | SEO framing, competitor pages, DMCA-safe copy | website; SEO; parasite SEO; 4K Video Downloader; comparison page; domain |
+| [`docs/ruforge/research/ai-llm-discoverability.md`](docs/ruforge/research/ai-llm-discoverability.md) | llms.txt, IndexNow, AI citation policy | llms.txt; robots; crawler; IndexNow; GPTBot; ClaudeBot; AI discoverability |
+| [`website/public/llms.txt`](website/public/llms.txt) | Live site AI index (deploy artifact) | llms.txt content; site root index |
+| [`website/public/robots.txt`](website/public/robots.txt) | Live crawler policy | robots.txt; disallow GPTBot |
+| [`website/src/pages/**`](website/src/pages/) + [`docs/ruforge/website/design.md`](docs/ruforge/website/design.md) | Public site pages + design tokens | JSON-LD; SoftwareApplication; BaseLayout; meta description; Astro page |
+| [`.cursor/rules/roadmap-workflow.mdc`](.cursor/rules/roadmap-workflow.mdc) | When/how to edit roadmap.json | roadmap workflow; new feature idea; mark finished |
+| [`website/src/content/roadmap.json`](website/src/content/roadmap.json) | Public roadmap rows | roadmap; roadmap.json; field notes; roadmapStatus |
+| [`docs/agents/handoffs/roadmap-field-notes.md`](docs/agents/handoffs/roadmap-field-notes.md) | Stale desktop roadmap polish handoff | field notes; RoadmapFieldNotes; `/roadmap` desktop polish |
+| [`docs/ruforge/research/ruforge-competitive-audit.md`](docs/ruforge/research/ruforge-competitive-audit.md) | yt-dlp GUI feature matrix | Parabolic; imsyy; ytdlp-interface; dsymbol; competitive audit |
+| [`docs/ruforge/plans/<topic>.plan.md`](docs/ruforge/plans/) | Committed machine plans | plan file named in task; export phase; downloader ETA; music mini player |
+| [`docs/ruforge/PROBLEMS.md`](docs/ruforge/PROBLEMS.md) | Report-only bug backlog | known problem; PROBLEMS; bug backlog; P0 update hang |
+| [`docs/ruforge/RuForge.md`](docs/ruforge/RuForge.md) | Archived roadmap (stale) | only when Angel explicitly points here |
+| [`docs/ruforge/product-feature-catalogue.md`](docs/ruforge/product-feature-catalogue.md) | Stale code inventory (stale) | only when Angel explicitly points here |
+| [`docs/agents/handoffs/`](docs/agents/handoffs/) | Stale session handoffs | handoff; pass 1; prior chat context (read banner; do not treat as live state) |
+
+**Sleepy / Discord bot:** no repo doc. Discord Rich Presence is a Future line in archived `docs/ruforge/RuForge.md` only.
 
 ## Output law (non-negotiable, every agent, every surface)
 
@@ -112,10 +161,10 @@ Phase 2 work (distribution, content, README polish) is authorized separately.
 ## Planning & ideas (canonical doc)
 
 - **Shipped log (THIS FILE, bottom, `## Shipped log`):** the **first and mandatory** place every shipped change is recorded. One appended line per change, no format ceremony. This is the cheap, vague-input-proof capture surface. **If you change behavior, append here before you consider the task done.** See `## Shipped log` for the rule.
-- **Living roadmap / ideas (in-repo, canonical for agents):** `docs/RuForge.md`. Update when shipped work lands. Optional mirror outside the repo: `c:\Random things i dont want deleted\markdown files\RuForge.md` (keep in sync by hand if you use both).
-- **Companion + competitor doc index (agents):** `docs/COMPANION-AND-COMPETITOR-INDEX.md`. Trigger-word routing to companion architecture research, yt-dlp GUI competitive audit, SEO rivals, and live code paths. Read before companion LAN or "how competitors lay out their server" tasks.
-- **Graph surfaces (`docs/changes.html`, `docs/versions/version-<semver>.json`, `docs/versioner.html`):** Angel's project-tracking + release-note source. These are **drained from the Shipped log at release time only** (see `## Release ritual`, step 8). **Never** edited per-change mid-cycle. The gap between the Shipped log and the last version present in the graph surfaces IS the release-prep to-do; do not wait to be told.
-- **In-repo machine plans:** `.cursor/plans/` (e.g. Zustand migration audit). Implementation detail, may lag; trust code + this `AGENTS.md` for "what shipped."
+- **Historical roadmap / ideas archive:** `docs/ruforge/RuForge.md` (frozen; do not treat as live state). Live priorities: `STATE.md` (`Next 3`, `Open P0`) + `website/src/content/roadmap.json`. Optional mirror outside the repo: `c:\Random things i dont want deleted\markdown files\RuForge.md` (keep in sync by hand if you use both).
+- **Companion + competitor doc index (agents):** `docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`. Trigger-word routing to companion architecture research, yt-dlp GUI competitive audit, SEO rivals, and live code paths. Read before companion LAN or "how competitors lay out their server" tasks.
+- **Graph surfaces (`docs/agents/release/versioner.html` + `docs/agents/release/versions/version-<semver>.json`):** Angel's project-tracking + release-note source. (`docs/changes.html` is not in the repo.) Drained from the Shipped log at release time only (see `## Release ritual`, step 8). **Never** edited per-change mid-cycle. The gap between the Shipped log and the last version present in the graph surfaces IS the release-prep to-do; do not wait to be told.
+- **Committed machine plans:** `docs/ruforge/plans/`. Optional machine-local plans under `%USERPROFILE%\.cursor\plans\` are not repo truth. Implementation detail may lag; trust code + this `AGENTS.md` for "what shipped."
 - **Dynamic Island (architecture & usability):** `src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`. Read before island, motion, playback-bridge, or island-onboarding edits. Extend that file when you learn something future agents must not break; do not duplicate long island animation rules here.
 
 ## Who does what (this workspace vs elsewhere)
@@ -124,6 +173,8 @@ Phase 2 work (distribution, content, README polish) is authorized separately.
 |------|-------------|--------|
 | **Chad** (default agent in Cursor) | Cursor, this workspace | **Logic only:** TypeScript / React behavior, state, Tauri wiring, bug fixes, refactors. Small `.ts` / `.tsx` edits are in scope when they touch behavior, types, or data flow. Not pure styling passes. |
 | **Jim** (Gemini) | Your CLI or Antigravity. **Not** Cursor | **Visuals only:** layout, typography, color, motion, component styling. **No** business logic, state machines, or store changes. |
+
+**Chad/Jim** are Cursor/Gemini nicknames. **Codex and other agents** use the same logic-vs-visuals split: logic in the repo agent, visuals handoff to Jim when needed.
 
 **Handoff rule:** If something needs Jim's pass (pure UI polish), Chad should **not** pretend to be Jim. Instead, Chad ends with a **short, copy-paste prompt for you to run in Jim's environment** (file paths, desired look, explicit "do not change logic or props contracts"). Chad implements or preserves the logic and prop surfaces Jim should style against.
 
@@ -275,25 +326,16 @@ A past mismatch was **`Cargo.toml` behind the JS/Tauri app version**. Fix on eve
 ## Changelog & version-graph authoring (pointer)
 
 The full authoring detail for the release-notes and version-graph surfaces
-lives in `docs/CHANGELOG-AUTHORING.md`. It is not inlined here on purpose:
+lives in `docs/agents/release/CHANGELOG-AUTHORING.md`. It is not inlined here on purpose:
 the per-task agent path stays thin so the Shipped log and release ritual
 below are not buried under manuals.
 
 You only go to that doc when the release ritual sends you (step 6), or when
 explicitly changing one of these surfaces. For all normal work, ignore it.
 
-- Version graph manifests (`docs/versioner.html` + `docs/versions/version-<semver>.json`):
+- Version graph manifests (`docs/agents/release/versioner.html` + `docs/agents/release/versions/version-<semver>.json`):
   schema, registry rows, fileEdits, preview. See CHANGELOG-AUTHORING.md part 1.
-- Changelog source (`docs/changes.html`): HTML-only DOM contract (`rf-*`
-  classes, `data-version`), the embedded `<script id="changelog-data">` JSON
-  island, faded-divider rule, Canvas Architecture Workflow, Iconify category
-  icons. See CHANGELOG-AUTHORING.md part 2.
-- Structured version block + DOM template for a new release section.
-  See CHANGELOG-AUTHORING.md part 3.
-
-Hard rule unchanged by the move: never edit the changes.html JS or CSS
-rendering logic. Append to the JSON island only, recompute `.rf-count`,
-honor faded dividers, fixes are non-red. Full detail in the authoring doc.
+- Changelog source (`docs/changes.html`, **not in repo**): historical HTML contract documented in CHANGELOG-AUTHORING.md part 2 if the file returns. Release authoring today uses version JSON + `docs/agents/release/versioner.html` only.
 
 ## Dynamic Island (architecture & usability)
 
@@ -305,7 +347,7 @@ Before changing `ActivityIsland`, `DynamicIsland`, island motion/expand behavior
 
 - Config: `src-tauri/tauri.conf.json` â†’ `plugins.updater` (`endpoints`, `pubkey`). Bundles: `"createUpdaterArtifacts": true`.
 - Permissions: `src-tauri/capabilities/default.json` includes `updater:allow-check` and `updater:allow-download-and-install`.
-- **Runtime:** `src/App.tsx` calls `check()` on startup; in-app update UI uses `downloadAndInstall()` from the returned `Update` object. **Structured release copy** for agents lives in **`docs/changes.html`** (internal HTML); user-facing strings also come from **`updater.json` `notes`**, GitHub Releases, and the in-app changelog UI. Keep them consistent when you ship.
+- **Runtime:** `src/App.tsx` calls `check()` on startup; in-app update UI uses `downloadAndInstall()` from the returned `Update` object. **Structured release copy** for agents lives in **`updater.json` `notes`** and GitHub Releases; see also `docs/versions/version-*.json` at release time. Keep them consistent when you ship.
 - **Where "what's in this update" comes from (not hardcoded in the old build):** On each `check()`, the updater plugin fetches **`updater.json`** from `plugins.updater.endpoints` (e.g. raw `main` on GitHub). The **`version`** and **`notes`** fields describe the **available** update. Users on an older build see whatever **`notes`** says **at check time**. You do **not** need to ship new frontend code just to change that copy. The GitHub **Release description** is **not** read automatically; mirror anything you want users to see into **`updater.json` `notes`** (or keep Release + `notes` in sync by hand).
 - **Two UI surfaces, keep copy split sensible:** (1) **`UpdaterMainOverlays`**: small top-right card, **`line-clamp-3`**, narrow width. Treat this as a **teaser** (one short line, or a tiny markdown blurb). (2) **`UpdaterPostInstallStack`**: after install, scrollable "What's new". Use **`src/updatePostInstall.ts`**: plain markdown in `notes`, or structured JSON `{"notes","additions","fixes"}` for categorized lists. When `notes` is JSON, the teaser card uses **only** the inner `"notes"` string via **`teaserNotesFromUpdaterBody`** so raw JSON does not fill the small card. **Agents:** do **not** paste long `docs/changes.html` blobs into `updater.json`; distill. Prefer short teaser + fuller post-install payload.
 - **Why "no update" is often correct:** `check()` returns **`null` unless the version in `updater.json` is greater than the running app's version.** If `updater.json` on `main` still says the same version as the installed build, users will see nothing. That is expected, not a broken wire.
@@ -403,14 +445,16 @@ Steps that highlight or drive the activity island: read **`src/components/island
 - **Newest version block on top, inside this section.** Newest line on top within a block.
 - **Do NOT create per-change files or per-version folders.** That reintroduces the exact distance/ceremony this section deletes. The flat block IS the system. Editing this file every time is fine. Finch does exactly this and never misses; editing was never the friction, distance was.
 - **`### vX.Y.Z (unreleased)`** is the live block during a cycle. At release, the ritual (below) drains it to graph surfaces, then **deletes** it from this file and opens a fresh empty `(unreleased)` block.
-- **Do NOT keep `(shipped)` blocks here.** After release ritual step 8, shipped history lives only in `docs/changes.html` and `docs/versions/version-<semver>.json`. Keeping old blocks bloats every agent read for no benefit.
+- **Do NOT keep `(shipped)` blocks here.** After release ritual step 8, shipped history lives only in `docs/agents/release/versions/version-<semver>.json` and `docs/agents/release/versioner.html`. Keeping old blocks bloats every agent read for no benefit.
 
-**This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see `## Release ritual`). That is the only time the graph JSON / `changes.html` get touched. Prefer one line per user-visible feature or fix; batch incremental polish passes into one line instead of ten `(fix)` breakpoints.
+**This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see `## Release ritual`). That is the only time the version JSON / `versioner.html` registry get touched. Prefer one line per user-visible feature or fix; batch incremental polish passes into one line instead of ten `(fix)` breakpoints.
 
 
 ### v0.2.2 (unreleased)
 
-- **Docs**: companion and competitor index with trigger-word routing for agents (`docs/COMPANION-AND-COMPETITOR-INDEX.md`, `AGENTS.md` pointer).
+- **Docs**: second-pass doc layout (`docs/agents/`, `docs/ruforge/`), AGENTS Doc routing table, reference pointer updates (`AGENTS.md`, `STATE.md`, `legal.ts`, cross-doc links).
+- **Docs**: agent-doc cleanup: single Shipped log in AGENTS.md, STATE live-cursor pointer, stale banners on historical docs, pointer fixes for RuForge.md / changes.html / docs/plans (`AGENTS.md`, `STATE.md`, handoffs, `docs/ruforge/RuForge.md`).
+- **Docs**: companion and competitor index with trigger-word routing for agents (`docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`, `AGENTS.md` pointer).
 - **Companion LAN (dev-gated)**: companion loading visual polish with PS5-inspired progress rail (`companion-web/index.html`).
 
 - **Companion LAN (dev-gated)**: minimal black-and-red full-screen loading with red accent rail, status rotator, and segmented pulse bar (`companion-web/index.html`).
@@ -472,11 +516,8 @@ Steps that highlight or drive the activity island: read **`src/components/island
 8. **Drain Shipped log â†’ graph surfaces AND roll STATE.md (scoped, this
    step only).**
    a. Append the now-released changes into
-      `docs/versions/version-<semver>.json` and the
-      `<script id="changelog-data">` JSON inside `docs/changes.html`
-      (append to the `versions` array only; recompute `.rf-count`; never
-      touch the JS/CSS/DOM contract; see `docs/CHANGELOG-AUTHORING.md`).
-      Add the registry row in `docs/versioner.html`.
+      `docs/agents/release/versions/version-<semver>.json` (see `docs/agents/release/CHANGELOG-AUTHORING.md`).
+      Add the registry row in `docs/agents/release/versioner.html`.
    b. In AGENTS.md: drain the `(unreleased)` block into graph surfaces, then
       **delete that block** and open a fresh empty
       `### v<next> (unreleased)` block. Do **not** leave `(shipped)` blocks
