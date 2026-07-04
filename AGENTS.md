@@ -37,6 +37,7 @@ Do not start from `docs/agents/handoffs/`, `docs/ruforge/RuForge.md`, or `docs/r
 |------|---------|---------------|
 | [`STATE.md`](STATE.md) | Live version, Now, Next 3, Open P0, unreleased delta | always; project state; what shipped; priorities; P0 |
 | [`AGENTS.md`](AGENTS.md) | Rules, Shipped log, release ritual, Chad/Jim split, editing guardrails | always; agent rules; shipped log; release ritual; Codex; Cursor; agent instructions; context files |
+| [`docs/ruforge/plans/companion-action-plan.md`](docs/ruforge/plans/companion-action-plan.md) | Locked Companion V1 scope and open product decisions | Companion action plan; Companion V1; same-PC browser companion; localhost companion; progress sync; no downloader UI; Companion scope |
 | [`docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`](docs/agents/COMPANION-AND-COMPETITOR-INDEX.md) | Companion LAN + competitor doc map | companion; LAN; QR; pair; pairing; session cookie; stream-token; signed URL; HMAC; `/pair`; `/library`; `/stream`; companion-web; browser companion; axum companion; phone browser |
 | [`docs/ruforge/research/companion-architecture-extraction.md`](docs/ruforge/research/companion-architecture-extraction.md) | Companion v1 target design + upstream server patterns | (after index) Jellyfin; Navidrome; PairDrop; Snapdrop; go2rtc; MediaMTX; range 206; embed SPA; no transcode |
 | [`src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`](src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md) | Activity Island motion, portal, playback bridge, onboarding constraints | Activity Island; dynamic island; island onboarding; playback bridge; activityOwner; shellBlocked; island expand |
@@ -162,6 +163,7 @@ Phase 2 work (distribution, content, README polish) is authorized separately.
 
 - **Shipped log (THIS FILE, bottom, `## Shipped log`):** the **first and mandatory** place every shipped change is recorded. One appended line per change, no format ceremony. This is the cheap, vague-input-proof capture surface. **If you change behavior, append here before you consider the task done.** See `## Shipped log` for the rule.
 - **Historical roadmap / ideas archive:** `docs/ruforge/RuForge.md` (frozen; do not treat as live state). Live priorities: `STATE.md` (`Next 3`, `Open P0`) + `website/src/content/roadmap.json`. Optional mirror outside the repo: `c:\Random things i dont want deleted\markdown files\RuForge.md` (keep in sync by hand if you use both).
+- **Companion action plan:** `docs/ruforge/plans/companion-action-plan.md`. Locked V1 scope and open product decisions for Browser Companion. Read before proposing Companion product direction.
 - **Companion + competitor doc index (agents):** `docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`. Trigger-word routing to companion architecture research, yt-dlp GUI competitive audit, SEO rivals, and live code paths. Read before companion LAN or "how competitors lay out their server" tasks.
 - **Graph surfaces (`docs/agents/release/versioner.html` + `docs/agents/release/versions/version-<semver>.json`):** Angel's project-tracking + release-note source. (`docs/changes.html` is not in the repo.) Drained from the Shipped log at release time only (see `## Release ritual`, step 8). **Never** edited per-change mid-cycle. The gap between the Shipped log and the last version present in the graph surfaces IS the release-prep to-do; do not wait to be told.
 - **Committed machine plans:** `docs/ruforge/plans/`. Optional machine-local plans under `%USERPROFILE%\.cursor\plans\` are not repo truth. Implementation detail may lag; trust code + this `AGENTS.md` for "what shipped."
@@ -452,6 +454,7 @@ Steps that highlight or drive the activity island: read **`src/components/island
 
 ### v0.2.2 (unreleased)
 
+- **Docs**: Companion action plan moved under committed RuForge plans and stale Companion doc paths were corrected (`docs/ruforge/plans/companion-action-plan.md`, `AGENTS.md`, `STATE.md`, `docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`).
 - **Docs**: second-pass doc layout (`docs/agents/`, `docs/ruforge/`), AGENTS Doc routing table, reference pointer updates (`AGENTS.md`, `STATE.md`, `legal.ts`, cross-doc links).
 - **Docs**: agent-doc cleanup: single Shipped log in AGENTS.md, STATE live-cursor pointer, stale banners on historical docs, pointer fixes for RuForge.md / changes.html / docs/plans (`AGENTS.md`, `STATE.md`, handoffs, `docs/ruforge/RuForge.md`).
 - **Docs**: companion and competitor index with trigger-word routing for agents (`docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`, `AGENTS.md` pointer).
