@@ -18,9 +18,9 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-04 (companion-web disconnected/reconnect polish)
+Last updated: 2026-07-04 (Companion V1.1 ruforge://focus protocol bridge)
 
-Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. Browser Companion (dev-gated) binds localhost only with progress sync and disconnected/session-lost reconnect UX in companion-web; dev gate unchanged.
+Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync and disconnected UX. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow upda
 
 
 
-0.2.2 in tree: website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) binds `127.0.0.1`, progress sync into desktop `playbackStorage`, and companion-web disconnected/session-lost gates with quiet reconnect backoff. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
+0.2.2 in tree: website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync and disconnected gates. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
 
 
 
@@ -57,6 +57,8 @@ reads this for the last shipped delta, not the git tree.
 
 
 **0.2.2 (unreleased, in tree):**
+
+- Companion V1.1: `ruforge://focus` deep link raises the main window only (fail-closed; no library or download actions).
 
 - Companion (dev-gated): companion-web disconnected and session-lost gates with reconnect backoff and re-pair guidance after RuForge restart.
 

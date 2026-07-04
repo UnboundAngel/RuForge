@@ -1,12 +1,9 @@
 use tauri::menu::{Menu, MenuEvent, MenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, EventTarget, Manager};
+use tauri::{AppHandle, Manager};
 
 use crate::debug_log::is_category_enabled;
-
-/// Emitted to the **main** webview only. Handled in `App.tsx` using `@tauri-apps/api/webviewWindow`
-/// (`unminimize`, `show`, `setFocus`) — the same public API documented for the JS window layer.
-pub const TRAY_SHOW_MAIN_EVENT: &str = "ruforge:tray-show-main";
+use crate::focus_protocol;
 
 /// Prints one line to **stderr** (visible in `tauri dev` / terminal). Used from the main webview
 /// so tray debugging does not rely on the browser console.
@@ -24,17 +21,7 @@ fn tray_log(line: impl AsRef<str>) {
 }
 
 fn request_show_main_from_tray(app: &AppHandle) {
-    tray_log(format!(
-        "Rust: Show menu item matched, emitting `{TRAY_SHOW_MAIN_EVENT}` → main webview"
-    ));
-    match app.emit_to(
-        EventTarget::webview_window("main"),
-        TRAY_SHOW_MAIN_EVENT,
-        (),
-    ) {
-        Ok(()) => tray_log("Rust: emit_to returned Ok"),
-        Err(e) => tray_log(format!("Rust: emit_to FAILED: {e}")),
-    }
+    focus_protocol::request_show_main(app);
 }
 
 pub fn setup_tray(app: &tauri::App) -> Result<(), tauri::Error> {
@@ -67,10 +54,12 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), tauri::Error> {
 
     let menu = Menu::with_items(app, &[&show_i, &troubleshooting_m, &quit_i])?;
 
-    let mut tray_builder = TrayIconBuilder::new()
-        .menu(&menu)
-        .on_menu_event(move |app: &AppHandle, event: MenuEvent| {
+    let mut tray_builder = TrayIconBuilder::new().menu(&menu).on_menu_event(
+        move |app: &AppHandle, event: MenuEvent| {
             if event.id == show_menu_id {
+                tray_log(format!(
+                    "Rust: Show menu item matched, raising main window via focus protocol helper"
+                ));
                 request_show_main_from_tray(app);
                 return;
             }
@@ -94,7 +83,8 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), tauri::Error> {
                 }
                 _ => {}
             }
-        });
+        },
+    );
 
     if let Some(icon) = app.default_window_icon() {
         tray_builder = tray_builder.icon(icon.clone());
