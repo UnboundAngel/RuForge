@@ -18,7 +18,7 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-03 (companion session refresh + mobile layout)
+Last updated: 2026-07-04 (companion action plan doc added)
 
 Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. LAN companion remains dev-gated only in tree; companion-web session survives refresh while RuForge stays running.
 
@@ -213,6 +213,8 @@ Fixes:
 - `docs/changes.html` is not in the repo (never committed). Version graph uses `docs/versioner.html` + `docs/versions/version-*.json` only.
 
 - Companion LAN server is in tree but dev-gated (`showDebuggingSettings`). Not in 0.2.1 public release notes.
+
+- Companion scope is locked in `docs/COMPANION-ACTION-PLAN.md`: V1 is same-PC browser Companion on `localhost` only (Videos + Songs, playback, mandatory progress sync as the only write path). Current code binds `0.0.0.0` (LAN) and has no progress write path yet, both flagged there as implementation reconciliation / new work, not shipped V1.
 
 
 
