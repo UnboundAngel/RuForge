@@ -18,7 +18,7 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-04 (companion action plan; doc layout second pass)
+Last updated: 2026-07-04 (companion action plan moved into plans; doc routing cleanup)
 
 Status: 0.2.1 live on GitHub and updater.json. Website download URLs follow updater.json at build time; OG preview uses `ruforge-og.png` on ruforge.app. LAN companion remains dev-gated only in tree; companion-web session survives refresh while RuForge stays running.
 
@@ -61,6 +61,8 @@ reads this for the last shipped delta, not the git tree.
 - Docs: second-pass doc layout (`docs/agents/`, `docs/ruforge/`), AGENTS Doc routing table, reference pointer updates.
 
 - Docs: agent-doc cleanup (Shipped log authority, stale banners, pointer fixes; `AGENTS.md`, `STATE.md`).
+
+- Docs: Companion action plan moved under `docs/ruforge/plans/`; stale Companion routing references corrected.
 
 - Companion LAN (dev-gated): cinematic loading scene (glass layers, breathe-accent sidebar, PS5-inspired progress rail) in companion-web.
 - Companion LAN (dev-gated): paired URL normalizes to `/paired` after session confirm; reassurance copy in debug strip.
@@ -218,7 +220,7 @@ Fixes:
 
 - Companion LAN server is in tree but dev-gated (`showDebuggingSettings`). Not in 0.2.1 public release notes.
 
-- Companion scope is locked in `docs/COMPANION-ACTION-PLAN.md`: V1 is same-PC browser Companion on `localhost` only (Videos + Songs, playback, mandatory progress sync as the only write path). Current code binds `0.0.0.0` (LAN) and has no progress write path yet, both flagged there as implementation reconciliation / new work, not shipped V1.
+- Companion scope is locked in `docs/ruforge/plans/companion-action-plan.md`: V1 is same-PC browser Companion on `localhost` only (Videos + Songs, playback, mandatory progress sync as the only write path). Current code binds `0.0.0.0` (LAN) and has no progress write path yet, both flagged there as implementation reconciliation / new work, not shipped V1.
 
 
 

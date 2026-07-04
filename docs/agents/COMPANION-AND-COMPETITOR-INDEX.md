@@ -10,6 +10,7 @@ Agent-facing map of where companion LAN architecture, competitor research, and r
 
 | If the task mentions… | Open first | Then |
 |----------------------|------------|------|
+| Companion action plan, Companion V1, same-PC browser companion, localhost companion, progress sync, no downloader UI, Companion scope | **`docs/ruforge/plans/companion-action-plan.md`** | Part 2 of `docs/ruforge/research/companion-architecture-extraction.md` for architecture |
 | companion, LAN server, QR pair, session cookie, `/pair`, `/library`, `/stream`, HMAC signed URL, companion-web, phone browser, axum companion | **`docs/ruforge/research/companion-architecture-extraction.md`** Part 2 | Code: `src-tauri/src/companion/` |
 | Jellyfin, Navidrome, PairDrop, Snapdrop, go2rtc, MediaMTX, PlaybackInfo, Subsonic, Quick Connect, embed.FS, ServeContent, range 206 | **`docs/ruforge/research/companion-architecture-extraction.md`** Part 1 (+ Part 3 borrow table) | Part 2 for RuForge target design |
 | what to copy vs not copy from upstream servers | **`docs/ruforge/research/companion-architecture-extraction.md`** Part 3 | Part 2 reconciliation section |
@@ -48,6 +49,23 @@ Agent-facing map of where companion LAN architecture, competitor research, and r
 **Note:** Doc references `.cursor/plans/companion_lan_server_a1f7c239.plan.md`. That plan file is not in the repo; Part 2 is the surviving plan surface.
 
 **Trigger words:** `companion`, `LAN`, `pairing code`, `session token`, `stream-token`, `signed URL`, `range request`, `206`, `playable`, `CORS`, `QR`, `companion-web`, `axum`, `embed SPA`, `no transcode`, `browser-only`, `Quick Connect`, `api_key anti-pattern`, `Shares public URL`, `PairDrop roomSecret`, `go2rtc ladder`, `ffprobe`, `faststart`
+
+---
+
+## Canonical companion scope doc
+
+**Path:** `docs/ruforge/plans/companion-action-plan.md`
+
+**What it is:** Scope-control document for Browser Companion V1. It locks V1 to
+same-PC localhost access, Videos and Songs, playback, mandatory progress sync,
+and no downloader UI or external acquisition from Companion.
+
+**Use it for:** product boundaries, what must not ship in V1, open Companion
+decisions to preserve, and implementation reconciliation between current LAN
+code and loopback-first Browser Companion.
+
+**Do not use it for:** endpoint shapes, auth design, range streaming details, or
+competitor extraction. Use the architecture doc above for those.
 
 ---
 

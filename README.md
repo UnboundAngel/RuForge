@@ -44,7 +44,7 @@ Tauri v2, Rust backend, React and TypeScript frontend, Zustand for main-window s
 
 ## status
 
-version 0.2.0 shipped. two of us use it every day. still pre-1.0 and actively developed; see the [roadmap](https://ruforge.app/roadmap) and [changelog](https://ruforge.app/changelog) on the site for what is new and what is next.
+version 0.2.1 shipped. two of us use it every day. still pre-1.0 and actively developed; see the [roadmap](https://ruforge.app/roadmap) and [changelog](https://ruforge.app/changelog) on the site for what is new and what is next.
 
 [GitHub Discussions](https://github.com/UnboundAngel/RuForge/discussions) are open if you want to ask something or share how you're using it.
 

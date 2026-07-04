@@ -8,14 +8,14 @@ YouTube surface, or a general remote-access product.
 The competitive and architecture research already lives elsewhere and stays
 authoritative for how to build the server:
 
-- `docs/research/companion-architecture-extraction.md`: the four-project
+- `docs/ruforge/research/companion-architecture-extraction.md`: the four-project
   extraction (Jellyfin, Navidrome, Snapdrop/PairDrop, go2rtc) and the RuForge
   target design (Part 2). This action plan does not restate it; it locks what
   slice of it V1 is allowed to ship.
-- `docs/COMPANION-AND-COMPETITOR-INDEX.md`: routing index for the above plus the
-  code map.
-- `docs/research/ruforge-competitive-audit.md`: yt-dlp GUI product audit. Cited
-  only to confirm Companion is not where downloader features go.
+- `docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`: routing index for the above
+  plus the code map.
+- `docs/ruforge/research/ruforge-competitive-audit.md`: yt-dlp GUI product
+  audit. Cited only to confirm Companion is not where downloader features go.
 
 Live code wins for current implementation truth. This action plan wins for V1
 scope. If current code in `src-tauri/src/companion/` disagrees with a V1
