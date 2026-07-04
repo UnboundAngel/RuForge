@@ -49,7 +49,7 @@ pub enum MediaType {
 /// Companion/browser-facing item projection. This type can never carry a filesystem
 /// path; it is a physically separate struct from any desktop projection so a stray
 /// field addition cannot leak a path to an untrusted LAN client.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompanionItemProjection {
     pub id: String,
@@ -67,7 +67,7 @@ pub struct CompanionItemProjection {
 /// Internal-only record backing one companion item. Holds real paths; `resolver`
 /// is the only module permitted to read `source_path` / `serve_path` / `thumb_path`
 /// out of this struct. Never serialize this type directly to an HTTP response.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompanionLibraryItem {
     pub id: String,
     pub source_path: PathBuf,

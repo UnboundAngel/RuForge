@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use tauri::{AppHandle, Emitter};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::RwLock;
 
 use crate::commands::gallery::GalleryEntry;
@@ -17,13 +18,22 @@ use super::types::{CompanionLibraryItem, LibraryConfig};
 /// Event name the desktop store subscribes to for push-driven refresh instead of
 /// polling. Fired after every successful reindex whose version changed.
 pub const LIBRARY_CHANGED_EVENT: &str = "library-changed";
+const COMPANION_CATALOG_CACHE: &str = "companion-catalog.json";
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CompanionCatalogCache {
+    roots: Vec<String>,
+    version: String,
+    items: HashMap<String, CompanionLibraryItem>,
+}
 
 pub struct LibraryState {
     pub config: RwLock<LibraryConfig>,
     desktop_entries: RwLock<Vec<GalleryEntry>>,
     companion_items: RwLock<HashMap<String, CompanionLibraryItem>>,
     version: RwLock<String>,
-    ready: RwLock<bool>,
+    desktop_ready: RwLock<bool>,
+    companion_ready: RwLock<bool>,
     probe_cache: RwLock<ProbeCache>,
     remux_cache_dir: RwLock<Option<PathBuf>>,
     /// Serializes reindex runs; a reindex triggered by a UI refresh and one
@@ -38,7 +48,8 @@ impl LibraryState {
             desktop_entries: RwLock::new(Vec::new()),
             companion_items: RwLock::new(HashMap::new()),
             version: RwLock::new(String::from("empty")),
-            ready: RwLock::new(false),
+            desktop_ready: RwLock::new(false),
+            companion_ready: RwLock::new(false),
             probe_cache: RwLock::new(HashMap::new()),
             remux_cache_dir: RwLock::new(None),
             reindex_lock: tokio::sync::Mutex::new(()),
@@ -78,7 +89,7 @@ impl LibraryState {
     pub async fn desktop_snapshot(&self) -> (String, bool, Vec<GalleryEntry>) {
         (
             self.version.read().await.clone(),
-            *self.ready.read().await,
+            *self.desktop_ready.read().await,
             self.desktop_entries.read().await.clone(),
         )
     }
@@ -87,10 +98,58 @@ impl LibraryState {
         self.companion_items.read().await.get(id).cloned()
     }
 
-    pub async fn companion_projections(&self) -> (String, bool, Vec<super::types::CompanionItemProjection>) {
+    pub async fn companion_projections(
+        &self,
+    ) -> (
+        String,
+        bool,
+        bool,
+        Vec<super::types::CompanionItemProjection>,
+    ) {
         let items = self.companion_items.read().await;
         let projections = items.values().map(|i| i.projection.clone()).collect();
-        (self.version.read().await.clone(), *self.ready.read().await, projections)
+        let companion_ready = *self.companion_ready.read().await;
+        let desktop_ready = *self.desktop_ready.read().await;
+        (
+            self.version.read().await.clone(),
+            companion_ready,
+            companion_ready && !desktop_ready,
+            projections,
+        )
+    }
+
+    pub async fn load_companion_catalog_cache(&self, cache_dir: PathBuf) -> Result<bool, String> {
+        let path = cache_dir.join(COMPANION_CATALOG_CACHE);
+        let data = match std::fs::read(&path) {
+            Ok(data) => data,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(e) => return Err(e.to_string()),
+        };
+        let cache: CompanionCatalogCache =
+            serde_json::from_slice(&data).map_err(|e| e.to_string())?;
+        if cache.roots != self.effective_roots().await {
+            return Ok(false);
+        }
+        if cache.items.is_empty() {
+            return Ok(false);
+        }
+
+        *self.companion_items.write().await = cache.items;
+        *self.version.write().await = cache.version;
+        *self.companion_ready.write().await = true;
+        Ok(true)
+    }
+
+    async fn save_companion_catalog_cache(&self, cache_dir: PathBuf) -> Result<(), String> {
+        let path = cache_dir.join(COMPANION_CATALOG_CACHE);
+        let cache = CompanionCatalogCache {
+            roots: self.effective_roots().await,
+            version: self.version.read().await.clone(),
+            items: self.companion_items.read().await.clone(),
+        };
+        let data = serde_json::to_vec(&cache).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+        std::fs::write(path, data).map_err(|e| e.to_string())
     }
 
     /// Walk every configured root, probe new/changed video files, and publish the
@@ -109,7 +168,18 @@ impl LibraryState {
         *self.desktop_entries.write().await = output.desktop_entries;
         *self.companion_items.write().await = output.companion_items;
         *self.version.write().await = output.version;
-        *self.ready.write().await = true;
+        *self.desktop_ready.write().await = true;
+        *self.companion_ready.write().await = true;
+
+        if let Ok(cache_dir) = app.path().app_cache_dir() {
+            if let Err(e) = self.save_companion_catalog_cache(cache_dir).await {
+                crate::rf_log!(
+                    "library.cache",
+                    log::Level::Warn,
+                    "failed to save companion catalog cache: {e}"
+                );
+            }
+        }
 
         if changed {
             let _ = app.emit(LIBRARY_CHANGED_EVENT, ());

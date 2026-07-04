@@ -97,13 +97,13 @@ use crate::commands::ytdlp_update::{
 use crate::debug_log::sync_debug_log_categories;
 use crate::dev_gate::DevGateDisk;
 use crate::download_job_manager::DownloadJobManager;
+use crate::focus_protocol::TRAY_SHOW_MAIN_EVENT;
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
 use crate::library::commands::{
     get_library_snapshot, library_get_config, library_reindex, library_set_config,
 };
 use crate::library::LibraryState;
 use crate::tray::{setup_tray, tray_front_debug};
-use crate::focus_protocol::TRAY_SHOW_MAIN_EVENT;
 
 fn aptabase_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     let key = option_env!("APTABASE_APP_KEY").unwrap_or("");
@@ -373,7 +373,6 @@ pub fn run() {
             crate::companion::commands::companion_qr_payload,
             crate::companion::commands::companion_sessions,
             crate::companion::commands::companion_revoke_all,
-            crate::companion::commands::companion_local_name_experiment,
             #[cfg(windows)]
             taskbar_thumbbar::sync_taskbar_transport,
         ])

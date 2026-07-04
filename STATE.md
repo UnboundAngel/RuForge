@@ -18,9 +18,9 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-04 (Companion V1.1 ruforge://focus protocol bridge)
+Last updated: 2026-07-04 (companion large-library catalog cache)
 
-Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync and disconnected UX. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged.
+Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, and cached catalog startup for large libraries. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) bin
 
 
 
-0.2.2 in tree: website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync and disconnected gates. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
+0.2.2 in tree: website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, and cached catalog startup for large libraries. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
 
 
 
@@ -58,7 +58,11 @@ reads this for the last shipped delta, not the git tree.
 
 **0.2.2 (unreleased, in tree):**
 
-- Companion (dev-gated): `ruforge.local` same-PC experiment (hosts-file probe, loopback-only friendly URL; no mDNS, no LAN bind).
+- Companion (dev-gated): large library opens can serve a cached Rust catalog immediately while the canonical reindex refreshes in the background.
+
+- Companion (dev-gated): companion-web inline playback errors for stream/token/decode failures; app stays paired unless network or session auth fails.
+
+- Companion (dev-gated): dropped the `ruforge.local` same-PC experiment; localhost remains the only V1 browser entry point.
 
 - Companion V1.1: `ruforge://focus` deep link raises the main window only (fail-closed; no library or download actions).
 

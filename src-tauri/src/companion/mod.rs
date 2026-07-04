@@ -1,6 +1,5 @@
 pub mod auth;
 pub mod commands;
-pub mod local_name;
 pub mod routes;
 pub mod spa;
 
@@ -124,9 +123,21 @@ impl CompanionState {
         if let Ok(cache_dir) = app.path().app_cache_dir() {
             let remux_dir = cache_dir.join("library-remux");
             let _ = std::fs::create_dir_all(&remux_dir);
-            app.state::<LibraryState>()
-                .set_remux_cache_dir(remux_dir)
-                .await;
+            let lib = app.state::<LibraryState>();
+            lib.set_remux_cache_dir(remux_dir).await;
+            match lib.load_companion_catalog_cache(cache_dir).await {
+                Ok(true) => crate::rf_log!(
+                    "companion.server",
+                    log::Level::Info,
+                    "companion catalog cache loaded"
+                ),
+                Ok(false) => {}
+                Err(e) => crate::rf_log!(
+                    "companion.server",
+                    log::Level::Warn,
+                    "companion catalog cache load failed: {e}"
+                ),
+            }
         }
 
         *self.inner.app_handle.write().await = Some(app.clone());

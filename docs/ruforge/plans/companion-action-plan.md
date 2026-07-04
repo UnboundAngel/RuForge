@@ -24,10 +24,17 @@ mismatch as implementation reconciliation needed and fix the code forward only
 under a scoped task. Where this plan describes what is in tree today, trust the
 code over stale doc text.
 
-Status at time of writing: Companion is dev-gated behind `showDebuggingSettings`
-plus `dev_gate` (`companion/commands.rs`). Nothing here is in a public release.
-Progress sync does not exist in code yet (`/sidecar/:id` returns empty
-`chapters`/`subtitles`/`comments`, and there is no write endpoint).
+Status as of 2026-07-04: Companion is dev-gated behind
+`showDebuggingSettings` plus `dev_gate` (`companion/commands.rs`). Nothing here
+is in a public release. Browser Companion V1 now binds localhost, opens the
+same-PC browser URL, serves the split static client, supports playback, has
+progress sync through `POST/GET /progress/:id`, and shows disconnected /
+session-lost gates. The `ruforge.local` experiment was dropped; localhost is the
+only V1 browser entry point.
+
+Next up: finish small V1 hardening only. Keep it on localhost, keep it
+dependency-free, and keep manual app validation as a short Angel checklist
+rather than a Cursor testing task.
 
 ---
 
@@ -71,6 +78,24 @@ V1 is the same-PC browser Companion and nothing beyond it.
 
 Everything not in this list is out of V1 by default. See Sections 4 and 5.
 
+Current implementation status:
+
+- Done: same-PC localhost bind and browser open (`http://localhost:<port>`).
+- Done: Videos / Songs browser client over the existing library IDs.
+- Done: playback, pairing, split static client, favicon, disconnected and
+  session-lost states.
+- Done: progress sync back into the desktop playback path using media IDs over
+  HTTP and internal desktop bridging.
+- Next up: decide whether port `8787` is the final V1 default, and do one
+  lightweight hardening pass on playback-startup error messaging if needed.
+- Done: cached Companion catalog startup. The last Rust-built Companion catalog
+  is stored under the app cache and loaded on server start when scan roots still
+  match, so large existing libraries can render immediately while the canonical
+  reindex refreshes in the background. Companion still uses media IDs over HTTP
+  and Rust resolver authority for all path access.
+- Next up: finish media-type support beyond videos, especially Music/Songs, so
+  Companion can browse and play the library categories V1 promises.
+
 ---
 
 ## 3. V1 progress sync (locked)
@@ -99,25 +124,18 @@ through narrow, authenticated, per-item playback-progress writes, not broad
 server mutation. Companion copies that shape: a single narrow "set progress for
 this media ID" write and nothing that can mutate the library.
 
-Write-path auth is an open reconciliation point, not assumed solved by the
-existing read path. The current HttpOnly session cookie and same-origin guard
-may be enough for catalog reads and stream-token minting, but the progress write
-endpoint must be explicitly reviewed before implementation. That review must
-cover at least CSRF exposure, origin policy, and whether the write needs a
-stronger token or binding than reads. Do not ship progress sync on reuse of the
-read session model alone without that pass.
+Current implementation status:
 
-Reconciliation note (progress store): the existing desktop progress path is
-`src/playbackStorage.ts`, which reads and writes browser `localStorage` keys
-`ruforge-playback-pos:<videoPath>` and `ruforge-playback-dur:<videoPath>`,
-keyed by file path, inside the main WebView. The Companion server is Rust
-(`companion/`) and only knows internal IDs, never paths. So a Companion progress
-write cannot directly touch today's store. Reconciliation options, to be decided
-(open question, Section 10), without changing this section's boundaries:
-map ID to path server-side and bridge the write into the main window's existing
-`playbackStorage` path via Tauri emit/listen, or introduce a backend
-progress store that the desktop reads too. Either way the write stays narrow,
-authenticated, and library-read-only.
+- Done: `POST /progress/:id` and `GET /progress/:id` use authenticated session
+  access and media IDs only.
+- Done: Rust resolves the media ID to the trusted desktop path server-side.
+- Done: Tauri events bridge writes and reads into `src/playbackStorage.ts`, so
+  Companion does not create a separate progress store and never sends paths over
+  HTTP.
+- Done: client writes are debounced and narrow to position, duration, and simple
+  playback state.
+- Next up: keep an eye on session lifetime and restart behavior during public
+  V1 polish. Do not add any other write path.
 
 ---
 
@@ -142,8 +160,7 @@ cool" is not that decision.
   Companion.
 - No YouTube surface in V1.
 - No bundled ad blocker in V1.
-- No LAN binding in V1. (Current code binds `0.0.0.0`; see Section 9,
-  implementation reconciliation needed.)
+- No LAN binding in V1. Current V1 code binds loopback only.
 - No phone, mobile, or TV mode in V1.
 
 ---
@@ -153,12 +170,9 @@ cool" is not that decision.
 These are allowed to be explored later. They are explicitly not V1 dependencies
 and must never be smuggled into V1 as "small additions."
 
-- `ruforge.local` / mDNS friendly naming. Desired UX target, not a V1
-  dependency. **Same-PC experiment (dev-gated, in tree):** probe OS resolution
-  for `ruforge.local`; user adds `127.0.0.1 ruforge.local` to the hosts file
-  manually. No mDNS responder, no hosts auto-edit, no bind change. **Future LAN:**
-  mDNS/DNS-SD (`_ruforge._tcp`) deferred to V2 with written threat model; requires
-  a new Rust dependency and multicast traffic review.
+- mDNS/DNS-SD friendly naming. Desired UX target, not a V1 dependency.
+  Deferred to V2 with written threat model; requires a new Rust dependency and
+  multicast traffic review.
 - LAN access beyond localhost. Requires a written threat model first.
 - Mobile sync of existing library files only. Never acquisition.
 - TV / big-screen mode.
@@ -182,8 +196,7 @@ approval to start.
 
 - V1: same-PC Browser Companion (localhost, Videos and Songs, playback, progress
   sync, disconnected state).
-- V1.1: possible focus-only protocol bridge (`ruforge://focus`, focus only) and a
-  possible `ruforge.local` experiment.
+- V1.1: possible focus-only protocol bridge (`ruforge://focus`, focus only).
 - V2: LAN access, only after a written threat model.
 - V3: mobile sync for existing library files only.
 - V4: TV / big-screen mode.
@@ -223,10 +236,9 @@ store/policy trouble. It does not bend for convenience.
 ## 8. URL and access strategy (locked)
 
 - `localhost` is canonical for V1. `http://localhost:<port>` is the browser URL.
-- `ruforge.local` is an aspiration only. Same-PC dev experiment uses a manual
-  hosts-file line (`127.0.0.1 ruforge.local`) plus an OS resolver probe; see
-  `docs/ruforge/research/ruforge-local-experiment.md`. LAN mDNS remains deferred
-  until V2 threat model.
+- Friendly local naming is not a V1 requirement. The same-PC `ruforge.local`
+  hosts-file experiment was dropped because the manual setup is not worth the
+  product cost. LAN mDNS remains deferred until the V2 threat model.
 - Always keep fallback URL behavior: if the preferred port is taken, bind an
   ephemeral port and open that actual URL. The desktop opens whatever port was
   really bound, so the user is never stranded on a stale URL.
@@ -266,38 +278,33 @@ What already matches V1 and should be reused as-is:
 What must be mode-gated or reconciled for loopback-first Browser Companion
 (implementation reconciliation needed, not an immediate fix):
 
-- LAN binding. `CompanionState::start()` binds `0.0.0.0:8787` with an ephemeral
-  `0.0.0.0:0` fallback, and `companion_qr_payload` builds a LAN-IP URL
-  (`http://{ip}:{port}/?c=...`). V1 requires loopback (`127.0.0.1`) and a
-  `http://localhost:<port>` open URL. Reconciliation: gate the bind address and
-  the open-URL construction by mode (loopback for Browser Companion V1, LAN only
-  behind the future V2 threat-model gate). Do not delete the LAN path; split or
-  mode-gate it. Open question in Section 10.
-- QR pairing vs same-PC open. On the same machine the desktop can open the
-  browser directly and pair without a scanned QR. QR is still the right join
-  mechanism for the later LAN/mobile buckets. Reconciliation: decide whether V1
-  same-PC uses a direct desktop-opened pairing handoff while QR stays for
-  research-gated remote buckets. The underlying single-use code and cookie
-  session are reusable either way.
-- Cookie / session model for same-PC writes. The cookie (`Max-Age=86400`,
-  `SameSite=Strict`, `Path=/`) and `session_secret` rotation on restart /
-  `revoke_all` were designed for untrusted LAN browsers. For a loopback same-PC
-  browser this may be heavier than needed, and restart-rotation drops the session
-  on every desktop restart. Reconciliation: decide whether the session lifetime
-  and secret-rotation policy need adjustment for the same-PC write path (progress
-  sync). Open question in Section 10.
-- Progress sync write path does not exist yet. There is no write endpoint and no
-  ID-keyed progress store; the desktop store is path-keyed `localStorage`
-  (`src/playbackStorage.ts`). Building V1 progress sync is new work, bounded by
-  Section 3. This is the one V1-required capability that is genuinely not in tree.
-- Sections limited to Videos and Songs. `/library` already carries `mediaType`
-  (`audio` / `video`), so the two-section split is a client filter over existing
-  data, not new backend work.
+- Resolved: V1 bind and open URL are localhost-only. LAN bind is deferred to V2
+  threat modeling.
+- Resolved: same-PC open mints a pairing URL and the browser normalizes to
+  `/paired` after session confirmation. QR remains an advanced/manual affordance,
+  not a V1 requirement.
+- Resolved: progress sync write path exists and bridges media-ID requests into
+  the desktop playback store without exposing paths.
+- Still open: cookie / session lifetime after desktop restart. Current behavior
+  can require re-pairing after restart; decide whether that is acceptable for
+  public V1 or should be softened.
+- Still open: playback-startup failures should stay inline when the server is
+  reachable and the session is valid. Only network/session failures should enter
+  disconnected or session-lost gates.
+- Resolved: large-library load performance now uses a cached Companion catalog
+  loaded from app cache before the background reindex runs. The cache is ignored
+  when scan roots changed, and paths remain internal to Rust resolver records.
+- Still open: media-type breadth. Videos and Songs/Music are in V1 scope; any
+  current video-only assumptions in the client should be tightened without
+  adding non-V1 media-server scope.
 
 Deferred by these buckets, keep in tree but do not surface in V1:
 LAN reachability status (`lan_reachable`, `lan_ip` in `CompanionStatus`) and any
 device-label / multi-device affordances are for the LAN/mobile buckets. They can
 stay in the struct; they just should not drive V1 UI.
+
+Next up: review the remaining LAN-shaped status fields and stale copy after V1
+hardening. Do not remove future LAN scaffolding unless it leaks into V1 behavior.
 
 ---
 
@@ -306,28 +313,24 @@ stay in the struct; they just should not drive V1 UI.
 These are unresolved on purpose. Do not invent answers in code; resolve them as
 explicit decisions and update this doc.
 
-- Exact static preferred localhost port for V1. Current code uses `8787`
-  (`DEFAULT_PORT`), chosen for the LAN design; confirm whether V1 keeps `8787` or
-  picks a different loopback default.
-- Exact existing progress storage path to reuse. Today it is path-keyed
-  `localStorage` in the main WebView (`src/playbackStorage.ts`). Decide whether
-  V1 bridges Companion ID writes into that path via Tauri events, or introduces
-  an ID-keyed backend store that both the desktop and Companion read. Section 3
-  boundaries hold regardless.
-- Whether the current LAN Companion code should be split into a separate module
-  or mode-gated in place for loopback-only Browser Companion (Section 9 bind /
-  open-URL reconciliation).
-- Whether the current cookie/session model (24h cookie, secret rotation on
-  restart) needs adjustment for same-PC progress writes, or whether same-PC
-  should use a lighter session.
+- Next up: confirm whether V1 keeps `8787` as the default localhost port.
+- Resolved: large-library startup uses a root-matched cached Companion catalog,
+  then refreshes from the canonical Rust reindex in the background.
+- Next up: finish support for Music/Songs and any other already-indexed local
+  media types that V1 should expose, without adding downloads, URL entry, or
+  library mutation.
+- Resolved: progress storage uses the existing desktop `src/playbackStorage.ts`
+  path through a Tauri event bridge. Keep media IDs on HTTP and paths internal.
+- Resolved for V1: loopback-only binding and localhost open URL are in tree.
+  Future LAN mode remains deferred, not deleted.
+- Next up: decide whether the current cookie/session model (24h cookie, secret
+  rotation on restart) is acceptable for same-PC V1, or whether restart recovery
+  should be softened without weakening auth.
 - Whether the existing Companion context and research docs
   (`companion-architecture-extraction.md`, `COMPANION-AND-COMPETITOR-INDEX.md`)
   should be updated to point at this action plan, or whether this plan supersedes
   their scope statements. Default assumption: this plan owns scope; those docs
   own architecture and routing.
-- **Resolved (2026-07-04):** `ruforge.local` same-PC mechanism. Use manual
-  Windows hosts file + OS `lookup_host` probe (dev-gated). Do not register mDNS
-  or bind LAN in this experiment. Future LAN naming uses mDNS per RFC 6762/6763
-  only behind V2 threat model and a deliberate dependency add (`mdns-sd` or
-  equivalent). Enterprise `.local` unicast DNS hijacking is a known failure mode;
-  probe must require loopback-only resolution before offering a friendly URL.
+- **Resolved (2026-07-04):** `ruforge.local` same-PC mechanism dropped. Keep V1
+  on localhost. Future LAN naming uses mDNS per RFC 6762/6763 only behind V2
+  threat model and a deliberate dependency add (`mdns-sd` or equivalent).
