@@ -167,7 +167,11 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.2 (unreleased)
 
-- **Companion (dev-gated)**: `ruforge.local` same-PC experiment probes OS resolution, shows manual hosts-file line, optional friendly open when loopback-only; no mDNS, no LAN bind (`local_name.rs`, `companion/commands.rs`, `CompanionSettingsSection.tsx`, `docs/ruforge/research/ruforge-local-experiment.md`).
+- **Companion (dev-gated)**: large library opens can serve a cached Rust catalog immediately while the canonical reindex refreshes in the background (`library_state.rs`, `routes.rs`, `companion-web/app.js`).
+
+- **Companion (dev-gated)**: companion-web shows inline playback errors for stream/token/decode failures while staying paired; disconnected and session-lost gates only on network or session auth failures (`companion-web/app.js`, `index.html`, `styles.css`).
+
+- **Companion (dev-gated)**: dropped the `ruforge.local` same-PC experiment; localhost remains the only V1 browser entry point and no hosts-file workflow is exposed (`companion/commands.rs`, `CompanionSettingsSection.tsx`).
 
 - **Companion V1.1**: focus-only `ruforge://focus` deep link raises the main window; fail-closed parsing in Rust (`focus_protocol.rs`, `tauri-plugin-deep-link`, `tauri-plugin-single-instance`, `tauri.conf.json`).
 - **Companion (dev-gated)**: companion-web disconnected and session-lost gates with quiet reconnect backoff, manual Try again, and re-pair copy after RuForge restart (`companion-web/index.html`).

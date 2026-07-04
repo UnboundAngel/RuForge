@@ -150,7 +150,7 @@ async fn library(State(state): State<CompanionStateHandle>, headers: HeaderMap) 
         Err(e) => return e,
     };
     let lib = app.state::<LibraryState>();
-    let (version, ready, items) = resolver::snapshot(&lib).await;
+    let (version, ready, refreshing, items) = resolver::snapshot(&lib).await;
 
     let payload: Vec<_> = items
         .into_iter()
@@ -173,7 +173,13 @@ async fn library(State(state): State<CompanionStateHandle>, headers: HeaderMap) 
         })
         .collect();
 
-    let mut res = Json(json!({ "catalogVersion": version, "ready": ready, "items": payload })).into_response();
+    let mut res = Json(json!({
+        "catalogVersion": version,
+        "ready": ready,
+        "refreshing": refreshing,
+        "items": payload,
+    }))
+    .into_response();
     res.headers_mut().insert(
         header::CACHE_CONTROL,
         HeaderValue::from_static("private, max-age=30"),

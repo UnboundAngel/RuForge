@@ -15,7 +15,7 @@ use super::scanner;
 use super::types::CompanionItemProjection;
 
 /// Full catalog listing for `/library`. Metadata only, ids only, no paths.
-pub async fn snapshot(state: &LibraryState) -> (String, bool, Vec<CompanionItemProjection>) {
+pub async fn snapshot(state: &LibraryState) -> (String, bool, bool, Vec<CompanionItemProjection>) {
     state.companion_projections().await
 }
 
