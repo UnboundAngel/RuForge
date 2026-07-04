@@ -154,7 +154,11 @@ These are allowed to be explored later. They are explicitly not V1 dependencies
 and must never be smuggled into V1 as "small additions."
 
 - `ruforge.local` / mDNS friendly naming. Desired UX target, not a V1
-  dependency.
+  dependency. **Same-PC experiment (dev-gated, in tree):** probe OS resolution
+  for `ruforge.local`; user adds `127.0.0.1 ruforge.local` to the hosts file
+  manually. No mDNS responder, no hosts auto-edit, no bind change. **Future LAN:**
+  mDNS/DNS-SD (`_ruforge._tcp`) deferred to V2 with written threat model; requires
+  a new Rust dependency and multicast traffic review.
 - LAN access beyond localhost. Requires a written threat model first.
 - Mobile sync of existing library files only. Never acquisition.
 - TV / big-screen mode.
@@ -219,8 +223,10 @@ store/policy trouble. It does not bend for convenience.
 ## 8. URL and access strategy (locked)
 
 - `localhost` is canonical for V1. `http://localhost:<port>` is the browser URL.
-- `ruforge.local` is an aspiration only, and only after mDNS reliability research
-  (research-gated, Section 5). It is not a V1 URL.
+- `ruforge.local` is an aspiration only. Same-PC dev experiment uses a manual
+  hosts-file line (`127.0.0.1 ruforge.local`) plus an OS resolver probe; see
+  `docs/ruforge/research/ruforge-local-experiment.md`. LAN mDNS remains deferred
+  until V2 threat model.
 - Always keep fallback URL behavior: if the preferred port is taken, bind an
   ephemeral port and open that actual URL. The desktop opens whatever port was
   really bound, so the user is never stranded on a stale URL.
@@ -319,3 +325,9 @@ explicit decisions and update this doc.
   should be updated to point at this action plan, or whether this plan supersedes
   their scope statements. Default assumption: this plan owns scope; those docs
   own architecture and routing.
+- **Resolved (2026-07-04):** `ruforge.local` same-PC mechanism. Use manual
+  Windows hosts file + OS `lookup_host` probe (dev-gated). Do not register mDNS
+  or bind LAN in this experiment. Future LAN naming uses mDNS per RFC 6762/6763
+  only behind V2 threat model and a deliberate dependency add (`mdns-sd` or
+  equivalent). Enterprise `.local` unicast DNS hijacking is a known failure mode;
+  probe must require loopback-only resolution before offering a friendly URL.

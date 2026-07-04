@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod commands;
+pub mod local_name;
 pub mod routes;
 pub mod spa;
 
@@ -123,7 +124,9 @@ impl CompanionState {
         if let Ok(cache_dir) = app.path().app_cache_dir() {
             let remux_dir = cache_dir.join("library-remux");
             let _ = std::fs::create_dir_all(&remux_dir);
-            app.state::<LibraryState>().set_remux_cache_dir(remux_dir).await;
+            app.state::<LibraryState>()
+                .set_remux_cache_dir(remux_dir)
+                .await;
         }
 
         *self.inner.app_handle.write().await = Some(app.clone());
