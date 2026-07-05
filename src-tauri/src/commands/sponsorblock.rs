@@ -320,3 +320,50 @@ pub async fn ensure_sponsorblock_segments(
 fn iso_now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
+
+/// Read or fetch SponsorBlock segments for a companion sidecar route call.
+/// Reads the `.sponsorblock.json` sidecar next to `source_path`; fetches from
+/// the SponsorBlock API on cache miss when a `.info.json` with a valid video ID
+/// is present. Returns an empty vec on any failure; never panics.
+pub async fn segments_for_companion_route(source_path: &std::path::Path) -> Vec<SponsorBlockSegmentDto> {
+    let Some(parent) = source_path.parent() else {
+        return vec![];
+    };
+    let Some(stem) = source_path.file_stem().and_then(|s| s.to_str()) else {
+        return vec![];
+    };
+
+    let info_path = resolve_info_json_path(parent, stem);
+    let Some(video_id) = info_path.as_ref().and_then(|p| source_id_from_info(p)) else {
+        return vec![];
+    };
+
+    let sidecar_path = parent.join(format!("{stem}.sponsorblock.json"));
+    let cached = read_sidecar(&sidecar_path);
+    let local_dur = local_duration_secs(info_path.as_deref(), 0.0);
+
+    let need_fetch = cached.is_none()
+        || cached
+            .as_ref()
+            .map(|c| c.api != SB_SIDECAR_API_TAG)
+            .unwrap_or(false)
+        || cached
+            .as_ref()
+            .map(|c| sidecar_is_stale(c, local_dur))
+            .unwrap_or(false);
+
+    if need_fetch {
+        if let Some(segments) = fetch_segments_from_api(&video_id).await {
+            let sidecar = SponsorBlockSidecarDto {
+                video_id,
+                fetched_at: iso_now(),
+                api: SB_SIDECAR_API_TAG.to_string(),
+                segments: segments.clone(),
+            };
+            let _ = write_sidecar(&sidecar_path, &sidecar);
+            return segments;
+        }
+    }
+
+    cached.map(|c| c.segments).unwrap_or_default()
+}

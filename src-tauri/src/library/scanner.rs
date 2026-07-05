@@ -23,7 +23,8 @@ use super::types::{CompanionItemProjection, CompanionLibraryItem, MediaType};
 
 const PLAYABLE_CONTAINERS: [&str; 2] = ["mp4", "webm"];
 const PLAYABLE_VIDEO_CODECS: [&str; 4] = ["h264", "vp8", "vp9", "av1"];
-const PLAYABLE_AUDIO_CODECS: [&str; 4] = ["aac", "opus", "vorbis", "mp3"];
+const PLAYABLE_AUDIO_CODECS: [&str; 5] = ["aac", "opus", "vorbis", "mp3", "flac"];
+const PLAYABLE_AUDIO_CONTAINERS: [&str; 7] = ["mp3", "m4a", "ogg", "opus", "wav", "flac", "mp4"];
 
 /// Cached ffprobe + remux result for one path, keyed by (path, mtime, size) so a
 /// reindex only re-probes files that actually changed. This is what makes
@@ -80,27 +81,61 @@ fn normalize_container(format_name: &str, path: &Path) -> String {
     }
 }
 
-fn is_playable(container: &str, video_codec: &str, audio_codec: &str) -> bool {
+fn is_video_playable(container: &str, video_codec: &str, audio_codec: &str) -> bool {
     PLAYABLE_CONTAINERS.contains(&container)
         && PLAYABLE_VIDEO_CODECS.contains(&video_codec)
         && (audio_codec.is_empty() || PLAYABLE_AUDIO_CODECS.contains(&audio_codec))
 }
 
-pub(crate) fn native_playable(container: &str, video_codec: &str, audio_codec: &str) -> bool {
-    is_playable(container, video_codec, audio_codec)
+fn is_audio_playable(container: &str, audio_codec: &str) -> bool {
+    if PLAYABLE_AUDIO_CONTAINERS.contains(&container) {
+        return audio_codec.is_empty()
+            || PLAYABLE_AUDIO_CODECS.contains(&audio_codec)
+            || audio_codec.starts_with("pcm");
+    }
+    if container == "webm" && (audio_codec == "opus" || audio_codec.is_empty()) {
+        return true;
+    }
+    !audio_codec.is_empty() && PLAYABLE_AUDIO_CODECS.contains(&audio_codec)
+}
+
+pub(crate) fn native_playable(
+    media_type: MediaType,
+    container: &str,
+    video_codec: &str,
+    audio_codec: &str,
+) -> bool {
+    match media_type {
+        MediaType::Audio => is_audio_playable(container, audio_codec),
+        MediaType::Video => is_video_playable(container, video_codec, audio_codec),
+    }
 }
 
 /// Codecs are browser-safe but the container needs a stream-copy remux (e.g. MKV).
 pub(crate) fn remux_eligible(container: &str, video_codec: &str, audio_codec: &str) -> bool {
-    !is_playable(container, video_codec, audio_codec)
+    if video_codec.is_empty() {
+        return false;
+    }
+    !is_video_playable(container, video_codec, audio_codec)
         && !container.is_empty()
         && PLAYABLE_VIDEO_CODECS.contains(&video_codec)
         && (audio_codec.is_empty() || PLAYABLE_AUDIO_CODECS.contains(&audio_codec))
 }
 
 /// Companion `playable` flag: native container or remux-eligible (remux runs on first stream).
-fn companion_playable(container: &str, video_codec: &str, audio_codec: &str) -> bool {
-    is_playable(container, video_codec, audio_codec) || remux_eligible(container, video_codec, audio_codec)
+pub(crate) fn companion_playable(
+    media_type: MediaType,
+    container: &str,
+    video_codec: &str,
+    audio_codec: &str,
+) -> bool {
+    match media_type {
+        MediaType::Audio => is_audio_playable(container, audio_codec),
+        MediaType::Video => {
+            is_video_playable(container, video_codec, audio_codec)
+                || remux_eligible(container, video_codec, audio_codec)
+        }
+    }
 }
 
 struct ProbeResult {
@@ -157,7 +192,7 @@ async fn probe_media(app: &AppHandle, path: &Path) -> Option<ProbeResult> {
     })
 }
 
-/// Probe (or reuse a cached probe of) one video file, deciding remux if the
+/// Probe (or reuse a cached probe of) one library file, deciding remux if the
 /// container is not directly playable but the codecs are.
 async fn probe_and_cache(
     app: &AppHandle,
@@ -168,10 +203,14 @@ async fn probe_and_cache(
     size_bytes: u64,
     cache: &mut ProbeCache,
     allow_remux: bool,
+    media_type: MediaType,
 ) -> ProbeCacheEntry {
     if let Some(existing) = cache.get(canonical) {
         if existing.mtime == mtime && existing.size_bytes == size_bytes {
-            return existing.clone();
+            let mut entry = existing.clone();
+            entry.playable =
+                companion_playable(media_type, &entry.container, &entry.video_codec, &entry.audio_codec);
+            return entry;
         }
     }
 
@@ -182,9 +221,12 @@ async fn probe_and_cache(
     };
 
     let mut serve_path = canonical.to_path_buf();
-    let mut playable = companion_playable(&container, &video_codec, &audio_codec);
+    let mut playable = companion_playable(media_type, &container, &video_codec, &audio_codec);
 
-    if allow_remux && remux_eligible(&container, &video_codec, &audio_codec) {
+    if allow_remux
+        && media_type == MediaType::Video
+        && remux_eligible(&container, &video_codec, &audio_codec)
+    {
         if let Some(dir) = remux_dir {
             if let Some(remuxed) = remux::ensure_remuxed(app, dir, id, canonical).await {
                 serve_path = remuxed;
@@ -253,7 +295,7 @@ fn version_hash(items: &HashMap<String, CompanionLibraryItem>, desktop_len: usiz
 }
 
 /// Full reindex: walk every configured root, probe (or reuse a cached probe of)
-/// each video file, and produce both the desktop projection (path-bearing,
+/// each library file, and produce both the desktop projection (path-bearing,
 /// wire-identical to the old `scan_gallery` output) and the companion projection
 /// (id-only, precomputed `playable`).
 pub async fn reindex(
@@ -294,8 +336,18 @@ pub async fn reindex(
             .to_ascii_lowercase();
         let media_type = if is_audio_only_ext(&ext) { MediaType::Audio } else { MediaType::Video };
 
-        let probe = probe_and_cache(app, remux_cache_dir, &id, &canonical, mtime, size_bytes, probe_cache, false)
-            .await;
+        let probe = probe_and_cache(
+            app,
+            remux_cache_dir,
+            &id,
+            &canonical,
+            mtime,
+            size_bytes,
+            probe_cache,
+            false,
+            media_type,
+        )
+        .await;
 
         let thumb_path = thumb_path_for(file, &canonical);
         let duration_secs = if probe.duration_secs > 0 {
@@ -303,16 +355,26 @@ pub async fn reindex(
         } else {
             file.duration.max(0.0) as u32
         };
+        let container = if probe.container.is_empty() && media_type == MediaType::Audio {
+            ext.clone()
+        } else {
+            probe.container.clone()
+        };
 
         let projection = CompanionItemProjection {
             id: id.clone(),
             title: file.name.clone(),
             media_type,
             duration_secs,
-            container: probe.container.clone(),
+            container: container.clone(),
             video_codec: probe.video_codec.clone(),
             audio_codec: probe.audio_codec.clone(),
-            playable: probe.playable,
+            playable: companion_playable(
+                media_type,
+                &container,
+                &probe.video_codec,
+                &probe.audio_codec,
+            ),
             has_thumb: thumb_path.is_some(),
             size_bytes,
         };
@@ -342,4 +404,49 @@ pub async fn reindex(
 #[allow(dead_code)]
 pub fn playlist_items(playlist: &PlaylistCollection) -> &[MediaFile] {
     &playlist.items
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn audio_playable_covers_common_music_formats() {
+        assert!(is_audio_playable("mp3", "mp3"));
+        assert!(is_audio_playable("m4a", "aac"));
+        assert!(is_audio_playable("mp4", "aac"));
+        assert!(is_audio_playable("ogg", "vorbis"));
+        assert!(is_audio_playable("opus", "opus"));
+        assert!(is_audio_playable("flac", "flac"));
+        assert!(is_audio_playable("wav", "pcm_s16le"));
+    }
+
+    #[test]
+    fn audio_playable_rejects_unknown_container_and_codec() {
+        assert!(!is_audio_playable("mkv", "aac"));
+        assert!(!is_audio_playable("", ""));
+    }
+
+    #[test]
+    fn video_playable_still_requires_video_codec() {
+        assert!(is_video_playable("mp4", "h264", "aac"));
+        assert!(!is_video_playable("mp4", "", "aac"));
+    }
+
+    #[test]
+    fn remux_eligible_is_video_only() {
+        assert!(!remux_eligible("mkv", "", "aac"));
+        assert!(remux_eligible("mkv", "h264", "aac"));
+    }
+
+    #[test]
+    fn companion_playable_respects_media_type() {
+        assert!(companion_playable(MediaType::Audio, "mp3", "", "mp3"));
+        assert!(!companion_playable(
+            MediaType::Video,
+            "mp3",
+            "",
+            "mp3"
+        ));
+    }
 }

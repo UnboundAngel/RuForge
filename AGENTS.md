@@ -1,4 +1,4 @@
-﻿# RuForge: notes for IDE agents (Cursor and other automation)
+# RuForge: notes for IDE agents (Cursor and other automation)
 
 Concise guardrails for agents working **inside this repo's IDE workspace**. Not a full architecture audit. Extended detail lives in routed docs (see table below).
 
@@ -17,6 +17,32 @@ If STATE.md and the code disagree, the code wins. Fix STATE.md forward. Never gi
 3. **Task-specific only:** one row from **Doc routing** when trigger words match.
 
 Do not start from `docs/agents/handoffs/`, `docs/ruforge/RuForge.md`, or `docs/ruforge/product-feature-catalogue.md` unless Angel explicitly points you there.
+
+## Codex operating mode
+
+Codex in this repo is for GitHub Actions / CI debugging, GitHub workflow help,
+prompt creation, handoff drafting, and review summaries when explicitly
+requested. Do not edit app code or implement repo changes from Codex unless
+Angel explicitly overrides this boundary in the current chat.
+
+At the start of every RuForge Codex chat, load the Codex memory surface before
+work:
+
+- Read `C:\Users\Attic\.codex\memories\memory_summary.md` when it is provided
+  in context.
+- Read or search `C:\Users\Attic\.codex\memories\MEMORY.md`.
+- Read repo `STATE.md` and `AGENTS.md`.
+- Read only the task-routed docs from the table below after that.
+
+For Companion work, Codex should usually create a focused Cursor prompt instead
+of implementing code. The prompt should force convergence: define the V1 done
+line, name the exact files or areas to inspect, ban scope expansion, and require
+verification plus a short manual Angel checklist.
+
+Planning is for feature direction, product scope, and cross-chat continuity.
+Do not turn normal implementation into a planning exercise. Preserve
+auditability with compact handoffs every few messages or before moving to a new
+chat, not with status tracking after every message.
 
 ## Doc routing (trigger words)
 
@@ -125,7 +151,7 @@ Before any website SEO, structured data, copy, or distribution change: read [`do
 
 ## Code quality (summary)
 
-Every edit: (1) comments explain why, not what; delete narrators and AI-voice patterns. (2) extract components/hooks/helpers before files become monoliths (~120 JSX lines, shared helpers, deep nesting). (3) Tailwind + CSS tokens in `global.css`; no css-in-js; inline `style={}` only for dynamic values.
+High-priority code style: avoid comments in code files unless they are genuinely needed. Comments must explain why, never what. Delete narrator comments, commented-out code, block headers for obvious code, step markers, and AI-voice patterns. Prefer names, structure, extraction, and tests over comments. Then apply the usual thresholds: extract components/hooks/helpers before files become monoliths (~120 JSX lines, shared helpers, deep nesting); Tailwind + CSS tokens in `global.css`; no css-in-js; inline `style={}` only for dynamic values.
 
 Full thresholds and examples: [`docs/agents/AGENT-REFERENCE.md`](docs/agents/AGENT-REFERENCE.md). Visual rules: `.cursor/rules/design-style*.mdc`.
 
@@ -166,6 +192,26 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 
 ### v0.2.2 (unreleased)
+
+- **Companion (dev-gated)**: React companion-web playback ownership fixed so audio/video clicks stop the previous element, controls bind to the active media kind, progress posts use the backend `positionSecs` / `durationSecs` / `playbackState` contract, and Audio mode renders app-style Quick picks, Liked Songs, Artists, Albums, and Local Files sections instead of a single long list. (`companion-web-src/App.tsx`, `companion-web-src/types.ts`, `companion-web-src/components/LibraryView.tsx`, `companion-web-src/styles.css`).
+
+- **Companion (dev-gated)**: React companion-web pairing restored: fresh /?c= links now redeem via POST /pair before /library, auth errors map to stable gate states, and successful sessions still normalize to /paired. (companion-web-src/api.ts, companion-web-src/App.tsx).
+
+- **Companion (dev-gated)**: companion-web replaced with a React-built client (`companion-web-src/`). Audio mode now directly ports the RuForge Music UI: same black/charcoal/red tokens, MusicLibraryView song rows (Songs/Albums/Artists tabs), NowPlayingBar 3-column grid, queue right-panel, dense song rows with lazy thumbs. Video mode: grid of cards + inline player. All existing behaviors preserved: stream token, progress sync via `/progress/:id`, SponsorBlock overlays and auto-skip, scrub sprite preview, reconnect backoff, disconnected/session-lost gates, volume/mute/loop/speed/SponsorBlock companion-local persistence, search overlay, catalog refresh. Build pipeline added: `npm run companion:build` (Vite + React, outputs to `src-tauri/companion-web/`); `npm run build` now runs companion build first. `spa.rs` asset handler updated to serve Vite `assets/` subdirectory; content-type list extended. (`companion-web-src/`, `companion-web.config.ts`, `package.json`, `src-tauri/src/companion/spa.rs`).
+
+- **Companion (dev-gated)**: Audio mode redesigned to match RuForge Music app design language: near-black/charcoal surfaces (`#0f0f0f`/`#121212`), red accent (`#ff0033`), dense vertical song rows (MusicQuickPickRow glass pattern), and audio player dock with artwork thumbnail and track info. Video mode layout and warm-brown tokens unchanged. (`companion-web/index.html`, `companion-web/styles.css`, `companion-web/app.js`).
+
+- **Companion (dev-gated)**: companion-web reskinned as a static adaptation of the AI Studio import layout: fixed nav over full-width hero, TOP poster row (uniform 160/200px 2:3 cards with `align-items: flex-start` row, `card-{variant}` width classes), horizontal backdrop/song rows, import-style search and details overlays, lazy signed thumbs, stable in-place library refresh without flash. Playback, progress sync, SponsorBlock, scrub sprites, session gates unchanged. (`companion-web/index.html`, `companion-web/styles.css`, `companion-web/app.js`).
+
+- **Companion (dev-gated)**: SponsorBlock segments served via enriched `/sidecar/:id` (reads or API-fetches `.sponsorblock.json` server-side; companion-web auto-skips and shows skip button; SB enable is companion-local `localStorage`). (`commands/sponsorblock.rs`, `companion/routes.rs`, `library/resolver.rs`, `companion-web/app.js`).
+
+- **Companion (dev-gated)**: Scrub preview sprites served via `/sprite/:id/:idx` (HMAC-signed, covers media ID + sheet index). `/sidecar/:id` now returns `scrubSpriteCount`; companion-web shows hover sprite thumbnail when sprite sheets exist. (`companion/routes.rs`, `library/resolver.rs`, `companion-web/app.js`).
+
+- **Companion (dev-gated)**: Companion-local playback settings: loop, playback speed, SponsorBlock enable, all persisted in `localStorage`. Custom player controls replace native `<video controls>`: play/pause, scrub bar with SponsorBlock segment color overlays, skip button, time display, speed selector, loop/SB/mute/fullscreen buttons. (`companion-web/index.html`, `companion-web/styles.css`, `companion-web/app.js`).
+
+- **Companion (dev-gated)**: companion-web persists volume and mute in localStorage across refresh and applies saved output before stream playback (`companion-web/app.js`).
+
+- **Companion (dev-gated)**: Music/Songs audio-only library files get browser playability projection and stream resolution separate from video/remux rules (`library/scanner.rs`, `library/resolver.rs`).
 
 - **Companion (dev-gated)**: large library opens can serve a cached Rust catalog immediately while the canonical reindex refreshes in the background (`library_state.rs`, `routes.rs`, `companion-web/app.js`).
 

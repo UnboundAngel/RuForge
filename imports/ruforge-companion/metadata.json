@@ -1,0 +1,6 @@
+{
+  "name": "Cineby Clone",
+  "description": "A visual layout clone of the Cineby movie streaming platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
