@@ -18,9 +18,9 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-04 (companion large-library catalog cache)
+Last updated: 2026-07-05 (React companion playback and audio layout repair)
 
-Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, and cached catalog startup for large libraries. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path.
+Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) bin
 
 
 
-0.2.2 in tree: website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, and cached catalog startup for large libraries. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
+0.2.2 in tree: website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
 
 
 
@@ -57,6 +57,26 @@ reads this for the last shipped delta, not the git tree.
 
 
 **0.2.2 (unreleased, in tree):**
+
+- Companion (dev-gated): React companion-web playback ownership fixed so audio/video clicks stop the previous element, controls bind to the active media kind, progress posts use the backend position/duration/state contract, and Audio mode renders app-style Quick picks, Liked Songs, Artists, Albums, and Local Files sections instead of one long list.
+
+- Companion (dev-gated): React companion-web pairing restored: fresh /?c= links redeem through POST /pair before /library, auth errors map to stable gates, and paired sessions normalize to /paired.
+
+- Companion (dev-gated): companion-web replaced with a React-built client that directly ports the RuForge Music UI. Audio mode: MusicLibraryView-style song/album/artist tabs, NowPlayingBar 3-column grid, queue right-panel, dense song rows with lazy thumbs, same black/charcoal/red tokens. All existing backend behaviors preserved (stream tokens, progress sync, SponsorBlock, scrub sprites, reconnect, gates). Build: `npm run companion:build`.
+
+- Companion (dev-gated): Audio mode redesigned to RuForge Music design language: near-black surfaces, red accent, dense vertical song rows, audio player dock with artwork and track info. Video mode unchanged.
+
+- Companion (dev-gated): companion-web reskinned as a static adaptation of the AI Studio import layout with nav-over-hero, TOP row, horizontal library rows, search/details overlays, lazy signed thumbs, and stable in-place refresh during background reindex; playback/progress/SponsorBlock/scrub/session behavior unchanged.
+
+- Companion (dev-gated): SponsorBlock segments served via enriched `/sidecar/:id`; companion-web auto-skips segments and shows skip button; SB enable is companion-local.
+
+- Companion (dev-gated): Scrub preview sprites served via signed `/sprite/:id/:idx`; companion-web shows hover sprite thumbnail on the custom scrub bar.
+
+- Companion (dev-gated): Custom player controls (replaces native `<video controls>`): play/pause, scrub bar with SponsorBlock color overlays, time display, speed, loop, SB toggle, mute, fullscreen. Loop, speed, SB enable all companion-local.
+
+- Companion (dev-gated): companion-web persists volume and mute across refresh in companion-local localStorage and applies saved output before stream playback.
+
+- Companion (dev-gated): Music/Songs audio-only files get browser playability projection and stream resolution separate from video/remux rules.
 
 - Companion (dev-gated): large library opens can serve a cached Rust catalog immediately while the canonical reindex refreshes in the background.
 
@@ -224,6 +244,8 @@ Fixes:
 
 ## Notes (not P0)
 
+- Codex should stay out of app implementation by default in this repo. Use Codex for GitHub Actions / CI, GitHub workflow help, focused Cursor prompts and handoffs, and explicit review summaries. Each RuForge Codex chat should load the Codex memory surface, then `STATE.md` and `AGENTS.md`, then only task-routed docs. Prefer planning for feature direction and cross-chat continuity, not routine implementation steps.
+
 
 
 - P2 mid-download 403 was not reproduced on CLI without cookies. Fix adds yt-dlp retries, resume-on-retry, and clearer 403 copy. Re-test in-app at 720p with your cookie mode on https://www.youtube.com/watch?v=rkdzxRaI68g.
@@ -242,7 +264,7 @@ Fixes:
 
 - Companion server is in tree but dev-gated (`showDebuggingSettings`). V1 binds `127.0.0.1` only; progress sync and disconnected reconnect UX are in tree. Not in 0.2.1 public release notes.
 
-- Companion scope is locked in `docs/ruforge/plans/companion-action-plan.md`: V1 is same-PC browser Companion on `localhost` only (Videos + Songs, playback, mandatory progress sync as the only write path). Loopback bind, progress sync, and disconnected-state polish are reconciled in tree; public ship still blocked on dev gate until Angel approves.
+- Companion scope is locked in `docs/ruforge/plans/companion-action-plan.md`: V1 is same-PC browser Companion on `localhost` only (Videos + Songs, playback, mandatory progress sync as the only write path). Loopback bind, progress sync, Music/Songs playability, and disconnected-state polish are reconciled in tree; public ship still blocked on dev gate until Angel approves.
 
 
 

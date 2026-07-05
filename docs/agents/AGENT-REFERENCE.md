@@ -35,7 +35,7 @@ Three rules. Every agent, every edit.
 
 ### 1. Comments: zero narration
 
-Comments explain **why**, never **what**. Delete on sight: import/define/return narrators, block headers under 200 lines, commented-out code, AI-voice patterns (`// Now we need to`, `// Step 1:`), future-tense self-talk without a real `// TODO:`.
+Comments are high-friction in this repo. Default to no comments in code files unless the comment is genuinely needed. Comments explain **why**, never **what**. Delete on sight: import/define/return narrators, block headers under 200 lines, commented-out code, AI-voice patterns (`// Now we need to`, `// Step 1:`), future-tense self-talk without a real `// TODO:`.
 
 Allowed: non-obvious constraints, tradeoffs, external references, intent the signature cannot convey. Test: if deleting the comment leaves the code equally clear, delete the comment.
 

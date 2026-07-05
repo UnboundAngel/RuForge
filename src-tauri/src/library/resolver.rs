@@ -13,8 +13,43 @@ use super::library_state::LibraryState;
 use super::remux;
 use super::scanner;
 use super::types::CompanionItemProjection;
+use super::types::MediaType;
 
-/// Full catalog listing for `/library`. Metadata only, ids only, no paths.
+/// Canonical source path for sidecar-based data access (SponsorBlock segments,
+/// sprite sheet listing). Only sidecar and sprite-serving routes may call this.
+/// The path never crosses the HTTP boundary.
+pub async fn resolve_source_path_for_sidecar(state: &LibraryState, id: &str) -> Option<PathBuf> {
+    let item = state.companion_item(id).await?;
+    let canonical = item.source_path.canonicalize().ok()?;
+    if !state.is_root_allowed(&canonical).await {
+        return None;
+    }
+    Some(canonical)
+}
+
+/// Allowlist-checked path to a specific scrub sprite sheet (0-based `idx`) for
+/// this media id. Only the `/sprite/:id/:idx` byte-serving route may call this.
+pub async fn resolve_sprite_sheet_path(state: &LibraryState, id: &str, idx: usize) -> Option<PathBuf> {
+    let source = resolve_source_path_for_sidecar(state, id).await?;
+    let paths = crate::commands::media::list_scrub_sprite_paths_for_video(&source);
+    let path_str = paths.get(idx)?;
+    let path = PathBuf::from(path_str);
+    let canonical = path.canonicalize().ok()?;
+    if !state.is_root_allowed(&canonical).await {
+        return None;
+    }
+    Some(canonical)
+}
+
+/// Count of available scrub sprite sheets for this media id. Returns 0 if none exist.
+pub async fn sprite_sheet_count(state: &LibraryState, id: &str) -> usize {
+    let Some(source) = resolve_source_path_for_sidecar(state, id).await else {
+        return 0;
+    };
+    crate::commands::media::list_scrub_sprite_paths_for_video(&source).len()
+}
+
+
 pub async fn snapshot(state: &LibraryState) -> (String, bool, bool, Vec<CompanionItemProjection>) {
     state.companion_projections().await
 }
@@ -71,14 +106,16 @@ pub async fn resolve_stream_path(
     }
 
     let p = &item.projection;
-    if scanner::native_playable(&p.container, &p.video_codec, &p.audio_codec) {
+    if scanner::native_playable(p.media_type, &p.container, &p.video_codec, &p.audio_codec) {
         let path = item.serve_path.canonicalize().ok()?;
         if state.is_root_allowed(&path).await {
             return Some(path);
         }
     }
 
-    if scanner::remux_eligible(&p.container, &p.video_codec, &p.audio_codec) {
+    if p.media_type == MediaType::Video
+        && scanner::remux_eligible(&p.container, &p.video_codec, &p.audio_codec)
+    {
         let cache = state.remux_cache_dir().await?;
         if let Some(remuxed) = remux::ensure_remuxed(app, &cache, id, &source).await {
             let path = remuxed.canonicalize().ok()?;

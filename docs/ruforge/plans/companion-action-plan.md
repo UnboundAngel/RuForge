@@ -75,6 +75,10 @@ V1 is the same-PC browser Companion and nothing beyond it.
   path (see Section 3).
 - Must show a clear disconnected state: "RuForge is closed or disconnected,"
   plus reconnect behavior when the desktop comes back.
+- **V1 expansion (2026-07-04, Angel-approved):** SponsorBlock segment skip,
+  scrub preview sprites (where sprite sheets exist), and companion-local
+  playback settings (volume, mute, loop, playback speed, SponsorBlock enable).
+  All companion-local only; none wired to desktop settings or Zustand.
 
 Everything not in this list is out of V1 by default. See Sections 4 and 5.
 
@@ -86,15 +90,32 @@ Current implementation status:
   session-lost states.
 - Done: progress sync back into the desktop playback path using media IDs over
   HTTP and internal desktop bridging.
-- Next up: decide whether port `8787` is the final V1 default, and do one
+- Next up: confirm whether V1 keeps `8787` as the final V1 default, and do one
   lightweight hardening pass on playback-startup error messaging if needed.
 - Done: cached Companion catalog startup. The last Rust-built Companion catalog
   is stored under the app cache and loaded on server start when scan roots still
   match, so large existing libraries can render immediately while the canonical
   reindex refreshes in the background. Companion still uses media IDs over HTTP
   and Rust resolver authority for all path access.
-- Next up: finish media-type support beyond videos, especially Music/Songs, so
-  Companion can browse and play the library categories V1 promises.
+- Done: Music/Songs media-type support. Audio-only library files get browser
+  playability projection and stream resolution separate from video/remux rules
+  (`library/scanner.rs`, `library/resolver.rs`).
+- Done: SponsorBlock segment serving via `/sidecar/:id` (reads or fetches
+  `.sponsorblock.json` server-side; segments returned by ID, no path in response).
+  companion-web auto-skips and shows skip button; SB enable is companion-local
+  (`companion/routes.rs`, `commands/sponsorblock.rs`, `companion-web/app.js`).
+- Done: Scrub sprite serving via `/sprite/:id/:idx` (signed URL, HMAC covers
+  both media ID and sheet index). `/sidecar/:id` now includes `scrubSpriteCount`.
+  companion-web shows hover sprite preview when sheets exist (`companion/routes.rs`,
+  `library/resolver.rs`, `companion-web/app.js`).
+- Done: Companion-local playback settings: loop, playback speed, SponsorBlock
+  enable. All persisted in companion-local `localStorage`; not wired to desktop
+  settings (`companion-web/app.js`). Volume/mute was already in tree.
+- Done: Custom player controls (replaces native `<video controls>`): play/pause,
+  scrub bar with SponsorBlock segment overlays, time display, skip button, speed
+  selector, loop toggle, SB toggle, mute, fullscreen (`companion-web/`).
+- Next up: confirm whether V1 keeps `8787` as the final V1 default port, and do
+  one lightweight hardening pass on session lifetime after restart.
 
 ---
 
@@ -294,9 +315,9 @@ What must be mode-gated or reconciled for loopback-first Browser Companion
 - Resolved: large-library load performance now uses a cached Companion catalog
   loaded from app cache before the background reindex runs. The cache is ignored
   when scan roots changed, and paths remain internal to Rust resolver records.
-- Still open: media-type breadth. Videos and Songs/Music are in V1 scope; any
-  current video-only assumptions in the client should be tightened without
-  adding non-V1 media-server scope.
+- Resolved: media-type breadth. Audio-only Music/Songs items use separate browser
+  playability and stream resolution from video/remux paths (`library/scanner.rs`,
+  `library/resolver.rs`).
 
 Deferred by these buckets, keep in tree but do not surface in V1:
 LAN reachability status (`lan_reachable`, `lan_ip` in `CompanionStatus`) and any
@@ -316,9 +337,8 @@ explicit decisions and update this doc.
 - Next up: confirm whether V1 keeps `8787` as the default localhost port.
 - Resolved: large-library startup uses a root-matched cached Companion catalog,
   then refreshes from the canonical Rust reindex in the background.
-- Next up: finish support for Music/Songs and any other already-indexed local
-  media types that V1 should expose, without adding downloads, URL entry, or
-  library mutation.
+- Resolved: Music/Songs browse and playback for already-indexed audio-only files
+  via separate browser playability projection from video/remux rules.
 - Resolved: progress storage uses the existing desktop `src/playbackStorage.ts`
   path through a Tauri event bridge. Keep media IDs on HTTP and paths internal.
 - Resolved for V1: loopback-only binding and localhost open URL are in tree.

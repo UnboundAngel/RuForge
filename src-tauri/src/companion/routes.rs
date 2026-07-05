@@ -30,6 +30,7 @@ pub fn build_router(state: CompanionStateHandle) -> Router {
         .route("/stream-token/:id", post(stream_token))
         .route("/stream/:id", get(stream_media))
         .route("/thumb/:id", get(thumb_media))
+        .route("/sprite/:id/:idx", get(sprite_media))
         .route("/progress/:id", get(progress_get).post(progress_post))
         .layer(middleware::from_fn(same_origin_guard))
         .with_state(state)
@@ -203,10 +204,24 @@ async fn sidecar(
         Err(e) => return e,
     };
     let lib = app.state::<LibraryState>();
-    if !resolver::is_known_id(&lib, &id).await {
+    let Some(source_path) = resolver::resolve_source_path_for_sidecar(&lib, &id).await else {
         return error_response(StatusCode::NOT_FOUND, "unknown_id");
-    }
-    Json(json!({ "id": id, "chapters": [], "subtitles": [], "comments": null })).into_response()
+    };
+
+    let (sponsor_segments, sprite_count) = tokio::join!(
+        crate::commands::sponsorblock::segments_for_companion_route(&source_path),
+        resolver::sprite_sheet_count(&lib, &id),
+    );
+
+    Json(json!({
+        "id": id,
+        "chapters": [],
+        "subtitles": [],
+        "comments": null,
+        "sponsorSegments": sponsor_segments,
+        "scrubSpriteCount": sprite_count,
+    }))
+    .into_response()
 }
 
 #[derive(Deserialize)]
@@ -361,6 +376,7 @@ fn progress_json(id: &str, position_secs: f64, duration_secs: f64) -> Response {
 #[derive(Deserialize)]
 struct StreamTokenQuery {
     kind: Option<String>,
+    idx: Option<usize>,
 }
 
 async fn stream_token(
@@ -373,16 +389,33 @@ async fn stream_token(
         Ok(s) => s,
         Err(e) => return e,
     };
-    let kind = match q.kind.as_deref() {
-        Some("thumb") => "thumb",
-        _ => "stream",
-    };
 
     let app = match require_app_handle(&state).await {
         Ok(a) => a,
         Err(e) => return e,
     };
     let lib = app.state::<LibraryState>();
+
+    // Sprite: sign kind="sprite" with combined "{id}/{idx}" to cover both
+    // the media id and sheet index in the HMAC.
+    if q.kind.as_deref() == Some("sprite") {
+        let idx = q.idx.unwrap_or(0);
+        if resolver::resolve_sprite_sheet_path(&lib, &id, idx).await.is_none() {
+            return error_response(StatusCode::NOT_FOUND, "no_sprite");
+        }
+        let exp = now_unix() + 300;
+        let secret = *state.session_secret.read().await;
+        let combined = format!("{id}/{idx}");
+        let sig = auth::sign_media(&secret, "sprite", &combined, &sid, exp);
+        let url = format!("/sprite/{id}/{idx}?sid={sid}&exp={exp}&sig={sig}");
+        return Json(json!({ "url": url, "expSecs": exp })).into_response();
+    }
+
+    let kind = match q.kind.as_deref() {
+        Some("thumb") => "thumb",
+        _ => "stream",
+    };
+
     if !resolver::is_known_id(&lib, &id).await {
         return error_response(StatusCode::NOT_FOUND, "unknown_id");
     }
@@ -470,6 +503,51 @@ async fn serve_signed_media(
             res.headers_mut().insert(
                 header::CACHE_CONTROL,
                 HeaderValue::from_static("private, no-store"),
+            );
+            res
+        }
+        Err(_) => error_response(StatusCode::NOT_FOUND, "file_missing"),
+    }
+}
+
+async fn sprite_media(
+    State(state): State<CompanionStateHandle>,
+    Query(q): Query<SignedMediaQuery>,
+    AxumPath((id, idx)): AxumPath<(String, usize)>,
+    req: Request,
+) -> Response {
+    if q.exp < now_unix() {
+        return error_response(StatusCode::GONE, "signed_url_expired");
+    }
+
+    let secret = *state.session_secret.read().await;
+    let combined = format!("{id}/{idx}");
+    if !auth::verify_media_sig(&secret, "sprite", &combined, &q.sid, q.exp, &q.sig) {
+        return error_response(StatusCode::FORBIDDEN, "bad_signature");
+    }
+
+    let sid_live = state.sessions.read().await.values().any(|s| s.id == q.sid);
+    if !sid_live {
+        return error_response(StatusCode::FORBIDDEN, "session_revoked");
+    }
+
+    let app = match require_app_handle(&state).await {
+        Ok(a) => a,
+        Err(e) => return e,
+    };
+    let lib = app.state::<LibraryState>();
+
+    let Some(canonical) = resolver::resolve_sprite_sheet_path(&lib, &id, idx).await else {
+        return error_response(StatusCode::NOT_FOUND, "file_missing");
+    };
+
+    let service = ServeFile::new(&canonical);
+    match service.oneshot(req).await {
+        Ok(res) => {
+            let mut res = res.into_response();
+            res.headers_mut().insert(
+                header::CACHE_CONTROL,
+                HeaderValue::from_static("private, max-age=300"),
             );
             res
         }
