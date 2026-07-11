@@ -193,7 +193,9 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.2 (unreleased)
 
-- **Companion (dev-gated)**: React companion-web playback ownership fixed so audio/video clicks stop the previous element, controls bind to the active media kind, progress posts use the backend `positionSecs` / `durationSecs` / `playbackState` contract, and Audio mode renders app-style Quick picks, Liked Songs, Artists, Albums, and Local Files sections instead of a single long list. (`companion-web-src/App.tsx`, `companion-web-src/types.ts`, `companion-web-src/components/LibraryView.tsx`, `companion-web-src/styles.css`).
+- **Downloads / media engine**: headless `media_engine` workspace crate extracts inspect, validated download args, throttled progress, inspection expiry, job state, and runtime boundaries; RuForge `get_video_info` / `start_download_job` delegate to it via thin Tauri adapters; Finch-facing `media_engine_*` commands added. (`src-tauri/media_engine/`, `src-tauri/src/media_engine_adapter.rs`, `src-tauri/src/commands/media_engine_cmd.rs`, `src-tauri/src/commands/downloader.rs`).
+
+- **Companion (dev-gated)**: React companion-web playback ownership fixed so audio/video clicks stop the previous element, controls bind to the active media kind, progress posts use the backend `positionSecs` / `durationSecs` / `playbackState` contract, and Audio mode renders app-style Quick picks, Liked Songs, Artists, Albums, and Local Files sections instead of one long list. (`companion-web-src/App.tsx`, `companion-web-src/types.ts`, `companion-web-src/components/LibraryView.tsx`, `companion-web-src/styles.css`).
 
 - **Companion (dev-gated)**: React companion-web pairing restored: fresh /?c= links now redeem via POST /pair before /library, auth errors map to stable gate states, and successful sessions still normalize to /paired. (companion-web-src/api.ts, companion-web-src/App.tsx).
 

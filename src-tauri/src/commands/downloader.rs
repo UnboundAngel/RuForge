@@ -8,6 +8,13 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::download_job_manager::{kill_ytdlp_tree, DownloadJobManager};
+use crate::media_engine_adapter::{auth_from_download_options, MediaEngineState};
+use media_engine::{
+    progress::ProgressTracker,
+    ytdlp_args::{build_download_args, effective_filename_template, DownloadPaths},
+    InspectRequest, MediaInspection, PlaylistItemPreview as EnginePlaylistItemPreview,
+    validated_choices_from_options,
+};
 use crate::ytdlp_binary::{ytdlp_push_js_runtime_args, ytdlp_shell_command};
 use crate::ytdlp_rate_limit::{
     ytdlp_push_politeness_args, ytdlp_register_rate_limit_from_stderr,
@@ -1616,9 +1623,40 @@ pub(crate) fn video_info_cookie_probe(
     })
 }
 
+pub fn media_inspection_to_video_info(inspection: MediaInspection) -> VideoInfo {
+    VideoInfo {
+        title: inspection.title,
+        thumbnail: inspection.thumbnail,
+        duration: inspection.duration,
+        formats: inspection.formats,
+        file_size_bytes: inspection.file_size_bytes,
+        file_size_bytes_audio: inspection.file_size_bytes_audio,
+        file_size_bytes_video: inspection.file_size_bytes_video,
+        is_playlist: inspection.is_playlist,
+        playlist_items: inspection.playlist_items.map(|items| {
+            items
+                .into_iter()
+                .map(|p: EnginePlaylistItemPreview| PlaylistItemPreview {
+                    title: p.title,
+                    thumbnail: p.thumbnail,
+                    duration: p.duration,
+                    id: p.id,
+                    webpage_url: p.webpage_url,
+                    file_size_bytes: p.file_size_bytes,
+                    file_size_bytes_audio: p.file_size_bytes_audio,
+                    file_size_bytes_video: p.file_size_bytes_video,
+                })
+                .collect()
+        }),
+        uploader: inspection.uploader,
+        channel: inspection.channel,
+    }
+}
+
 #[tauri::command]
 pub async fn get_video_info(
     app: AppHandle,
+    engine_state: State<'_, MediaEngineState>,
     url: String,
     format: Option<String>,
     audio_only: Option<bool>,
@@ -1626,103 +1664,52 @@ pub async fn get_video_info(
     cookie_file: Option<String>,
     display_only: Option<bool>,
 ) -> Result<VideoInfo, String> {
-    let cookie_fallback = video_info_cookie_probe(browser_cookies, cookie_file);
-    let cookie_ref = cookie_fallback.as_ref();
-
-    if display_only == Some(true) {
-        let json = yt_dlp_single_json_simulate_with_cookie_fallback(
-            &app,
-            &url,
-            cookie_ref,
-            None,
-        )
-        .await
-        .map_err(|e| get_video_info_simulate_failure_message(&e))?
-        .0;
-        let mut info = video_info_from_ytdlp_single_json(json);
-        info.file_size_bytes_audio = None;
-        info.file_size_bytes_video = None;
-        return Ok(info);
-    }
-
-    // Prefer m4a source to avoid transcoding; pure audio streams only (no /best video fallback).
-    const AUDIO_SIMULATE_FMT: &str = "bestaudio[ext=m4a]/bestaudio";
-    let audio_primary = audio_only.unwrap_or(false);
-    let video_fmt = effective_video_format_for_info_probe(format.as_deref());
-    let video_fmt_ref = video_fmt.as_str();
-
-    // Run sequentially — parallel simulates double the request rate on the same cookies.
-    let json_video_res =
-        yt_dlp_single_json_simulate_with_cookie_fallback(&app, &url, cookie_ref, Some(video_fmt_ref))
-            .await
-            .map(|(json, _)| json);
-    let json_audio_res =
-        yt_dlp_single_json_simulate_with_cookie_fallback(
-            &app,
-            &url,
-            cookie_ref,
-            Some(AUDIO_SIMULATE_FMT),
-        )
-        .await
-        .map(|(json, _)| json);
-
-    let json_video = json_video_res.as_ref().ok();
-    let json_audio = json_audio_res.as_ref().ok();
-
-    if json_video.is_none() && json_audio.is_none() {
-        return Err(match (&json_video_res, &json_audio_res) {
-            (Err(v), Err(a)) => format!(
-                "Metadata fetch failed (video: {}; audio: {})",
-                get_video_info_simulate_failure_message(v),
-                get_video_info_simulate_failure_message(a),
-            ),
-            (Err(e), Ok(_)) => get_video_info_simulate_failure_message(e),
-            (Ok(_), Err(e)) => get_video_info_simulate_failure_message(e),
-            (Ok(_), Ok(_)) => "Metadata fetch failed".to_string(),
-        });
-    }
-
-    if let Err(e) = &json_video_res {
-        if json_audio.is_some() {
-            crate::rf_log!(
-                "download.ytdlp",
-                log::Level::Warn,
-                "get_video_info video simulate failed (audio ok): {}",
-                e
-            );
-        }
-    }
-    if let Err(e) = &json_audio_res {
-        if json_video.is_some() {
-            crate::rf_log!(
-                "download.ytdlp",
-                log::Level::Warn,
-                "get_video_info audio simulate failed (video ok): {}",
-                e
-            );
-        }
-    }
-
-    let base_json = json_video
-        .or(json_audio)
-        .expect("at least one simulate succeeded");
-    let (_, file_size_bytes_video) = json_video
-        .map(|j| dual_file_sizes_from_ytdlp_json(j, Some(video_fmt_ref), false))
-        .unwrap_or((None, None));
-    let (file_size_bytes_audio, _) = json_audio
-        .map(|j| dual_file_sizes_from_ytdlp_json(j, None, true))
-        .unwrap_or((None, None));
-
-    let mut info = video_info_from_ytdlp_single_json(base_json.clone());
-    info.file_size_bytes_audio = file_size_bytes_audio;
-    info.file_size_bytes_video = file_size_bytes_video;
-    info.file_size_bytes = if audio_primary {
-        file_size_bytes_audio.or(file_size_bytes_video)
+    let cookie_probe = video_info_cookie_probe(browser_cookies.clone(), cookie_file.clone());
+    let browser_arg = if browser_cookies.as_deref() == Some("ruforge") {
+        ytdlp_browser_cookie_arg(&app, "ruforge").ok()
     } else {
-        file_size_bytes_video.or(file_size_bytes_audio)
+        None
+    };
+    let auth = auth_from_download_options(
+        browser_cookies.as_deref(),
+        cookie_file.as_deref(),
+        browser_arg,
+    );
+    if let Some(ref probe) = cookie_probe {
+        if probe.browser_cookies.as_deref() == Some("ruforge") {
+            let export = export_ruforge_cookies_for_ytdlp(&app).await?;
+            let path = export.path().display().to_string();
+            let _export_guard = export;
+            let auth = auth_from_download_options(None, Some(&path), None);
+            let request = InspectRequest {
+                url: url.clone(),
+                video_format: format.clone(),
+                audio_only: audio_only.unwrap_or(false),
+                display_only: display_only.unwrap_or(false),
+                auth,
+            };
+            let result = engine_state
+                .engine
+                .inspect(request)
+                .await
+                .map_err(|e| e.message)?;
+            return Ok(media_inspection_to_video_info(result.inspection));
+        }
     }
-    .or(info.file_size_bytes);
-    Ok(info)
+
+    let request = InspectRequest {
+        url,
+        video_format: format,
+        audio_only: audio_only.unwrap_or(false),
+        display_only: display_only.unwrap_or(false),
+        auth,
+    };
+    engine_state
+        .engine
+        .inspect(request)
+        .await
+        .map(|r| media_inspection_to_video_info(r.inspection))
+        .map_err(|e| get_video_info_simulate_failure_message(&e.message))
 }
 
 fn push_ytdlp_download_cookie_args(
@@ -2038,6 +2025,7 @@ fn append_ytdlp_stderr_line_bounded(log: &mut String, line_bytes: &[u8], max_byt
 #[tauri::command]
 pub async fn start_download_job(
     app: AppHandle,
+    engine_state: State<'_, MediaEngineState>,
     manager: State<'_, DownloadJobManager>,
     job_id: String,
     url: String,
@@ -2045,6 +2033,40 @@ pub async fn start_download_job(
     resume: bool,
 ) -> Result<(), String> {
     manager.try_claim_active_job(&job_id)?;
+
+    let browser_arg = if options.browser_cookies.as_deref() == Some("ruforge") {
+        ytdlp_browser_cookie_arg(&app, "ruforge").ok()
+    } else {
+        None
+    };
+
+    let inspect_auth = auth_from_download_options(
+        options.browser_cookies.as_deref(),
+        options.cookie_file.as_deref(),
+        browser_arg.clone(),
+    );
+
+    let inspect_result = match engine_state
+        .engine
+        .inspect(InspectRequest {
+            url: url.clone(),
+            video_format: if options.audio_only {
+                None
+            } else {
+                Some(options.format.clone())
+            },
+            audio_only: options.audio_only,
+            display_only: false,
+            auth: inspect_auth.clone(),
+        })
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            manager.release_claim_if_pending(&job_id)?;
+            return Err(e.message);
+        }
+    };
 
     let cookie_fallback = if ytdlp_has_configured_cookie_source(
         options.browser_cookies.as_deref(),
@@ -2055,21 +2077,7 @@ pub async fn start_download_job(
         None
     };
 
-    let (probe, used_cookies) = match yt_dlp_single_json_simulate_with_cookie_fallback(
-        &app,
-        &url,
-        cookie_fallback.as_ref(),
-        None,
-    )
-    .await
-    {
-        Ok(pair) => pair,
-        Err(e) => {
-            manager.release_claim_if_pending(&job_id)?;
-            return Err(e);
-        }
-    };
-    let (download_options, cookie_export_guard) = if used_cookies {
+    let (download_options, cookie_export_guard) = if inspect_auth.is_some() {
         if options.browser_cookies.as_deref() == Some("ruforge") {
             match ytdlp_download_options_with_ruforge_export(&app, &options).await {
                 Ok(pair) => pair,
@@ -2084,8 +2092,34 @@ pub async fn start_download_job(
     } else {
         (download_options_without_cookies(&options), None)
     };
-    let filename_template_eff =
-        yt_dlp_effective_filename_template(&probe, &options.filename_template, &download_options);
+
+    let choices = validated_choices_from_options(
+        &download_options.format,
+        download_options.audio_only,
+        &download_options.audio_format,
+        &download_options.sub_langs,
+    )
+    .map_err(|e| {
+        let _ = manager.release_claim_if_pending(&job_id);
+        e.message
+    })?;
+
+    let paths = DownloadPaths {
+        output_dir: options.output_dir.clone(),
+        filename_template: options.filename_template.clone(),
+        playlist_output_folder: options.playlist_output_folder.clone(),
+        playlist_index: options.playlist_index,
+    };
+
+    let probe_json = inspect_result
+        .metadata_probe
+        .unwrap_or(serde_json::Value::Null);
+    let filename_template_eff = effective_filename_template(
+        &probe_json,
+        &options.filename_template,
+        &choices,
+        &paths,
+    );
 
     let output_dir = options.output_dir.trim().to_string();
     if output_dir.is_empty() {
@@ -2101,20 +2135,38 @@ pub async fn start_download_job(
         ));
     }
 
-    let mut args = match build_ytdlp_download_args(
-        &app,
+    let download_auth = if download_options.browser_cookies.is_some()
+        || download_options.cookie_file.is_some()
+    {
+        if let Some(ref export) = cookie_export_guard {
+            auth_from_download_options(None, Some(&export.path().display().to_string()), None)
+        } else {
+            auth_from_download_options(
+                download_options.browser_cookies.as_deref(),
+                download_options.cookie_file.as_deref(),
+                browser_arg,
+            )
+        }
+    } else {
+        None
+    };
+
+    let args = match build_download_args(
         &url,
-        &download_options,
+        &choices,
+        &output_dir,
         &filename_template_eff,
         resume,
+        download_auth.as_ref(),
+        crate::deno_binary::resolved_deno_path_if_present(&app).as_deref(),
     ) {
         Ok(a) => a,
         Err(e) => {
             manager.release_claim_if_pending(&job_id)?;
-            return Err(e);
+            return Err(e.message);
         }
     };
-    ytdlp_push_js_runtime_args(&app, &mut args);
+    let _ = inspect_result.inspection_id;
 
     let shell = match ytdlp_shell_command(&app) {
         Ok(c) => c,
@@ -2160,108 +2212,41 @@ pub async fn start_download_job(
         let auto_scrub = options.auto_scrub_previews && !options.audio_only;
         let browser_cookies_for_errors = options.browser_cookies.clone();
         let scrub_spawned = Arc::new(AtomicBool::new(false));
-        let mut progress_extras = PlaylistDownloadProgressExtras::default();
+        let mut tracker = ProgressTracker::default();
         let mut error_log = String::new();
-        let mut download_reached_full = false;
-        let mut last_percentage: f32 = 0.0;
-        let mut last_speed = String::new();
-        let mut last_eta = String::new();
-        let mut last_downloaded_bytes: Option<u64> = None;
-        let mut last_total_bytes: Option<u64> = None;
 
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line_bytes) => {
                     let line = String::from_utf8_lossy(&line_bytes).to_string();
-                    if line.contains("[download]") {
-                        if let Some((idx, total, tit)) =
-                            parse_ytdlp_playlist_download_line(&line)
-                        {
-                            progress_extras.current_index = Some(idx);
-                            progress_extras.total_items = Some(total);
-                            if tit.is_some() {
-                                progress_extras.current_item_title = tit;
-                            }
-                        }
-                    }
-
-                    if line.contains("[download]") && line.contains('%') {
-                        let parts: Vec<&str> = line.split_whitespace().collect();
-                        if parts.len() >= 2 {
-                            let percent_str = parts[1].trim_end_matches('%');
-                            if let Ok(percentage) = percent_str.parse::<f32>() {
-                                let mut speed = "";
-                                let mut eta = "";
-
-                                for (i, part) in parts.iter().enumerate() {
-                                    if part.contains("/s") || part.contains("B/s") {
-                                        speed = part;
-                                    }
-                                    if part.contains(':') && i > 4 {
-                                        eta = part;
-                                    }
-                                }
-
-                                let sizes = parse_ytdlp_percent_of_total_bytes(&line, percentage);
-                                let (downloaded_bytes, total_bytes) = match sizes {
-                                    Some((d, t)) => (Some(d), Some(t)),
-                                    None => (None, None),
-                                };
-
-                                // Latch: yt-dlp can emit another [download] % line below 100 after
-                                // one stream hit 100% (HLS fragments, playlist items). Do not clear.
-                                if percentage >= 100.0 {
-                                    download_reached_full = true;
-                                }
-                                last_percentage = percentage;
-                                last_speed = speed.to_string();
-                                last_eta = eta.to_string();
-                                last_downloaded_bytes = downloaded_bytes;
-                                last_total_bytes = total_bytes;
-
-                                let _ = app.emit(
-                                    "download-progress",
-                                    ProgressPayload {
-                                        job_id: job_id.clone(),
-                                        percentage,
-                                        speed: last_speed.clone(),
-                                        eta: last_eta.clone(),
-                                        status: "downloading".to_string(),
-                                        current_index: progress_extras.current_index,
-                                        total_items: progress_extras.total_items,
-                                        current_item_title: progress_extras
-                                            .current_item_title
-                                            .clone(),
-                                        downloaded_bytes,
-                                        total_bytes,
-                                    },
-                                );
-                            }
-                        }
-                    } else if download_reached_full && ytdlp_line_is_post_process(&line) {
-                        let pct = last_percentage.max(100.0);
+                    if let Some(mut progress) = tracker.handle_stdout_line(&line) {
+                        progress.job_id = job_id.clone();
+                        let status = match progress.status {
+                            media_engine::DownloadStatus::PostProcessing => "processing",
+                            _ => "downloading",
+                        };
                         let _ = app.emit(
                             "download-progress",
                             ProgressPayload {
                                 job_id: job_id.clone(),
-                                percentage: pct,
-                                speed: last_speed.clone(),
-                                eta: last_eta.clone(),
-                                status: "processing".to_string(),
-                                current_index: progress_extras.current_index,
-                                total_items: progress_extras.total_items,
-                                current_item_title: progress_extras.current_item_title.clone(),
-                                downloaded_bytes: last_downloaded_bytes,
-                                total_bytes: last_total_bytes,
+                                percentage: progress.percentage,
+                                speed: progress.speed,
+                                eta: progress.eta,
+                                status: status.to_string(),
+                                current_index: progress.current_index,
+                                total_items: progress.total_items,
+                                current_item_title: progress.current_item_title,
+                                downloaded_bytes: progress.downloaded_bytes,
+                                total_bytes: progress.total_bytes,
                             },
                         );
                     }
                 }
                 CommandEvent::Stderr(line_bytes) => {
-                    append_ytdlp_stderr_line_bounded(
+                    media_engine::progress::append_stderr_bounded(
                         &mut error_log,
                         &line_bytes,
-                        DOWNLOAD_JOB_YTDLP_STDERR_LOG_MAX_BYTES,
+                        ProgressTracker::STDERR_MAX_BYTES,
                     );
                 }
                 CommandEvent::Terminated(payload) => {
