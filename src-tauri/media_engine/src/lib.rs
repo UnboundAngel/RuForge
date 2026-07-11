@@ -1,0 +1,21 @@
+pub mod engine;
+pub mod error;
+pub mod events;
+pub mod inspection;
+pub mod jobs;
+pub mod process;
+pub mod progress;
+pub mod rate_limit;
+pub mod types;
+pub mod url;
+pub mod ytdlp_args;
+pub mod ytdlp_json;
+
+pub use engine::{validated_choices_from_options, MediaEngine, MediaEngineConfig};
+pub use error::{classify_ytdlp_stderr, EngineError, EngineErrorCode};
+pub use events::{ChannelEventSink, EngineEvent, EventSink, JobStore, MemoryJobStore};
+pub use inspection::{InspectionStore, DEFAULT_INSPECTION_TTL_SECS};
+pub use jobs::ActiveJobRegistry;
+pub use process::{ProcessLauncher, ProcessOutput, RuntimeProvider, SpawnedProcess, StdProcessLauncher};
+pub use rate_limit::{stderr_is_missing_js_runtime, JS_RUNTIME_MISSING_PREFIX};
+pub use types::*;

@@ -18,7 +18,7 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-05 (React companion playback and audio layout repair)
+Last updated: 2026-07-11 (headless media_engine download core extraction)
 
 Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path.
 
@@ -57,6 +57,8 @@ reads this for the last shipped delta, not the git tree.
 
 
 **0.2.2 (unreleased, in tree):**
+
+- Downloads / media engine: headless `media_engine` workspace crate extracts inspect, validated download args, throttled progress, inspection expiry, job state, and runtime boundaries; RuForge download commands delegate through thin Tauri adapters; Finch-facing `media_engine_*` commands added.
 
 - Companion (dev-gated): React companion-web playback ownership fixed so audio/video clicks stop the previous element, controls bind to the active media kind, progress posts use the backend position/duration/state contract, and Audio mode renders app-style Quick picks, Liked Songs, Artists, Albums, and Local Files sections instead of one long list.
 

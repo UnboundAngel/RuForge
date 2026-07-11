@@ -4,6 +4,7 @@ pub mod companion;
 pub mod debug_log;
 mod deno_binary;
 mod dev_gate;
+mod media_engine_adapter;
 mod download_job_manager;
 mod focus_protocol;
 mod hardware_acceleration;
@@ -32,6 +33,10 @@ use tauri_plugin_updater::UpdaterExt;
 
 use crate::app_state::AppConfig;
 use crate::commands::deno_update::{download_deno, get_deno_status};
+use crate::commands::media_engine_cmd::{
+    media_engine_cancel_job, media_engine_get_job, media_engine_inspect,
+    media_engine_list_jobs, media_engine_runtime_status, media_engine_start_download,
+};
 use crate::commands::dev_captures::{
     capture_main_window_dev, delete_dev_captures, dev_captures_folder_path, list_dev_captures,
     read_dev_capture_png, start_dev_capture_file_drag, write_dev_capture_png, DevCaptureMainWindow,
@@ -191,6 +196,18 @@ pub fn run() {
                 .map_err(|e| format!("failed to load library config: {e}"))?;
             app.manage(LibraryState::new(library_config));
 
+            let job_manager_for_engine = app.state::<DownloadJobManager>().inner().clone();
+            let active_probe = std::sync::Arc::new(move || {
+                job_manager_for_engine
+                    .has_active_downloads()
+                    .unwrap_or(false)
+            });
+            app.manage(crate::media_engine_adapter::MediaEngineState::new(
+                handle.clone(),
+                1,
+                active_probe,
+            ));
+
             crate::companion::register_progress_query_listener(&handle);
 
             warm_ytdlp_release_cache_spawn(handle.clone());
@@ -292,6 +309,12 @@ pub fn run() {
             start_download_job,
             pause_download_job,
             stop_all_active_download_jobs,
+            media_engine_inspect,
+            media_engine_start_download,
+            media_engine_get_job,
+            media_engine_cancel_job,
+            media_engine_runtime_status,
+            media_engine_list_jobs,
             scan_dir_for_neighbors,
             sweep_library_download_duplicates,
             regroup_playlist_downloads,
