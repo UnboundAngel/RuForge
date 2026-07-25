@@ -160,6 +160,8 @@ Full thresholds and examples: [`docs/agents/AGENT-REFERENCE.md`](docs/agents/AGE
 - **Stack:** Tauri v2, Rust, React 19, TypeScript, Zustand, yt-dlp, Tailwind v4. Two webviews (main + mini); Zustand does not span webviews; cross-window sync is Tauri emit/listen only.
 - **Versions (must match on every bump):** `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version` (+ `Cargo.lock` when crate version changes). Past failure: `Cargo.toml` behind JS/Tauri version.
 - **Builds:** `npm run build` (web); `npm run tauri build` (desktop installer).
+- **Dev loop (normal entry point):** `npm run dev:app`. Runs the Companion asset watcher plus `tauri dev` and shuts both down on exit. `npm run tauri dev` still works unchanged when the Companion watcher is not wanted. Companion assets are read from disk in debug builds, so a Companion edit plus browser refresh needs no Rust rebuild.
+- **Dev maintenance:** `npm run dev:disk` (read-only size report), `npm run dev:clean:safe` (dry run unless `-Apply`; switches `-Incremental`, `-WebsiteDist`, `-NpmCache`), `npm run dev:rust-recover` (one non-incremental build; use when Rust leaf rebuilds roughly double because the ReFS Dev Drive incremental session stops finalizing, see rust-lang/rust#151181). Full symbols on demand: `cargo build --profile debugging`.
 - **Large binaries:** do not commit `src-tauri/binaries/ffmpeg-*` / `ffprobe-*` unless LFS policy exists. Typical junk: `.cursor/`, ad-hoc archives like `ffmpeg.7z`.
 
 ## Auto-updater (essentials)
@@ -192,6 +194,12 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 
 ### v0.2.2 (unreleased)
+
+- **Dev tooling**: `npm run dev:app` is the new development entry point, running the Companion asset watcher alongside `tauri dev` and tearing down both process trees on exit or interrupt. Added `dev:disk` (read-only artifact report), `dev:clean:safe` (dry run by default, guarded opt-in switches, refuses while builds are running), and `dev:rust-recover` (one process-scoped non-incremental build for the ReFS Dev Drive finalization bug). (`scripts/dev-app.ps1`, `scripts/dev-disk-report.ps1`, `scripts/dev-clean-safe.ps1`, `scripts/dev-rust-recover.ps1`, `package.json`).
+
+- **Dev build cost**: dev profile now emits line tables only with dependency debug info off, cutting `ruforge_lib.lib` from 1540 MB to 356 MB, `ruforge.pdb` from 273 MB to 57 MB, and Rust leaf rebuilds from 28s to 15s; panic backtraces keep file, line, and symbol names. New opt-in `debugging` profile restores full debug info. Companion directories added to `.taurignore` so Companion edits no longer restart the desktop app. (`src-tauri/Cargo.toml`, `src-tauri/.taurignore`).
+
+- **Windows capture**: main and secondary windows register Win32 class `RuForge_Chrome_WidgetWin` so OBS Window Capture Automatic selects Windows Graphics Capture instead of BitBlt (WebView2 GPU frames were black under BitBlt). Hardware acceleration, transparency, and rounded shell unchanged. (`tauri.conf.json`, `window_classname.rs`, `player.rs`, `notify_overlay.rs`).
 
 - **Downloads / media engine**: headless `media_engine` workspace crate extracts inspect, validated download args, throttled progress, inspection expiry, job state, and runtime boundaries; RuForge `get_video_info` / `start_download_job` delegate to it via thin Tauri adapters; Finch-facing `media_engine_*` commands added. (`src-tauri/media_engine/`, `src-tauri/src/media_engine_adapter.rs`, `src-tauri/src/commands/media_engine_cmd.rs`, `src-tauri/src/commands/downloader.rs`).
 

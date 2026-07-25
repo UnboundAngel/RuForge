@@ -91,6 +91,20 @@ name = "verify_gallery_folder"
 path = "dev-bin/verify_gallery_folder.rs"
 required-features = ["dev-verify-bins"]
 
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+# Opt in with --profile debugging when a debugger or full symbols are needed.
+[profile.debugging]
+inherits = "dev"
+debug = true
+
+[profile.debugging.package."*"]
+debug = true
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
   "Win32_Foundation",

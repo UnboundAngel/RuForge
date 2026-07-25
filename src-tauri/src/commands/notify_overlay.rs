@@ -9,6 +9,7 @@ use tauri::{AppHandle, Emitter, EventTarget, Manager, PhysicalPosition, Physical
 use tauri::WebviewWindowBuilder;
 
 use crate::hardware_acceleration::HardwareAccelerationDisk;
+use crate::window_classname::OBS_COMPAT_WINDOW_CLASSNAME;
 
 const NOTIFY_LABEL: &str = "notify";
 const PUSH_EVENT: &str = "ruforge-background-notify";
@@ -126,7 +127,8 @@ fn ensure_notify_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String>
         .skip_taskbar(true)
         .always_on_top(true)
         .focused(false)
-        .visible(false);
+        .visible(false)
+        .window_classname(OBS_COMPAT_WINDOW_CLASSNAME);
 
     if let Some(browser_args) = prefs.webview_additional_browser_args() {
         builder = builder.additional_browser_args(&browser_args);

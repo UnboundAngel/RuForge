@@ -21,7 +21,8 @@
         "decorations": false,
         "transparent": true,
         "shadow": false,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "windowClassname": "RuForge_Chrome_WidgetWin"
       }
     ],
     "security": {
