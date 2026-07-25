@@ -8,6 +8,7 @@ mod media_engine_adapter;
 mod download_job_manager;
 mod focus_protocol;
 mod hardware_acceleration;
+mod window_classname;
 pub mod library;
 mod media_bundle;
 mod process_tree;

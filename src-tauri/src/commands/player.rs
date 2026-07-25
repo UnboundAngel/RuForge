@@ -1,6 +1,7 @@
 use tauri::{AppHandle, Manager};
 
 use crate::hardware_acceleration::HardwareAccelerationDisk;
+use crate::window_classname::OBS_COMPAT_WINDOW_CLASSNAME;
 
 #[cfg(windows)]
 fn apply_window_icon(app: &AppHandle, window: &tauri::WebviewWindow) {
@@ -51,7 +52,8 @@ pub async fn open_mini_player(app: AppHandle) -> Result<(), String> {
             .resizable(true)
             .decorations(false)
             .transparent(true)
-            .shadow(false);
+            .shadow(false)
+            .window_classname(OBS_COMPAT_WINDOW_CLASSNAME);
 
     if let Some(browser_args) = prefs.webview_additional_browser_args() {
         mini_builder = mini_builder.additional_browser_args(&browser_args);
@@ -84,7 +86,8 @@ pub async fn open_music_mini_player(app: AppHandle) -> Result<(), String> {
     .resizable(false)
     .decorations(false)
     .transparent(true)
-    .shadow(false);
+    .shadow(false)
+    .window_classname(OBS_COMPAT_WINDOW_CLASSNAME);
 
     if let Some(browser_args) = prefs.webview_additional_browser_args() {
         builder = builder.additional_browser_args(&browser_args);
@@ -118,6 +121,7 @@ pub async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
     )
     .title("YouTube Explorer")
     .inner_size(1200.0, 800.0)
+    .window_classname(OBS_COMPAT_WINDOW_CLASSNAME)
     .data_directory(data_dir)
     .browser_extensions_enabled(false)
     .user_agent(

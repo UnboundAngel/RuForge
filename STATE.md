@@ -18,9 +18,9 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-11 (headless media_engine download core extraction)
+Last updated: 2026-07-24 (Windows dev-cycle fix: dev profile, `dev:app`, maintenance scripts)
 
-Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path.
+Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path. Main and secondary windows use class `RuForge_Chrome_WidgetWin` so OBS Automatic picks WGC for WebView2 capture.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) bin
 
 
 
-0.2.2 in tree: website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
+0.2.2 in tree: OBS Window Capture fix (Win32 class `RuForge_Chrome_WidgetWin` so Automatic uses WGC). Website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
 
 
 
@@ -46,6 +46,16 @@ local dev, not a shipped target yet.
 
 
 
+Windows dev loop: `npm run dev:app` is the normal entry point (Companion asset
+
+watcher plus `tauri dev`, both torn down on exit). `npm run tauri dev` still works
+
+unchanged. Maintenance: `npm run dev:disk`, `npm run dev:clean:safe`,
+
+`npm run dev:rust-recover`. Full symbols on demand: `cargo build --profile debugging`.
+
+
+
 ## What is new since last user release
 
 
@@ -57,6 +67,12 @@ reads this for the last shipped delta, not the git tree.
 
 
 **0.2.2 (unreleased, in tree):**
+
+- Dev tooling: `npm run dev:app` runs the Companion watcher with `tauri dev` and cleans up both trees on exit; `dev:disk`, `dev:clean:safe`, and `dev:rust-recover` added for artifact visibility, guarded opt-in cleanup, and ReFS incremental recovery. Developer-facing only, no user-visible behavior change.
+
+- Dev build cost: dev profile emits line tables only with dependency debug info off (`ruforge_lib.lib` 1540 MB to 356 MB, `ruforge.pdb` 273 MB to 57 MB, Rust leaf rebuilds 28s to 15s, backtraces unchanged); opt-in `debugging` profile restores full symbols; Companion directories in `.taurignore` stop app restarts on Companion edits. Developer-facing only.
+
+- Windows capture: Win32 class `RuForge_Chrome_WidgetWin` on main/mini/explorer/notify windows so OBS Window Capture Automatic selects Windows Graphics Capture; BitBlt cannot sample WebView2 GPU frames. HW accel and transparent rounded shell unchanged.
 
 - Downloads / media engine: headless `media_engine` workspace crate extracts inspect, validated download args, throttled progress, inspection expiry, job state, and runtime boundaries; RuForge download commands delegate through thin Tauri adapters; Finch-facing `media_engine_*` commands added.
 

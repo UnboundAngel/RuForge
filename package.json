@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:app": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev-app.ps1",
+    "dev:disk": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev-disk-report.ps1",
+    "dev:clean:safe": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev-clean-safe.ps1",
+    "dev:rust-recover": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev-rust-recover.ps1",
     "companion:build": "vite build --config companion-web.config.ts",
+    "companion:dev": "vite build --config companion-web.config.ts --watch",
     "build": "npm run companion:build && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
