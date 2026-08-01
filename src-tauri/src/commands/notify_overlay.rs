@@ -61,7 +61,7 @@ fn physical_size_for_notify_window(
     let win_w = ((logical_w * scale).round() as u32).max(1);
     let win_h = ((logical_h * scale).round() as u32).max(1);
     let work = monitor.work_area();
-    let pos = work_area_bottom_right(work, win_w, win_h, 12, 56);
+    let pos = work_area_bottom_right(work, win_w, win_h, 12, 120);
     (PhysicalSize::new(win_w, win_h), pos)
 }
 

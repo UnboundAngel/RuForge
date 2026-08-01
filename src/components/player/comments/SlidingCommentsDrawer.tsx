@@ -146,7 +146,9 @@ export function SlidingCommentsDrawer({
           width: COMMENTS_PANEL_WIDTH,
           x: animatedX,
         }}
-        className="absolute bottom-0 right-0 top-0 z-[65] flex flex-col bg-[#271C18]"
+        className={`absolute bottom-0 right-0 top-0 z-[65] flex flex-col bg-[#271C18] ${
+          isOpen || isDragging || isHolding ? "pointer-events-auto" : "pointer-events-none"
+        }`}
       >
         <svg
           className="pointer-events-none absolute right-full top-0 h-5 w-5"
@@ -181,7 +183,9 @@ export function SlidingCommentsDrawer({
       {!isOpen && enableEdgeHold ? (
         <div
           onPointerDown={handleRightEdgeDown}
-          className={`absolute bottom-0 right-0 top-0 z-[66] flex w-16 touch-none select-none items-center justify-end pr-2 ${isHolding ? "cursor-grabbing" : "cursor-pointer"}`}
+          className={`absolute right-0 top-14 z-[55] flex w-3 touch-none select-none items-center justify-end ${isHolding ? "cursor-grabbing" : "cursor-pointer"}`}
+          style={{ bottom: "7.5rem" }}
+          aria-hidden
         >
           <motion.div
             className="h-24 w-1 origin-center rounded-full bg-white/80"

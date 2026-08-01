@@ -13,6 +13,7 @@ import { buildMultiTrackAlbumGroups, resolveDisplayAlbum } from "./musicShelfDed
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicLikeButton } from "./MusicLikeButton";
+import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import {
   ensureArtistMetaSidecar,
   readArtistMetaSidecar,
@@ -205,18 +206,13 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, mot
       onClick={onClick}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
     >
-      {/* Track index / playing indicator */}
-      <div
-        className="w-7 text-right shrink-0 select-none"
-        style={{ color: isPlaying ? "var(--music-accent)" : "var(--music-text-muted)" }}
-      >
-        <span className="group-hover/row:hidden text-xs tabular-nums">
-          {isPlaying ? "♪" : index + 1}
-        </span>
-        <span className="hidden group-hover/row:flex justify-end">
-          <Play size={12} fill="currentColor" />
-        </span>
-      </div>
+      <MusicTrackIndexPlay
+        indexLabel={index + 1}
+        isPlaying={isPlaying}
+        iconSize={12}
+        className="h-7 w-7"
+        labelClassName="text-xs"
+      />
 
       {/* Album thumbnail — always cover-crop, never letterbox */}
       <div

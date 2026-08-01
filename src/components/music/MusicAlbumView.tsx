@@ -12,6 +12,7 @@ import { albumKeyFromFile, resolveDisplayAlbum } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicLikeButton } from "./MusicLikeButton";
+import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 
 type TrackRowProps = {
   file: MediaFile;
@@ -32,10 +33,13 @@ function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: 
       onClick={onClick}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
     >
-      <div className="w-6 text-right text-xs shrink-0" style={{ color: isPlaying ? "var(--music-accent)" : "var(--music-text-muted)" }}>
-        <span className="group-hover/row:hidden">{isPlaying ? "♪" : trackNum}</span>
-        <span className="hidden group-hover/row:inline"><Play size={12} fill="currentColor" /></span>
-      </div>
+      <MusicTrackIndexPlay
+        indexLabel={trackNum}
+        isPlaying={isPlaying}
+        iconSize={12}
+        className="h-6 w-6"
+        labelClassName="text-xs"
+      />
       <div className="flex-1 min-w-0">
         <div
           className="text-sm font-medium truncate"
