@@ -480,10 +480,10 @@ html.ruforge-notify-root body {
 
 /* Music mode palette - applied to the full app shell in music mode. */
 [data-music-mode="true"] {
-  --music-bg: #080204;
-  --music-shell-chrome: #050102;
-  --music-surface: #0c0809;
-  --music-surface-raised: #141010;
+  --music-bg: #0a0a0a;
+  --music-shell-chrome: #000000;
+  --music-surface: #121212;
+  --music-surface-raised: #1a1a1a;
   --music-border: rgba(255, 255, 255, 0.08);
   --music-text-primary: #ffffff;
   --music-text-secondary: rgba(255, 255, 255, 0.6);
@@ -502,7 +502,7 @@ html.ruforge-notify-root body {
   --music-shell-gap: 8px;
   --music-explore-bar-height: 44px;
 
-  --bg: #080204;
+  --bg: #0a0a0a;
   /* Pull the global accent token to music red so all existing hover:text-[var(--accent)] surfaces get it for free. */
   --accent: #ff0033;
 }
