@@ -1,0 +1,100 @@
+{
+  "nodes": [
+    {
+      "id": "t-download-paste-dup",
+      "type": "task",
+      "label": "Downloader paste UX and duplicate gate",
+      "agent": "chad",
+      "details": [
+        "Paste no longer flashes; soft library-duplicate warning on URL entry; every enqueue path uses the Download-click duplicate check."
+      ],
+      "fileEdits": [
+        { "path": "src/components/DownloaderView.tsx", "reason": "Paste and hero transition." },
+        { "path": "src/components/downloader/useDownloaderView.ts", "reason": "Duplicate warn and enqueue gates." },
+        { "path": "src/store/downloadQueueSlice.ts", "reason": "Enqueue library check and finish clear." }
+      ]
+    },
+    {
+      "id": "t-library-incremental",
+      "type": "task",
+      "label": "Incremental library remove and upsert",
+      "agent": "chad",
+      "details": [
+        "Delete and download success update the grid without a full cold scan; Media/Music cold-scan once per session then quiet refresh."
+      ],
+      "fileEdits": [
+        { "path": "src/galleryEntries.ts", "reason": "Remove and upsert helpers." },
+        { "path": "src/store/ruforgeStore.ts", "reason": "Local mutation and fetch token." }
+      ]
+    },
+    {
+      "id": "t-prespawn-timeout",
+      "type": "task",
+      "label": "Pre-spawn hang and watchdog races",
+      "agent": "chad",
+      "details": [
+        "90s inspect timeout with kill-on-timeout; parallel video/audio simulate; watchdog arms before start; terminal guards; auto-clear only for approval auto."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/media_engine/src/process.rs", "reason": "Subprocess timeout ceiling." },
+        { "path": "src-tauri/src/media_engine_adapter.rs", "reason": "Tauri kill on inspect timeout." },
+        { "path": "src/downloadJobWatchdog.ts", "reason": "Pre-transfer budget and wall clock." },
+        { "path": "src/store/downloadQueueSlice.ts", "reason": "Arm, skip pause, auto-clear scope." }
+      ]
+    },
+    {
+      "id": "t-media-engine",
+      "type": "task",
+      "label": "Headless media_engine crate",
+      "agent": "chad",
+      "details": [
+        "Extract inspect, validated download args, progress, and job boundaries; RuForge delegates via thin adapters."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/media_engine/", "reason": "Workspace crate." },
+        { "path": "src-tauri/src/media_engine_adapter.rs", "reason": "Tauri adapter." }
+      ]
+    },
+    {
+      "id": "f-obs-wgc",
+      "type": "fix",
+      "label": "OBS Window Capture WGC class",
+      "agent": "chad",
+      "details": [
+        "Win32 class RuForge_Chrome_WidgetWin so OBS Automatic selects Graphics Capture for WebView2."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/window_classname.rs", "reason": "Class registration." },
+        { "path": "src-tauri/tauri.conf.json", "reason": "Window class config." }
+      ]
+    },
+    {
+      "id": "f-storage-player-music",
+      "type": "fix",
+      "label": "Storage, player, and Music polish",
+      "agent": "chad",
+      "details": [
+        "Cleanup opens without cold scan under titlebar; comments edge-hold and toast layering; Music play fade and OLED panel gray."
+      ],
+      "fileEdits": [
+        { "path": "src/components/AuthorizeCleanupModal.tsx", "reason": "Immediate open and chrome band." },
+        { "path": "src/components/player/comments/SlidingCommentsDrawer.tsx", "reason": "Edge-hold strip." },
+        { "path": "src/index.css", "reason": "Music panel tokens." }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-download-paste-dup" },
+    { "source": "t-download-paste-dup", "target": "ruforge" },
+    { "source": "chad", "target": "t-library-incremental" },
+    { "source": "t-library-incremental", "target": "ruforge" },
+    { "source": "chad", "target": "t-prespawn-timeout" },
+    { "source": "t-prespawn-timeout", "target": "ruforge" },
+    { "source": "chad", "target": "t-media-engine" },
+    { "source": "t-media-engine", "target": "ruforge" },
+    { "source": "chad", "target": "f-obs-wgc" },
+    { "source": "f-obs-wgc", "target": "ruforge" },
+    { "source": "chad", "target": "f-storage-player-music" },
+    { "source": "f-storage-player-music", "target": "ruforge" }
+  ]
+}

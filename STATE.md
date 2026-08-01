@@ -14,13 +14,13 @@
 
 
 
-Shipping version: 0.2.2 (unreleased)
+Shipping version: 0.2.3 (unreleased)
 
-Last shipped to users: 0.2.1
+Last shipped to users: 0.2.2
 
-Last updated: 2026-08-01 (Auto-clear start failures only for approval auto)
+Last updated: 2026-08-01 (Shipped 0.2.2)
 
-Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path. Main and secondary windows use class `RuForge_Chrome_WidgetWin` so OBS Automatic picks WGC for WebView2 capture. Download start path bounds inspect waits and arms the job watchdog before spawn. Library entries support incremental remove/upsert so deletes and finished downloads avoid a full cold scan.
+Status: 0.2.2 live on GitHub and updater.json. Downloader paste no longer flashes; soft library-duplicate warning on URL entry; every enqueue path shares the Download-click duplicate gate. Library incremental remove/upsert (no full rescan on delete or download success). Pre-spawn inspect timeout with kill-on-timeout; watchdog armed before start; auto-clear start failures only for approval auto. OBS Window Capture uses class `RuForge_Chrome_WidgetWin` for WGC. Headless `media_engine` crate backs inspect/download. Browser Companion remains developer-gated on localhost.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) bin
 
 
 
-0.2.2 in tree: downloader paste transition no longer flashes (URL stays visible through metadata; leftover top-left chip clears on success); every downloader enqueue path uses the Download-click library duplicate check. Library incremental remove/upsert (no full rescan on delete or download success; Media/Music cold-scan once per session then quiet refresh). Download pre-spawn hang fix (90s inspect timeout + watchdog armed before `start_download_job`). OBS Window Capture fix (Win32 class `RuForge_Chrome_WidgetWin` so Automatic uses WGC). Website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
+0.2.2 shipped. Next cycle open. Priorities unchanged: storage cap before enqueue, main-app nav restructure, Companion Browser V1 when Angel approves removing the dev gate.
 
 
 
@@ -60,87 +60,49 @@ unchanged. Maintenance: `npm run dev:disk`, `npm run dev:clean:safe`,
 
 
 
-Closed release 0.2.1 (what users upgrading from 0.2.0 receive). The release-note drafter
+Closed release 0.2.2 (what users upgrading from 0.2.1 receive). The release-note drafter
 
 reads this for the last shipped delta, not the git tree.
 
 
 
-**0.2.2 (unreleased, in tree):**
+**0.2.3 (unreleased, in tree):**
 
-- Downloads: Paste no longer flashes or blanks the center URL; successful finishes clear the leftover top-left chip; all downloader enqueue paths run the Download-click library duplicate check (warn/replace when auto-skip is off).
+(none yet)
 
-- Library: Incremental entry remove/upsert; delete skips full rescan; download success upserts finished file; Media/Music cold-scan once per session then quiet background refresh without backfill.
 
-- Downloads: Pre-spawn hang closed (90s yt-dlp inspect timeout; watchdog arms before job start; failed/timed-out starts clear so music auto-save can retry). Pre-release race fixes: parallel inspect, kill-on-timeout, terminal-state guards, auto-skip pauses active children, gallery local mutations invalidate in-flight fetches. Non-timeout start failures auto-clear only for `approval: "auto"`; sticky failed rows stay for everything else.
 
-- Music: Track row play fades over the index; content panels use soft neutral gray (`#121212`) for OLED readability instead of near-black red undertone.
+**0.2.2 shipped:**
 
-- Storage cleanup: Opens on click without waiting for a cold library scan; overlay below titlebar so window controls stay visible; storage header sits under that band.
 
-- Player: Comments edge-hold no longer blocks scrubber end or fullscreen; download toasts clear the player control dock; notify overlay sits higher.
 
-- Downloads: Library duplicate scan runs on URL paste; soft “Already in your library” warning shows before Download. Download click no longer hangs on a cold gallery scan; replace/copy popup still appears when auto-skip is off.
+Additions:
 
-- Dev tooling: `npm run dev:app` runs the Companion watcher with `tauri dev` and cleans up both trees on exit; `dev:disk`, `dev:clean:safe`, and `dev:rust-recover` added for artifact visibility, guarded opt-in cleanup, and ReFS incremental recovery. Developer-facing only, no user-visible behavior change.
+- Downloads: Soft Already in your library warning appears when you paste or enter a URL, before Download.
 
-- Dev build cost: dev profile emits line tables only with dependency debug info off (`ruforge_lib.lib` 1540 MB to 356 MB, `ruforge.pdb` 273 MB to 57 MB, Rust leaf rebuilds 28s to 15s, backtraces unchanged); opt-in `debugging` profile restores full symbols; Companion directories in `.taurignore` stop app restarts on Companion edits. Developer-facing only.
+- Library: Deletes and finished downloads update the gallery without a full rescan.
 
-- Windows capture: Win32 class `RuForge_Chrome_WidgetWin` on main/mini/explorer/notify windows so OBS Window Capture Automatic selects Windows Graphics Capture; BitBlt cannot sample WebView2 GPU frames. HW accel and transparent rounded shell unchanged.
+- Windows: Main and secondary windows use class RuForge_Chrome_WidgetWin so OBS Automatic selects Graphics Capture.
 
-- Downloads / media engine: headless `media_engine` workspace crate extracts inspect, validated download args, throttled progress, inspection expiry, job state, and runtime boundaries; RuForge download commands delegate through thin Tauri adapters; Finch-facing `media_engine_*` commands added.
 
-- Companion (dev-gated): React companion-web playback ownership fixed so audio/video clicks stop the previous element, controls bind to the active media kind, progress posts use the backend position/duration/state contract, and Audio mode renders app-style Quick picks, Liked Songs, Artists, Albums, and Local Files sections instead of one long list.
 
-- Companion (dev-gated): React companion-web pairing restored: fresh /?c= links redeem through POST /pair before /library, auth errors map to stable gates, and paired sessions normalize to /paired.
+Fixes:
 
-- Companion (dev-gated): companion-web replaced with a React-built client that directly ports the RuForge Music UI. Audio mode: MusicLibraryView-style song/album/artist tabs, NowPlayingBar 3-column grid, queue right-panel, dense song rows with lazy thumbs, same black/charcoal/red tokens. All existing backend behaviors preserved (stream tokens, progress sync, SponsorBlock, scrub sprites, reconnect, gates). Build: `npm run companion:build`.
+- Downloads: Paste and metadata transition no longer blanks the URL or flashes the hero.
 
-- Companion (dev-gated): Audio mode redesigned to RuForge Music design language: near-black surfaces, red accent, dense vertical song rows, audio player dock with artwork and track info. Video mode unchanged.
+- Downloads: Every enqueue path runs the same library duplicate check as Download click.
 
-- Companion (dev-gated): companion-web reskinned as a static adaptation of the AI Studio import layout with nav-over-hero, TOP row, horizontal library rows, search/details overlays, lazy signed thumbs, and stable in-place refresh during background reindex; playback/progress/SponsorBlock/scrub/session behavior unchanged.
+- Downloads: Pre-spawn inspect capped at 90s; watchdog arms before start; stuck jobs time out visibly.
 
-- Companion (dev-gated): SponsorBlock segments served via enriched `/sidecar/:id`; companion-web auto-skips segments and shows skip button; SB enable is companion-local.
+- Downloads: Non-timeout start failures auto-clear only for auto jobs; manual failures stay sticky with the error.
 
-- Companion (dev-gated): Scrub preview sprites served via signed `/sprite/:id/:idx`; companion-web shows hover sprite thumbnail on the custom scrub bar.
+- Downloads / Library: Quiet reindex cannot restore a deleted row or wipe a finished upsert; zombie downloads after timeout or skip are killed.
 
-- Companion (dev-gated): Custom player controls (replaces native `<video controls>`): play/pause, scrub bar with SponsorBlock color overlays, time display, speed, loop, SB toggle, mute, fullscreen. Loop, speed, SB enable all companion-local.
+- Storage: Cleanup opens immediately and stays below window chrome.
 
-- Companion (dev-gated): companion-web persists volume and mute across refresh in companion-local localStorage and applies saved output before stream playback.
+- Player: Comments edge-hold no longer steals the scrubber end or fullscreen; download toasts clear the control dock.
 
-- Companion (dev-gated): Music/Songs audio-only files get browser playability projection and stream resolution separate from video/remux rules.
-
-- Companion (dev-gated): large library opens can serve a cached Rust catalog immediately while the canonical reindex refreshes in the background.
-
-- Companion (dev-gated): companion-web inline playback errors for stream/token/decode failures; app stays paired unless network or session auth fails.
-
-- Companion (dev-gated): dropped the `ruforge.local` same-PC experiment; localhost remains the only V1 browser entry point.
-
-- Companion V1.1: `ruforge://focus` deep link raises the main window only (fail-closed; no library or download actions).
-
-- Companion (dev-gated): companion-web disconnected and session-lost gates with reconnect backoff and re-pair guidance after RuForge restart.
-
-- Companion (dev-gated): progress sync via authenticated `POST/GET /progress/:id` (media ID only over HTTP; path bridged internally to `playbackStorage.ts`).
-
-- Companion (dev-gated): Browser Companion V1 slice binds loopback only, opens localhost URL, Settings and companion-web copy no longer present LAN/phone/TV V1.
-
-- Docs: root `AGENTS.md` de-bloated for Cursor; extended context in `docs/agents/AGENT-REFERENCE.md`.
-
-- Docs: Codex audit workspace and packaged skill routing added under `docs/agents/codex/` and `docs/agents/skills/`.
-
-- Docs: Codex memory surface added and research-skill routing tightened for explicit research tasks.
-
-- Docs: Codex memory compacted with durable Claude imports and stale context labels.
-
-- Docs: second-pass doc layout (`docs/agents/`, `docs/ruforge/`), AGENTS Doc routing table, reference pointer updates.
-
-- Docs: agent-doc cleanup (Shipped log authority, stale banners, pointer fixes; `AGENTS.md`, `STATE.md`).
-
-- Docs: Companion action plan moved under `docs/ruforge/plans/`; stale Companion routing references corrected.
-
-- Companion LAN (dev-gated): cinematic loading scene (glass layers, breathe-accent sidebar, PS5-inspired progress rail) in companion-web.
-- Companion LAN (dev-gated): paired URL normalizes to `/paired` after session confirm; reassurance copy in debug strip.
-- Companion LAN (dev-gated): companion-web branded loading card; desktop QR pairing modal with copy/open/refresh; Open in web and Show QR controls in Settings debugging.
+- Music: Track play control fades over the index without a layout jump.
 
 
 

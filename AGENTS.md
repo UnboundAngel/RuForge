@@ -193,86 +193,8 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 **This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see Release ritual). That is the only time the version JSON / `versioner.html` registry get touched. Prefer one line per user-visible feature or fix; batch incremental polish passes into one line instead of ten `(fix)` breakpoints.
 
 
-### v0.2.2 (unreleased)
+### v0.2.3 (unreleased)
 
-- **Downloads**: Non-timeout start failures auto-clear only for `approval: "auto"` jobs (music auto-save / auto pump); manual and other approvals keep a sticky failed row with the error visible. (`downloadQueueSlice.ts`).
-
-- **Downloads / Library**: Pre-release race fixes: local gallery remove/upsert invalidates in-flight snapshot writes; video/audio inspect simulates run in parallel; Tauri inspect timeout kills the yt-dlp tree; pre-transfer watchdog budget covers auth-fallback inspect; audio wall-clock starts after transfer; finish/pause/progress ignore terminal jobs; auto-skip and post-timeout paths pause active children so zombie downloads cannot continue. (`ruforgeStore.ts`, `downloadQueueSlice.ts`, `downloadJobWatchdog.ts`, `media_engine/engine.rs`, `media_engine_adapter.rs`).
-
-- **Music**: Content panels use soft neutral gray (`#121212`) instead of near-black red undertone so OLED edges stay readable without going bright; chrome gaps stay pure black. (`index.css`, `App.tsx`).
-
-- **Downloads**: Paste transition no longer flashes: metadata loading arms on paste, top-left chrome waits for hero metadata, browser strip exits in reserved space, hero fades without a blank frame, and the backdrop waits until details land; center URL stays visible until the chip FLIP. Successful finishes clear the leftover top-left URL chip via stronger hero clear. Every downloader enqueue path (stage, quick enqueue, drop, explorer add, held-batch start) runs the same library duplicate check as Download click so auto-skip-off shows the replace prompt instead of a silent second download. (`DownloaderView.tsx`, `useDownloaderView.ts`, `downloadQueueSlice.ts`, `ExplorerWatchQueueButton.tsx`).
-
-- **Library**: Incremental entry remove/upsert; delete updates the grid without rescan; download success upserts the finished file (quiet fetch only if path unknown); Media/Music mounts cold-scan once per session then quiet background refresh without poster/scrub backfill. (`galleryEntries.ts`, `ruforgeStore.ts`, `MediaView.tsx`, `MusicShell.tsx`, `downloadQueueSlice.ts`).
-
-- **Downloads**: Pre-spawn hang closed: yt-dlp inspect/simulate child waits are capped at 90s with a real timeout error; download watchdog arms before `start_download_job` (not after spawn) so stuck inspect jobs time out visibly; failed/timed-out start rows clear so music auto-save can retry the same track. (`media_engine/process.rs`, `media_engine_adapter.rs`, `downloadJobWatchdog.ts`, `downloadQueueSlice.ts`).
-
-- **Music**: Track row play control fades in over the index (same slot, no snap/layout jump). (`MusicTrackIndexPlay.tsx`, library/liked/album/artist rows).
-
-- **Storage cleanup**: Opens immediately on storage glyph click instead of waiting for a cold library scan. Overlay starts below the titlebar so minimize/maximize/close stay visible and usable; storage header and its X sit under that band, not on top of window chrome. (`AuthorizeCleanupModal.tsx`, `ruforgeStore.ts`).
-
-- **Player**: Comments edge-hold no longer steals the scrubber end or fullscreen button (narrow mid-height strip, controls raised above it). Download toasts mount above the video shell and clear the control dock; background notify overlay sits higher off the bottom edge. (`SlidingCommentsDrawer.tsx`, `PlayerView.tsx`, `App.tsx`, `notify_overlay.rs`).
-
-- **Downloads**: Library scan for duplicates starts when a URL is entered, not on Download click. Soft “Already in your library” warning appears as soon as the URL matches a library item (including during metadata fetch); Download still opens the replace/copy popup when auto-skip is off. First click no longer hangs on a cold gallery scan. (`useDownloaderView.ts`, `downloadQueueSlice.ts`, `DownloaderView.tsx`).
-
-- **Dev tooling**: `npm run dev:app` is the new development entry point, running the Companion asset watcher alongside `tauri dev` and tearing down both process trees on exit or interrupt. Added `dev:disk` (read-only artifact report), `dev:clean:safe` (dry run by default, guarded opt-in switches, refuses while builds are running), and `dev:rust-recover` (one process-scoped non-incremental build for the ReFS Dev Drive finalization bug). (`scripts/dev-app.ps1`, `scripts/dev-disk-report.ps1`, `scripts/dev-clean-safe.ps1`, `scripts/dev-rust-recover.ps1`, `package.json`).
-
-- **Dev build cost**: dev profile now emits line tables only with dependency debug info off, cutting `ruforge_lib.lib` from 1540 MB to 356 MB, `ruforge.pdb` from 273 MB to 57 MB, and Rust leaf rebuilds from 28s to 15s; panic backtraces keep file, line, and symbol names. New opt-in `debugging` profile restores full debug info. Companion directories added to `.taurignore` so Companion edits no longer restart the desktop app. (`src-tauri/Cargo.toml`, `src-tauri/.taurignore`).
-
-- **Windows capture**: main and secondary windows register Win32 class `RuForge_Chrome_WidgetWin` so OBS Window Capture Automatic selects Windows Graphics Capture instead of BitBlt (WebView2 GPU frames were black under BitBlt). Hardware acceleration, transparency, and rounded shell unchanged. (`tauri.conf.json`, `window_classname.rs`, `player.rs`, `notify_overlay.rs`).
-
-- **Downloads / media engine**: headless `media_engine` workspace crate extracts inspect, validated download args, throttled progress, inspection expiry, job state, and runtime boundaries; RuForge `get_video_info` / `start_download_job` delegate to it via thin Tauri adapters; Finch-facing `media_engine_*` commands added. (`src-tauri/media_engine/`, `src-tauri/src/media_engine_adapter.rs`, `src-tauri/src/commands/media_engine_cmd.rs`, `src-tauri/src/commands/downloader.rs`).
-
-- **Companion (dev-gated)**: React companion-web playback ownership fixed so audio/video clicks stop the previous element, controls bind to the active media kind, progress posts use the backend `positionSecs` / `durationSecs` / `playbackState` contract, and Audio mode renders app-style Quick picks, Liked Songs, Artists, Albums, and Local Files sections instead of one long list. (`companion-web-src/App.tsx`, `companion-web-src/types.ts`, `companion-web-src/components/LibraryView.tsx`, `companion-web-src/styles.css`).
-
-- **Companion (dev-gated)**: React companion-web pairing restored: fresh /?c= links now redeem via POST /pair before /library, auth errors map to stable gate states, and successful sessions still normalize to /paired. (companion-web-src/api.ts, companion-web-src/App.tsx).
-
-- **Companion (dev-gated)**: companion-web replaced with a React-built client (`companion-web-src/`). Audio mode now directly ports the RuForge Music UI: same black/charcoal/red tokens, MusicLibraryView song rows (Songs/Albums/Artists tabs), NowPlayingBar 3-column grid, queue right-panel, dense song rows with lazy thumbs. Video mode: grid of cards + inline player. All existing behaviors preserved: stream token, progress sync via `/progress/:id`, SponsorBlock overlays and auto-skip, scrub sprite preview, reconnect backoff, disconnected/session-lost gates, volume/mute/loop/speed/SponsorBlock companion-local persistence, search overlay, catalog refresh. Build pipeline added: `npm run companion:build` (Vite + React, outputs to `src-tauri/companion-web/`); `npm run build` now runs companion build first. `spa.rs` asset handler updated to serve Vite `assets/` subdirectory; content-type list extended. (`companion-web-src/`, `companion-web.config.ts`, `package.json`, `src-tauri/src/companion/spa.rs`).
-
-- **Companion (dev-gated)**: Audio mode redesigned to match RuForge Music app design language: near-black/charcoal surfaces (`#0f0f0f`/`#121212`), red accent (`#ff0033`), dense vertical song rows (MusicQuickPickRow glass pattern), and audio player dock with artwork thumbnail and track info. Video mode layout and warm-brown tokens unchanged. (`companion-web/index.html`, `companion-web/styles.css`, `companion-web/app.js`).
-
-- **Companion (dev-gated)**: companion-web reskinned as a static adaptation of the AI Studio import layout: fixed nav over full-width hero, TOP poster row (uniform 160/200px 2:3 cards with `align-items: flex-start` row, `card-{variant}` width classes), horizontal backdrop/song rows, import-style search and details overlays, lazy signed thumbs, stable in-place library refresh without flash. Playback, progress sync, SponsorBlock, scrub sprites, session gates unchanged. (`companion-web/index.html`, `companion-web/styles.css`, `companion-web/app.js`).
-
-- **Companion (dev-gated)**: SponsorBlock segments served via enriched `/sidecar/:id` (reads or API-fetches `.sponsorblock.json` server-side; companion-web auto-skips and shows skip button; SB enable is companion-local `localStorage`). (`commands/sponsorblock.rs`, `companion/routes.rs`, `library/resolver.rs`, `companion-web/app.js`).
-
-- **Companion (dev-gated)**: Scrub preview sprites served via `/sprite/:id/:idx` (HMAC-signed, covers media ID + sheet index). `/sidecar/:id` now returns `scrubSpriteCount`; companion-web shows hover sprite thumbnail when sprite sheets exist. (`companion/routes.rs`, `library/resolver.rs`, `companion-web/app.js`).
-
-- **Companion (dev-gated)**: Companion-local playback settings: loop, playback speed, SponsorBlock enable, all persisted in `localStorage`. Custom player controls replace native `<video controls>`: play/pause, scrub bar with SponsorBlock segment color overlays, skip button, time display, speed selector, loop/SB/mute/fullscreen buttons. (`companion-web/index.html`, `companion-web/styles.css`, `companion-web/app.js`).
-
-- **Companion (dev-gated)**: companion-web persists volume and mute in localStorage across refresh and applies saved output before stream playback (`companion-web/app.js`).
-
-- **Companion (dev-gated)**: Music/Songs audio-only library files get browser playability projection and stream resolution separate from video/remux rules (`library/scanner.rs`, `library/resolver.rs`).
-
-- **Companion (dev-gated)**: large library opens can serve a cached Rust catalog immediately while the canonical reindex refreshes in the background (`library_state.rs`, `routes.rs`, `companion-web/app.js`).
-
-- **Companion (dev-gated)**: companion-web shows inline playback errors for stream/token/decode failures while staying paired; disconnected and session-lost gates only on network or session auth failures (`companion-web/app.js`, `index.html`, `styles.css`).
-
-- **Companion (dev-gated)**: dropped the `ruforge.local` same-PC experiment; localhost remains the only V1 browser entry point and no hosts-file workflow is exposed (`companion/commands.rs`, `CompanionSettingsSection.tsx`).
-
-- **Companion V1.1**: focus-only `ruforge://focus` deep link raises the main window; fail-closed parsing in Rust (`focus_protocol.rs`, `tauri-plugin-deep-link`, `tauri-plugin-single-instance`, `tauri.conf.json`).
-- **Companion (dev-gated)**: companion-web disconnected and session-lost gates with quiet reconnect backoff, manual Try again, and re-pair copy after RuForge restart (`companion-web/index.html`).
-- **Companion (dev-gated)**: progress sync via `POST/GET /progress/:id` (session auth, ID-only HTTP); server resolves library ID to desktop path and bridges writes/reads through Tauri events into `playbackStorage.ts` (`companion/routes.rs`, `companion/mod.rs`, `companionProgressSync.ts`, `companion-web/index.html`).
-- **Companion (dev-gated)**: Browser Companion V1 slice binds `127.0.0.1` only, opens `http://localhost:<port>`, and Settings/companion-web copy no longer presents LAN/phone/TV V1 (`companion/mod.rs`, `companion/commands.rs`, `CompanionSettingsSection.tsx`, `CompanionPairingModal.tsx`, `companion-web/index.html`).
-- **Docs**: root AGENTS.md de-bloated; extended agent context moved to `docs/agents/AGENT-REFERENCE.md`; Codex-only paths removed from Cursor routing (`AGENTS.md`).
-- **Docs**: Codex audit workspace and agent-neutral skill routing added (`docs/agents/codex/AGENTS.md`, `docs/agents/skills/README.md`, `AGENTS.md`, `STATE.md`).
-- **Docs**: Codex memory surface added and research skill routing tightened (`docs/agents/codex/MEMORY.md`, `docs/agents/codex/AGENTS.md`, `docs/agents/skills/README.md`).
-- **Docs**: Codex memory compacted with durable Claude imports and stale context labels (`docs/agents/codex/MEMORY.md`).
-- **Docs**: Companion action plan moved under committed RuForge plans and stale Companion doc paths were corrected (`docs/ruforge/plans/companion-action-plan.md`, `AGENTS.md`, `STATE.md`, `docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`).
-- **Docs**: second-pass doc layout (`docs/agents/`, `docs/ruforge/`), AGENTS Doc routing table, reference pointer updates (`AGENTS.md`, `STATE.md`, `legal.ts`, cross-doc links).
-- **Docs**: agent-doc cleanup: single Shipped log in AGENTS.md, STATE live-cursor pointer, stale banners on historical docs, pointer fixes for RuForge.md / changes.html / docs/plans (`AGENTS.md`, `STATE.md`, handoffs, `docs/ruforge/RuForge.md`).
-- **Docs**: companion and competitor index with trigger-word routing for agents (`docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`, `AGENTS.md` pointer).
-- **Companion LAN (dev-gated)**: companion loading visual polish with PS5-inspired progress rail (`companion-web/index.html`).
-
-- **Companion LAN (dev-gated)**: minimal black-and-red full-screen loading with red accent rail, status rotator, and segmented pulse bar (`companion-web/index.html`).
-- **Companion LAN (dev-gated)**: paired sessions normalize address bar to `/paired` via replaceState; SPA fallback route for refresh; compact paired reassurance copy (`companion-web/index.html`, `companion/routes.rs`).
-- **Companion LAN (dev-gated)**: companion-web mobile-first responsive layout, collapsible debug stats, gate cards, no horizontal overflow (`companion-web/index.html`).
-- **Companion LAN (dev-gated)**: QR modal URL wrap, smaller center logo for scan margin, clearer one-time link copy (`CompanionPairingModal.tsx`).
-- **Companion LAN (dev-gated)**: pairing QR uses ECC H, 4-module quiet zone, and centered RuForge icon overlay on cream plate (`companionQr.ts`, `CompanionPairingModal.tsx`).
-- **Companion LAN (dev-gated)**: companion-web branded loading card; desktop pairing modal with QR, copy/open/refresh actions, and Open in web / Show QR controls (`companion-web/index.html`, `CompanionSettingsSection.tsx`, `CompanionPairingModal.tsx`, `companionQr.ts`).
-- **Companion LAN (dev-gated)**: companion-web dev strip, filters, search, copy-debug, RuForge tokens, and `mediaType` in library payload (`companion-web/index.html`, `companion/routes.rs`).
-- **Companion LAN (dev-gated)**: companion-web library rows show media type, container, and playable dev info with audio/video row styling (`companion-web/index.html`).
-- **Website**: Social/Open Graph preview image is sanitized `ruforge-og.png` on ruforge.app (`site.ts`, `BaseLayout.astro`).
-- **Website**: Download page and installer URLs use `updater.json` shipped version instead of unreleased `package.json` (`astro.config.mjs`, `copy-installer-for-website.ps1`, `sync-website-release.mjs`).
 
 ## Release ritual
 
