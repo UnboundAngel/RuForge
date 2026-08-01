@@ -18,7 +18,7 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-08-01 (Library incremental refresh + download pre-spawn timeout)
+Last updated: 2026-08-01 (Downloader paste flash + enqueue library gate)
 
 Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path. Main and secondary windows use class `RuForge_Chrome_WidgetWin` so OBS Automatic picks WGC for WebView2 capture. Download start path bounds inspect waits and arms the job watchdog before spawn. Library entries support incremental remove/upsert so deletes and finished downloads avoid a full cold scan.
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) bin
 
 
 
-0.2.2 in tree: library incremental remove/upsert (no full rescan on delete or download success; Media/Music cold-scan once per session then quiet refresh). Download pre-spawn hang fix (90s inspect timeout + watchdog armed before `start_download_job`). OBS Window Capture fix (Win32 class `RuForge_Chrome_WidgetWin` so Automatic uses WGC). Website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
+0.2.2 in tree: downloader paste transition no longer flashes (URL stays visible through metadata; leftover top-left chip clears on success); every downloader enqueue path uses the Download-click library duplicate check. Library incremental remove/upsert (no full rescan on delete or download success; Media/Music cold-scan once per session then quiet refresh). Download pre-spawn hang fix (90s inspect timeout + watchdog armed before `start_download_job`). OBS Window Capture fix (Win32 class `RuForge_Chrome_WidgetWin` so Automatic uses WGC). Website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
 
 
 
@@ -67,6 +67,8 @@ reads this for the last shipped delta, not the git tree.
 
 
 **0.2.2 (unreleased, in tree):**
+
+- Downloads: Paste no longer flashes or blanks the center URL; successful finishes clear the leftover top-left chip; all downloader enqueue paths run the Download-click library duplicate check (warn/replace when auto-skip is off).
 
 - Library: Incremental entry remove/upsert; delete skips full rescan; download success upserts finished file; Media/Music cold-scan once per session then quiet background refresh without backfill.
 

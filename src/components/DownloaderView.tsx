@@ -397,8 +397,6 @@ export const DownloaderView = (props: DownloaderViewProps) => {
     d.batchQueueHeroDisplayBytes ??
     (displayHero?.isPlaylist ? d.playlistHeroDisplayBytes : null);
 
-  const heroThumb = d.heroBackdropThumb.trim();
-
   const bigProgressPctRaw = d.progress?.percentage ?? 0;
   const bigProgressPct = Number.isFinite(bigProgressPctRaw)
     ? Math.min(100, Math.max(0, bigProgressPctRaw))
@@ -431,19 +429,19 @@ export const DownloaderView = (props: DownloaderViewProps) => {
           onChoose={d.handleDuplicateChoice}
         />
       )}
-      {heroThumb ? (
+      {d.heroBackdropThumb.trim() && !d.metadataLoading ? (
         <div className="absolute inset-0 z-0 overflow-hidden">
           <AnimatePresence mode="sync" initial={false}>
             <motion.div
-              key={heroThumb}
+              key={d.heroBackdropThumb.trim()}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.32, ease: [0.23, 1, 0.32, 1] }}
+              transition={{ duration: 0.55, ease: [0.23, 1, 0.32, 1], delay: 0.12 }}
               className="absolute inset-0"
             >
               <img
-                src={heroThumb}
+                src={d.heroBackdropThumb.trim()}
                 alt=""
                 className="h-full w-full object-cover opacity-40 blur-[12px] saturate-[1.1]"
               />
@@ -514,61 +512,68 @@ export const DownloaderView = (props: DownloaderViewProps) => {
             </motion.div>
           )}
         </AnimatePresence>
-        <AnimatePresence>
-          {!d.anyDownloading && !d.url.startsWith("http") && !d.queueBrowsingHidesUrlChrome && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="hidden min-[800px]:flex flex-col items-center gap-2 sm:gap-4 mb-4 sm:mb-8"
-            >
-              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                {BROWSER_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => d.handleBrowserChange(opt.value)}
-                    className="flex items-center gap-2 group transition-all duration-300"
-                  >
-                    <div
-                      className={`w-1 h-1 rounded-full transition-all duration-300 ${d.browserContextUi === opt.value ? "bg-[color:var(--accent)] scale-150" : "bg-stone-800 group-hover:bg-stone-600"}`}
-                    />
-                    <span
-                      className={`text-[8px] font-black uppercase tracking-[0.3em] ${
-                        d.browserContextUi === opt.value
-                          ? "text-[color:var(--accent)]"
-                          : "text-stone-700 group-hover:text-stone-500"
-                      }`}
+        <div className="relative hidden min-h-[3.25rem] shrink-0 min-[800px]:block">
+          <AnimatePresence initial={false}>
+            {!d.anyDownloading && !d.url.startsWith("http") && !d.queueBrowsingHidesUrlChrome && (
+              <motion.div
+                key="browser-cookie-strip"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                className="absolute inset-x-0 top-0 mb-4 flex flex-col items-center gap-2 sm:mb-8 sm:gap-4"
+              >
+                <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+                  {BROWSER_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => d.handleBrowserChange(opt.value)}
+                      className="flex items-center gap-2 group transition-all duration-300"
                     >
-                      {opt.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <AnimatePresence>
-                {!d.browserContextUi && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="flex items-center gap-2 px-3 py-1 rounded-full border border-[color-mix(in_srgb,var(--accent),transparent_90%)] bg-[color-mix(in_srgb,var(--accent),transparent_95%)]"
-                  >
-                    <Info size={10} className="text-[color:var(--accent)] opacity-40" />
-                    <span className="text-[7px] font-black text-[color:var(--accent)] opacity-30 uppercase tracking-[0.2em]">
-                      None: public videos. Pick Internal or Firefox for signed-in content.
-                    </span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                      <div
+                        className={`w-1 h-1 rounded-full transition-all duration-300 ${d.browserContextUi === opt.value ? "bg-[color:var(--accent)] scale-150" : "bg-stone-800 group-hover:bg-stone-600"}`}
+                      />
+                      <span
+                        className={`text-[8px] font-black uppercase tracking-[0.3em] ${
+                          d.browserContextUi === opt.value
+                            ? "text-[color:var(--accent)]"
+                            : "text-stone-700 group-hover:text-stone-500"
+                        }`}
+                      >
+                        {opt.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <AnimatePresence>
+                  {!d.browserContextUi && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="flex items-center gap-2 px-3 py-1 rounded-full border border-[color-mix(in_srgb,var(--accent),transparent_90%)] bg-[color-mix(in_srgb,var(--accent),transparent_95%)]"
+                    >
+                      <Info size={10} className="text-[color:var(--accent)] opacity-40" />
+                      <span className="text-[7px] font-black text-[color:var(--accent)] opacity-30 uppercase tracking-[0.2em]">
+                        None: public videos. Pick Internal or Firefox for signed-in content.
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
         <div className="flex-1 flex flex-col justify-center w-full min-h-0">
           <LayoutGroup id="downloader-url">
-            <AnimatePresence mode="popLayout">
+            <AnimatePresence mode="sync" initial={false}>
               {d.showTopLeftDownloaderChrome && (
                 <motion.div
                   key={d.showUrlBubble ? "url-pill" : "queue-add-tools"}
                   layoutId={d.showUrlBubble ? "downloader-url-chip" : undefined}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                   transition={d.urlChipLayoutTransition}
                   className="pointer-events-none absolute left-4 top-12 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col items-stretch gap-2 sm:left-6 sm:top-14 lg:left-8 lg:top-14"
                 >
@@ -877,14 +882,14 @@ export const DownloaderView = (props: DownloaderViewProps) => {
             <div className="w-full max-w-6xl mx-auto space-y-2 sm:space-y-8">
               {!d.showImmersiveDownload ? (
                 <div className="space-y-4 sm:space-y-10">
-                  <AnimatePresence mode="wait">
+                  <AnimatePresence mode="sync" initial={false}>
                     {displayHero ? (
                       <motion.div
                         key="video-details"
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
                         className="text-center space-y-2 sm:space-y-6"
                       >
                         <h2

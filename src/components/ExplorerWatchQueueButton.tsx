@@ -160,6 +160,19 @@ export function ExplorerWatchQueueButton({
         );
         return;
       }
+    } else {
+      const dup = findLibraryDuplicate(canon, entries);
+      if (dup) {
+        const st = useRuforgeStore.getState();
+        st.setVideoInfo(null);
+        st.setMetadataError(null);
+        st.setDownloaderMetadataLoading(true);
+        st.setDownloaderUrl(canon);
+        st.setDownloaderUrlSourceHint("explorer");
+        st.setActiveTab("downloader");
+        flashLeftHint("add");
+        return;
+      }
     }
     const outputPath = saveToInternal ? internalVault : outputDir;
     const options = buildDownloadJobOptions(settings, outputPath, "replace");

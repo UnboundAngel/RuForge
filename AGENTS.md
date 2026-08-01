@@ -195,6 +195,8 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.2 (unreleased)
 
+- **Downloads**: Paste transition no longer flashes: metadata loading arms on paste, top-left chrome waits for hero metadata, browser strip exits in reserved space, hero fades without a blank frame, and the backdrop waits until details land; center URL stays visible until the chip FLIP. Successful finishes clear the leftover top-left URL chip via stronger hero clear. Every downloader enqueue path (stage, quick enqueue, drop, explorer add, held-batch start) runs the same library duplicate check as Download click so auto-skip-off shows the replace prompt instead of a silent second download. (`DownloaderView.tsx`, `useDownloaderView.ts`, `downloadQueueSlice.ts`, `ExplorerWatchQueueButton.tsx`).
+
 - **Library**: Incremental entry remove/upsert; delete updates the grid without rescan; download success upserts the finished file (quiet fetch only if path unknown); Media/Music mounts cold-scan once per session then quiet background refresh without poster/scrub backfill. (`galleryEntries.ts`, `ruforgeStore.ts`, `MediaView.tsx`, `MusicShell.tsx`, `downloadQueueSlice.ts`).
 
 - **Downloads**: Pre-spawn hang closed: yt-dlp inspect/simulate child waits are capped at 90s with a real timeout error; download watchdog arms before `start_download_job` (not after spawn) so stuck inspect jobs time out visibly; failed/timed-out start rows clear so music auto-save can retry the same track. (`media_engine/process.rs`, `media_engine_adapter.rs`, `downloadJobWatchdog.ts`, `downloadQueueSlice.ts`).
