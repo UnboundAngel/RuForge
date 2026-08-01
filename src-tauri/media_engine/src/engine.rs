@@ -41,7 +41,6 @@ impl Default for MediaEngineConfig {
 }
 
 pub struct MediaEngine {
-    config: MediaEngineConfig,
     runtime: Arc<dyn RuntimeProvider>,
     launcher: Arc<dyn ProcessLauncher>,
     inspections: InspectionStore,
@@ -61,7 +60,6 @@ impl MediaEngine {
         let inspections = InspectionStore::new(config.inspection_ttl_secs);
         let registry = ActiveJobRegistry::new(config.max_concurrent_downloads);
         Self {
-            config,
             runtime,
             launcher,
             inspections,
