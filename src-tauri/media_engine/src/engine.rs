@@ -125,12 +125,10 @@ impl MediaEngine {
             });
         }
 
-        let json_video_res = self
-            .simulate_with_fallback(&url, request.auth.as_ref(), Some(video_fmt.as_str()))
-            .await;
-        let json_audio_res = self
-            .simulate_with_fallback(&url, request.auth.as_ref(), Some(AUDIO_SIMULATE_FORMAT))
-            .await;
+        let (json_video_res, json_audio_res) = tokio::join!(
+            self.simulate_with_fallback(&url, request.auth.as_ref(), Some(video_fmt.as_str())),
+            self.simulate_with_fallback(&url, request.auth.as_ref(), Some(AUDIO_SIMULATE_FORMAT)),
+        );
 
         let json_video = json_video_res.as_ref().ok();
         let json_audio = json_audio_res.as_ref().ok();

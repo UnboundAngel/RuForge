@@ -109,7 +109,15 @@ function isYtDlpStartCancelledError(message: string): boolean {
 }
 
 function isDownloadStartTimeoutError(message: string): boolean {
-  return /timed out/i.test(message);
+  return /yt-dlp timed out after \d+s/i.test(message);
+}
+
+async function killDownloadJobIfStillActive(jobId: string): Promise<void> {
+  try {
+    await invoke("pause_download_job", { jobId });
+  } catch (e) {
+    console.warn("[RuForge] cleanup pause_download_job:", e);
+  }
 }
 
 function clearSkippedJobRemovalTimer(jobId: string): void {
@@ -593,6 +601,7 @@ export const createDownloadQueueSlice: StateCreator<
           disarmDownloadJobWatchdog(jobId);
           return;
         }
+        touchDownloadJobWatchdog(jobId);
         if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
           disarmDownloadJobWatchdog(jobId);
           get().pumpDownloadQueue();
@@ -606,17 +615,29 @@ export const createDownloadQueueSlice: StateCreator<
           await runDevSimulatedDownload(get, jobId, url);
           return;
         }
-        const invokeOptions = toInvokeDownloadOptions(job.options);
+        const still = get().downloadJobs.find((j) => j.id === jobId);
+        if (!still || still.status !== "downloading") {
+          disarmDownloadJobWatchdog(jobId);
+          return;
+        }
+        const invokeOptions = toInvokeDownloadOptions(still.options);
         await invoke("start_download_job", {
           jobId,
           url,
           options: invokeOptions,
           resume,
         });
+        const afterStart = get().downloadJobs.find((j) => j.id === jobId);
+        if (!afterStart || afterStart.status !== "downloading") {
+          await killDownloadJobIfStillActive(jobId);
+          disarmDownloadJobWatchdog(jobId);
+          return;
+        }
         touchDownloadJobWatchdog(jobId);
       } catch (e) {
         const latest = get().downloadJobs.find((j) => j.id === jobId);
         if (!latest || latest.status !== "downloading") {
+          await killDownloadJobIfStillActive(jobId);
           disarmDownloadJobWatchdog(jobId);
           return;
         }
@@ -891,6 +912,7 @@ export const createDownloadQueueSlice: StateCreator<
     skipDownloadJobAsLibraryDuplicate: (id) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job || job.status === "skipped") return;
+      const wasDownloading = job.status === "downloading";
 
       set((s) => {
         const downloadJobs = markJobSkippedLibraryDuplicate(s.downloadJobs, id);
@@ -902,6 +924,10 @@ export const createDownloadQueueSlice: StateCreator<
           ...syncLegacyDownloaderUi(downloadJobs, focus),
         };
       });
+      disarmDownloadJobWatchdog(id);
+      if (wasDownloading) {
+        void killDownloadJobIfStillActive(id);
+      }
       if (job.options.playlistOutputFolder?.trim()) {
         updatePlaylistDownloadSidecarFromJob(get().downloadJobs, job, "done");
       }
@@ -1016,21 +1042,34 @@ export const createDownloadQueueSlice: StateCreator<
           disarmDownloadJobWatchdog(id);
           return;
         }
+        touchDownloadJobWatchdog(id);
         if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
           disarmDownloadJobWatchdog(id);
           get().pumpDownloadQueue();
           return;
         }
+        const still = get().downloadJobs.find((j) => j.id === id);
+        if (!still || still.status !== "downloading") {
+          disarmDownloadJobWatchdog(id);
+          return;
+        }
         await invoke("start_download_job", {
           jobId: id,
           url: job.url,
-          options: toInvokeDownloadOptions(job.options),
+          options: toInvokeDownloadOptions(still.options),
           resume: true,
         });
+        const afterStart = get().downloadJobs.find((j) => j.id === id);
+        if (!afterStart || afterStart.status !== "downloading") {
+          await killDownloadJobIfStillActive(id);
+          disarmDownloadJobWatchdog(id);
+          return;
+        }
         touchDownloadJobWatchdog(id);
       } catch (e) {
         const current = get().downloadJobs.find((j) => j.id === id);
         if (!current || current.status !== "downloading") {
+          await killDownloadJobIfStillActive(id);
           disarmDownloadJobWatchdog(id);
           return;
         }
@@ -1191,7 +1230,9 @@ export const createDownloadQueueSlice: StateCreator<
             j.id !== payload.jobId ||
             j.status === "completed" ||
             j.status === "failed" ||
-            j.status === "timed_out"
+            j.status === "timed_out" ||
+            j.status === "skipped" ||
+            j.status === "paused"
           ) {
             return j;
           }
@@ -1225,7 +1266,7 @@ export const createDownloadQueueSlice: StateCreator<
       resetDownloadProgressEtaSmoothing(jobId);
       set((s) => {
         const downloadJobs = s.downloadJobs.map((j) =>
-          j.id === jobId && j.status !== "paused"
+          j.id === jobId && j.status === "downloading"
             ? {
                 ...j,
                 status: "paused" as const,
@@ -1248,6 +1289,18 @@ export const createDownloadQueueSlice: StateCreator<
     onDownloadJobFinished: (payload) => {
       disarmDownloadJobWatchdog(payload.jobId);
       resetDownloadProgressEtaSmoothing(payload.jobId);
+      const finishedJobBefore = get().downloadJobs.find((j) => j.id === payload.jobId);
+      if (!finishedJobBefore) {
+        return;
+      }
+      if (
+        finishedJobBefore.status === "completed" ||
+        finishedJobBefore.status === "failed" ||
+        finishedJobBefore.status === "timed_out" ||
+        finishedJobBefore.status === "skipped"
+      ) {
+        return;
+      }
       if (payload.success && payload.outputPath && payload.url?.trim()) {
         if (isDevReplayOutputCaptureActive()) {
           appendReplayOutputPath(payload.url, payload.outputPath);
@@ -1260,10 +1313,18 @@ export const createDownloadQueueSlice: StateCreator<
       const heroUrlBeforeFinish = get().url.trim();
       let playlistSidecarJob: DownloadJob | undefined;
       let playlistSidecarStatus: "done" | "failed" | undefined;
-      const finishedJobBefore = get().downloadJobs.find((j) => j.id === payload.jobId);
 
       set((s) => {
         const finishedJob = s.downloadJobs.find((j) => j.id === payload.jobId);
+        if (
+          finishedJob &&
+          (finishedJob.status === "completed" ||
+            finishedJob.status === "failed" ||
+            finishedJob.status === "timed_out" ||
+            finishedJob.status === "skipped")
+        ) {
+          return {};
+        }
         finishedUrl =
           payload.url?.trim() || finishedJob?.url?.trim() || undefined;
 

@@ -25,8 +25,12 @@ export function progressAdvancesDownloadWatchdog(
   return false;
 }
 
-/** No yt-dlp transfer bytes yet (inspect + connect + first stdout). Aligns with Rust SUBPROCESS_OUTPUT_TIMEOUT_SECS. */
-const PRE_TRANSFER_MAX_MS = 90_000;
+/**
+ * No yt-dlp transfer bytes yet (hydrate + start inspect + connect + first stdout).
+ * Covers one auth-fallback simulate pair at SUBPROCESS_OUTPUT_TIMEOUT_SECS (90s each)
+ * after video/audio simulates run in parallel.
+ */
+const PRE_TRANSFER_MAX_MS = 200_000;
 const MIN_ACTIVE_IDLE_MS = 5 * 60_000;
 const MAX_ACTIVE_IDLE_MS = 45 * 60_000;
 const PROCESSING_IDLE_MS = 10 * 60_000;
@@ -101,6 +105,7 @@ function jobWallClockAgeMs(job: DownloadJob): number {
 
 function jobExceededWallClock(job: DownloadJob): boolean {
   if (job.options?.audioOnly !== true) return false;
+  if (!jobHasDownloadTransferStarted(job)) return false;
   return jobWallClockAgeMs(job) >= MAX_DOWNLOAD_WALL_CLOCK_MS;
 }
 

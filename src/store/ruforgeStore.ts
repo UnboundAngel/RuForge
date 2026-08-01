@@ -1274,8 +1274,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
       ensureGalleryOnViewMount: async (opts) => {
         const forceCold = opts?.forceCold === true || !gallerySessionHadColdScan;
         if (forceCold) {
-          gallerySessionHadColdScan = true;
           await get().fetchEntries();
+          gallerySessionHadColdScan = true;
           return;
         }
         void get().fetchEntries({
@@ -1286,16 +1286,20 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       removeGalleryEntryByPath: (path) => {
+        galleryFetchToken += 1;
         set((s) => ({
           entries: removePathFromGalleryEntries(s.entries, path),
           libraryScanRevision: s.libraryScanRevision + 1,
+          galleryLoading: false,
         }));
       },
 
       upsertGalleryMediaFile: (file) => {
+        galleryFetchToken += 1;
         set((s) => ({
           entries: upsertMediaIntoGalleryEntries(s.entries, file),
           libraryScanRevision: s.libraryScanRevision + 1,
+          galleryLoading: false,
         }));
       },
 
