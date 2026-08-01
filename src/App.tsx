@@ -1667,7 +1667,7 @@ function App() {
           ? "rf-main-window-shell--maximized"
           : "rf-main-window-shell--rounded"
       }`}
-      style={{ background: navMode === "music" ? "var(--music-bg, #080204)" : "#271C18" }}
+      style={{ background: navMode === "music" ? "var(--music-bg, #0a0a0a)" : "#271C18" }}
       data-music-mode={navMode === "music" ? "true" : undefined}
     >
 
