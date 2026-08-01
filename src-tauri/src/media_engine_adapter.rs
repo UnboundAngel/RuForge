@@ -4,7 +4,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use media_engine::{
     AuthConfig, EngineError, EngineErrorCode, EventSink, ProcessLauncher, ProcessOutput,
-    RuntimeProvider, RuntimeSnapshot,
+    RuntimeProvider, RuntimeSnapshot, SUBPROCESS_OUTPUT_TIMEOUT_SECS,
 };
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::ShellExt;
@@ -85,17 +85,28 @@ impl TauriProcessLauncher {
 #[async_trait]
 impl ProcessLauncher for TauriProcessLauncher {
     async fn output(&self, _exe: &Path, args: &[String]) -> Result<ProcessOutput, EngineError> {
-        let output = ytdlp_shell_command(&self.app)
-            .map_err(|e| EngineError::new(EngineErrorCode::RuntimeMissing, e))?
-            .args(args.to_vec())
-            .output()
-            .await
-            .map_err(|e| {
-                EngineError::new(
+        let shell = ytdlp_shell_command(&self.app)
+            .map_err(|e| EngineError::new(EngineErrorCode::RuntimeMissing, e))?;
+        let timed = tokio::time::timeout(
+            std::time::Duration::from_secs(SUBPROCESS_OUTPUT_TIMEOUT_SECS),
+            shell.args(args.to_vec()).output(),
+        )
+        .await;
+        let output = match timed {
+            Ok(Ok(o)) => o,
+            Ok(Err(e)) => {
+                return Err(EngineError::new(
                     EngineErrorCode::ProcessLaunchFailure,
                     format!("Failed to run yt-dlp: {e}"),
-                )
-            })?;
+                ));
+            }
+            Err(_) => {
+                return Err(EngineError::new(
+                    EngineErrorCode::RuntimeExecutionFailed,
+                    format!("yt-dlp timed out after {SUBPROCESS_OUTPUT_TIMEOUT_SECS}s"),
+                ));
+            }
+        };
         Ok(ProcessOutput {
             status_code: output.status.code(),
             stdout: output.stdout,

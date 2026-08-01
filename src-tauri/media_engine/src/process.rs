@@ -1,10 +1,14 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 
 use crate::error::{classify_ytdlp_stderr, EngineError, EngineErrorCode};
 use crate::types::RuntimeSnapshot;
+
+/// Ceiling for one yt-dlp `--print` / simulate child. Matches RuForge `run_ytdlp_json`.
+pub const SUBPROCESS_OUTPUT_TIMEOUT_SECS: u64 = 90;
 
 #[derive(Debug, Clone)]
 pub struct ProcessOutput {
@@ -40,16 +44,40 @@ pub struct StdProcessLauncher;
 impl ProcessLauncher for StdProcessLauncher {
     async fn output(&self, exe: &Path, args: &[String]) -> Result<ProcessOutput, EngineError> {
         validate_executable(exe)?;
-        let output = tokio::process::Command::new(exe)
+        let child = tokio::process::Command::new(exe)
             .args(args)
-            .output()
-            .await
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
             .map_err(|e| {
                 EngineError::new(
                     EngineErrorCode::ProcessLaunchFailure,
                     format!("Failed to launch {}: {}", exe.display(), e),
                 )
             })?;
+        let timed = tokio::time::timeout(
+            Duration::from_secs(SUBPROCESS_OUTPUT_TIMEOUT_SECS),
+            child.wait_with_output(),
+        )
+        .await;
+        let output = match timed {
+            Ok(Ok(o)) => o,
+            Ok(Err(e)) => {
+                return Err(EngineError::new(
+                    EngineErrorCode::ProcessLaunchFailure,
+                    format!("Failed to run {}: {}", exe.display(), e),
+                ));
+            }
+            Err(_) => {
+                return Err(EngineError::new(
+                    EngineErrorCode::RuntimeExecutionFailed,
+                    format!(
+                        "yt-dlp timed out after {SUBPROCESS_OUTPUT_TIMEOUT_SECS}s"
+                    ),
+                ));
+            }
+        };
         Ok(ProcessOutput {
             status_code: output.status.code(),
             stdout: output.stdout,

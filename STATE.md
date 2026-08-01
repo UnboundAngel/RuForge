@@ -18,9 +18,9 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-07-24 (Windows dev-cycle fix: dev profile, `dev:app`, maintenance scripts)
+Last updated: 2026-08-01 (Library incremental refresh + download pre-spawn timeout)
 
-Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path. Main and secondary windows use class `RuForge_Chrome_WidgetWin` so OBS Automatic picks WGC for WebView2 capture.
+Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path. Main and secondary windows use class `RuForge_Chrome_WidgetWin` so OBS Automatic picks WGC for WebView2 capture. Download start path bounds inspect waits and arms the job watchdog before spawn. Library entries support incremental remove/upsert so deletes and finished downloads avoid a full cold scan.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) bin
 
 
 
-0.2.2 in tree: OBS Window Capture fix (Win32 class `RuForge_Chrome_WidgetWin` so Automatic uses WGC). Website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
+0.2.2 in tree: library incremental remove/upsert (no full rescan on delete or download success; Media/Music cold-scan once per session then quiet refresh). Download pre-spawn hang fix (90s inspect timeout + watchdog armed before `start_download_job`). OBS Window Capture fix (Win32 class `RuForge_Chrome_WidgetWin` so Automatic uses WGC). Website OG preview image (`ruforge-og.png`). Browser Companion (dev-gated) on localhost with progress sync, disconnected gates, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 `ruforge://focus` deep link raises the main window (fail-closed, no IDs/paths/commands). The `ruforge.local` experiment was dropped; localhost is the V1 browser entry point. Root `AGENTS.md` trimmed for every-task reads; extended agent context lives in `docs/agents/AGENT-REFERENCE.md`.
 
 
 
@@ -67,6 +67,18 @@ reads this for the last shipped delta, not the git tree.
 
 
 **0.2.2 (unreleased, in tree):**
+
+- Library: Incremental entry remove/upsert; delete skips full rescan; download success upserts finished file; Media/Music cold-scan once per session then quiet background refresh without backfill.
+
+- Downloads: Pre-spawn hang closed (90s yt-dlp inspect timeout; watchdog arms before job start; failed/timed-out starts clear so music auto-save can retry).
+
+- Music: Track row play fades over the index; deeper near-black shell with a slight red undertone.
+
+- Storage cleanup: Opens on click without waiting for a cold library scan; overlay below titlebar so window controls stay visible; storage header sits under that band.
+
+- Player: Comments edge-hold no longer blocks scrubber end or fullscreen; download toasts clear the player control dock; notify overlay sits higher.
+
+- Downloads: Library duplicate scan runs on URL paste; soft “Already in your library” warning shows before Download. Download click no longer hangs on a cold gallery scan; replace/copy popup still appears when auto-skip is off.
 
 - Dev tooling: `npm run dev:app` runs the Companion watcher with `tauri dev` and cleans up both trees on exit; `dev:disk`, `dev:clean:safe`, and `dev:rust-recover` added for artifact visibility, guarded opt-in cleanup, and ReFS incremental recovery. Developer-facing only, no user-visible behavior change.
 

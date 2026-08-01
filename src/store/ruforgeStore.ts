@@ -17,6 +17,10 @@ import {
 } from "../lib/libraryConfig";
 import { ensurePostersForFiles, filesMissingPoster } from "../posterBackfill";
 import {
+  removePathFromGalleryEntries,
+  upsertMediaIntoGalleryEntries,
+} from "../galleryEntries";
+import {
   ensureScrubSpritesForFiles,
   topNScrubBackfillCandidates,
 } from "../scrubSpriteBackfill";
@@ -326,6 +330,14 @@ export interface RuforgeStore extends DownloadQueueSlice {
     /** Full-tree duplicate download cleanup before scan (e.g. after library migration). */
     sweepDuplicates?: boolean;
   }) => Promise<void>;
+  /**
+   * Media/Music mount policy: first call this session runs a cold scan with poster/scrub
+   * backfill; later mounts serve store data and quiet-reindex without spinner or backfill.
+   * `forceCold` (e.g. libraryScanDirs changed) always takes the cold path.
+   */
+  ensureGalleryOnViewMount: (opts?: { forceCold?: boolean }) => Promise<void>;
+  removeGalleryEntryByPath: (path: string) => void;
+  upsertGalleryMediaFile: (file: MediaFile) => void;
   invalidateEntries: (opts?: { silent?: boolean; sweepDuplicates?: boolean }) => Promise<void>;
   setGalleryActiveMenu: (menu: GalleryContextMenuState) => void;
   addGalleryExtractingPath: (path: string) => void;
@@ -399,6 +411,9 @@ let galleryFetchToken = 0;
 /** Serial for poster backfill so stale async work cannot chain a second scan after navigation. */
 let galleryPosterEpoch = 0;
 let galleryScrubEpoch = 0;
+
+/** Session-scoped: cold gallery scan with backfill runs once unless forceCold. */
+let gallerySessionHadColdScan = false;
 
 let deferredScrubBackfillQueue: MediaFile[] = [];
 
@@ -1044,10 +1059,16 @@ export const useRuforgeStore = create<RuforgeStore>()(
       openAuthorizeCleanupModal: async () => {
         const { saveToInternal, fetchEntries } = get();
         if (!saveToInternal) return;
-        if (get().entries.length === 0) {
-          await fetchEntries({ manageLoadingStart: false });
-        }
+        // Open first; never block the click on a cold gallery scan.
         set({ cleanupModalOpen: true });
+        if (get().entries.length === 0) {
+          void fetchEntries({
+            manageLoadingStart: true,
+            skipPosterBackfill: true,
+            skipScrubBackfill: true,
+          });
+        }
+        void get().refreshStorageStats();
       },
 
       closeAuthorizeCleanupModal: () => set({ cleanupModalOpen: false }),
@@ -1248,6 +1269,34 @@ export const useRuforgeStore = create<RuforgeStore>()(
             });
           })();
         }
+      },
+
+      ensureGalleryOnViewMount: async (opts) => {
+        const forceCold = opts?.forceCold === true || !gallerySessionHadColdScan;
+        if (forceCold) {
+          gallerySessionHadColdScan = true;
+          await get().fetchEntries();
+          return;
+        }
+        void get().fetchEntries({
+          manageLoadingStart: false,
+          skipPosterBackfill: true,
+          skipScrubBackfill: true,
+        });
+      },
+
+      removeGalleryEntryByPath: (path) => {
+        set((s) => ({
+          entries: removePathFromGalleryEntries(s.entries, path),
+          libraryScanRevision: s.libraryScanRevision + 1,
+        }));
+      },
+
+      upsertGalleryMediaFile: (file) => {
+        set((s) => ({
+          entries: upsertMediaIntoGalleryEntries(s.entries, file),
+          libraryScanRevision: s.libraryScanRevision + 1,
+        }));
       },
 
       invalidateEntries: async (opts) => {

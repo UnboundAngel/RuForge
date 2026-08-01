@@ -251,7 +251,7 @@ export function MusicShell() {
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
   const setPlayingFile = useRuforgeStore((s) => s.setPlayingFile);
-  const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
+  const ensureGalleryOnViewMount = useRuforgeStore((s) => s.ensureGalleryOnViewMount);
   const settings = useRuforgeStore((s) => s.settings);
   const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
   const handlePlayFolderNeighbor = useRuforgeStore((s) => s.handlePlayFolderNeighbor);
@@ -423,8 +423,8 @@ export function MusicShell() {
     && downloadCelebrating == null;
 
   useEffect(() => {
-    void fetchEntries();
-  }, [fetchEntries]);
+    void ensureGalleryOnViewMount();
+  }, [ensureGalleryOnViewMount]);
 
   useEffect(() => {
     if (playerExpanded && rightPanelTab === "segments") setRightPanelTab("queue");
