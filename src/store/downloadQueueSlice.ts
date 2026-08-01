@@ -1314,7 +1314,12 @@ export const createDownloadQueueSlice: StateCreator<
           downloadJobs,
           focusedJobId: focus,
           ...syncLegacyDownloaderUi(downloadJobs, focus),
-          ...(payload.success ? heroClearPatchForUrl(s, finishedUrl) : {}),
+          ...(payload.success
+            ? {
+                ...heroClearPatchForUrl(s, finishedUrl),
+                ...heroClearWhenUrlNotInQueue(s, downloadJobs),
+              }
+            : {}),
         };
       });
 
