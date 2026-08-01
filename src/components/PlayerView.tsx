@@ -1670,7 +1670,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.2 }}
-            className="absolute top-0 left-0 right-0 px-8 pt-6 pb-20 flex items-start justify-between z-50 bg-gradient-to-b from-black/85 via-black/30 to-transparent pointer-events-none"
+            className="absolute top-0 left-0 right-0 px-8 pt-6 pb-20 flex items-start justify-between z-[70] bg-gradient-to-b from-black/85 via-black/30 to-transparent pointer-events-none"
           >
             <div className="flex items-center gap-5 pointer-events-auto">
               <button
@@ -1719,7 +1719,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="absolute bottom-0 left-0 right-0 px-6 sm:px-8 pb-6 sm:pb-8 pt-24 z-50 bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-none"
+            className="absolute bottom-0 left-0 right-0 px-6 sm:px-8 pb-6 sm:pb-8 pt-24 z-[70] bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-none"
           >
             {/* Scrubber */}
             <div

@@ -342,21 +342,50 @@ export const DownloaderView = (props: DownloaderViewProps) => {
             ) ?? null,
           isPlaylist: d.videoInfo.isPlaylist,
           playlistItems: d.videoInfo.playlistItems,
+          loading: false,
         };
       }
       if (d.focusedJob && d.focusedJob.status !== "downloading") {
         const m = d.focusedJob.metadata;
         const needs = downloadJobMediaNeedsHydration(m);
         const rawTitle = (d.focusedJob.title ?? m?.title ?? "").trim();
+        if (needs && !rawTitle) {
+          return {
+            title: d.downloadStartPending ? "Starting download…" : "Fetching details…",
+            duration: 0,
+            fileSizeBytes: null,
+            isPlaylist: false,
+            playlistItems: undefined,
+            loading: true,
+          };
+        }
         const title =
-          rawTitle || (needs ? "Loading…" : (d.focusedJob.url || "Video").trim());
+          rawTitle || (needs ? "Fetching details…" : (d.focusedJob.url || "Video").trim());
         const jobAudioOnly = d.focusedJob.options.audioOnly === true;
         return {
           title,
-          duration: m?.duration ?? 0,
-          fileSizeBytes: downloadJobDisplayFileSizeBytes(m, jobAudioOnly),
+          duration: needs ? 0 : (m?.duration ?? 0),
+          fileSizeBytes: needs ? null : downloadJobDisplayFileSizeBytes(m, jobAudioOnly),
           isPlaylist: Boolean(m?.isPlaylist),
           playlistItems: m?.playlistItems,
+          loading: needs,
+        };
+      }
+      if (
+        d.url.startsWith("http") &&
+        (d.metadataLoading || d.downloadStartPending || d.showDuplicateBanner)
+      ) {
+        return {
+          title: d.downloadStartPending
+            ? "Starting download…"
+            : d.metadataLoading
+              ? "Fetching details…"
+              : (d.libraryDuplicateTitle ?? "Already in your library"),
+          duration: 0,
+          fileSizeBytes: null,
+          isPlaylist: false,
+          playlistItems: undefined,
+          loading: d.metadataLoading || d.downloadStartPending,
         };
       }
       return null;
@@ -541,7 +570,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   key={d.showUrlBubble ? "url-pill" : "queue-add-tools"}
                   layoutId={d.showUrlBubble ? "downloader-url-chip" : undefined}
                   transition={d.urlChipLayoutTransition}
-                  className="pointer-events-none absolute left-4 top-4 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col items-stretch gap-2 sm:left-6 sm:top-6 lg:left-8 lg:top-8"
+                  className="pointer-events-none absolute left-4 top-12 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col items-stretch gap-2 sm:left-6 sm:top-14 lg:left-8 lg:top-14"
                 >
                   {d.showMainUrlChip && (
                     <MainDownloaderUrlChip
@@ -858,9 +887,16 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
                         className="text-center space-y-2 sm:space-y-6"
                       >
-                        <h2 className="text-xl sm:text-4xl lg:text-6xl font-black text-white leading-[1.08] sm:leading-[1.1] tracking-tighter line-clamp-2 px-4 pb-0.5">
+                        <h2
+                          className={`font-black leading-[1.08] sm:leading-[1.1] tracking-tighter line-clamp-2 px-4 pb-0.5 ${
+                            displayHero.loading
+                              ? "text-lg sm:text-2xl lg:text-3xl text-white/55"
+                              : "text-xl sm:text-4xl lg:text-6xl text-white"
+                          }`}
+                        >
                           {displayHero.title}
                         </h2>
+                        {!displayHero.loading && (
                         <div className="hidden min-[600px]:flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-8 gap-y-2 text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--accent)] opacity-60">
                           <div className="flex items-center gap-1.5">
                             <Clock size={12} className="opacity-50" />
@@ -890,6 +926,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             <span>YouTube</span>
                           </div>
                         </div>
+                        )}
                         {d.showDuplicateBanner && (
                           <motion.div
                             initial={{ opacity: 0, y: 8 }}
@@ -901,8 +938,18 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               Already in your library
                             </p>
                             <p className="mt-2 text-[10px] leading-relaxed text-[#EDD79C]/50">
-                              This video has been detected in your collection. Use{" "}
-                              <span className="text-[#EDD79C]/80">Download</span> to replace it or save a copy.
+                              {d.duplicateBannerAutoSkip ? (
+                                <>
+                                  This link matches a video you already have. Download will be skipped
+                                  automatically.
+                                </>
+                              ) : (
+                                <>
+                                  This link matches a video in your collection. Hit{" "}
+                                  <span className="text-[#EDD79C]/80">Download</span> to replace it
+                                  or save a copy.
+                                </>
+                              )}
                             </p>
                           </motion.div>
                         )}
@@ -915,7 +962,9 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           </p>
                         )}
                         <motion.div className="space-y-4 pt-2 sm:space-y-5 sm:pt-6">
-                          {d.settings.downloadSubtitles && d.subLangsForDisplay && (
+                          {!displayHero.loading &&
+                            d.settings.downloadSubtitles &&
+                            d.subLangsForDisplay && (
                             <div className="flex flex-col items-center gap-1.5">
                               <span className="text-[8px] font-black uppercase tracking-[0.4em] text-stone-600">
                                 Enqueued Captions
@@ -937,17 +986,21 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               {d.showPrimaryDownload && (
                                 <button
                                   type="button"
-                                  disabled={d.storageBlocksNewDownloads}
+                                  disabled={d.storageBlocksNewDownloads || d.downloadStartPending}
                                   title={
                                     d.storageBlocksNewDownloads
                                       ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
-                                      : undefined
+                                      : d.downloadStartPending
+                                        ? "Download will start when details are ready"
+                                        : undefined
                                   }
                                   onClick={d.handleDownloadClick}
-                                  className="flex items-center gap-3 rounded-full bg-[color:var(--accent)] px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.4em] text-stone-950 shadow-xl transition-all duration-300 hover:scale-105 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-[color:var(--accent)] sm:gap-4 sm:px-12 sm:py-4 sm:text-xs"
+                                  className={`flex items-center gap-3 rounded-full bg-[color:var(--accent)] px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.4em] text-stone-950 shadow-xl transition-all duration-300 hover:scale-105 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-[color:var(--accent)] sm:gap-4 sm:px-12 sm:py-4 sm:text-xs ${
+                                    d.downloadStartPending ? "animate-pulse" : ""
+                                  }`}
                                 >
                                   <Download size={14} />
-                                  Download
+                                  {d.downloadStartPending ? "Starting…" : "Download"}
                                 </button>
                               )}
                             </div>

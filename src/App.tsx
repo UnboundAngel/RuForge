@@ -1667,7 +1667,7 @@ function App() {
           ? "rf-main-window-shell--maximized"
           : "rf-main-window-shell--rounded"
       }`}
-      style={{ background: navMode === "music" ? "var(--music-bg, #0f0f0f)" : "#271C18" }}
+      style={{ background: navMode === "music" ? "var(--music-bg, #080204)" : "#271C18" }}
       data-music-mode={navMode === "music" ? "true" : undefined}
     >
 
@@ -2073,70 +2073,76 @@ function App() {
               )}
             </AnimatePresence>
           </main>
-
-          {/* Toast Notifications */}
-          <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-50 pointer-events-none max-w-[min(100vw-2rem,22rem)]">
-            <AnimatePresence>
-              {notifications.map((n) => {
-                const t = n.type ?? "info";
-                const shell =
-                  t === "error"
-                    ? "rf-notify-card text-stone-100 border border-rose-400/30"
-                    : t === "progress"
-                      ? "rf-notify-card text-stone-50 border border-white/10"
-                      : t === "warning"
-                        ? "rf-notify-card text-stone-50 border-2 border-dotted border-amber-300/70"
-                        : "rf-notify-card text-stone-50 border border-white/10";
-                const closeBtn =
-                  t === "error"
-                    ? "text-red-200/70 hover:text-red-100"
-                    : t === "warning"
-                      ? "text-yellow-200/55 hover:text-yellow-100/90"
-                      : "text-stone-500 hover:text-stone-300";
-                return (
-                <motion.div
-                  key={n.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 4 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                  style={{ willChange: "opacity, transform" }}
-                  className="rounded-xl pointer-events-auto min-w-0 w-full overflow-hidden"
-                >
-                  <div className={`${shell} px-3 py-2 flex items-center gap-2.5 min-w-0 w-full rounded-xl`}>
-                    {t === "error" ? (
-                      <AlertCircle className="text-red-400 w-4 h-4 flex-shrink-0" />
-                    ) : t === "progress" ? (
-                      <Loader2 className="text-[color:var(--accent)] w-4 h-4 flex-shrink-0 animate-spin" />
-                    ) : t === "warning" ? (
-                      <HardDrive className="text-yellow-400/95 w-4 h-4 flex-shrink-0" aria-hidden />
-                    ) : (
-                      <CheckCircle2 className="text-emerald-400 w-4 h-4 flex-shrink-0" />
-                    )}
-
-                    <div className="flex-1 flex flex-col min-w-0">
-                      <span className="text-xs font-semibold leading-snug">
-                        {n.message}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => dismissNotification(n.id)}
-                      className={`${closeBtn} transition-colors flex-shrink-0 self-start p-0.5 rounded`}
-                      aria-label="Dismiss"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
         </div>
       </div>
       </>
+      )}
+
+      {/* Toasts above the video shell; bottom offset clears the player control dock. Below window controls (z-100). */}
+      {navMode !== "music" && (
+        <div
+          className={`pointer-events-none fixed right-4 z-[90] flex max-w-[min(100vw-2rem,22rem)] flex-col gap-2 ${
+            videoPlayerShellVisible ? "bottom-28" : "bottom-4"
+          }`}
+        >
+          <AnimatePresence>
+            {notifications.map((n) => {
+              const t = n.type ?? "info";
+              const shell =
+                t === "error"
+                  ? "rf-notify-card text-stone-100 border border-rose-400/30"
+                  : t === "progress"
+                    ? "rf-notify-card text-stone-50 border border-white/10"
+                    : t === "warning"
+                      ? "rf-notify-card text-stone-50 border-2 border-dotted border-amber-300/70"
+                      : "rf-notify-card text-stone-50 border border-white/10";
+              const closeBtn =
+                t === "error"
+                  ? "text-red-200/70 hover:text-red-100"
+                  : t === "warning"
+                    ? "text-yellow-200/55 hover:text-yellow-100/90"
+                    : "text-stone-500 hover:text-stone-300";
+              return (
+              <motion.div
+                key={n.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                style={{ willChange: "opacity, transform" }}
+                className="rounded-xl pointer-events-auto min-w-0 w-full overflow-hidden"
+              >
+                <div className={`${shell} px-3 py-2 flex items-center gap-2.5 min-w-0 w-full rounded-xl`}>
+                  {t === "error" ? (
+                    <AlertCircle className="text-red-400 w-4 h-4 flex-shrink-0" />
+                  ) : t === "progress" ? (
+                    <Loader2 className="text-[color:var(--accent)] w-4 h-4 flex-shrink-0 animate-spin" />
+                  ) : t === "warning" ? (
+                    <HardDrive className="text-yellow-400/95 w-4 h-4 flex-shrink-0" aria-hidden />
+                  ) : (
+                    <CheckCircle2 className="text-emerald-400 w-4 h-4 flex-shrink-0" />
+                  )}
+
+                  <div className="flex-1 flex flex-col min-w-0">
+                    <span className="text-xs font-semibold leading-snug">
+                      {n.message}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => dismissNotification(n.id)}
+                    className={`${closeBtn} transition-colors flex-shrink-0 self-start p-0.5 rounded`}
+                    aria-label="Dismiss"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       )}
 
       {backgroundVideoFile ? (

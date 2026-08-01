@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback, memo } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { releasePlaybackBeforeDelete } from "../releasePlaybackBeforeDelete";
@@ -17,6 +18,7 @@ import {
   type CleanupFilterMode,
   type CleanupCandidate,
 } from "../cleanupCandidates";
+
 
 const CleanupItem = memo(({ 
   candidate: c, 
@@ -103,6 +105,7 @@ export function AuthorizeCleanupModal() {
   const open = useRuforgeStore((s) => s.cleanupModalOpen);
   const close = useRuforgeStore((s) => s.closeAuthorizeCleanupModal);
   const entries = useRuforgeStore((s) => s.entries);
+  const libraryLoading = useRuforgeStore((s) => s.galleryLoading);
   const limitGB = useRuforgeStore((s) => s.settings.storageLimitGB);
   const storageStats = useRuforgeStore((s) => s.storageStats);
   const notify = useRuforgeStore((s) => s.notify);
@@ -262,23 +265,21 @@ export function AuthorizeCleanupModal() {
         ? "var(--accent)"
         : "rgb(120 113 108)"; // stone-500 brown-gray
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[200] flex flex-col bg-[#110D0B] text-stone-100 selection:bg-[color:var(--accent)] selection:text-[#110D0B]"
+          className="fixed bottom-0 left-0 right-0 top-[var(--rf-titlebar-h)] z-[400] flex flex-col bg-[#110D0B] text-stone-100 selection:bg-[color:var(--accent)] selection:text-[#110D0B]"
           role="dialog"
           aria-modal="true"
         >
-          {/* Combined Slim Header & Drag Region */}
           <div
-            className={`h-16 w-full flex-shrink-0 flex items-center justify-between px-10 pointer-events-auto bg-[#1D1613] transition-shadow duration-200 ${scrolled ? "shadow-[0_8px_24px_rgba(0,0,0,0.35)]" : ""}`}
-            data-tauri-drag-region
+            className={`relative z-10 flex h-16 w-full flex-shrink-0 items-center justify-between bg-[#1D1613] px-10 transition-shadow duration-200 ${scrolled ? "shadow-[0_8px_24px_rgba(0,0,0,0.35)]" : ""}`}
           >
-            <div className="flex items-center gap-10 pointer-events-none">
+            <div className="pointer-events-none flex items-center gap-10">
               <div className="space-y-0.5">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">
                   Storage
@@ -289,7 +290,7 @@ export function AuthorizeCleanupModal() {
               </div>
 
               <LayoutGroup id="cleanup-filters">
-                <div className="flex items-center gap-1 pointer-events-auto">
+                <div className="pointer-events-auto flex items-center gap-1">
                   {(
                     [
                       ["oldest_unwatched", "Oldest"],
@@ -301,13 +302,14 @@ export function AuthorizeCleanupModal() {
                     return (
                       <button
                         key={value}
+                        type="button"
                         onClick={() => onModeChange(value)}
-                        className={`relative px-5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all duration-300 ${isActive ? 'text-[#110D0B]' : 'text-stone-500 hover:text-stone-300'}`}
+                        className={`relative rounded-full px-5 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all duration-300 ${isActive ? "text-[#110D0B]" : "text-stone-500 hover:text-stone-300"}`}
                       >
                         {isActive && (
                           <motion.div
                             layoutId="filter-bg"
-                            className="absolute inset-0 bg-[color:var(--accent)] rounded-full z-0"
+                            className="absolute inset-0 z-0 rounded-full bg-[color:var(--accent)]"
                             transition={{ type: "spring", bounce: 0.1, duration: 0.5 }}
                           />
                         )}
@@ -319,13 +321,13 @@ export function AuthorizeCleanupModal() {
               </LayoutGroup>
             </div>
 
-            <div className="flex items-center gap-8 pointer-events-auto">
-              <div className="flex flex-col items-end gap-1.5 min-w-[12rem]">
+            <div className="pointer-events-auto flex items-center gap-8">
+              <div className="flex min-w-[12rem] flex-col items-end gap-1.5">
                 <div className="flex items-baseline gap-2 tabular-nums">
                   <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
                     {hasByteGoal ? "Goal progress" : "Selected"}
                   </span>
-                  {bytesNeeded === null ? (
+                  {bytesNeeded === null || libraryLoading ? (
                     <Loader2 size={10} className="animate-spin text-stone-700" />
                   ) : (
                     <span
@@ -337,12 +339,12 @@ export function AuthorizeCleanupModal() {
                       {hasByteGoal && goalItemCount > 0 ? ` / ${goalItemCount}` : ""} item
                       {selected.size === 1 ? "" : "s"}
                       {hasByteGoal ? (
-                        <span className="text-stone-600 font-semibold">
+                        <span className="font-semibold text-stone-600">
                           {" "}
                           · {formatCleanupBytes(selectedBytes)} / {formatCleanupBytes(bytesNeeded)}
                         </span>
                       ) : selectedBytes > 0 ? (
-                        <span className="text-stone-600 font-semibold">
+                        <span className="font-semibold text-stone-600">
                           {" "}
                           · {formatCleanupBytes(selectedBytes)}
                         </span>
@@ -350,7 +352,7 @@ export function AuthorizeCleanupModal() {
                     </span>
                   )}
                 </div>
-                <div className="w-48 h-1 rounded-full overflow-hidden bg-stone-800/80">
+                <div className="h-1 w-48 overflow-hidden rounded-full bg-stone-800/80">
                   <motion.div
                     initial={false}
                     animate={{
@@ -363,8 +365,10 @@ export function AuthorizeCleanupModal() {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={close}
-                className="w-10 h-10 flex items-center justify-center rounded-full text-stone-400 hover:text-white transition-colors"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-stone-400 transition-colors hover:text-white"
+                aria-label="Close storage cleanup"
               >
                 <X size={18} />
               </button>
@@ -397,24 +401,33 @@ export function AuthorizeCleanupModal() {
               className="flex-1 overflow-y-auto p-10 relative z-10"
               onScroll={handleScroll}
             >
-              <LayoutGroup id="cleanup-grid">
-                <motion.div 
-                  layout
-                  className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8"
-                >
-                  <AnimatePresence mode="popLayout">
-                    {candidates.map((c) => (
-                      <CleanupItem
-                        key={c.file.path}
-                        candidate={c}
-                        checked={selected.has(c.file.path)}
-                        busy={busy}
-                        onToggle={togglePath}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </motion.div>
-              </LayoutGroup>
+              {libraryLoading && candidates.length === 0 ? (
+                <div className="flex h-full min-h-[12rem] flex-col items-center justify-center gap-3 text-stone-500">
+                  <Loader2 size={22} className="animate-spin text-[color:var(--accent)]" />
+                  <p className="text-[10px] font-black uppercase tracking-[0.28em]">
+                    Loading library…
+                  </p>
+                </div>
+              ) : (
+                <LayoutGroup id="cleanup-grid">
+                  <motion.div 
+                    layout
+                    className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-8"
+                  >
+                    <AnimatePresence mode="popLayout">
+                      {candidates.map((c) => (
+                        <CleanupItem
+                          key={c.file.path}
+                          candidate={c}
+                          checked={selected.has(c.file.path)}
+                          busy={busy}
+                          onToggle={togglePath}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </motion.div>
+                </LayoutGroup>
+              )}
             </div>
           </div>
 
@@ -464,6 +477,7 @@ export function AuthorizeCleanupModal() {
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

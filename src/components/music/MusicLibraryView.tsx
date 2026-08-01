@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Play, Pause, MoreHorizontal, Shuffle } from "lucide-react";
+import { Play, MoreHorizontal, Shuffle } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
@@ -16,6 +16,7 @@ import { resolveLikedFiles } from "./musicLikedTracks";
 import { MusicProfileView } from "./MusicProfileView";
 import { LikedSongsCover } from "./LikedSongsCover";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
+import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 
 type LibTab = "songs" | "albums" | "artists" | "liked" | "stats";
 
@@ -44,16 +45,11 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
       onClick={onClick}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
     >
-      <div className="w-8 text-right text-sm shrink-0" style={{ color: isPlaying ? "var(--music-accent)" : "var(--music-text-muted)" }}>
-        <span className="group-hover/row:hidden">{isPlaying ? "♪" : index + 1}</span>
-        <span className="hidden group-hover/row:inline">
-          {showPauseOnHover ? (
-            <Pause size={14} fill="currentColor" />
-          ) : (
-            <Play size={14} fill="currentColor" />
-          )}
-        </span>
-      </div>
+      <MusicTrackIndexPlay
+        indexLabel={index + 1}
+        isPlaying={isPlaying}
+        showPause={showPauseOnHover}
+      />
       {coverSrc ? (
         <img src={coverSrc} alt="" className="w-11 h-11 rounded shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
       ) : (

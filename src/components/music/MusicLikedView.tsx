@@ -11,6 +11,7 @@ import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { LikedSongsCover } from "./LikedSongsCover";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 
 type TrackRowProps = {
   file: MediaFile;
@@ -34,10 +35,7 @@ function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: 
       onClick={onClick}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
     >
-      <div className="w-8 text-right text-sm shrink-0" style={{ color: isPlaying ? "var(--music-accent)" : "var(--music-text-muted)" }}>
-        <span className="group-hover/row:hidden">{isPlaying ? "♪" : index + 1}</span>
-        <span className="hidden group-hover/row:inline"><Play size={14} fill="currentColor" /></span>
-      </div>
+      <MusicTrackIndexPlay indexLabel={index + 1} isPlaying={isPlaying} />
       {coverSrc ? (
         <img src={coverSrc} alt="" className="w-11 h-11 shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
       ) : (
