@@ -650,6 +650,7 @@ export const createDownloadQueueSlice: StateCreator<
           }
         }
         const timedOut = isDownloadStartTimeoutError(msg);
+        const approval = latest.approval;
         get().onDownloadJobFinished({
           jobId,
           url,
@@ -657,7 +658,7 @@ export const createDownloadQueueSlice: StateCreator<
           timedOut,
           error: timedOut ? DOWNLOAD_TIMED_OUT_MESSAGE : msg,
         });
-        if (!timedOut) {
+        if (!timedOut && approval === "auto") {
           scheduleTimedOutJobRemoval(get, jobId);
         }
       }
@@ -1082,6 +1083,7 @@ export const createDownloadQueueSlice: StateCreator<
           }
         }
         const timedOut = isDownloadStartTimeoutError(msg);
+        const approval = current.approval;
         get().onDownloadJobFinished({
           jobId: id,
           url: job.url,
@@ -1089,7 +1091,7 @@ export const createDownloadQueueSlice: StateCreator<
           timedOut,
           error: timedOut ? DOWNLOAD_TIMED_OUT_MESSAGE : msg,
         });
-        if (!timedOut) {
+        if (!timedOut && approval === "auto") {
           scheduleTimedOutJobRemoval(get, id);
         }
       }

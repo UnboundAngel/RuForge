@@ -195,6 +195,8 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.2 (unreleased)
 
+- **Downloads**: Non-timeout start failures auto-clear only for `approval: "auto"` jobs (music auto-save / auto pump); manual and other approvals keep a sticky failed row with the error visible. (`downloadQueueSlice.ts`).
+
 - **Downloads / Library**: Pre-release race fixes: local gallery remove/upsert invalidates in-flight snapshot writes; video/audio inspect simulates run in parallel; Tauri inspect timeout kills the yt-dlp tree; pre-transfer watchdog budget covers auth-fallback inspect; audio wall-clock starts after transfer; finish/pause/progress ignore terminal jobs; auto-skip and post-timeout paths pause active children so zombie downloads cannot continue. (`ruforgeStore.ts`, `downloadQueueSlice.ts`, `downloadJobWatchdog.ts`, `media_engine/engine.rs`, `media_engine_adapter.rs`).
 
 - **Music**: Content panels use soft neutral gray (`#121212`) instead of near-black red undertone so OLED edges stay readable without going bright; chrome gaps stay pure black. (`index.css`, `App.tsx`).
