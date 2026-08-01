@@ -195,13 +195,17 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.2 (unreleased)
 
+- **Downloads / Library**: Pre-release race fixes: local gallery remove/upsert invalidates in-flight snapshot writes; video/audio inspect simulates run in parallel; Tauri inspect timeout kills the yt-dlp tree; pre-transfer watchdog budget covers auth-fallback inspect; audio wall-clock starts after transfer; finish/pause/progress ignore terminal jobs; auto-skip and post-timeout paths pause active children so zombie downloads cannot continue. (`ruforgeStore.ts`, `downloadQueueSlice.ts`, `downloadJobWatchdog.ts`, `media_engine/engine.rs`, `media_engine_adapter.rs`).
+
+- **Music**: Content panels use soft neutral gray (`#121212`) instead of near-black red undertone so OLED edges stay readable without going bright; chrome gaps stay pure black. (`index.css`, `App.tsx`).
+
 - **Downloads**: Paste transition no longer flashes: metadata loading arms on paste, top-left chrome waits for hero metadata, browser strip exits in reserved space, hero fades without a blank frame, and the backdrop waits until details land; center URL stays visible until the chip FLIP. Successful finishes clear the leftover top-left URL chip via stronger hero clear. Every downloader enqueue path (stage, quick enqueue, drop, explorer add, held-batch start) runs the same library duplicate check as Download click so auto-skip-off shows the replace prompt instead of a silent second download. (`DownloaderView.tsx`, `useDownloaderView.ts`, `downloadQueueSlice.ts`, `ExplorerWatchQueueButton.tsx`).
 
 - **Library**: Incremental entry remove/upsert; delete updates the grid without rescan; download success upserts the finished file (quiet fetch only if path unknown); Media/Music mounts cold-scan once per session then quiet background refresh without poster/scrub backfill. (`galleryEntries.ts`, `ruforgeStore.ts`, `MediaView.tsx`, `MusicShell.tsx`, `downloadQueueSlice.ts`).
 
 - **Downloads**: Pre-spawn hang closed: yt-dlp inspect/simulate child waits are capped at 90s with a real timeout error; download watchdog arms before `start_download_job` (not after spawn) so stuck inspect jobs time out visibly; failed/timed-out start rows clear so music auto-save can retry the same track. (`media_engine/process.rs`, `media_engine_adapter.rs`, `downloadJobWatchdog.ts`, `downloadQueueSlice.ts`).
 
-- **Music**: Track row play control fades in over the index (same slot, no snap/layout jump). Deeper near-black shell with a slight red undertone. (`MusicTrackIndexPlay.tsx`, library/liked/album/artist rows, `index.css`).
+- **Music**: Track row play control fades in over the index (same slot, no snap/layout jump). (`MusicTrackIndexPlay.tsx`, library/liked/album/artist rows).
 
 - **Storage cleanup**: Opens immediately on storage glyph click instead of waiting for a cold library scan. Overlay starts below the titlebar so minimize/maximize/close stay visible and usable; storage header and its X sit under that band, not on top of window chrome. (`AuthorizeCleanupModal.tsx`, `ruforgeStore.ts`).
 

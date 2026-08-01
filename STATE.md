@@ -18,7 +18,7 @@ Shipping version: 0.2.2 (unreleased)
 
 Last shipped to users: 0.2.1
 
-Last updated: 2026-08-01 (Downloader paste flash + enqueue library gate)
+Last updated: 2026-08-01 (Pre-release race gate: gallery + download watchdog)
 
 Status: 0.2.1 live on GitHub and updater.json. Browser Companion (dev-gated) binds localhost with progress sync, disconnected UX, cached catalog startup for large libraries, Music/Songs audio playability, and companion-local volume/mute persistence across refresh. Companion V1.1 adds fail-closed `ruforge://focus` deep link to raise the main window; dev gate unchanged. The dropped `ruforge.local` experiment is no longer a current path. Main and secondary windows use class `RuForge_Chrome_WidgetWin` so OBS Automatic picks WGC for WebView2 capture. Download start path bounds inspect waits and arms the job watchdog before spawn. Library entries support incremental remove/upsert so deletes and finished downloads avoid a full cold scan.
 
@@ -72,9 +72,9 @@ reads this for the last shipped delta, not the git tree.
 
 - Library: Incremental entry remove/upsert; delete skips full rescan; download success upserts finished file; Media/Music cold-scan once per session then quiet background refresh without backfill.
 
-- Downloads: Pre-spawn hang closed (90s yt-dlp inspect timeout; watchdog arms before job start; failed/timed-out starts clear so music auto-save can retry).
+- Downloads: Pre-spawn hang closed (90s yt-dlp inspect timeout; watchdog arms before job start; failed/timed-out starts clear so music auto-save can retry). Pre-release race fixes: parallel inspect, kill-on-timeout, terminal-state guards, auto-skip pauses active children, gallery local mutations invalidate in-flight fetches.
 
-- Music: Track row play fades over the index; deeper near-black shell with a slight red undertone.
+- Music: Track row play fades over the index; content panels use soft neutral gray (`#121212`) for OLED readability instead of near-black red undertone.
 
 - Storage cleanup: Opens on click without waiting for a cold library scan; overlay below titlebar so window controls stay visible; storage header sits under that band.
 

@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::ShellExt;
 
 use crate::deno_binary::resolved_deno_path_if_present;
+use crate::process_tree::kill_shell_child_tree;
 use crate::ytdlp_binary::{userdata_ytdlp_path, ytdlp_shell_command};
 
 pub struct RuForgeRuntimeProvider {
@@ -85,33 +86,57 @@ impl TauriProcessLauncher {
 #[async_trait]
 impl ProcessLauncher for TauriProcessLauncher {
     async fn output(&self, _exe: &Path, args: &[String]) -> Result<ProcessOutput, EngineError> {
+        use tauri_plugin_shell::process::CommandEvent;
+
         let shell = ytdlp_shell_command(&self.app)
             .map_err(|e| EngineError::new(EngineErrorCode::RuntimeMissing, e))?;
-        let timed = tokio::time::timeout(
+        let (mut rx, child) = shell.args(args.to_vec()).spawn().map_err(|e| {
+            EngineError::new(
+                EngineErrorCode::ProcessLaunchFailure,
+                format!("Failed to run yt-dlp: {e}"),
+            )
+        })?;
+
+        let collect = async {
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let mut status_code = None;
+            while let Some(event) = rx.recv().await {
+                match event {
+                    CommandEvent::Stdout(bytes) => stdout.extend_from_slice(&bytes),
+                    CommandEvent::Stderr(bytes) => stderr.extend_from_slice(&bytes),
+                    CommandEvent::Terminated(payload) => {
+                        status_code = payload.code;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            (stdout, stderr, status_code)
+        };
+
+        match tokio::time::timeout(
             std::time::Duration::from_secs(SUBPROCESS_OUTPUT_TIMEOUT_SECS),
-            shell.args(args.to_vec()).output(),
+            collect,
         )
-        .await;
-        let output = match timed {
-            Ok(Ok(o)) => o,
-            Ok(Err(e)) => {
-                return Err(EngineError::new(
-                    EngineErrorCode::ProcessLaunchFailure,
-                    format!("Failed to run yt-dlp: {e}"),
-                ));
+        .await
+        {
+            Ok((stdout, stderr, status_code)) => {
+                drop(child);
+                Ok(ProcessOutput {
+                    status_code,
+                    stdout,
+                    stderr,
+                })
             }
             Err(_) => {
-                return Err(EngineError::new(
+                kill_shell_child_tree(child);
+                Err(EngineError::new(
                     EngineErrorCode::RuntimeExecutionFailed,
                     format!("yt-dlp timed out after {SUBPROCESS_OUTPUT_TIMEOUT_SECS}s"),
-                ));
+                ))
             }
-        };
-        Ok(ProcessOutput {
-            status_code: output.status.code(),
-            stdout: output.stdout,
-            stderr: output.stderr,
-        })
+        }
     }
 
     async fn spawn(
