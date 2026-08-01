@@ -25,8 +25,8 @@ export function progressAdvancesDownloadWatchdog(
   return false;
 }
 
-/** No yt-dlp transfer bytes yet (connect + first stdout). */
-const PRE_TRANSFER_MAX_MS = 30_000;
+/** No yt-dlp transfer bytes yet (inspect + connect + first stdout). Aligns with Rust SUBPROCESS_OUTPUT_TIMEOUT_SECS. */
+const PRE_TRANSFER_MAX_MS = 90_000;
 const MIN_ACTIVE_IDLE_MS = 5 * 60_000;
 const MAX_ACTIVE_IDLE_MS = 45 * 60_000;
 const PROCESSING_IDLE_MS = 10 * 60_000;

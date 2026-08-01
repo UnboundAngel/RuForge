@@ -302,6 +302,9 @@ export const MediaView = ({
   const activeMenu = useRuforgeStore((s) => s.activeMenu);
   const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
+  const ensureGalleryOnViewMount = useRuforgeStore((s) => s.ensureGalleryOnViewMount);
+  const removeGalleryEntryByPath = useRuforgeStore((s) => s.removeGalleryEntryByPath);
+  const upsertGalleryMediaFile = useRuforgeStore((s) => s.upsertGalleryMediaFile);
   const addGalleryExtractingPath = useRuforgeStore((s) => s.addGalleryExtractingPath);
   const removeGalleryExtractingPath = useRuforgeStore((s) => s.removeGalleryExtractingPath);
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
@@ -355,6 +358,7 @@ export const MediaView = ({
 
     await releasePlaybackBeforeDelete([file.path]);
     const deletingId = notify("Deleting…", "progress");
+    removeGalleryEntryByPath(file.path);
 
     try {
       const result = await deleteMediaAtPath(file.path);
@@ -370,9 +374,9 @@ export const MediaView = ({
       } else {
         notify("Removed from library.");
       }
-      await fetchEntries();
     } catch (e) {
       console.error(e);
+      upsertGalleryMediaFile(file);
       const message = deleteMediaErrorMessage(e);
       notify(message, message.includes("still in use") ? "warning" : "error");
     } finally {
@@ -396,9 +400,17 @@ export const MediaView = ({
     }
   };
 
+  const libraryScanDirsPrevRef = useRef<string[] | null>(null);
+
   useEffect(() => {
-    void fetchEntries();
-  }, [fetchEntries, libraryScanDirs]);
+    const prev = libraryScanDirsPrevRef.current;
+    libraryScanDirsPrevRef.current = libraryScanDirs;
+    const dirsChanged =
+      prev !== null &&
+      (prev.length !== libraryScanDirs.length ||
+        prev.some((d, i) => d !== libraryScanDirs[i]));
+    void ensureGalleryOnViewMount({ forceCold: dirsChanged });
+  }, [ensureGalleryOnViewMount, libraryScanDirs]);
 
   const groupEntriesByDate = (entries: GalleryEntry[]) => {
     const sorted = [...entries].sort((a, b) => {

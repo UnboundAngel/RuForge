@@ -754,6 +754,8 @@ function App() {
           url: raw.url,
           success: raw.success,
           error: raw.error,
+          timedOut: raw.timedOut,
+          outputPath: raw.outputPath,
         });
 
         if (

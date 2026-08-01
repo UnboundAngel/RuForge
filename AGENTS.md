@@ -195,6 +195,18 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.2 (unreleased)
 
+- **Library**: Incremental entry remove/upsert; delete updates the grid without rescan; download success upserts the finished file (quiet fetch only if path unknown); Media/Music mounts cold-scan once per session then quiet background refresh without poster/scrub backfill. (`galleryEntries.ts`, `ruforgeStore.ts`, `MediaView.tsx`, `MusicShell.tsx`, `downloadQueueSlice.ts`).
+
+- **Downloads**: Pre-spawn hang closed: yt-dlp inspect/simulate child waits are capped at 90s with a real timeout error; download watchdog arms before `start_download_job` (not after spawn) so stuck inspect jobs time out visibly; failed/timed-out start rows clear so music auto-save can retry the same track. (`media_engine/process.rs`, `media_engine_adapter.rs`, `downloadJobWatchdog.ts`, `downloadQueueSlice.ts`).
+
+- **Music**: Track row play control fades in over the index (same slot, no snap/layout jump). Deeper near-black shell with a slight red undertone. (`MusicTrackIndexPlay.tsx`, library/liked/album/artist rows, `index.css`).
+
+- **Storage cleanup**: Opens immediately on storage glyph click instead of waiting for a cold library scan. Overlay starts below the titlebar so minimize/maximize/close stay visible and usable; storage header and its X sit under that band, not on top of window chrome. (`AuthorizeCleanupModal.tsx`, `ruforgeStore.ts`).
+
+- **Player**: Comments edge-hold no longer steals the scrubber end or fullscreen button (narrow mid-height strip, controls raised above it). Download toasts mount above the video shell and clear the control dock; background notify overlay sits higher off the bottom edge. (`SlidingCommentsDrawer.tsx`, `PlayerView.tsx`, `App.tsx`, `notify_overlay.rs`).
+
+- **Downloads**: Library scan for duplicates starts when a URL is entered, not on Download click. Soft “Already in your library” warning appears as soon as the URL matches a library item (including during metadata fetch); Download still opens the replace/copy popup when auto-skip is off. First click no longer hangs on a cold gallery scan. (`useDownloaderView.ts`, `downloadQueueSlice.ts`, `DownloaderView.tsx`).
+
 - **Dev tooling**: `npm run dev:app` is the new development entry point, running the Companion asset watcher alongside `tauri dev` and tearing down both process trees on exit or interrupt. Added `dev:disk` (read-only artifact report), `dev:clean:safe` (dry run by default, guarded opt-in switches, refuses while builds are running), and `dev:rust-recover` (one process-scoped non-incremental build for the ReFS Dev Drive finalization bug). (`scripts/dev-app.ps1`, `scripts/dev-disk-report.ps1`, `scripts/dev-clean-safe.ps1`, `scripts/dev-rust-recover.ps1`, `package.json`).
 
 - **Dev build cost**: dev profile now emits line tables only with dependency debug info off, cutting `ruforge_lib.lib` from 1540 MB to 356 MB, `ruforge.pdb` from 273 MB to 57 MB, and Rust leaf rebuilds from 28s to 15s; panic backtraces keep file, line, and symbol names. New opt-in `debugging` profile restores full debug info. Companion directories added to `.taurignore` so Companion edits no longer restart the desktop app. (`src-tauri/Cargo.toml`, `src-tauri/.taurignore`).

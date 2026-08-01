@@ -66,6 +66,7 @@ import {
 import { deliverUserNotification } from "../systemNotify";
 import { findLibraryDuplicate } from "../duplicateDownload";
 import { updatePlaylistDownloadSidecarFromJob } from "../lib/playlistDownloadSidecar";
+import { mediaFileFromDownloadFinish } from "../galleryEntries";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 
 /** Coalesce `persistDownloadJobs` when many hydrates finish back-to-back (e.g. startup sweep). */
@@ -78,15 +79,18 @@ const timedOutJobRemovalTimers = new Map<string, ReturnType<typeof setTimeout>>(
 /** Match collapsed music explore celebration duration. */
 const TIMED_OUT_JOB_ROW_MS = 2100;
 
-/** Coalesce gallery scans when duplicate-skip needs library rows before yt-dlp. */
+/** Coalesce gallery scans when the downloader needs library rows (duplicate banner / auto-skip). */
 let entriesFetchForDuplicateCheckInflight: Promise<void> | null = null;
 
-async function ensureEntriesForDuplicateCheck(get: () => RuforgeStore): Promise<void> {
-  if (!get().settings.skipDuplicatesAutomatically) return;
+async function ensureLibraryEntriesLoaded(get: () => RuforgeStore): Promise<void> {
   if (get().entries.length > 0) return;
   if (!entriesFetchForDuplicateCheckInflight) {
     entriesFetchForDuplicateCheckInflight = get()
-      .fetchEntries({ manageLoadingStart: false, skipPosterBackfill: true })
+      .fetchEntries({
+        manageLoadingStart: false,
+        skipPosterBackfill: true,
+        skipScrubBackfill: true,
+      })
       .then(() => undefined)
       .finally(() => {
         entriesFetchForDuplicateCheckInflight = null;
@@ -95,8 +99,17 @@ async function ensureEntriesForDuplicateCheck(get: () => RuforgeStore): Promise<
   await entriesFetchForDuplicateCheckInflight;
 }
 
+async function ensureEntriesForDuplicateCheck(get: () => RuforgeStore): Promise<void> {
+  if (!get().settings.skipDuplicatesAutomatically) return;
+  await ensureLibraryEntriesLoaded(get);
+}
+
 function isYtDlpStartCancelledError(message: string): boolean {
   return /cancelled before yt-dlp could start/i.test(message);
+}
+
+function isDownloadStartTimeoutError(message: string): boolean {
+  return /timed out/i.test(message);
 }
 
 function clearSkippedJobRemovalTimer(jobId: string): void {
@@ -434,6 +447,8 @@ export type DownloadQueueSlice = {
   onDownloadJobFinished: (payload: DownloadJobFinishedPayload) => void;
   onDownloadJobPaused: (jobId: string) => void;
   pumpDownloadQueue: () => void;
+  /** Load gallery rows when empty so URL paste can soft-warn duplicates. */
+  ensureLibraryEntriesLoaded: () => Promise<void>;
 };
 
 const DOWNLOAD_STALL_ERROR =
@@ -565,17 +580,21 @@ export const createDownloadQueueSlice: StateCreator<
     resume: boolean,
   ): void {
     void (async () => {
+      armDownloadJobWatchdog(jobId);
       try {
         if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
+          disarmDownloadJobWatchdog(jobId);
           get().pumpDownloadQueue();
           return;
         }
         await hydrateDownloadJobMetadata(get, set, jobId, url);
         const job = get().downloadJobs.find((j) => j.id === jobId);
         if (!job || job.status !== "downloading") {
+          disarmDownloadJobWatchdog(jobId);
           return;
         }
         if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
+          disarmDownloadJobWatchdog(jobId);
           get().pumpDownloadQueue();
           return;
         }
@@ -594,28 +613,32 @@ export const createDownloadQueueSlice: StateCreator<
           options: invokeOptions,
           resume,
         });
-        // start_download_job resolves only after yt-dlp spawns; pre-transfer clock starts here.
-        armDownloadJobWatchdog(jobId);
+        touchDownloadJobWatchdog(jobId);
       } catch (e) {
+        const latest = get().downloadJobs.find((j) => j.id === jobId);
+        if (!latest || latest.status !== "downloading") {
+          disarmDownloadJobWatchdog(jobId);
+          return;
+        }
         const msg = String(e);
         if (isYtDlpStartCancelledError(msg)) {
-          const latest = get().downloadJobs.find((j) => j.id === jobId);
-          if (latest?.status === "paused") {
-            disarmDownloadJobWatchdog(jobId);
-            return;
-          }
           if (await trySkipLibraryDuplicateJob(get, jobId, url)) {
             disarmDownloadJobWatchdog(jobId);
             get().pumpDownloadQueue();
             return;
           }
         }
+        const timedOut = isDownloadStartTimeoutError(msg);
         get().onDownloadJobFinished({
           jobId,
           url,
           success: false,
-          error: msg,
+          timedOut,
+          error: timedOut ? DOWNLOAD_TIMED_OUT_MESSAGE : msg,
         });
+        if (!timedOut) {
+          scheduleTimedOutJobRemoval(get, jobId);
+        }
       }
     })();
   }
@@ -980,17 +1003,21 @@ export const createDownloadQueueSlice: StateCreator<
         return;
       }
 
+      armDownloadJobWatchdog(id);
       try {
         if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
+          disarmDownloadJobWatchdog(id);
           get().pumpDownloadQueue();
           return;
         }
         await hydrateDownloadJobMetadata(get, set, id, job.url);
         const latest = get().downloadJobs.find((j) => j.id === id);
         if (!latest || latest.status !== "downloading") {
+          disarmDownloadJobWatchdog(id);
           return;
         }
         if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
+          disarmDownloadJobWatchdog(id);
           get().pumpDownloadQueue();
           return;
         }
@@ -1000,27 +1027,32 @@ export const createDownloadQueueSlice: StateCreator<
           options: toInvokeDownloadOptions(job.options),
           resume: true,
         });
-        // start_download_job resolves only after yt-dlp spawns; pre-transfer clock starts here.
-        armDownloadJobWatchdog(id);
+        touchDownloadJobWatchdog(id);
       } catch (e) {
-        disarmDownloadJobWatchdog(id);
+        const current = get().downloadJobs.find((j) => j.id === id);
+        if (!current || current.status !== "downloading") {
+          disarmDownloadJobWatchdog(id);
+          return;
+        }
         const msg = String(e);
         if (isYtDlpStartCancelledError(msg)) {
-          const latest = get().downloadJobs.find((j) => j.id === id);
-          if (latest?.status === "paused") {
-            return;
-          }
           if (await trySkipLibraryDuplicateJob(get, id, job.url)) {
+            disarmDownloadJobWatchdog(id);
             get().pumpDownloadQueue();
             return;
           }
         }
+        const timedOut = isDownloadStartTimeoutError(msg);
         get().onDownloadJobFinished({
           jobId: id,
           url: job.url,
           success: false,
-          error: msg,
+          timedOut,
+          error: timedOut ? DOWNLOAD_TIMED_OUT_MESSAGE : msg,
         });
+        if (!timedOut) {
+          scheduleTimedOutJobRemoval(get, id);
+        }
       }
     },
 
@@ -1228,6 +1260,7 @@ export const createDownloadQueueSlice: StateCreator<
       const heroUrlBeforeFinish = get().url.trim();
       let playlistSidecarJob: DownloadJob | undefined;
       let playlistSidecarStatus: "done" | "failed" | undefined;
+      const finishedJobBefore = get().downloadJobs.find((j) => j.id === payload.jobId);
 
       set((s) => {
         const finishedJob = s.downloadJobs.find((j) => j.id === payload.jobId);
@@ -1314,7 +1347,20 @@ export const createDownloadQueueSlice: StateCreator<
       }
 
       if (payload.success) {
-        void get().invalidateEntries({ silent: true });
+        const upserted = mediaFileFromDownloadFinish(
+          payload.outputPath,
+          finishedJobBefore,
+          finishedUrl,
+        );
+        if (upserted) {
+          get().upsertGalleryMediaFile(upserted);
+        } else {
+          void get().fetchEntries({
+            manageLoadingStart: false,
+            skipPosterBackfill: true,
+            skipScrubBackfill: true,
+          });
+        }
         void deliverUserNotification(
           {
             dedupeKey: `download-finished:${payload.jobId}`,
@@ -1354,8 +1400,9 @@ export const createDownloadQueueSlice: StateCreator<
 
     pumpDownloadQueue: () => {
       void (async () => {
-        await ensureEntriesForDuplicateCheck(get);
-
+        // Promote immediately so the hero flips to downloading. Duplicate skip
+        // still awaits a cold gallery scan inside startHydratedDownloadJob /
+        // trySkipLibraryDuplicateJob — after the user already sees progress UI.
         const starts: { id: string; url: string; resume: boolean }[] = [];
         const skippedIds: string[] = [];
 
@@ -1398,5 +1445,7 @@ export const createDownloadQueueSlice: StateCreator<
         }
       })();
     },
+
+    ensureLibraryEntriesLoaded: () => ensureLibraryEntriesLoaded(get),
   };
 };

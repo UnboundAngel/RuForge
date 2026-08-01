@@ -16,6 +16,9 @@ pub use error::{classify_ytdlp_stderr, EngineError, EngineErrorCode};
 pub use events::{ChannelEventSink, EngineEvent, EventSink, JobStore, MemoryJobStore};
 pub use inspection::{InspectionStore, DEFAULT_INSPECTION_TTL_SECS};
 pub use jobs::ActiveJobRegistry;
-pub use process::{ProcessLauncher, ProcessOutput, RuntimeProvider, SpawnedProcess, StdProcessLauncher};
+pub use process::{
+    ProcessLauncher, ProcessOutput, RuntimeProvider, SpawnedProcess, StdProcessLauncher,
+    SUBPROCESS_OUTPUT_TIMEOUT_SECS,
+};
 pub use rate_limit::{stderr_is_missing_js_runtime, JS_RUNTIME_MISSING_PREFIX};
 pub use types::*;
