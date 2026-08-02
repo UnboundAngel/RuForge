@@ -195,6 +195,10 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.3 (unreleased)
 
+- **Music**: Loop is tri-state off / all / one (cycle off→all→one→off); all loops the user-chosen span with idle endless tail preserved and no staging; one repeats the track; `true` migrates to one. `playbackLoopStorage.ts` / `ruforgeStore.ts` / `useMusicPlayback.ts` / music mini + NowPlayingBar + island
+- **Music**: Queue "Next from" is play-origin tagged (`musicQueueSource`); skip/advance keep the tag; endless next-row still shows Library; null origin shows Next up (no metadata guess). `musicQueueSource.ts` / `ruforgeStore.ts` / music play entry points
+- **Music**: Endless lookahead depth locked at 12 (`MUSIC_ENDLESS_LOOKAHEAD`); skip refill tops back to full depth (not a hardcoded floor of 3). `musicEndlessNext.ts` / `useMusicPlayback.ts` / `useMusicMiniPlayback.ts`
+- **Music**: Neighbor scan no longer wipes endless staging. `App.tsx` / `ruforgeStore.ts`
 - **Island**: When main is minimized or tray-hidden and main-owned playback is active, a top-center always-on-top Dynamic Island overlay appears (compact + expand; suppressed when mini owns playback). Waveform bars share one max height and move more independently (no middle-tall envelope). `island_overlay.rs` / `IslandOverlayApp.tsx` / `useDesktopIslandOverlay.ts` / `desktopIslandBridge.ts` / `ActivityIslandWaveform.tsx` / `audioAnalyserGraph.ts`
 - **Library**: Video Library multi-column grid with date groups, hover card shell, Morph ⋯ menu over the media, and scroll-linked tab chrome (no full-gallery re-render on scroll). Vite ignores `STATE.md` / `AGENTS.md` / docs markdown. `MediaView.tsx` / `Morph.tsx` / `App.tsx` / `vite.config.ts`
 - **Library**: `get_library_snapshot` serves the published desktop projection when ready (join in-flight, force only on invalidate/dirs/sweep); Companion probe no longer holds `reindex_lock`. `library_state.rs` / `commands.rs` / `ruforgeStore.ts`

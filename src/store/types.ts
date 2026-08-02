@@ -13,6 +13,9 @@ import {
   DEFAULT_OUTPUT_DIR,
   RUFORGE_INTERNAL_DIR,
 } from "../platformPaths";
+import { parseLoopMode, type LoopMode } from "../playbackLoopStorage";
+
+export type { LoopMode };
 
 export type ActiveTab = "downloader" | "media" | "player" | "settings" | "explorer";
 
@@ -285,8 +288,16 @@ export function readInitialPlayerVolumeFromLs(): number {
   }
 }
 
-export function readInitialPlayerLoopFromLs(): boolean {
-  return localStorage.getItem(LS_MINI_LOOP) === "true";
+export function readInitialPlayerLoopModeFromLs(): LoopMode {
+  try {
+    return parseLoopMode(localStorage.getItem(LS_MINI_LOOP));
+  } catch {
+    return "off";
+  }
+}
+
+export function writePlayerLoopModeToLs(mode: LoopMode): void {
+  localStorage.setItem(LS_MINI_LOOP, mode);
 }
 
 export { LS_MINI_VOLUME, LS_MINI_LOOP };

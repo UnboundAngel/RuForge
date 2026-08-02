@@ -22,6 +22,7 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import {
   hasMusicNextTrack,
   hasMusicPrevTrack,
+  musicAdvanceLoopOpts,
   resolveMusicNextTrack,
   resolveMusicPrevTrack,
 } from "./musicAdvanceQueue";
@@ -37,7 +38,12 @@ import {
 } from "@/lib/musicListenSession";
 import { primaryArtist } from "./musicArtist";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
-import { pickSmartNextTrack } from "./musicSmartShuffle";
+import {
+  ensureMusicEndlessLookahead,
+  MUSIC_ENDLESS_LOOKAHEAD,
+  remainingQueueCount,
+  resolveMusicEndlessNext,
+} from "./musicEndlessNext";
 
 const DUCK_OUT_SEC = 0.008;
 const DUCK_IN_SEC = 0.012;
@@ -75,7 +81,7 @@ export function useMusicPlayback(
   const entries = useRuforgeStore((s) => s.entries);
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
-  const isLooping = useRuforgeStore((s) => s.isLooping);
+  const loopMode = useRuforgeStore((s) => s.loopMode);
   const handlePlayFolderNeighbor = useRuforgeStore((s) => s.handlePlayFolderNeighbor);
   const manualQueue = useRuforgeStore((s) => s.manualQueue);
   const playingFromManualQueue = useRuforgeStore((s) => s.playingFromManualQueue);
@@ -87,7 +93,9 @@ export function useMusicPlayback(
   const activityOwner = useRuforgeStore((s) => s.activityOwner);
   const navMode = useRuforgeStore((s) => s.navMode);
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
-  const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
+  const musicEndlessExtended = useRuforgeStore((s) => s.musicEndlessExtended);
+  const musicEndlessFromIndex = useRuforgeStore((s) => s.musicEndlessFromIndex);
+  const applyMusicEndlessAdvance = useRuforgeStore((s) => s.applyMusicEndlessAdvance);
 
   const [paused, setPaused] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
@@ -199,7 +207,7 @@ export function useMusicPlayback(
     }
 
     applyMediaOutputState(el, volume, isMuted);
-    el.loop = isLooping;
+    el.loop = loopMode === "one";
     el.playbackRate = playbackSpeed;
 
     const resume = musicPlayerResume;
@@ -228,7 +236,7 @@ export function useMusicPlayback(
     clearMusicPlayerResume,
     volume,
     isMuted,
-    isLooping,
+    loopMode,
     playbackSpeed,
     folderAudioPlaylist,
     libraryAudio,
@@ -247,8 +255,8 @@ export function useMusicPlayback(
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-    el.loop = isLooping;
-  }, [isLooping, audioRef]);
+    el.loop = loopMode === "one";
+  }, [loopMode, audioRef]);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -387,6 +395,11 @@ export function useMusicPlayback(
     };
   }, []);
 
+  const advanceLoopOpts = useMemo(
+    () => musicAdvanceLoopOpts(loopMode, effectivePlaylist.length, musicEndlessFromIndex),
+    [loopMode, effectivePlaylist.length, musicEndlessFromIndex],
+  );
+
   const skipPrev = useCallback(() => {
     if (!playingFile) return;
     const el = audioRef.current;
@@ -396,13 +409,16 @@ export function useMusicPlayback(
       return;
     }
 
-    const prev = resolveMusicPrevTrack({
-      manualQueue,
-      effectivePlaylist,
-      playlistIndex,
-      playingFromManualQueue,
-      manualQueueContextIndex,
-    });
+    const prev = resolveMusicPrevTrack(
+      {
+        manualQueue,
+        effectivePlaylist,
+        playlistIndex,
+        playingFromManualQueue,
+        manualQueueContextIndex,
+      },
+      advanceLoopOpts,
+    );
 
     if (prev) {
       noteIslandSkipDir(-1);
@@ -412,7 +428,7 @@ export function useMusicPlayback(
       setPendingListenEndReason("skipped");
       handlePlayFolderNeighbor(prev);
     }
-  }, [playingFile, playlistIndex, effectivePlaylist, manualQueue, playingFromManualQueue, manualQueueContextIndex, handlePlayFolderNeighbor, clearManualQueuePlayingState, audioRef]);
+  }, [playingFile, playlistIndex, effectivePlaylist, manualQueue, playingFromManualQueue, manualQueueContextIndex, advanceLoopOpts, handlePlayFolderNeighbor, clearManualQueuePlayingState, audioRef]);
 
   const skipNext = useCallback(() => {
     if (!playingFile) return;
@@ -428,7 +444,7 @@ export function useMusicPlayback(
       return effectivePlaylist.find((f) => f.path === path) ?? null;
     };
 
-    const result = resolveMusicNextTrack(advanceState, resolveFromLibrary);
+    const result = resolveMusicNextTrack(advanceState, resolveFromLibrary, advanceLoopOpts);
     if (!result) return;
 
     noteIslandSkipDir(1);
@@ -440,7 +456,7 @@ export function useMusicPlayback(
 
     setPendingListenEndReason("skipped");
     handlePlayFolderNeighbor(result.file);
-  }, [playingFile, playlistIndex, effectivePlaylist, manualQueue, playingFromManualQueue, manualQueueContextIndex, handlePlayFolderNeighbor, applyManualQueueAdvance, clearManualQueuePlayingState]);
+  }, [playingFile, playlistIndex, effectivePlaylist, manualQueue, playingFromManualQueue, manualQueueContextIndex, advanceLoopOpts, handlePlayFolderNeighbor, applyManualQueueAdvance, clearManualQueuePlayingState]);
 
   const jumpPrevChapter = useCallback(() => {
     if (!chapters) return;
@@ -458,49 +474,85 @@ export function useMusicPlayback(
     if (next !== null) seek(chapters[next].start_time);
   }, [chapters, currentTime, seek]);
 
+  useEffect(() => {
+    if (navMode !== "music" || !playingFile) return;
+    if (loopMode === "all") return;
+    const remaining = remainingQueueCount(
+      playlistIndex,
+      effectivePlaylist.length,
+      manualQueue.length,
+    );
+    if (remaining >= MUSIC_ENDLESS_LOOKAHEAD) return;
+
+    const result = ensureMusicEndlessLookahead({
+      libraryAudio,
+      folderAudioPlaylist,
+      current: playingFile,
+      endlessExtended: musicEndlessExtended,
+      endlessFromIndex: musicEndlessFromIndex,
+      effectivePlaylist,
+      playlistIndex,
+      manualQueueLength: manualQueue.length,
+      likedKeys: musicLikedKeys,
+      sessionRecentKeys: sessionRecentKeysRef.current,
+      lookahead: MUSIC_ENDLESS_LOOKAHEAD,
+    });
+    if (!result) return;
+    applyMusicEndlessAdvance(result.folderAudioPlaylistAfter, result.endlessFromIndex);
+  }, [
+    navMode,
+    playingFile,
+    playingFile?.path,
+    playlistIndex,
+    effectivePlaylist.length,
+    manualQueue.length,
+    libraryAudio,
+    folderAudioPlaylist,
+    musicEndlessExtended,
+    musicEndlessFromIndex,
+    effectivePlaylist,
+    musicLikedKeys,
+    loopMode,
+    applyMusicEndlessAdvance,
+  ]);
+
   const trySmartEndlessNext = useCallback((): boolean => {
     if (navMode !== "music" || !playingFile) return false;
+    if (loopMode === "all") return false;
 
-    const inLibrary = libraryAudio.some((f) => f.path === playingFile.path);
-    const inFolder = folderAudioPlaylist.some((f) => f.path === playingFile.path);
-    if (!inLibrary && !inFolder) return false;
-
-    const pool =
-      folderAudioPlaylist.length > 1 && inFolder
-        ? folderAudioPlaylist
-        : libraryAudio;
-    if (pool.length === 0) return false;
-
-    const next = pickSmartNextTrack({
-      pool,
+    const result = resolveMusicEndlessNext({
+      libraryAudio,
+      folderAudioPlaylist,
       current: playingFile,
+      endlessExtended: musicEndlessExtended,
+      endlessFromIndex: musicEndlessFromIndex,
+      effectivePlaylist,
       likedKeys: musicLikedKeys,
       sessionRecentKeys: sessionRecentKeysRef.current,
     });
-    if (!next) return false;
+    if (!result) return false;
 
-    const base =
-      effectivePlaylist.length > 0 ? effectivePlaylist : folderAudioPlaylist;
-    if (!base.some((f) => f.path === next.path)) {
-      setFolderAudioPlaylist([...base, next]);
-    }
+    applyMusicEndlessAdvance(result.folderAudioPlaylistAfter, result.endlessFromIndex);
     setPendingListenEndReason("manual_switch");
-    handlePlayFolderNeighbor(next);
+    handlePlayFolderNeighbor(result.next);
     return true;
   }, [
     navMode,
     playingFile,
     libraryAudio,
     folderAudioPlaylist,
+    musicEndlessExtended,
+    musicEndlessFromIndex,
     musicLikedKeys,
     effectivePlaylist,
-    setFolderAudioPlaylist,
+    loopMode,
+    applyMusicEndlessAdvance,
     handlePlayFolderNeighbor,
   ]);
 
   const handleEnded = useCallback(async () => {
     isDraggingRef.current = false;
-    if (isLooping || !playingFile) return;
+    if (loopMode === "one" || !playingFile) return;
     await flushListenSessionAccum(true);
     const advanceState = {
       manualQueue,
@@ -512,7 +564,7 @@ export function useMusicPlayback(
 
     const resolveFromPlaylist = (path: string): import("@/types").MediaFile | null =>
       effectivePlaylist.find((f) => f.path === path) ?? null;
-    const result = resolveMusicNextTrack(advanceState, resolveFromPlaylist);
+    const result = resolveMusicNextTrack(advanceState, resolveFromPlaylist, advanceLoopOpts);
 
     if (result) {
       await endListenSession("completed");
@@ -526,19 +578,26 @@ export function useMusicPlayback(
       return;
     }
 
+    if (loopMode === "all") {
+      clearManualQueuePlayingState();
+      setPaused(true);
+      return;
+    }
+
     await endListenSession("wall_endless_pick");
     if (!trySmartEndlessNext()) {
       clearManualQueuePlayingState();
       setPaused(true);
     }
   }, [
-    isLooping,
+    loopMode,
     playingFile,
     playlistIndex,
     effectivePlaylist,
     manualQueue,
     playingFromManualQueue,
     manualQueueContextIndex,
+    advanceLoopOpts,
     handlePlayFolderNeighbor,
     applyManualQueueAdvance,
     clearManualQueuePlayingState,
@@ -597,10 +656,12 @@ export function useMusicPlayback(
     hasPrevInQueue: hasMusicPrevTrack(
       { manualQueue, effectivePlaylist, playlistIndex, playingFromManualQueue, manualQueueContextIndex },
       currentTime,
+      advanceLoopOpts,
     ),
-    hasNextInQueue: hasMusicNextTrack({
-      manualQueue, effectivePlaylist, playlistIndex, playingFromManualQueue, manualQueueContextIndex,
-    }),
+    hasNextInQueue: hasMusicNextTrack(
+      { manualQueue, effectivePlaylist, playlistIndex, playingFromManualQueue, manualQueueContextIndex },
+      advanceLoopOpts,
+    ),
     hasChapters: !!(chapters && chapters.length >= 2),
     isDraggingRef,
     effectivePlaylist,

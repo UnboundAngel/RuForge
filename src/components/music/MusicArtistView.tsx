@@ -12,6 +12,7 @@ import { fileMatchesArtistKey, primaryArtist, rawArtistFromFile } from "./musicA
 import { buildMultiTrackAlbumGroups, resolveDisplayAlbum } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import {
@@ -316,7 +317,7 @@ function SectionLabel({ children, mutedColor }: { children: React.ReactNode; mut
 
 type Props = {
   artistKey: string;
-  onPlayFile: (file: MediaFile, playlist: MediaFile[]) => void;
+  onPlayFile: (file: MediaFile, playlist: MediaFile[], source: MusicQueueSource) => void;
   onOpenAlbum: (albumKey: string) => void;
   onBack: () => void;
 };
@@ -414,6 +415,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
   }, [heroCover]);
 
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
+  const artistSource = musicQueueSource("artist", displayName);
 
   const handleShuffle = () => {
     if (tracks.length === 0) return;
@@ -422,7 +424,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
       likedKeys: musicLikedKeys,
       seed: Date.now() & 0xffffffff,
     });
-    onPlayFile(shuffled[0]!, shuffled);
+    onPlayFile(shuffled[0]!, shuffled, artistSource);
   };
 
   if (tracks.length === 0) {
@@ -541,7 +543,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => onPlayFile(tracks[0], tracks)}
+            onClick={() => onPlayFile(tracks[0], tracks, artistSource)}
             className="flex items-center gap-2 px-7 py-2.5 text-sm font-semibold transition-opacity hover:opacity-88"
             style={{
               background: ambience.onCanvasPrimary,
@@ -606,7 +608,9 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
                   context: { kind: "album", artistKey, albumKey: a.key, displayName: a.display, artistName: displayName },
                   x: e.clientX,
                   y: e.clientY,
-                  onPlay: a.tracks.length > 0 ? () => onPlayFile(a.tracks[0], a.tracks) : undefined,
+                  onPlay: a.tracks.length > 0
+                    ? () => onPlayFile(a.tracks[0], a.tracks, musicQueueSource("album", a.display))
+                    : undefined,
                 })}
               />
             ))}
@@ -624,14 +628,14 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
             file={file}
             index={i}
             isPlaying={playingFile?.path === file.path}
-            onClick={() => onPlayFile(file, tracks)}
-            menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
-            onContextMenu={(e) => setMenu({
-              context: { kind: "song", file },
-              x: e.clientX,
-              y: e.clientY,
-              onPlay: () => onPlayFile(file, tracks),
-            })}
+            onClick={() => onPlayFile(file, tracks, artistSource)}
+              menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
+              onContextMenu={(e) => setMenu({
+                context: { kind: "song", file },
+                x: e.clientX,
+                y: e.clientY,
+                onPlay: () => onPlayFile(file, tracks, artistSource),
+              })}
             motionDelay={Math.min(i * 0.035, 0.4)}
             rowHoverBg={ambience.rowHoverBg}
           />

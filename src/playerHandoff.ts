@@ -1,4 +1,6 @@
 import type { MediaFile } from "./types";
+import type { LoopMode } from "./playbackLoopStorage";
+import { parseLoopMode } from "./playbackLoopStorage";
 
 export type PlayInMiniPayload = {
   file: MediaFile;
@@ -28,11 +30,16 @@ export type PlayInMusicMiniPayload = {
   muted?: boolean;
   queueSnapshot?: MediaFile[];
   queueIndex?: number;
+  loopMode?: LoopMode;
   isLooping?: boolean;
   manualQueue?: string[];
   playingFromManualQueue?: boolean;
   manualQueueContextIndex?: number | null;
   listenEventId?: string | null;
+  libraryAudio?: MediaFile[];
+  musicEndlessExtended?: boolean;
+  musicEndlessFromIndex?: number | null;
+  musicLikedKeys?: string[];
 };
 
 export type SendToMusicMainPayload = {
@@ -45,6 +52,18 @@ export type SendToMusicMainPayload = {
   manualQueue?: string[];
   playingFromManualQueue?: boolean;
   manualQueueContextIndex?: number | null;
+  loopMode?: LoopMode;
   isLooping?: boolean;
   listenEventId?: string | null;
 };
+
+export function loopModeFromHandoff(payload: {
+  loopMode?: LoopMode;
+  isLooping?: boolean;
+}): LoopMode {
+  if (payload.loopMode) return payload.loopMode;
+  if (typeof payload.isLooping === "boolean") {
+    return parseLoopMode(payload.isLooping ? "true" : "false");
+  }
+  return "off";
+}

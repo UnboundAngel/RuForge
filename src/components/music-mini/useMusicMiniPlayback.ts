@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import { applyMediaOutputState } from "@/applyMediaOutputState";
@@ -6,14 +6,30 @@ import { bestCoverPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
 import { emitActivityHandoffSync } from "@/lib/activityHandoffSync";
 import type { PlayInMusicMiniPayload } from "@/playerHandoff";
+import { loopModeFromHandoff } from "@/playerHandoff";
 import { writePlaybackPos } from "@/playbackStorage";
+import {
+  cycleLoopMode,
+  writeLoopModeForPath,
+  type LoopMode,
+} from "@/playbackLoopStorage";
+import { writePlayerLoopModeToLs } from "@/store/types";
 import {
   hasMusicNextTrack,
   hasMusicPrevTrack,
+  musicAdvanceLoopOpts,
   resolveMusicNextTrack,
   resolveMusicPrevTrack,
   type MusicAdvanceState,
 } from "@/components/music/musicAdvanceQueue";
+import {
+  ensureMusicEndlessLookahead,
+  MUSIC_ENDLESS_LOOKAHEAD,
+  remainingQueueCount,
+  resolveMusicEndlessNext,
+} from "@/components/music/musicEndlessNext";
+import { primaryArtist } from "@/components/music/musicArtist";
+import { musicTrackIdentityKey } from "@/components/music/musicShelfDedup";
 import { MUSIC_MINI_VOLUME_KEY } from "./musicMiniConstants";
 import {
   beginListenSession,
@@ -116,10 +132,14 @@ export function useMusicMiniPlayback() {
   const [manualQueue, setManualQueue] = useState<string[]>([]);
   const [playingFromManualQueue, setPlayingFromManualQueue] = useState(false);
   const [manualQueueContextIndex, setManualQueueContextIndex] = useState<number | null>(null);
+  const [libraryAudio, setLibraryAudio] = useState<MediaFile[]>([]);
+  const [musicEndlessExtended, setMusicEndlessExtended] = useState(false);
+  const [musicEndlessFromIndex, setMusicEndlessFromIndex] = useState<number | null>(null);
+  const [musicLikedKeys, setMusicLikedKeys] = useState<string[]>([]);
   const [paused, setPaused] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isLooping, setIsLooping] = useState(false);
+  const [loopMode, setLoopMode] = useState<LoopMode>("off");
   const [shuffled, setShuffled] = useState(false);
   const [direction, setDirection] = useState<TrackDirection>(null);
   const [volume, setVolume] = useState(readStoredVolume);
@@ -128,6 +148,12 @@ export function useMusicMiniPlayback() {
   const layerIdRef = useRef(0);
   const layerPruneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedPathRef = useRef<string | null>(null);
+  const sessionRecentKeysRef = useRef<string[]>([]);
+
+  const advanceLoopOpts = useMemo(
+    () => musicAdvanceLoopOpts(loopMode, effectivePlaylist.length, musicEndlessFromIndex),
+    [loopMode, effectivePlaylist.length, musicEndlessFromIndex],
+  );
 
   const advanceState: MusicAdvanceState = {
     manualQueue,
@@ -195,7 +221,7 @@ export function useMusicMiniPlayback() {
       }
       el.playbackRate = playbackSpeed;
       applyMediaOutputState(el, volume, muted);
-      el.loop = isLooping;
+      el.loop = loopMode === "one";
 
       const applyStart = () => {
         setDuration(el.duration || 0);
@@ -208,7 +234,7 @@ export function useMusicMiniPlayback() {
       if (el.readyState >= 1) applyStart();
       else el.addEventListener("loadedmetadata", applyStart, { once: true });
     },
-    [volume, muted, isLooping],
+    [volume, muted, loopMode],
   );
 
   const applyHandoff = useCallback(
@@ -223,7 +249,12 @@ export function useMusicMiniPlayback() {
       setManualQueue(payload.manualQueue ?? []);
       setPlayingFromManualQueue(payload.playingFromManualQueue ?? false);
       setManualQueueContextIndex(payload.manualQueueContextIndex ?? null);
-      setIsLooping(payload.isLooping ?? false);
+      setLibraryAudio(payload.libraryAudio ?? snapshot);
+      setMusicEndlessExtended(payload.musicEndlessExtended ?? false);
+      setMusicEndlessFromIndex(payload.musicEndlessFromIndex ?? null);
+      setMusicLikedKeys(payload.musicLikedKeys ?? []);
+      sessionRecentKeysRef.current = [];
+      setLoopMode(loopModeFromHandoff(payload));
       if (typeof payload.volume === "number") {
         setVolume(payload.volume);
         writeStoredVolume(payload.volume);
@@ -232,6 +263,8 @@ export function useMusicMiniPlayback() {
       if (payload.listenEventId) {
         stageHandoffListenEventId(payload.listenEventId);
       }
+      const startKey = musicTrackIdentityKey(payload.file, primaryArtist);
+      sessionRecentKeysRef.current = [startKey];
       loadFile(
         payload.file,
         payload.startTime,
@@ -297,8 +330,49 @@ export function useMusicMiniPlayback() {
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-    el.loop = isLooping;
-  }, [isLooping]);
+    el.loop = loopMode === "one";
+  }, [loopMode]);
+
+  useEffect(() => {
+    if (loopMode === "all") return;
+    if (!playingFile) return;
+    const remaining = remainingQueueCount(
+      playlistIndex,
+      effectivePlaylist.length,
+      manualQueue.length,
+    );
+    if (remaining >= MUSIC_ENDLESS_LOOKAHEAD) return;
+
+    const result = ensureMusicEndlessLookahead({
+      libraryAudio,
+      folderAudioPlaylist: effectivePlaylist,
+      current: playingFile,
+      endlessExtended: musicEndlessExtended,
+      endlessFromIndex: musicEndlessFromIndex,
+      effectivePlaylist,
+      playlistIndex,
+      manualQueueLength: manualQueue.length,
+      likedKeys: musicLikedKeys,
+      sessionRecentKeys: sessionRecentKeysRef.current,
+      lookahead: MUSIC_ENDLESS_LOOKAHEAD,
+    });
+    if (!result) return;
+    setEffectivePlaylist(result.folderAudioPlaylistAfter);
+    setMusicEndlessExtended(true);
+    setMusicEndlessFromIndex((prev) => prev ?? result.endlessFromIndex);
+  }, [
+    playingFile,
+    playingFile?.path,
+    playlistIndex,
+    effectivePlaylist,
+    effectivePlaylist.length,
+    manualQueue.length,
+    libraryAudio,
+    musicEndlessExtended,
+    musicEndlessFromIndex,
+    musicLikedKeys,
+    loopMode,
+  ]);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -318,7 +392,7 @@ export function useMusicMiniPlayback() {
     const onPause = () => setPaused(true);
     const onEnded = () => {
       void (async () => {
-        if (isLooping) return;
+        if (loopMode === "one" || !playingFile) return;
         await flushListenSessionAccum(true);
         const state: MusicAdvanceState = {
           manualQueue,
@@ -327,32 +401,78 @@ export function useMusicMiniPlayback() {
           playingFromManualQueue,
           manualQueueContextIndex,
         };
-        const result = resolveMusicNextTrack(state, resolveFromPlaylist);
-        if (!result) {
+        const result = resolveMusicNextTrack(state, resolveFromPlaylist, advanceLoopOpts);
+        if (result) {
           await endListenSession("completed");
+          setManualQueue(result.manualQueueAfter);
+          setPlayingFromManualQueue(result.playingFromManualQueue);
+          setManualQueueContextIndex(result.manualQueueContextIndex);
+          const nextIdx = result.playingFromManualQueue
+            ? playlistIndex
+            : effectivePlaylist.findIndex((f) => f.path === result.file.path);
+          if (!result.playingFromManualQueue && nextIdx >= 0) setPlaylistIndex(nextIdx);
+          setPendingListenEndReason("manual_switch");
+          const key = musicTrackIdentityKey(result.file, primaryArtist);
+          sessionRecentKeysRef.current = [
+            ...sessionRecentKeysRef.current.filter((k) => k !== key),
+            key,
+          ].slice(-12);
+          loadFile(result.file, 0, false, el.playbackRate, "next", {
+            playingFromManualQueue: result.playingFromManualQueue,
+            manualQueue: result.manualQueueAfter,
+            manualQueueContextIndex: result.manualQueueContextIndex,
+            playlistIndex: nextIdx >= 0 ? nextIdx : playlistIndex,
+          });
+          return;
+        }
+
+        if (loopMode === "all") {
           setPlayingFromManualQueue(false);
           setManualQueue([]);
           setManualQueueContextIndex(null);
           setPaused(true);
           return;
         }
-        await endListenSession("completed");
-        setManualQueue(result.manualQueueAfter);
-        setPlayingFromManualQueue(result.playingFromManualQueue);
-        setManualQueueContextIndex(result.manualQueueContextIndex);
-        if (!result.playingFromManualQueue) {
-          const nextIdx = effectivePlaylist.findIndex((f) => f.path === result.file.path);
-          if (nextIdx >= 0) setPlaylistIndex(nextIdx);
+        await endListenSession("wall_endless_pick");
+        const endless = resolveMusicEndlessNext({
+          libraryAudio,
+          folderAudioPlaylist: effectivePlaylist,
+          current: playingFile,
+          endlessExtended: musicEndlessExtended,
+          endlessFromIndex: musicEndlessFromIndex,
+          effectivePlaylist,
+          likedKeys: musicLikedKeys,
+          sessionRecentKeys: sessionRecentKeysRef.current,
+        });
+        if (!endless) {
+          setPlayingFromManualQueue(false);
+          setManualQueue([]);
+          setManualQueueContextIndex(null);
+          setPaused(true);
+          return;
         }
+
+        setEffectivePlaylist(endless.folderAudioPlaylistAfter);
+        setMusicEndlessExtended(true);
+        setMusicEndlessFromIndex((prev) => prev ?? endless.endlessFromIndex);
+        setPlayingFromManualQueue(false);
+        setManualQueue([]);
+        setManualQueueContextIndex(null);
+        const endlessIdx = endless.folderAudioPlaylistAfter.findIndex(
+          (f) => f.path === endless.next.path,
+        );
+        setPlaylistIndex(endlessIdx >= 0 ? endlessIdx : 0);
+        const key = musicTrackIdentityKey(endless.next, primaryArtist);
+        sessionRecentKeysRef.current = [
+          ...sessionRecentKeysRef.current.filter((k) => k !== key),
+          key,
+        ].slice(-12);
         setPendingListenEndReason("manual_switch");
-        loadFile(result.file, 0, false, el.playbackRate, "next", {
-          playingFromManualQueue: result.playingFromManualQueue,
-          manualQueue: result.manualQueueAfter,
-          manualQueueContextIndex: result.manualQueueContextIndex,
-          playlistIndex:
-            result.playingFromManualQueue
-              ? playlistIndex
-              : effectivePlaylist.findIndex((f) => f.path === result.file.path),
+        loadFile(endless.next, 0, false, el.playbackRate, "next", {
+          playingFromManualQueue: false,
+          manualQueue: [],
+          manualQueueContextIndex: null,
+          playlistIndex: endlessIdx >= 0 ? endlessIdx : 0,
         });
       })();
     };
@@ -378,7 +498,12 @@ export function useMusicMiniPlayback() {
     manualQueue,
     playingFromManualQueue,
     manualQueueContextIndex,
-    isLooping,
+    libraryAudio,
+    musicEndlessExtended,
+    musicEndlessFromIndex,
+    musicLikedKeys,
+    loopMode,
+    advanceLoopOpts,
     loadFile,
     resolveFromPlaylist,
   ]);
@@ -408,7 +533,7 @@ export function useMusicMiniPlayback() {
       playingFromManualQueue,
       manualQueueContextIndex,
     };
-    const result = resolveMusicNextTrack(state, resolveFromPlaylist);
+    const result = resolveMusicNextTrack(state, resolveFromPlaylist, advanceLoopOpts);
     if (!result) return;
     setManualQueue(result.manualQueueAfter);
     setPlayingFromManualQueue(result.playingFromManualQueue);
@@ -435,6 +560,7 @@ export function useMusicMiniPlayback() {
     manualQueueContextIndex,
     loadFile,
     resolveFromPlaylist,
+    advanceLoopOpts,
   ]);
 
   const skipPrev = useCallback(() => {
@@ -452,7 +578,7 @@ export function useMusicMiniPlayback() {
       playingFromManualQueue,
       manualQueueContextIndex,
     };
-    const prev = resolveMusicPrevTrack(state);
+    const prev = resolveMusicPrevTrack(state, advanceLoopOpts);
     if (!prev) return;
     setPlayingFromManualQueue(false);
     const prevIdx = effectivePlaylist.findIndex((f) => f.path === prev.path);
@@ -470,9 +596,17 @@ export function useMusicMiniPlayback() {
     playingFromManualQueue,
     manualQueueContextIndex,
     loadFile,
+    advanceLoopOpts,
   ]);
 
-  const toggleLoop = useCallback(() => setIsLooping((l) => !l), []);
+  const toggleLoop = useCallback(() => {
+    setLoopMode((prev) => {
+      const next = cycleLoopMode(prev);
+      writePlayerLoopModeToLs(next);
+      if (playingFile) writeLoopModeForPath(playingFile.path, next);
+      return next;
+    });
+  }, [playingFile]);
   const toggleShuffle = useCallback(() => setShuffled((s) => !s), []);
 
   const persistPosition = useCallback(() => {
@@ -488,7 +622,7 @@ export function useMusicMiniPlayback() {
     paused,
     currentTime,
     duration,
-    isLooping,
+    loopMode,
     shuffled,
     direction,
     layers,
@@ -497,8 +631,8 @@ export function useMusicMiniPlayback() {
     manualQueue,
     playingFromManualQueue,
     manualQueueContextIndex,
-    hasPrev: hasMusicPrevTrack(advanceState, currentTime),
-    hasNext: hasMusicNextTrack(advanceState),
+    hasPrev: hasMusicPrevTrack(advanceState, currentTime, advanceLoopOpts),
+    hasNext: hasMusicNextTrack(advanceState, advanceLoopOpts),
     togglePlay,
     seekPct,
     skipNext,

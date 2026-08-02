@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
 import type { DynamicIslandContent } from "./DynamicIsland";
+import { loopModeAriaLabel, loopModeIcon } from "@/playbackLoopStorage";
 import { HoverMarqueeText } from "@/components/music/HoverMarqueeText";
 import { IslandVolumeControl } from "./IslandVolumeControl";
 import { IslandWaveformHoverSlot } from "./IslandWaveformHoverSlot";
@@ -475,12 +476,12 @@ export function IslandExpandedContent({
                   <span className="shrink-0" aria-hidden />
                 )}
                 <IslandIconButton
-                  label={content.isLooping ? "Loop on" : "Loop off"}
-                  active={content.isLooping}
+                  label={loopModeAriaLabel(content.loopMode)}
+                  active={content.loopMode !== "off"}
                   onClick={onToggleLoop}
                 >
                   <Icon
-                    icon={content.isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"}
+                    icon={loopModeIcon(content.loopMode)}
                     width={15}
                     height={15}
                   />

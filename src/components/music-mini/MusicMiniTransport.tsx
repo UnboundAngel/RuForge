@@ -1,10 +1,12 @@
 import { Play, SkipForward, SkipBack, Shuffle, Repeat, Repeat1 } from "lucide-react";
+import type { LoopMode } from "@/playbackLoopStorage";
+import { loopModeAriaLabel } from "@/playbackLoopStorage";
 import { cn } from "@/lib/utils";
 
 type Props = {
   isPlaying: boolean;
   shuffled: boolean;
-  isLooping: boolean;
+  loopMode: LoopMode;
   hasPrev: boolean;
   hasNext: boolean;
   onToggle: () => void;
@@ -17,7 +19,7 @@ type Props = {
 export function MusicMiniTransport({
   isPlaying,
   shuffled,
-  isLooping,
+  loopMode,
   hasPrev,
   hasNext,
   onToggle,
@@ -82,12 +84,16 @@ export function MusicMiniTransport({
         type="button"
         className={cn(
           "transition-colors duration-200",
-          isLooping ? "rf-mm-control-active" : "text-gray-500 hover:text-white",
+          loopMode !== "off" ? "rf-mm-control-active" : "text-gray-500 hover:text-white",
         )}
         onClick={onLoop}
-        aria-label="Loop"
+        aria-label={loopModeAriaLabel(loopMode)}
       >
-        {isLooping ? <Repeat1 size={18} strokeWidth={2.5} /> : <Repeat size={18} strokeWidth={2.5} />}
+        {loopMode === "one" ? (
+          <Repeat1 size={18} strokeWidth={2.5} />
+        ) : (
+          <Repeat size={18} strokeWidth={2.5} />
+        )}
       </button>
     </div>
   );

@@ -113,7 +113,7 @@ export function applyDesktopIslandControl(control: DesktopIslandControl): void {
       st.setMuted(control.muted);
       return;
     case "loop":
-      st.setLooping(!st.isLooping);
+      st.cycleLoopMode();
       return;
     case "openPlayer": {
       const file = st.playingFile;

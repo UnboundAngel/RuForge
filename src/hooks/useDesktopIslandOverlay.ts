@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef } from "react";
 
+import type { LoopMode } from "@/playbackLoopStorage";
 import { primaryArtist, rawArtistFromFile } from "@/components/music/musicArtist";
 import { useCurrentActivity } from "@/hooks/useCurrentActivity";
 import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
@@ -49,7 +50,7 @@ function buildDesktopIslandPayload(
   settingsAccent: string,
   volume: number,
   isMuted: boolean,
-  isLooping: boolean,
+  loopMode: LoopMode,
 ): DesktopIslandStatePayload | null {
   if (
     !activity.hasSession ||
@@ -97,7 +98,7 @@ function buildDesktopIslandPayload(
       canSeek: Boolean(playback?.seek) && liveDuration > 0,
       isMuted,
       volume,
-      isLooping,
+      loopMode,
     },
   };
 }
@@ -124,7 +125,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
   const activity = useCurrentActivity();
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
-  const isLooping = useRuforgeStore((s) => s.isLooping);
+  const loopMode = useRuforgeStore((s) => s.loopMode);
   const settingsAccent = useRuforgeStore((s) =>
     typeof s.settings.accentColor === "string" ? s.settings.accentColor : "#EDCF9B",
   );
@@ -139,11 +140,11 @@ export function useDesktopIslandOverlay(enabled: boolean) {
 
   const volumeRef = useRef(volume);
   const mutedRef = useRef(isMuted);
-  const loopingRef = useRef(isLooping);
+  const loopModeRef = useRef(loopMode);
   const accentRef = useRef(settingsAccent);
   volumeRef.current = volume;
   mutedRef.current = isMuted;
-  loopingRef.current = isLooping;
+  loopModeRef.current = loopMode;
   accentRef.current = settingsAccent;
 
   useEffect(() => {
@@ -215,7 +216,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
         accentRef.current,
         volumeRef.current,
         mutedRef.current,
-        loopingRef.current,
+        loopModeRef.current,
       );
       const want = mainAway && raw != null;
 
@@ -303,7 +304,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       settingsAccent,
       volume,
       isMuted,
-      isLooping,
+      loopMode,
     );
     if (raw == null) {
       if (shownRef.current) {
@@ -325,5 +326,5 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       return;
     }
     void pushDesktopIslandState(payload).catch(() => {});
-  }, [enabled, activity, settingsAccent, volume, isMuted, isLooping]);
+  }, [enabled, activity, settingsAccent, volume, isMuted, loopMode]);
 }

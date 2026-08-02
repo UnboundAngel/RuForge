@@ -12,11 +12,15 @@ import { buildMultiTrackAlbumGroups, resolveDisplayAlbum } from "./musicShelfDed
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { resolveLikedFiles } from "./musicLikedTracks";
 import { MusicProfileView } from "./MusicProfileView";
 import { LikedSongsCover } from "./LikedSongsCover";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
+
+const LIKED_SOURCE = musicQueueSource("liked", "Liked Songs");
+const LIBRARY_SOURCE = musicQueueSource("library", "Library");
 
 type LibTab = "songs" | "albums" | "artists" | "liked" | "stats";
 
@@ -192,7 +196,7 @@ function ArtistRow({ artist, trackCount, onClick, onContextMenu }: ArtistRowProp
 }
 
 type Props = {
-  onPlayFile: (file: MediaFile, playlist: MediaFile[]) => void;
+  onPlayFile: (file: MediaFile, playlist: MediaFile[], source: MusicQueueSource) => void;
   onOpenArtist: (artistKey: string) => void;
   onOpenAlbum: (artistKey: string, albumKey: string) => void;
 };
@@ -304,7 +308,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                     <div className="flex items-center gap-2 mt-3">
                       <button
                         type="button"
-                        onClick={() => onPlayFile(likedTracks[0]!, likedTracks)}
+                        onClick={() => onPlayFile(likedTracks[0]!, likedTracks, LIKED_SOURCE)}
                         className="flex items-center gap-2 px-4 py-1.5 text-sm font-semibold transition-opacity hover:opacity-80"
                         style={{ background: "var(--music-accent)", color: "#fff", borderRadius: 12 }}
                       >
@@ -318,7 +322,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                             likedKeys: musicLikedKeys,
                             seed: Date.now() & 0xffffffff,
                           });
-                          onPlayFile(shuffled[0]!, shuffled);
+                          onPlayFile(shuffled[0]!, shuffled, LIKED_SOURCE);
                         }}
                         className="flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors hover:bg-white/10"
                         style={{ borderColor: "var(--music-border)", color: "var(--music-text-primary)" }}
@@ -334,13 +338,13 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                     file={file}
                     index={i}
                     isPlaying={playingFile?.path === file.path}
-                    onClick={() => onPlayFile(file, likedTracks)}
+                    onClick={() => onPlayFile(file, likedTracks, LIKED_SOURCE)}
                     menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
                     onContextMenu={(e) => setMenu({
                       context: { kind: "song", file },
                       x: e.clientX,
                       y: e.clientY,
-                      onPlay: () => onPlayFile(file, likedTracks),
+                      onPlay: () => onPlayFile(file, likedTracks, LIKED_SOURCE),
                     })}
                   />
                 ))}
@@ -360,13 +364,13 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                 file={file}
                 index={i}
                 isPlaying={playingFile?.path === file.path}
-                onClick={() => onPlayFile(file, sortedTracks)}
+                onClick={() => onPlayFile(file, sortedTracks, LIBRARY_SOURCE)}
                 menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
                 onContextMenu={(e) => setMenu({
                   context: { kind: "song", file },
                   x: e.clientX,
                   y: e.clientY,
-                  onPlay: () => onPlayFile(file, sortedTracks),
+                  onPlay: () => onPlayFile(file, sortedTracks, LIBRARY_SOURCE),
                 })}
               />
             ))}
@@ -395,7 +399,9 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                   context: { kind: "album", artistKey: a.artistKey, albumKey: a.albumKey, displayName: a.album, artistName: a.artist },
                   x: e.clientX,
                   y: e.clientY,
-                  onPlay: a.tracks.length > 0 ? () => onPlayFile(a.tracks[0], a.tracks) : undefined,
+                  onPlay: a.tracks.length > 0
+                    ? () => onPlayFile(a.tracks[0], a.tracks, musicQueueSource("album", a.album))
+                    : undefined,
                 })}
               />
               );
@@ -420,7 +426,9 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                   context: { kind: "artist", artistKey: a.key, displayName: a.display },
                   x: e.clientX,
                   y: e.clientY,
-                  onPlay: a.tracks.length > 0 ? () => onPlayFile(a.tracks[0], a.tracks) : undefined,
+                  onPlay: a.tracks.length > 0
+                    ? () => onPlayFile(a.tracks[0], a.tracks, musicQueueSource("artist", a.display))
+                    : undefined,
                 })}
               />
             ))}

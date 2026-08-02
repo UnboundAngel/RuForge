@@ -39,7 +39,16 @@ import {
   writePlaybackPos,
   getPlaybackThumbnailBar,
 } from "./playbackStorage";
-import { readLoopForPath, writeLoopForPath } from "./playbackLoopStorage";
+import {
+  type LoopMode,
+  cycleLoopMode,
+  loopModeAriaLabel,
+  loopModeIcon,
+  readLoopModeForPath,
+  resolveLoopModeForPlay,
+  writeLoopModeForPath,
+} from "./playbackLoopStorage";
+import { readInitialPlayerLoopModeFromLs, writePlayerLoopModeToLs } from "./store/types";
 import { readPlaybackSpeed, writePlaybackSpeed } from "./playbackSpeedStorage";
 import { extractProminentColorFromPath, hexIsNearBlackOrWhite } from "./prominentColor";
 import { useVideoAmbientBackdrop } from "./useVideoAmbientBackdrop";
@@ -576,7 +585,7 @@ export default function MiniPlayer() {
   const libraryPosterBackfillEpochRef = useRef(0);
   const [isGalleryHovered, setIsGalleryHovered] = useState(false);
   const [, setIsFocused] = useState(true);
-  const [isLooping, setIsLooping] = useState(false);
+  const [loopMode, setLoopMode] = useState<LoopMode>(() => readInitialPlayerLoopModeFromLs());
   const [isShuffling, setIsShuffling] = useState(false);
   const [isMediaSelectorOpen, setIsMediaSelectorOpen] = useState(false);
 
@@ -955,11 +964,16 @@ export default function MiniPlayer() {
 
   useEffect(() => {
     if (!playingFile) {
-      setIsLooping(false);
+      setLoopMode(readInitialPlayerLoopModeFromLs());
       return;
     }
-    setIsLooping(readLoopForPath(playingFile.path));
+    const session = readInitialPlayerLoopModeFromLs();
+    setLoopMode(resolveLoopModeForPlay(readLoopModeForPath(playingFile.path), session));
   }, [playingFile?.path]);
+
+  useEffect(() => {
+    if (mediaRef.current) mediaRef.current.loop = loopMode === "one";
+  }, [loopMode, playingFile?.path]);
 
   useVideoAmbientBackdrop(
     mediaRef as React.RefObject<HTMLVideoElement | null>,
@@ -1049,7 +1063,8 @@ export default function MiniPlayer() {
     handoffPausedRef.current = payload.paused ?? false;
     setPlayingFile(payload.file);
     if (payload.navMode) setMiniNavMode(payload.navMode);
-    setIsLooping(readLoopForPath(payload.file.path));
+    const session = readInitialPlayerLoopModeFromLs();
+    setLoopMode(resolveLoopModeForPlay(readLoopModeForPath(payload.file.path), session));
     incrementViewCount(payload.file);
     void emit("stop-playback", "mini-player");
     getCurrentWindow().setFocus().catch(console.error);
@@ -1501,6 +1516,24 @@ export default function MiniPlayer() {
     return suggestions;
   }, [playingFile, videoPlaylistMini]);
 
+  const wrapFolderNext = useCallback((): MediaFile | null => {
+    const playlist = playingAudioOnly ? audioPlaylistMini : videoPlaylistMini;
+    if (!playingFile || playlist.length < 2) return null;
+    const idx = playlist.findIndex((p) => p.path === playingFile.path);
+    if (idx < 0) return null;
+    return playlist[(idx + 1) % playlist.length] ?? null;
+  }, [playingFile, playingAudioOnly, audioPlaylistMini, videoPlaylistMini]);
+
+  const cycleLoop = useCallback(() => {
+    setLoopMode((prev) => {
+      const next = cycleLoopMode(prev);
+      if (playingFile) writeLoopModeForPath(playingFile.path, next);
+      writePlayerLoopModeToLs(next);
+      if (mediaRef.current) mediaRef.current.loop = next === "one";
+      return next;
+    });
+  }, [playingFile]);
+
   const incrementViewCount = (file: MediaFile) => {
     const saved = localStorage.getItem(`views-${file.path}`);
     const current = saved ? parseInt(saved) : 0;
@@ -1550,10 +1583,13 @@ export default function MiniPlayer() {
 
   const handleVideoPlaybackEnded = () => {
     if (!playingFile || playingAudioOnly) return;
-    if (isLooping && mediaRef.current) {
-      mediaRef.current.currentTime = 0;
-      void mediaRef.current.play().catch(() => {});
-      return;
+    if (loopMode === "one") return;
+    if (loopMode === "all") {
+      const next = wrapFolderNext();
+      if (next) {
+        handleSelectMedia(next);
+        return;
+      }
     }
     const v = mediaRef.current;
     if (v && isFinite(v.duration) && v.duration > 0) {
@@ -1608,16 +1644,16 @@ export default function MiniPlayer() {
   }, [playingFile?.path]);
 
   useEffect(() => {
-    if (isLooping) {
+    if (loopMode !== "off") {
       setEndScreen(null);
       setEndDimOpacity(0);
       setEndCardHovered(false);
       endFadeGainRef.current = 1;
     }
-  }, [isLooping]);
+  }, [loopMode]);
 
   useEffect(() => {
-    if (!playingFile || playingAudioOnly || isLooping) {
+    if (!playingFile || playingAudioOnly || loopMode !== "off") {
       if (endFadeGainRef.current !== 1) {
         endFadeGainRef.current = 1;
         applyVideoOutputWithFade();
@@ -1676,7 +1712,7 @@ export default function MiniPlayer() {
   }, [
     playingFile,
     playingAudioOnly,
-    isLooping,
+    loopMode,
     duration,
     currentTime,
     endScreen,
@@ -2004,10 +2040,13 @@ export default function MiniPlayer() {
                     }
                     onLoadedMetadata={(e) => applyInitialMediaSeek(e.currentTarget)}
                     onEnded={() => {
-                      if (isLooping && mediaRef.current) {
-                        mediaRef.current.currentTime = 0;
-                        void mediaRef.current.play().catch(() => {});
-                        return;
+                      if (loopMode === "one") return;
+                      if (loopMode === "all") {
+                        const next = wrapFolderNext();
+                        if (next) {
+                          handleSelectMedia(next);
+                          return;
+                        }
                       }
                       const v = mediaRef.current;
                       if (playingFile && v && isFinite(v.duration) && v.duration > 0) {
@@ -2269,25 +2308,20 @@ export default function MiniPlayer() {
                             <button onClick={() => seek(15)} className="text-stone-400 transition" onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent)'} onMouseLeave={(e) => e.currentTarget.style.color = ''}><Icon icon="tabler:rewind-forward-15" width={isMini ? 16 : 22} /></button>
                           </Tooltip>
 
-                          <Tooltip text={isLooping ? "Disable Loop" : "Enable Loop"} disabled={isSmallMode}>
+                          <Tooltip text={loopModeAriaLabel(loopMode)} disabled={isSmallMode}>
                             <button 
-                              onClick={() => {
-                                const nextLoop = !isLooping;
-                                setIsLooping(nextLoop);
-                                if (playingFile) writeLoopForPath(playingFile.path, nextLoop);
-                                if (mediaRef.current) mediaRef.current.loop = nextLoop;
-                              }} 
-                              className={`transition-all p-1 rounded-lg ${isLooping ? 'text-[color:var(--accent)] bg-[color:var(--accent)]/10' : 'text-stone-400 hover:text-white'}`}
+                              onClick={cycleLoop}
+                              className={`transition-all p-1 rounded-lg ${loopMode !== "off" ? 'text-[color:var(--accent)] bg-[color:var(--accent)]/10' : 'text-stone-400 hover:text-white'}`}
                             >
                               <AnimatePresence mode="wait" initial={false}>
                                 <motion.div
-                                  key={isLooping ? "looping" : "not-looping"}
+                                  key={loopMode}
                                   initial={{ opacity: 0, rotate: -20, scale: 0.8 }}
                                   animate={{ opacity: 1, rotate: 0, scale: 1 }}
                                   exit={{ opacity: 0, rotate: 20, scale: 0.8 }}
                                   transition={{ duration: 0.15 }}
                                 >
-                                  <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={isMini ? 16 : 20} />
+                                  <Icon icon={loopModeIcon(loopMode)} width={isMini ? 16 : 20} />
                                 </motion.div>
                               </AnimatePresence>
                             </button>
@@ -2432,24 +2466,19 @@ export default function MiniPlayer() {
                           <Icon icon="tabler:rewind-forward-15" width={winSize.width < 380 ? 18 : 22} />
                         </button>
                         <button 
-                          onClick={() => {
-                            const next = !isLooping;
-                            setIsLooping(next);
-                            if (playingFile) writeLoopForPath(playingFile.path, next);
-                            if (mediaRef.current) mediaRef.current.loop = next;
-                          }} 
-                          className={`transition-all p-1 rounded-lg active:scale-90 ${isLooping ? 'bg-[color:var(--accent)]/20' : 'opacity-40 hover:opacity-100'}`}
-                          title={isLooping ? "Disable Loop" : "Enable Loop"}
+                          onClick={cycleLoop}
+                          className={`transition-all p-1 rounded-lg active:scale-90 ${loopMode !== "off" ? 'bg-[color:var(--accent)]/20' : 'opacity-40 hover:opacity-100'}`}
+                          title={loopModeAriaLabel(loopMode)}
                         >
                           <AnimatePresence mode="wait" initial={false}>
                             <motion.div
-                              key={isLooping ? "looping-small" : "not-looping-small"}
+                              key={loopMode}
                               initial={{ opacity: 0, rotate: -20, scale: 0.8 }}
                               animate={{ opacity: 1, rotate: 0, scale: 1 }}
                               exit={{ opacity: 0, rotate: 20, scale: 0.8 }}
                               transition={{ duration: 0.15 }}
                             >
-                              <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={winSize.width < 380 ? 16 : 20} />
+                              <Icon icon={loopModeIcon(loopMode)} width={winSize.width < 380 ? 16 : 20} />
                             </motion.div>
                           </AnimatePresence>
                         </button>
@@ -2587,16 +2616,11 @@ export default function MiniPlayer() {
 
                         {/* 5. Loop */}
                         <button 
-                          onClick={() => {
-                            const next = !isLooping;
-                            setIsLooping(next);
-                            if (playingFile) writeLoopForPath(playingFile.path, next);
-                            if (mediaRef.current) mediaRef.current.loop = next;
-                          }} 
-                          className={`relative z-10 transition-all p-1 active:scale-90 flex items-center justify-center ${controlBtnSize} shrink-0 ${isLooping ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
-                          title={isLooping ? "Disable Loop" : "Enable Loop"}
+                          onClick={cycleLoop}
+                          className={`relative z-10 transition-all p-1 active:scale-90 flex items-center justify-center ${controlBtnSize} shrink-0 ${loopMode !== "off" ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
+                          title={loopModeAriaLabel(loopMode)}
                         >
-                          <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={controlIconWidth} />
+                          <Icon icon={loopModeIcon(loopMode)} width={controlIconWidth} />
                         </button>
                       </div>
 
@@ -2865,17 +2889,12 @@ export default function MiniPlayer() {
                               {/* Loop */}
                               {winSize.width >= 250 && (
                                 <button 
-                                  onClick={() => {
-                                    const next = !isLooping;
-                                    setIsLooping(next);
-                                    if (playingFile) writeLoopForPath(playingFile.path, next);
-                                    if (mediaRef.current) mediaRef.current.loop = next;
-                                  }} 
+                                  onClick={cycleLoop}
                                   className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all active:scale-90
-                                    ${isLooping ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
-                                  title={isLooping ? "Disable Loop" : "Enable Loop"}
+                                    ${loopMode !== "off" ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
+                                  title={loopModeAriaLabel(loopMode)}
                                 >
-                                  <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={14} />
+                                  <Icon icon={loopModeIcon(loopMode)} width={14} />
                                 </button>
                               )}
                             </div>

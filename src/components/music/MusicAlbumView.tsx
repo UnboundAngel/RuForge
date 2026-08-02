@@ -11,6 +11,7 @@ import { artistKeyFromFile, primaryArtist, rawArtistFromFile } from "./musicArti
 import { albumKeyFromFile, resolveDisplayAlbum } from "./musicShelfDedup";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 
@@ -79,7 +80,7 @@ function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: 
 type Props = {
   artistKey: string;
   albumKey: string;
-  onPlayFile: (file: MediaFile, playlist: MediaFile[]) => void;
+  onPlayFile: (file: MediaFile, playlist: MediaFile[], source: MusicQueueSource) => void;
   onOpenArtist: (artistKey: string) => void;
   onBack: () => void;
 };
@@ -135,6 +136,8 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
 
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
 
+  const albumSource = musicQueueSource("album", displayAlbum);
+
   const handleShuffle = () => {
     if (tracks.length === 0) return;
     const shuffled = buildSmartShuffleOrder({
@@ -142,7 +145,7 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
       likedKeys: musicLikedKeys,
       seed: Date.now() & 0xffffffff,
     });
-    onPlayFile(shuffled[0]!, shuffled);
+    onPlayFile(shuffled[0]!, shuffled, albumSource);
   };
 
   return (
@@ -219,7 +222,7 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
       <div className="flex items-center gap-3 px-5 py-3 shrink-0">
         <button
           type="button"
-          onClick={() => onPlayFile(tracks[0], tracks)}
+          onClick={() => onPlayFile(tracks[0], tracks, albumSource)}
           className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-opacity hover:opacity-80"
           style={{ background: "var(--music-accent)", color: "#fff" }}
           disabled={tracks.length === 0}
@@ -248,13 +251,13 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
               file={file}
               index={i}
               isPlaying={playingFile?.path === file.path}
-              onClick={() => onPlayFile(file, tracks)}
+              onClick={() => onPlayFile(file, tracks, albumSource)}
               menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
               onContextMenu={(e) => setMenu({
                 context: { kind: "song", file },
                 x: e.clientX,
                 y: e.clientY,
-                onPlay: () => onPlayFile(file, tracks),
+                onPlay: () => onPlayFile(file, tracks, albumSource),
               })}
             />
           ))

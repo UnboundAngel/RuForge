@@ -28,6 +28,7 @@ import { useScrubberThumbs } from "../useScrubberThumbs";
 import { useScrubberHover } from "../hooks/useScrubberHover";
 import { readResumeSeconds, writePlaybackPos } from "../playbackStorage";
 import { readPlaybackSpeed, writePlaybackSpeed } from "../playbackSpeedStorage";
+import { loopModeAriaLabel, loopModeIcon } from "../playbackLoopStorage";
 import { useVideoAmbientBackdrop } from "../useVideoAmbientBackdrop";
 import {
   readAudioAutoAdvanceFolder,
@@ -172,11 +173,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
-  const isLooping = useRuforgeStore((s) => s.isLooping);
+  const loopMode = useRuforgeStore((s) => s.loopMode);
   const setVolume = useRuforgeStore((s) => s.setVolume);
   const setMuted = useRuforgeStore((s) => s.setMuted);
-  const setLooping = useRuforgeStore((s) => s.setLooping);
+  const cycleLoopMode = useRuforgeStore((s) => s.cycleLoopMode);
   const setPlayingFile = useRuforgeStore((s) => s.setPlayingFile);
+  const setMusicQueueSource = useRuforgeStore((s) => s.setMusicQueueSource);
   const handlePopOutFromStore = useRuforgeStore((s) => s.handlePopOut);
   const playerResumeAt = useRuforgeStore((s) => s.playerResumeAt);
   const clearPlayerResumeAt = useRuforgeStore((s) => s.clearPlayerResumeAt);
@@ -445,13 +447,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   }, [file.path]);
 
   useEffect(() => {
-    if (isLooping) {
+    if (loopMode !== "off") {
       setEndScreen(null);
       setEndDimOpacity(0);
       setEndCardHovered(false);
       endFadeGainRef.current = 1;
     }
-  }, [isLooping]);
+  }, [loopMode]);
 
   const applyVideoOutputWithFade = useCallback(() => {
     if (audioDelegated) return;
@@ -478,9 +480,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       setEndDimOpacity(0);
       setEndCardHovered(false);
       endFadeGainRef.current = 1;
+      setMusicQueueSource(null);
       setPlayingFile(next);
     },
-    [setPlayingFile],
+    [setMusicQueueSource, setPlayingFile],
   );
 
   const handleEndScreenCancelTimer = useCallback(() => {
@@ -543,8 +546,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     const el = mediaRef.current;
     if (!el) return;
     applyMediaOutputState(el, volume * endFadeGainRef.current, isMuted);
-    el.loop = isLooping;
-  }, [file.path, volume, isMuted, isLooping]);
+    el.loop = loopMode === "one";
+  }, [file.path, volume, isMuted, loopMode]);
 
   // Sync playback speed (preservesPitch reduces time-stretch artifacts when rate ≠ 1)
   useEffect(() => {
@@ -600,7 +603,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   }, [volume, isMuted]);
 
   useEffect(() => {
-    if (audioOnly || isLooping) {
+    if (audioOnly || loopMode !== "off") {
       if (endFadeGainRef.current !== 1) {
         endFadeGainRef.current = 1;
         applyVideoOutputWithFade();
@@ -658,7 +661,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
   }, [
     audioOnly,
-    isLooping,
+    loopMode,
     duration,
     currentTime,
     endScreen,
@@ -669,12 +672,21 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   ]);
 
   const handlePlaybackEnded = useCallback(() => {
-    if (isLooping) return;
+    if (loopMode === "one") return;
     const m = mediaRef.current;
     if (m && isFinite(m.duration) && m.duration > 0) {
       writePlaybackPos(file.path, m.duration, m.duration);
     }
     if (!audioOnly) {
+      if (loopMode === "all") {
+        const vi = videoLibrarySorted.findIndex((f) => f.path === file.path);
+        if (vi >= 0 && videoLibrarySorted.length > 0) {
+          setPlayingFile(videoLibrarySorted[(vi + 1) % videoLibrarySorted.length]!);
+          return;
+        }
+        setIsPaused(true);
+        return;
+      }
       const suggestions = ensureEndSuggestions();
       endFadeGainRef.current = 0;
       applyVideoOutputWithFade();
@@ -694,13 +706,20 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       });
       return;
     }
+    const advanceTo = (nextFile: MediaFile) => {
+      setPlayingFile(nextFile);
+    };
+    if (loopMode === "all") {
+      const idx = folderAudioPlaylist.findIndex((f) => f.path === file.path);
+      if (idx >= 0 && folderAudioPlaylist.length > 0) {
+        advanceTo(folderAudioPlaylist[(idx + 1) % folderAudioPlaylist.length]!);
+        return;
+      }
+    }
     if (!readAudioAutoAdvanceFolder()) {
       setIsPaused(true);
       return;
     }
-    const advanceTo = (nextFile: MediaFile) => {
-      setPlayingFile(nextFile);
-    };
     const idx = folderAudioPlaylist.findIndex((f) => f.path === file.path);
     const folderNeighbor =
       idx >= 0 && idx < folderAudioPlaylist.length - 1 ? folderAudioPlaylist[idx + 1] : null;
@@ -716,11 +735,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
     setIsPaused(true);
   }, [
-    isLooping,
+    loopMode,
     file.path,
     audioOnly,
     folderAudioPlaylist,
     audioLibrarySorted,
+    videoLibrarySorted,
     ensureEndSuggestions,
     applyVideoOutputWithFade,
     setPlayingFile,
@@ -1079,8 +1099,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
           toggleFullscreen();
           break;
         case "KeyL": {
-          const l = useRuforgeStore.getState().isLooping;
-          setLooping(!l);
+          useRuforgeStore.getState().cycleLoopMode();
           break;
         }
       }
@@ -1097,7 +1116,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     changeVolume,
     setMuted,
     toggleFullscreen,
-    setLooping,
   ]);
 
   const handleSeeked = useCallback(() => {
@@ -1601,7 +1619,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                   onPause={() => setIsPaused(true)}
                   onPlay={() => setIsPaused(false)}
                   onEnded={() => {
-                    if (!isLooping) handlePlaybackEnded();
+                    if (loopMode !== "one") handlePlaybackEnded();
                   }}
                 />
                 {prefetchNextEnabled && nextInFolder && (
@@ -1678,7 +1696,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                   registerVideoMediaIfActive(mediaRef.current);
                 }}
                 onEnded={() => {
-                  if (!isLooping) handlePlaybackEnded();
+                  if (loopMode !== "one") handlePlaybackEnded();
                 }}
                 onClick={togglePlay}
                 onDoubleClick={toggleFullscreen}
@@ -2019,13 +2037,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 </div>
 
                 <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-                  <Tooltip text={isLooping ? "Loop on" : "Loop off"}>
+                  <Tooltip text={loopModeAriaLabel(loopMode)}>
                     <button
                       type="button"
-                      onClick={() => setLooping(!isLooping)}
-                      className={`${playerBarBtnClass} ${isLooping ? "text-[color:var(--accent)] bg-white/10" : ""}`}
+                      onClick={() => cycleLoopMode()}
+                      className={`${playerBarBtnClass} ${loopMode !== "off" ? "text-[color:var(--accent)] bg-white/10" : ""}`}
                     >
-                      <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={16} height={16} />
+                      <Icon icon={loopModeIcon(loopMode)} width={16} height={16} />
                     </button>
                   </Tooltip>
                   <div className="relative">

@@ -13,6 +13,7 @@ import { MusicAlbumShelf } from "./MusicAlbumShelf";
 import { MusicQuickPickRow } from "./MusicQuickPickRow";
 import { MusicRecentPlaylistCard } from "./MusicRecentPlaylistCard";
 import type { MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 
 type RecentTab = "added" | "listened";
 
@@ -20,7 +21,7 @@ type Props = {
   tracks: MediaFile[];
   historyEntries: PlayHistoryEntry[];
   quickPicks: MediaFile[];
-  onPlayFile: (file: MediaFile, playlist?: MediaFile[]) => void;
+  onPlayFile: (file: MediaFile, playlist?: MediaFile[], source?: MusicQueueSource | null) => void;
   onOpenAlbum: (artistKey: string, albumKey: string) => void;
   onPlayQuickPicks: () => void;
   setMenu: (menu: MusicRowContextMenuState | null) => void;
@@ -164,13 +165,21 @@ export function MusicHomeRecentSection({
                       key={pl.folderKey}
                       title={pl.title}
                       tracks={pl.tracks}
-                      onClick={() => onPlayFile(pl.tracks[0]!, pl.tracks)}
+                      onClick={() => onPlayFile(
+                        pl.tracks[0]!,
+                        pl.tracks,
+                        musicQueueSource("playlist", pl.title),
+                      )}
                       onContextMenu={(e) =>
                         setMenu({
                           context: { kind: "song", file: pl.tracks[0]! },
                           x: e.clientX,
                           y: e.clientY,
-                          onPlay: () => onPlayFile(pl.tracks[0]!, pl.tracks),
+                          onPlay: () => onPlayFile(
+                            pl.tracks[0]!,
+                            pl.tracks,
+                            musicQueueSource("playlist", pl.title),
+                          ),
                         })
                       }
                     />
@@ -188,13 +197,21 @@ export function MusicHomeRecentSection({
                         file={file}
                         variant="glass"
                         menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
-                        onClick={() => onPlayFile(file, [file])}
+                        onClick={() => onPlayFile(
+                          file,
+                          [file],
+                          musicQueueSource("track", file.name),
+                        )}
                         onContextMenu={(e) =>
                           setMenu({
                             context: { kind: "song", file },
                             x: e.clientX,
                             y: e.clientY,
-                            onPlay: () => onPlayFile(file, [file]),
+                            onPlay: () => onPlayFile(
+                              file,
+                              [file],
+                              musicQueueSource("track", file.name),
+                            ),
                           })
                         }
                       />
@@ -232,7 +249,11 @@ export function MusicHomeRecentSection({
                             y: e.clientY,
                             onPlay:
                               a.tracks.length > 0
-                                ? () => onPlayFile(a.tracks[0]!, a.tracks)
+                                ? () => onPlayFile(
+                                    a.tracks[0]!,
+                                    a.tracks,
+                                    musicQueueSource("album", a.album),
+                                  )
                                 : undefined,
                           })
                         }
@@ -256,13 +277,21 @@ export function MusicHomeRecentSection({
                       variant="glass"
                       metaLabel={formatRelativePlayed(playedAt)}
                       menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
-                      onClick={() => onPlayFile(file, listened.map((x) => x.file))}
+                      onClick={() => onPlayFile(
+                        file,
+                        listened.map((x) => x.file),
+                        musicQueueSource("recent", "Recently listened"),
+                      )}
                       onContextMenu={(e) =>
                         setMenu({
                           context: { kind: "song", file },
                           x: e.clientX,
                           y: e.clientY,
-                          onPlay: () => onPlayFile(file, listened.map((x) => x.file)),
+                          onPlay: () => onPlayFile(
+                            file,
+                            listened.map((x) => x.file),
+                            musicQueueSource("recent", "Recently listened"),
+                          ),
                         })
                       }
                     />

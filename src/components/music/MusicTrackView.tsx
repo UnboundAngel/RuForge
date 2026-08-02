@@ -14,6 +14,7 @@ import { openInFileManager } from "@/openInFileManager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { canonicalYouTubeWatchUrl } from "@/youtubeUrl";
 import { MusicTrackCredits } from "./MusicTrackCredits";
+import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 
 function resolveYoutubeWatchUrl(file: MediaFile, meta?: MusicMetaSidecar): string | null {
   for (const candidate of [meta?.youtube?.sourceUrl, file.sourceUrl]) {
@@ -32,7 +33,7 @@ function resolveYoutubeWatchUrl(file: MediaFile, meta?: MusicMetaSidecar): strin
 
 type Props = {
   path: string;
-  onPlayFile: (file: MediaFile, playlist: MediaFile[]) => void;
+  onPlayFile: (file: MediaFile, playlist: MediaFile[], source: MusicQueueSource) => void;
   onOpenArtist: (artistKey: string) => void;
   onOpenAlbum: (artistKey: string, albumKey: string) => void;
   onBack: () => void;
@@ -259,7 +260,7 @@ export function MusicTrackView({
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-[2px]">
               <button
                 type="button"
-                onClick={() => onPlayFile(file, [file])}
+                onClick={() => onPlayFile(file, [file], musicQueueSource("track", file.name))}
                 className="w-24 h-24 flex items-center justify-center rounded-full bg-[var(--music-accent)] text-white hover:scale-110 active:scale-95 transition-transform duration-200"
               >
                 <Play size={36} fill="currentColor" className="ml-2" />
@@ -307,7 +308,7 @@ export function MusicTrackView({
             <div className="flex items-center gap-6 animate-fade-in" style={{ animationDelay: '200ms', animationFillMode: 'both' }}>
               <button
                 type="button"
-                onClick={() => onPlayFile(file, [file])}
+                onClick={() => onPlayFile(file, [file], musicQueueSource("track", file.name))}
                 className="px-6 py-2.5 rounded-full bg-white text-black font-bold text-sm hover:scale-105 active:scale-95 transition-transform flex items-center gap-2"
               >
                 <Play size={16} fill="currentColor" />

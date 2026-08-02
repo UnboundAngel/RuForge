@@ -12,6 +12,7 @@ import { MusicLibraryView } from "./MusicLibraryView";
 import { MusicArtistView } from "./MusicArtistView";
 import { MusicAlbumView } from "./MusicAlbumView";
 import { MusicLikedView } from "./MusicLikedView";
+import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { MusicTrackView } from "./MusicTrackView";
 import { MusicProfileView } from "./MusicProfileView";
 import { MusicStatsView } from "./MusicStatsView";
@@ -249,8 +250,6 @@ export function MusicShell() {
   const closeMusicDetail = useRuforgeStore((s) => s.closeMusicDetail);
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const isMuted = useRuforgeStore((s) => s.isMuted);
-  const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
-  const setPlayingFile = useRuforgeStore((s) => s.setPlayingFile);
   const ensureGalleryOnViewMount = useRuforgeStore((s) => s.ensureGalleryOnViewMount);
   const settings = useRuforgeStore((s) => s.settings);
   const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
@@ -899,11 +898,15 @@ export function MusicShell() {
     };
   }, [exploreWebviewActive, isMainMaximized]);
 
-  const handlePlayFile = useCallback((file: MediaFile, playlist?: MediaFile[]) => {
+  const playMusicQueue = useRuforgeStore((s) => s.playMusicQueue);
+  const handlePlayFile = useCallback((
+    file: MediaFile,
+    playlist?: MediaFile[],
+    source?: MusicQueueSource | null,
+  ) => {
     setPendingListenEndReason("manual_switch");
-    setFolderAudioPlaylist(playlist ?? []);
-    setPlayingFile(file);
-  }, [setFolderAudioPlaylist, setPlayingFile]);
+    playMusicQueue(file, playlist ?? [file], source ?? null);
+  }, [playMusicQueue]);
 
   const handleBack = useCallback(() => {
     cycleNavMode();
@@ -1272,6 +1275,14 @@ export function MusicShell() {
             folderAudioPlaylist={folderAudioPlaylist}
             onSeek={playback.seek}
             onPlay={(file) => handlePlayFolderNeighbor(file)}
+            onPlayHistory={(file) => {
+              setPendingListenEndReason("manual_switch");
+              playMusicQueue(
+                file,
+                [file],
+                musicQueueSource("recent", "Recently listened"),
+              );
+            }}
             historyEntries={historyEntries}
             chapters={chapters}
             sbSegments={sbPlayback.segments}

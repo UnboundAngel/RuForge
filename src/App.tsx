@@ -68,6 +68,7 @@ import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
 import { askConfirm, ConfirmDialogHost } from "./components/ConfirmDialog";
 import { JS_RUNTIME_MISSING_PREFIX } from "./types";
 import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff";
+import { loopModeFromHandoff } from "./playerHandoff";
 import { stageHandoffListenEventId } from "./lib/musicListenSession";
 
 function miniKindFromWindowLabel(label: string): "video" | "music" | null {
@@ -284,7 +285,6 @@ function App() {
   const galleryScrollBulge = galleryScrollChrome > 0.08;
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
-  const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
   const selectedPlaylist = useRuforgeStore((s) => s.selectedPlaylist);
   const setSelectedPlaylist = useRuforgeStore((s) => s.setSelectedPlaylist);
   const [miniKind, setMiniKind] = useState<"video" | "music" | null>(initialMiniKind);
@@ -1168,6 +1168,7 @@ function App() {
     const unlisten = listen<MediaFile>("play-media", (event) => {
       const file = event.payload;
       const st = useRuforgeStore.getState();
+      st.setMusicQueueSource(null);
       st.setPlayingFile(file);
       void emit("stop-playback", "main-app");
       st.notify(`Now playing: ${file.name}`);
@@ -1181,6 +1182,7 @@ function App() {
       if (event.payload === "mini-player") {
         useRuforgeStore.setState((s) => ({
           playingFile: null,
+          musicQueueSource: null,
           activeTab: s.activeTab === "player" ? "media" : s.activeTab,
         }));
         return;
@@ -1314,6 +1316,7 @@ function App() {
       const st = useRuforgeStore.getState();
       if (typeof payload.volume === "number") st.setVolume(payload.volume);
       if (typeof payload.muted === "boolean") st.setMuted(payload.muted);
+      st.setMusicQueueSource(null);
       st.setPlayingFile(payload.file);
       st.setActiveTab("player");
       useRuforgeStore.setState({ playerResumeAt: Math.max(0, payload.currentTime) });
@@ -1340,6 +1343,9 @@ function App() {
       const st = useRuforgeStore.getState();
       if (typeof payload.volume === "number") st.setVolume(payload.volume);
       if (typeof payload.muted === "boolean") st.setMuted(payload.muted);
+      if (payload.loopMode !== undefined || typeof payload.isLooping === "boolean") {
+        st.setLoopMode(loopModeFromHandoff(payload));
+      }
       useRuforgeStore.setState({
         musicPlayerResume: {
           currentTime: Math.max(0, payload.currentTime),
@@ -1353,7 +1359,6 @@ function App() {
         ...(payload.manualQueueContextIndex !== undefined
           ? { manualQueueContextIndex: payload.manualQueueContextIndex }
           : {}),
-        ...(typeof payload.isLooping === "boolean" ? { isLooping: payload.isLooping } : {}),
       });
       st.setPlayingFile(payload.file);
       const main = await WebviewWindow.getByLabel("main");
@@ -1414,33 +1419,36 @@ function App() {
   useEffect(() => {
     let cancel = false;
     (async () => {
-      if (!playingFile?.path) {
+      const path = useRuforgeStore.getState().playingFile?.path;
+      if (!path) {
         setFolderAudioPlaylist([]);
+        useRuforgeStore.getState().setMusicQueueSource(null);
         return;
       }
 
-      // If the current file is already part of the existing playlist,
-      // don't overwrite it (this preserves manually queued playlists/shuffles)
-      const isAlreadyQueued = folderAudioPlaylist.some(f => f.path === playingFile.path);
-      if (isAlreadyQueued) return;
+      const alreadyQueued = (snap: ReturnType<typeof useRuforgeStore.getState>) =>
+        snap.folderAudioPlaylist.some((f) => f.path === path) || snap.musicEndlessExtended;
+
+      if (alreadyQueued(useRuforgeStore.getState())) return;
 
       try {
-        const itemDir = await dirname(playingFile.path);
+        const itemDir = await dirname(path);
         const bucketDir = await dirname(itemDir);
         const bucketName = bucketDir.split(/[\\/]/).pop()?.toLowerCase() ?? "";
         const BUCKET_NAMES = ["videos", "music", "movies", "shows", "playlists"];
-        // Under the bucketed layout, scan the bucket dir so siblings from other item folders are found.
-        // Under the legacy flat layout, scan the immediate parent.
         const scanDir = BUCKET_NAMES.includes(bucketName) ? bucketDir : itemDir;
         const scannedRaw = await invoke<GalleryEntry[]>("scan_dir_for_neighbors", { dir: scanDir });
         if (cancel) return;
+        const latest = useRuforgeStore.getState();
+        if (latest.playingFile?.path !== path) return;
+        if (alreadyQueued(latest)) return;
+
         const scanned = flattenGalleryScanToMediaFiles(scannedRaw);
-        
-        const isAudio = isAudioOnlyPath(playingFile.path);
+        const isAudio = isAudioOnlyPath(path);
         const neighbors = scanned
           .filter((f) => isAudioOnlyPath(f.path) === isAudio)
           .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }));
-        
+
         setFolderAudioPlaylist(neighbors);
       } catch (e) {
         console.error(e);
@@ -1450,7 +1458,7 @@ function App() {
     return () => {
       cancel = true;
     };
-  }, [playingFile?.path]); // Depend on path to trigger on song change, but we check isAlreadyQueued inside
+  }, [playingFile?.path, setFolderAudioPlaylist]);
 
   useEffect(() => {
     const unlisten = listen<string>("explorer-url", (event) => {
