@@ -18,7 +18,7 @@ Shipping version: 0.2.3 (unreleased)
 
 Last shipped to users: 0.2.2
 
-Last updated: 2026-08-02 (Library snapshot serve + end-screen phases in 0.2.3 tree)
+Last updated: 2026-08-02 (End-screen card layout + button polish in 0.2.3 tree)
 
 Status: 0.2.2 live on GitHub and updater.json. Downloader paste no longer flashes; soft library-duplicate warning on URL entry; every enqueue path shares the Download-click duplicate gate. Library incremental remove/upsert (no full rescan on delete or download success). Pre-spawn inspect timeout with kill-on-timeout; watchdog armed before start; auto-clear start failures only for approval auto. OBS Window Capture uses class `RuForge_Chrome_WidgetWin` for WGC. Headless `media_engine` crate backs inspect/download. Browser Companion remains developer-gated on localhost.
 
@@ -69,7 +69,7 @@ reads this for the last shipped delta, not the git tree.
 **0.2.3 (unreleased, in tree):**
 
 - Library: `get_library_snapshot` serves the published desktop projection when ready and Companion probe no longer holds the reindex lock; cold open single-flights the gallery fetch; paints after disk walk; cleanup Delete selected confirm is visible above the modal with per-item progress and incremental removes (no full rescan after delete).
-- Player: YouTube-style end flow (cards at T-15s, fade at T-5s, single Up next with Cancel / Play now) on main and mini; unwatched-first suggestions. Chapter scrubber knob tracks the pointer again (no double horizontal translate).
+- Player: YouTube-style end flow (larger lower-third cards at T-15s, light hover dim, fade at T-5s, compact Up next with gray Cancel / Play now) on main and mini. Chapter scrubber knob tracks the pointer again (no double horizontal translate).
 
 
 
