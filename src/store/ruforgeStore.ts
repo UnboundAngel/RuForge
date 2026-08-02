@@ -109,7 +109,13 @@ export type RuforgeNotification = {
   type?: "info" | "error" | "progress" | "warning";
 };
 
-export type GalleryContextMenuState = { path: string; x: number; y: number } | null;
+export type GalleryContextMenuState = {
+  path: string;
+  x?: number;
+  y?: number;
+  /** Playlist (and legacy) floating popover. Media cards use in-card Morph instead. */
+  floating?: boolean;
+} | null;
 
 export interface RuforgeStore extends DownloadQueueSlice {
   settings: RuforgeSettings;
@@ -128,8 +134,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   activeTab: ActiveTab;
   settingsTab: SettingsTab;
   galleryFilter: GalleryFilter;
-  /** Video Library inner scroll offset (drives tab-strip chrome in App). */
-  galleryLibraryScrollTop: number;
+  /** 0–1 Video Library tab chrome reveal (throttled from MediaView scroll; not raw scrollTop). */
+  galleryScrollChrome: number;
   selectedPlaylist: PlaylistCollection | null;
   isSearchExpanded: boolean;
   searchValue: string;
@@ -295,7 +301,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setActiveTab: (tab: ActiveTab) => void;
   setSettingsTab: (tab: SettingsTab) => void;
   setGalleryFilter: (f: GalleryFilter) => void;
-  setGalleryLibraryScrollTop: (n: number) => void;
+  setGalleryScrollChrome: (n: number) => void;
   setSelectedPlaylist: (p: PlaylistCollection | null) => void;
   setIsSearchExpanded: (v: boolean | ((p: boolean) => boolean)) => void;
   setSearchValue: (v: string) => void;
@@ -488,7 +494,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       activeTab: "downloader",
       settingsTab: "general",
       galleryFilter: "all",
-      galleryLibraryScrollTop: 0,
+      galleryScrollChrome: 0,
       selectedPlaylist: null,
       isSearchExpanded: false,
       searchValue: "",
@@ -1107,13 +1113,17 @@ export const useRuforgeStore = create<RuforgeStore>()(
       setActiveTab: (tab) => {
         set({
           activeTab: tab,
-          ...(tab !== "media" ? { galleryLibraryScrollTop: 0 } : {}),
+          ...(tab !== "media" ? { galleryScrollChrome: 0 } : {}),
         });
         if (tab !== "player") tryFlushDeferredScrubBackfill(get);
       },
       setSettingsTab: (tab) => set({ settingsTab: tab }),
-      setGalleryFilter: (f) => set({ galleryFilter: f, galleryLibraryScrollTop: 0 }),
-      setGalleryLibraryScrollTop: (n) => set({ galleryLibraryScrollTop: Math.max(0, n) }),
+      setGalleryFilter: (f) => set({ galleryFilter: f, galleryScrollChrome: 0 }),
+      setGalleryScrollChrome: (n) => {
+        const next = Math.min(1, Math.max(0, n));
+        if (get().galleryScrollChrome === next) return;
+        set({ galleryScrollChrome: next });
+      },
       setSelectedPlaylist: (p) => set({ selectedPlaylist: p }),
       setIsSearchExpanded: (v) =>
         set((s) => ({

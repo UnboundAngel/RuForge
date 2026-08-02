@@ -195,6 +195,7 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.3 (unreleased)
 
+- **Library**: Video Library multi-column grid with date groups, hover card shell, Morph ⋯ menu over the media, and scroll-linked tab chrome (no full-gallery re-render on scroll). Vite ignores `STATE.md` / `AGENTS.md` / docs markdown. `MediaView.tsx` / `Morph.tsx` / `App.tsx` / `vite.config.ts`
 - **Library**: `get_library_snapshot` serves the published desktop projection when ready (join in-flight, force only on invalidate/dirs/sweep); Companion probe no longer holds `reindex_lock`. `library_state.rs` / `commands.rs` / `ruforgeStore.ts`
 - **Library**: Cold Video Library open single-flights the gallery fetch so StrictMode remounts and `library-changed` cannot discard the early desktop snapshot. `galleryColdFetch.ts` / `ruforgeStore.ts` / `App.tsx`
 - **Library**: Video Library paints after the disk walk (Companion ffprobe no longer blocks the snapshot); storage cleanup confirm stacks above the fullscreen modal with delete progress and incremental gallery removes (no post-delete full rescan). `library_state.rs` / `AuthorizeCleanupModal.tsx` / `overlayZIndex.ts`
