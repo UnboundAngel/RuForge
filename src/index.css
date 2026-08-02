@@ -1335,6 +1335,10 @@ button.rf-yt-profile-pill {
   height: 0;
 }
 
+.rf-island-waveform-bar {
+  box-shadow: 0 0 0 0.5px rgb(255 255 255 / 0.35);
+}
+
 .rf-island-waveform-art-bg {
   filter: blur(5px) saturate(1.35);
   transform: scale(1.3);

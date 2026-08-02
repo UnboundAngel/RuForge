@@ -42,11 +42,11 @@ export const ActivityIslandWaveform = memo(function ActivityIslandWaveform({
         return (
           <div
             key={i}
-            className="flex h-full w-[2.5px] items-center justify-center overflow-hidden"
-            style={{ contain: "strict" }}
+            className="flex h-full w-[2.5px] items-center justify-center overflow-visible"
+            style={{ contain: "layout style" }}
           >
             <div
-              className="w-full overflow-hidden rounded-full"
+              className="rf-island-waveform-bar w-full overflow-hidden rounded-full"
               style={{
                 height: `${height}px`,
                 transform: "translateZ(0)",
