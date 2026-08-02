@@ -34,6 +34,8 @@ import {
   readAudioPrefetchNext,
 } from "../audioPlaybackPrefs";
 import {
+  VIDEO_END_CARDS_DIM,
+  VIDEO_END_CARDS_HOVER_DIM,
   VIDEO_END_CARDS_LEAD_SEC,
   endScreenFadeGain,
   endScreenFadeProgress,
@@ -638,7 +640,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
           autoplayArmed: readAudioAutoAdvanceFolder(),
         });
       }
-      const hoverDim = endCardHovered ? 0.55 : 0.25;
+      const hoverDim = endCardHovered ? VIDEO_END_CARDS_HOVER_DIM : VIDEO_END_CARDS_DIM;
       const dim = Math.max(hoverDim, fadeProgress);
       if (endDimOpacity !== dim) setEndDimOpacity(dim);
       return;

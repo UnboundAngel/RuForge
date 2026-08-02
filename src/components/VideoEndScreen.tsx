@@ -49,7 +49,7 @@ function EndCardTile({
 }) {
   const thumb = posterSrc(file);
   const durationLabel = formatDuration(file.duration);
-  const tileW = compact ? "w-[36vw] max-w-[140px]" : "w-[min(28vw,220px)]";
+  const tileW = compact ? "w-[44vw] max-w-[220px]" : "w-[min(42vw,380px)]";
 
   return (
     <button
@@ -59,10 +59,10 @@ function EndCardTile({
       onMouseLeave={() => onHoverChange?.(false)}
       onFocus={() => onHoverChange?.(true)}
       onBlur={() => onHoverChange?.(false)}
-      className={`${tileW} group text-left rounded-xl overflow-hidden border border-white/20 bg-black/55 backdrop-blur-md shadow-xl transition-transform duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
+      className={`${tileW} group text-left rounded-2xl overflow-hidden border border-white/15 bg-black/60 backdrop-blur-md shadow-2xl transition-transform duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
         lifted
-          ? "-translate-y-3 scale-[1.04] shadow-2xl border-white/35 z-10"
-          : "hover:-translate-y-3 hover:scale-[1.04] hover:shadow-2xl hover:border-white/35 hover:z-10"
+          ? "-translate-y-4 scale-[1.03] shadow-[0_20px_48px_rgba(0,0,0,0.55)] border-white/30 z-10"
+          : "hover:-translate-y-4 hover:scale-[1.03] hover:shadow-[0_20px_48px_rgba(0,0,0,0.55)] hover:border-white/30 hover:z-10"
       }`}
     >
       <div className="relative w-full aspect-video bg-black/40">
@@ -79,18 +79,18 @@ function EndCardTile({
         )}
         {durationLabel && (
           <span
-            className={`absolute bottom-1.5 right-1.5 rounded bg-black/80 text-white font-semibold tabular-nums ${
-              compact ? "px-1 py-0.5 text-[8px]" : "px-1.5 py-0.5 text-[10px]"
+            className={`absolute bottom-2 right-2 rounded bg-black/85 text-white font-semibold tabular-nums ${
+              compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[11px]"
             }`}
           >
             {durationLabel}
           </span>
         )}
       </div>
-      <div className={compact ? "px-2 py-1.5" : "px-2.5 py-2"}>
+      <div className={compact ? "px-2.5 py-2" : "px-3.5 py-2.5"}>
         <p
           className={`text-white font-semibold leading-snug line-clamp-2 ${
-            compact ? "text-[10px]" : "text-xs"
+            compact ? "text-[11px]" : "text-sm"
           }`}
         >
           {file.name}
@@ -112,7 +112,7 @@ function CardsPhase({
   onCardHoverChange?: (hovered: boolean) => void;
 }) {
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
-  const gap = compact ? "gap-4" : "gap-10";
+  const gap = compact ? "gap-5" : "gap-12";
 
   const setHover = (path: string | null) => {
     setHoveredPath(path);
@@ -125,12 +125,14 @@ function CardsPhase({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="absolute inset-0 z-[54] flex items-center justify-center pointer-events-none"
+      className={`absolute inset-0 z-[54] flex items-end justify-center pointer-events-none ${
+        compact ? "pb-[22%]" : "pb-[18%]"
+      }`}
       aria-label="Suggested videos"
     >
       <div
-        className={`relative z-10 flex items-center justify-center pointer-events-auto ${gap} ${
-          compact ? "px-3" : "px-8"
+        className={`relative z-10 flex items-end justify-center pointer-events-auto ${gap} ${
+          compact ? "px-3" : "px-10"
         }`}
       >
         {suggestions.map((file) => (
@@ -175,7 +177,7 @@ function EndedPhase({
   const primaryPath = primary?.path ?? null;
   const thumb = primary ? posterSrc(primary) : null;
   const durationLabel = primary ? formatDuration(primary.duration) : null;
-  const tileW = compact ? "w-[56vw] max-w-[200px]" : "w-[min(48vw,320px)]";
+  const tileW = compact ? "w-[52vw] max-w-[220px]" : "w-[min(36vw,280px)]";
 
   useEffect(() => {
     firedRef.current = false;
@@ -215,6 +217,8 @@ function EndedPhase({
 
   if (!primary) return null;
 
+  const btnPad = compact ? "px-5 py-1.5 text-[10px]" : "px-6 py-2 text-[12px]";
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -232,12 +236,12 @@ function EndedPhase({
 
       <div
         className={`relative z-10 flex flex-col items-center ${
-          compact ? "px-3 gap-2.5" : "px-6 gap-4"
+          compact ? "px-3 gap-2.5" : "px-6 gap-3.5"
         }`}
       >
         {autoplayArmed && secondsLeft > 0 ? (
           <p
-            className={`text-white/90 font-semibold tracking-wide ${
+            className={`text-white font-medium ${
               compact ? "text-xs" : "text-sm"
             }`}
           >
@@ -245,7 +249,7 @@ function EndedPhase({
           </p>
         ) : (
           <p
-            className={`text-white/70 font-semibold tracking-wide ${
+            className={`text-white/80 font-medium ${
               compact ? "text-xs" : "text-sm"
             }`}
           >
@@ -256,9 +260,9 @@ function EndedPhase({
         <button
           type="button"
           onClick={() => onSelect(primary)}
-          className={`${tileW} text-left rounded-xl overflow-hidden border border-white/15 bg-[#1a1412]/95 shadow-2xl hover:border-[color:var(--accent)]/50 hover:-translate-y-1 hover:scale-[1.02] active:scale-[0.98] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}
+          className={`${tileW} text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-xl`}
         >
-          <div className="relative w-full aspect-video bg-black/40">
+          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black/40">
             {thumb ? (
               <img
                 src={thumb}
@@ -272,7 +276,7 @@ function EndedPhase({
             )}
             {durationLabel && (
               <span
-                className={`absolute bottom-1.5 right-1.5 rounded bg-black/80 text-white font-semibold tabular-nums ${
+                className={`absolute bottom-1.5 right-1.5 rounded bg-black/85 text-white font-semibold tabular-nums ${
                   compact ? "px-1 py-0.5 text-[8px]" : "px-1.5 py-0.5 text-[10px]"
                 }`}
               >
@@ -280,10 +284,10 @@ function EndedPhase({
               </span>
             )}
           </div>
-          <div className={compact ? "px-2 py-1.5" : "px-3 py-2.5"}>
+          <div className={compact ? "pt-2" : "pt-2.5"}>
             <p
-              className={`text-white font-semibold leading-snug line-clamp-2 ${
-                compact ? "text-[11px]" : "text-sm"
+              className={`text-white font-medium leading-snug line-clamp-2 ${
+                compact ? "text-[12px]" : "text-[15px]"
               }`}
             >
               {primary.name}
@@ -291,22 +295,18 @@ function EndedPhase({
           </div>
         </button>
 
-        <div className={`flex items-center ${compact ? "gap-2" : "gap-3"}`}>
+        <div className={`flex items-center ${compact ? "gap-2.5 pt-0.5" : "gap-3 pt-1"}`}>
           <button
             type="button"
             onClick={onCancelTimer}
-            className={`rounded-full border border-white/20 bg-black/60 text-white/90 hover:bg-white/10 hover:text-white transition-colors font-semibold tracking-wide uppercase ${
-              compact ? "px-3 py-1 text-[9px]" : "px-4 py-1.5 text-[11px]"
-            }`}
+            className={`rounded-full bg-[#272727] text-white hover:bg-[#3a3a3a] transition-colors font-medium tracking-wide uppercase ${btnPad}`}
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={onPlayNow}
-            className={`rounded-full border border-white/25 bg-white/15 text-white hover:bg-white/25 transition-colors font-semibold tracking-wide uppercase ${
-              compact ? "px-3 py-1 text-[9px]" : "px-4 py-1.5 text-[11px]"
-            }`}
+            className={`rounded-full bg-[#3f3f3f] text-white hover:bg-[#525252] transition-colors font-medium tracking-wide uppercase ${btnPad}`}
           >
             Play now
           </button>
