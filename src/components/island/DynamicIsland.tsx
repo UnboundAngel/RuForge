@@ -1,5 +1,11 @@
 import { AnimatePresence, motion } from "motion/react";
-import type { CSSProperties, MouseEvent, ReactNode } from "react";
+import {
+  useCallback,
+  useRef,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 
 import { ActivityIslandWaveform } from "./ActivityIslandWaveform";
 import {
@@ -15,6 +21,12 @@ import {
   islandUpdateCollapsedWidth,
   type IslandUpdateContentProps,
 } from "./IslandUpdateContent";
+import {
+  ISLAND_SKIP_TRANSITION,
+  islandSkipCompactVariants,
+  type IslandSkipDir,
+} from "./islandSkipMotion";
+import { consumeIslandSkipDir, noteIslandSkipDir } from "@/lib/islandSkipDirection";
 
 export type IslandState = "idle" | "compact" | "expanded" | "capture";
 
@@ -85,6 +97,8 @@ type DynamicIslandProps = {
   captureSavedPreviewSrc?: string;
   onCaptureSavedOpen?: (e: MouseEvent) => void;
   updateAvailable?: Omit<IslandUpdateContentProps, "compact"> & { collapsed: boolean };
+  /** Cross-window hint (desktop overlay). Wins over local pending when trackKey changes. */
+  skipDirHint?: IslandSkipDir | null;
 };
 
 function ContentShell({
@@ -114,14 +128,35 @@ function IdleContent() {
   );
 }
 
-function CoverArt({ src }: { src: string | null }) {
-  if (!src) {
-    return <div className="h-6 w-6 shrink-0 overflow-hidden rounded-full bg-white/10" />;
-  }
-
+function CompactCoverArt({
+  src,
+  trackKey,
+  skipDir,
+}: {
+  src: string | null;
+  trackKey: string;
+  skipDir: IslandSkipDir;
+}) {
   return (
-    <div className="h-6 w-6 shrink-0 overflow-hidden rounded-full">
-      <img src={src} alt="" className="h-full w-full object-cover" />
+    <div className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full">
+      <AnimatePresence initial={false} custom={skipDir} mode="popLayout">
+        <motion.div
+          key={trackKey || "empty"}
+          custom={skipDir}
+          variants={islandSkipCompactVariants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={ISLAND_SKIP_TRANSITION}
+          className="absolute inset-0 overflow-hidden rounded-full"
+        >
+          {src ? (
+            <img src={src} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="h-full w-full bg-white/10" />
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
@@ -129,14 +164,20 @@ function CoverArt({ src }: { src: string | null }) {
 function CompactContent({
   content,
   waveformLevels,
+  skipDir,
 }: {
   content: DynamicIslandContent;
   waveformLevels: readonly number[];
+  skipDir: IslandSkipDir;
 }) {
   return (
     <ContentShell>
       <div className="pointer-events-none flex h-full items-center justify-between px-2">
-        <CoverArt src={content.coverSrc} />
+        <CompactCoverArt
+          src={content.coverSrc}
+          trackKey={content.trackKey}
+          skipDir={skipDir}
+        />
         <ActivityIslandWaveform
           levels={waveformLevels}
           coverSrc={content.coverSrc}
@@ -171,7 +212,48 @@ export function DynamicIsland({
   captureSavedPreviewSrc,
   onCaptureSavedOpen,
   updateAvailable,
+  skipDirHint = null,
 }: DynamicIslandProps) {
+  const pendingSkipDirRef = useRef<IslandSkipDir>(1);
+  const skipDirRef = useRef<IslandSkipDir>(1);
+  const prevTrackKeyRef = useRef(content.trackKey);
+
+  // Consume direction during render so AnimatePresence gets the right custom
+  // on the same frame the trackKey changes (useEffect is one frame too late).
+  if (content.trackKey !== prevTrackKeyRef.current) {
+    const buttonDir = pendingSkipDirRef.current;
+    pendingSkipDirRef.current = 1;
+    if (skipDirHint === 1 || skipDirHint === -1) {
+      skipDirRef.current = skipDirHint;
+      consumeIslandSkipDir();
+    } else if (buttonDir === -1) {
+      skipDirRef.current = -1;
+      consumeIslandSkipDir();
+    } else {
+      skipDirRef.current = consumeIslandSkipDir();
+    }
+    prevTrackKeyRef.current = content.trackKey;
+  }
+  const skipDir = skipDirRef.current;
+
+  const handleSkipPrev = useCallback(
+    (e: MouseEvent) => {
+      pendingSkipDirRef.current = -1;
+      noteIslandSkipDir(-1);
+      onSkipPrev?.(e);
+    },
+    [onSkipPrev],
+  );
+
+  const handleSkipNext = useCallback(
+    (e: MouseEvent) => {
+      pendingSkipDirRef.current = 1;
+      noteIslandSkipDir(1);
+      onSkipNext?.(e);
+    },
+    [onSkipNext],
+  );
+
   const updateMode = Boolean(updateAvailable);
   const effectiveState: IslandState = updateMode
     ? updateAvailable!.collapsed
@@ -242,7 +324,12 @@ export function DynamicIsland({
           ) : null}
           {!updateMode && state === "idle" && !devCaptureIdle ? <IdleContent key="idle" /> : null}
           {!updateMode && state === "compact" && (
-            <CompactContent key="compact" content={content} waveformLevels={waveformLevels} />
+            <CompactContent
+              key="compact"
+              content={content}
+              waveformLevels={waveformLevels}
+              skipDir={skipDir}
+            />
           )}
           {!updateMode && state === "capture" && captureSavedCaption && captureSavedPreviewSrc && onCaptureSavedOpen ? (
             <IslandCaptureSavedContent
@@ -257,13 +344,14 @@ export function DynamicIsland({
               key="expanded"
               content={content}
               waveformLevels={waveformLevels}
+              skipDir={skipDir}
               onPlayPause={onPlayPause}
               onSeek={onSeek}
               onBeginScrub={onBeginScrub}
               onReleaseScrub={onReleaseScrub}
               onOpenPlayer={onOpenPlayer}
-              onSkipPrev={onSkipPrev}
-              onSkipNext={onSkipNext}
+              onSkipPrev={handleSkipPrev}
+              onSkipNext={handleSkipNext}
               onSkipBySeconds={onSkipBySeconds}
               onVolume={onVolume}
               onMuted={onMuted}

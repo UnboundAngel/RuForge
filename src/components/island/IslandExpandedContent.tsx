@@ -7,6 +7,11 @@ import type { DynamicIslandContent } from "./DynamicIsland";
 import { HoverMarqueeText } from "@/components/music/HoverMarqueeText";
 import { IslandVolumeControl } from "./IslandVolumeControl";
 import { IslandWaveformHoverSlot } from "./IslandWaveformHoverSlot";
+import {
+  ISLAND_SKIP_TRANSITION,
+  islandSkipExpandedVariants,
+  type IslandSkipDir,
+} from "./islandSkipMotion";
 
 const islandBtnClass =
   "flex h-7 w-7 shrink-0 items-center justify-center text-zinc-300 transition-[color,transform] duration-150 hover:text-white active:scale-[0.97] disabled:opacity-30 disabled:pointer-events-none";
@@ -320,6 +325,7 @@ function IslandScrubber({
 type Props = {
   content: DynamicIslandContent;
   waveformLevels: readonly number[];
+  skipDir?: IslandSkipDir;
   onPlayPause: (e: MouseEvent) => void;
   onSeek?: (seconds: number) => void;
   onBeginScrub?: () => void;
@@ -337,6 +343,7 @@ type Props = {
 export function IslandExpandedContent({
   content,
   waveformLevels,
+  skipDir = 1,
   onPlayPause,
   onSeek,
   onBeginScrub,
@@ -358,26 +365,39 @@ export function IslandExpandedContent({
       className="pointer-events-auto absolute inset-0 flex flex-col justify-between p-4"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center gap-3 px-0.5">
-        <CoverArtButton src={content.coverSrc} onOpenPlayer={onOpenPlayer} />
-        <div className="flex min-w-0 flex-1 flex-col justify-center">
-          <IslandTitleCopy text={content.title} trackKey={content.trackKey} />
-          {content.subtitle ? (
-            <span className="truncate pt-0.5 text-[14px] text-zinc-400">{content.subtitle}</span>
-          ) : null}
-          {content.isStub && content.stubLabel ? (
-            <span className="truncate pt-0.5 text-[12px] uppercase tracking-wide text-zinc-500">
-              {content.stubLabel}
-            </span>
-          ) : null}
-        </div>
-        <IslandWaveformHoverSlot
-          levels={waveformLevels}
-          coverSrc={content.coverSrc}
-          accentColor={content.accentColor}
-          muted={content.isStub}
-          onPopOut={onPopOut}
-        />
+      <div className="relative h-16 w-full overflow-hidden">
+        <AnimatePresence initial={false} custom={skipDir} mode="popLayout">
+          <motion.div
+            key={content.trackKey || "empty"}
+            custom={skipDir}
+            variants={islandSkipExpandedVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={ISLAND_SKIP_TRANSITION}
+            className="absolute inset-0 flex items-center gap-3 px-0.5"
+          >
+            <CoverArtButton src={content.coverSrc} onOpenPlayer={onOpenPlayer} />
+            <div className="flex min-w-0 flex-1 flex-col justify-center">
+              <IslandTitleCopy text={content.title} trackKey={content.trackKey} />
+              {content.subtitle ? (
+                <span className="truncate pt-0.5 text-[14px] text-zinc-400">{content.subtitle}</span>
+              ) : null}
+              {content.isStub && content.stubLabel ? (
+                <span className="truncate pt-0.5 text-[12px] uppercase tracking-wide text-zinc-500">
+                  {content.stubLabel}
+                </span>
+              ) : null}
+            </div>
+            <IslandWaveformHoverSlot
+              levels={waveformLevels}
+              coverSrc={content.coverSrc}
+              accentColor={content.accentColor}
+              muted={content.isStub}
+              onPopOut={onPopOut}
+            />
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {content.showExpandedControls ? (

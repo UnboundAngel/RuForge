@@ -15,6 +15,7 @@ import {
   prevChapterIndex,
 } from "@/chapters";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
+import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
 import { isAudioOnlyPath } from "@/mediaKind";
 import { readPlaybackSpeed, writePlaybackSpeed } from "@/playbackSpeedStorage";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -404,6 +405,7 @@ export function useMusicPlayback(
     });
 
     if (prev) {
+      noteIslandSkipDir(-1);
       if (playingFromManualQueue) {
         clearManualQueuePlayingState();
       }
@@ -429,6 +431,7 @@ export function useMusicPlayback(
     const result = resolveMusicNextTrack(advanceState, resolveFromLibrary);
     if (!result) return;
 
+    noteIslandSkipDir(1);
     if (result.playingFromManualQueue) {
       applyManualQueueAdvance(result.manualQueueContextIndex);
     } else {
@@ -593,7 +596,7 @@ export function useMusicPlayback(
     jumpNextChapter,
     hasPrevInQueue: hasMusicPrevTrack(
       { manualQueue, effectivePlaylist, playlistIndex, playingFromManualQueue, manualQueueContextIndex },
-      0,
+      currentTime,
     ),
     hasNextInQueue: hasMusicNextTrack({
       manualQueue, effectivePlaylist, playlistIndex, playingFromManualQueue, manualQueueContextIndex,
