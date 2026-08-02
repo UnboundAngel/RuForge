@@ -39,7 +39,7 @@ const EMPTY_CONTENT: DynamicIslandContent = {
   canSeek: false,
   isMuted: false,
   volume: 1,
-  isLooping: false,
+  loopMode: "off",
 };
 
 export default function IslandOverlayApp() {

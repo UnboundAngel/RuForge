@@ -151,17 +151,46 @@ describe("musicAdvanceQueue", () => {
     ).toBe(false);
   });
 
-  it("hasMusicPrevTrack true when currentTime > 3 regardless", () => {
+  it("wraps to first track when loopMode is all at playlist end", () => {
+    const r = resolveMusicNextTrack(
+      {
+        manualQueue: [],
+        effectivePlaylist: playlist,
+        playlistIndex: 2,
+        playingFromManualQueue: false,
+        manualQueueContextIndex: null,
+      },
+      resolvePath,
+      { loopMode: "all" },
+    );
+    expect(r?.file.path).toBe("/a.mp3");
+  });
+
+  it("wraps prev to last track when loopMode is all at playlist start", () => {
+    const prev = resolveMusicPrevTrack(
+      {
+        manualQueue: [],
+        effectivePlaylist: playlist,
+        playlistIndex: 0,
+        playingFromManualQueue: false,
+        manualQueueContextIndex: null,
+      },
+      { loopMode: "all" },
+    );
+    expect(prev?.path).toBe("/c.mp3");
+  });
+
+  it("hasMusicNextTrack true at end when loopMode is all", () => {
     expect(
-      hasMusicPrevTrack(
+      hasMusicNextTrack(
         {
           manualQueue: [],
           effectivePlaylist: playlist,
-          playlistIndex: 0,
+          playlistIndex: 2,
           playingFromManualQueue: false,
           manualQueueContextIndex: null,
         },
-        5,
+        { loopMode: "all" },
       ),
     ).toBe(true);
   });

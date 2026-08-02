@@ -120,24 +120,42 @@ export function buildSmartShuffleOrder(ctx: SmartShuffleContext): MediaFile[] {
   return out;
 }
 
-/** One weighted next track for endless autoplay. */
-export function pickSmartNextTrack(ctx: SmartShuffleContext): MediaFile | null {
-  const pool = ctx.pool.filter((f) => f.path !== ctx.current?.path);
-  if (pool.length === 0) return null;
-
-  const weightCtx = buildWeightContext(ctx);
-  const weights = pool.map((f) => smartShuffleWeight(f, weightCtx));
-  const total = weights.reduce((a, b) => a + b, 0);
-  if (total <= 0) {
-    const rand = mulberry32(ctx.seed ?? Date.now());
-    return pool[Math.floor(rand() * pool.length)] ?? null;
-  }
-
-  const rand = mulberry32(ctx.seed ?? Date.now());
+function pickWeightedFromPool(
+  pool: MediaFile[],
+  weights: number[],
+  total: number,
+  seed: number,
+): MediaFile | null {
+  if (pool.length === 0 || total <= 0) return null;
+  const rand = mulberry32(seed);
   let r = rand() * total;
   for (let i = 0; i < pool.length; i++) {
     r -= weights[i]!;
     if (r <= 0) return pool[i] ?? null;
   }
   return pool[pool.length - 1] ?? null;
+}
+
+/** One weighted next track for endless autoplay. */
+export function pickSmartNextTrack(ctx: SmartShuffleContext): MediaFile | null {
+  const pool = ctx.pool.filter((f) => f.path !== ctx.current?.path);
+  if (pool.length === 0) return null;
+
+  const seed = ctx.seed ?? (Date.now() & 0xffffffff);
+  const weightCtx = buildWeightContext(ctx);
+  const weights = pool.map((f) => smartShuffleWeight(f, weightCtx));
+  const total = weights.reduce((a, b) => a + b, 0);
+  const first = pickWeightedFromPool(pool, weights, total, seed);
+  if (first) return first;
+
+  if ((ctx.sessionRecentKeys?.length ?? 0) > 0) {
+    const relaxedCtx = buildWeightContext({ ...ctx, sessionRecentKeys: [] });
+    const relaxedWeights = pool.map((f) => smartShuffleWeight(f, relaxedCtx));
+    const relaxedTotal = relaxedWeights.reduce((a, b) => a + b, 0);
+    const second = pickWeightedFromPool(pool, relaxedWeights, relaxedTotal, seed ^ 0x9e3779b9);
+    if (second) return second;
+  }
+
+  const rand = mulberry32(seed ^ 0x85ebca6b);
+  return pool[Math.floor(rand() * pool.length)] ?? null;
 }

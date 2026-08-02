@@ -25,6 +25,7 @@ import {
   removePathFromGalleryEntries,
   upsertMediaIntoGalleryEntries,
 } from "../galleryEntries";
+import { flattenGalleryScanToMediaFiles } from "../galleryScan";
 import {
   ensureScrubSpritesForFiles,
   topNScrubBackfillCandidates,
@@ -33,16 +34,17 @@ import { mediaPathsMatch } from "../lib/mediaPathMatch";
 import {
   DEFAULT_OUTPUT_DIR,
   DEFAULT_SETTINGS,
-  LS_MINI_LOOP,
   LS_MINI_VOLUME,
   RUFORGE_INTERNAL_DIR,
   clampMaxConcurrentDownloads,
   readInitialPathsFromLs,
-  readInitialPlayerLoopFromLs,
+  readInitialPlayerLoopModeFromLs,
   readInitialPlayerVolumeFromLs,
+  writePlayerLoopModeToLs,
   nextNavMode,
   type ActiveTab,
   type GalleryFilter,
+  type LoopMode,
   type MusicDetail,
   type MusicView,
   type NavMode,
@@ -61,12 +63,18 @@ import {
   createDownloadQueueSlice,
   type DownloadQueueSlice,
 } from "./downloadQueueSlice";
-import { readLoopForPath, writeLoopForPath } from "../playbackLoopStorage";
+import {
+  cycleLoopMode,
+  readLoopModeForPath,
+  resolveLoopModeForPlay,
+  writeLoopModeForPath,
+} from "../playbackLoopStorage";
 import {
   loadLikedIdentityKeys,
   toggleTrackLike,
 } from "../components/music/musicLikedTracks";
 import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
+import type { MusicQueueSource } from "../components/music/musicQueueSource";
 import { isAudioOnlyPath } from "../mediaKind";
 import {
   claimMainPlayback,
@@ -178,12 +186,27 @@ export interface RuforgeStore extends DownloadQueueSlice {
   extractingByPath: Record<string, boolean>;
   activeMenu: GalleryContextMenuState;
 
-  /** Main-window player; `volume` / `isLooping` mirror flat LS keys read by MiniPlayer. */
+  /** Main-window player; `volume` / `loopMode` mirror flat LS keys read by MiniPlayer. */
   playingFile: MediaFile | null;
   /** Set when playback hands off to a mini webview; drives activity island stub state. */
   activityOwner: ActivityOwner | null;
   activityHandoff: ActivityHandoffSnapshot | null;
   folderAudioPlaylist: MediaFile[];
+  /**
+   * True after endless autoplay has extended `folderAudioPlaylist`.
+   * Blocks using that live list as the endless candidate pool.
+   */
+  musicEndlessExtended: boolean;
+  /**
+   * Index in `folderAudioPlaylist` where endless picks begin.
+   * Null until the first endless stage/append.
+   */
+  musicEndlessFromIndex: number | null;
+  /**
+   * Play-time queue origin for "Next from:" (null = unknown → "Next up").
+   * Cleared only by a new user-initiated play or stop; skip/advance keep it.
+   */
+  musicQueueSource: MusicQueueSource | null;
   /**
    * Manual queue paths (FIFO). Drained before effectivePlaylist advances.
    * Paths only — resolved to MediaFile on playback by useMusicPlayback.
@@ -200,7 +223,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   musicLikedKeys: string[];
   volume: number;
   isMuted: boolean;
-  isLooping: boolean;
+  loopMode: LoopMode;
   /** One-shot resume position (seconds) after mini → main handoff. */
   playerResumeAt: number | null;
   /** Video session parked when music claims playback over in-progress video. */
@@ -230,6 +253,12 @@ export interface RuforgeStore extends DownloadQueueSlice {
   clearPlayerResumeAt: () => void;
   clearMusicPlayerResume: () => void;
   setFolderAudioPlaylist: (files: MediaFile[]) => void;
+  setMusicQueueSource: (source: MusicQueueSource | null) => void;
+  /** Apply an endless stage/append: extend playlist and record endless tail start. */
+  applyMusicEndlessAdvance: (
+    playlistAfter: MediaFile[],
+    endlessFromIndex: number,
+  ) => void;
   /** Append a path to the manual queue (deduped; ignored if already present). */
   enqueueManualQueue: (path: string) => void;
   /** Remove a single path from the manual queue. */
@@ -251,12 +280,26 @@ export interface RuforgeStore extends DownloadQueueSlice {
   toggleMusicLike: (file: MediaFile) => void;
   setVolume: (v: number) => void;
   setMuted: (muted: boolean) => void;
-  setLooping: (loop: boolean) => void;
+  setLoopMode: (mode: LoopMode) => void;
+  cycleLoopMode: () => void;
   stopPlayback: () => void;
 
-  handlePlayFile: (file: MediaFile, playlist?: MediaFile[]) => Promise<void>;
+  handlePlayFile: (
+    file: MediaFile,
+    playlist?: MediaFile[],
+    source?: MusicQueueSource | null,
+  ) => Promise<void>;
+  playMusicQueue: (
+    file: MediaFile,
+    playlist: MediaFile[],
+    source: MusicQueueSource | null,
+  ) => void;
   handlePlayFolderNeighbor: (file: MediaFile) => void;
-  handlePlayPlaylist: (files: MediaFile[], shuffle?: boolean) => void;
+  handlePlayPlaylist: (
+    files: MediaFile[],
+    shuffle?: boolean,
+    source?: MusicQueueSource | null,
+  ) => void;
   handlePopOut: (
     startTime?: number,
     opts?: { paused?: boolean; playbackSpeed?: number },
@@ -470,7 +513,7 @@ function tryFlushDeferredScrubBackfill(get: () => RuforgeStore) {
 
 const pathsInit = readInitialPathsFromLs();
 const playerInitVolume = readInitialPlayerVolumeFromLs();
-const playerInitLoop = readInitialPlayerLoopFromLs();
+const playerInitLoopMode = readInitialPlayerLoopModeFromLs();
 const initialDownloadQueue = loadInitialDownloadQueueState();
 
 export const useRuforgeStore = create<RuforgeStore>()(
@@ -533,13 +576,16 @@ export const useRuforgeStore = create<RuforgeStore>()(
       activityOwner: null,
       activityHandoff: null,
       folderAudioPlaylist: [],
+      musicEndlessExtended: false,
+      musicEndlessFromIndex: null,
+      musicQueueSource: null,
       manualQueue: [],
       playingFromManualQueue: false,
       manualQueueContextIndex: null,
       musicLikedKeys: loadLikedIdentityKeys(),
       volume: playerInitVolume,
       isMuted: false,
-      isLooping: playerInitLoop,
+      loopMode: playerInitLoopMode,
       playerResumeAt: null,
       parkedVideoFile: null,
       parkedVideoAt: null,
@@ -554,7 +600,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       setPlayingFile: (playingFile) => {
         const prev = get().playingFile;
-        const isLooping = playingFile ? readLoopForPath(playingFile.path) : false;
+        const loopMode = playingFile
+          ? resolveLoopModeForPlay(readLoopModeForPath(playingFile.path), get().loopMode)
+          : get().loopMode;
 
         if (
           playingFile &&
@@ -566,7 +614,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
           claimMainPlayback();
           set({
             playingFile,
-            isLooping,
+            loopMode,
             activityOwner: null,
             activityHandoff: null,
             parkedVideoFile: prev,
@@ -583,7 +631,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
             parkedVideoFile?.path === playingFile.path;
           set({
             playingFile,
-            isLooping,
+            loopMode,
             activityOwner: null,
             activityHandoff: null,
             ...(restoreParkedVideo
@@ -597,7 +645,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
                 : {}),
           });
         } else {
-          set({ playingFile, isLooping });
+          set({ playingFile });
           tryFlushDeferredScrubBackfill(get);
         }
       },
@@ -613,7 +661,19 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
       clearPlayerResumeAt: () => set({ playerResumeAt: null }),
       clearMusicPlayerResume: () => set({ musicPlayerResume: null }),
-      setFolderAudioPlaylist: (folderAudioPlaylist) => set({ folderAudioPlaylist }),
+      setFolderAudioPlaylist: (folderAudioPlaylist) =>
+        set({
+          folderAudioPlaylist,
+          musicEndlessExtended: false,
+          musicEndlessFromIndex: null,
+        }),
+      setMusicQueueSource: (musicQueueSource) => set({ musicQueueSource }),
+      applyMusicEndlessAdvance: (folderAudioPlaylist, endlessFromIndex) =>
+        set((s) => ({
+          folderAudioPlaylist,
+          musicEndlessExtended: true,
+          musicEndlessFromIndex: s.musicEndlessFromIndex ?? endlessFromIndex,
+        })),
 
       enqueueManualQueue: (path) => {
         const { manualQueue } = get();
@@ -661,17 +721,21 @@ export const useRuforgeStore = create<RuforgeStore>()(
         set({ isMuted });
       },
 
-      setLooping: (isLooping) => {
+      setLoopMode: (loopMode) => {
         const { playingFile } = get();
-        if (playingFile) writeLoopForPath(playingFile.path, isLooping);
-        localStorage.setItem(LS_MINI_LOOP, isLooping.toString());
-        set({ isLooping });
+        if (playingFile) writeLoopModeForPath(playingFile.path, loopMode);
+        writePlayerLoopModeToLs(loopMode);
+        set({ loopMode });
+      },
+      cycleLoopMode: () => {
+        get().setLoopMode(cycleLoopMode(get().loopMode));
       },
 
       stopPlayback: () => {
         claimMainPlayback();
         set({
           playingFile: null,
+          musicQueueSource: null,
           activityOwner: null,
           activityHandoff: null,
           parkedVideoFile: null,
@@ -680,14 +744,25 @@ export const useRuforgeStore = create<RuforgeStore>()(
         tryFlushDeferredScrubBackfill(get);
       },
 
-      handlePlayFile: async (file, playlist) => {
+      handlePlayFile: async (file, playlist, source = null) => {
         await closeVideoMiniWindow();
 
         const prev = get().playingFile;
         if (playlist !== undefined) {
-          set({ folderAudioPlaylist: playlist, activeTab: "player", playerResumeAt: null });
+          set({
+            folderAudioPlaylist: playlist,
+            musicEndlessExtended: false,
+            musicEndlessFromIndex: null,
+            musicQueueSource: source ?? null,
+            activeTab: "player",
+            playerResumeAt: null,
+          });
         } else {
-          set({ activeTab: "player", playerResumeAt: null });
+          set({
+            musicQueueSource: source ?? null,
+            activeTab: "player",
+            playerResumeAt: null,
+          });
         }
         get().setPlayingFile(file);
 
@@ -696,11 +771,30 @@ export const useRuforgeStore = create<RuforgeStore>()(
         }
       },
 
+      playMusicQueue: (file, playlist, source) => {
+        claimMainPlayback();
+        const loopMode = resolveLoopModeForPlay(
+          readLoopModeForPath(file.path),
+          get().loopMode,
+        );
+        set({
+          folderAudioPlaylist: playlist,
+          musicEndlessExtended: false,
+          musicEndlessFromIndex: null,
+          musicQueueSource: source,
+          playingFile: file,
+          loopMode,
+          activityOwner: null,
+          activityHandoff: null,
+          playerResumeAt: null,
+        });
+      },
+
       handlePlayFolderNeighbor: (file) => {
         get().setPlayingFile(file);
       },
 
-      handlePlayPlaylist: (files, shuffle = false) => {
+      handlePlayPlaylist: (files, shuffle = false, source = null) => {
         if (files.length === 0) return;
         let queue = [...files];
         if (shuffle) {
@@ -719,6 +813,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
         }
         set({
           folderAudioPlaylist: queue,
+          musicEndlessExtended: false,
+          musicEndlessFromIndex: null,
+          musicQueueSource: source ?? null,
           activeTab: "player",
         });
         get().setPlayingFile(queue[0]);
@@ -793,9 +890,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
           playingFile,
           volume,
           isMuted,
-          isLooping,
+          loopMode,
           entries,
           folderAudioPlaylist,
+          musicEndlessExtended,
+          musicEndlessFromIndex,
+          musicLikedKeys,
           manualQueue,
           playingFromManualQueue,
           manualQueueContextIndex,
@@ -820,6 +920,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
           : foundIndex >= 0
             ? foundIndex
             : 0;
+        const libraryAudio = flattenGalleryScanToMediaFiles(entries).filter((f) =>
+          isAudioOnlyPath(f.path),
+        );
 
         const payload: PlayInMusicMiniPayload = {
           file: fileToHandoff,
@@ -830,11 +933,15 @@ export const useRuforgeStore = create<RuforgeStore>()(
           muted: isMuted,
           queueSnapshot,
           queueIndex,
-          isLooping,
+          loopMode,
           manualQueue: [...manualQueue],
           playingFromManualQueue,
           manualQueueContextIndex,
           listenEventId: null,
+          libraryAudio,
+          musicEndlessExtended,
+          musicEndlessFromIndex,
+          musicLikedKeys: [...musicLikedKeys],
         };
 
         try {

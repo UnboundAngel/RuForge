@@ -45,7 +45,7 @@ export default function MusicMiniPlayer() {
       manualQueue: playback.manualQueue,
       playingFromManualQueue: playback.playingFromManualQueue,
       manualQueueContextIndex: playback.manualQueueContextIndex,
-      isLooping: playback.isLooping,
+      loopMode: playback.loopMode,
       listenEventId,
     };
     if (!playback.paused) {
@@ -144,7 +144,7 @@ export default function MusicMiniPlayer() {
           <MusicMiniTransport
             isPlaying={!playback.paused}
             shuffled={playback.shuffled}
-            isLooping={playback.isLooping}
+            loopMode={playback.loopMode}
             hasPrev={playback.hasPrev}
             hasNext={playback.hasNext}
             onToggle={playback.togglePlay}

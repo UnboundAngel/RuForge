@@ -67,10 +67,10 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   const navMode = useRuforgeStore((s) => s.navMode);
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
-  const isLooping = useRuforgeStore((s) => s.isLooping);
+  const loopMode = useRuforgeStore((s) => s.loopMode);
   const setMuted = useRuforgeStore((s) => s.setMuted);
   const setVolume = useRuforgeStore((s) => s.setVolume);
-  const setLooping = useRuforgeStore((s) => s.setLooping);
+  const cycleLoopMode = useRuforgeStore((s) => s.cycleLoopMode);
   const handlePopOut = useRuforgeStore((s) => s.handlePopOut);
   const showDebuggingSettings = useRuforgeStore((s) => s.settings.showDebuggingSettings);
   const crashRecoveryPreview = useCrashRecoveryPreview();
@@ -237,9 +237,9 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   const handleToggleLoop = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      setLooping(!isLooping);
+      cycleLoopMode();
     },
-    [isLooping, setLooping],
+    [cycleLoopMode],
   );
 
   const handlePopOutClick = useCallback(
@@ -300,7 +300,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       canSeek: Boolean(playback?.seek) && liveDuration > 0 && !activity.isStub,
       isMuted,
       volume,
-      isLooping,
+      loopMode,
     }),
     [
       activity.coverSrc,
@@ -323,7 +323,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       activity.isStub,
       isMuted,
       volume,
-      isLooping,
+      loopMode,
       playback?.paused,
       playback?.currentTime,
     ],

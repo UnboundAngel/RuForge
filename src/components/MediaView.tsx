@@ -294,7 +294,7 @@ const VideoCard = memo(function VideoCard({
     const newViews = views + 1;
     setViews(newViews);
     localStorage.setItem(`views-${file.path}`, newViews.toString());
-    void handlePlayFile(file);
+    void handlePlayFile(file, undefined, null);
   };
 
   const setMenuOpen = (next: boolean) => {
@@ -321,7 +321,7 @@ const VideoCard = memo(function VideoCard({
         label: "Play Video",
         icon: iconBox(<Play size={13} fill="currentColor" />),
         onSelect: () => {
-          void handlePlayFile(file);
+          void handlePlayFile(file, undefined, null);
         },
       },
       {
@@ -951,7 +951,7 @@ export const MediaView = ({
                   </button>
                   <button
                     onClick={() => {
-                      handlePlayPlaylist(playlist.items);
+                      handlePlayPlaylist(playlist.items, false, null);
                       setGalleryActiveMenu(null);
                     }}
                     className="w-full px-2.5 py-2 flex items-center gap-2.5 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg group"
@@ -963,7 +963,7 @@ export const MediaView = ({
                   </button>
                   <button
                     onClick={() => {
-                      handlePlayPlaylist(playlist.items, true);
+                      handlePlayPlaylist(playlist.items, true, null);
                       setGalleryActiveMenu(null);
                     }}
                     className="w-full px-2.5 py-2 flex items-center gap-2.5 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"

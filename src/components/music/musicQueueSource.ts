@@ -1,31 +1,58 @@
 import type { MediaFile } from "@/types";
 
-/**
- * Folder/album context for the queue list section label.
- * Returns null for library fallback (use "Next up" label).
- */
+export type MusicQueueSourceKind =
+  | "liked"
+  | "album"
+  | "artist"
+  | "folder"
+  | "search"
+  | "library"
+  | "quick_picks"
+  | "recent"
+  | "playlist"
+  | "stats"
+  | "track";
+
+export type MusicQueueSource = {
+  kind: MusicQueueSourceKind;
+  label: string;
+};
+
+export function musicQueueSource(
+  kind: MusicQueueSourceKind,
+  label: string,
+): MusicQueueSource {
+  return { kind, label };
+}
+
 export function resolveQueueSourceLabel(
-  playingFile: MediaFile | null,
-  folderAudioPlaylist: MediaFile[],
+  source: MusicQueueSource | null,
+  nextRowIsEndless: boolean,
 ): string | null {
-  if (!playingFile) return null;
-  const inFolder = folderAudioPlaylist.some((f) => f.path === playingFile.path);
-  if (!inFolder || folderAudioPlaylist.length === 0) return null;
-
-  const album = playingFile.album?.trim();
-  if (album) return album;
-
-  const artist = playingFile.artist?.trim();
-  if (artist) return artist;
-
-  const first = folderAudioPlaylist[0]!;
-  const parts = first.path.replace(/\\/g, "/").split("/");
-  const parentDir = parts[parts.length - 2]?.trim() ?? "";
-  if (parentDir) return parentDir;
-
-  return null;
+  if (nextRowIsEndless) return "Library";
+  const label = source?.label?.trim();
+  return label || null;
 }
 
 export function queueNextSectionLabel(source: string | null): string {
   return source ? `Next from: ${source}` : "Next up";
+}
+
+export function nextQueueRowIsEndless(args: {
+  manualQueueLength: number;
+  playlistIndex: number;
+  effectivePlaylist: MediaFile[];
+  folderAudioPlaylist: MediaFile[];
+  endlessFromIndex: number | null;
+}): boolean {
+  if (args.manualQueueLength > 0) return false;
+  if (args.endlessFromIndex == null) return false;
+  if (args.playlistIndex < 0) return false;
+
+  const next = args.effectivePlaylist[args.playlistIndex + 1];
+  if (!next) return false;
+
+  const idxInFolder = args.folderAudioPlaylist.findIndex((f) => f.path === next.path);
+  if (idxInFolder < 0) return true;
+  return idxInFolder >= args.endlessFromIndex;
 }

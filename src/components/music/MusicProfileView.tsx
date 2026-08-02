@@ -28,6 +28,7 @@ import {
   type ListenStat,
   type TopArtistStat,
 } from "./musicListenStats";
+import { musicQueueSource } from "./musicQueueSource";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -272,8 +273,7 @@ export function MusicProfileView({ onBack }: Props) {
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const openAuthorizeCleanupModal = useRuforgeStore((s) => s.openAuthorizeCleanupModal);
   const refreshStorageStats = useRuforgeStore((s) => s.refreshStorageStats);
-  const setPlayingFile = useRuforgeStore((s) => s.setPlayingFile);
-  const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
+  const playMusicQueue = useRuforgeStore((s) => s.playMusicQueue);
   const playingPath = useRuforgeStore((s) => s.playingFile?.path);
   const lookup = useProfileMediaLookup();
   const [tick, setTick] = useState(0);
@@ -319,8 +319,7 @@ export function MusicProfileView({ onBack }: Props) {
   }, [avatarUrl, lookup, snapshot.likedFiles, snapshot.topTrack]);
 
   const playFile = (file: MediaFile) => {
-    setFolderAudioPlaylist([file]);
-    setPlayingFile(file);
+    playMusicQueue(file, [file], musicQueueSource("track", file.name));
   };
 
   const usedGB = storageStats ? storageStats.total_bytes / (1024 * 1024 * 1024) : 0;

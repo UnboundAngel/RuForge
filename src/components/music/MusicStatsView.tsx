@@ -22,6 +22,7 @@ import {
   type ListenStat,
   type TopArtistStat,
 } from "./musicListenStats";
+import { musicQueueSource } from "./musicQueueSource";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -290,8 +291,7 @@ type Props = {
 
 export function MusicStatsView({ onBack }: Props) {
   const playingPath = useRuforgeStore((s) => s.playingFile?.path);
-  const setPlayingFile = useRuforgeStore((s) => s.setPlayingFile);
-  const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
+  const playMusicQueue = useRuforgeStore((s) => s.playMusicQueue);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const openMusicSong = useRuforgeStore((s) => s.openMusicSong);
   const lookup = useStatsMediaLookup();
@@ -332,9 +332,10 @@ export function MusicStatsView({ onBack }: Props) {
     return out;
   }, [snapshot.topTracks, lookup]);
 
+  const statsSource = musicQueueSource("stats", "Stats");
+
   const playStatFile = (file: MediaFile) => {
-    setFolderAudioPlaylist([file]);
-    setPlayingFile(file);
+    playMusicQueue(file, [file], statsSource);
   };
 
   const playStatPlaylist = (rows: ListenStat[]) => {
@@ -342,8 +343,7 @@ export function MusicStatsView({ onBack }: Props) {
       .map((r) => resolveStatFile(r, lookup))
       .filter((f): f is MediaFile => !!f);
     if (files.length === 0) return;
-    setFolderAudioPlaylist(files);
-    setPlayingFile(files[0]!);
+    playMusicQueue(files[0]!, files, statsSource);
   };
 
   const hasAnyStats =

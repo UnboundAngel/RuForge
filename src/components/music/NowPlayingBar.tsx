@@ -8,6 +8,7 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
 import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
+import { loopModeAriaLabel, loopModeIcon } from "@/playbackLoopStorage";
 import { MusicVolumeControl } from "./MusicVolumeControl";
 import { MusicLikeButton } from "./MusicLikeButton";
 
@@ -65,10 +66,10 @@ export function NowPlayingBar({
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
-  const isLooping = useRuforgeStore((s) => s.isLooping);
+  const loopMode = useRuforgeStore((s) => s.loopMode);
   const setVolume = useRuforgeStore((s) => s.setVolume);
   const setMuted = useRuforgeStore((s) => s.setMuted);
-  const setLooping = useRuforgeStore((s) => s.setLooping);
+  const cycleLoopMode = useRuforgeStore((s) => s.cycleLoopMode);
   const handlePopOut = useRuforgeStore((s) => s.handlePopOut);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
@@ -217,8 +218,8 @@ export function NowPlayingBar({
   }, [volume, isMuted, setVolume, setMuted]);
 
   const toggleLoop = useCallback(() => {
-    setLooping(!isLooping);
-  }, [isLooping, setLooping]);
+    cycleLoopMode();
+  }, [cycleLoopMode]);
 
   const coverPath = playingFile ? bestCoverPath(playingFile) : null;
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
@@ -377,11 +378,11 @@ export function NowPlayingBar({
           <button
             type="button"
             onClick={toggleLoop}
-            className={cn(barBtnClass, isLooping && "opacity-100")}
-            style={{ color: isLooping ? "var(--music-accent)" : "var(--music-text-primary)" }}
-            aria-label={isLooping ? "Loop on" : "Loop off"}
+            className={cn(barBtnClass, loopMode !== "off" && "opacity-100")}
+            style={{ color: loopMode !== "off" ? "var(--music-accent)" : "var(--music-text-primary)" }}
+            aria-label={loopModeAriaLabel(loopMode)}
           >
-            <Icon icon={isLooping ? "streamline:arrow-infinite-loop" : "radix-icons:loop"} width={16} height={16} />
+            <Icon icon={loopModeIcon(loopMode)} width={16} height={16} />
           </button>
 
           <MusicVolumeControl

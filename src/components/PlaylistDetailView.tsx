@@ -6,6 +6,7 @@ import { getPlaybackThumbnailBar } from "../playbackStorage";
 import { formatDuration } from "./downloader/downloaderFormat";
 import { formatStorageSize } from "../formatStorageSize";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import { musicQueueSource } from "./music/musicQueueSource";
 
 export const PlaylistDetailView = ({ 
   playlist, 
@@ -16,6 +17,7 @@ export const PlaylistDetailView = ({
 }) => {
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
   const handlePlayPlaylist = useRuforgeStore((s) => s.handlePlayPlaylist);
+  const playlistSource = musicQueueSource("playlist", playlist.title);
   const mainThumbnail = playlist.stackThumbnailPath || (playlist.items[0]?.thumbnailPath || playlist.items[0]?.ruforgePosterPath);
 
   return (
@@ -52,7 +54,7 @@ export const PlaylistDetailView = ({
             <div className="space-y-8">
               <div 
                 className="relative aspect-video rounded-3xl overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] border border-white/10 group cursor-pointer"
-                onClick={() => handlePlayPlaylist(playlist.items)}
+                onClick={() => handlePlayPlaylist(playlist.items, false, playlistSource)}
               >
                 {mainThumbnail ? (
                   <img src={convertFileSrc(mainThumbnail)} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
@@ -91,14 +93,14 @@ export const PlaylistDetailView = ({
 
               <div className="flex gap-3">
                 <button 
-                  onClick={() => handlePlayPlaylist(playlist.items)}
+                  onClick={() => handlePlayPlaylist(playlist.items, false, playlistSource)}
                   className="flex-1 flex items-center justify-center gap-3 py-3.5 rounded-2xl bg-[color:var(--accent)] text-stone-950 hover:brightness-110 transition-all active:scale-95 shadow-xl shadow-[color:var(--accent)]/10"
                 >
                   <Play size={14} fill="currentColor" />
                   <span className="text-[10px] font-black uppercase tracking-[0.2em]">Play All</span>
                 </button>
                 <button 
-                  onClick={() => handlePlayPlaylist(playlist.items, true)}
+                  onClick={() => handlePlayPlaylist(playlist.items, true, playlistSource)}
                   className="flex-1 flex items-center justify-center gap-3 py-3.5 rounded-2xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all active:scale-95"
                 >
                   <Shuffle size={14} />
@@ -118,7 +120,7 @@ export const PlaylistDetailView = ({
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.03 }}
-              onClick={() => void handlePlayFile(item)}
+              onClick={() => void handlePlayFile(item, playlist.items, playlistSource)}
               className="group flex items-center gap-6 p-4 rounded-3xl hover:bg-white/5 transition-all cursor-pointer border border-transparent hover:border-white/5"
             >
               <div className="text-stone-700 font-mono text-[10px] w-6 text-center group-hover:text-[color:var(--accent)] transition-colors">

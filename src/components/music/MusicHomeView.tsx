@@ -24,10 +24,11 @@ import { MusicAlbumCard } from "./MusicAlbumCard";
 import { MusicAlbumShelf } from "./MusicAlbumShelf";
 import { MUSIC_ALBUM_SHELF_GAP_HOME_PX } from "@/lib/musicAlbumShelfLayout";
 import { MusicHomeRecentSection } from "./MusicHomeRecentSection";
+import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import type { PlayHistoryEntry } from "./musicPlayHistory";
 
 type MusicHomeViewProps = {
-  onPlayFile: (file: MediaFile, playlist?: MediaFile[]) => void;
+  onPlayFile: (file: MediaFile, playlist?: MediaFile[], source?: MusicQueueSource | null) => void;
   onOpenArtist: (artistKey: string) => void;
   onOpenAlbum: (artistKey: string, albumKey: string) => void;
   onSearchYoutubeMusic?: (query: string) => void;
@@ -204,6 +205,11 @@ export function MusicHomeView({
 
   const [activeFilter, setActiveFilter] = useState<"all" | "relax" | "focus">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const searching = searchQuery.trim().length > 0;
+  const searchSource = musicQueueSource("search", "Search");
+  const quickPicksSource = searching
+    ? searchSource
+    : musicQueueSource("quick_picks", "Quick picks");
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
 
   const tracks = useMemo(
@@ -434,13 +440,13 @@ export function MusicHomeView({
                     <MusicQuickPickRow
                       key={file.path}
                       file={file}
-                      onClick={() => onPlayFile(file, quickPicks)}
+                      onClick={() => onPlayFile(file, quickPicks, quickPicksSource)}
                       menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
                       onContextMenu={(e) => setMenu({
                         context: { kind: "song", file },
                         x: e.clientX,
                         y: e.clientY,
-                        onPlay: () => onPlayFile(file, quickPicks),
+                        onPlay: () => onPlayFile(file, quickPicks, quickPicksSource),
                       })}
                     />
                   ))}
@@ -494,7 +500,13 @@ export function MusicHomeView({
                         context: { kind: "artist", artistKey: a.key, displayName: a.display },
                         x: e.clientX,
                         y: e.clientY,
-                        onPlay: artistTracks.length > 0 ? () => onPlayFile(artistTracks[0], artistTracks) : undefined,
+                        onPlay: artistTracks.length > 0
+                          ? () => onPlayFile(
+                              artistTracks[0],
+                              artistTracks,
+                              searching ? searchSource : musicQueueSource("artist", a.display),
+                            )
+                          : undefined,
                       });
                     }}
                   />
@@ -520,7 +532,13 @@ export function MusicHomeView({
                       context: { kind: "album", artistKey: a.artistKey, albumKey: a.albumKey, displayName: a.album, artistName: a.artist },
                       x: e.clientX,
                       y: e.clientY,
-                      onPlay: a.tracks.length > 0 ? () => onPlayFile(a.tracks[0], a.tracks) : undefined,
+                      onPlay: a.tracks.length > 0
+                        ? () => onPlayFile(
+                            a.tracks[0],
+                            a.tracks,
+                            searching ? searchSource : musicQueueSource("album", a.album),
+                          )
+                        : undefined,
                     })}
                   />
                 )}
@@ -535,7 +553,9 @@ export function MusicHomeView({
                 onPlayFile={onPlayFile}
                 onOpenAlbum={onOpenAlbum}
                 onPlayQuickPicks={() => {
-                  if (quickPicks[0]) onPlayFile(quickPicks[0], quickPicks);
+                  if (quickPicks[0]) {
+                    onPlayFile(quickPicks[0], quickPicks, musicQueueSource("quick_picks", "Quick picks"));
+                  }
                 }}
                 setMenu={setMenu}
                 menu={menu}

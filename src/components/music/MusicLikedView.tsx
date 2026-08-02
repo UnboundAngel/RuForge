@@ -11,7 +11,10 @@ import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { LikedSongsCover } from "./LikedSongsCover";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
+
+const LIKED_SOURCE = musicQueueSource("liked", "Liked Songs");
 
 type TrackRowProps = {
   file: MediaFile;
@@ -83,7 +86,7 @@ function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: 
 }
 
 type Props = {
-  onPlayFile: (file: MediaFile, playlist: MediaFile[]) => void;
+  onPlayFile: (file: MediaFile, playlist: MediaFile[], source: MusicQueueSource) => void;
   onBack: () => void;
 };
 
@@ -107,7 +110,7 @@ export function MusicLikedView({ onPlayFile, onBack }: Props) {
       likedKeys: musicLikedKeys,
       seed: Date.now() & 0xffffffff,
     });
-    onPlayFile(shuffled[0]!, shuffled);
+    onPlayFile(shuffled[0]!, shuffled, LIKED_SOURCE);
   };
 
   return (
@@ -152,7 +155,7 @@ export function MusicLikedView({ onPlayFile, onBack }: Props) {
       <div className="flex items-center gap-3 px-5 py-3 shrink-0">
         <button
           type="button"
-          onClick={() => tracks[0] && onPlayFile(tracks[0], tracks)}
+          onClick={() => tracks[0] && onPlayFile(tracks[0], tracks, LIKED_SOURCE)}
           className="flex items-center gap-2 px-5 py-2 text-sm font-semibold transition-opacity hover:opacity-80"
           style={{ background: "var(--music-accent)", color: "#fff", borderRadius: 12 }}
           disabled={tracks.length === 0}
@@ -182,13 +185,13 @@ export function MusicLikedView({ onPlayFile, onBack }: Props) {
               file={file}
               index={i}
               isPlaying={playingFile?.path === file.path}
-              onClick={() => onPlayFile(file, tracks)}
+              onClick={() => onPlayFile(file, tracks, LIKED_SOURCE)}
               menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
               onContextMenu={(e) => setMenu({
                 context: { kind: "song", file },
                 x: e.clientX,
                 y: e.clientY,
-                onPlay: () => onPlayFile(file, tracks),
+                onPlay: () => onPlayFile(file, tracks, LIKED_SOURCE),
               })}
             />
           ))

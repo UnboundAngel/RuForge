@@ -1,24 +1,15 @@
 import { motion } from "framer-motion";
-
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 
-
-
 import type { MediaFile } from "@/types";
-
 import type { SponsorBlockSegment } from "@/sponsorBlock";
-
 import type { Chapter } from "@/types";
-
 import type { PlayHistoryEntry } from "./musicPlayHistory";
-
 import { MusicQueueTab } from "./MusicQueueTab";
-
 import { MusicHistoryTab } from "./MusicHistoryTab";
-
 import { MusicSegmentsTab } from "./MusicSegmentsTab";
-
-import { resolveQueueSourceLabel } from "./musicQueueSource";
+import { nextQueueRowIsEndless, resolveQueueSourceLabel } from "./musicQueueSource";
+import { useRuforgeStore } from "@/store/ruforgeStore";
 
 
 
@@ -57,6 +48,8 @@ type Props = {
   onSeek: (t: number) => void;
 
   onPlay: (file: MediaFile) => void;
+
+  onPlayHistory?: (file: MediaFile) => void;
 
 
 
@@ -110,6 +103,8 @@ export function MusicRightPanel({
 
   onPlay,
 
+  onPlayHistory,
+
   historyEntries,
 
   chapters,
@@ -130,9 +125,16 @@ export function MusicRightPanel({
 
 
 
-  const queueSource = resolveQueueSourceLabel(playingFile, folderAudioPlaylist);
-
-
+  const musicEndlessFromIndex = useRuforgeStore((s) => s.musicEndlessFromIndex);
+  const musicQueueSource = useRuforgeStore((s) => s.musicQueueSource);
+  const nextRowIsEndless = nextQueueRowIsEndless({
+    manualQueueLength: manualQueue.length,
+    playlistIndex,
+    effectivePlaylist,
+    folderAudioPlaylist,
+    endlessFromIndex: musicEndlessFromIndex,
+  });
+  const queueSource = resolveQueueSourceLabel(musicQueueSource, nextRowIsEndless);
 
   const panelStyle: React.CSSProperties = shellFrame
 
@@ -253,7 +255,7 @@ export function MusicRightPanel({
             <MusicHistoryTab
               playingFile={playingFile}
               entries={historyEntries}
-              onPlay={onPlay}
+              onPlay={onPlayHistory ?? onPlay}
             />
           </TabPanel>
           {showSegmentsTab && (

@@ -47,6 +47,8 @@ const ISLAND_DIMENSIONS: Record<
   expanded: { width: 350, height: 184, borderRadius: 40 },
 };
 
+import type { LoopMode } from "@/playbackLoopStorage";
+
 export type DynamicIslandContent = {
   coverSrc: string | null;
   /** Stable per-track identity (file path) for resetting scrub state on track change. */
@@ -68,7 +70,7 @@ export type DynamicIslandContent = {
   canSeek: boolean;
   isMuted: boolean;
   volume: number;
-  isLooping: boolean;
+  loopMode: LoopMode;
 };
 
 type DynamicIslandProps = {
