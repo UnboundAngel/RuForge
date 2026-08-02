@@ -5,6 +5,8 @@ import {
   endScreenFadeGain,
   endScreenFadeProgress,
   pickVideoEndScreenSuggestions,
+  videoEndCardsLeadSec,
+  videoEndFadeSec,
 } from "./videoEndScreenSuggestions";
 
 let store: Record<string, string> = {};
@@ -41,6 +43,17 @@ function mediaFile(
 
 beforeEach(() => {
   store = {};
+});
+
+describe("videoEndCardsLeadSec", () => {
+  it("clamps to 2–10 seconds from 5% of duration", () => {
+    expect(videoEndCardsLeadSec(10)).toBe(2);
+    expect(videoEndCardsLeadSec(40)).toBe(2);
+    expect(videoEndCardsLeadSec(100)).toBe(5);
+    expect(videoEndCardsLeadSec(300)).toBe(10);
+    expect(videoEndFadeSec(10)).toBe(2);
+    expect(videoEndFadeSec(300)).toBe(5);
+  });
 });
 
 describe("endScreenFadeProgress", () => {
