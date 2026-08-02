@@ -4,6 +4,9 @@ import type { MediaFile } from "./types";
 export const VIDEO_END_SCREEN_COUNTDOWN_SEC = 12;
 export const VIDEO_END_CARDS_LEAD_SEC = 15;
 export const VIDEO_END_FADE_SEC = 5;
+/** Mild dim while end cards are up; hover only bumps slightly so the video stays readable. */
+export const VIDEO_END_CARDS_DIM = 0.12;
+export const VIDEO_END_CARDS_HOVER_DIM = 0.22;
 
 /** 0 at fade start, 1 at end (remaining <= 0). */
 export function endScreenFadeProgress(
