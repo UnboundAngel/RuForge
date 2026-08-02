@@ -51,6 +51,8 @@ import {
   readAudioAutoAdvanceFolder,
   readAudioPrefetchNext,
 } from "./audioPlaybackPrefs";
+import { pickVideoEndScreenSuggestions } from "./videoEndScreenSuggestions";
+import { VideoEndScreen } from "./components/VideoEndScreen";
 import { applyMediaOutputState } from "./applyMediaOutputState";
 import { chapterAtTime, normalizeChapters, timeForScrubberClientX, timeForScrubberPercent } from "./chapters";
 import { ChapterScrubber } from "./components/player/ChapterScrubber";
@@ -444,6 +446,10 @@ export default function MiniPlayer() {
   const playingAudioOnly = Boolean(playingFile && isAudioOnlyPath(playingFile.path));
 
   const [isPaused, setIsPaused] = useState(false);
+  const [endScreen, setEndScreen] = useState<{
+    suggestions: MediaFile[];
+    autoplayArmed: boolean;
+  } | null>(null);
   const [isVolumeHovered, setIsVolumeHovered] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -1463,6 +1469,7 @@ export default function MiniPlayer() {
   };
 
   const handleSelectMedia = (file: MediaFile) => {
+    setEndScreen(null);
     setPlayingFile(file);
     incrementViewCount(file);
     setIsMediaSelectorOpen(false);
@@ -1476,6 +1483,7 @@ export default function MiniPlayer() {
     }
     setIsPaused(true);
     setIsMediaSelectorOpen(false);
+    setEndScreen(null);
     setPlayingFile(null);
     emitVideoMiniTeardown();
   };
@@ -1492,6 +1500,61 @@ export default function MiniPlayer() {
     if (isShuffling) return pickShuffleNext();
     return playingAudioOnly ? nextMini : nextVideoMini;
   };
+
+  const handleVideoPlaybackEnded = () => {
+    if (!playingFile || playingAudioOnly) return;
+    if (isLooping && mediaRef.current) {
+      mediaRef.current.currentTime = 0;
+      void mediaRef.current.play().catch(() => {});
+      return;
+    }
+    const v = mediaRef.current;
+    if (v && isFinite(v.duration) && v.duration > 0) {
+      writePlaybackPos(playingFile.path, v.duration, v.duration);
+    }
+    const suggestions = pickVideoEndScreenSuggestions(
+      playingFile.path,
+      videoPlaylistMini,
+    );
+    if (suggestions.length === 0) {
+      if (readAudioAutoAdvanceFolder()) {
+        returnToLibraryBrowse();
+        return;
+      }
+      setIsPaused(true);
+      return;
+    }
+    setIsPaused(true);
+    setEndScreen({
+      suggestions,
+      autoplayArmed: readAudioAutoAdvanceFolder(),
+    });
+  };
+
+  const handleEndScreenSelect = (next: MediaFile) => {
+    handleSelectMedia(next);
+  };
+
+  const handleEndScreenCancelTimer = () => {
+    setEndScreen((prev) => (prev ? { ...prev, autoplayArmed: false } : null));
+  };
+
+  const handleEndScreenReplay = () => {
+    setEndScreen(null);
+    const m = mediaRef.current;
+    if (!m) return;
+    m.currentTime = 0;
+    setIsPaused(false);
+    void m.play().catch(() => {});
+  };
+
+  useEffect(() => {
+    setEndScreen(null);
+  }, [playingFile?.path]);
+
+  useEffect(() => {
+    if (isLooping) setEndScreen(null);
+  }, [isLooping]);
 
   const skipToNextTrack = () => {
     if (!playingFile) return;
@@ -1577,6 +1640,20 @@ export default function MiniPlayer() {
             onClick={sponsorBlock.handleSkipClick}
             label={sponsorBlock.skipButtonLabel}
             activeCategory={sponsorBlock.activeSkipCategory}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {endScreen && playingFile && !playingAudioOnly && (
+          <VideoEndScreen
+            key="mini-video-end-screen"
+            suggestions={endScreen.suggestions}
+            autoplayArmed={endScreen.autoplayArmed}
+            compact={!isLargeMode}
+            onSelect={handleEndScreenSelect}
+            onCancelTimer={handleEndScreenCancelTimer}
+            onReplay={handleEndScreenReplay}
           />
         )}
       </AnimatePresence>
@@ -1846,24 +1923,7 @@ export default function MiniPlayer() {
                     }
                     onLoadedMetadata={(e) => applyInitialMediaSeek(e.currentTarget)}
                     onEnded={() => {
-                      if (isLooping && mediaRef.current) {
-                        mediaRef.current.currentTime = 0;
-                        void mediaRef.current.play().catch(() => {});
-                        return;
-                      }
-                      const v = mediaRef.current;
-                      if (playingFile && v && isFinite(v.duration) && v.duration > 0) {
-                        writePlaybackPos(playingFile.path, v.duration, v.duration);
-                      }
-                      const advance = readAudioAutoAdvanceFolder();
-                      if (advance && playingFile) {
-                        const next = resolveNextTrack();
-                        if (next) {
-                          handleSelectMedia(next);
-                          return;
-                        }
-                      }
-                      returnToLibraryBrowse();
+                      handleVideoPlaybackEnded();
                     }}
                     onTimeUpdate={handleTimeUpdate}
                     onSeeked={handleSeeked}
