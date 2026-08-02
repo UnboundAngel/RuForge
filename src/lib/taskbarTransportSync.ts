@@ -7,6 +7,7 @@ import {
   bridgeOwnerMatchesRenderState,
 } from "@/lib/activityIslandResolve";
 import type { ActivityOwner } from "@/lib/activityTypes";
+import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
 import {
   getMainPlaybackBridge,
   getMainPlaybackBridgeOwner,
@@ -157,6 +158,8 @@ export function setupTaskbarTransportBridge(): () => void {
         case "prev":
         case "play_pause":
         case "next":
+          if (event.payload.action === "prev") noteIslandSkipDir(-1);
+          else if (event.payload.action === "next") noteIslandSkipDir(1);
           executeTaskbarTransport(event.payload.action);
           return;
         default:

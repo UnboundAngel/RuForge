@@ -2,8 +2,10 @@ import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 import type { DynamicIslandContent } from "@/components/island/DynamicIsland";
+import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
 import type { ActivityRenderState } from "@/lib/activityTypes";
 import { navigateToActivityOwningSurface } from "@/lib/activityIslandResolve";
+import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
 import { getMainPlaybackBridge } from "@/lib/mainPlaybackBridge";
 import { isAudioOnlyPath } from "@/mediaKind";
 import { readPlaybackSpeed } from "@/playbackSpeedStorage";
@@ -19,6 +21,8 @@ export type DesktopIslandStatePayload = {
   waveformLevels: readonly number[];
   renderState: ActivityRenderState;
   filePath: string | null;
+  /** Present on track changes so the overlay webview can slide prev vs next. */
+  skipDir?: IslandSkipDir;
 };
 
 export type DesktopIslandControl =
@@ -85,9 +89,11 @@ export function applyDesktopIslandControl(control: DesktopIslandControl): void {
       bridge?.seek?.(control.seconds);
       return;
     case "skipPrev":
+      noteIslandSkipDir(-1);
       bridge?.skipPrev?.();
       return;
     case "skipNext":
+      noteIslandSkipDir(1);
       bridge?.skipNext?.();
       return;
     case "skipBy": {

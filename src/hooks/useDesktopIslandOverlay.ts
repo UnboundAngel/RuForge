@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 
 import { primaryArtist, rawArtistFromFile } from "@/components/music/musicArtist";
 import { useCurrentActivity } from "@/hooks/useCurrentActivity";
+import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
 import {
   applyDesktopIslandControl,
   listenDesktopIslandControl,
@@ -12,8 +13,10 @@ import {
   pushDesktopIslandState,
   type DesktopIslandStatePayload,
 } from "@/lib/desktopIslandBridge";
+import { takeIslandSkipDirForBridge } from "@/lib/islandSkipDirection";
 import {
   getIslandWaveformLevels,
+  setIslandWaveformBackgroundPump,
   subscribeIslandWaveformLevels,
 } from "@/lib/islandWaveformLevels";
 import {
@@ -68,6 +71,7 @@ function buildDesktopIslandPayload(
   const progress =
     liveDuration > 0 ? Math.min(100, (liveCurrentTime / liveDuration) * 100) : 0;
   const waveformPaused = livePaused;
+  const trackKey = activity.file?.path ?? "";
 
   return {
     renderState: activity.renderState,
@@ -75,7 +79,7 @@ function buildDesktopIslandPayload(
     waveformLevels: getIslandWaveformLevels(),
     content: {
       coverSrc: activity.coverSrc,
-      trackKey: activity.file?.path ?? "",
+      trackKey,
       title,
       subtitle,
       stubLabel: null,
@@ -98,6 +102,20 @@ function buildDesktopIslandPayload(
   };
 }
 
+function attachSkipDirForTrackChange(
+  payload: DesktopIslandStatePayload,
+  lastPushedTrackKeyRef: { current: string | null },
+): DesktopIslandStatePayload {
+  const trackKey = payload.content.trackKey;
+  const trackChanged = Boolean(trackKey) && trackKey !== lastPushedTrackKeyRef.current;
+  if (!trackChanged) {
+    return { ...payload, skipDir: undefined };
+  }
+  const skipDir: IslandSkipDir = takeIslandSkipDirForBridge();
+  lastPushedTrackKeyRef.current = trackKey;
+  return { ...payload, skipDir };
+}
+
 /**
  * Shows the top-of-screen island overlay while main is minimized or tray-hidden
  * and main-owned playback is active. Suppresses when mini owns playback.
@@ -114,6 +132,8 @@ export function useDesktopIslandOverlay(enabled: boolean) {
   const awayRef = useRef(false);
   const shownRef = useRef(false);
   const lastPushAtRef = useRef(0);
+  const lastPushedTrackKeyRef = useRef<string | null>(null);
+  const pendingPushRef = useRef<DesktopIslandStatePayload | null>(null);
   const activityRef = useRef(activity);
   activityRef.current = activity;
 
@@ -140,6 +160,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     if (!enabled) {
       if (shownRef.current) {
         shownRef.current = false;
+        setIslandWaveformBackgroundPump(false);
         void invoke("hide_island_overlay").catch(() => {});
       }
       return;
@@ -148,50 +169,68 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     let cancelled = false;
     let pushTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const pushNow = (payload: DesktopIslandStatePayload) => {
+      lastPushAtRef.current = Date.now();
+      pendingPushRef.current = null;
+      void pushDesktopIslandState(payload).catch(() => {});
+    };
+
+    const queuePush = (payload: DesktopIslandStatePayload) => {
+      // Keep the newest payload; preserve skipDir from an earlier track-change
+      // packet if this telemetry tick is same-track.
+      const prev = pendingPushRef.current;
+      if (
+        prev?.skipDir != null &&
+        prev.content.trackKey === payload.content.trackKey &&
+        payload.skipDir == null
+      ) {
+        pendingPushRef.current = { ...payload, skipDir: prev.skipDir };
+      } else {
+        pendingPushRef.current = payload;
+      }
+
+      const now = Date.now();
+      if (now - lastPushAtRef.current >= TELEMETRY_MIN_MS) {
+        const next = pendingPushRef.current;
+        if (next) pushNow(next);
+        return;
+      }
+      if (pushTimer != null) return;
+      pushTimer = setTimeout(() => {
+        pushTimer = null;
+        if (cancelled) return;
+        const next = pendingPushRef.current;
+        if (next) pushNow(next);
+      }, TELEMETRY_MIN_MS - (now - lastPushAtRef.current));
+    };
+
     const syncOverlay = async (forceAway?: boolean) => {
       if (cancelled) return;
       if (typeof forceAway === "boolean") {
         awayRef.current = forceAway;
       }
       const mainAway = awayRef.current;
-      const payload = buildDesktopIslandPayload(
+      const raw = buildDesktopIslandPayload(
         activityRef.current,
         accentRef.current,
         volumeRef.current,
         mutedRef.current,
         loopingRef.current,
       );
-      const want = mainAway && payload != null;
+      const want = mainAway && raw != null;
 
-      if (want) {
+      if (want && raw) {
+        const payload = attachSkipDirForTrackChange(raw, lastPushedTrackKeyRef);
         if (!shownRef.current) {
           shownRef.current = true;
+          setIslandWaveformBackgroundPump(true);
           await invoke("show_island_overlay").catch(() => {});
         }
-        const now = Date.now();
-        const flush = () => {
-          if (cancelled) return;
-          lastPushAtRef.current = Date.now();
-          const next = buildDesktopIslandPayload(
-            activityRef.current,
-            accentRef.current,
-            volumeRef.current,
-            mutedRef.current,
-            loopingRef.current,
-          );
-          if (!next) return;
-          void pushDesktopIslandState(next).catch(() => {});
-        };
-        if (now - lastPushAtRef.current >= TELEMETRY_MIN_MS) {
-          flush();
-        } else if (pushTimer == null) {
-          pushTimer = setTimeout(() => {
-            pushTimer = null;
-            flush();
-          }, TELEMETRY_MIN_MS - (now - lastPushAtRef.current));
-        }
+        queuePush(payload);
       } else if (shownRef.current) {
         shownRef.current = false;
+        pendingPushRef.current = null;
+        setIslandWaveformBackgroundPump(false);
         await invoke("hide_island_overlay").catch(() => {});
       }
     };
@@ -249,6 +288,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       void unlistenTrayShow.then((fn) => fn());
       if (shownRef.current) {
         shownRef.current = false;
+        setIslandWaveformBackgroundPump(false);
         void invoke("hide_island_overlay").catch(() => {});
       }
     };
@@ -258,23 +298,27 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     if (!enabled) return;
     if (!awayRef.current) return;
 
-    const payload = buildDesktopIslandPayload(
+    const raw = buildDesktopIslandPayload(
       activity,
       settingsAccent,
       volume,
       isMuted,
       isLooping,
     );
-    if (payload == null) {
+    if (raw == null) {
       if (shownRef.current) {
         shownRef.current = false;
+        setIslandWaveformBackgroundPump(false);
         void invoke("hide_island_overlay").catch(() => {});
       }
       return;
     }
 
+    const payload = attachSkipDirForTrackChange(raw, lastPushedTrackKeyRef);
+
     if (!shownRef.current) {
       shownRef.current = true;
+      setIslandWaveformBackgroundPump(true);
       void invoke("show_island_overlay")
         .then(() => pushDesktopIslandState(payload))
         .catch(() => {});

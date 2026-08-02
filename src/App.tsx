@@ -162,6 +162,7 @@ import {
 import { useMainWindowMaximized } from "./hooks/useMainWindowMaximized";
 import { useMainWindowTransparentFrame } from "./hooks/useMainWindowTransparentFrame";
 import { setupTaskbarTransportBridge } from "./lib/taskbarTransportSync";
+import { setupMediaSessionTransport } from "./lib/mediaSessionTransport";
 
 const WindowControls = ({
   isMaximized,
@@ -1156,6 +1157,7 @@ function App() {
   }, [isSearchExpanded]);
 
   useEffect(() => setupTaskbarTransportBridge(), []);
+  useEffect(() => setupMediaSessionTransport(), []);
 
   useEffect(() => wireScrubSpriteGalleryIndicators(), []);
 

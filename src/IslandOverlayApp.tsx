@@ -13,6 +13,8 @@ import {
   restoreMainFromDesktopIsland,
   type DesktopIslandStatePayload,
 } from "@/lib/desktopIslandBridge";
+import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
+import { useOverlayWaveformLevels } from "@/hooks/useOverlayWaveformLevels";
 
 const COMPACT_BOUNDS = { width: 380, height: 56 };
 const EXPANDED_BOUNDS = { width: 380, height: 220 };
@@ -54,7 +56,16 @@ export default function IslandOverlayApp() {
   useEffect(() => {
     void invoke("island_overlay_ready").catch(() => {});
     const unlisten = listenDesktopIslandState((next) => {
-      setPayload(next);
+      setPayload((prev) => {
+        if (
+          next.skipDir != null &&
+          next.content.trackKey &&
+          next.content.trackKey !== prev?.content.trackKey
+        ) {
+          noteIslandSkipDir(next.skipDir);
+        }
+        return next;
+      });
     });
     return () => {
       void unlisten.then((fn) => fn());
@@ -99,7 +110,10 @@ export default function IslandOverlayApp() {
       }
     : EMPTY_CONTENT;
 
-  const waveformLevels = payload?.waveformLevels ?? [];
+  const waveformLevels = useOverlayWaveformLevels(
+    content.waveformPaused || content.paused,
+    payload?.waveformLevels ?? [],
+  );
 
   const handleShellClick = useCallback(() => {
     if (!hasSession) return;
@@ -158,6 +172,7 @@ export default function IslandOverlayApp() {
           state={islandState}
           content={content}
           waveformLevels={waveformLevels}
+          skipDirHint={payload?.skipDir ?? null}
           onClick={handleShellClick}
           onPlayPause={handlePlayPause}
           onSeek={handleSeek}

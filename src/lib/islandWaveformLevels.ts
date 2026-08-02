@@ -108,10 +108,9 @@ function bindMediaRetryListeners(el: HTMLMediaElement | null) {
 }
 
 let unbindMediaRetry: (() => void) | null = null;
+let bgPumpId: ReturnType<typeof setInterval> | null = null;
 
-function tick() {
-  rafId = requestAnimationFrame(tick);
-
+function tickOnce() {
   const el = getPlaybackMediaElement();
   if (inactive || !el || el.paused) {
     decayToIdle();
@@ -136,6 +135,11 @@ function tick() {
   if (changed) notify();
 }
 
+function tick() {
+  rafId = requestAnimationFrame(tick);
+  tickOnce();
+}
+
 function startLoop() {
   if (rafId !== null) return;
   rafId = requestAnimationFrame(tick);
@@ -150,6 +154,25 @@ function stopLoop() {
   for (let i = 0; i < ISLAND_WAVEFORM_BAR_COUNT; i++) {
     levels[i] = IDLE_LEVEL;
     velocities[i] = 0;
+  }
+}
+
+/**
+ * Minimized / hidden main freezes rAF. Keep sampling the analyser on an
+ * interval so the desktop island overlay still receives live levels.
+ */
+export function setIslandWaveformBackgroundPump(on: boolean) {
+  if (on) {
+    if (bgPumpId != null) return;
+    bgPumpId = setInterval(() => {
+      tickOnce();
+    }, 48);
+    tickOnce();
+    return;
+  }
+  if (bgPumpId != null) {
+    clearInterval(bgPumpId);
+    bgPumpId = null;
   }
 }
 
