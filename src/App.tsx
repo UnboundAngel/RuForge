@@ -125,7 +125,6 @@ import {
 import { CrashRecoveryPreviewContext } from "./lib/crashRecoveryPreview";
 import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
 import { RF_TITLEBAR_H_PX } from "./lib/chromeLayout";
-import { galleryScrollChromeAmount } from "./lib/galleryScrollChrome";
 import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
@@ -275,8 +274,12 @@ function App() {
   const setSettingsTab = useRuforgeStore((s) => s.setSettingsTab);
   const galleryFilter = useRuforgeStore((s) => s.galleryFilter);
   const setGalleryFilter = useRuforgeStore((s) => s.setGalleryFilter);
-  const galleryLibraryScrollTop = useRuforgeStore((s) => s.galleryLibraryScrollTop);
-  const galleryScrollChrome = galleryScrollChromeAmount(galleryLibraryScrollTop);
+  const galleryScrollChromeRaw = useRuforgeStore((s) => s.galleryScrollChrome);
+  const galleryScrollChrome =
+    typeof galleryScrollChromeRaw === "number" && Number.isFinite(galleryScrollChromeRaw)
+      ? Math.min(1, Math.max(0, galleryScrollChromeRaw))
+      : 0;
+  const galleryScrollBulge = galleryScrollChrome > 0.08;
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
   const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
@@ -1868,48 +1871,45 @@ function App() {
               className="absolute left-6 top-0 z-20 flex h-[var(--rf-tab-strip-h)] items-end pointer-events-none"
             >
               <div className="relative flex h-[var(--rf-tab-strip-h)] items-end pointer-events-auto">
-                <motion.div
-                  className="pointer-events-none absolute inset-0 bg-[#271C18] rounded-b-[28px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
-                  style={{
-                    clipPath: "inset(var(--rf-titlebar-h) -100px -100px -100px)",
-                  }}
-                  initial={false}
-                  animate={{ opacity: galleryScrollChrome }}
-                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                  aria-hidden
-                />
-                <motion.div
-                  className="pointer-events-none absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]"
-                  initial={false}
-                  animate={{ opacity: galleryScrollChrome }}
-                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                  aria-hidden
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
-                </motion.div>
-                <motion.div
-                  className="pointer-events-none absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]"
-                  initial={false}
-                  animate={{ opacity: galleryScrollChrome }}
-                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                  aria-hidden
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
-                </motion.div>
+                {galleryScrollChrome > 0 ? (
+                  <>
+                    <div
+                      className="pointer-events-none absolute inset-0 bg-[#271C18] rounded-b-[28px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+                      style={{
+                        opacity: galleryScrollChrome,
+                        clipPath: "inset(var(--rf-titlebar-h) -100px -100px -100px)",
+                      }}
+                      aria-hidden
+                    />
+                    <div
+                      className="pointer-events-none absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]"
+                      style={{ opacity: galleryScrollChrome }}
+                      aria-hidden
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
+                    </div>
+                    <div
+                      className="pointer-events-none absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]"
+                      style={{ opacity: galleryScrollChrome }}
+                      aria-hidden
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
+                    </div>
+                  </>
+                ) : null}
 
                 <div className="relative flex items-end pb-1 px-6">
                   <div className="flex items-end">
                     {(['all', 'in-progress', 'watched'] as const).map((t) => {
                       const isActive = galleryFilter === t;
                       const label = t === 'all' ? 'All' : t === 'in-progress' ? 'In Progress' : 'Watched';
-                      const scrollBulge = galleryScrollChrome > 0.08;
                       return (
                         <button
                           key={t}
                           onClick={() => setGalleryFilter(t)}
                           className="relative flex h-[var(--rf-tab-strip-h)] px-6 items-end pb-2 justify-center cursor-pointer pointer-events-auto group/tab"
                         >
-                          {isActive && !scrollBulge && (
+                          {isActive && !galleryScrollBulge && (
                             <motion.div
                               layoutId="galleryTabShape"
                               className="absolute inset-0 bg-[#271C18] rounded-b-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.5)] z-0"
