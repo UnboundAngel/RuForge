@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
+import IslandOverlayApp from "./IslandOverlayApp";
 import NotifyOverlayApp from "./NotifyOverlayApp";
 import RootErrorBoundary from "./components/RootErrorBoundary";
 import { clearRuforgeNotificationDismissTimers } from "./store/ruforgeStore";
@@ -43,7 +44,14 @@ if (import.meta.env.DEV && label === "main") {
   });
 }
 
-const tree = label === "notify" ? <NotifyOverlayApp /> : <App />;
+const tree =
+  label === "notify" ? (
+    <NotifyOverlayApp />
+  ) : label === "island" ? (
+    <IslandOverlayApp />
+  ) : (
+    <App />
+  );
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>

@@ -348,6 +348,21 @@ html.ruforge-notify-root body {
   overflow: hidden;
 }
 
+/* Desktop island overlay window (label `island`): transparent frameless shell */
+html.ruforge-island-root,
+html.ruforge-island-root body,
+html.ruforge-island-root #root {
+  background-color: transparent !important;
+}
+
+html.ruforge-island-root body {
+  overflow: hidden;
+}
+
+html.ruforge-island-root #root {
+  height: 100%;
+}
+
 .rf-notify-card {
   background: rgb(39 28 24 / 0.62);
   backdrop-filter: blur(20px) saturate(1.15);

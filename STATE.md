@@ -18,7 +18,7 @@ Shipping version: 0.2.3 (unreleased)
 
 Last shipped to users: 0.2.2
 
-Last updated: 2026-08-02 (Video Library grid + Morph menu; Vite ignores agent markdown)
+Last updated: 2026-08-02 (Desktop island overlay when minimized/tray-hidden)
 
 Status: 0.2.2 live on GitHub and updater.json. Downloader paste no longer flashes; soft library-duplicate warning on URL entry; every enqueue path shares the Download-click duplicate gate. Library incremental remove/upsert (no full rescan on delete or download success). Pre-spawn inspect timeout with kill-on-timeout; watchdog armed before start; auto-clear start failures only for approval auto. OBS Window Capture uses class `RuForge_Chrome_WidgetWin` for WGC. Headless `media_engine` crate backs inspect/download. Browser Companion remains developer-gated on localhost.
 
@@ -68,6 +68,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.2.3 (unreleased, in tree):**
 
+- Island: minimized/tray-hidden main shows top-center Dynamic Island overlay for main-owned playback (not when mini owns); waveform motion no longer forces a middle-tall envelope.
 - Library: Video Library multi-column grid with date groups, hover shell, Morph card menu, and scroll-linked tab chrome; Vite ignores agent markdown. Snapshot/cold-open/cleanup work from earlier in the cycle still applies.
 - Player: YouTube-style end flow (bottom cards 2-10s from 5% duration, ring hover, fade, Up next with left timer + full-width buttons) on main and mini. Chapter scrubber knob tracks the pointer again (no double horizontal translate).
 

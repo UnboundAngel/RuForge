@@ -10,7 +10,6 @@ type Props = {
   className?: string;
 };
 
-const BAR_MAX_FRAC = [0.58, 0.78, 1, 0.78, 0.58];
 const TRACK_H = 16;
 const MIN_BAR_H = 3;
 const BAR_W_PX = 2.5;
@@ -18,10 +17,8 @@ const BAR_GAP_PX = 2.5;
 const TRACK_W_PX =
   ISLAND_WAVEFORM_BAR_COUNT * BAR_W_PX + (ISLAND_WAVEFORM_BAR_COUNT - 1) * BAR_GAP_PX;
 
-function barHeightPx(level: number, index: number): number {
-  const cap = BAR_MAX_FRAC[index] ?? 1;
-  const maxH = TRACK_H * cap;
-  return MIN_BAR_H + level * (maxH - MIN_BAR_H);
+function barHeightPx(level: number): number {
+  return MIN_BAR_H + level * (TRACK_H - MIN_BAR_H);
 }
 
 export const ActivityIslandWaveform = memo(function ActivityIslandWaveform({
@@ -39,7 +36,7 @@ export const ActivityIslandWaveform = memo(function ActivityIslandWaveform({
       aria-hidden
     >
       {Array.from({ length: ISLAND_WAVEFORM_BAR_COUNT }, (_, i) => {
-        const height = barHeightPx(levels[i] ?? 0, i);
+        const height = barHeightPx(levels[i] ?? 0);
         const sliceOffset = i * (BAR_W_PX + BAR_GAP_PX);
 
         return (

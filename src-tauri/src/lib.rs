@@ -29,7 +29,7 @@ mod windows_audio_brand;
 
 use std::sync::Mutex;
 
-use tauri::{Listener, Manager};
+use tauri::{Emitter, EventTarget, Listener, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::app_state::AppConfig;
@@ -68,6 +68,10 @@ use crate::commands::music_listen_log::{
 use crate::commands::musicmeta::{
     backfill_music_meta, ensure_artist_meta_sidecar, ensure_music_meta, get_artist_info,
     read_artist_meta_sidecar, read_music_meta,
+};
+use crate::commands::island_overlay::{
+    hide_island_overlay, island_overlay_ready, show_island_overlay, sync_island_overlay_bounds,
+    MAIN_HIDDEN_EVENT,
 };
 use crate::commands::notify_overlay::{
     hide_notify_overlay_window, notify_overlay_ready, push_background_notify,
@@ -290,6 +294,11 @@ pub fn run() {
                 if minimize_to_tray && window.label() == "main" {
                     let _ = window.hide();
                     api.prevent_close();
+                    let _ = window.app_handle().emit_to(
+                        EventTarget::webview_window("main"),
+                        MAIN_HIDDEN_EVENT,
+                        (),
+                    );
                 }
             }
         })
@@ -374,6 +383,10 @@ pub fn run() {
             sync_notify_overlay_bounds,
             hide_notify_overlay_window,
             notify_overlay_ready,
+            show_island_overlay,
+            hide_island_overlay,
+            sync_island_overlay_bounds,
+            island_overlay_ready,
             export_media_bundle,
             cancel_export_bundle,
             poll_removable_drives,

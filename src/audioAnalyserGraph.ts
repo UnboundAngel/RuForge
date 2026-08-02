@@ -277,12 +277,11 @@ const ISLAND_BAND_START = [1, 5, 14, 40, 100] as const;
 const ISLAND_BAND_END = [5, 14, 40, 100, 280] as const;
 
 /**
- * Perceptual weighting per band (low-to-high order, pre-reverse). Human
- * hearing perceives mids as louder than bass/treble at equal power, so
- * Apple's waveform boosts the outer (bass + treble) bars relative to the
- * middle to keep the whole shape looking visually "full".
+ * Perceptual weighting per band (low-to-high order, pre-reverse). Bass and
+ * treble get a mild lift so outer bars stay readable; mids are not visually
+ * capped elsewhere, so keep mid weight near 1 (Apple bars all share one max).
  */
-const PERCEPTUAL_WEIGHT = [1.35, 1.05, 0.85, 1.05, 1.3] as const;
+const PERCEPTUAL_WEIGHT = [1.2, 1.05, 1, 1.05, 1.15] as const;
 
 /**
  * AGC: target RMS the visualizer normalizes toward. The running level
@@ -337,11 +336,13 @@ export function readIslandBandLevels(
     Math.max(AGC_MIN_GAIN, AGC_TARGET / Math.max(0.01, graph.agcLevel)),
   );
 
+  // Light neighbor blend keeps motion coherent without forcing a permanent
+  // middle-tall silhouette (Apple's bars stay largely independent).
   const smoothed: number[] = [];
   for (let i = 0; i < count; i++) {
     const prev = raw[i - 1] ?? raw[i];
     const next = raw[i + 1] ?? raw[i];
-    const blended = raw[i] * 0.62 + prev * 0.19 + next * 0.19;
+    const blended = raw[i] * 0.82 + prev * 0.09 + next * 0.09;
     smoothed.push(Math.min(1, Math.pow(blended * agcGain * gain, 0.85)));
   }
 

@@ -14,7 +14,11 @@ This document describes how the RuForge activity island expands, animates, and w
 | `src/hooks/useCurrentActivity.ts` | Session snapshot: file, paused, time, cover |
 | `src/lib/mainPlaybackBridge.ts` | Cross-tree playback telemetry + control callbacks (video + music host) |
 | `src/context/MainPlaybackContext.tsx` | Publishes bridge from `PlayerView` / `MainPlaybackHost` |
-| `App.tsx` | Mounts `<ActivityIsland />` when `!shellBlocked` |
+| `App.tsx` | Mounts `<ActivityIsland />` when `!shellBlocked`; runs `useDesktopIslandOverlay` for minimized/tray desktop island |
+| `IslandOverlayApp.tsx` | Desktop overlay webview (`island` label): Dynamic Island only |
+| `src/hooks/useDesktopIslandOverlay.ts` | Show/hide desktop island + telemetry push |
+| `src/lib/desktopIslandBridge.ts` | Cross-window state/control events for desktop island |
+| `src-tauri/src/commands/island_overlay.rs` | Transparent always-on-top `island` window |
 
 Tests for resolve/navigation rules: `src/lib/activityIslandResolve.test.ts`.
 
@@ -274,6 +278,28 @@ Music mode: island portal still renders above `MusicShell` when away from music 
 
 ---
 
+## Desktop overlay (minimized / tray-hidden)
+
+When the **main** window is OS-minimized or hidden to tray, and playback is **main-owned** (`main-music` / `main-video`), a separate transparent always-on-top webview (`label: island`) shows only the Dynamic Island at the **top center** of the primary work area.
+
+**Show rules**
+
+- Triggers: minimize **or** close-to-tray hide (`ruforge:main-hidden` from Rust CloseRequested path).
+- Session required: active main-owned session (paused still counts).
+- Suppress when `activityOwner` is mini (`video-mini` / `music-mini`): mini is already the surface.
+- Hide when main is restored/shown, session ends, or mini takes ownership.
+
+**Architecture**
+
+- Media stays in `main`. Overlay is remote control only (no media element).
+- Events: `desktop-island-state` (main → island), `desktop-island-control` (island → main).
+- Window bounds hug compact (~380×56) or expanded (~380×220); `sync_island_overlay_bounds` on expand/collapse. Expanded collapses on Escape or when the overlay window blurs (click outside).
+- Reuses `DynamicIsland` presentation; does not mount idle empty pill on the desktop (window hidden when no session).
+
+**Do not** drive desktop overlay from Zustand inside `DynamicIsland.tsx`. Keep bridge apply logic in `desktopIslandBridge.ts` / `useDesktopIslandOverlay.ts`.
+
+---
+
 ## Safe change guide (for agents)
 
 ### Allowed without animation risk
@@ -397,6 +423,9 @@ if (onboardingOccupied) return null;
 - [ ] Onboarding island step plays through to completion: hint → celebrate ("nice!") → idle pill, with **no flash/disappear/pop** at any transition, including the final handoff to `ActivityIsland`.
 - [ ] Start real playback mid-onboarding: activity pill stays hidden until the onboarding hint reaches idle/dismisses (precedence rule).
 - [ ] Resize window: pill stays centered horizontally, aligned to titlebar.
+- [ ] Play content, minimize main: desktop island appears top-center; expand + transport work; Open restores main.
+- [ ] Play content, close-to-tray: desktop island appears; restore via tray Show hides it.
+- [ ] Mini owns playback + minimize main: no desktop island.
 
 ---
 
