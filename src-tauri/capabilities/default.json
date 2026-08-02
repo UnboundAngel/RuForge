@@ -7,7 +7,8 @@
     "music-mini",
     "explorer",
     "explorer-surface",
-    "notify"
+    "notify",
+    "island"
   ],
   "webviews": [
     "main"
@@ -31,6 +32,8 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-focus",
     "core:window:allow-is-maximized",
+    "core:window:allow-is-minimized",
+    "core:window:allow-is-visible",
     "snap-layout:default",
     "core:event:default",
     "core:path:default",

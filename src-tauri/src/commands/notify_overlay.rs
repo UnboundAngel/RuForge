@@ -115,7 +115,7 @@ fn ensure_notify_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String>
 
     let prefs = HardwareAccelerationDisk::load(&app.config().identifier);
 
-    let mut builder = WebviewWindowBuilder::new(app, NOTIFY_LABEL, WebviewUrl::App("index.html".into()))
+    let mut builder = WebviewWindowBuilder::new(app, NOTIFY_LABEL, WebviewUrl::App("index.html?rfWindow=notify".into()))
         .title("RuForge")
         .inner_size(380.0, 120.0)
         .min_inner_size(380.0, 80.0)

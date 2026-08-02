@@ -127,6 +127,7 @@ import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
 import { RF_TITLEBAR_H_PX } from "./lib/chromeLayout";
 import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
+import { useDesktopIslandOverlay } from "./hooks/useDesktopIslandOverlay";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
 import { writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
 
@@ -1643,6 +1644,8 @@ function App() {
 
   const { open: radialNavOpen, anchor: radialNavAnchor } =
     useAltRadialNav(shellBlocked);
+
+  useDesktopIslandOverlay(!shellBlocked && miniKind == null);
 
   const handleRadialCenterClick = useCallback(() => {
     cycleNavMode();
