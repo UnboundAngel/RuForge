@@ -195,6 +195,7 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.3 (unreleased)
 
+- **Player**: Chapter scrubber knob no longer sits left of the pointer (Tailwind `translate` was stacking with the inline `transform`). `ChapterScrubber.tsx`
 - **Player**: Video end screen shows up to two local suggestions (unwatched first, then random) with a 12s Up next countdown on main and mini. `VideoEndScreen.tsx` / `videoEndScreenSuggestions.ts`
 
 ## Release ritual

@@ -259,7 +259,7 @@ export function ChapterScrubber({
       </div>
 
       <div
-        className={`absolute -translate-x-1/2 w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg pointer-events-none z-30 transition-[opacity,bottom] duration-150 ${
+        className={`absolute w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg pointer-events-none z-30 transition-[opacity,bottom] duration-150 ${
           isHovering || isScrubbing ? "opacity-100" : "opacity-0"
         }`}
         style={{
