@@ -37,19 +37,19 @@ function formatDuration(seconds: number | null | undefined): string | null {
 function EndCardTile({
   file,
   compact,
-  lifted,
+  active,
   onSelect,
   onHoverChange,
 }: {
   file: MediaFile;
   compact: boolean;
-  lifted?: boolean;
+  active?: boolean;
   onSelect: () => void;
   onHoverChange?: (hovered: boolean) => void;
 }) {
   const thumb = posterSrc(file);
   const durationLabel = formatDuration(file.duration);
-  const tileW = compact ? "w-[44vw] max-w-[220px]" : "w-[min(42vw,380px)]";
+  const tileW = compact ? "w-[46vw] max-w-[240px]" : "w-[min(40vw,360px)]";
 
   return (
     <button
@@ -59,10 +59,10 @@ function EndCardTile({
       onMouseLeave={() => onHoverChange?.(false)}
       onFocus={() => onHoverChange?.(true)}
       onBlur={() => onHoverChange?.(false)}
-      className={`${tileW} group text-left rounded-2xl overflow-hidden border border-white/15 bg-black/60 backdrop-blur-md shadow-2xl transition-transform duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${
-        lifted
-          ? "-translate-y-4 scale-[1.03] shadow-[0_20px_48px_rgba(0,0,0,0.55)] border-white/30 z-10"
-          : "hover:-translate-y-4 hover:scale-[1.03] hover:shadow-[0_20px_48px_rgba(0,0,0,0.55)] hover:border-white/30 hover:z-10"
+      className={`${tileW} text-left rounded-xl overflow-hidden border border-white/20 bg-black/55 backdrop-blur-sm shadow-xl transition-[box-shadow] duration-150 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
+        active
+          ? "ring-2 ring-white/55 ring-offset-2 ring-offset-black/40"
+          : "hover:ring-2 hover:ring-white/55 hover:ring-offset-2 hover:ring-offset-black/40"
       }`}
     >
       <div className="relative w-full aspect-video bg-black/40">
@@ -112,7 +112,7 @@ function CardsPhase({
   onCardHoverChange?: (hovered: boolean) => void;
 }) {
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
-  const gap = compact ? "gap-5" : "gap-12";
+  const gap = compact ? "gap-4" : "gap-10";
 
   const setHover = (path: string | null) => {
     setHoveredPath(path);
@@ -125,14 +125,13 @@ function CardsPhase({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className={`absolute inset-0 z-[54] flex items-end justify-center pointer-events-none ${
-        compact ? "pb-[22%]" : "pb-[18%]"
-      }`}
+      className="absolute inset-x-0 bottom-0 z-[54] pointer-events-none"
+      style={{ height: compact ? "42%" : "38%" }}
       aria-label="Suggested videos"
     >
       <div
-        className={`relative z-10 flex items-end justify-center pointer-events-auto ${gap} ${
-          compact ? "px-3" : "px-10"
+        className={`absolute inset-x-0 bottom-0 flex items-end justify-center pointer-events-auto ${gap} ${
+          compact ? "px-3 pb-3" : "px-10 pb-4"
         }`}
       >
         {suggestions.map((file) => (
@@ -140,7 +139,7 @@ function CardsPhase({
             key={file.path}
             file={file}
             compact={compact}
-            lifted={hoveredPath === file.path}
+            active={hoveredPath === file.path}
             onSelect={() => onSelect(file)}
             onHoverChange={(hovered) => setHover(hovered ? file.path : null)}
           />
@@ -177,7 +176,7 @@ function EndedPhase({
   const primaryPath = primary?.path ?? null;
   const thumb = primary ? posterSrc(primary) : null;
   const durationLabel = primary ? formatDuration(primary.duration) : null;
-  const tileW = compact ? "w-[52vw] max-w-[220px]" : "w-[min(36vw,280px)]";
+  const tileW = compact ? "w-[56vw] max-w-[240px]" : "w-[min(34vw,300px)]";
 
   useEffect(() => {
     firedRef.current = false;
@@ -217,7 +216,7 @@ function EndedPhase({
 
   if (!primary) return null;
 
-  const btnPad = compact ? "px-5 py-1.5 text-[10px]" : "px-6 py-2 text-[12px]";
+  const btnPad = compact ? "px-3 py-1.5 text-[10px]" : "px-4 py-2 text-[12px]";
 
   return (
     <motion.div
@@ -234,14 +233,10 @@ function EndedPhase({
     >
       <div className="absolute inset-0 bg-black" aria-hidden />
 
-      <div
-        className={`relative z-10 flex flex-col items-center ${
-          compact ? "px-3 gap-2.5" : "px-6 gap-3.5"
-        }`}
-      >
+      <div className={`relative z-10 ${tileW}`}>
         {autoplayArmed && secondsLeft > 0 ? (
           <p
-            className={`text-white font-medium ${
+            className={`text-left text-white font-medium mb-1.5 ${
               compact ? "text-xs" : "text-sm"
             }`}
           >
@@ -249,7 +244,7 @@ function EndedPhase({
           </p>
         ) : (
           <p
-            className={`text-white/80 font-medium ${
+            className={`text-left text-white/80 font-medium mb-1.5 ${
               compact ? "text-xs" : "text-sm"
             }`}
           >
@@ -260,7 +255,7 @@ function EndedPhase({
         <button
           type="button"
           onClick={() => onSelect(primary)}
-          className={`${tileW} text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-xl`}
+          className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-xl"
         >
           <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black/40">
             {thumb ? (
@@ -284,29 +279,27 @@ function EndedPhase({
               </span>
             )}
           </div>
-          <div className={compact ? "pt-2" : "pt-2.5"}>
-            <p
-              className={`text-white font-medium leading-snug line-clamp-2 ${
-                compact ? "text-[12px]" : "text-[15px]"
-              }`}
-            >
-              {primary.name}
-            </p>
-          </div>
+          <p
+            className={`text-left text-white font-medium leading-snug line-clamp-2 mt-2 ${
+              compact ? "text-[12px]" : "text-[15px]"
+            }`}
+          >
+            {primary.name}
+          </p>
         </button>
 
-        <div className={`flex items-center ${compact ? "gap-2.5 pt-0.5" : "gap-3 pt-1"}`}>
+        <div className={`flex w-full items-stretch ${compact ? "gap-2 mt-3" : "gap-2.5 mt-3.5"}`}>
           <button
             type="button"
             onClick={onCancelTimer}
-            className={`rounded-full bg-[#272727] text-white hover:bg-[#3a3a3a] transition-colors font-medium tracking-wide uppercase ${btnPad}`}
+            className={`flex-1 rounded-full bg-[#272727] text-white hover:bg-[#3a3a3a] transition-colors font-medium tracking-wide uppercase ${btnPad}`}
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={onPlayNow}
-            className={`rounded-full bg-[#3f3f3f] text-white hover:bg-[#525252] transition-colors font-medium tracking-wide uppercase ${btnPad}`}
+            className={`flex-1 rounded-full bg-[#3f3f3f] text-white hover:bg-[#525252] transition-colors font-medium tracking-wide uppercase ${btnPad}`}
           >
             Play now
           </button>

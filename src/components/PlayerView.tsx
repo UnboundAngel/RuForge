@@ -36,10 +36,11 @@ import {
 import {
   VIDEO_END_CARDS_DIM,
   VIDEO_END_CARDS_HOVER_DIM,
-  VIDEO_END_CARDS_LEAD_SEC,
   endScreenFadeGain,
   endScreenFadeProgress,
   pickVideoEndScreenSuggestions,
+  videoEndCardsLeadSec,
+  videoEndFadeSec,
 } from "../videoEndScreenSuggestions";
 import { VideoEndScreen, type VideoEndScreenPhase } from "./VideoEndScreen";
 import { isAudioOnlyPath } from "../mediaKind";
@@ -618,14 +619,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (!isFinite(duration) || duration <= 0) return;
 
     const remaining = duration - currentTime;
-    const fadeProgress = endScreenFadeProgress(remaining);
-    const nextGain = endScreenFadeGain(remaining);
+    const leadSec = videoEndCardsLeadSec(duration);
+    const fadeSec = videoEndFadeSec(duration);
+    const fadeProgress = endScreenFadeProgress(remaining, fadeSec);
+    const nextGain = endScreenFadeGain(remaining, fadeSec);
     if (endFadeGainRef.current !== nextGain) {
       endFadeGainRef.current = nextGain;
       applyVideoOutputWithFade();
     }
 
-    if (remaining <= VIDEO_END_CARDS_LEAD_SEC) {
+    if (remaining <= leadSec) {
       const suggestions = ensureEndSuggestions();
       if (suggestions.length === 0) {
         if (endScreen) setEndScreen(null);
