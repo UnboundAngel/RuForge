@@ -701,17 +701,19 @@ pub async fn extract_frames(
     result
 }
 
-/// After canceling ffmpeg, wait briefly for the per-file lock (best effort).
-async fn wait_ffmpeg_slot_idle(video_path: &str, max_wait: Duration) {
+/// Cancel any in-flight ffmpeg for this path, then hold the per-video lock across trash
+/// so a new probe/sprite job cannot reopen the file between the idle check and delete.
+async fn acquire_ffmpeg_lock_for_delete(
+    video_path: &str,
+) -> Option<tokio::sync::OwnedMutexGuard<()>> {
+    cancel_ffmpeg_for_video(video_path).await;
     let slot = ffmpeg_slot_for(video_path).await;
-    let deadline = tokio::time::Instant::now() + max_wait;
-    while tokio::time::Instant::now() < deadline {
-        cancel_ffmpeg_for_video(video_path).await;
-        if let Ok(guard) = slot.lock.try_lock() {
-            drop(guard);
-            return;
+    match tokio::time::timeout(Duration::from_secs(2), slot.lock.clone().lock_owned()).await {
+        Ok(guard) => Some(guard),
+        Err(_) => {
+            cancel_ffmpeg_for_video(video_path).await;
+            slot.lock.clone().try_lock_owned().ok()
         }
-        tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }
 
@@ -756,7 +758,7 @@ fn delete_media_filesystem(app: &AppHandle, video_path: &str) -> Result<DeleteMe
     let already_missing = !had_media;
 
     let paths = collect_deletion_paths(video_file_path);
-    let trashed_files: Vec<String> = paths
+    let existing_before: Vec<String> = paths
         .iter()
         .filter(|p| p.exists())
         .map(|p| p.to_string_lossy().into_owned())
@@ -766,6 +768,28 @@ fn delete_media_filesystem(app: &AppHandle, video_path: &str) -> Result<DeleteMe
     for warning in &sidecar_warnings {
         crate::rf_log!("library.delete", log::Level::Warn, "delete trash: {warning}");
     }
+
+    if had_media && video_file_path.is_file() {
+        let detail = sidecar_warnings
+            .iter()
+            .find(|w| {
+                let lower = w.to_ascii_lowercase();
+                lower.contains("being used by another process") || lower.contains("os error 32")
+            })
+            .cloned()
+            .unwrap_or_else(|| {
+                format!(
+                    "{}: file is still on disk after trash (being used by another process)",
+                    video_file_path.display()
+                )
+            });
+        return Err(detail);
+    }
+
+    let trashed_files: Vec<String> = existing_before
+        .into_iter()
+        .filter(|p| !Path::new(p).exists())
+        .collect();
 
     prune_empty_dirs_after_media_delete(video_file_path);
 
@@ -781,16 +805,37 @@ fn delete_media_filesystem(app: &AppHandle, video_path: &str) -> Result<DeleteMe
     })
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteMediaBatchProgress {
+    pub done: usize,
+    pub total: usize,
+    pub path: String,
+    pub deleted_bytes: u64,
+}
+
+pub const DELETE_MEDIA_BATCH_PROGRESS_EVENT: &str = "delete-media-batch-progress";
+
 #[tauri::command]
 pub async fn delete_media_batch(app: AppHandle, paths: Vec<String>) -> Result<u64, String> {
+    let total = paths.len();
     let mut deleted_bytes: u64 = 0;
-    for video_path in paths {
+    for (index, video_path) in paths.into_iter().enumerate() {
         if let Ok(meta) = std::fs::metadata(&video_path) {
             if meta.is_file() {
                 deleted_bytes = deleted_bytes.saturating_add(meta.len());
             }
         }
-        delete_media(app.clone(), video_path).await?;
+        delete_media(app.clone(), video_path.clone()).await?;
+        let _ = app.emit(
+            DELETE_MEDIA_BATCH_PROGRESS_EVENT,
+            DeleteMediaBatchProgress {
+                done: index + 1,
+                total,
+                path: video_path,
+                deleted_bytes,
+            },
+        );
     }
     Ok(deleted_bytes)
 }
@@ -800,8 +845,7 @@ pub async fn delete_media(
     app: AppHandle,
     video_path: String,
 ) -> Result<DeleteMediaResult, String> {
-    cancel_ffmpeg_for_video(&video_path).await;
-    wait_ffmpeg_slot_idle(&video_path, Duration::from_secs(2)).await;
+    let _ffmpeg_hold = acquire_ffmpeg_lock_for_delete(&video_path).await;
     delete_media_filesystem(&app, &video_path)
 }
 
@@ -1001,5 +1045,30 @@ mod delete_media_tests {
         assert!(!item_dir.join("clip.info.json").exists());
         assert!(!item_dir.join(THUMB_DIR_NAME).exists());
         assert!(!item_dir.exists());
+    }
+
+    #[test]
+    fn trash_five_media_bundles_wall_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut medias = Vec::new();
+        for i in 0..5 {
+            let item_dir = dir.path().join("Videos").join(format!("Clip {i}"));
+            std::fs::create_dir_all(&item_dir).unwrap();
+            let media = item_dir.join("clip.mkv");
+            std::fs::write(&media, vec![0u8; 64 * 1024]).unwrap();
+            std::fs::write(item_dir.join("clip.info.json"), br#"{"id":"x"}"#).unwrap();
+            std::fs::write(item_dir.join("clip.jpg"), b"thumb").unwrap();
+            medias.push(media);
+        }
+        let started = std::time::Instant::now();
+        for media in &medias {
+            let paths = collect_deletion_paths(media);
+            let warnings = trash_paths(&paths);
+            assert!(warnings.is_empty(), "{warnings:?}");
+            prune_empty_dirs_after_media_delete(media);
+        }
+        let elapsed = started.elapsed();
+        eprintln!("trash_five_media_bundles_wall_time: {elapsed:?}");
+        assert!(elapsed.as_secs() < 30, "unexpectedly slow trash: {elapsed:?}");
     }
 }

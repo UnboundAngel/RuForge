@@ -33,8 +33,13 @@ import {
   readAudioAutoAdvanceFolder,
   readAudioPrefetchNext,
 } from "../audioPlaybackPrefs";
-import { pickVideoEndScreenSuggestions } from "../videoEndScreenSuggestions";
-import { VideoEndScreen } from "./VideoEndScreen";
+import {
+  VIDEO_END_CARDS_LEAD_SEC,
+  endScreenFadeGain,
+  endScreenFadeProgress,
+  pickVideoEndScreenSuggestions,
+} from "../videoEndScreenSuggestions";
+import { VideoEndScreen, type VideoEndScreenPhase } from "./VideoEndScreen";
 import { isAudioOnlyPath } from "../mediaKind";
 import { fetchSubtitleTracks, revokeSubtitleBlobSrcs, subtitleTracksWithBlobSrc, syncVideoTextTrackModes, type SubtitleTrack } from "../localVideoSubtitles";
 import { cookieContextFromSettings } from "@/downloadQueue";
@@ -387,8 +392,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [endScreen, setEndScreen] = useState<{
+    phase: VideoEndScreenPhase;
     suggestions: MediaFile[];
     autoplayArmed: boolean;
+  } | null>(null);
+  const [endDimOpacity, setEndDimOpacity] = useState(0);
+  const [endCardHovered, setEndCardHovered] = useState(false);
+  const endFadeGainRef = useRef(1);
+  const endSuggestionsForPathRef = useRef<{
+    path: string;
+    suggestions: MediaFile[];
   } | null>(null);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const [showPlayerMoreMenu, setShowPlayerMoreMenu] = useState(false);
@@ -422,11 +435,35 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   useEffect(() => {
     setCommentsPanelOpen(false);
     setEndScreen(null);
+    setEndDimOpacity(0);
+    setEndCardHovered(false);
+    endFadeGainRef.current = 1;
+    endSuggestionsForPathRef.current = null;
   }, [file.path]);
 
   useEffect(() => {
-    if (isLooping) setEndScreen(null);
+    if (isLooping) {
+      setEndScreen(null);
+      setEndDimOpacity(0);
+      setEndCardHovered(false);
+      endFadeGainRef.current = 1;
+    }
   }, [isLooping]);
+
+  const applyVideoOutputWithFade = useCallback(() => {
+    if (audioDelegated) return;
+    const el = mediaRef.current;
+    if (!el) return;
+    applyMediaOutputState(el, volume * endFadeGainRef.current, isMuted);
+  }, [audioDelegated, volume, isMuted]);
+
+  const ensureEndSuggestions = useCallback((): MediaFile[] => {
+    const cached = endSuggestionsForPathRef.current;
+    if (cached?.path === file.path) return cached.suggestions;
+    const suggestions = pickVideoEndScreenSuggestions(file.path, videoLibrarySorted);
+    endSuggestionsForPathRef.current = { path: file.path, suggestions };
+    return suggestions;
+  }, [file.path, videoLibrarySorted]);
 
   const handleCommentsPanelX = useCallback((x: number) => {
     commentsPanelX.set(x);
@@ -435,6 +472,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const handleEndScreenSelect = useCallback(
     (next: MediaFile) => {
       setEndScreen(null);
+      setEndDimOpacity(0);
+      setEndCardHovered(false);
+      endFadeGainRef.current = 1;
       setPlayingFile(next);
     },
     [setPlayingFile],
@@ -444,13 +484,14 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     setEndScreen((prev) => (prev ? { ...prev, autoplayArmed: false } : null));
   }, []);
 
-  const handleEndScreenReplay = useCallback(() => {
-    setEndScreen(null);
-    const m = mediaRef.current;
-    if (!m) return;
-    m.currentTime = 0;
-    setIsPaused(false);
-    void m.play().catch(() => {});
+  const handleEndScreenPlayNow = useCallback(() => {
+    const primary = endScreen?.suggestions[0];
+    if (!primary) return;
+    handleEndScreenSelect(primary);
+  }, [endScreen, handleEndScreenSelect]);
+
+  const handleEndCardHoverChange = useCallback((hovered: boolean) => {
+    setEndCardHovered(hovered);
   }, []);
 
   const toggleCommentsPanel = useCallback(() => {
@@ -498,7 +539,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (audioDelegated) return;
     const el = mediaRef.current;
     if (!el) return;
-    applyMediaOutputState(el, volume, isMuted);
+    applyMediaOutputState(el, volume * endFadeGainRef.current, isMuted);
     el.loop = isLooping;
   }, [file.path, volume, isMuted, isLooping]);
 
@@ -537,7 +578,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     const media = mediaRef.current;
     if (!media) return;
     if (media.paused) {
-      applyMediaOutputState(media, volume, isMuted);
+      applyMediaOutputState(media, volume * endFadeGainRef.current, isMuted);
       void media.play().catch(() => {});
       syncPausedFromMedia(false);
       setClickFlash("play");
@@ -552,8 +593,75 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   }, [file.path, volume, isMuted, audioDelegated, hostAudio]);
 
   const handleMediaCanPlay = useCallback((el: HTMLMediaElement) => {
-    applyMediaOutputState(el, volume, isMuted);
+    applyMediaOutputState(el, volume * endFadeGainRef.current, isMuted);
   }, [volume, isMuted]);
+
+  useEffect(() => {
+    if (audioOnly || isLooping) {
+      if (endFadeGainRef.current !== 1) {
+        endFadeGainRef.current = 1;
+        applyVideoOutputWithFade();
+      }
+      if (endDimOpacity !== 0) setEndDimOpacity(0);
+      if (endCardHovered) setEndCardHovered(false);
+      if (endScreen?.phase === "cards") setEndScreen(null);
+      return;
+    }
+    if (endScreen?.phase === "ended") {
+      endFadeGainRef.current = 0;
+      applyVideoOutputWithFade();
+      if (endDimOpacity !== 1) setEndDimOpacity(1);
+      return;
+    }
+    if (!isFinite(duration) || duration <= 0) return;
+
+    const remaining = duration - currentTime;
+    const fadeProgress = endScreenFadeProgress(remaining);
+    const nextGain = endScreenFadeGain(remaining);
+    if (endFadeGainRef.current !== nextGain) {
+      endFadeGainRef.current = nextGain;
+      applyVideoOutputWithFade();
+    }
+
+    if (remaining <= VIDEO_END_CARDS_LEAD_SEC) {
+      const suggestions = ensureEndSuggestions();
+      if (suggestions.length === 0) {
+        if (endScreen) setEndScreen(null);
+        const dim = fadeProgress;
+        if (endDimOpacity !== dim) setEndDimOpacity(dim);
+        return;
+      }
+      if (!endScreen || endScreen.phase !== "cards") {
+        setEndScreen({
+          phase: "cards",
+          suggestions,
+          autoplayArmed: readAudioAutoAdvanceFolder(),
+        });
+      }
+      const hoverDim = endCardHovered ? 0.55 : 0.25;
+      const dim = Math.max(hoverDim, fadeProgress);
+      if (endDimOpacity !== dim) setEndDimOpacity(dim);
+      return;
+    }
+
+    if (endScreen?.phase === "cards") setEndScreen(null);
+    if (endCardHovered) setEndCardHovered(false);
+    if (endDimOpacity !== 0) setEndDimOpacity(0);
+    if (endFadeGainRef.current !== 1) {
+      endFadeGainRef.current = 1;
+      applyVideoOutputWithFade();
+    }
+  }, [
+    audioOnly,
+    isLooping,
+    duration,
+    currentTime,
+    endScreen,
+    endCardHovered,
+    endDimOpacity,
+    ensureEndSuggestions,
+    applyVideoOutputWithFade,
+  ]);
 
   const handlePlaybackEnded = useCallback(() => {
     if (isLooping) return;
@@ -562,14 +670,20 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       writePlaybackPos(file.path, m.duration, m.duration);
     }
     if (!audioOnly) {
-      const suggestions = pickVideoEndScreenSuggestions(file.path, videoLibrarySorted);
+      const suggestions = ensureEndSuggestions();
+      endFadeGainRef.current = 0;
+      applyVideoOutputWithFade();
+      setEndDimOpacity(1);
+      setEndCardHovered(false);
       if (suggestions.length === 0) {
+        setEndScreen(null);
         setIsPaused(true);
         return;
       }
       setIsPaused(true);
       setShowControls(true);
       setEndScreen({
+        phase: "ended",
         suggestions,
         autoplayArmed: readAudioAutoAdvanceFolder(),
       });
@@ -602,7 +716,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     audioOnly,
     folderAudioPlaylist,
     audioLibrarySorted,
-    videoLibrarySorted,
+    ensureEndSuggestions,
+    applyVideoOutputWithFade,
     setPlayingFile,
   ]);
 
@@ -698,7 +813,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     const media = mediaRef.current;
     if (media) {
       writePlaybackPos(file.path, media.currentTime, media.duration);
-      setVolume(media.volume);
       const wasPlaying = !media.paused;
       media.pause();
       void handlePopOutFromStore(media.currentTime, {
@@ -1199,7 +1313,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     syncPausedFromMedia(vid.paused);
     durationRef.current = vid.duration;
     setDuration(vid.duration);
-    applyMediaOutputState(vid, volume, isMuted);
+    applyMediaOutputState(vid, volume * endFadeGainRef.current, isMuted);
     vid.preservesPitch = true;
     vid.playbackRate = playbackSpeed;
 
@@ -1605,15 +1719,25 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         />
       )}
 
+      {!audioOnly && endDimOpacity > 0 && (
+        <div
+          className="absolute inset-0 z-[53] pointer-events-none bg-black transition-opacity duration-150"
+          style={{ opacity: endDimOpacity }}
+          aria-hidden
+        />
+      )}
+
       <AnimatePresence>
         {endScreen && (
           <VideoEndScreen
-            key="video-end-screen"
+            key={`video-end-screen-${endScreen.phase}`}
+            phase={endScreen.phase}
             suggestions={endScreen.suggestions}
             autoplayArmed={endScreen.autoplayArmed}
             onSelect={handleEndScreenSelect}
             onCancelTimer={handleEndScreenCancelTimer}
-            onReplay={handleEndScreenReplay}
+            onPlayNow={handleEndScreenPlayNow}
+            onCardHoverChange={handleEndCardHoverChange}
           />
         )}
       </AnimatePresence>

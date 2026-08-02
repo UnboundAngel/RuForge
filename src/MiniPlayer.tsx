@@ -51,8 +51,13 @@ import {
   readAudioAutoAdvanceFolder,
   readAudioPrefetchNext,
 } from "./audioPlaybackPrefs";
-import { pickVideoEndScreenSuggestions } from "./videoEndScreenSuggestions";
-import { VideoEndScreen } from "./components/VideoEndScreen";
+import {
+  VIDEO_END_CARDS_LEAD_SEC,
+  endScreenFadeGain,
+  endScreenFadeProgress,
+  pickVideoEndScreenSuggestions,
+} from "./videoEndScreenSuggestions";
+import { VideoEndScreen, type VideoEndScreenPhase } from "./components/VideoEndScreen";
 import { applyMediaOutputState } from "./applyMediaOutputState";
 import { chapterAtTime, normalizeChapters, timeForScrubberClientX, timeForScrubberPercent } from "./chapters";
 import { ChapterScrubber } from "./components/player/ChapterScrubber";
@@ -447,8 +452,16 @@ export default function MiniPlayer() {
 
   const [isPaused, setIsPaused] = useState(false);
   const [endScreen, setEndScreen] = useState<{
+    phase: VideoEndScreenPhase;
     suggestions: MediaFile[];
     autoplayArmed: boolean;
+  } | null>(null);
+  const [endDimOpacity, setEndDimOpacity] = useState(0);
+  const [endCardHovered, setEndCardHovered] = useState(false);
+  const endFadeGainRef = useRef(1);
+  const endSuggestionsForPathRef = useRef<{
+    path: string;
+    suggestions: MediaFile[];
   } | null>(null);
   const [isVolumeHovered, setIsVolumeHovered] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -670,7 +683,7 @@ export default function MiniPlayer() {
   useEffect(() => {
     const el = mediaRef.current;
     if (!el) return;
-    applyMediaOutputState(el, volumeLabel / 100, isMuted);
+    applyMediaOutputState(el, (volumeLabel / 100) * endFadeGainRef.current, isMuted);
   }, [playingFile, volumeLabel, isMuted]);
 
   useEffect(() => {
@@ -920,7 +933,8 @@ export default function MiniPlayer() {
     v.playbackRate = payload.playbackSpeed ?? playbackSpeed;
     applyMediaOutputState(
       v,
-      typeof payload.volume === "number" ? payload.volume : volumeLabel / 100,
+      (typeof payload.volume === "number" ? payload.volume : volumeLabel / 100) *
+        endFadeGainRef.current,
       payload.muted ?? isMuted,
     );
     if (paused) {
@@ -990,7 +1004,7 @@ export default function MiniPlayer() {
   const applyInitialMediaSeek = (v: HTMLMediaElement) => {
     if (isUserSeekingRef.current) return;
     if (!playingFile) return;
-    applyMediaOutputState(v, volumeLabel / 100, isMuted);
+    applyMediaOutputState(v, (volumeLabel / 100) * endFadeGainRef.current, isMuted);
     v.preservesPitch = true;
     v.playbackRate = playbackSpeed;
 
@@ -1083,15 +1097,19 @@ export default function MiniPlayer() {
   }, []);
 
   const adjustVolume = (delta: number) => {
-    if (!mediaRef.current) return;
-
-    const start = mediaRef.current.volume;
+    const start = volumeLabel / 100;
     const target = Math.max(0, Math.min(1, start + delta));
     if (Math.abs(target - start) < 0.001) return;
 
-    mediaRef.current.volume = target;
     setVolumeLabel(Math.round(target * 100));
     localStorage.setItem("miniplayer-volume", target.toString());
+    if (mediaRef.current) {
+      applyMediaOutputState(
+        mediaRef.current,
+        target * endFadeGainRef.current,
+        isMuted,
+      );
+    }
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -1392,7 +1410,7 @@ export default function MiniPlayer() {
     const media = mediaRef.current;
     if (!media) return;
     if (media.paused) {
-      applyMediaOutputState(media, volumeLabel / 100, isMuted);
+      applyMediaOutputState(media, (volumeLabel / 100) * endFadeGainRef.current, isMuted);
       void media.play().catch(() => {});
       setIsPaused(false);
     } else {
@@ -1462,6 +1480,24 @@ export default function MiniPlayer() {
       ? videoPlaylistMini[playlistVideoIdxMini + 1]
       : null;
 
+  const applyVideoOutputWithFade = useCallback(() => {
+    const el = mediaRef.current;
+    if (!el) return;
+    applyMediaOutputState(el, (volumeLabel / 100) * endFadeGainRef.current, isMuted);
+  }, [volumeLabel, isMuted]);
+
+  const ensureEndSuggestions = useCallback((): MediaFile[] => {
+    if (!playingFile) return [];
+    const cached = endSuggestionsForPathRef.current;
+    if (cached?.path === playingFile.path) return cached.suggestions;
+    const suggestions = pickVideoEndScreenSuggestions(
+      playingFile.path,
+      videoPlaylistMini,
+    );
+    endSuggestionsForPathRef.current = { path: playingFile.path, suggestions };
+    return suggestions;
+  }, [playingFile, videoPlaylistMini]);
+
   const incrementViewCount = (file: MediaFile) => {
     const saved = localStorage.getItem(`views-${file.path}`);
     const current = saved ? parseInt(saved) : 0;
@@ -1470,6 +1506,10 @@ export default function MiniPlayer() {
 
   const handleSelectMedia = (file: MediaFile) => {
     setEndScreen(null);
+    setEndDimOpacity(0);
+    setEndCardHovered(false);
+    endFadeGainRef.current = 1;
+    endSuggestionsForPathRef.current = null;
     setPlayingFile(file);
     incrementViewCount(file);
     setIsMediaSelectorOpen(false);
@@ -1484,6 +1524,10 @@ export default function MiniPlayer() {
     setIsPaused(true);
     setIsMediaSelectorOpen(false);
     setEndScreen(null);
+    setEndDimOpacity(0);
+    setEndCardHovered(false);
+    endFadeGainRef.current = 1;
+    endSuggestionsForPathRef.current = null;
     setPlayingFile(null);
     emitVideoMiniTeardown();
   };
@@ -1512,11 +1556,13 @@ export default function MiniPlayer() {
     if (v && isFinite(v.duration) && v.duration > 0) {
       writePlaybackPos(playingFile.path, v.duration, v.duration);
     }
-    const suggestions = pickVideoEndScreenSuggestions(
-      playingFile.path,
-      videoPlaylistMini,
-    );
+    const suggestions = ensureEndSuggestions();
+    endFadeGainRef.current = 0;
+    applyVideoOutputWithFade();
+    setEndDimOpacity(1);
+    setEndCardHovered(false);
     if (suggestions.length === 0) {
+      setEndScreen(null);
       if (readAudioAutoAdvanceFolder()) {
         returnToLibraryBrowse();
         return;
@@ -1526,6 +1572,7 @@ export default function MiniPlayer() {
     }
     setIsPaused(true);
     setEndScreen({
+      phase: "ended",
       suggestions,
       autoplayArmed: readAudioAutoAdvanceFolder(),
     });
@@ -1539,22 +1586,100 @@ export default function MiniPlayer() {
     setEndScreen((prev) => (prev ? { ...prev, autoplayArmed: false } : null));
   };
 
-  const handleEndScreenReplay = () => {
-    setEndScreen(null);
-    const m = mediaRef.current;
-    if (!m) return;
-    m.currentTime = 0;
-    setIsPaused(false);
-    void m.play().catch(() => {});
+  const handleEndScreenPlayNow = () => {
+    const primary = endScreen?.suggestions[0];
+    if (!primary) return;
+    handleEndScreenSelect(primary);
+  };
+
+  const handleEndCardHoverChange = (hovered: boolean) => {
+    setEndCardHovered(hovered);
   };
 
   useEffect(() => {
     setEndScreen(null);
+    setEndDimOpacity(0);
+    setEndCardHovered(false);
+    endFadeGainRef.current = 1;
+    endSuggestionsForPathRef.current = null;
   }, [playingFile?.path]);
 
   useEffect(() => {
-    if (isLooping) setEndScreen(null);
+    if (isLooping) {
+      setEndScreen(null);
+      setEndDimOpacity(0);
+      setEndCardHovered(false);
+      endFadeGainRef.current = 1;
+    }
   }, [isLooping]);
+
+  useEffect(() => {
+    if (!playingFile || playingAudioOnly || isLooping) {
+      if (endFadeGainRef.current !== 1) {
+        endFadeGainRef.current = 1;
+        applyVideoOutputWithFade();
+      }
+      if (endDimOpacity !== 0) setEndDimOpacity(0);
+      if (endCardHovered) setEndCardHovered(false);
+      if (endScreen?.phase === "cards") setEndScreen(null);
+      return;
+    }
+    if (endScreen?.phase === "ended") {
+      endFadeGainRef.current = 0;
+      applyVideoOutputWithFade();
+      if (endDimOpacity !== 1) setEndDimOpacity(1);
+      return;
+    }
+    if (!isFinite(duration) || duration <= 0) return;
+
+    const remaining = duration - currentTime;
+    const fadeProgress = endScreenFadeProgress(remaining);
+    const nextGain = endScreenFadeGain(remaining);
+    if (endFadeGainRef.current !== nextGain) {
+      endFadeGainRef.current = nextGain;
+      applyVideoOutputWithFade();
+    }
+
+    if (remaining <= VIDEO_END_CARDS_LEAD_SEC) {
+      const suggestions = ensureEndSuggestions();
+      if (suggestions.length === 0) {
+        if (endScreen) setEndScreen(null);
+        const dim = fadeProgress;
+        if (endDimOpacity !== dim) setEndDimOpacity(dim);
+        return;
+      }
+      if (!endScreen || endScreen.phase !== "cards") {
+        setEndScreen({
+          phase: "cards",
+          suggestions,
+          autoplayArmed: readAudioAutoAdvanceFolder(),
+        });
+      }
+      const hoverDim = endCardHovered ? 0.55 : 0.25;
+      const dim = Math.max(hoverDim, fadeProgress);
+      if (endDimOpacity !== dim) setEndDimOpacity(dim);
+      return;
+    }
+
+    if (endScreen?.phase === "cards") setEndScreen(null);
+    if (endCardHovered) setEndCardHovered(false);
+    if (endDimOpacity !== 0) setEndDimOpacity(0);
+    if (endFadeGainRef.current !== 1) {
+      endFadeGainRef.current = 1;
+      applyVideoOutputWithFade();
+    }
+  }, [
+    playingFile,
+    playingAudioOnly,
+    isLooping,
+    duration,
+    currentTime,
+    endScreen,
+    endCardHovered,
+    endDimOpacity,
+    ensureEndSuggestions,
+    applyVideoOutputWithFade,
+  ]);
 
   const skipToNextTrack = () => {
     if (!playingFile) return;
@@ -1644,16 +1769,26 @@ export default function MiniPlayer() {
         )}
       </AnimatePresence>
 
+      {playingFile && !playingAudioOnly && endDimOpacity > 0 && (
+        <div
+          className="absolute inset-0 z-[53] pointer-events-none bg-black transition-opacity duration-150"
+          style={{ opacity: endDimOpacity }}
+          aria-hidden
+        />
+      )}
+
       <AnimatePresence>
         {endScreen && playingFile && !playingAudioOnly && (
           <VideoEndScreen
-            key="mini-video-end-screen"
+            key={`mini-video-end-screen-${endScreen.phase}`}
+            phase={endScreen.phase}
             suggestions={endScreen.suggestions}
             autoplayArmed={endScreen.autoplayArmed}
             compact={!isLargeMode}
             onSelect={handleEndScreenSelect}
             onCancelTimer={handleEndScreenCancelTimer}
-            onReplay={handleEndScreenReplay}
+            onPlayNow={handleEndScreenPlayNow}
+            onCardHoverChange={handleEndCardHoverChange}
           />
         )}
       </AnimatePresence>
@@ -1730,7 +1865,7 @@ export default function MiniPlayer() {
                     currentTime: media?.currentTime ?? 0,
                     paused: media ? media.paused : true,
                     playbackSpeed,
-                    volume: media?.volume ?? volumeLabel / 100,
+                    volume: volumeLabel / 100,
                     muted: isMuted,
                   };
                   if (media && playingFile) {
@@ -1841,14 +1976,26 @@ export default function MiniPlayer() {
                       setIsPaused(false);
                       setIsGalleryHovered(false);
                       if (mediaRef.current) {
-                        applyMediaOutputState(mediaRef.current, volumeLabel / 100, isMuted);
+                        applyMediaOutputState(
+                          mediaRef.current,
+                          (volumeLabel / 100) * endFadeGainRef.current,
+                          isMuted,
+                        );
                       }
                     }}
                     onCanPlay={(e) =>
-                      applyMediaOutputState(e.currentTarget, volumeLabel / 100, isMuted)
+                      applyMediaOutputState(
+                        e.currentTarget,
+                        (volumeLabel / 100) * endFadeGainRef.current,
+                        isMuted,
+                      )
                     }
                     onLoadedData={(e) =>
-                      applyMediaOutputState(e.currentTarget, volumeLabel / 100, isMuted)
+                      applyMediaOutputState(
+                        e.currentTarget,
+                        (volumeLabel / 100) * endFadeGainRef.current,
+                        isMuted,
+                      )
                     }
                     onLoadedMetadata={(e) => applyInitialMediaSeek(e.currentTarget)}
                     onEnded={() => {
@@ -1912,14 +2059,26 @@ export default function MiniPlayer() {
                       setIsPaused(false);
                       setIsGalleryHovered(false);
                       if (mediaRef.current) {
-                        applyMediaOutputState(mediaRef.current, volumeLabel / 100, isMuted);
+                        applyMediaOutputState(
+                          mediaRef.current,
+                          (volumeLabel / 100) * endFadeGainRef.current,
+                          isMuted,
+                        );
                       }
                     }}
                     onCanPlay={(e) =>
-                      applyMediaOutputState(e.currentTarget, volumeLabel / 100, isMuted)
+                      applyMediaOutputState(
+                        e.currentTarget,
+                        (volumeLabel / 100) * endFadeGainRef.current,
+                        isMuted,
+                      )
                     }
                     onLoadedData={(e) =>
-                      applyMediaOutputState(e.currentTarget, volumeLabel / 100, isMuted)
+                      applyMediaOutputState(
+                        e.currentTarget,
+                        (volumeLabel / 100) * endFadeGainRef.current,
+                        isMuted,
+                      )
                     }
                     onLoadedMetadata={(e) => applyInitialMediaSeek(e.currentTarget)}
                     onEnded={() => {

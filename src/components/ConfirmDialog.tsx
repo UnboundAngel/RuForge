@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence } from "motion/react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { OVERLAY_Z_CLASS } from "../lib/overlayZIndex";
 import {
   SettingsModalBtnPrimary,
   SettingsModalBtnSecondary,
@@ -54,7 +56,7 @@ function ConfirmDialogView({
       title={pending.title}
       description={pending.message}
       eyebrow={null}
-      zIndexClass="z-[320]"
+      zIndexClass={OVERLAY_Z_CLASS.confirm}
       maxWidthClass="max-w-md"
       footer={
         <>
@@ -98,7 +100,7 @@ function ConfirmDialogView({
   );
 }
 
-/** Mount once near the app root (e.g. `App.tsx`). */
+/** Mount once near the app root (e.g. `App.tsx`). Portaled to `document.body`. */
 export function ConfirmDialogHost() {
   const [pending, setPending] = useState<PendingConfirm | null>(null);
 
@@ -119,7 +121,7 @@ export function ConfirmDialogHost() {
   const onConfirm = useCallback(() => settle(true), [settle]);
   const onCancel = useCallback(() => settle(false), [settle]);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {pending ? (
         <ConfirmDialogView
@@ -129,6 +131,7 @@ export function ConfirmDialogHost() {
           onCancel={onCancel}
         />
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

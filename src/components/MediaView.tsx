@@ -299,6 +299,7 @@ export const MediaView = ({
     (s) => s.settings.hideAudioFromMainLibrary !== false,
   );
   const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
+  const galleryDesktopReady = useRuforgeStore((s) => s.galleryDesktopReady);
   const activeMenu = useRuforgeStore((s) => s.activeMenu);
   const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
@@ -523,7 +524,7 @@ export const MediaView = ({
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
-        {galleryLoading ? (
+        {galleryLoading && !galleryDesktopReady ? (
           <div className="flex justify-center py-40">
             <Loader2 className="animate-spin text-[color:var(--accent)] opacity-20" size={60} />
           </div>

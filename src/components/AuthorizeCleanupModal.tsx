@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState, useRef, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { releasePlaybackBeforeDelete } from "../releasePlaybackBeforeDelete";
 import { X, Video, Trash2, CheckSquare, Square, Loader2 } from "lucide-react";
+import { OVERLAY_Z_CLASS } from "../lib/overlayZIndex";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 import { askConfirm } from "./ConfirmDialog";
@@ -18,6 +20,13 @@ import {
   type CleanupFilterMode,
   type CleanupCandidate,
 } from "../cleanupCandidates";
+
+type DeleteBatchProgress = {
+  done: number;
+  total: number;
+  path: string;
+  deletedBytes: number;
+};
 
 
 const CleanupItem = memo(({ 
@@ -110,18 +119,26 @@ export function AuthorizeCleanupModal() {
   const storageStats = useRuforgeStore((s) => s.storageStats);
   const notify = useRuforgeStore((s) => s.notify);
   const refreshStorageStats = useRuforgeStore((s) => s.refreshStorageStats);
-  const invalidateEntries = useRuforgeStore((s) => s.invalidateEntries);
+  const removeGalleryEntryByPath = useRuforgeStore((s) => s.removeGalleryEntryByPath);
 
   const [mode, setMode] = useState<CleanupFilterMode>("oldest_unwatched");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [busy, setBusy] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
   const [showDeselectWarning, setShowDeselectWarning] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const isMounted = useRef(true);
+  const deleteProgressUnlistenRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     isMounted.current = true;
-    return () => { isMounted.current = false; };
+    return () => {
+      isMounted.current = false;
+      deleteProgressUnlistenRef.current?.();
+      deleteProgressUnlistenRef.current = null;
+    };
   }, []);
 
   const bytesNeeded = useMemo(
@@ -194,14 +211,34 @@ export function AuthorizeCleanupModal() {
     if (!approved) return;
 
     setBusy(true);
+    setDeleteProgress({ done: 0, total: paths.length });
+    const deletedPaths: string[] = [];
     try {
+      deleteProgressUnlistenRef.current?.();
+      const unlistenProgress = await listen<DeleteBatchProgress>(
+        "delete-media-batch-progress",
+        (event) => {
+          const { done, total, path } = event.payload;
+          deletedPaths.push(path);
+          removeGalleryEntryByPath(path);
+          setSelected((prev) => {
+            const next = new Set(prev);
+            next.delete(path);
+            return next;
+          });
+          if (isMounted.current) setDeleteProgress({ done, total });
+        },
+      );
+      deleteProgressUnlistenRef.current = unlistenProgress;
+
       await releasePlaybackBeforeDelete(paths);
-
       const deleted = await invoke<number>("delete_media_batch", { paths });
-      clearPlaybackStateForDeletedPaths(paths);
+      clearPlaybackStateForDeletedPaths(deletedPaths.length > 0 ? deletedPaths : paths);
 
+      const removedSet = new Set(deletedPaths);
       const jobIds = new Set<string>();
       for (const c of selectedCandidates) {
+        if (!removedSet.has(c.file.path)) continue;
         const sourceUrl = c.file.sourceUrl?.trim();
         if (!sourceUrl) continue;
         for (const j of useRuforgeStore.getState().downloadJobs) {
@@ -216,7 +253,6 @@ export function AuthorizeCleanupModal() {
       }
 
       await refreshStorageStats();
-      await invalidateEntries({ silent: true });
       if (isMounted.current) {
         notify(`Freed ${formatBytes(deleted)} from your library.`);
         close();
@@ -232,7 +268,12 @@ export function AuthorizeCleanupModal() {
         }
       }
     } finally {
-      if (isMounted.current) setBusy(false);
+      deleteProgressUnlistenRef.current?.();
+      deleteProgressUnlistenRef.current = null;
+      if (isMounted.current) {
+        setBusy(false);
+        setDeleteProgress(null);
+      }
     }
   };
 
@@ -272,7 +313,7 @@ export function AuthorizeCleanupModal() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed bottom-0 left-0 right-0 top-[var(--rf-titlebar-h)] z-[400] flex flex-col bg-[#110D0B] text-stone-100 selection:bg-[color:var(--accent)] selection:text-[#110D0B]"
+          className={`fixed bottom-0 left-0 right-0 top-[var(--rf-titlebar-h)] ${OVERLAY_Z_CLASS.fullscreen} flex flex-col bg-[#110D0B] text-stone-100 selection:bg-[color:var(--accent)] selection:text-[#110D0B]`}
           role="dialog"
           aria-modal="true"
         >
@@ -367,7 +408,8 @@ export function AuthorizeCleanupModal() {
               <button
                 type="button"
                 onClick={close}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-stone-400 transition-colors hover:text-white"
+                disabled={busy}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-stone-400 transition-colors hover:text-white disabled:opacity-30 disabled:pointer-events-none"
                 aria-label="Close storage cleanup"
               >
                 <X size={18} />
@@ -462,16 +504,35 @@ export function AuthorizeCleanupModal() {
             <div className="flex items-center gap-6">
               <button
                 onClick={close}
-                className="px-8 py-3 text-[11px] font-black uppercase tracking-[0.3em] text-stone-500 hover:text-stone-100 transition-colors"
+                disabled={busy}
+                className="px-8 py-3 text-[11px] font-black uppercase tracking-[0.3em] text-stone-500 hover:text-stone-100 transition-colors disabled:opacity-30 disabled:pointer-events-none"
               >
                 Cancel
               </button>
               <button
                 disabled={busy || selected.size === 0}
                 onClick={() => void handleConfirm()}
-                className={`h-12 px-10 rounded-[var(--radius-input)] text-[10px] font-black uppercase tracking-[0.2em] transition-all ${busy || selected.size === 0 ? "bg-stone-800 text-stone-600 opacity-30 cursor-not-allowed" : "bg-[color:var(--accent)] text-[#110D0B] active:scale-[0.98]"}`}
+                className={`h-12 px-10 rounded-[var(--radius-input)] text-[10px] font-black uppercase tracking-[0.2em] transition-all inline-flex items-center gap-2 ${
+                  busy
+                    ? "bg-[color:var(--accent)] text-[#110D0B] cursor-wait"
+                    : selected.size === 0
+                      ? "bg-stone-800 text-stone-600 opacity-30 cursor-not-allowed"
+                      : "bg-[color:var(--accent)] text-[#110D0B] active:scale-[0.98]"
+                }`}
               >
-                {busy ? "Deleting…" : "Delete selected"}
+                {busy && deleteProgress ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Deleting {deleteProgress.done} of {deleteProgress.total}
+                  </>
+                ) : busy ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Deleting…
+                  </>
+                ) : (
+                  "Delete selected"
+                )}
               </button>
             </div>
           </div>
