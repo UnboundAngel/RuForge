@@ -33,6 +33,8 @@ import {
   readAudioAutoAdvanceFolder,
   readAudioPrefetchNext,
 } from "../audioPlaybackPrefs";
+import { pickVideoEndScreenSuggestions } from "../videoEndScreenSuggestions";
+import { VideoEndScreen } from "./VideoEndScreen";
 import { isAudioOnlyPath } from "../mediaKind";
 import { fetchSubtitleTracks, revokeSubtitleBlobSrcs, subtitleTracksWithBlobSrc, syncVideoTextTrackModes, type SubtitleTrack } from "../localVideoSubtitles";
 import { cookieContextFromSettings } from "@/downloadQueue";
@@ -384,6 +386,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   };
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showPlaylist, setShowPlaylist] = useState(false);
+  const [endScreen, setEndScreen] = useState<{
+    suggestions: MediaFile[];
+    autoplayArmed: boolean;
+  } | null>(null);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const [showPlayerMoreMenu, setShowPlayerMoreMenu] = useState(false);
   const [clickFlash, setClickFlash] = useState<"play" | "pause" | null>(null);
@@ -415,11 +421,37 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   useEffect(() => {
     setCommentsPanelOpen(false);
+    setEndScreen(null);
   }, [file.path]);
+
+  useEffect(() => {
+    if (isLooping) setEndScreen(null);
+  }, [isLooping]);
 
   const handleCommentsPanelX = useCallback((x: number) => {
     commentsPanelX.set(x);
   }, [commentsPanelX]);
+
+  const handleEndScreenSelect = useCallback(
+    (next: MediaFile) => {
+      setEndScreen(null);
+      setPlayingFile(next);
+    },
+    [setPlayingFile],
+  );
+
+  const handleEndScreenCancelTimer = useCallback(() => {
+    setEndScreen((prev) => (prev ? { ...prev, autoplayArmed: false } : null));
+  }, []);
+
+  const handleEndScreenReplay = useCallback(() => {
+    setEndScreen(null);
+    const m = mediaRef.current;
+    if (!m) return;
+    m.currentTime = 0;
+    setIsPaused(false);
+    void m.play().catch(() => {});
+  }, []);
 
   const toggleCommentsPanel = useCallback(() => {
     setShowPlaylist(false);
@@ -529,6 +561,20 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (m && isFinite(m.duration) && m.duration > 0) {
       writePlaybackPos(file.path, m.duration, m.duration);
     }
+    if (!audioOnly) {
+      const suggestions = pickVideoEndScreenSuggestions(file.path, videoLibrarySorted);
+      if (suggestions.length === 0) {
+        setIsPaused(true);
+        return;
+      }
+      setIsPaused(true);
+      setShowControls(true);
+      setEndScreen({
+        suggestions,
+        autoplayArmed: readAudioAutoAdvanceFolder(),
+      });
+      return;
+    }
     if (!readAudioAutoAdvanceFolder()) {
       setIsPaused(true);
       return;
@@ -543,9 +589,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       advanceTo(folderNeighbor);
       return;
     }
-    const libList = audioOnly ? audioLibrarySorted : videoLibrarySorted;
-    const li = libList.findIndex((f) => f.path === file.path);
-    const libNext = li >= 0 && li < libList.length - 1 ? libList[li + 1] : null;
+    const li = audioLibrarySorted.findIndex((f) => f.path === file.path);
+    const libNext = li >= 0 && li < audioLibrarySorted.length - 1 ? audioLibrarySorted[li + 1] : null;
     if (libNext) {
       advanceTo(libNext);
       return;
@@ -1559,6 +1604,19 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
           onAnimatedXChange={handleCommentsPanelX}
         />
       )}
+
+      <AnimatePresence>
+        {endScreen && (
+          <VideoEndScreen
+            key="video-end-screen"
+            suggestions={endScreen.suggestions}
+            autoplayArmed={endScreen.autoplayArmed}
+            onSelect={handleEndScreenSelect}
+            onCancelTimer={handleEndScreenCancelTimer}
+            onReplay={handleEndScreenReplay}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Speed Indicator (YouTube style hold) */}
       <AnimatePresence>

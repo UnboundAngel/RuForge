@@ -18,7 +18,7 @@ Shipping version: 0.2.3 (unreleased)
 
 Last shipped to users: 0.2.2
 
-Last updated: 2026-08-01 (Shipped 0.2.2)
+Last updated: 2026-08-02 (Video end screen in 0.2.3 tree)
 
 Status: 0.2.2 live on GitHub and updater.json. Downloader paste no longer flashes; soft library-duplicate warning on URL entry; every enqueue path shares the Download-click duplicate gate. Library incremental remove/upsert (no full rescan on delete or download success). Pre-spawn inspect timeout with kill-on-timeout; watchdog armed before start; auto-clear start failures only for approval auto. OBS Window Capture uses class `RuForge_Chrome_WidgetWin` for WGC. Headless `media_engine` crate backs inspect/download. Browser Companion remains developer-gated on localhost.
 
@@ -68,7 +68,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.2.3 (unreleased, in tree):**
 
-(none yet)
+- Player: Video end screen on main and mini with unwatched-first suggestions and Up next countdown.
 
 
 
