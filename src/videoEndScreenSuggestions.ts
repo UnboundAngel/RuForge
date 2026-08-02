@@ -2,6 +2,27 @@ import { isVideoWatched } from "./playbackStorage";
 import type { MediaFile } from "./types";
 
 export const VIDEO_END_SCREEN_COUNTDOWN_SEC = 12;
+export const VIDEO_END_CARDS_LEAD_SEC = 15;
+export const VIDEO_END_FADE_SEC = 5;
+
+/** 0 at fade start, 1 at end (remaining <= 0). */
+export function endScreenFadeProgress(
+  remainingSec: number,
+  fadeSec: number = VIDEO_END_FADE_SEC,
+): number {
+  if (fadeSec <= 0) return remainingSec <= 0 ? 1 : 0;
+  if (remainingSec >= fadeSec) return 0;
+  if (remainingSec <= 0) return 1;
+  return 1 - remainingSec / fadeSec;
+}
+
+/** Audio gain multiplier during end fade (1 → 0). */
+export function endScreenFadeGain(
+  remainingSec: number,
+  fadeSec: number = VIDEO_END_FADE_SEC,
+): number {
+  return 1 - endScreenFadeProgress(remainingSec, fadeSec);
+}
 
 function shuffleInPlace<T>(items: T[], random: () => number): T[] {
   for (let i = items.length - 1; i > 0; i--) {

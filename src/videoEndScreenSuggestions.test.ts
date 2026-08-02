@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaFile } from "./types";
 import { writePlaybackPos } from "./playbackStorage";
-import { pickVideoEndScreenSuggestions } from "./videoEndScreenSuggestions";
+import {
+  endScreenFadeGain,
+  endScreenFadeProgress,
+  pickVideoEndScreenSuggestions,
+} from "./videoEndScreenSuggestions";
 
 let store: Record<string, string> = {};
 vi.stubGlobal("localStorage", {
@@ -37,6 +41,22 @@ function mediaFile(
 
 beforeEach(() => {
   store = {};
+});
+
+describe("endScreenFadeProgress", () => {
+  it("is 0 before the fade window and 1 at or past end", () => {
+    expect(endScreenFadeProgress(5, 5)).toBe(0);
+    expect(endScreenFadeProgress(10, 5)).toBe(0);
+    expect(endScreenFadeProgress(0, 5)).toBe(1);
+    expect(endScreenFadeProgress(-1, 5)).toBe(1);
+  });
+
+  it("ramps linearly through the fade window", () => {
+    expect(endScreenFadeProgress(2.5, 5)).toBeCloseTo(0.5);
+    expect(endScreenFadeGain(2.5, 5)).toBeCloseTo(0.5);
+    expect(endScreenFadeGain(5, 5)).toBe(1);
+    expect(endScreenFadeGain(0, 5)).toBe(0);
+  });
 });
 
 describe("pickVideoEndScreenSuggestions", () => {

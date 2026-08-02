@@ -294,23 +294,43 @@ fn version_hash(items: &HashMap<String, CompanionLibraryItem>, desktop_len: usiz
     format!("{:016x}", hasher.finish())
 }
 
-/// Full reindex: walk every configured root, probe (or reuse a cached probe of)
-/// each library file, and produce both the desktop projection (path-bearing,
-/// wire-identical to the old `scan_gallery` output) and the companion projection
-/// (id-only, precomputed `playable`).
-pub async fn reindex(
+pub async fn walk_desktop_entries(roots: &[String]) -> Result<Vec<GalleryEntry>, String> {
+    let roots_owned = roots.to_vec();
+    tokio::task::spawn_blocking(move || gallery::build_gallery_entries_for_roots(&roots_owned))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+pub fn desktop_version_hash(entries: &[GalleryEntry]) -> String {
+    let mut hasher = DefaultHasher::new();
+    entries.len().hash(&mut hasher);
+    for entry in entries {
+        match entry {
+            GalleryEntry::Media { file } => {
+                file.path.hash(&mut hasher);
+                file.created.hash(&mut hasher);
+                file.size.hash(&mut hasher);
+            }
+            GalleryEntry::Playlist { playlist } => {
+                playlist.path.hash(&mut hasher);
+                for item in &playlist.items {
+                    item.path.hash(&mut hasher);
+                    item.created.hash(&mut hasher);
+                    item.size.hash(&mut hasher);
+                }
+            }
+        }
+    }
+    format!("{:016x}", hasher.finish())
+}
+
+pub async fn probe_companion_items(
     app: &AppHandle,
-    roots: &[String],
+    desktop_entries: &[GalleryEntry],
     remux_cache_dir: Option<&Path>,
     probe_cache: &mut ProbeCache,
-) -> Result<ReindexOutput, String> {
-    let roots_owned = roots.to_vec();
-    let desktop_entries =
-        tokio::task::spawn_blocking(move || gallery::build_gallery_entries_for_roots(&roots_owned))
-            .await
-            .map_err(|e| e.to_string())??;
-
-    let media_files = media_files_from_entries(&desktop_entries);
+) -> Result<HashMap<String, CompanionLibraryItem>, String> {
+    let media_files = media_files_from_entries(desktop_entries);
     let mut companion_items: HashMap<String, CompanionLibraryItem> = HashMap::new();
 
     for file in &media_files {
@@ -334,7 +354,11 @@ pub async fn reindex(
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        let media_type = if is_audio_only_ext(&ext) { MediaType::Audio } else { MediaType::Video };
+        let media_type = if is_audio_only_ext(&ext) {
+            MediaType::Audio
+        } else {
+            MediaType::Video
+        };
 
         let probe = probe_and_cache(
             app,
@@ -393,6 +417,22 @@ pub async fn reindex(
         );
     }
 
+    Ok(companion_items)
+}
+
+/// Full reindex: walk every configured root, probe (or reuse a cached probe of)
+/// each library file, and produce both the desktop projection (path-bearing,
+/// wire-identical to the old `scan_gallery` output) and the companion projection
+/// (id-only, precomputed `playable`).
+pub async fn reindex(
+    app: &AppHandle,
+    roots: &[String],
+    remux_cache_dir: Option<&Path>,
+    probe_cache: &mut ProbeCache,
+) -> Result<ReindexOutput, String> {
+    let desktop_entries = walk_desktop_entries(roots).await?;
+    let companion_items =
+        probe_companion_items(app, &desktop_entries, remux_cache_dir, probe_cache).await?;
     let version = version_hash(&companion_items, desktop_entries.len());
     Ok(ReindexOutput {
         desktop_entries,

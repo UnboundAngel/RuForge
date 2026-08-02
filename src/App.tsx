@@ -689,6 +689,7 @@ function App() {
         manageLoadingStart: false,
         skipPosterBackfill: true,
         skipScrubBackfill: true,
+        joinColdInFlight: true,
       });
     }).then((fn) => {
       unlisten = fn;

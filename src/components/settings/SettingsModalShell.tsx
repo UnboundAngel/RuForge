@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { X, type LucideIcon } from "lucide-react";
+import { OVERLAY_Z_CLASS } from "../../lib/overlayZIndex";
 
 type SettingsModalShellProps = {
   open: boolean;
@@ -12,7 +13,7 @@ type SettingsModalShellProps = {
   icon?: LucideIcon;
   children: ReactNode;
   footer?: ReactNode;
-  /** z-index tier; default 300 matches legacy settings modals */
+  /** z-index tier; default matches legacy settings modals in `OVERLAY_Z_CLASS`. */
   zIndexClass?: string;
   maxWidthClass?: string;
   /** When true, backdrop and close button do not dismiss (e.g. while a job runs). */
@@ -29,7 +30,7 @@ export function SettingsModalShell({
   icon: Icon,
   children,
   footer,
-  zIndexClass = "z-[300]",
+  zIndexClass = OVERLAY_Z_CLASS.settings,
   maxWidthClass = "max-w-lg",
   disableDismiss = false,
 }: SettingsModalShellProps) {
