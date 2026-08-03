@@ -1,0 +1,109 @@
+{
+  "nodes": [
+    {
+      "id": "t-media-session",
+      "type": "task",
+      "label": "Media Session OS transport",
+      "agent": "chad",
+      "details": [
+        "OS/browser media keys get play/pause/stop/prev/next/seek plus metadata and position via Media Session."
+      ],
+      "fileEdits": [
+        { "path": "src/lib/mediaSessionTransport.ts", "reason": "Media Session handlers and metadata sync.", "action": "created" },
+        { "path": "src/App.tsx", "reason": "Install Media Session transport on boot." }
+      ]
+    },
+    {
+      "id": "t-music-crossfade",
+      "type": "task",
+      "label": "Music equal-power crossfade",
+      "agent": "chad",
+      "details": [
+        "0–12s crossfade (default Off, persisted); Now Playing control; A/B ping-pong; 18s solo floor with shorten-or-hard-cut guards."
+      ],
+      "fileEdits": [
+        { "path": "src/components/music/musicCrossfade.ts", "reason": "Equal-power curve helpers.", "action": "created" },
+        { "path": "src/components/music/musicCrossfadeStorage.ts", "reason": "Persisted seconds key.", "action": "created" },
+        { "path": "src/components/music/useMusicPlayback.ts", "reason": "A/B overlap arm/abort/cascade." },
+        { "path": "src/playback/MainPlaybackHost.tsx", "reason": "Dual-element host wiring." },
+        { "path": "src/components/music/NowPlayingBar.tsx", "reason": "Crossfade control UI." }
+      ]
+    },
+    {
+      "id": "t-desktop-island",
+      "type": "task",
+      "label": "Desktop Dynamic Island overlay",
+      "agent": "chad",
+      "details": [
+        "Top-center always-on-top island when main is minimized/tray-hidden; monitor anchor; headphones output; skip dir; live waveform; blur collapse."
+      ],
+      "fileEdits": [
+        { "path": "src-tauri/src/commands/island_overlay.rs", "reason": "Overlay window commands.", "action": "created" },
+        { "path": "src/IslandOverlayApp.tsx", "reason": "Overlay React shell.", "action": "created" },
+        { "path": "src/hooks/useDesktopIslandOverlay.ts", "reason": "Show/hide and bridge push.", "action": "created" },
+        { "path": "src/lib/desktopIslandBridge.ts", "reason": "Main-to-overlay state channel.", "action": "created" },
+        { "path": "src/audioOutputDevices.ts", "reason": "Enumerate and setSinkId routing.", "action": "created" },
+        { "path": "src/components/island/IslandAudioOutputControl.tsx", "reason": "Headphones MorphMenu.", "action": "created" }
+      ]
+    },
+    {
+      "id": "t-music-queue-loop",
+      "type": "task",
+      "label": "Music loop and queue origin",
+      "agent": "chad",
+      "details": [
+        "Loop off/all/one; Next from play-origin tags; endless lookahead 12; neighbor scan preserves staging."
+      ],
+      "fileEdits": [
+        { "path": "src/playbackLoopStorage.ts", "reason": "Tri-state loop persistence." },
+        { "path": "src/components/music/musicQueueSource.ts", "reason": "Play-origin tags." },
+        { "path": "src/components/music/musicEndlessNext.ts", "reason": "Lookahead depth 12.", "action": "created" },
+        { "path": "src/store/ruforgeStore.ts", "reason": "Queue source and loop store fields." }
+      ]
+    },
+    {
+      "id": "t-video-end-library",
+      "type": "task",
+      "label": "Video end screen and library grid",
+      "agent": "chad",
+      "details": [
+        "YouTube-style end flow on main/mini; Video Library multi-column grid; snapshot serve without Companion probe block; locked-file delete fails loudly."
+      ],
+      "fileEdits": [
+        { "path": "src/components/VideoEndScreen.tsx", "reason": "End-screen phases.", "action": "created" },
+        { "path": "src/components/MediaView.tsx", "reason": "Date-grouped multi-column grid." },
+        { "path": "src/components/ui/Morph.tsx", "reason": "Card Morph menu shell.", "action": "created" },
+        { "path": "src-tauri/src/library/library_state.rs", "reason": "Desktop snapshot publish path." },
+        { "path": "src-tauri/src/commands/media.rs", "reason": "Delete progress and locked-file error." }
+      ]
+    },
+    {
+      "id": "f-player-polish",
+      "type": "fix",
+      "label": "Play/pause morph and scrubber",
+      "agent": "chad",
+      "details": [
+        "Shared PlayPauseMorphIcon (path ↔ bars); chapter scrubber knob tracks pointer; downloader paste stack spacing."
+      ],
+      "fileEdits": [
+        { "path": "src/components/ui/PlayPauseMorphIcon.tsx", "reason": "Shared morph icon.", "action": "created" },
+        { "path": "src/components/player/ChapterScrubber.tsx", "reason": "Knob translate fix." },
+        { "path": "src/components/DownloaderView.tsx", "reason": "Idle stack spacing." }
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-media-session" },
+    { "source": "t-media-session", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-crossfade" },
+    { "source": "t-music-crossfade", "target": "ruforge" },
+    { "source": "chad", "target": "t-desktop-island" },
+    { "source": "t-desktop-island", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-queue-loop" },
+    { "source": "t-music-queue-loop", "target": "ruforge" },
+    { "source": "chad", "target": "t-video-end-library" },
+    { "source": "t-video-end-library", "target": "ruforge" },
+    { "source": "chad", "target": "f-player-polish" },
+    { "source": "f-player-polish", "target": "ruforge" }
+  ]
+}

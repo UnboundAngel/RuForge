@@ -193,37 +193,7 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 **This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see Release ritual). That is the only time the version JSON / `versioner.html` registry get touched. Prefer one line per user-visible feature or fix; batch incremental polish passes into one line instead of ten `(fix)` breakpoints.
 
 
-### v0.3.0 (unreleased)
-
-- **Playback** (MINOR): Media Session transport wires OS/browser media keys (play/pause/stop/prev/next/seek) plus metadata and position. `mediaSessionTransport.ts` / `App.tsx`
-- **Music** (MINOR): Main equal-power crossfade 0–12s (default Off, LS `ruforge-music-crossfade-sec`); Now Playing control; A/B ping-pong; min 18s solo before overlap (shorten fade to fit, else hard cut); late-arm / mid-overlap abort / cascade guards. `musicCrossfade.ts` / `useMusicPlayback.ts` / `MainPlaybackHost.tsx`
-- **Island**: Skip art/meta slide direction matches prev vs next (bridged to the desktop overlay; taskbar prev/next also notes dir). `islandSkipDirection.ts` / `islandSkipMotion.ts` / `DynamicIsland.tsx` / `desktopIslandBridge.ts`
-- **Island**: Overlay waveform keeps moving while main is minimized/backgrounded (analyser pump + local overlay motion under rAF throttle). `useOverlayWaveformLevels.ts` / `useDesktopIslandOverlay.ts`
-- **Island**: Desktop overlay collapses on window blur / focus loss. `IslandOverlayApp.tsx`
-- **Library**: Delete fails loudly if the media file is still on disk after trash (locked / in use), instead of treating a no-op trash as success. `media.rs`
-- **Downloader**: Paste/fetch idle stack no longer overlaps (URL, pacer, status); pasted URLs use readable type instead of screaming uppercase; fetch status sits under the pacer; Download CTA is soft-rect. `DownloaderView.tsx`
-- **Island**: Marquee edge fade is mask-only (no painted black scrim that mismatched the menu brown). `index.css`
-- **Island**: Audio output MorphMenu labels marquee slowly on row hover when truncated. `Morph.tsx` / `HoverMarqueeText.tsx`
-- **Music**: Now Playing bar uses shell chrome black (`--music-shell-chrome`) so it matches the header and side frame. `NowPlayingBar.tsx`
-- **Island**: Headphones output rows show form-factor icons from the device label (headphones / speakers / display / cable / bluetooth). `audioOutputDeviceKind.ts` / `IslandAudioOutputControl.tsx`
-- **Island**: Headphones MorphMenu stays opaque over transport (right wing stacks above play when open) and caps height to the viewport with scroll so long device lists do not clip off-screen. `Morph.tsx` / `IslandExpandedContent.tsx`
-- **Player**: Play/pause morph uses play-path ↔ pause-bars crossfade (bar-skew morph was reading as an X). `PlayPauseMorphIcon.tsx`
-- **Island**: Headphones MorphMenu is bare at rest (icon only), opens opaque `#271C18` panel like other menus; device list unlocks/enumerates on main and is pushed to the overlay. `IslandAudioOutputControl.tsx` / `audioOutputDevices.ts` / `Morph.tsx`
-- **Player**: Play/pause transport toggles morph between triangle and bars via shared `PlayPauseMorphIcon` (Now Playing, island, music mini, video mini, main player, row hover). `PlayPauseMorphIcon.tsx`
-- **Music**: Artist hero cover falls back to track art when the playlist folder cover (`.ruforge-playlist-cover.jpg`) is missing; album cards already did. `MusicArtistView.tsx`
-- **Island**: Desktop overlay anchors to the monitor the main window was on (cached before minimize/tray hide), not always primary. `island_overlay.rs`
-- **Island**: Expanded headphones control lists audio outputs and routes main playback (media `setSinkId` + analyser `AudioContext` when MES-tapped); choice persists app-wide; desktop overlay sends `audioOutput` over the island bridge. `audioOutputDevices.ts` / `IslandAudioOutputControl.tsx` / `desktopIslandBridge.ts`
-- **Music**: Loop is tri-state off / all / one (cycle off→all→one→off); all loops the user-chosen span with idle endless tail preserved and no staging; one repeats the track; `true` migrates to one. `playbackLoopStorage.ts` / `ruforgeStore.ts` / `useMusicPlayback.ts` / music mini + NowPlayingBar + island
-- **Music**: Queue "Next from" is play-origin tagged (`musicQueueSource`); skip/advance keep the tag; endless next-row still shows Library; null origin shows Next up (no metadata guess). `musicQueueSource.ts` / `ruforgeStore.ts` / music play entry points
-- **Music**: Endless lookahead depth locked at 12 (`MUSIC_ENDLESS_LOOKAHEAD`); skip refill tops back to full depth (not a hardcoded floor of 3). `musicEndlessNext.ts` / `useMusicPlayback.ts` / `useMusicMiniPlayback.ts`
-- **Music**: Neighbor scan no longer wipes endless staging. `App.tsx` / `ruforgeStore.ts`
-- **Island**: When main is minimized or tray-hidden and main-owned playback is active, a top-center always-on-top Dynamic Island overlay appears (compact + expand; suppressed when mini owns playback). Waveform bars share one max height, move more independently (no middle-tall envelope), and use a hairline white outline. `island_overlay.rs` / `IslandOverlayApp.tsx` / `useDesktopIslandOverlay.ts` / `desktopIslandBridge.ts` / `ActivityIslandWaveform.tsx` / `audioAnalyserGraph.ts` / `index.css`
-- **Library**: Video Library multi-column grid with date groups, hover card shell, Morph ⋯ menu over the media, and scroll-linked tab chrome (no full-gallery re-render on scroll). Vite ignores `STATE.md` / `AGENTS.md` / docs markdown. `MediaView.tsx` / `Morph.tsx` / `App.tsx` / `vite.config.ts`
-- **Library**: `get_library_snapshot` serves the published desktop projection when ready (join in-flight, force only on invalidate/dirs/sweep); Companion probe no longer holds `reindex_lock`. `library_state.rs` / `commands.rs` / `ruforgeStore.ts`
-- **Library**: Cold Video Library open single-flights the gallery fetch so StrictMode remounts and `library-changed` cannot discard the early desktop snapshot. `galleryColdFetch.ts` / `ruforgeStore.ts` / `App.tsx`
-- **Library**: Video Library paints after the disk walk (Companion ffprobe no longer blocks the snapshot); storage cleanup confirm stacks above the fullscreen modal with delete progress and incremental gallery removes (no post-delete full rescan). `library_state.rs` / `AuthorizeCleanupModal.tsx` / `overlayZIndex.ts`
-- **Player**: YouTube-style video end flow on main and mini: bottom-docked suggestion cards (2–10s lead from 5% of duration, ring hover), video/audio fade, then Up next with left-aligned timer and full-width Cancel / Play now. `VideoEndScreen.tsx` / `videoEndScreenSuggestions.ts` / `PlayerView.tsx` / `MiniPlayer.tsx`
-- **Player**: Chapter scrubber knob no longer sits left of the pointer (Tailwind `translate` was stacking with the inline `transform`). `ChapterScrubber.tsx`
+### v0.3.1 (unreleased)
 
 ## Release ritual
 
