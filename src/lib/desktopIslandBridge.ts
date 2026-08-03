@@ -1,6 +1,7 @@
 import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
+import { setAudioOutputDeviceId } from "@/audioOutputDevices";
 import type { DynamicIslandContent } from "@/components/island/DynamicIsland";
 import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
 import type { ActivityRenderState } from "@/lib/activityTypes";
@@ -36,6 +37,7 @@ export type DesktopIslandControl =
   | { type: "volume"; volume: number }
   | { type: "muted"; muted: boolean }
   | { type: "loop" }
+  | { type: "audioOutput"; deviceId: string }
   | { type: "openPlayer" }
   | { type: "popOut" };
 
@@ -114,6 +116,9 @@ export function applyDesktopIslandControl(control: DesktopIslandControl): void {
       return;
     case "loop":
       st.cycleLoopMode();
+      return;
+    case "audioOutput":
+      setAudioOutputDeviceId(control.deviceId);
       return;
     case "openPlayer": {
       const file = st.playingFile;

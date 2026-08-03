@@ -375,12 +375,16 @@ export const DownloaderView = (props: DownloaderViewProps) => {
         d.url.startsWith("http") &&
         (d.metadataLoading || d.downloadStartPending || d.showDuplicateBanner)
       ) {
+        const statusOnly =
+          (d.metadataLoading || d.downloadStartPending) && !d.showDuplicateBanner;
         return {
-          title: d.downloadStartPending
-            ? "Starting download…"
-            : d.metadataLoading
-              ? "Fetching details…"
-              : (d.libraryDuplicateTitle ?? "Already in your library"),
+          title: statusOnly
+            ? ""
+            : d.downloadStartPending
+              ? "Starting download…"
+              : d.metadataLoading
+                ? "Fetching details…"
+                : (d.libraryDuplicateTitle ?? "Already in your library"),
           duration: 0,
           fileSizeBytes: null,
           isPlaylist: false,
@@ -564,7 +568,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
             )}
           </AnimatePresence>
         </div>
-        <div className="flex-1 flex flex-col justify-center w-full min-h-0">
+        <div className="flex min-h-0 w-full flex-1 flex-col justify-center gap-8 sm:gap-12">
           <LayoutGroup id="downloader-url">
             <AnimatePresence mode="sync" initial={false}>
               {d.showTopLeftDownloaderChrome && (
@@ -698,7 +702,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   layout
                   layoutId="downloader-url-chip"
                   transition={d.urlChipLayoutTransition}
-                  className="relative group mx-auto w-full max-w-2xl pt-2 sm:pt-6 hidden min-[700px]:block"
+                  className="relative group mx-auto hidden w-full max-w-2xl px-4 pt-2 min-[700px]:block sm:pt-4"
                 >
                   <AnimatePresence>
                     {!d.showUrlBubble && d.urlSourceHint === "clipboard" && d.clipboardPastedHint && (
@@ -708,7 +712,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 4, scale: 0.98 }}
                         transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
-                        className="pb-2 text-center text-[8px] font-black uppercase tracking-[0.25em] text-stone-500"
+                        className="pb-3 text-center text-[9px] font-bold uppercase tracking-[0.22em] text-stone-500"
                       >
                         Pasted from clipboard
                       </motion.p>
@@ -720,7 +724,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 4, scale: 0.98 }}
                         transition={{ duration: 0.35, ease: [0.23, 1, 0.32, 1] }}
-                        className="pb-2 text-center text-[8px] font-black uppercase tracking-[0.25em] text-stone-500"
+                        className="pb-3 text-center text-[9px] font-bold uppercase tracking-[0.22em] text-stone-500"
                       >
                         Added from watch page
                       </motion.p>
@@ -738,12 +742,19 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       onFocus={d.handleUrlFocus}
                       onBlur={d.handleUrlBlur}
                       onPaste={(e) => d.handleUrlPaste(e)}
-                      placeholder="PASTE LINK"
-                      className="w-full bg-transparent text-center text-lg sm:text-xl font-black tracking-[0.2em] text-stone-100 placeholder:text-stone-800 outline-none border-none transition-all uppercase"
+                      placeholder="Paste link"
+                      spellCheck={false}
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      className={
+                        d.url.trim()
+                          ? "w-full border-none bg-transparent text-center text-sm font-semibold tracking-tight text-stone-100 outline-none transition-colors sm:text-base"
+                          : "w-full border-none bg-transparent text-center text-lg font-black uppercase tracking-[0.18em] text-stone-100 outline-none transition-colors placeholder:text-stone-700 sm:text-xl"
+                      }
                     />
                   </div>
                   {d.clipboardOfferUrl && (
-                    <div className="pt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+                    <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 pt-3 text-center">
                       <span className="text-[8px] font-black uppercase tracking-[0.2em] text-stone-500">
                         Clipboard has a YouTube link:
                       </span>
@@ -757,19 +768,34 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       </button>
                     </div>
                   )}
-                  <motion.div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
+                  <div className="mt-5 flex flex-col items-center gap-3">
                     <UrlInputPacer
-                      expanded={d.isFocused || d.metadataLoading}
-                      loading={d.metadataLoading}
+                      expanded={d.isFocused || d.metadataLoading || d.downloadStartPending}
+                      loading={d.metadataLoading || d.downloadStartPending}
                     />
-                  </motion.div>
+                    <AnimatePresence initial={false}>
+                      {(d.metadataLoading || d.downloadStartPending) && (
+                        <motion.p
+                          key="url-fetch-status"
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 2 }}
+                          transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                          className="text-center text-[10px] font-bold uppercase tracking-[0.2em] text-stone-500"
+                          aria-live="polite"
+                        >
+                          {d.downloadStartPending ? "Starting download…" : "Fetching details…"}
+                        </motion.p>
+                      )}
+                    </AnimatePresence>
+                  </div>
                   {d.metadataError && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="absolute left-0 right-0 top-full pt-4 text-center z-50"
+                      className="relative z-50 pt-4 text-center"
                     >
-                      <span className="text-red-400 text-[9px] font-black uppercase tracking-[0.2em] bg-red-400/5 px-3 py-1.5 rounded-full border border-red-400/10 inline-block max-w-lg truncate">
+                      <span className="inline-block max-w-lg truncate rounded-full border border-red-400/10 bg-red-400/5 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-red-400">
                         {d.metadataError}
                       </span>
                     </motion.div>
@@ -879,9 +905,9 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                 </motion.div>
               )}
             </AnimatePresence>
-            <div className="w-full max-w-6xl mx-auto space-y-2 sm:space-y-8">
+            <div className="mx-auto w-full max-w-6xl space-y-6 sm:space-y-10">
               {!d.showImmersiveDownload ? (
-                <div className="space-y-4 sm:space-y-10">
+                <div className="space-y-6 sm:space-y-10">
                   <AnimatePresence mode="sync" initial={false}>
                     {displayHero ? (
                       <motion.div
@@ -890,17 +916,26 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
-                        className="text-center space-y-2 sm:space-y-6"
+                        className="space-y-4 text-center sm:space-y-7"
                       >
-                        <h2
-                          className={`font-black leading-[1.08] sm:leading-[1.1] tracking-tighter line-clamp-2 px-4 pb-0.5 ${
-                            displayHero.loading
-                              ? "text-lg sm:text-2xl lg:text-3xl text-white/55"
-                              : "text-xl sm:text-4xl lg:text-6xl text-white"
-                          }`}
-                        >
-                          {displayHero.title}
-                        </h2>
+                        {displayHero.title.trim() &&
+                        !(
+                          displayHero.loading &&
+                          (d.metadataLoading || d.downloadStartPending) &&
+                          !d.showUrlBubble &&
+                          !d.anyDownloading &&
+                          !d.queueBrowsingHidesUrlChrome
+                        ) ? (
+                          <h2
+                            className={
+                              displayHero.loading
+                                ? "line-clamp-2 px-4 text-sm font-bold uppercase tracking-[0.18em] text-stone-500 sm:text-base"
+                                : "line-clamp-2 px-4 pb-0.5 text-xl font-black leading-[1.08] tracking-tighter text-white sm:text-4xl sm:leading-[1.1] lg:text-6xl"
+                            }
+                          >
+                            {displayHero.title}
+                          </h2>
+                        ) : null}
                         {!displayHero.loading && (
                         <div className="hidden min-[600px]:flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-8 gap-y-2 text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--accent)] opacity-60">
                           <div className="flex items-center gap-1.5">
@@ -966,7 +1001,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               " · nothing new to download"}
                           </p>
                         )}
-                        <motion.div className="space-y-4 pt-2 sm:space-y-5 sm:pt-6">
+                        <motion.div className="space-y-4 pt-4 sm:space-y-5 sm:pt-8">
                           {!displayHero.loading &&
                             d.settings.downloadSubtitles &&
                             d.subLangsForDisplay && (
@@ -1000,7 +1035,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                         : undefined
                                   }
                                   onClick={d.handleDownloadClick}
-                                  className={`flex items-center gap-3 rounded-full bg-[color:var(--accent)] px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.4em] text-stone-950 shadow-xl transition-all duration-300 hover:scale-105 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-[color:var(--accent)] sm:gap-4 sm:px-12 sm:py-4 sm:text-xs ${
+                                  className={`flex items-center gap-3 rounded-xl bg-[color:var(--accent)] px-6 py-2.5 text-[9px] font-black uppercase tracking-[0.35em] text-stone-950 transition-all duration-300 hover:scale-[1.03] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-[color:var(--accent)] sm:gap-4 sm:px-12 sm:py-4 sm:text-xs ${
                                     d.downloadStartPending ? "animate-pulse" : ""
                                   }`}
                                 >

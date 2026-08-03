@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNo
 import type { DynamicIslandContent } from "./DynamicIsland";
 import { loopModeAriaLabel, loopModeIcon } from "@/playbackLoopStorage";
 import { HoverMarqueeText } from "@/components/music/HoverMarqueeText";
+import { IslandAudioOutputControl } from "./IslandAudioOutputControl";
 import { IslandVolumeControl } from "./IslandVolumeControl";
 import { IslandWaveformHoverSlot } from "./IslandWaveformHoverSlot";
 import {
@@ -13,6 +14,7 @@ import {
   islandSkipExpandedVariants,
   type IslandSkipDir,
 } from "./islandSkipMotion";
+import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 
 const islandBtnClass =
   "flex h-7 w-7 shrink-0 items-center justify-center text-zinc-300 transition-[color,transform] duration-150 hover:text-white active:scale-[0.97] disabled:opacity-30 disabled:pointer-events-none";
@@ -338,6 +340,7 @@ type Props = {
   onVolume?: (v: number) => void;
   onMuted?: (m: boolean) => void;
   onToggleLoop?: (e: MouseEvent) => void;
+  onAudioOutput?: (deviceId: string) => void;
   onPopOut?: (e: MouseEvent) => void;
 };
 
@@ -356,6 +359,7 @@ export function IslandExpandedContent({
   onVolume,
   onMuted,
   onToggleLoop,
+  onAudioOutput,
   onPopOut,
 }: Props) {
   return (
@@ -422,11 +426,7 @@ export function IslandExpandedContent({
                 aria-label={content.paused ? "Play" : "Pause"}
               >
                 <span className="pointer-events-none">
-                  {content.paused ? (
-                    <Icon icon="tabler:player-play-filled" width={22} />
-                  ) : (
-                    <Icon icon="tabler:player-pause-filled" width={22} />
-                  )}
+                  <PlayPauseMorphIcon playing={!content.paused} size={22} />
                 </span>
               </button>
               <IslandIconButton label="Forward 15 seconds" onClick={onSkipBySeconds?.(15)}>
@@ -460,7 +460,7 @@ export function IslandExpandedContent({
             </div>
 
             <div
-              className="pointer-events-none absolute inset-y-0 right-0 z-20 flex items-center"
+              className="pointer-events-none absolute inset-y-0 right-0 z-20 flex items-center has-[[aria-expanded=true]]:z-40"
               style={{ width: `calc(50% - ${TRANSPORT_HALF_PX + CENTER_GAP_PX}px)` }}
             >
               <div className="pointer-events-none flex w-full items-center justify-between gap-0.5">
@@ -475,17 +475,24 @@ export function IslandExpandedContent({
                 ) : (
                   <span className="shrink-0" aria-hidden />
                 )}
-                <IslandIconButton
-                  label={loopModeAriaLabel(content.loopMode)}
-                  active={content.loopMode !== "off"}
-                  onClick={onToggleLoop}
-                >
-                  <Icon
-                    icon={loopModeIcon(content.loopMode)}
-                    width={15}
-                    height={15}
+                <div className="pointer-events-none flex items-center gap-0.5">
+                  <IslandAudioOutputControl
+                    selectedDeviceId={content.audioOutputDeviceId}
+                    devices={content.audioOutputDevices}
+                    onSelect={(deviceId) => onAudioOutput?.(deviceId)}
                   />
-                </IslandIconButton>
+                  <IslandIconButton
+                    label={loopModeAriaLabel(content.loopMode)}
+                    active={content.loopMode !== "off"}
+                    onClick={onToggleLoop}
+                  >
+                    <Icon
+                      icon={loopModeIcon(content.loopMode)}
+                      width={15}
+                      height={15}
+                    />
+                  </IslandIconButton>
+                </div>
               </div>
             </div>
           </div>

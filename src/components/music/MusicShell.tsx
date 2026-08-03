@@ -270,7 +270,11 @@ export function MusicShell() {
   useEffect(() => {
     if (!musicOnlySkip) return;
     if (!playingFile) return;
-    const ct = playback.currentTime;
+    const primary = playback.audioEl;
+    const ct =
+      primary && Number.isFinite(primary.currentTime)
+        ? primary.currentTime
+        : playback.currentTime;
     for (const seg of sbPlayback.segments) {
       if (seg.category !== "music_offtopic") continue;
       if (seg.actionType !== "skip") continue;
@@ -283,7 +287,7 @@ export function MusicShell() {
         return;
       }
     }
-  }, [musicOnlySkip, playback.currentTime, sbPlayback.segments, playingFile, playback.seek]);
+  }, [musicOnlySkip, playback.currentTime, playback.audioEl, sbPlayback.segments, playingFile, playback.seek]);
 
   // Reset music-only-skip seen-set when track changes
   useEffect(() => {
@@ -1320,6 +1324,7 @@ export function MusicShell() {
                 duration={playback.duration}
                 expanded={playerExpanded}
                 playbackSpeed={playback.playbackSpeed}
+                crossfadeSec={playback.crossfadeSec}
                 hasChapters={playback.hasChapters}
                 hasPrevInQueue={playback.hasPrevInQueue}
                 hasNextInQueue={playback.hasNextInQueue}
@@ -1330,6 +1335,7 @@ export function MusicShell() {
                 onJumpPrevChapter={playback.jumpPrevChapter}
                 onJumpNextChapter={playback.jumpNextChapter}
                 onSetPlaybackSpeed={playback.setPlaybackSpeed}
+                onSetCrossfadeSec={playback.setCrossfadeSec}
                 onBeginScrub={playback.beginScrub}
                 onReleaseScrub={playback.releaseScrub}
                 onToggleExpand={handleToggleExpand}

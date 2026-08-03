@@ -195,6 +195,19 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.2.3 (unreleased)
 
+- **Music** (MINOR): Main equal-power crossfade 0–12s (default Off, LS `ruforge-music-crossfade-sec`); Now Playing control; A/B ping-pong; min 18s solo before overlap (shorten fade to fit, else hard cut); late-arm / mid-overlap abort / cascade guards. `musicCrossfade.ts` / `useMusicPlayback.ts` / `MainPlaybackHost.tsx`
+- **Downloader**: Paste/fetch idle stack no longer overlaps (URL, pacer, status); pasted URLs use readable type instead of screaming uppercase; fetch status sits under the pacer; Download CTA is soft-rect. `DownloaderView.tsx`
+- **Island**: Marquee edge fade is mask-only (no painted black scrim that mismatched the menu brown). `index.css`
+- **Island**: Audio output MorphMenu labels marquee slowly on row hover when truncated. `Morph.tsx` / `HoverMarqueeText.tsx`
+- **Music**: Now Playing bar uses shell chrome black (`--music-shell-chrome`) so it matches the header and side frame. `NowPlayingBar.tsx`
+- **Island**: Headphones output rows show form-factor icons from the device label (headphones / speakers / display / cable / bluetooth). `audioOutputDeviceKind.ts` / `IslandAudioOutputControl.tsx`
+- **Island**: Headphones MorphMenu stays opaque over transport (right wing stacks above play when open) and caps height to the viewport with scroll so long device lists do not clip off-screen. `Morph.tsx` / `IslandExpandedContent.tsx`
+- **Player**: Play/pause morph uses play-path ↔ pause-bars crossfade (bar-skew morph was reading as an X). `PlayPauseMorphIcon.tsx`
+- **Island**: Headphones MorphMenu is bare at rest (icon only), opens opaque `#271C18` panel like other menus; device list unlocks/enumerates on main and is pushed to the overlay. `IslandAudioOutputControl.tsx` / `audioOutputDevices.ts` / `Morph.tsx`
+- **Player**: Play/pause transport toggles morph between triangle and bars via shared `PlayPauseMorphIcon` (Now Playing, island, music mini, video mini, main player, row hover). `PlayPauseMorphIcon.tsx`
+- **Music**: Artist hero cover falls back to track art when the playlist folder cover (`.ruforge-playlist-cover.jpg`) is missing; album cards already did. `MusicArtistView.tsx`
+- **Island**: Desktop overlay anchors to the monitor the main window was on (cached before minimize/tray hide), not always primary. `island_overlay.rs`
+- **Island**: Expanded headphones control lists audio outputs and routes main playback (media `setSinkId` + analyser `AudioContext` when MES-tapped); choice persists app-wide; desktop overlay sends `audioOutput` over the island bridge. `audioOutputDevices.ts` / `IslandAudioOutputControl.tsx` / `desktopIslandBridge.ts`
 - **Music**: Loop is tri-state off / all / one (cycle off→all→one→off); all loops the user-chosen span with idle endless tail preserved and no staging; one repeats the track; `true` migrates to one. `playbackLoopStorage.ts` / `ruforgeStore.ts` / `useMusicPlayback.ts` / music mini + NowPlayingBar + island
 - **Music**: Queue "Next from" is play-origin tagged (`musicQueueSource`); skip/advance keep the tag; endless next-row still shows Library; null origin shows Next up (no metadata guess). `musicQueueSource.ts` / `ruforgeStore.ts` / music play entry points
 - **Music**: Endless lookahead depth locked at 12 (`MUSIC_ENDLESS_LOOKAHEAD`); skip refill tops back to full depth (not a hardcoded floor of 3). `musicEndlessNext.ts` / `useMusicPlayback.ts` / `useMusicMiniPlayback.ts`

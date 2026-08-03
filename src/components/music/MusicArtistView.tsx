@@ -281,9 +281,9 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, mot
 }
 
 function pickHeroCover(
-  albums: { cover: string | null; year?: number | null }[],
+  albums: { cover: string | null; coverFallback?: string | null; year?: number | null }[],
   tracks: MediaFile[],
-): string | null {
+): { primary: string | null; fallback: string | null } {
   const sorted = [...albums].sort((a, b) => {
     if (a.year && b.year) return b.year - a.year;
     if (a.year) return -1;
@@ -291,13 +291,18 @@ function pickHeroCover(
     return 0;
   });
   for (const album of sorted) {
-    if (album.cover) return album.cover;
+    if (album.cover || album.coverFallback) {
+      return {
+        primary: album.cover,
+        fallback: album.coverFallback ?? null,
+      };
+    }
   }
   for (const track of tracks) {
     const cover = bestCoverPath(track);
-    if (cover) return cover;
+    if (cover) return { primary: cover, fallback: null };
   }
-  return null;
+  return { primary: null, fallback: null };
 }
 
 // ---- Section header with left accent bar -----------------------------------
@@ -364,8 +369,25 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
     });
   }, [tracks]);
 
-  const heroCover = useMemo(() => pickHeroCover(albums, tracks), [albums, tracks]);
-  const heroCoverSrc = heroCover ? convertFileSrc(heroCover) : null;
+  const heroPaths = useMemo(() => pickHeroCover(albums, tracks), [albums, tracks]);
+  const [heroCoverSrc, setHeroCoverSrc] = useState<string | null>(null);
+  const [heroAmbiencePath, setHeroAmbiencePath] = useState<string | null>(null);
+
+  useEffect(() => {
+    const path = heroPaths.primary ?? heroPaths.fallback;
+    setHeroCoverSrc(path ? convertFileSrc(path) : null);
+    setHeroAmbiencePath(path);
+  }, [heroPaths.primary, heroPaths.fallback]);
+
+  const handleHeroCoverError = () => {
+    if (heroPaths.fallback && heroAmbiencePath === heroPaths.primary) {
+      setHeroCoverSrc(convertFileSrc(heroPaths.fallback));
+      setHeroAmbiencePath(heroPaths.fallback);
+      return;
+    }
+    setHeroCoverSrc(null);
+    setHeroAmbiencePath(null);
+  };
 
   const totalDuration = useMemo(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
 
@@ -401,18 +423,18 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
   }, [artistKey, displayName]);
 
   useEffect(() => {
-    if (!heroCover) {
+    if (!heroAmbiencePath) {
       setAmbience(buildCoverAmbienceTheme(null));
       return;
     }
     let cancelled = false;
-    void extractCoverBackdropFromPath(heroCover).then((hex) => {
+    void extractCoverBackdropFromPath(heroAmbiencePath).then((hex) => {
       if (!cancelled) setAmbience(buildCoverAmbienceTheme(hex));
     });
     return () => {
       cancelled = true;
     };
-  }, [heroCover]);
+  }, [heroAmbiencePath]);
 
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const artistSource = musicQueueSource("artist", displayName);
@@ -494,6 +516,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
             <img
               src={heroCoverSrc}
               alt=""
+              onError={handleHeroCoverError}
               className="h-44 w-44 shrink-0"
               style={{
                 borderRadius: "var(--music-card-radius, 14px)",

@@ -2,9 +2,7 @@ import { createContext, useContext, type Context } from "react";
 
 import type { useMusicPlayback } from "@/components/music/useMusicPlayback";
 
-export type MainAudioPlaybackValue = ReturnType<typeof useMusicPlayback> & {
-  audioEl: HTMLAudioElement | null;
-};
+export type MainAudioPlaybackValue = ReturnType<typeof useMusicPlayback>;
 
 const CONTEXT_KEY = Symbol.for("ruforge.MainAudioPlaybackContext");
 

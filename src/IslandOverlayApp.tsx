@@ -40,6 +40,8 @@ const EMPTY_CONTENT: DynamicIslandContent = {
   isMuted: false,
   volume: 1,
   loopMode: "off",
+  audioOutputDeviceId: "",
+  audioOutputDevices: [],
 };
 
 export default function IslandOverlayApp() {
@@ -195,6 +197,9 @@ export default function IslandOverlayApp() {
             void emitDesktopIslandControl({ type: "muted", muted });
           }}
           onToggleLoop={handleToggleLoop}
+          onAudioOutput={(deviceId) => {
+            void emitDesktopIslandControl({ type: "audioOutput", deviceId });
+          }}
           onPopOut={handlePopOut}
         />
       </div>

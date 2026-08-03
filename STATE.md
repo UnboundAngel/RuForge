@@ -18,7 +18,7 @@ Shipping version: 0.2.3 (unreleased)
 
 Last shipped to users: 0.2.2
 
-Last updated: 2026-08-02 (Music loopMode off/all/one)
+Last updated: 2026-08-02 (Music crossfade solo floor)
 
 Status: 0.2.2 live on GitHub and updater.json. Downloader paste no longer flashes; soft library-duplicate warning on URL entry; every enqueue path shares the Download-click duplicate gate. Library incremental remove/upsert (no full rescan on delete or download success). Pre-spawn inspect timeout with kill-on-timeout; watchdog armed before start; auto-clear start failures only for approval auto. OBS Window Capture uses class `RuForge_Chrome_WidgetWin` for WGC. Headless `media_engine` crate backs inspect/download. Browser Companion remains developer-gated on localhost.
 
@@ -68,8 +68,15 @@ reads this for the last shipped delta, not the git tree.
 
 **0.2.3 (unreleased, in tree):**
 
+- Music (MINOR): equal-power crossfade 0–12s (default Off, persisted); Now Playing control; A/B elements; 18s min solo (shorten fade or hard cut); arm/abort/cascade guards.
+- Downloader: paste/fetch center stack spaced (no URL/status/pacer overlap); readable URL type; fetch status under pacer; soft-rect Download CTA.
+- Island: audio output device labels marquee slowly on hover when truncated.
+- Music: Now Playing bar matches header/corner shell black (`--music-shell-chrome`), not the lighter content surface.
+- Island: headphones MorphMenu stays above transport (no see-through play/pause), viewport-caps + scrolls long device lists; per-row device icons from label (headphones/speakers/display/cable); icon-only at rest, opaque `#271C18` panel; outputs enumerate on main (label unlock) and push to overlay.
+- Player: play/pause transport toggles use `PlayPauseMorphIcon` (play path ↔ pause bars crossfade; Now Playing, island, music/video mini, main player, row hover).
+- Music: artist hero cover falls back to track art when the playlist folder cover is missing (same path album cards already used).
 - Music: loopMode off/all/one (all = user span, no staging, idle endless tail kept); endless lookahead 12; "Next from" uses play-origin tag (`musicQueueSource`).
-- Island: minimized/tray-hidden main shows top-center Dynamic Island overlay for main-owned playback (not when mini owns); waveform motion no longer forces a middle-tall envelope.
+- Island: minimized/tray-hidden main shows top-center Dynamic Island overlay for main-owned playback (not when mini owns); overlay follows the monitor main was on; waveform motion no longer forces a middle-tall envelope; expanded headphones picker routes and remembers audio output (`audioOutputDevices`).
 - Library: Video Library multi-column grid with date groups, hover shell, Morph card menu, and scroll-linked tab chrome; Vite ignores agent markdown. Snapshot/cold-open/cleanup work from earlier in the cycle still applies.
 - Player: YouTube-style end flow (bottom cards 2-10s from 5% duration, ring hover, fade, Up next with left timer + full-width buttons) on main and mini. Chapter scrubber knob tracks the pointer again (no double horizontal translate).
 

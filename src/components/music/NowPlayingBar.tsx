@@ -9,8 +9,13 @@ import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
 import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
 import { loopModeAriaLabel, loopModeIcon } from "@/playbackLoopStorage";
+import {
+  MUSIC_CROSSFADE_MAX_SEC,
+  MUSIC_CROSSFADE_SUGGESTED_SEC,
+} from "./musicCrossfadeStorage";
 import { MusicVolumeControl } from "./MusicVolumeControl";
 import { MusicLikeButton } from "./MusicLikeButton";
+import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
@@ -23,6 +28,7 @@ type Props = {
   duration: number;
   expanded: boolean;
   playbackSpeed: number;
+  crossfadeSec: number;
   hasChapters: boolean;
   hasPrevInQueue: boolean;
   hasNextInQueue: boolean;
@@ -33,6 +39,7 @@ type Props = {
   onJumpPrevChapter: () => void;
   onJumpNextChapter: () => void;
   onSetPlaybackSpeed: (speed: number) => void;
+  onSetCrossfadeSec: (sec: number) => void;
   onBeginScrub: () => void;
   onReleaseScrub: (seconds: number) => void;
   onToggleExpand: () => void;
@@ -47,6 +54,7 @@ export function NowPlayingBar({
   duration,
   expanded,
   playbackSpeed,
+  crossfadeSec,
   hasChapters,
   hasPrevInQueue,
   hasNextInQueue,
@@ -57,6 +65,7 @@ export function NowPlayingBar({
   onJumpPrevChapter,
   onJumpNextChapter,
   onSetPlaybackSpeed,
+  onSetCrossfadeSec,
   onBeginScrub,
   onReleaseScrub,
   onToggleExpand,
@@ -87,7 +96,7 @@ export function NowPlayingBar({
   }, [activeJobs, removeDownloadJob]);
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [morePanel, setMorePanel] = useState<"main" | "speed">("main");
+  const [morePanel, setMorePanel] = useState<"main" | "speed" | "crossfade">("main");
   const [volumeInteractTick, setVolumeInteractTick] = useState(0);
   const utilitiesRef = useRef<HTMLDivElement>(null);
   const scrubTrackRef = useRef<HTMLDivElement>(null);
@@ -182,9 +191,7 @@ export function NowPlayingBar({
       if (!isScrubbingRef.current) return;
       const finalSec = previewFromClientX(ev.clientX);
       isScrubbingRef.current = false;
-      if (finalSec !== null) {
-        onReleaseScrub(finalSec);
-      }
+      onReleaseScrub(finalSec ?? currentTime);
       if (duration > 0) {
         pendingReleaseRef.current = true;
         pendingReleaseTimeoutRef.current = setTimeout(() => {
@@ -199,7 +206,7 @@ export function NowPlayingBar({
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [duration, onBeginScrub, onReleaseScrub, previewFromClientX, clearPendingRelease]);
+  }, [currentTime, duration, onBeginScrub, onReleaseScrub, previewFromClientX, clearPendingRelease]);
 
   useEffect(() => {
     const el = barRef.current;
@@ -238,7 +245,7 @@ export function NowPlayingBar({
       className="shrink-0"
       style={{
         height: "var(--music-nowplaying-height)",
-        background: expanded ? "var(--music-bg)" : "var(--music-surface)",
+        background: "var(--music-shell-chrome)",
       }}
     >
       <div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1fr)] items-center gap-x-4 px-4">
@@ -321,9 +328,7 @@ export function NowPlayingBar({
               style={{ background: "var(--music-text-primary)", color: "var(--music-bg)" }}
               aria-label={paused ? "Play" : "Pause"}
             >
-              {paused
-                ? <Icon icon="tabler:player-play-filled" width={16} />
-                : <Icon icon="tabler:player-pause-filled" width={16} />}
+              <PlayPauseMorphIcon playing={!paused} size={16} />
             </button>
             <button
               type="button"
@@ -441,8 +446,22 @@ export function NowPlayingBar({
                           <span className="tabular-nums opacity-70">{playbackSpeed}×</span>
                           <ChevronRight size={14} data-more-icon className="opacity-70" />
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setMorePanel("crossfade")}
+                          className="rf-music-more-row"
+                        >
+                          <span data-more-icon>
+                            <Icon icon="tabler:arrows-exchange" width={15} />
+                          </span>
+                          <span className="flex-1">Crossfade</span>
+                          <span className="tabular-nums opacity-70">
+                            {crossfadeSec <= 0 ? "Off" : `${crossfadeSec}s`}
+                          </span>
+                          <ChevronRight size={14} data-more-icon className="opacity-70" />
+                        </button>
                       </motion.div>
-                    ) : (
+                    ) : morePanel === "speed" ? (
                       <motion.div
                         key="more-speed"
                         initial={{ opacity: 0, x: 8 }}
@@ -470,6 +489,56 @@ export function NowPlayingBar({
                             {speed}×
                           </button>
                         ))}
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="more-crossfade"
+                        initial={{ opacity: 0, x: 8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 8 }}
+                        transition={{ duration: 0.12 }}
+                        className="px-3 py-2"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setMorePanel("main")}
+                          className="rf-music-more-row -mx-3"
+                        >
+                          <ChevronLeft size={14} data-more-icon />
+                          Crossfade
+                        </button>
+                        <div className="flex items-center justify-between gap-3 pt-1 pb-2">
+                          <span className="text-xs opacity-70">
+                            {crossfadeSec <= 0 ? "Off" : `${crossfadeSec}s`}
+                          </span>
+                          {crossfadeSec <= 0 ? (
+                            <button
+                              type="button"
+                              className="text-xs opacity-80 hover:opacity-100"
+                              onClick={() => onSetCrossfadeSec(MUSIC_CROSSFADE_SUGGESTED_SEC)}
+                            >
+                              Use {MUSIC_CROSSFADE_SUGGESTED_SEC}s
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-xs opacity-80 hover:opacity-100"
+                              onClick={() => onSetCrossfadeSec(0)}
+                            >
+                              Off
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={MUSIC_CROSSFADE_MAX_SEC}
+                          step={1}
+                          value={crossfadeSec}
+                          onChange={(e) => onSetCrossfadeSec(Number(e.target.value))}
+                          className="w-full accent-[var(--music-accent)]"
+                          aria-label="Crossfade duration"
+                        />
                       </motion.div>
                     )}
                   </AnimatePresence>

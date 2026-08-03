@@ -9,6 +9,7 @@ This document describes how the RuForge activity island expands, animates, and w
 | `ActivityIsland.tsx` | Integration layer: session state, user expand/collapse, portal mount, handlers, content mapping |
 | `DynamicIsland.tsx` | Visual shell: single morphing container + inner content swap |
 | `ActivityIslandWaveform.tsx` | Five-bar accent waveform (compact + expanded header) |
+| `IslandAudioOutputControl.tsx` | Headphones MorphMenu (`paintedRest={false}`); device list from main content |
 | `islandIcons.tsx` | SVG icons for expanded controls |
 | `src/lib/activityIslandResolve.ts` | Pure rules: when island shows, when expand is allowed, navigate-to-owner |
 | `src/hooks/useCurrentActivity.ts` | Session snapshot: file, paused, time, cover |
@@ -225,6 +226,7 @@ Onboarding or coach marks must account for this ordering (see below).
 | Tap backdrop | `setUserExpanded(false)` | Only mounted when expanded |
 | Escape | `setUserExpanded(false)` | window listener while expanded |
 | Play/pause, skip, seek, open | Expanded buttons; all `stopPropagation` | Shell click must not collapse when using controls |
+| Audio output (headphones) | `setAudioOutputDeviceId` on main; desktop overlay emits `audioOutput` control | Applies `setSinkId` on media el + analyser `AudioContext` when MES-routed |
 | Open player (airplay icon) | `navigateToActivityOwningSurface` | Music → `setNavMode("music")`, video → `setActiveTab("player")` |
 
 **Do not** remove `stopPropagation` from expanded controls without re-testing collapse behavior.
@@ -254,6 +256,10 @@ DynamicIsland      ← content prop only
 | `showExpandedControls` | `isExpanded && !isStub && hasSession` |
 | `canSeek` | bridge has `seek` + duration > 0 + not stub |
 | `accentColor` | Settings accent (`ActivityIsland`); waveform fallback when no cover or mini stub |
+| `audioOutputDeviceId` | Persisted app-wide sink id (`audioOutputDevices.ts`); empty = system default |
+| `audioOutputDevices` | Main-enumerated outputs (pushed to desktop overlay; overlay webview cannot list devices) |
+
+Expanded headphones control uses MorphMenu with bare rest (icon only). Open shell is opaque `#271C18`. Routes output on the owning main media element. Desktop overlay is remote only: selection goes through `DesktopIslandControl` `{ type: "audioOutput"; deviceId }` and is applied on main (including `AudioContext.setSinkId` when the island waveform uses a media-element source).
 
 ### Video bridge note
 
@@ -280,7 +286,7 @@ Music mode: island portal still renders above `MusicShell` when away from music 
 
 ## Desktop overlay (minimized / tray-hidden)
 
-When the **main** window is OS-minimized or hidden to tray, and playback is **main-owned** (`main-music` / `main-video`), a separate transparent always-on-top webview (`label: island`) shows only the Dynamic Island at the **top center** of the primary work area.
+When the **main** window is OS-minimized or hidden to tray, and playback is **main-owned** (`main-music` / `main-video`), a separate transparent always-on-top webview (`label: island`) shows only the Dynamic Island at the **top center** of the monitor the main window was on (cached before minimize/hide; falls back to primary).
 
 **Show rules**
 
@@ -292,8 +298,9 @@ When the **main** window is OS-minimized or hidden to tray, and playback is **ma
 **Architecture**
 
 - Media stays in `main`. Overlay is remote control only (no media element).
-- Events: `desktop-island-state` (main → island), `desktop-island-control` (island → main).
+- Events: `desktop-island-state` (main → island), `desktop-island-control` (island → main). Control types include play/seek/skip/volume/mute/loop/`audioOutput`/open/popOut.
 - Window bounds hug compact (~380×56) or expanded (~380×220); `sync_island_overlay_bounds` on expand/collapse. Expanded collapses on Escape or when the overlay window blurs (click outside).
+- Placement uses the main window's monitor (`note_main_window_monitor` on move/resize and before tray hide); minimized outer coords are ignored so the island does not jump to the primary display.
 - Reuses `DynamicIsland` presentation; does not mount idle empty pill on the desktop (window hidden when no session).
 
 **Do not** drive desktop overlay from Zustand inside `DynamicIsland.tsx`. Keep bridge apply logic in `desktopIslandBridge.ts` / `useDesktopIslandOverlay.ts`.

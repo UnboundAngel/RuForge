@@ -1,8 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 
+import {
+  getAudioOutputDeviceId,
+  getCachedAudioOutputDevices,
+  listAudioOutputDevices,
+  subscribeAudioOutputDeviceId,
+  subscribeCachedAudioOutputDevices,
+} from "@/audioOutputDevices";
 import type { LoopMode } from "@/playbackLoopStorage";
 import { primaryArtist, rawArtistFromFile } from "@/components/music/musicArtist";
 import { useCurrentActivity } from "@/hooks/useCurrentActivity";
@@ -51,6 +58,8 @@ function buildDesktopIslandPayload(
   volume: number,
   isMuted: boolean,
   loopMode: LoopMode,
+  audioOutputDeviceId: string,
+  audioOutputDevices: ReturnType<typeof getCachedAudioOutputDevices>,
 ): DesktopIslandStatePayload | null {
   if (
     !activity.hasSession ||
@@ -99,6 +108,8 @@ function buildDesktopIslandPayload(
       isMuted,
       volume,
       loopMode,
+      audioOutputDeviceId,
+      audioOutputDevices,
     },
   };
 }
@@ -126,6 +137,16 @@ export function useDesktopIslandOverlay(enabled: boolean) {
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const loopMode = useRuforgeStore((s) => s.loopMode);
+  const audioOutputDeviceId = useSyncExternalStore(
+    subscribeAudioOutputDeviceId,
+    getAudioOutputDeviceId,
+    getAudioOutputDeviceId,
+  );
+  const audioOutputDevices = useSyncExternalStore(
+    subscribeCachedAudioOutputDevices,
+    getCachedAudioOutputDevices,
+    getCachedAudioOutputDevices,
+  );
   const settingsAccent = useRuforgeStore((s) =>
     typeof s.settings.accentColor === "string" ? s.settings.accentColor : "#EDCF9B",
   );
@@ -141,10 +162,14 @@ export function useDesktopIslandOverlay(enabled: boolean) {
   const volumeRef = useRef(volume);
   const mutedRef = useRef(isMuted);
   const loopModeRef = useRef(loopMode);
+  const audioOutputRef = useRef(audioOutputDeviceId);
+  const audioOutputDevicesRef = useRef(audioOutputDevices);
   const accentRef = useRef(settingsAccent);
   volumeRef.current = volume;
   mutedRef.current = isMuted;
   loopModeRef.current = loopMode;
+  audioOutputRef.current = audioOutputDeviceId;
+  audioOutputDevicesRef.current = audioOutputDevices;
   accentRef.current = settingsAccent;
 
   useEffect(() => {
@@ -217,6 +242,8 @@ export function useDesktopIslandOverlay(enabled: boolean) {
         volumeRef.current,
         mutedRef.current,
         loopModeRef.current,
+        audioOutputRef.current,
+        audioOutputDevicesRef.current,
       );
       const want = mainAway && raw != null;
 
@@ -305,6 +332,8 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       volume,
       isMuted,
       loopMode,
+      audioOutputDeviceId,
+      audioOutputDevices,
     );
     if (raw == null) {
       if (shownRef.current) {
@@ -320,11 +349,21 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     if (!shownRef.current) {
       shownRef.current = true;
       setIslandWaveformBackgroundPump(true);
+      void listAudioOutputDevices({ unlock: true });
       void invoke("show_island_overlay")
         .then(() => pushDesktopIslandState(payload))
         .catch(() => {});
       return;
     }
     void pushDesktopIslandState(payload).catch(() => {});
-  }, [enabled, activity, settingsAccent, volume, isMuted, loopMode]);
+  }, [
+    enabled,
+    activity,
+    settingsAccent,
+    volume,
+    isMuted,
+    loopMode,
+    audioOutputDeviceId,
+    audioOutputDevices,
+  ]);
 }

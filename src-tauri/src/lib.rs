@@ -70,8 +70,8 @@ use crate::commands::musicmeta::{
     read_artist_meta_sidecar, read_music_meta,
 };
 use crate::commands::island_overlay::{
-    hide_island_overlay, island_overlay_ready, show_island_overlay, sync_island_overlay_bounds,
-    MAIN_HIDDEN_EVENT,
+    hide_island_overlay, island_overlay_ready, note_main_window_monitor, show_island_overlay,
+    sync_island_overlay_bounds, MAIN_HIDDEN_EVENT,
 };
 use crate::commands::notify_overlay::{
     hide_notify_overlay_window, notify_overlay_ready, push_background_notify,
@@ -259,6 +259,7 @@ pub fn run() {
 
             if let Some(main) = app.get_webview_window("main") {
                 app.manage(DevCaptureMainWindow(main.clone()));
+                note_main_window_monitor(app.handle());
                 let _ = main.listen(TRAY_SHOW_MAIN_EVENT, |_event| {
                     crate::rf_log!(
                         "core.tray",
@@ -280,25 +281,32 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            #[cfg(windows)]
             if window.label() == "main" {
-                if matches!(event, tauri::WindowEvent::Destroyed) {
-                    taskbar_thumbbar::on_main_destroyed();
-                }
-            }
-
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let state = window.state::<AppConfig>();
-                let minimize_to_tray = *state.minimize_to_tray.lock().unwrap();
-
-                if minimize_to_tray && window.label() == "main" {
-                    let _ = window.hide();
-                    api.prevent_close();
-                    let _ = window.app_handle().emit_to(
-                        EventTarget::webview_window("main"),
-                        MAIN_HIDDEN_EVENT,
-                        (),
-                    );
+                match event {
+                    tauri::WindowEvent::Moved(_)
+                    | tauri::WindowEvent::Resized(_)
+                    | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                        note_main_window_monitor(window.app_handle());
+                    }
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        let state = window.state::<AppConfig>();
+                        let minimize_to_tray = *state.minimize_to_tray.lock().unwrap();
+                        if minimize_to_tray {
+                            note_main_window_monitor(window.app_handle());
+                            let _ = window.hide();
+                            api.prevent_close();
+                            let _ = window.app_handle().emit_to(
+                                EventTarget::webview_window("main"),
+                                MAIN_HIDDEN_EVENT,
+                                (),
+                            );
+                        }
+                    }
+                    #[cfg(windows)]
+                    tauri::WindowEvent::Destroyed => {
+                        taskbar_thumbbar::on_main_destroyed();
+                    }
+                    _ => {}
                 }
             }
         })

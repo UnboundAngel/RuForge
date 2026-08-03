@@ -22,6 +22,7 @@ import {
   Ellipsis,
   MessageSquare,
 } from "lucide-react";
+import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 import { type FfprobeHint, type MediaFile } from "../types";
 import { ScrubHoverPreview } from "./player/ScrubHoverPreview";
 import { useScrubberThumbs } from "../useScrubberThumbs";
@@ -1996,9 +1997,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                       onClick={togglePlay}
                       className={`${playerBarBtnClass} inline-flex items-center justify-center`}
                     >
-                      {isPaused
-                        ? <Play className="w-5 h-5 fill-current" />
-                        : <Pause className="w-5 h-5 fill-current" />}
+                      <PlayPauseMorphIcon playing={!isPaused} size={20} />
                     </button>
                   </Tooltip>
                   <Tooltip text="Rewind 15s">

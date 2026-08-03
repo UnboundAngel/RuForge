@@ -47,3 +47,7 @@ Putting the duration timestamp top-left, the rating in a weird spot, rank badges
 ## 10. Animating layout properties
 Transitioning `width`/`height`/`top`/`left`/`margin` → janky, laggy, drops frames.
 - **Instead:** `transform` and `opacity` only.
+
+## 11. Hard truncate with no hover reveal
+Device names, track titles, paths, or menu labels cut off with `…` and no way to read the rest on hover. Hides meaning.
+- **Instead:** truncate at rest; slow marquee on hover / row hover (`HoverMarqueeText`, `animate-marquee-slow` for menus).
