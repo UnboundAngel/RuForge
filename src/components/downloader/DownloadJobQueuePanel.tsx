@@ -42,12 +42,15 @@ export const MarqueeText = ({
   layoutKey,
   centered = false,
   fadeLeadingEdge = false,
+  marqueeClassName = "animate-marquee",
 }: {
   text: string;
   className?: string;
   layoutKey?: boolean | number | string;
   centered?: boolean;
   fadeLeadingEdge?: boolean;
+  /** Override scroll animation class (e.g. `animate-marquee-slow`). */
+  marqueeClassName?: string;
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
@@ -77,7 +80,7 @@ export const MarqueeText = ({
       }`}
     >
       <div
-        className={`flex w-max ${shouldMarquee ? "animate-marquee" : ""}`}
+        className={`flex w-max ${shouldMarquee ? marqueeClassName : ""}`}
         style={centered && !shouldMarquee ? { margin: "0 auto" } : undefined}
       >
         <span ref={textRef} className={shouldMarquee ? "pr-12" : ""}>

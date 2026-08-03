@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { HoverMarqueeText } from "@/components/music/HoverMarqueeText";
 import { cn } from "@/lib/utils";
 
 /**
@@ -71,6 +72,13 @@ type MorphMenuProps = {
   itemClassName?: string;
   activeItemClassName?: string;
   triggerSize?: number;
+  /**
+   * When false, rest state is icon-only (no border/fill/shadow). Open still
+   * paints the menu shell. Use for transport / ghost icons; keep true for card chips.
+   */
+  paintedRest?: boolean;
+  /** Overflowing labels scroll on row hover (audio output device names). */
+  marqueeOnHover?: boolean;
   /** `start` grows to the right of the chip (RuForge ⋯). */
   align?: "start" | "end";
   "aria-label"?: string;
@@ -80,6 +88,44 @@ type MorphMenuProps = {
 };
 
 const MENU_WIDTH = 176;
+/** Keep open menus inside the webview / window (island overlay is short). */
+const MENU_VIEWPORT_PAD_PX = 8;
+
+/** Opaque RuForge menu panel (matches Settings / island version menus). */
+export const MORPH_MENU_SHELL =
+  "border border-white/10 bg-[#271C18] shadow-[0_8px_24px_rgba(0,0,0,0.45)]";
+
+function MorphMenuRow({
+  item,
+  className,
+  marqueeOnHover,
+  label,
+  onActivate,
+}: {
+  item: MorphMenuItem;
+  className: string;
+  marqueeOnHover: boolean;
+  label: (item: MorphMenuItem, hovered: boolean) => ReactNode;
+  onActivate: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={item.disabled}
+      tabIndex={0}
+      className={className}
+      onMouseEnter={marqueeOnHover ? () => setHovered(true) : undefined}
+      onMouseLeave={marqueeOnHover ? () => setHovered(false) : undefined}
+      onClick={onActivate}
+    >
+      {item.icon}
+      {label(item, hovered)}
+      {item.trailing}
+    </button>
+  );
+}
 
 /**
  * Pattern B — chip grows into the menu from the same origin.
@@ -94,6 +140,8 @@ export function MorphMenu({
   itemClassName,
   activeItemClassName,
   triggerSize = 32,
+  paintedRest = true,
+  marqueeOnHover = false,
   align = "start",
   "aria-label": ariaLabel = "Open menu",
   header,
@@ -106,6 +154,7 @@ export function MorphMenu({
   const menuLayerRef = useRef<HTMLDivElement>(null);
   const [submenuId, setSubmenuId] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
+  const [viewportCapH, setViewportCapH] = useState<number | null>(null);
   const wasOpenRef = useRef(open);
   const spring = reduceMotion ? { duration: 0 } : MORPH_SPRING;
 
@@ -139,7 +188,28 @@ export function MorphMenu({
     `${items.length}:${items.map((i) => i.label).join("\0")}:${submenuId ?? ""}:${header ? "1" : "0"}`,
   );
 
-  const openHeight = Math.max(triggerSize, menuSize?.h ?? triggerSize);
+  useLayoutEffect(() => {
+    if (!open) {
+      setViewportCapH(null);
+      return;
+    }
+    const el = rootRef.current;
+    if (!el) return;
+    const updateCap = () => {
+      const rect = el.getBoundingClientRect();
+      // Shell is bottom-anchored on the trigger; grow upward into free space.
+      const available = Math.floor(rect.bottom - MENU_VIEWPORT_PAD_PX);
+      setViewportCapH(Math.max(triggerSize, available));
+    };
+    updateCap();
+    window.addEventListener("resize", updateCap);
+    return () => window.removeEventListener("resize", updateCap);
+  }, [open, triggerSize, items.length]);
+
+  const naturalOpenH = Math.max(triggerSize, menuSize?.h ?? triggerSize);
+  const openHeight =
+    viewportCapH == null ? naturalOpenH : Math.min(naturalOpenH, viewportCapH);
+  const menuScrolls = open && openHeight < naturalOpenH;
   const target = open
     ? { w: MENU_WIDTH, h: openHeight }
     : { w: triggerSize, h: triggerSize };
@@ -204,13 +274,27 @@ export function MorphMenu({
       itemClassName,
     );
 
+  const labelNode = (item: MorphMenuItem, hovered: boolean) =>
+    marqueeOnHover ? (
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <HoverMarqueeText
+          text={item.label}
+          layoutKey={item.id}
+          slow
+          active={hovered}
+        />
+      </div>
+    ) : (
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+    );
+
   const menuBody = (
     <>
       {header ? <div className="mb-0.5 px-2.5 py-2">{header}</div> : null}
       {items.map((item) => (
         <div key={item.id} className={rowClass(item)}>
           {item.icon}
-          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          {labelNode(item, false)}
           {item.trailing}
         </div>
       ))}
@@ -222,7 +306,7 @@ export function MorphMenu({
   return (
     <div
       ref={rootRef}
-      className={cn("relative shrink-0", className)}
+      className={cn("relative shrink-0", open && "z-[100]", className)}
       style={{ width: triggerSize, height: triggerSize }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -240,10 +324,12 @@ export function MorphMenu({
         id={panelId}
         aria-label={open ? ariaLabel : undefined}
         className={cn(
-          "absolute bottom-0 z-[60] overflow-hidden border border-white/10",
-          "bg-[#1D1613]/80 backdrop-blur-2xl shadow-2xl shadow-black/40",
+          "absolute bottom-0 z-[60]",
+          menuScrolls ? "overflow-x-hidden overflow-y-auto" : "overflow-hidden",
           align === "start" ? "left-0" : "right-0",
-          shellClassName,
+          open || paintedRest
+            ? cn(MORPH_MENU_SHELL, shellClassName)
+            : cn("border-0 bg-transparent shadow-none", shellClassName),
         )}
         initial={false}
         animate={{
@@ -287,8 +373,10 @@ export function MorphMenu({
         <div
           ref={menuLayerRef}
           className={cn(
-            "absolute bottom-0 flex w-44 flex-col p-1",
-            align === "start" ? "left-0" : "right-0",
+            menuScrolls
+              ? "relative flex w-44 flex-col p-1"
+              : "absolute bottom-0 flex w-44 flex-col p-1",
+            !menuScrolls && (align === "start" ? "left-0" : "right-0"),
             !open && "pointer-events-none",
           )}
           style={{
@@ -301,18 +389,17 @@ export function MorphMenu({
             <>
               {header ? <div className="mb-0.5 px-2.5 py-2">{header}</div> : null}
               {items.map((item) => (
-                <button
+                <MorphMenuRow
                   key={item.id}
-                  type="button"
-                  role="menuitem"
-                  disabled={item.disabled}
-                  tabIndex={0}
+                  item={item}
                   className={cn(
                     rowClass(item),
                     "outline-none transition-colors",
                     "disabled:pointer-events-none disabled:opacity-50",
                   )}
-                  onClick={() => {
+                  marqueeOnHover={marqueeOnHover}
+                  label={labelNode}
+                  onActivate={() => {
                     if (item.submenu) {
                       setSubmenu(submenuId === item.id ? null : item.id);
                       return;
@@ -320,11 +407,7 @@ export function MorphMenu({
                     item.onSelect?.();
                     close();
                   }}
-                >
-                  {item.icon}
-                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  {item.trailing}
-                </button>
+                />
               ))}
               <AnimatePresence>
                 {open && activeSubmenu ? (

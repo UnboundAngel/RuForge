@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  getAudioOutputDeviceId,
+  getCachedAudioOutputDevices,
+  listAudioOutputDevices,
+  setAudioOutputDeviceId,
+  subscribeAudioOutputDeviceChange,
+  subscribeAudioOutputDeviceId,
+  subscribeCachedAudioOutputDevices,
+} from "@/audioOutputDevices";
 import { useDevCaptureChrome } from "@/components/dev-captures/DevCaptureChromeProvider";
 import { isDevCaptureEnabled } from "@/lib/devCaptureGate";
 import { ISLAND_CAPTURE_AUTO_DISMISS_MS } from "@/lib/devCaptureDismiss";
@@ -68,6 +77,16 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const loopMode = useRuforgeStore((s) => s.loopMode);
+  const audioOutputDeviceId = useSyncExternalStore(
+    subscribeAudioOutputDeviceId,
+    getAudioOutputDeviceId,
+    getAudioOutputDeviceId,
+  );
+  const audioOutputDevices = useSyncExternalStore(
+    subscribeCachedAudioOutputDevices,
+    getCachedAudioOutputDevices,
+    getCachedAudioOutputDevices,
+  );
   const setMuted = useRuforgeStore((s) => s.setMuted);
   const setVolume = useRuforgeStore((s) => s.setVolume);
   const cycleLoopMode = useRuforgeStore((s) => s.cycleLoopMode);
@@ -124,6 +143,14 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       : isExpanded
         ? "expanded"
         : "compact";
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    void listAudioOutputDevices({ unlock: true });
+    return subscribeAudioOutputDeviceChange(() => {
+      void listAudioOutputDevices({ unlock: false });
+    });
+  }, [isExpanded]);
 
   const dismissSavedCapture = useCallback(() => {
     setSavedCapture((prev) => {
@@ -242,6 +269,10 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
     [cycleLoopMode],
   );
 
+  const handleAudioOutput = useCallback((deviceId: string) => {
+    setAudioOutputDeviceId(deviceId);
+  }, []);
+
   const handlePopOutClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -301,6 +332,8 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       isMuted,
       volume,
       loopMode,
+      audioOutputDeviceId,
+      audioOutputDevices,
     }),
     [
       activity.coverSrc,
@@ -324,6 +357,8 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       isMuted,
       volume,
       loopMode,
+      audioOutputDeviceId,
+      audioOutputDevices,
       playback?.paused,
       playback?.currentTime,
     ],
@@ -462,6 +497,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
           onVolume={setVolume}
           onMuted={setMuted}
           onToggleLoop={handleToggleLoop}
+          onAudioOutput={handleAudioOutput}
           onPopOut={handlePopOutClick}
         />
         </div>

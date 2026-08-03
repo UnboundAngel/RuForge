@@ -2,23 +2,6 @@ import type { SVGProps } from "react";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
-export function PauseIcon({ className, ...props }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
-      <rect x="6" y="4" width="4" height="16" rx="1" />
-      <rect x="14" y="4" width="4" height="16" rx="1" />
-    </svg>
-  );
-}
-
-export function PlayIcon({ className, ...props }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
-      <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" />
-    </svg>
-  );
-}
-
 export function SkipBackIcon({ className, ...props }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>

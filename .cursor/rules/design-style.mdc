@@ -27,6 +27,7 @@ These are the rules that matter most. Break these and the output is wrong.
 5. **Depth = tonal layers, not effects.** Darkest background → lighter surface → lighter nested surface → lightest interactive element. Build the "popping out of a pocket" feel with stacked tonal contrast.
 6. **Don't default to Inter/system-ui on a flat white card.** Use a characterful sans and a real tonal theme picked for the app's purpose.
 7. **Sameness is a statement.** Two sections look identical ONLY if they hold equal value. Don't render "Albums", "Recently added", and "Rediscover" pixel-identical. Differentiate by card size, art treatment, or density.
+8. **Truncated text must marquee on hover.** If a label can ellipsize off-screen or out of its cell (`truncate`, single-line overflow), hover (or row hover) must reveal the full string with a slow horizontal marquee. Prefer `HoverMarqueeText` / `MarqueeText` (`animate-marquee` or `animate-marquee-slow`). Do not leave important names permanently unreadable behind `…`.
 
 ---
 
@@ -148,6 +149,8 @@ Characterful sans, not Inter-by-default. Three tiers working together:
 ```
 
 Dot-separated metadata lines (`8.5 · 2019 · TV Show`) use `--text-muted`.
+
+**Overflow labels (required):** Rest state may truncate. On hover of the text or its clickable row, overflowing copy scrolls slowly so the full string is readable. RuForge primitives: `HoverMarqueeText` (hover gate) + `MarqueeText` (loop). Use `animate-marquee-slow` for dense menus (device names, paths). Always-on marquees are fine for now-playing title strips where the whole field is the focus; menus and grids stay truncate-until-hover.
 
 ---
 

@@ -523,6 +523,7 @@ const VideoCard = memo(function VideoCard({
                 onOpenChange={setMenuOpen}
                 triggerSize={32}
                 align="end"
+                paintedRest
                 aria-label="Video options"
                 trigger={<MoreVertical size={16} strokeWidth={2.25} />}
                 items={menuItems}

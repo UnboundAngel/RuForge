@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, WebviewUrl};
+use tauri::{AppHandle, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewUrl};
 use tauri::WebviewWindowBuilder;
 
 use crate::hardware_acceleration::HardwareAccelerationDisk;
@@ -15,8 +15,12 @@ pub const MAIN_HIDDEN_EVENT: &str = "ruforge:main-hidden";
 const DEFAULT_LOGICAL_W: f64 = 380.0;
 const DEFAULT_LOGICAL_H: f64 = 56.0;
 
+/// Windows reports minimized outer positions near -32000; treat those as unusable.
+const MIN_SANE_OUTER_COORD: i32 = -10_000;
+
 static ISLAND_CREATE_LOCK: Mutex<()> = Mutex::new(());
 static OVERLAY_READY: AtomicBool = AtomicBool::new(false);
+static LAST_MAIN_MONITOR: Mutex<Option<Monitor>> = Mutex::new(None);
 
 fn work_area_top_center(
     work: &tauri::PhysicalRect<i32, u32>,
@@ -34,7 +38,7 @@ fn work_area_top_center(
 }
 
 fn physical_size_for_island_window(
-    monitor: &tauri::Monitor,
+    monitor: &Monitor,
     logical_w: f64,
     logical_h: f64,
 ) -> (PhysicalSize<u32>, PhysicalPosition<i32>) {
@@ -46,15 +50,94 @@ fn physical_size_for_island_window(
     (PhysicalSize::new(win_w, win_h), pos)
 }
 
+fn outer_position_sane(pos: PhysicalPosition<i32>) -> bool {
+    pos.x > MIN_SANE_OUTER_COORD && pos.y > MIN_SANE_OUTER_COORD
+}
+
+fn cache_main_monitor(monitor: Monitor) {
+    if let Ok(mut guard) = LAST_MAIN_MONITOR.lock() {
+        *guard = Some(monitor);
+    }
+}
+
+/// Snapshot the monitor the main window currently occupies (call while still visible).
+pub fn note_main_window_monitor(app: &AppHandle) {
+    let Some(main) = app.get_webview_window("main") else {
+        return;
+    };
+    if let Ok(Some(m)) = main.current_monitor() {
+        cache_main_monitor(m);
+        return;
+    }
+    let Ok(pos) = main.outer_position() else {
+        return;
+    };
+    if !outer_position_sane(pos) {
+        return;
+    }
+    let Ok(size) = main.outer_size() else {
+        return;
+    };
+    let cx = pos.x as f64 + size.width as f64 / 2.0;
+    let cy = pos.y as f64 + size.height as f64 / 2.0;
+    if let Ok(Some(m)) = main.monitor_from_point(cx, cy) {
+        cache_main_monitor(m);
+    }
+}
+
+fn resolve_island_monitor(app: &AppHandle) -> Result<Monitor, String> {
+    if let Some(main) = app.get_webview_window("main") {
+        let pos_ok = main
+            .outer_position()
+            .ok()
+            .map(outer_position_sane)
+            .unwrap_or(false);
+
+        if pos_ok {
+            if let Ok(Some(m)) = main.current_monitor() {
+                cache_main_monitor(m.clone());
+                return Ok(m);
+            }
+            if let (Ok(pos), Ok(size)) = (main.outer_position(), main.outer_size()) {
+                let cx = pos.x as f64 + size.width as f64 / 2.0;
+                let cy = pos.y as f64 + size.height as f64 / 2.0;
+                if let Ok(Some(m)) = main.monitor_from_point(cx, cy) {
+                    cache_main_monitor(m.clone());
+                    return Ok(m);
+                }
+            }
+        }
+
+        if let Ok(guard) = LAST_MAIN_MONITOR.lock() {
+            if let Some(ref m) = *guard {
+                return Ok(m.clone());
+            }
+        }
+
+        if let Ok(Some(m)) = main.current_monitor() {
+            cache_main_monitor(m.clone());
+            return Ok(m);
+        }
+    }
+
+    if let Ok(guard) = LAST_MAIN_MONITOR.lock() {
+        if let Some(ref m) = *guard {
+            return Ok(m.clone());
+        }
+    }
+
+    app.primary_monitor()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "no primary monitor".to_string())
+}
+
 fn reposition_island_window(
+    app: &AppHandle,
     window: &tauri::WebviewWindow,
     logical_w: f64,
     logical_h: f64,
 ) -> Result<(), String> {
-    let monitor = window
-        .primary_monitor()
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "no primary monitor".to_string())?;
+    let monitor = resolve_island_monitor(app)?;
     let (size, pos) = physical_size_for_island_window(&monitor, logical_w, logical_h);
     window
         .set_size(tauri::Size::Physical(size))
@@ -103,7 +186,7 @@ fn ensure_island_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String>
     }
 
     let window = builder.build().map_err(|e| e.to_string())?;
-    reposition_island_window(&window, DEFAULT_LOGICAL_W, DEFAULT_LOGICAL_H)?;
+    reposition_island_window(app, &window, DEFAULT_LOGICAL_W, DEFAULT_LOGICAL_H)?;
     Ok(window)
 }
 
@@ -115,8 +198,9 @@ pub async fn island_overlay_ready(_app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn show_island_overlay(app: AppHandle) -> Result<(), String> {
+    note_main_window_monitor(&app);
     let window = ensure_island_window(&app)?;
-    reposition_island_window(&window, DEFAULT_LOGICAL_W, DEFAULT_LOGICAL_H)?;
+    reposition_island_window(&app, &window, DEFAULT_LOGICAL_W, DEFAULT_LOGICAL_H)?;
     window.show().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -140,6 +224,6 @@ pub async fn sync_island_overlay_bounds(
     };
     let w = width.clamp(220.0, 420.0);
     let h = height.clamp(48.0, 280.0);
-    reposition_island_window(&window, w, h)?;
+    reposition_island_window(&app, &window, w, h)?;
     Ok(())
 }

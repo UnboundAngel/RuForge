@@ -16,7 +16,6 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import logo from "./assets/ruforgeAppIcon.png";
 import {
   Play,
-  Pause,
   Volume2,
   VolumeX,
   Volume1,
@@ -27,6 +26,7 @@ import {
   Speaker,
   Layers,
 } from "lucide-react";
+import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "./types";
 import type { LibrarySnapshot } from "./lib/libraryConfig";
 import { hydratePlatformDefaultPaths } from "./platformPaths";
@@ -2301,7 +2301,7 @@ export default function MiniPlayer() {
                           </Tooltip>
                           
                           <Tooltip text={isPaused ? "Play" : "Pause"} disabled={isSmallMode}>
-                            <button onClick={togglePlay} className="text-[color:var(--accent)] transition" onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent)'} onMouseLeave={(e) => e.currentTarget.style.color = ''}>{isPaused ? <Play size={isMini ? 16 : 20} fill="currentColor" /> : <Pause size={isMini ? 16 : 20} fill="currentColor" />}</button>
+                            <button onClick={togglePlay} className="text-[color:var(--accent)] transition" onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent)'} onMouseLeave={(e) => e.currentTarget.style.color = ''}><PlayPauseMorphIcon playing={!isPaused} size={isMini ? 16 : 20} /></button>
                           </Tooltip>
 
                           <Tooltip text="Forward 15s" disabled={isSmallMode}>
@@ -2461,7 +2461,7 @@ export default function MiniPlayer() {
                         <button onClick={() => seek(-15)} className="text-stone-400 hover:text-[color:var(--accent)] transition-all active:scale-90">
                           <Icon icon="tabler:rewind-backward-15" width={winSize.width < 380 ? 18 : 22} />
                         </button>
-                        <button onClick={togglePlay} className="text-[color:var(--accent)] hover:scale-110 active:scale-90 transition-all">{isPaused ? <Play size={winSize.width < 380 ? 20 : 24} fill="currentColor" /> : <Pause size={winSize.width < 380 ? 20 : 24} fill="currentColor" />}</button>
+                        <button onClick={togglePlay} className="text-[color:var(--accent)] hover:scale-110 active:scale-90 transition-all"><PlayPauseMorphIcon playing={!isPaused} size={winSize.width < 380 ? 20 : 24} /></button>
                         <button onClick={() => seek(15)} className="text-stone-400 hover:text-[color:var(--accent)] transition-all active:scale-90">
                           <Icon icon="tabler:rewind-forward-15" width={winSize.width < 380 ? 18 : 22} />
                         </button>
@@ -2602,7 +2602,7 @@ export default function MiniPlayer() {
                           className={`relative z-10 bg-[color:var(--accent)] hover:brightness-110 text-stone-950 transition-all duration-300 active:scale-95 flex items-center justify-center ${playBtnSize} rounded-full shrink-0`}
                           title={isPaused ? "Play" : "Pause"}
                         >
-                          {isPaused ? <Play size={playIconSize} fill="currentColor" className="ml-0.5" /> : <Pause size={playIconSize} fill="currentColor" />}
+                          <PlayPauseMorphIcon playing={!isPaused} size={playIconSize} className={isPaused ? "ml-0.5" : undefined} />
                         </button>
 
                         {/* 4. Forward 15s */}
@@ -2830,7 +2830,7 @@ export default function MiniPlayer() {
                                 className="w-7 h-7 rounded-full bg-[color:var(--accent)] hover:brightness-110 text-stone-950 flex items-center justify-center active:scale-95 transition-all duration-300"
                                 title={isPaused ? "Play" : "Pause"}
                               >
-                                {isPaused ? <Play size={12} fill="currentColor" className="ml-0.5" /> : <Pause size={12} fill="currentColor" />}
+                                <PlayPauseMorphIcon playing={!isPaused} size={12} className={isPaused ? "ml-0.5" : undefined} />
                               </button>
 
                               {/* Next track */}
@@ -2874,7 +2874,7 @@ export default function MiniPlayer() {
                                 className="w-8 h-8 rounded-full bg-[color:var(--accent)] hover:brightness-110 text-stone-950 flex items-center justify-center active:scale-95 transition-all duration-300"
                                 title={isPaused ? "Play" : "Pause"}
                               >
-                                {isPaused ? <Play size={14} fill="currentColor" className="ml-0.5" /> : <Pause size={14} fill="currentColor" />}
+                                <PlayPauseMorphIcon playing={!isPaused} size={14} className={isPaused ? "ml-0.5" : undefined} />
                               </button>
 
                               {/* Forward */}

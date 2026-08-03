@@ -1,4 +1,4 @@
-import { Pause, Play } from "lucide-react";
+import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 
 type Props = {
   indexLabel: string | number;
@@ -27,11 +27,7 @@ export function MusicTrackIndexPlay({
         {isPlaying ? "♪" : indexLabel}
       </span>
       <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-150 group-hover/row:opacity-100">
-        {showPause ? (
-          <Pause size={iconSize} fill="currentColor" />
-        ) : (
-          <Play size={iconSize} fill="currentColor" />
-        )}
+        <PlayPauseMorphIcon playing={showPause} size={iconSize} />
       </span>
     </div>
   );

@@ -1,7 +1,8 @@
-import { Play, SkipForward, SkipBack, Shuffle, Repeat, Repeat1 } from "lucide-react";
+import { SkipForward, SkipBack, Shuffle, Repeat, Repeat1 } from "lucide-react";
 import type { LoopMode } from "@/playbackLoopStorage";
 import { loopModeAriaLabel } from "@/playbackLoopStorage";
 import { cn } from "@/lib/utils";
+import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 
 type Props = {
   isPlaying: boolean;
@@ -56,20 +57,7 @@ export function MusicMiniTransport({
         onClick={onToggle}
         aria-label={isPlaying ? "Pause" : "Play"}
       >
-        <Play
-          size={24}
-          fill="currentColor"
-          className={cn(
-            "transition-all duration-300 ml-1",
-            isPlaying ? "opacity-0 scale-50 rotate-45 pointer-events-none" : "opacity-100 scale-100 rotate-0",
-          )}
-        />
-        <div
-          className={cn(
-            "absolute bg-white transition-all duration-300",
-            isPlaying ? "w-[18px] h-[18px] opacity-100 scale-100 rf-mm-play-pulse" : "opacity-0 scale-50 pointer-events-none",
-          )}
-        />
+        <PlayPauseMorphIcon playing={isPlaying} size={24} className={isPlaying ? undefined : "ml-0.5"} />
       </button>
       <button
         type="button"

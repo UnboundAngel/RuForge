@@ -16,6 +16,16 @@ const graphs = new WeakMap<HTMLMediaElement, AnalyserGraph>();
 const mesAlreadyAttached = new WeakSet<HTMLMediaElement>();
 const mediaElementSources = new WeakMap<HTMLMediaElement, MediaElementAudioSourceNode>();
 const mediaStreamSources = new WeakMap<HTMLMediaElement, MediaStreamAudioSourceNode>();
+const acquireHooks = new Set<(el: HTMLMediaElement) => void>();
+
+export function onAnalyserGraphAcquired(fn: (el: HTMLMediaElement) => void): () => void {
+  acquireHooks.add(fn);
+  return () => acquireHooks.delete(fn);
+}
+
+function notifyAnalyserGraphAcquired(el: HTMLMediaElement): void {
+  for (const fn of acquireHooks) fn(el);
+}
 
 type CaptureCapable = HTMLMediaElement & {
   captureStream?: () => MediaStream;
@@ -135,23 +145,28 @@ export function peekAnalyserGraph(el: HTMLMediaElement): AnalyserGraph | null {
   return null;
 }
 
+function finishAcquire(el: HTMLMediaElement, graph: AnalyserGraph | null): AnalyserGraph | null {
+  if (graph) notifyAnalyserGraphAcquired(el);
+  return graph;
+}
+
 /** Audio: media-element tap first. Keeps context open on soft release for MES reuse. */
 export function acquireAnalyserGraph(el: HTMLMediaElement): AnalyserGraph | null {
   const existing = graphs.get(el);
   if (existing && existing.ctx.state !== "closed") {
-    return reconnectExistingGraph(existing);
+    return finishAcquire(el, reconnectExistingGraph(existing));
   }
 
   try {
     if (el instanceof HTMLAudioElement) {
       const mes = tryMediaElementGraph(el);
-      if (mes) return mes;
-      return tryCaptureStreamGraph(el);
+      if (mes) return finishAcquire(el, mes);
+      return finishAcquire(el, tryCaptureStreamGraph(el));
     }
 
     const fromStream = tryCaptureStreamGraph(el);
-    if (fromStream) return fromStream;
-    return tryMediaElementGraph(el);
+    if (fromStream) return finishAcquire(el, fromStream);
+    return finishAcquire(el, tryMediaElementGraph(el));
   } catch (err) {
     console.warn("[RuForge] acquireAnalyserGraph failed", err);
     return null;
@@ -160,12 +175,12 @@ export function acquireAnalyserGraph(el: HTMLMediaElement): AnalyserGraph | null
 
 export function acquireAnalyserGraphMediaElement(el: HTMLMediaElement): AnalyserGraph | null {
   releaseAnalyserGraph(el, true);
-  return tryMediaElementGraph(el);
+  return finishAcquire(el, tryMediaElementGraph(el));
 }
 
 export function acquireAnalyserGraphCaptureStream(el: HTMLMediaElement): AnalyserGraph | null {
   releaseAnalyserGraph(el, true);
-  return tryCaptureStreamGraph(el);
+  return finishAcquire(el, tryCaptureStreamGraph(el));
 }
 
 /**

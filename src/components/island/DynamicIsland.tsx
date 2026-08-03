@@ -47,6 +47,7 @@ const ISLAND_DIMENSIONS: Record<
   expanded: { width: 350, height: 184, borderRadius: 40 },
 };
 
+import type { AudioOutputDevice } from "@/audioOutputDevices";
 import type { LoopMode } from "@/playbackLoopStorage";
 
 export type DynamicIslandContent = {
@@ -71,6 +72,9 @@ export type DynamicIslandContent = {
   isMuted: boolean;
   volume: number;
   loopMode: LoopMode;
+  audioOutputDeviceId: string;
+  /** Main-enumerated outputs for overlay webviews that cannot list devices. */
+  audioOutputDevices: AudioOutputDevice[];
 };
 
 type DynamicIslandProps = {
@@ -89,6 +93,7 @@ type DynamicIslandProps = {
   onVolume?: (v: number) => void;
   onMuted?: (m: boolean) => void;
   onToggleLoop?: (e: MouseEvent) => void;
+  onAudioOutput?: (deviceId: string) => void;
   onPopOut?: (e: MouseEvent) => void;
   devCaptureIdle?: {
     hover: boolean;
@@ -208,6 +213,7 @@ export function DynamicIsland({
   onVolume,
   onMuted,
   onToggleLoop,
+  onAudioOutput,
   onPopOut,
   devCaptureIdle,
   captureSavedCaption,
@@ -358,6 +364,7 @@ export function DynamicIsland({
               onVolume={onVolume}
               onMuted={onMuted}
               onToggleLoop={onToggleLoop}
+              onAudioOutput={onAudioOutput}
               onPopOut={onPopOut}
             />
           )}

@@ -1,9 +1,10 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Clock, MoreHorizontal, Pause, Play } from "lucide-react";
+import { Clock, MoreHorizontal } from "lucide-react";
 import type { MediaFile } from "@/types";
 import { bestCoverPath } from "@/mediaKind";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
+import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 
 type Props = {
   file: MediaFile;
@@ -82,11 +83,11 @@ export function MusicQuickPickRow({
             variant === "glass" ? "backdrop-blur-[2px]" : ""
           }`}
         >
-          {showPauseOnHover ? (
-            <Pause size={hoverIconSize} className="text-white fill-white" />
-          ) : (
-            <Play size={hoverIconSize} className="text-white fill-white ml-0.5" />
-          )}
+          <PlayPauseMorphIcon
+            playing={showPauseOnHover}
+            size={hoverIconSize}
+            className={showPauseOnHover ? "text-white" : "text-white ml-0.5"}
+          />
         </div>
       </div>
       <div className="min-w-0 flex-1 flex flex-col gap-0.5 pr-1">
