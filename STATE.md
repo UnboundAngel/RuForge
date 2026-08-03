@@ -14,13 +14,13 @@
 
 
 
-Shipping version: 0.3.0 (unreleased)
+Shipping version: 0.3.1 (unreleased)
 
-Last shipped to users: 0.2.2
+Last shipped to users: 0.3.0
 
-Last updated: 2026-08-02 (release ritual prep 0.3.0)
+Last updated: 2026-08-02 (shipped 0.3.0)
 
-Status: 0.2.2 live on GitHub and updater.json. Downloader paste no longer flashes; soft library-duplicate warning on URL entry; every enqueue path shares the Download-click duplicate gate. Library incremental remove/upsert (no full rescan on delete or download success). Pre-spawn inspect timeout with kill-on-timeout; watchdog armed before start; auto-clear start failures only for approval auto. OBS Window Capture uses class `RuForge_Chrome_WidgetWin` for WGC. Headless `media_engine` crate backs inspect/download. Browser Companion remains developer-gated on localhost.
+Status: 0.3.0 live on GitHub and updater.json. Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.2.2 live on GitHub and updater.json. Downloader paste no longer flashe
 
 
 
-0.2.2 shipped. Next cycle open. Priorities unchanged: storage cap before enqueue, main-app nav restructure, Companion Browser V1 when Angel approves removing the dev gate.
+0.3.0 shipped. Next cycle open. Priorities unchanged: storage cap before enqueue, main-app nav restructure, Companion Browser V1 when Angel approves removing the dev gate.
 
 
 
@@ -60,28 +60,59 @@ unchanged. Maintenance: `npm run dev:disk`, `npm run dev:clean:safe`,
 
 
 
-Closed release 0.2.2 (what users upgrading from 0.2.1 receive). The release-note drafter
+Closed release 0.3.0 (what users upgrading from 0.2.2 receive). The release-note drafter
 
 reads this for the last shipped delta, not the git tree.
 
 
 
-**0.3.0 (unreleased, in tree):**
+**0.3.1 (unreleased, in tree):**
 
-- Playback (MINOR): Media Session transport for OS/browser media keys (play/pause/stop/prev/next/seek) plus metadata and position.
-- Music (MINOR): equal-power crossfade 0–12s (default Off, persisted); Now Playing control; A/B elements; 18s min solo (shorten fade or hard cut); arm/abort/cascade guards.
-- Island: skip art/meta slide matches prev vs next (desktop overlay + taskbar); overlay waveform keeps moving while main is backgrounded; overlay collapses on blur/focus loss.
-- Library: delete fails loudly if the file is still on disk after trash (locked / in use).
-- Downloader: paste/fetch center stack spaced (no URL/status/pacer overlap); readable URL type; fetch status under pacer; soft-rect Download CTA.
-- Island: audio output device labels marquee slowly on hover when truncated.
-- Music: Now Playing bar matches header/corner shell black (`--music-shell-chrome`), not the lighter content surface.
-- Island: headphones MorphMenu stays above transport (no see-through play/pause), viewport-caps + scrolls long device lists; per-row device icons from label (headphones/speakers/display/cable); icon-only at rest, opaque `#271C18` panel; outputs enumerate on main (label unlock) and push to overlay.
-- Player: play/pause transport toggles use `PlayPauseMorphIcon` (play path ↔ pause bars crossfade; Now Playing, island, music/video mini, main player, row hover).
-- Music: artist hero cover falls back to track art when the playlist folder cover is missing (same path album cards already used).
-- Music: loopMode off/all/one (all = user span, no staging, idle endless tail kept); endless lookahead 12; "Next from" uses play-origin tag (`musicQueueSource`).
-- Island: minimized/tray-hidden main shows top-center Dynamic Island overlay for main-owned playback (not when mini owns); overlay follows the monitor main was on; waveform motion no longer forces a middle-tall envelope and uses a hairline white outline; expanded headphones picker routes and remembers audio output (`audioOutputDevices`).
-- Library: Video Library multi-column grid with date groups, hover shell, Morph card menu, and scroll-linked tab chrome; Vite ignores agent markdown. Snapshot/cold-open/cleanup work from earlier in the cycle still applies.
-- Player: YouTube-style end flow (bottom cards 2-10s from 5% duration, ring hover, fade, Up next with left timer + full-width buttons) on main and mini. Chapter scrubber knob tracks the pointer again (no double horizontal translate).
+(none yet)
+
+
+
+**0.3.0 shipped:**
+
+
+
+Additions:
+
+- Playback: OS/browser Media Session transport (media keys, metadata, position).
+
+- Music: Equal-power crossfade 0–12s (default Off) with Now Playing control and solo-floor guards.
+
+- Island: Desktop Dynamic Island overlay when main is minimized or tray-hidden during main-owned playback.
+
+- Island: Headphones output picker routes and remembers the audio device.
+
+- Music: Loop mode off / all / one; queue Next from play-origin tags; endless lookahead 12.
+
+- Player: YouTube-style video end screen with suggestion cards and Up next.
+
+- Library: Video Library multi-column grid with date groups and Morph card menu.
+
+- Player: Shared play/pause morph icon across Now Playing, island, mini, and main.
+
+
+
+Fixes:
+
+- Island: Skip slide direction matches prev vs next on overlay and taskbar.
+
+- Island: Overlay waveform keeps moving while main is backgrounded; collapses on blur.
+
+- Library: Delete fails loudly when the file is still locked after trash.
+
+- Library: Video Library paints after disk walk; cold open single-flights the snapshot.
+
+- Downloader: Paste/fetch idle stack no longer overlaps; readable URL type.
+
+- Player: Chapter scrubber knob tracks the pointer again.
+
+- Music: Artist hero falls back to track art when playlist folder cover is missing.
+
+- Music: Neighbor scan no longer wipes endless staging.
 
 
 
