@@ -18,9 +18,9 @@ Shipping version: 0.3.1 (unreleased)
 
 Last shipped to users: 0.3.0
 
-Last updated: 2026-08-02 (shipped 0.3.0)
+Last updated: 2026-08-08 (Discord RPC pass 1 Rust)
 
-Status: 0.3.0 live on GitHub and updater.json. Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
+Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Presence Rust module (commands only; Settings/UI next). Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.3.0 live on GitHub and updater.json. Media Session OS keys; music cros
 
 
 
-0.3.0 shipped. Next cycle open. Priorities unchanged: storage cap before enqueue, main-app nav restructure, Companion Browser V1 when Angel approves removing the dev gate.
+Discord Rich Presence pass 1 landed (Rust worker + commands). Next: Settings toggles + frontend transport (pass 2). Priorities otherwise unchanged: storage cap before enqueue, main-app nav restructure, Companion Browser V1 when Angel approves removing the dev gate.
 
 
 
@@ -68,7 +68,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.3.1 (unreleased, in tree):**
 
-(none yet)
+- Discord: Rust Rich Presence IPC worker and Tauri commands; Settings UI and activity transport still pending.
 
 
 

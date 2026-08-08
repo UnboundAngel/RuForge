@@ -65,6 +65,9 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), tauri::Error> {
             }
             match event.id.as_ref() {
                 "quit" => {
+                    if let Some(state) = app.try_state::<crate::discord_rpc::DiscordRpcState>() {
+                        state.shutdown();
+                    }
                     app.exit(0);
                 }
                 "reload" => {

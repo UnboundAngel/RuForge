@@ -4,6 +4,7 @@ pub mod companion;
 pub mod debug_log;
 mod deno_binary;
 mod dev_gate;
+pub mod discord_rpc;
 mod media_engine_adapter;
 mod download_job_manager;
 mod focus_protocol;
@@ -162,6 +163,7 @@ pub fn run() {
         .manage(ExportBundleState::default())
         .manage(RemovableDrivesState::default())
         .manage(crate::companion::CompanionState::new())
+        .manage(crate::discord_rpc::DiscordRpcState::new())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -418,9 +420,20 @@ pub fn run() {
             crate::companion::commands::companion_qr_payload,
             crate::companion::commands::companion_sessions,
             crate::companion::commands::companion_revoke_all,
+            crate::discord_rpc::commands::discord_rpc_set_enabled,
+            crate::discord_rpc::commands::discord_rpc_set_activity,
+            crate::discord_rpc::commands::discord_rpc_clear_activity,
+            crate::discord_rpc::commands::discord_rpc_status,
             #[cfg(windows)]
             taskbar_thumbbar::sync_taskbar_transport,
         ])
-        .run(context)
-        .expect("error while running tauri application");
+        .build(context)
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                if let Some(state) = app_handle.try_state::<crate::discord_rpc::DiscordRpcState>() {
+                    state.shutdown();
+                }
+            }
+        });
 }
