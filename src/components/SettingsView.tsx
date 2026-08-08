@@ -353,15 +353,17 @@ const ToggleSlot: React.FC<{
   onClick?: () => void;
   /** Visual only: preference stored but inactive for current download mode. */
   muted?: boolean;
-}> = ({ active, onClick, muted = false }) => (
+  disabled?: boolean;
+}> = ({ active, onClick, muted = false, disabled = false }) => (
   <button
     type="button"
+    disabled={disabled}
     onClick={onClick}
-    className={`w-12 h-6 rounded-full relative cursor-pointer transition-all duration-300 border border-white/[0.05] ${
+    className={`w-12 h-6 rounded-full relative cursor-pointer transition-all duration-300 border border-white/[0.05] disabled:pointer-events-none disabled:opacity-50 ${
       active
         ? "bg-[#2A1E1A] shadow-[0_2px_5px_rgba(0,0,0,0.5)]"
         : "bg-[#1D1613] shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]"
-    } ${muted ? "opacity-45" : ""}`}
+    } ${muted && !disabled ? "opacity-45" : ""}`}
   >
     <motion.div
       animate={{ x: active ? 26 : 2 }}
@@ -637,6 +639,58 @@ export const SettingsView: React.FC = () => {
                     <ToggleSlot
                       active={settings.minimizeToTray}
                       onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)}
+                    />
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection title="Discord">
+                <SettingItem
+                  title="Show activity on Discord"
+                  description="Friends on Discord can see what you are doing in RuForge when Discord is open."
+                  active={settings.discordPresenceEnabled}
+                  control={
+                    <ToggleSlot
+                      active={settings.discordPresenceEnabled}
+                      onClick={() =>
+                        void updateSetting(
+                          "discordPresenceEnabled",
+                          !settings.discordPresenceEnabled,
+                        )
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Include media titles"
+                  description="Show the track or video name instead of a generic watching or listening line."
+                  active={settings.discordPresenceEnabled}
+                  control={
+                    <ToggleSlot
+                      active={settings.discordPresenceShowTitles}
+                      disabled={!settings.discordPresenceEnabled}
+                      onClick={() =>
+                        void updateSetting(
+                          "discordPresenceShowTitles",
+                          !settings.discordPresenceShowTitles,
+                        )
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Include browsing status"
+                  description="Show library, Explorer, downloader, and settings activity when you are not playing media."
+                  active={settings.discordPresenceEnabled}
+                  control={
+                    <ToggleSlot
+                      active={settings.discordPresenceShowBrowsing}
+                      disabled={!settings.discordPresenceEnabled}
+                      onClick={() =>
+                        void updateSetting(
+                          "discordPresenceShowBrowsing",
+                          !settings.discordPresenceShowBrowsing,
+                        )
+                      }
                     />
                   }
                 />
