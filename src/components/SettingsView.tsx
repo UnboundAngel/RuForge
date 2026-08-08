@@ -8,6 +8,10 @@ import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel, CUSTOM_CONCU
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from "@tauri-apps/api/event";
+import {
+  requestDiscordOnboardingPreview,
+  requestReplayOnboardingPreview,
+} from "../lib/onboardingDebugPreview";
 import { galleryScanRootsFromStore, normalizeScanDirKey } from '../lib/libraryConfig';
 import { useRuforgeStore } from '../store/ruforgeStore';
 import {
@@ -1416,10 +1420,23 @@ export const SettingsView: React.FC = () => {
                   control={
                     <button
                       type="button"
-                      onClick={() => void emit("debug-replay-onboarding")}
+                      onClick={() => requestReplayOnboardingPreview()}
                       className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
                     >
                       REPLAY
+                    </button>
+                  }
+                />
+                <SettingItem
+                  title="Preview Discord onboarding"
+                  description="Island walkthrough for Discord Rich Presence only (skips older steps)."
+                  control={
+                    <button
+                      type="button"
+                      onClick={() => requestDiscordOnboardingPreview()}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                    >
+                      PREVIEW
                     </button>
                   }
                 />

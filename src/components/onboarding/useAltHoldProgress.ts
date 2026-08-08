@@ -17,6 +17,8 @@ function isTypingTarget(): boolean {
 export function useAltHoldProgress(
   paint: (progress: number) => void,
   onHoldComplete?: () => void,
+  /** Change this to clear a finished hold so Alt can advance the next beat. */
+  resetKey: string | number = 0,
 ): { holdComplete: boolean; altHeld: boolean } {
   const [holdComplete, setHoldComplete] = useState(false);
   const [altHeld, setAltHeld] = useState(false);
@@ -28,6 +30,14 @@ export function useAltHoldProgress(
   const progressHeldRef = useRef(0);
   paintRef.current = paint;
   onHoldCompleteRef.current = onHoldComplete;
+
+  useEffect(() => {
+    holdingRef.current = false;
+    progressHeldRef.current = 0;
+    setHoldComplete(false);
+    setAltHeld(false);
+    paintRef.current(0);
+  }, [resetKey]);
 
   useEffect(() => {
     const cancelRaf = () => {
