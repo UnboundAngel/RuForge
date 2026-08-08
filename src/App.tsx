@@ -131,6 +131,11 @@ import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { useDesktopIslandOverlay } from "./hooks/useDesktopIslandOverlay";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
 import { writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
+import {
+  registerDiscordOnboardingPreview,
+  registerReplayOnboardingPreview,
+} from "./lib/onboardingDebugPreview";
+import { DISCORD_PRESENCE_PREVIEW_LAST_SEEN } from "./lib/onboardingSteps";
 
 import { useRuforgeStore, type ActiveTab } from "./store/ruforgeStore";
 import {
@@ -314,7 +319,23 @@ function App() {
     !settingsTabsDocked && settingsMorphAmount < 0.02;
   useMotionValueEvent(settingsTabMorph, "change", setSettingsMorphAmount);
   const settingsTabDockLeft = SIDEBAR_RAIL_PX + 48;
+  const settingsDockedTabsRef = useRef<HTMLDivElement>(null);
+  const [settingsDockedTabsWidth, setSettingsDockedTabsWidth] = useState(0);
   const sidebarChromeLeft = SIDEBAR_RAIL_PX;
+
+  useEffect(() => {
+    if (!settingsTabsDocked) {
+      setSettingsDockedTabsWidth(0);
+      return;
+    }
+    const el = settingsDockedTabsRef.current;
+    if (!el) return;
+    const measure = () => setSettingsDockedTabsWidth(el.getBoundingClientRect().width);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [settingsTabsDocked, settings.showDebuggingSettings, settingsTab]);
   const backgroundVideoFile =
     playingFile && !isAudioOnlyPath(playingFile.path) ? playingFile : null;
   const videoPlayerShellVisible =
@@ -458,6 +479,7 @@ function App() {
   const [updaterInstallError, setUpdaterInstallError] = useState<string | null>(null);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingNonce, setOnboardingNonce] = useState(0);
   const [crashRecoveryPreview, setCrashRecoveryPreview] =
     useState<CrashRecoveryVariant | null>(null);
   const updaterTimersRef = useRef<{
@@ -1218,11 +1240,30 @@ function App() {
       void performUpdateCheckRef.current(true);
     });
 
-    const unlistenDebugOnboarding = listen("debug-replay-onboarding", () => {
+    const startReplayOnboarding = () => {
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
       writeOnboardingLastSeenVersion("0.0.0");
+      setOnboardingNonce((n) => n + 1);
       setOnboardingOpen(true);
-    });
+    };
+
+    const startDiscordOnboardingPreview = () => {
+      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      writeOnboardingLastSeenVersion(DISCORD_PRESENCE_PREVIEW_LAST_SEEN);
+      void useRuforgeStore.getState().updateSetting("discordPresenceEnabled", false);
+      setOnboardingNonce((n) => n + 1);
+      setOnboardingOpen(true);
+    };
+
+    const unlistenDebugOnboarding = listen("debug-replay-onboarding", startReplayOnboarding);
+    const unlistenDebugDiscordOnboarding = listen(
+      "debug-preview-discord-onboarding",
+      startDiscordOnboardingPreview,
+    );
+    const unregisterReplayPreview = registerReplayOnboardingPreview(startReplayOnboarding);
+    const unregisterDiscordPreview = registerDiscordOnboardingPreview(
+      startDiscordOnboardingPreview,
+    );
 
     const unlistenDebugBootSplash = listen("debug-preview-boot-splash", () => {
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
@@ -1284,6 +1325,9 @@ function App() {
       unlistenHandoffSync.then((f) => f());
       unlistenManualUpdaterCheck.then((f) => f());
       unlistenDebugOnboarding.then((f) => f());
+      unlistenDebugDiscordOnboarding.then((f) => f());
+      unregisterReplayPreview();
+      unregisterDiscordPreview();
       unlistenDebugBootSplash.then((f) => f());
       unlistenDebugCrashUi.then((f) => f());
       unlistenDebugCrashFatal.then((f) => f());
@@ -1743,10 +1787,20 @@ function App() {
         />
       )}
 
-      {/* Global Drag Region - Top strip except sidebar logo and window controls */}
+      {/* Global Drag Region - Top strip except sidebar logo, window controls, and docked settings tabs.
+          WebView drag regions ignore DOM z-index, so the strip must not cover clickable titleband chrome. */}
       <div
         className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
-        style={{ left: navMode === "music" ? 0 : SIDEBAR_RAIL_PX }}
+        style={{
+          left:
+            activeTab === "settings" &&
+            settingsTabsDocked &&
+            settingsDockedTabsWidth > 0
+              ? settingsTabDockLeft + settingsDockedTabsWidth
+              : navMode === "music"
+                ? 0
+                : SIDEBAR_RAIL_PX,
+        }}
         data-tauri-drag-region
       />
 
@@ -1782,9 +1836,10 @@ function App() {
               />
             ) : null}
             <div
+              ref={settingsDockedTabsRef}
               className={
                 settingsTabsDocked
-                  ? "pointer-events-auto fixed top-0 z-[30] flex h-[var(--rf-titlebar-h)] items-center overflow-hidden"
+                  ? "pointer-events-auto fixed top-0 z-[60] flex h-[var(--rf-titlebar-h)] items-center overflow-hidden"
                   : "pointer-events-none absolute left-6 top-0 z-[30] flex h-[var(--rf-tab-strip-h)] items-start"
               }
               style={settingsTabsDocked ? { left: settingsTabDockLeft } : undefined}
@@ -1820,6 +1875,7 @@ function App() {
                   <button
                     key={tab}
                     type="button"
+                    data-tauri-drag-region="false"
                     onClick={() => setSettingsTab(tab)}
                     className={`relative flex cursor-pointer justify-center pointer-events-auto transition-[height,padding] duration-200 ${
                       settingsTabsDocked
@@ -2190,7 +2246,10 @@ function App() {
         />
       )}
       {onboardingOpen && !postInstall && (
-        <OnboardingFlow onComplete={() => setOnboardingOpen(false)} />
+        <OnboardingFlow
+          key={onboardingNonce}
+          onComplete={() => setOnboardingOpen(false)}
+        />
       )}
 
       <UpdaterFullWindowUpdate

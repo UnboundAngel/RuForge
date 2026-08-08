@@ -195,6 +195,9 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.3.1 (unreleased)
 
+- **Discord**: Island onboarding visuals: espresso media frame for future presence card, clearer Settings-path compact + caption; Alt hold now finishes the Discord step after collapse. `OnboardingIsland.tsx`
+- **Discord**: Island onboarding Discord step uses Settings-path compact copy; SPIKE demo media removed pending a real presence screenshot. `onboardingSteps.ts`
+- **Discord**: Island onboarding step for Rich Presence (`introducedIn` 0.4.0) plus Debugging preview. `onboardingSteps.ts`
 - **Discord**: Main-window Rich Presence transport maps playback, downloads, and browsing to Discord via the Rust worker. `discordPresenceTransport.ts`
 - **Discord**: Settings General Discord section with three privacy toggles (presence off by default); transport not wired yet. `SettingsView.tsx` / `types.ts`
 - **Discord**: Rust Rich Presence worker and commands (`discord_rpc`), 15s coalesce, exit clear; Settings/UI transport not wired yet. `discord_rpc/mod.rs`

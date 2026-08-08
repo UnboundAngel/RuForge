@@ -152,6 +152,28 @@ function CategoryRow({
   );
 }
 
+const DEBUG_LOG_EXPANDED_KEY = "ruforge-debug-log-expanded";
+
+function readExpandedIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DEBUG_LOG_EXPANDED_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeExpandedIds(ids: Set<string>) {
+  try {
+    localStorage.setItem(DEBUG_LOG_EXPANDED_KEY, JSON.stringify([...ids]));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 export const DebugLogCategoryTree: React.FC = () => {
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
@@ -159,7 +181,7 @@ export const DebugLogCategoryTree: React.FC = () => {
     () => new Set(settings.debugLogEnabledCategories),
     [settings.debugLogEnabledCategories],
   );
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(["library", "download"]));
+  const [expanded, setExpanded] = useState<Set<string>>(readExpandedIds);
 
   const applyEnabled = useCallback(
     (next: string[]) => {
@@ -174,6 +196,7 @@ export const DebugLogCategoryTree: React.FC = () => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
       else n.add(id);
+      writeExpandedIds(n);
       return n;
     });
   }, []);
