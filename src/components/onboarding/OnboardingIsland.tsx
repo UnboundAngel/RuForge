@@ -64,13 +64,13 @@ type OnboardingIslandProps = OnboardingIslandStep & {
 
 function isGuideConditionMet(
   condition: OnboardingGuideCompleteWhen,
-  activeTab: string,
+  settingsOpen: boolean,
   settingsTab: string,
   discordOn: boolean,
 ): boolean {
-  if (condition === "on-settings") return activeTab === "settings";
+  if (condition === "on-settings") return settingsOpen;
   if (condition === "on-general") {
-    return activeTab === "settings" && settingsTab === "general";
+    return settingsOpen && settingsTab === "general";
   }
   return discordOn;
 }
@@ -78,14 +78,14 @@ function isGuideConditionMet(
 function nextGuideIndex(
   phases: readonly OnboardingGuidePhase[],
   fromIndex: number,
-  activeTab: string,
+  settingsOpen: boolean,
   settingsTab: string,
   discordOn: boolean,
 ): number {
   let i = fromIndex;
   while (i < phases.length) {
     const skip = phases[i]?.skipWhen;
-    if (skip && isGuideConditionMet(skip, activeTab, settingsTab, discordOn)) {
+    if (skip && isGuideConditionMet(skip, settingsOpen, settingsTab, discordOn)) {
       i += 1;
       continue;
     }
@@ -635,7 +635,7 @@ export function OnboardingIsland({
       const next = nextGuideIndex(
         guidePhases,
         fromIndex,
-        state.activeTab,
+        state.settingsOpen,
         state.settingsTab,
         state.settings.discordPresenceEnabled === true,
       );
@@ -663,7 +663,7 @@ export function OnboardingIsland({
     const next = nextGuideIndex(
       guidePhases,
       guideIndexRef.current + 1,
-      state.activeTab,
+      state.settingsOpen,
       state.settingsTab,
       state.settings.discordPresenceEnabled === true,
     );
@@ -733,7 +733,7 @@ export function OnboardingIsland({
     const state = useRuforgeStore.getState();
     let prevMet = isGuideConditionMet(
       condition,
-      state.activeTab,
+      state.settingsOpen,
       state.settingsTab,
       state.settings.discordPresenceEnabled === true,
     );
@@ -744,7 +744,7 @@ export function OnboardingIsland({
       if (guideIndexRef.current !== phaseIndex) return;
       const met = isGuideConditionMet(
         condition,
-        s.activeTab,
+        s.settingsOpen,
         s.settingsTab,
         s.settings.discordPresenceEnabled === true,
       );

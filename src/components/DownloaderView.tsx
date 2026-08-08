@@ -15,14 +15,26 @@ import {
 } from "lucide-react";
 import { DuplicateDownloadDialog } from "./DuplicateDownloadDialog";
 import { downloadSubtitleLangLabel } from "../store/types";
-import { formatApproxFileSize, formatDuration, formatHeroDownloadSpeed } from "./downloader/downloaderFormat";
+import {
+  formatApproxFileSize,
+  formatDuration,
+  formatHeroDownloadSpeed,
+  sanitizeCarouselDisplayTitle,
+} from "./downloader/downloaderFormat";
 import { BROWSER_OPTIONS } from "./downloader/downloaderConstants";
 import {
   DownloadJobAudioToggle,
   UrlInputPacer,
 } from "./downloader/DownloadJobQueuePanel";
+import {
+  ImmersiveDownloadHero,
+  resolveImmersiveDownloadPhase,
+} from "./downloader/ImmersiveDownloadHero";
 import { MultiDownloadSlotCarousel } from "./downloader/MultiDownloadSlotCarousel";
-import { downloadJobMediaNeedsHydration } from "../downloadQueue";
+import {
+  downloadJobMediaNeedsHydration,
+  jobHasDownloadTransferStarted,
+} from "../downloadQueue";
 import { downloadJobDisplayFileSizeBytes } from "../downloadJobFileSizes";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
 import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
@@ -406,6 +418,20 @@ export const DownloaderView = (props: DownloaderViewProps) => {
     ? Math.min(100, Math.max(0, bigProgressPctRaw))
     : 0;
   const heroSpeedLabel = formatHeroDownloadSpeed(d.progress?.speed);
+  const immersiveTitle =
+    sanitizeCarouselDisplayTitle(d.progress?.currentItemTitle) ||
+    sanitizeCarouselDisplayTitle(d.focusedJob?.metadata?.title) ||
+    sanitizeCarouselDisplayTitle(d.focusedJob?.title) ||
+    "Download";
+  const immersiveTransferStarted = d.focusedJob
+    ? jobHasDownloadTransferStarted(d.focusedJob)
+    : bigProgressPct > 0 || d.progress?.status === "processing";
+  const immersivePhase = resolveImmersiveDownloadPhase({
+    transferStarted: immersiveTransferStarted,
+    progressStatus: d.progress?.status,
+    percentage: bigProgressPct,
+    hasLiveSpeed: Boolean(heroSpeedLabel),
+  });
 
   const downloadCarouselItems =
     d.collectionDownloadCarousel?.items ??
@@ -1123,44 +1149,47 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   </AnimatePresence>
                 </div>
               ) : (
-                <motion.div className="relative flex h-full flex-col items-center justify-center gap-8 px-6">
+                <motion.div className="relative flex h-full flex-col items-center justify-center">
                   {!isMultiItemDownload ? (
-                    <motion.h3
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="max-w-4xl text-center text-4xl font-black uppercase leading-[0.9] tracking-tighter text-white drop-shadow-2xl line-clamp-2 lg:text-7xl"
-                    >
-                      {d.progress?.currentItemTitle ||
-                        d.focusedJob?.metadata?.title ||
-                        d.focusedJob?.title ||
-                        d.focusedJob?.url}
-                    </motion.h3>
+                    <ImmersiveDownloadHero
+                      title={immersiveTitle}
+                      thumbnail={d.heroBackdropThumb}
+                      percentage={bigProgressPct}
+                      speedLabel={heroSpeedLabel}
+                      eta={d.progress?.eta}
+                      phase={immersivePhase}
+                    />
                   ) : null}
-                  {!isMultiItemDownload ? (
-                    <div className="w-full max-w-md">
-                      <div className="relative h-1 overflow-hidden rounded-full bg-white/[0.06]">
-                        <motion.div
-                          className="absolute inset-y-0 left-0 rounded-full bg-[color:var(--accent)]"
-                          initial={false}
-                          animate={{ width: `${bigProgressPct}%` }}
-                          transition={{ duration: 0 }}
-                        />
-                      </div>
-                      {heroSpeedLabel ? (
-                        <p className="mt-4 text-center text-sm font-bold tabular-nums tracking-tight text-[color:var(--accent)]">
-                          {heroSpeedLabel}
+                  {isMultiItemDownload && downloadCarouselItems ? (
+                    <div className="flex w-full flex-col items-center gap-5 px-6">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[color:var(--accent)]">
+                        {immersivePhase === "preparing"
+                          ? "Preparing download"
+                          : immersivePhase === "finishing"
+                            ? "Finishing up"
+                            : "Downloading"}
+                      </p>
+                      <MultiDownloadSlotCarousel
+                        items={downloadCarouselItems}
+                        currentIndex={downloadCarouselCurrentIndex}
+                        percentage={
+                          immersivePhase === "preparing"
+                            ? 0
+                            : d.progress?.percentage || 0
+                        }
+                        speedLabel={
+                          immersivePhase === "downloading" ? heroSpeedLabel : null
+                        }
+                        currentTitle={multiDownloadTitle}
+                      />
+                      {immersivePhase !== "downloading" ? (
+                        <p className="max-w-md text-center text-sm font-medium text-stone-500">
+                          {immersivePhase === "preparing"
+                            ? "Connecting and starting the transfer. This can take a moment."
+                            : "Merging and writing the file. Progress may sit near the end."}
                         </p>
                       ) : null}
                     </div>
-                  ) : null}
-                  {isMultiItemDownload && downloadCarouselItems ? (
-                    <MultiDownloadSlotCarousel
-                      items={downloadCarouselItems}
-                      currentIndex={downloadCarouselCurrentIndex}
-                      percentage={d.progress?.percentage || 0}
-                      speedLabel={heroSpeedLabel}
-                      currentTitle={multiDownloadTitle}
-                    />
                   ) : null}
                 </motion.div>
               )}

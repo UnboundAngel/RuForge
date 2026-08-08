@@ -20,13 +20,13 @@ export type { LoopMode };
 export type ActiveTab = "downloader" | "media" | "player" | "settings" | "explorer";
 
 /** Shell persona cycled from the radial menu center (logo / settings scope later). */
-export type NavMode = "default" | "movie" | "music";
+export type NavMode = "default" | "music";
 
-const NAV_MODE_ORDER: NavMode[] = ["default", "movie", "music"];
+const NAV_MODE_ORDER: NavMode[] = ["default", "music"];
 
 export function nextNavMode(current: NavMode): NavMode {
   const i = NAV_MODE_ORDER.indexOf(current);
-  return NAV_MODE_ORDER[(i + 1) % NAV_MODE_ORDER.length];
+  return NAV_MODE_ORDER[(i < 0 ? 0 : i + 1) % NAV_MODE_ORDER.length];
 }
 
 /** Music shell browse surface (Home / Explore / Library). */
@@ -271,7 +271,10 @@ function readSidebarExpanded(): boolean {
 
 function readNavMode(): NavMode {
   const raw = localStorage.getItem("ruforge-nav-mode");
-  if (raw === "movie" || raw === "music" || raw === "default") return raw;
+  if (raw === "music") return "music";
+  if (raw === "movie") {
+    localStorage.setItem("ruforge-nav-mode", "default");
+  }
   return "default";
 }
 

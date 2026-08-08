@@ -25,17 +25,6 @@ export const RADIAL_PALETTE: Record<NavMode, RadialWedgePalette> = {
     accent: "#EDCF9B",
     iconIdle: "#78716c",
   },
-  movie: {
-    outerRing: "#2e2218",
-    wedge: "#3a2a1e",
-    wedgeStroke: "rgb(212 163 115 / 0.14)",
-    wedgeActive: "#5c4530",
-    wedgeActiveStroke: "rgb(212 163 115 / 0.26)",
-    centerFill: "#1a1410",
-    centerStroke: "rgb(212 163 115 / 0.22)",
-    accent: "#D4A373",
-    iconIdle: "#78716c",
-  },
   music: {
     outerRing: "#14080c",
     wedge: "#1e0c12",
@@ -51,6 +40,5 @@ export const RADIAL_PALETTE: Record<NavMode, RadialWedgePalette> = {
 
 export const NAV_MODE_ENTER_LABEL: Record<NavMode, string> = {
   default: "Default",
-  movie: "Movie",
   music: "Music",
 };

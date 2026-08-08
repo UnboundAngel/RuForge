@@ -3,9 +3,6 @@ import { flushSync } from "react-dom";
 import {
   motion,
   AnimatePresence,
-  useMotionValue,
-  useMotionValueEvent,
-  useTransform,
 } from "motion/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
@@ -125,7 +122,6 @@ import {
 } from "./components/crash-recovery/CrashRecoveryScreen";
 import { CrashRecoveryPreviewContext } from "./lib/crashRecoveryPreview";
 import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
-import { RF_TITLEBAR_H_PX } from "./lib/chromeLayout";
 import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { useDesktopIslandOverlay } from "./hooks/useDesktopIslandOverlay";
@@ -279,8 +275,9 @@ function App() {
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
   const internalVault = useRuforgeStore((s) => s.internalVault);
   const settings = useRuforgeStore((s) => s.settings);
-  const settingsTab = useRuforgeStore((s) => s.settingsTab);
-  const setSettingsTab = useRuforgeStore((s) => s.setSettingsTab);
+  const settingsOpen = useRuforgeStore((s) => s.settingsOpen);
+  const openSettings = useRuforgeStore((s) => s.openSettings);
+  const closeSettings = useRuforgeStore((s) => s.closeSettings);
   const galleryFilter = useRuforgeStore((s) => s.galleryFilter);
   const setGalleryFilter = useRuforgeStore((s) => s.setGalleryFilter);
   const galleryScrollChromeRaw = useRuforgeStore((s) => s.galleryScrollChrome);
@@ -303,39 +300,7 @@ function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [recentlyDeletedOpen, setRecentlyDeletedOpen] = useState(false);
   const mainContentRef = useRef<HTMLElement>(null);
-  /** 0 = bulge tabs flush on panel; 1 = tucked into the title band (scrollable settings only). */
-  const settingsTabMorph = useMotionValue(0);
-  const settingsTabMorphY = useTransform(
-    settingsTabMorph,
-    [0, 1],
-    [0, -RF_TITLEBAR_H_PX],
-  );
-  const [settingsMorphAmount, setSettingsMorphAmount] = useState(0);
-  const [settingsScrollable, setSettingsScrollable] = useState(false);
-  const settingsTabsDocked = settingsMorphAmount > 0.55;
-  const settingsTabShapeLayout = !settingsTabsDocked;
-  /** Bulge + corner fillets only at scroll rest; hide during morph/dock so curves don't bleed over content. */
-  const showSettingsTabBulge =
-    !settingsTabsDocked && settingsMorphAmount < 0.02;
-  useMotionValueEvent(settingsTabMorph, "change", setSettingsMorphAmount);
-  const settingsTabDockLeft = SIDEBAR_RAIL_PX + 48;
-  const settingsDockedTabsRef = useRef<HTMLDivElement>(null);
-  const [settingsDockedTabsWidth, setSettingsDockedTabsWidth] = useState(0);
   const sidebarChromeLeft = SIDEBAR_RAIL_PX;
-
-  useEffect(() => {
-    if (!settingsTabsDocked) {
-      setSettingsDockedTabsWidth(0);
-      return;
-    }
-    const el = settingsDockedTabsRef.current;
-    if (!el) return;
-    const measure = () => setSettingsDockedTabsWidth(el.getBoundingClientRect().width);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [settingsTabsDocked, settings.showDebuggingSettings, settingsTab]);
   const backgroundVideoFile =
     playingFile && !isAudioOnlyPath(playingFile.path) ? playingFile : null;
   const videoPlayerShellVisible =
@@ -1591,77 +1556,6 @@ function App() {
     };
   }, [activeTab, shellBlocked, setLastExplorerUrl]);
 
-  useEffect(() => {
-    if (activeTab !== "settings" || shellBlocked) {
-      settingsTabMorph.set(0);
-      setSettingsMorphAmount(0);
-      setSettingsScrollable(false);
-      return;
-    }
-
-    const morphPx = 72;
-    let el = mainContentRef.current;
-    let detach: (() => void) | undefined;
-    let resizeEndId: ReturnType<typeof setTimeout> | undefined;
-    let windowResizing = false;
-
-    const bind = () => {
-      detach?.();
-      el = mainContentRef.current;
-      if (!el) return;
-
-      const applyScrollable = () => {
-        const scrollable = el!.scrollHeight > el!.clientHeight + 2;
-        setSettingsScrollable(scrollable);
-        if (!scrollable) {
-          settingsTabMorph.set(0);
-          return false;
-        }
-        return true;
-      };
-
-      const applyMorph = () => {
-        if (!applyScrollable()) return;
-        if (windowResizing) return;
-        settingsTabMorph.set(Math.min(1, el!.scrollTop / morphPx));
-      };
-
-      const onWindowResize = () => {
-        windowResizing = true;
-        if (resizeEndId !== undefined) clearTimeout(resizeEndId);
-        resizeEndId = setTimeout(() => {
-          windowResizing = false;
-          resizeEndId = undefined;
-          applyMorph();
-        }, 120);
-        applyScrollable();
-      };
-
-      applyMorph();
-      el.addEventListener("scroll", applyMorph, { passive: true });
-      const ro = new ResizeObserver(applyScrollable);
-      ro.observe(el);
-      window.addEventListener("resize", onWindowResize);
-      detach = () => {
-        el!.removeEventListener("scroll", applyMorph);
-        ro.disconnect();
-        window.removeEventListener("resize", onWindowResize);
-        if (resizeEndId !== undefined) clearTimeout(resizeEndId);
-      };
-    };
-
-    bind();
-    const raf = requestAnimationFrame(bind);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      detach?.();
-      settingsTabMorph.set(0);
-      setSettingsMorphAmount(0);
-      setSettingsScrollable(false);
-    };
-  }, [activeTab, shellBlocked, settingsTab, settingsTabMorph]);
-
   const showExplorerToolbar = activeTab === "explorer" && !shellBlocked;
 
   const onExplorerBack = useCallback(async () => {
@@ -1741,6 +1635,10 @@ function App() {
         onCenterClick={handleRadialCenterClick}
       />
 
+      {!shellBlocked ? (
+        <SettingsView open={settingsOpen} onClose={closeSettings} />
+      ) : null}
+
       {showExplorerToolbar && (
         <ExplorerTitlebarNav
           left={sidebarChromeLeft}
@@ -1787,19 +1685,12 @@ function App() {
         />
       )}
 
-      {/* Global Drag Region - Top strip except sidebar logo, window controls, and docked settings tabs.
+      {/* Global Drag Region - Top strip except sidebar logo and window controls.
           WebView drag regions ignore DOM z-index, so the strip must not cover clickable titleband chrome. */}
       <div
         className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
         style={{
-          left:
-            activeTab === "settings" &&
-            settingsTabsDocked &&
-            settingsDockedTabsWidth > 0
-              ? settingsTabDockLeft + settingsDockedTabsWidth
-              : navMode === "music"
-                ? 0
-                : SIDEBAR_RAIL_PX,
+          left: navMode === "music" ? 0 : SIDEBAR_RAIL_PX,
         }}
         data-tauri-drag-region
       />
@@ -1812,128 +1703,26 @@ function App() {
       <>
       <AppSidebarRail
         activeTab={activeTab}
+        settingsOpen={settingsOpen}
         navMode={navMode}
         captureScreenLabel={activeTab}
         disabled={shellBlocked}
-        onSelectTab={setActiveTab}
+        onSelectTab={(tab) => {
+          if (tab === "settings") {
+            if (settingsOpen) closeSettings();
+            else openSettings();
+            return;
+          }
+          setActiveTab(tab);
+        }}
       />
 
       {/* ── Right Column (tab chrome above recessed content field) ─ */}
       <div className="rf-chrome-column flex-1 flex flex-col min-w-0 min-h-0 pt-[var(--rf-titlebar-h)] relative bg-[#271C18]">
         
-        {/* Settings / Gallery tab strip */}
+        {/* Gallery tab strip */}
         <AnimatePresence mode="wait">
-          {(activeTab === "settings" && !shellBlocked) ? (
-            <motion.div
-              key="settings-tabs"
-              initial={false}
-              className="contents"
-            >
-            {settingsMorphAmount > 0 && !settingsTabsDocked ? (
-              <div
-                className="pointer-events-none absolute top-0 left-0 right-0 z-[25] h-[var(--rf-titlebar-h)] bg-[#271C18]"
-                aria-hidden
-              />
-            ) : null}
-            <div
-              ref={settingsDockedTabsRef}
-              className={
-                settingsTabsDocked
-                  ? "pointer-events-auto fixed top-0 z-[60] flex h-[var(--rf-titlebar-h)] items-center overflow-hidden"
-                  : "pointer-events-none absolute left-6 top-0 z-[30] flex h-[var(--rf-tab-strip-h)] items-start"
-              }
-              style={settingsTabsDocked ? { left: settingsTabDockLeft } : undefined}
-            >
-              <motion.div
-                className={
-                  settingsTabsDocked
-                    ? "flex h-[var(--rf-titlebar-h)] items-center"
-                    : "flex h-[var(--rf-tab-strip-h)] origin-top-left items-start"
-                }
-                style={
-                  !settingsTabsDocked && settingsScrollable
-                    ? { y: settingsTabMorphY }
-                    : undefined
-                }
-              >
-              {(
-                [
-                  "general",
-                  "downloads",
-                  "playback",
-                  "appearance",
-                  "advanced",
-                  ...(settings.showDebuggingSettings ? (["debugging"] as const) : []),
-                ] as const
-              ).map((tab) => {
-                const isActive = settingsTab === tab;
-                const tabLabel =
-                  tab === "debugging"
-                    ? "DEBUGGING"
-                    : tab.toUpperCase();
-                return (
-                  <button
-                    key={tab}
-                    type="button"
-                    data-tauri-drag-region="false"
-                    onClick={() => setSettingsTab(tab)}
-                    className={`relative flex cursor-pointer justify-center pointer-events-auto transition-[height,padding] duration-200 ${
-                      settingsTabsDocked
-                        ? "h-[var(--rf-titlebar-h)] items-center px-4"
-                        : "h-[var(--rf-tab-strip-h)] items-end px-6 pb-2"
-                    }`}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId={settingsTabShapeLayout ? "settingsTabShape" : undefined}
-                        layout={settingsTabShapeLayout}
-                        className={`pointer-events-none absolute inset-0 z-0 bg-[#271C18] ${
-                          settingsTabsDocked
-                            ? "rounded-b-xl"
-                            : showSettingsTabBulge
-                              ? "rounded-b-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
-                              : "rounded-b-[24px]"
-                        }`}
-                        style={
-                          showSettingsTabBulge
-                            ? {
-                                clipPath:
-                                  "inset(var(--rf-titlebar-h) -100px -100px -100px)",
-                              }
-                            : undefined
-                        }
-                        transition={{
-                          layout: { type: "spring", bounce: 0.2, duration: 0.6 },
-                        }}
-                      >
-                        {showSettingsTabBulge ? (
-                          <>
-                            <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
-                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
-                            </div>
-                            <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
-                              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
-                            </div>
-                          </>
-                        ) : null}
-                      </motion.div>
-                    )}
-                    <span
-                      className={`relative z-10 font-medium text-[11px] uppercase tracking-[0.05em] transition-colors ${
-                        isActive
-                          ? "text-[color:var(--accent)]"
-                          : "text-stone-400 hover:text-stone-50"
-                      }`}
-                    >
-                      {tabLabel}
-                    </span>
-                  </button>
-                );
-              })}
-              </motion.div>
-            </div>
-            </motion.div>
-          ) : (activeTab === "media" && !selectedPlaylist && !shellBlocked) ? (
+          {(activeTab === "media" && !selectedPlaylist && !shellBlocked) ? (
             <motion.div
               key="gallery-tabs"
               initial={{ opacity: 0, x: -20 }}
@@ -2075,7 +1864,7 @@ function App() {
                   <Trash2 size={16} />
                 </button>
                 <button
-                  onClick={() => setActiveTab("settings")}
+                  onClick={() => openSettings()}
                   className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex-shrink-0"
                 >
                   <Settings size={16} />
@@ -2139,9 +1928,6 @@ function App() {
                   key={`player-${playingFile.path}`}
                   onBack={() => setActiveTab("media")}
                 />
-              )}
-              {activeTab === "settings" && (
-                <SettingsView key="settings" />
               )}
             </AnimatePresence>
           </main>

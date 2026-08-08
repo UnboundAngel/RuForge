@@ -195,6 +195,14 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.3.1 (unreleased)
 
+- **Settings**: Compact collapses the title block with MORPH_SPRING height (not a hard unmount); shell stays always-on; content scroll drives compact. `SettingsView.tsx`
+- **Settings**: Header compact uses sticky tabs + IntersectionObserver so the title scrolls away instead of snap-collapsing outside the scrollport. `SettingsView.tsx`
+- **Downloader**: Immersive download hero redesigned with poster, phase copy (preparing / downloading / finishing), ETA, and indeterminate bar so start stalls and end-of-file merge no longer look like a frozen 100%. `ImmersiveDownloadHero.tsx` / `DownloaderView.tsx`
+- **Downloader**: Fetching-details pacer spinner uses CSS `animate-spin` so it keeps turning while metadata work blocks the main thread. `DownloadJobQueuePanel.tsx`
+- **Nav**: Removed placeholder Movie mode from the Alt radial cycle (Default ↔ Music only). Stale `movie` localStorage maps to Default. `types.ts` / `radialNavItems.ts`
+- **Video Library**: Options ⋯ is a ghost icon (no rest bubble); card hover shell and watch progress stay while the menu is open. `MediaView.tsx`
+- **Settings**: Dialog height morph uses jump-then-spring (MotionValue), so the first tab swap after open springs like later ones. `SettingsView.tsx`
+- **Settings**: Settings is a centered popup with categorized top tabs (icons + tonal pills), search across settings, not a full page. `SettingsView.tsx` / `App.tsx`
 - **Discord**: Island onboarding visuals: espresso media frame for future presence card, clearer Settings-path compact + caption; Alt hold now finishes the Discord step after collapse. `OnboardingIsland.tsx`
 - **Discord**: Clarify Settings/onboarding copy for titles vs browsing (browsing off = media/download only). `SettingsView.tsx` / `onboardingSteps.ts`
 - **Discord**: Re-enable always re-sends SET_ACTIVITY (clear last_sent); unknown art keys no longer sent. `discord_rpc/mod.rs` / `discordPresenceTransport.ts`

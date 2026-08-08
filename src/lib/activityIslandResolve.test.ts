@@ -34,7 +34,7 @@ describe("resolveActivityAwayFromSurface", () => {
   it("collapses on music mode for main-music but session remains", () => {
     expect(resolveActivityAwayFromSurface("main-music", "media", "music")).toBe(false);
     expect(resolveActivityAwayFromSurface("main-music", "media", "default")).toBe(true);
-    expect(resolveActivityAwayFromSurface("main-music", "player", "movie")).toBe(true);
+    expect(resolveActivityAwayFromSurface("main-music", "player", "default")).toBe(true);
   });
 
   it("collapses on player tab for main-video but session remains", () => {

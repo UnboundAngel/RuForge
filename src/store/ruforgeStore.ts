@@ -140,6 +140,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   storageStats: { total_bytes: number; file_count: number } | null;
 
   activeTab: ActiveTab;
+  /** Settings is a centered overlay; does not replace the underlying tab. */
+  settingsOpen: boolean;
   settingsTab: SettingsTab;
   galleryFilter: GalleryFilter;
   /** 0–1 Video Library tab chrome reveal (throttled from MediaView scroll; not raw scrollTop). */
@@ -342,6 +344,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   resetExportOutcome: () => void;
 
   setActiveTab: (tab: ActiveTab) => void;
+  openSettings: () => void;
+  closeSettings: () => void;
   setSettingsTab: (tab: SettingsTab) => void;
   setGalleryFilter: (f: GalleryFilter) => void;
   setGalleryScrollChrome: (n: number) => void;
@@ -535,6 +539,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       storageStats: null,
 
       activeTab: "downloader",
+      settingsOpen: false,
       settingsTab: "general",
       galleryFilter: "all",
       galleryScrollChrome: 0,
@@ -1218,12 +1223,19 @@ export const useRuforgeStore = create<RuforgeStore>()(
       resetExportOutcome: () => set({ exportOutcome: null, exportProgress: null }),
 
       setActiveTab: (tab) => {
+        if (tab === "settings") {
+          set({ settingsOpen: true });
+          return;
+        }
         set({
           activeTab: tab,
+          settingsOpen: false,
           ...(tab !== "media" ? { galleryScrollChrome: 0 } : {}),
         });
         if (tab !== "player") tryFlushDeferredScrubBackfill(get);
       },
+      openSettings: () => set({ settingsOpen: true }),
+      closeSettings: () => set({ settingsOpen: false }),
       setSettingsTab: (tab) => set({ settingsTab: tab }),
       setGalleryFilter: (f) => set({ galleryFilter: f, galleryScrollChrome: 0 }),
       setGalleryScrollChrome: (n) => {
