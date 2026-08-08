@@ -26,10 +26,10 @@ export function downloadProgressPhaseLabel(
   isPlaylist?: boolean,
 ): string {
   if (progress?.status === "processing") {
-    return isPlaylist ? "Processing Collection…" : "Processing…";
+    return isPlaylist ? "Finishing collection…" : "Finishing up";
   }
   if (progress?.status === "downloading") {
-    return isPlaylist ? "Downloading Collection" : "Downloading Media";
+    return isPlaylist ? "Downloading collection" : "Downloading";
   }
   return DOWNLOAD_JOB_STATUS_LABEL.downloading;
 }

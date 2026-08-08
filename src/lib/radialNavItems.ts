@@ -39,37 +39,6 @@ const DEFAULT_ITEMS: RadialNavItemDef[] = [
   },
 ];
 
-const MOVIE_ITEMS: RadialNavItemDef[] = [
-  {
-    id: "downloader",
-    label: "Download",
-    iconId: "movie-download",
-    hintPlacement: "top",
-    action: { kind: "tab", tab: "downloader" },
-  },
-  {
-    id: "media",
-    label: "Videos",
-    iconId: "movie-videos",
-    hintPlacement: "right",
-    action: { kind: "tab", tab: "media" },
-  },
-  {
-    id: "explorer",
-    label: "YouTube",
-    iconId: "movie-explorer",
-    hintPlacement: "bottom",
-    action: { kind: "tab", tab: "explorer" },
-  },
-  {
-    id: "settings",
-    label: "System",
-    iconId: "movie-settings",
-    hintPlacement: "left",
-    action: { kind: "tab", tab: "settings" },
-  },
-];
-
 const MUSIC_ITEMS: RadialNavItemDef[] = [
   {
     id: "music-home",
@@ -103,7 +72,6 @@ const MUSIC_ITEMS: RadialNavItemDef[] = [
 
 const BY_MODE: Record<NavMode, RadialNavItemDef[]> = {
   default: DEFAULT_ITEMS,
-  movie: MOVIE_ITEMS,
   music: MUSIC_ITEMS,
 };
 

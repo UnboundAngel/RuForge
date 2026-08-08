@@ -187,6 +187,9 @@ function buildSnapshot(): DiscordActivityPayload | null {
 
   if (!showBrowsing) return null;
 
+  if (st.settingsOpen) {
+    return browsePayload("Mingling in the settings");
+  }
   if (activeTab === "explorer") {
     return browsePayload("Searching YouTube");
   }
@@ -198,9 +201,6 @@ function buildSnapshot(): DiscordActivityPayload | null {
   }
   if (activeTab === "downloader") {
     return browsePayload("Looking for something to download");
-  }
-  if (activeTab === "settings") {
-    return browsePayload("Mingling in the settings");
   }
   if (activeTab === "player") {
     return browsePayload("In the player");

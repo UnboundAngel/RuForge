@@ -8,10 +8,6 @@ export type RadialNavIconId =
   | "videos"
   | "explorer"
   | "settings"
-  | "movie-download"
-  | "movie-videos"
-  | "movie-explorer"
-  | "movie-settings"
   | "music-home"
   | "music-explore"
   | "music-library"
@@ -30,10 +26,6 @@ const ICON: Record<RadialNavIconId, IconSpec> = {
   videos: { kind: "iconify", icon: "material-symbols:play-circle-rounded" },
   explorer: { kind: "iconify", icon: "material-symbols:youtube-searched-for-rounded" },
   settings: { kind: "iconify", icon: "material-symbols:settings-rounded" },
-  "movie-download": { kind: "iconify", icon: "material-symbols:download-rounded" },
-  "movie-videos": { kind: "iconify", icon: "material-symbols:movie-rounded" },
-  "movie-explorer": { kind: "iconify", icon: "material-symbols:theaters-rounded" },
-  "movie-settings": { kind: "iconify", icon: "material-symbols:tune-rounded" },
   "music-home": { kind: "lucide", lucide: Home },
   "music-explore": { kind: "lucide", lucide: Compass },
   "music-library": { kind: "lucide", lucide: Library },

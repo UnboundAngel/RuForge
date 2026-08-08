@@ -21,6 +21,7 @@ const RAIL_ITEMS: RailItem[] = [
 
 type AppSidebarRailProps = {
   activeTab: ActiveTab;
+  settingsOpen?: boolean;
   navMode: NavMode;
   captureScreenLabel: string;
   disabled?: boolean;
@@ -29,6 +30,7 @@ type AppSidebarRailProps = {
 
 export function AppSidebarRail({
   activeTab,
+  settingsOpen = false,
   navMode,
   captureScreenLabel,
   disabled,
@@ -49,7 +51,10 @@ export function AppSidebarRail({
 
       <nav className="flex flex-1 flex-col items-center gap-1 px-1 py-2">
         {RAIL_ITEMS.map((item) => {
-          const isActive = activeTab === item.id;
+          const isActive =
+            item.id === "settings"
+              ? settingsOpen
+              : !settingsOpen && activeTab === item.id;
           return (
             <button
               key={item.id}

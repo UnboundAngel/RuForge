@@ -19,6 +19,7 @@ import { youtubeUrlsMatch } from "../youtubeUrl";
 import { useGalleryScrubExtracting } from "../scrubSpriteGallerySync";
 import { galleryScrollChromeAmount } from "../lib/galleryScrollChrome";
 import { MorphMenu, type MorphMenuItem } from "./ui/Morph";
+import { cn } from "../lib/utils";
 
 type ThumbnailBar = { show: boolean; widthPct: number; completed: boolean };
 
@@ -235,9 +236,10 @@ const VideoCard = memo(function VideoCard({
     hour: "2-digit",
     minute: "2-digit",
   });
-  const shellOpen = isHovered && !menuOpen;
+  const shellOpen = isHovered || menuOpen;
   const mountMorph = isHovered || menuOpen;
   const optionsVisible = isHovered || menuOpen;
+  const titleHot = isHovered || menuOpen;
 
   const clearPreviewTimer = () => {
     if (previewTimerRef.current != null) {
@@ -470,7 +472,7 @@ const VideoCard = memo(function VideoCard({
             </div>
           )}
 
-          {progressBar.show && !menuOpen && (
+          {progressBar.show && (
             <div className="absolute bottom-0 left-0 right-0 z-30 h-1 overflow-hidden bg-white/15">
               <div
                 className={`h-full bg-[color:var(--accent)] ${progressBar.completed ? "opacity-90" : ""}`}
@@ -498,7 +500,12 @@ const VideoCard = memo(function VideoCard({
 
         <div className="flex gap-3 px-0.5">
           <div className="flex-1 min-w-0">
-            <h3 className="text-[15px] font-bold text-stone-50 leading-snug line-clamp-2 transition-colors duration-150 group-hover:text-[color:var(--accent)]">
+            <h3
+              className={cn(
+                "text-[15px] font-bold leading-snug line-clamp-2 transition-colors duration-150",
+                titleHot ? "text-[color:var(--accent)]" : "text-stone-50",
+              )}
+            >
               {title}
             </h3>
             <p className="mt-1.5 text-[12px] font-medium text-stone-500 truncate">
@@ -523,7 +530,7 @@ const VideoCard = memo(function VideoCard({
                 onOpenChange={setMenuOpen}
                 triggerSize={32}
                 align="end"
-                paintedRest
+                paintedRest={false}
                 aria-label="Video options"
                 trigger={<MoreVertical size={16} strokeWidth={2.25} />}
                 items={menuItems}

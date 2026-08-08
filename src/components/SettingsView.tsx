@@ -1,11 +1,40 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown, Minus, Plus, X } from 'lucide-react';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  createContext,
+  useContext,
+  Fragment,
+} from 'react';
+import {
+  animate,
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  useTransform,
+} from "motion/react";
+import {
+  Bug,
+  ChevronDown,
+  Download,
+  Minus,
+  Paintbrush,
+  Play,
+  Plus,
+  Search,
+  Settings2,
+  Wrench,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
 import { listen } from '@tauri-apps/api/event';
 import { DOWNLOAD_AUDIO_FORMAT_OPTIONS } from '../downloadFormat';
 import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel, CUSTOM_CONCURRENT_DOWNLOADS_MIN, DEFAULT_MAX_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS_CAP } from '../store/types';
-import { open } from '@tauri-apps/plugin-dialog';
+import type { SettingsTab } from '../store/types';
+import { open as openDirectoryDialog } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from "@tauri-apps/api/event";
 import {
@@ -33,6 +62,75 @@ import { CompanionSettingsSection } from './settings/CompanionSettingsSection';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { useDenoStatus } from '../hooks/useDenoStatus';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
+import { OVERLAY_Z_CLASS } from '../lib/overlayZIndex';
+import { cn } from '../lib/utils';
+import { IconPillTooltip } from './ui/IconPillTooltip';
+import { MORPH_SPRING } from './ui/Morph';
+
+/** Compact chrome rim; thinner than the sticky icon bar (~36px). */
+const SETTINGS_SHELL_PAD_PX = 7;
+
+type SettingsNavItem = {
+  id: SettingsTab;
+  label: string;
+  icon: LucideIcon;
+};
+
+type SettingsNavGroup = {
+  label: string;
+  items: readonly SettingsNavItem[];
+};
+
+const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
+  {
+    label: "Preferences",
+    items: [
+      { id: "general", label: "General", icon: Settings2 },
+      { id: "appearance", label: "Appearance", icon: Paintbrush },
+    ],
+  },
+  {
+    label: "Library",
+    items: [
+      { id: "downloads", label: "Downloads", icon: Download },
+      { id: "playback", label: "Playback", icon: Play },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { id: "advanced", label: "Advanced", icon: Wrench },
+      { id: "debugging", label: "Debugging", icon: Bug },
+    ],
+  },
+];
+
+const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
+  general: "General",
+  downloads: "Downloads",
+  playback: "Playback",
+  appearance: "Appearance",
+  advanced: "Advanced",
+  debugging: "Debugging",
+};
+
+type SettingsSearchCtx = {
+  query: string;
+  /** Section title/keywords matched: show every child row. */
+  forceShow: boolean;
+};
+
+const SettingsSearchRootContext = createContext("");
+const SettingsSearchContext = createContext<SettingsSearchCtx>({
+  query: "",
+  forceShow: false,
+});
+
+function settingsTextMatches(query: string, ...parts: string[]): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return parts.some((part) => part.toLowerCase().includes(q));
+}
 
 interface SettingItemProps {
   title: string;
@@ -46,15 +144,22 @@ const SettingsSectionHeader: React.FC<{ children: React.ReactNode }> = ({ childr
   <h3 className="rf-settings-section-header">{children}</h3>
 );
 
-const SettingsSection: React.FC<{ title: string; children: React.ReactNode }> = ({
-  title,
-  children,
-}) => (
-  <section className="rf-settings-section">
-    <SettingsSectionHeader>{title}</SettingsSectionHeader>
-    <div className="rf-settings-section-body">{children}</div>
-  </section>
-);
+const SettingsSection: React.FC<{
+  title: string;
+  keywords?: string;
+  children: React.ReactNode;
+}> = ({ title, keywords = "", children }) => {
+  const query = useContext(SettingsSearchRootContext);
+  const forceShow = settingsTextMatches(query, title, keywords);
+  return (
+    <SettingsSearchContext.Provider value={{ query, forceShow }}>
+      <section className="rf-settings-section">
+        <SettingsSectionHeader>{title}</SettingsSectionHeader>
+        <div className="rf-settings-section-body">{children}</div>
+      </section>
+    </SettingsSearchContext.Provider>
+  );
+};
 
 interface CustomSelectProps {
   value: string;
@@ -385,21 +490,43 @@ const SettingItem: React.FC<SettingItemProps> = ({
   control,
   active = true,
   onClick,
-}) => (
-  <div onClick={onClick} className={`group rf-settings-row ${onClick ? "cursor-pointer" : ""}`}>
-    <div className="rf-settings-row-label space-y-0.5">
-      <h4 className={active ? "text-stone-100" : "text-stone-400"}>{title}</h4>
-      <SettingsDescription description={description} className="max-w-md" />
-    </div>
-    {control ? (
-      <div className="rf-settings-row-control" onClick={(e) => e.stopPropagation()}>
-        {control}
-      </div>
-    ) : null}
-  </div>
-);
+}) => {
+  const { query, forceShow } = useContext(SettingsSearchContext);
+  if (!settingsTextMatches(query, title, description) && !forceShow) {
+    return null;
+  }
 
-export const SettingsView: React.FC = () => {
+  return (
+    <div onClick={onClick} className={`group rf-settings-row ${onClick ? "cursor-pointer" : ""}`}>
+      <div className="rf-settings-row-label space-y-0.5">
+        <h4 className={active ? "text-stone-100" : "text-stone-400"}>{title}</h4>
+        <SettingsDescription description={description} className="max-w-md" />
+      </div>
+      {control ? (
+        <div className="rf-settings-row-control" onClick={(e) => e.stopPropagation()}>
+          {control}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+/** Keeps non-row panels (trees, custom blocks) in search results via keywords. */
+const SearchableBlock: React.FC<{
+  keywords: string;
+  children: React.ReactNode;
+}> = ({ keywords, children }) => {
+  const { query, forceShow } = useContext(SettingsSearchContext);
+  if (!forceShow && !settingsTextMatches(query, keywords)) {
+    return null;
+  }
+  return <div className="rf-settings-row rf-settings-row--block">{children}</div>;
+};
+
+export const SettingsView: React.FC<{
+  open: boolean;
+  onClose: () => void;
+}> = ({ open, onClose }) => {
   const activeTab = useRuforgeStore((s) => s.settingsTab);
   const setSettingsTab = useRuforgeStore((s) => s.setSettingsTab);
   const outputDir = useRuforgeStore((s) => s.outputDir);
@@ -427,6 +554,28 @@ export const SettingsView: React.FC = () => {
   const [lastBatchSummary, setLastBatchSummary] = useState(() =>
     formatLastBatchSummary(readLastDownloadBatchRecord()),
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [headerCompact, setHeaderCompact] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const panelHeight = useMotionValue(0);
+  const titleBlockHeight = useMotionValue(0);
+  const titleBlockOpacity = useTransform(titleBlockHeight, [0, 32], [0, 1]);
+  const heightPrimedRef = useRef(false);
+  const titleHeightPrimedRef = useRef(false);
+  const heightAnimRef = useRef<ReturnType<typeof animate> | null>(null);
+  const titleHeightAnimRef = useRef<ReturnType<typeof animate> | null>(null);
+  const headerCompactRef = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const settingsScrollRef = useRef<HTMLDivElement>(null);
+  const headerMeasureRef = useRef<HTMLDivElement>(null);
+  const titleInnerRef = useRef<HTMLDivElement>(null);
+  const bodyMeasureRef = useRef<HTMLDivElement>(null);
+  const isSearching = searchQuery.trim().length > 0;
+  const showSearchField = !headerCompact || searchExpanded || isSearching;
+  const settingsMaxHeight = useMemo(() => {
+    if (typeof window === "undefined") return 840;
+    return Math.min(Math.round(window.innerHeight * 0.88), 840);
+  }, [open]);
   const downloadQueueBusy = downloadJobs.some(
     (j) =>
       j.status === "queued" ||
@@ -443,7 +592,7 @@ export const SettingsView: React.FC = () => {
     percent: ytdlpPercent,
     invokeError: ytdlpError,
     checkAndUpdate: checkAndUpdateYtdlp,
-  } = useYtdlpUpdate(activeTab === 'downloads');
+  } = useYtdlpUpdate(activeTab === "downloads" || isSearching);
 
   const {
     status: denoStatus,
@@ -452,13 +601,137 @@ export const SettingsView: React.FC = () => {
     percent: denoPercent,
     invokeError: denoError,
     install: installDeno,
-  } = useDenoStatus(activeTab === 'downloads');
+  } = useDenoStatus(activeTab === "downloads" || isSearching);
 
   const accentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => setAppVersion(null));
   }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setSearchQuery("");
+      headerCompactRef.current = false;
+      setHeaderCompact(false);
+      setSearchExpanded(false);
+      heightPrimedRef.current = false;
+      titleHeightPrimedRef.current = false;
+      heightAnimRef.current?.stop();
+      heightAnimRef.current = null;
+      titleHeightAnimRef.current?.stop();
+      titleHeightAnimRef.current = null;
+      return;
+    }
+    if (!showSearchField) return;
+    const id = window.setTimeout(() => searchInputRef.current?.focus(), 40);
+    return () => window.clearTimeout(id);
+  }, [open, showSearchField]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const root = settingsScrollRef.current;
+    if (root) root.scrollTop = 0;
+    headerCompactRef.current = false;
+    setHeaderCompact(false);
+    setSearchExpanded(false);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const inner = titleInnerRef.current;
+    if (!inner) return;
+
+    const target = headerCompact ? 0 : Math.max(inner.scrollHeight, 1);
+    if (!titleHeightPrimedRef.current) {
+      titleHeightAnimRef.current?.stop();
+      titleHeightAnimRef.current = null;
+      titleBlockHeight.jump(target);
+      titleHeightPrimedRef.current = true;
+      return;
+    }
+    if (Math.abs(titleBlockHeight.get() - target) < 0.5) return;
+    titleHeightAnimRef.current?.stop();
+    titleHeightAnimRef.current = animate(titleBlockHeight, target, MORPH_SPRING);
+  }, [open, headerCompact, titleBlockHeight, isSearching]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const headerEl = headerMeasureRef.current;
+    const bodyEl = bodyMeasureRef.current;
+    if (!headerEl || !bodyEl) return;
+
+    const apply = () => {
+      const bodyH = Math.max(bodyEl.scrollHeight, bodyEl.offsetHeight);
+      if (bodyH < 48) return;
+      const maxH = Math.min(Math.round(window.innerHeight * 0.88), 840);
+      const natural =
+        headerEl.offsetHeight + bodyH + SETTINGS_SHELL_PAD_PX * 2;
+      const nextH = Math.min(Math.max(natural, 320), maxH);
+
+      if (!heightPrimedRef.current) {
+        heightAnimRef.current?.stop();
+        heightAnimRef.current = null;
+        panelHeight.jump(nextH);
+        heightPrimedRef.current = true;
+        return;
+      }
+
+      if (Math.abs(panelHeight.get() - nextH) < 0.5) return;
+      heightAnimRef.current?.stop();
+      heightAnimRef.current = animate(panelHeight, nextH, MORPH_SPRING);
+    };
+
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(headerEl);
+    ro.observe(bodyEl);
+    window.addEventListener("resize", apply);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", apply);
+    };
+  }, [
+    open,
+    panelHeight,
+    settingsMaxHeight,
+    activeTab,
+    headerCompact,
+    searchExpanded,
+    isSearching,
+    settings.showDebuggingSettings,
+  ]);
+
+  const syncHeaderCompactFromScroll = (scrollTop: number) => {
+    // Hysteresis: enter compact past 40px, leave only near the top.
+    const next = headerCompactRef.current
+      ? scrollTop > 12
+      : scrollTop > 40;
+    if (headerCompactRef.current === next) return;
+    headerCompactRef.current = next;
+    setHeaderCompact(next);
+    if (!next) setSearchExpanded(false);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (searchQuery.trim()) {
+          setSearchQuery("");
+          return;
+        }
+        if (searchExpanded) {
+          setSearchExpanded(false);
+          return;
+        }
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, searchQuery, searchExpanded]);
 
   useEffect(() => {
     if (activeTab !== "debugging") return;
@@ -480,14 +753,14 @@ export const SettingsView: React.FC = () => {
   };
 
   const handlePickDirectory = async () => {
-    const selected = await open({ directory: true, multiple: false });
+    const selected = await openDirectoryDialog({ directory: true, multiple: false });
     if (selected && typeof selected === 'string') {
       setOutputDir(selected);
     }
   };
 
   const handleAddLibraryScanFolder = async () => {
-    const selected = await open({ directory: true, multiple: false });
+    const selected = await openDirectoryDialog({ directory: true, multiple: false });
     if (!selected || typeof selected !== "string") return;
     const key = normalizeScanDirKey(selected);
     if (key === normalizeScanDirKey(internalVault)) {
@@ -591,22 +864,315 @@ export const SettingsView: React.FC = () => {
     notify("JavaScript runtime installed. Downloads will now solve the n-challenge automatically.");
   };
 
-  return (
-    <div className="rf-settings-shell w-full max-w-[min(100%,56rem)] min-h-full px-8 sm:px-10 pb-32 pt-20">
-      <div className="mb-10">
-        <h1 className="rf-settings-page-title">Settings</h1>
-        <p className="text-stone-500 mt-1 text-sm font-medium">System configuration and preferences.</p>
-      </div>
+  if (!open) return null;
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={activeTab}
-          initial={false}
-          animate={{ opacity: 1 }}
-          className="space-y-0"
-        >
-          {activeTab === 'general' && (
-            <div className="flex flex-col">
+  const navGroups = SETTINGS_NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter(
+      (item) => item.id !== "debugging" || settings.showDebuggingSettings,
+    ),
+  })).filter((group) => group.items.length > 0);
+
+  const showTab = (tab: SettingsTab) => isSearching || activeTab === tab;
+
+  const selectSettingsTab = (tab: SettingsTab) => {
+    setSearchQuery("");
+    setSearchExpanded(false);
+    if (tab === activeTab && !isSearching) return;
+    setSettingsTab(tab);
+    const el = settingsScrollRef.current;
+    if (el) el.scrollTop = 0;
+    headerCompactRef.current = false;
+    setHeaderCompact(false);
+  };
+
+  return (
+    <div
+      className={`fixed inset-0 ${OVERLAY_Z_CLASS.settings} flex items-center justify-center bg-black/65 p-4 sm:p-6`}
+      role="presentation"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="Close settings"
+        onClick={onClose}
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rf-settings-dialog-title"
+        initial={false}
+        className="relative flex w-full max-w-[56rem] flex-col overflow-hidden rounded-[24px] bg-[#271C18] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+        style={{
+          height: panelHeight,
+          maxHeight: settingsMaxHeight,
+          padding: SETTINGS_SHELL_PAD_PX,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <SettingsSearchRootContext.Provider value={searchQuery}>
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] bg-[#1D1613]">
+            <div
+              ref={headerMeasureRef}
+              className="relative shrink-0 px-5 pb-2.5 pt-2.5 sm:px-7"
+            >
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute right-5 top-2.5 z-30 rounded-lg p-1.5 text-stone-500 transition-colors hover:text-stone-200 sm:right-7"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+            <motion.div
+              style={{ height: titleBlockHeight, opacity: titleBlockOpacity }}
+              className="overflow-hidden"
+              aria-hidden={headerCompact}
+            >
+              <div
+                ref={titleInnerRef}
+                className={cn(
+                  "pt-2.5 pr-10",
+                  headerCompact && "pointer-events-none",
+                )}
+              >
+                <div className="mb-4 min-w-0">
+                  <h2
+                    id="rf-settings-dialog-title"
+                    className="rf-settings-page-title text-[1.5rem]"
+                  >
+                    Settings
+                  </h2>
+                  <p className="mt-0.5 text-sm font-medium text-stone-500">
+                    System configuration and preferences.
+                  </p>
+                </div>
+
+                <label className="relative mb-4 block">
+                  <Search
+                    size={15}
+                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-500"
+                    aria-hidden
+                  />
+                  <input
+                    ref={headerCompact ? undefined : searchInputRef}
+                    type="text"
+                    role="searchbox"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search settings"
+                    autoComplete="off"
+                    spellCheck={false}
+                    tabIndex={headerCompact ? -1 : 0}
+                    className="rf-settings-search-input w-full rounded-xl bg-[#261d18] py-2.5 pl-10 pr-10 text-[13px] text-stone-200 outline-none placeholder:text-stone-600 focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent),transparent_55%)]"
+                  />
+                  {isSearching ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-stone-500 hover:text-stone-200"
+                      aria-label="Clear search"
+                      tabIndex={headerCompact ? -1 : 0}
+                    >
+                      <X size={14} />
+                    </button>
+                  ) : null}
+                </label>
+              </div>
+            </motion.div>
+
+            <div>
+              <div
+                className={cn(
+                  "flex items-center gap-2",
+                  headerCompact ? "pr-10" : null,
+                )}
+              >
+                {headerCompact ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchExpanded((v) => !v)}
+                    className={cn(
+                      "shrink-0 rounded-lg p-1.5 transition-colors",
+                      showSearchField || isSearching
+                        ? "text-[color:var(--accent)]"
+                        : "text-stone-500 hover:text-stone-200",
+                    )}
+                    aria-label="Search settings"
+                    aria-pressed={showSearchField}
+                  >
+                    <Search size={16} />
+                  </button>
+                ) : null}
+
+                <nav
+                  className={cn(
+                    "flex min-w-0 flex-1 justify-center gap-x-5 overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                    headerCompact && "gap-x-1.5",
+                    isSearching && "pointer-events-none opacity-40",
+                  )}
+                  aria-label="Settings sections"
+                  aria-hidden={isSearching}
+                >
+                  {navGroups.map((group) => (
+                    <div
+                      key={group.label}
+                      className={cn(
+                        "flex shrink-0 flex-col items-center",
+                        headerCompact ? "gap-0" : "gap-1.5",
+                      )}
+                    >
+                      {!headerCompact ? (
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
+                          {group.label}
+                        </p>
+                      ) : null}
+                      <div
+                        className={cn(
+                          "flex items-center gap-1 bg-[#221a16] p-1",
+                          headerCompact ? "rounded-xl" : "rounded-2xl",
+                        )}
+                      >
+                        {group.items.map((item) => {
+                          const isActive = !isSearching && activeTab === item.id;
+                          const Icon = item.icon;
+                          const tabButton = (
+                            <button
+                              type="button"
+                              aria-label={item.label}
+                              onClick={() => selectSettingsTab(item.id)}
+                              className={cn(
+                                "relative flex items-center transition-colors",
+                                headerCompact
+                                  ? "rounded-lg px-2 py-1.5"
+                                  : "gap-2 rounded-xl px-3 py-2",
+                                isActive
+                                  ? "text-stone-100"
+                                  : "text-stone-500 hover:text-stone-200",
+                              )}
+                            >
+                              {isActive ? (
+                                <motion.span
+                                  layoutId={
+                                    headerCompact
+                                      ? "settingsTopNavActiveCompact"
+                                      : "settingsTopNavActive"
+                                  }
+                                  className={cn(
+                                    "absolute inset-0 bg-[#2c241f]",
+                                    headerCompact ? "rounded-lg" : "rounded-xl",
+                                  )}
+                                  transition={MORPH_SPRING}
+                                />
+                              ) : null}
+                              <Icon
+                                size={headerCompact ? 14 : 15}
+                                className={cn(
+                                  "relative z-10 shrink-0",
+                                  isActive
+                                    ? "text-[color:var(--accent)]"
+                                    : "text-current",
+                                )}
+                                aria-hidden
+                              />
+                              {!headerCompact ? (
+                                <span className="relative z-10 text-[12px] font-medium">
+                                  {item.label}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+
+                          if (!headerCompact) {
+                            return (
+                              <Fragment key={item.id}>{tabButton}</Fragment>
+                            );
+                          }
+
+                          return (
+                            <IconPillTooltip
+                              key={item.id}
+                              label={item.label}
+                              uppercase={false}
+                              className="inline-flex"
+                            >
+                              {tabButton}
+                            </IconPillTooltip>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </nav>
+
+              </div>
+
+              {headerCompact && showSearchField ? (
+                <label className="relative mt-2 block">
+                  <Search
+                    size={14}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500"
+                    aria-hidden
+                  />
+                  <input
+                    ref={headerCompact ? searchInputRef : undefined}
+                    type="text"
+                    role="searchbox"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onBlur={() => {
+                      if (!searchQuery.trim()) setSearchExpanded(false);
+                    }}
+                    placeholder="Search settings"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="rf-settings-search-input w-full rounded-xl bg-[#261d18] py-2 pl-9 pr-9 text-[13px] text-stone-200 outline-none placeholder:text-stone-600 focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent),transparent_55%)]"
+                  />
+                  {isSearching ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-stone-500 hover:text-stone-200"
+                      aria-label="Clear search"
+                    >
+                      <X size={14} />
+                    </button>
+                  ) : null}
+                </label>
+              ) : null}
+            </div>
+            </div>
+
+          <div
+            ref={settingsScrollRef}
+            onScroll={(e) => {
+              syncHeaderCompactFromScroll(e.currentTarget.scrollTop);
+            }}
+            className="rf-settings-shell min-h-0 flex-1 overflow-y-auto rf-scrollbar px-5 pb-6 pt-1 sm:px-7"
+          >
+            <div ref={bodyMeasureRef}>
+            {!isSearching ? (
+              <h3 className="mb-5 text-base font-semibold tracking-tight text-stone-100">
+                {SETTINGS_TAB_LABELS[activeTab]}
+              </h3>
+            ) : (
+              <p className="mb-5 text-sm text-stone-500">
+                Results for &ldquo;{searchQuery.trim()}&rdquo;
+              </p>
+            )}
+            <div className="space-y-0">
+          {showTab("general") && (
+            <div
+              className={cn(
+                "flex flex-col",
+                isSearching && "rf-settings-search-group",
+              )}
+            >
+              {isSearching ? (
+                <h3 className="rf-settings-search-group-title">
+                  {SETTINGS_TAB_LABELS.general}
+                </h3>
+              ) : null}
               <SettingsSection title="Storage">
                 <SettingItem
                   title="Storage Limit"
@@ -721,8 +1287,18 @@ export const SettingsView: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'downloads' && (
-            <div className="flex flex-col">
+          {showTab("downloads") && (
+            <div
+              className={cn(
+                "flex flex-col",
+                isSearching && "rf-settings-search-group",
+              )}
+            >
+              {isSearching ? (
+                <h3 className="rf-settings-search-group-title">
+                  {SETTINGS_TAB_LABELS.downloads}
+                </h3>
+              ) : null}
               <SettingsSection title="Location">
                 <SettingItem
                   title="Storage Target"
@@ -1137,8 +1713,18 @@ export const SettingsView: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'playback' && (
-            <div className="flex flex-col">
+          {showTab("playback") && (
+            <div
+              className={cn(
+                "flex flex-col",
+                isSearching && "rf-settings-search-group",
+              )}
+            >
+              {isSearching ? (
+                <h3 className="rf-settings-search-group-title">
+                  {SETTINGS_TAB_LABELS.playback}
+                </h3>
+              ) : null}
               <SettingsSection title="Playback">
                 <SettingItem
                   title="Auto-advance local audio"
@@ -1180,14 +1766,29 @@ export const SettingsView: React.FC = () => {
                   }
                 />
               </SettingsSection>
-              <SettingsSection title="SponsorBlock">
-                <SponsorBlockSettingsTree />
+              <SettingsSection
+                title="SponsorBlock"
+                keywords="sponsor skip segment youtube chapters"
+              >
+                <SearchableBlock keywords="sponsor skip segment youtube chapters">
+                  <SponsorBlockSettingsTree />
+                </SearchableBlock>
               </SettingsSection>
             </div>
           )}
 
-          {activeTab === 'appearance' && (
-            <div className="flex flex-col">
+          {showTab("appearance") && (
+            <div
+              className={cn(
+                "flex flex-col",
+                isSearching && "rf-settings-search-group",
+              )}
+            >
+              {isSearching ? (
+                <h3 className="rf-settings-search-group-title">
+                  {SETTINGS_TAB_LABELS.appearance}
+                </h3>
+              ) : null}
               <SettingsSection title="Theme">
                 <SettingItem
                   title="Accent Color"
@@ -1249,8 +1850,18 @@ export const SettingsView: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'advanced' && (
-            <div className="flex flex-col">
+          {showTab("advanced") && (
+            <div
+              className={cn(
+                "flex flex-col",
+                isSearching && "rf-settings-search-group",
+              )}
+            >
+              {isSearching ? (
+                <h3 className="rf-settings-search-group-title">
+                  {SETTINGS_TAB_LABELS.advanced}
+                </h3>
+              ) : null}
               <SettingsSection title="Performance">
                 <SettingItem
                   title="Hardware Acceleration"
@@ -1303,14 +1914,41 @@ export const SettingsView: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'debugging' && (
-            <div className="flex flex-col">
-              {settings.showDebuggingSettings ? (
-                <CompanionSettingsSection active={activeTab === 'debugging'} />
+          {showTab("debugging") && (
+            <div
+              className={cn(
+                "flex flex-col",
+                isSearching && "rf-settings-search-group",
+              )}
+            >
+              {isSearching ? (
+                <h3 className="rf-settings-search-group-title">
+                  {SETTINGS_TAB_LABELS.debugging}
+                </h3>
+              ) : null}
+              {settings.showDebuggingSettings &&
+              settingsTextMatches(
+                searchQuery,
+                "companion",
+                "browser",
+                "pair",
+                "lan",
+                "qr",
+              ) ? (
+                <div className="rf-settings-row rf-settings-row--block">
+                  <CompanionSettingsSection
+                    active={activeTab === "debugging" || isSearching}
+                  />
+                </div>
               ) : null}
               {import.meta.env.DEV && settings.showDebuggingSettings ? (
-                <SettingsSection title="Dev captures">
-                  <DevCapturesSection />
+                <SettingsSection
+                  title="Dev captures"
+                  keywords="screenshot capture annotate"
+                >
+                  <SearchableBlock keywords="screenshot capture annotate">
+                    <DevCapturesSection />
+                  </SearchableBlock>
                 </SettingsSection>
               ) : null}
               {settings.showDebuggingSettings ? (
@@ -1364,8 +2002,13 @@ export const SettingsView: React.FC = () => {
                 onClose={() => setMusicMetaBackfillOpen(false)}
                 roots={galleryScanRootsFromStore({ internalVault, libraryScanDirs })}
               />
-              <SettingsSection title="Debug logging">
-                <DebugLogCategoryTree />
+              <SettingsSection
+                title="Debug logging"
+                keywords="log category verbose rust"
+              >
+                <SearchableBlock keywords="log category verbose rust debug">
+                  <DebugLogCategoryTree />
+                </SearchableBlock>
               </SettingsSection>
               <SettingsSection title="Debugging">
                 <SettingItem
@@ -1559,8 +2202,12 @@ export const SettingsView: React.FC = () => {
               </SettingsSection>
             </div>
           )}
-        </motion.div>
-      </AnimatePresence>
+            </div>
+            </div>
+          </div>
+          </div>
+        </SettingsSearchRootContext.Provider>
+      </motion.div>
     </div>
   );
 };

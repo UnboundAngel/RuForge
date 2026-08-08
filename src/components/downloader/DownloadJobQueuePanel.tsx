@@ -232,13 +232,12 @@ export function UrlInputPacer({
       <motion.div
         className={`${lineHeight} rounded-full bg-[color:var(--accent)] opacity-30 transition-[width] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${lineWidth}`}
       />
-      {loading && (
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className={`${compact ? "h-2 w-2 border" : "h-3 w-3 border-2"} border-white/10 border-t-[color:var(--accent)] rounded-full`}
+      {loading ? (
+        <div
+          aria-hidden
+          className={`${compact ? "h-2 w-2 border" : "h-3 w-3 border-2"} animate-spin rounded-full border-white/10 border-t-[color:var(--accent)]`}
         />
-      )}
+      ) : null}
       <motion.div
         className={`${lineHeight} rounded-full bg-[color:var(--accent)] opacity-30 transition-[width] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${lineWidth}`}
       />
