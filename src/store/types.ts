@@ -169,6 +169,12 @@ export interface RuforgeSettings {
   telemetryCrashEnabled: boolean;
   /** User accepted the LAN companion disclosure before enabling the server. */
   companionServerDisclosureAcknowledged: boolean;
+  /** Master: share RuForge activity on Discord Rich Presence (off by default). */
+  discordPresenceEnabled: boolean;
+  /** When master is on: include media titles in presence (vs generic watching/listening). */
+  discordPresenceShowTitles: boolean;
+  /** When master is on: include browsing status (library, Explorer, settings, etc.). */
+  discordPresenceShowBrowsing: boolean;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -205,6 +211,9 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   telemetryUsageEnabled: false,
   telemetryCrashEnabled: false,
   companionServerDisclosureAcknowledged: false,
+  discordPresenceEnabled: false,
+  discordPresenceShowTitles: true,
+  discordPresenceShowBrowsing: true,
 };
 
 /** Hidden legacy default was `"chrome"` (not in downloader UI). Treat as no cookie source. */
@@ -247,6 +256,9 @@ export function loadMergedSettings(): RuforgeSettings {
       telemetryCrashEnabled: merged.telemetryCrashEnabled === true,
       companionServerDisclosureAcknowledged:
         merged.companionServerDisclosureAcknowledged === true,
+      discordPresenceEnabled: merged.discordPresenceEnabled === true,
+      discordPresenceShowTitles: merged.discordPresenceShowTitles !== false,
+      discordPresenceShowBrowsing: merged.discordPresenceShowBrowsing !== false,
     };
   } catch {
     return DEFAULT_SETTINGS;

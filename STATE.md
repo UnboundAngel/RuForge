@@ -18,9 +18,9 @@ Shipping version: 0.3.1 (unreleased)
 
 Last shipped to users: 0.3.0
 
-Last updated: 2026-08-08 (Discord RPC pass 1 Rust)
+Last updated: 2026-08-08 (Discord RPC pass 2a Settings)
 
-Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Presence Rust module (commands only; Settings/UI next). Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
+Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Presence Rust module plus General Settings toggles (activity transport next). Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Prese
 
 
 
-Discord Rich Presence pass 1 landed (Rust worker + commands). Next: Settings toggles + frontend transport (pass 2). Priorities otherwise unchanged: storage cap before enqueue, main-app nav restructure, Companion Browser V1 when Angel approves removing the dev gate.
+Discord Rich Presence: pass 1 Rust + pass 2a Settings schema/UI landed. Next: pass 2b frontend transport. Priorities otherwise unchanged: storage cap before enqueue, main-app nav restructure, Companion Browser V1 when Angel approves removing the dev gate.
 
 
 
@@ -68,7 +68,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.3.1 (unreleased, in tree):**
 
-- Discord: Rust Rich Presence IPC worker and Tauri commands; Settings UI and activity transport still pending.
+- Discord: Rust Rich Presence IPC worker and Tauri commands; General Settings Discord privacy toggles; activity transport still pending.
 
 
 
