@@ -164,6 +164,7 @@ import { useMainWindowMaximized } from "./hooks/useMainWindowMaximized";
 import { useMainWindowTransparentFrame } from "./hooks/useMainWindowTransparentFrame";
 import { setupTaskbarTransportBridge } from "./lib/taskbarTransportSync";
 import { setupMediaSessionTransport } from "./lib/mediaSessionTransport";
+import { setupDiscordPresenceTransport } from "./lib/discordPresenceTransport";
 
 const WindowControls = ({
   isMaximized,
@@ -1158,6 +1159,7 @@ function App() {
 
   useEffect(() => setupTaskbarTransportBridge(), []);
   useEffect(() => setupMediaSessionTransport(), []);
+  useEffect(() => setupDiscordPresenceTransport(), []);
 
   useEffect(() => wireScrubSpriteGalleryIndicators(), []);
 

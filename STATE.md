@@ -18,9 +18,9 @@ Shipping version: 0.3.1 (unreleased)
 
 Last shipped to users: 0.3.0
 
-Last updated: 2026-08-08 (Discord RPC pass 2a Settings)
+Last updated: 2026-08-08 (Discord RPC pass 2b transport)
 
-Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Presence Rust module plus General Settings toggles (activity transport next). Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
+Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Presence end-to-end (Rust worker, Settings toggles, main-window transport). Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Prese
 
 
 
-Discord Rich Presence: pass 1 Rust + pass 2a Settings schema/UI landed. Next: pass 2b frontend transport. Priorities otherwise unchanged: storage cap before enqueue, main-app nav restructure, Companion Browser V1 when Angel approves removing the dev gate.
+Discord Rich Presence pass 2b transport landed. Before public Discord ship: staleness guard (Next 1). Companion Browser V1 remains gated. Other priorities: storage cap, main-app nav restructure.
 
 
 
@@ -68,7 +68,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.3.1 (unreleased, in tree):**
 
-- Discord: Rust Rich Presence IPC worker and Tauri commands; General Settings Discord privacy toggles; activity transport still pending.
+- Discord: Rich Presence Rust worker, General Settings privacy toggles, and main-window activity transport.
 
 
 
@@ -272,11 +272,11 @@ Fixes:
 
 
 
-1. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
+1. Discord Rich Presence staleness guard: clear presence if no snapshot within N×15s (destroyed main webview can leave a stale card). Land before Discord ships to users.
 
-2. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell.
+2. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
 
-3. Companion Browser V1: ship when ready (dev gate removal only when Angel approves public ship); disconnected-state polish is in tree.
+3. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell.
 
 
 
