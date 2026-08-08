@@ -66,9 +66,11 @@ function baseAssets(): Pick<
   DiscordActivityPayload,
   "largeImage" | "largeText" | "smallImage" | "smallText"
 > {
+  // Omit portal art until Angel uploads the `ruforge` key. An unknown large_image
+  // key can cause Discord to drop the entire SET_ACTIVITY (spike worked with no assets).
   return {
-    largeImage: "ruforge",
-    largeText: "RuForge",
+    largeImage: null,
+    largeText: null,
     smallImage: null,
     smallText: null,
   };
@@ -200,6 +202,9 @@ function buildSnapshot(): DiscordActivityPayload | null {
   if (activeTab === "settings") {
     return browsePayload("Mingling in the settings");
   }
+  if (activeTab === "player") {
+    return browsePayload("In the player");
+  }
 
   return null;
 }
@@ -236,8 +241,8 @@ export function setupDiscordPresenceTransport(): () => void {
           await invoke("discord_rpc_set_activity", { payload: snapshot });
         }
       } while (queued);
-    } catch {
-      /* Discord IPC is best-effort */
+    } catch (err) {
+      console.error("[discord-presence]", err);
     } finally {
       inFlight = false;
       if (queued) {
@@ -255,9 +260,22 @@ export function setupDiscordPresenceTransport(): () => void {
   const unsubBridge = subscribeMainPlaybackBridge(refresh);
   const unsubStore = useRuforgeStore.subscribe(refresh);
 
+  void invoke<DiscordRpcStatus>("discord_rpc_status")
+    .then((status) => {
+      if (useRuforgeStore.getState().settings.discordPresenceEnabled === true) {
+        console.info("[discord-presence] status", status);
+      }
+    })
+    .catch((err) => console.error("[discord-presence] status", err));
+
   return () => {
     unsubBridge();
     unsubStore();
-    void invoke("discord_rpc_set_enabled", { enabled: false }).catch(() => undefined);
   };
 }
+
+type DiscordRpcStatus = {
+  enabled: boolean;
+  connection: "disabled" | "disconnected" | "connected";
+  hasActivity: boolean;
+};

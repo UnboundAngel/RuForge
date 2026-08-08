@@ -196,6 +196,10 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 ### v0.3.1 (unreleased)
 
 - **Discord**: Island onboarding visuals: espresso media frame for future presence card, clearer Settings-path compact + caption; Alt hold now finishes the Discord step after collapse. `OnboardingIsland.tsx`
+- **Discord**: Clarify Settings/onboarding copy for titles vs browsing (browsing off = media/download only). `SettingsView.tsx` / `onboardingSteps.ts`
+- **Discord**: Re-enable always re-sends SET_ACTIVITY (clear last_sent); unknown art keys no longer sent. `discord_rpc/mod.rs` / `discordPresenceTransport.ts`
+- **Discord**: Stop sending unuploaded `ruforge` art key (Discord can drop the whole activity); log IPC errors. `discordPresenceTransport.ts`
+- **Discord**: Presence survives webview reload: transport no longer disables IPC on unmount; re-enable clears the 15s send floor. `discordPresenceTransport.ts` / `discord_rpc/mod.rs`
 - **Discord**: Island onboarding Discord step uses Settings-path compact copy; SPIKE demo media removed pending a real presence screenshot. `onboardingSteps.ts`
 - **Discord**: Island onboarding step for Rich Presence (`introducedIn` 0.4.0) plus Debugging preview. `onboardingSteps.ts`
 - **Discord**: Main-window Rich Presence transport maps playback, downloads, and browsing to Discord via the Rust worker. `discordPresenceTransport.ts`

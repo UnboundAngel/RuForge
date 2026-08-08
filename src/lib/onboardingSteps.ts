@@ -98,7 +98,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
         id: "enable-discord",
         compact: "Turn on Discord",
         expandedCaption:
-          "Turn on Show activity on Discord.",
+          "Turn on Show activity on Discord. Turn on Include browsing status too if you want friends to see you in the library when nothing is playing.",
         completeWhen: "discord-on",
       },
     ],

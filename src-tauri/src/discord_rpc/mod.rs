@@ -244,6 +244,18 @@ fn worker_loop(rx: Receiver<WorkerMsg>, status: Arc<Mutex<SharedStatus>>) {
                         dirty = false;
                         force_flush = true;
                         backoff_idx = 0;
+                        last_send_at = None;
+                    } else {
+                        // Remount / re-enable must re-issue SET_ACTIVITY even when the
+                        // snapshot is unchanged. Discord may have dropped the card while
+                        // Rust still held last_sent (e.g. rejected assets, client refresh).
+                        backoff_idx = 0;
+                        last_send_at = None;
+                        last_sent = None;
+                        if desired.is_some() {
+                            dirty = true;
+                            force_flush = true;
+                        }
                     }
                 }
                 Ok(WorkerMsg::SetActivity(payload)) => {
