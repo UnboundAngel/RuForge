@@ -71,6 +71,7 @@ rand = "0.8"
 base64 = "0.22"
 rust-embed = "8"
 tauri-plugin-deep-link = "2"
+discord-rich-presence = "=1.1.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
@@ -78,6 +79,7 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 [features]
 default = []
 dev-verify-bins = []
+discord_rpc_spike = []
 
 [dev-dependencies]
 
@@ -90,6 +92,11 @@ required-features = ["dev-verify-bins"]
 name = "verify_gallery_folder"
 path = "dev-bin/verify_gallery_folder.rs"
 required-features = ["dev-verify-bins"]
+
+[[bin]]
+name = "discord_rpc_spike"
+path = "dev-bin/discord_rpc_spike.rs"
+required-features = ["discord_rpc_spike"]
 
 [profile.dev]
 debug = "line-tables-only"
