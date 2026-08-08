@@ -18,9 +18,9 @@ Shipping version: 0.3.1 (unreleased)
 
 Last shipped to users: 0.3.0
 
-Last updated: 2026-08-08 (Discord onboarding island polish)
+Last updated: 2026-08-08 (Discord presence reload fix)
 
-Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Presence end-to-end (Rust worker, Settings toggles, main-window transport). Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
+Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Presence end-to-end (Rust worker, Settings toggles, main-window transport, onboarding). Webview reload no longer clears Discord IPC. Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
 
 
 
@@ -28,7 +28,7 @@ Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Prese
 
 
 
-Discord Rich Presence pass 2b transport landed. Island Discord onboarding polish landed (preview via Debugging). Before public Discord ship: staleness guard (Next 1). Companion Browser V1 remains gated. Other priorities: storage cap, main-app nav restructure.
+Discord Rich Presence live in tree (reload fix landed). Before public Discord ship: staleness guard (Next 1). Companion Browser V1 remains gated. Other priorities: storage cap, main-app nav restructure.
 
 
 
@@ -68,7 +68,7 @@ reads this for the last shipped delta, not the git tree.
 
 **0.3.1 (unreleased, in tree):**
 
-- Discord: Rich Presence Rust worker, General Settings privacy toggles, main-window transport, and island onboarding step (ships with 0.4.0 gate; Debugging preview available). Island Discord step polish: media frame + Settings-path compact; Alt hold finishes after collapse.
+- Discord: Rich Presence Rust worker, General Settings privacy toggles, main-window transport, and island onboarding step (ships with 0.4.0 gate; Debugging preview available). Island Discord step polish: media frame + Settings-path compact; Alt hold finishes after collapse. Webview reload no longer disables Discord IPC mid-remount.
 
 
 

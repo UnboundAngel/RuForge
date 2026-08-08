@@ -650,7 +650,7 @@ export const SettingsView: React.FC = () => {
               <SettingsSection title="Discord">
                 <SettingItem
                   title="Show activity on Discord"
-                  description="Friends on Discord can see what you are doing in RuForge when Discord is open."
+                  description="When Discord is open, share RuForge activity with friends. What they see is controlled by the two options below."
                   active={settings.discordPresenceEnabled}
                   control={
                     <ToggleSlot
@@ -666,7 +666,7 @@ export const SettingsView: React.FC = () => {
                 />
                 <SettingItem
                   title="Include media titles"
-                  description="Show the track or video name instead of a generic watching or listening line."
+                  description="When watching or listening, show the real track or video name. Off uses generic lines like Watching a video."
                   active={settings.discordPresenceEnabled}
                   control={
                     <ToggleSlot
@@ -683,7 +683,7 @@ export const SettingsView: React.FC = () => {
                 />
                 <SettingItem
                   title="Include browsing status"
-                  description="Show library, Explorer, downloader, and settings activity when you are not playing media."
+                  description="Off: friends only see you while watching, listening, or downloading. On: also show library, Explorer, downloader, and settings."
                   active={settings.discordPresenceEnabled}
                   control={
                     <ToggleSlot
