@@ -195,6 +195,7 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.3.1 (unreleased)
 
+- **Discord**: Main-window Rich Presence transport maps playback, downloads, and browsing to Discord via the Rust worker. `discordPresenceTransport.ts`
 - **Discord**: Settings General Discord section with three privacy toggles (presence off by default); transport not wired yet. `SettingsView.tsx` / `types.ts`
 - **Discord**: Rust Rich Presence worker and commands (`discord_rpc`), 15s coalesce, exit clear; Settings/UI transport not wired yet. `discord_rpc/mod.rs`
 
