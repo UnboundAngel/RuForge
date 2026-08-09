@@ -195,6 +195,10 @@ Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.m
 
 ### v0.3.1 (unreleased)
 
+- **Settings**: Panel height morph coalesces ResizeObserver ticks (rAF + settle) so compact/title and nested expands no longer restart the spring every layout frame; empty search can shrink; maxHeight tracks window resize; yt-dlp/Deno status fetch only on Downloads tab. `SettingsView.tsx`
+- **SponsorBlock**: Music mode only owns learning/auto-skip for audio files so a hidden PlayerView no longer double-counts video. `MusicShell.tsx`
+- **SponsorBlock**: Learning counters use atomic store bumps (no stale overwrite); empty UUID segments still track/auto-skip; Music mode records learning; settings tree line no longer cuts through labels, with learning progress badges. `ruforgeStore.ts` / `useSponsorBlockPlayback.ts` / `SponsorBlockSettingsTree.tsx`
+- **Nav**: Sidebar and Alt radial label Settings (was System). `AppSidebarRail.tsx` / `radialNavItems.ts`
 - **Settings**: Compact collapses the title block with MORPH_SPRING height (not a hard unmount); shell stays always-on; content scroll drives compact. `SettingsView.tsx`
 - **Settings**: Header compact uses sticky tabs + IntersectionObserver so the title scrolls away instead of snap-collapsing outside the scrollport. `SettingsView.tsx`
 - **Downloader**: Immersive download hero redesigned with poster, phase copy (preparing / downloading / finishing), ETA, and indeterminate bar so start stalls and end-of-file merge no longer look like a frozen 100%. `ImmersiveDownloadHero.tsx` / `DownloaderView.tsx`

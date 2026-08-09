@@ -1334,28 +1334,25 @@ export default function MiniPlayer() {
     [applySeekRatio],
   );
 
-  const patchSbStats = useCallback(
-    (
-      cat: SponsorBlockSkipCategory,
-      patch: Partial<{
-        appearances: number;
-        manualSkips: number;
-        undoSignals: number;
-      }>,
-    ) => {
+  const bumpSbStat = useCallback(
+    (cat: SponsorBlockSkipCategory, field: "appearances" | "manualSkips" | "undoSignals") => {
       setSettings((prev) => {
-        const stats = { ...prev.sponsorBlockCategoryStats };
-        stats[cat] = { ...stats[cat], ...patch };
-        const next = { ...prev, sponsorBlockCategoryStats: stats };
+        const fresh = loadMergedSettings();
+        const baseStats = fresh.sponsorBlockCategoryStats;
+        const cur = baseStats[cat] ?? {
+          appearances: 0,
+          manualSkips: 0,
+          undoSignals: 0,
+        };
+        const stats = {
+          ...baseStats,
+          [cat]: { ...cur, [field]: cur[field] + 1 },
+        };
+        const next = { ...prev, ...fresh, sponsorBlockCategoryStats: stats };
         try {
-          const raw = localStorage.getItem("ruforge-settings");
-          const parsed =
-            raw && typeof raw === "string"
-              ? (JSON.parse(raw) as Record<string, unknown>)
-              : {};
           localStorage.setItem(
             "ruforge-settings",
-            JSON.stringify({ ...parsed, sponsorBlockCategoryStats: stats }),
+            JSON.stringify({ ...fresh, sponsorBlockCategoryStats: stats }),
           );
         } catch {
           /* ignore */
@@ -1368,26 +1365,23 @@ export default function MiniPlayer() {
 
   const onSbAppearance = useCallback(
     (cat: SponsorBlockSkipCategory) => {
-      const cur = settings.sponsorBlockCategoryStats[cat];
-      patchSbStats(cat, { appearances: cur.appearances + 1 });
+      bumpSbStat(cat, "appearances");
     },
-    [settings.sponsorBlockCategoryStats, patchSbStats],
+    [bumpSbStat],
   );
 
   const onSbManualSkip = useCallback(
     (cat: SponsorBlockSkipCategory) => {
-      const cur = settings.sponsorBlockCategoryStats[cat];
-      patchSbStats(cat, { manualSkips: cur.manualSkips + 1 });
+      bumpSbStat(cat, "manualSkips");
     },
-    [settings.sponsorBlockCategoryStats, patchSbStats],
+    [bumpSbStat],
   );
 
   const onSbDemoteUndo = useCallback(
     (cat: SponsorBlockSkipCategory) => {
-      const cur = settings.sponsorBlockCategoryStats[cat];
-      patchSbStats(cat, { undoSignals: cur.undoSignals + 1 });
+      bumpSbStat(cat, "undoSignals");
     },
-    [settings.sponsorBlockCategoryStats, patchSbStats],
+    [bumpSbStat],
   );
 
   const sponsorBlock = useSponsorBlockPlayback({

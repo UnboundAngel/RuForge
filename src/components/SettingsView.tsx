@@ -3,7 +3,6 @@ import React, {
   useRef,
   useEffect,
   useLayoutEffect,
-  useMemo,
   createContext,
   useContext,
   Fragment,
@@ -557,12 +556,19 @@ export const SettingsView: React.FC<{
   const [searchQuery, setSearchQuery] = useState("");
   const [headerCompact, setHeaderCompact] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
+  const [settingsMaxHeight, setSettingsMaxHeight] = useState(() => {
+    if (typeof window === "undefined") return 840;
+    return Math.min(Math.round(window.innerHeight * 0.88), 840);
+  });
   const panelHeight = useMotionValue(0);
   const titleBlockHeight = useMotionValue(0);
   const titleBlockOpacity = useTransform(titleBlockHeight, [0, 32], [0, 1]);
   const heightPrimedRef = useRef(false);
   const titleHeightPrimedRef = useRef(false);
   const heightAnimRef = useRef<ReturnType<typeof animate> | null>(null);
+  const heightTargetRef = useRef<number | null>(null);
+  const heightRoRafRef = useRef<number | null>(null);
+  const heightRoSettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleHeightAnimRef = useRef<ReturnType<typeof animate> | null>(null);
   const headerCompactRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -572,10 +578,6 @@ export const SettingsView: React.FC<{
   const bodyMeasureRef = useRef<HTMLDivElement>(null);
   const isSearching = searchQuery.trim().length > 0;
   const showSearchField = !headerCompact || searchExpanded || isSearching;
-  const settingsMaxHeight = useMemo(() => {
-    if (typeof window === "undefined") return 840;
-    return Math.min(Math.round(window.innerHeight * 0.88), 840);
-  }, [open]);
   const downloadQueueBusy = downloadJobs.some(
     (j) =>
       j.status === "queued" ||
@@ -592,7 +594,7 @@ export const SettingsView: React.FC<{
     percent: ytdlpPercent,
     invokeError: ytdlpError,
     checkAndUpdate: checkAndUpdateYtdlp,
-  } = useYtdlpUpdate(activeTab === "downloads" || isSearching);
+  } = useYtdlpUpdate(activeTab === "downloads");
 
   const {
     status: denoStatus,
@@ -601,7 +603,7 @@ export const SettingsView: React.FC<{
     percent: denoPercent,
     invokeError: denoError,
     install: installDeno,
-  } = useDenoStatus(activeTab === "downloads" || isSearching);
+  } = useDenoStatus(activeTab === "downloads");
 
   const accentInputRef = useRef<HTMLInputElement>(null);
 
@@ -617,6 +619,15 @@ export const SettingsView: React.FC<{
       setSearchExpanded(false);
       heightPrimedRef.current = false;
       titleHeightPrimedRef.current = false;
+      heightTargetRef.current = null;
+      if (heightRoRafRef.current != null) {
+        cancelAnimationFrame(heightRoRafRef.current);
+        heightRoRafRef.current = null;
+      }
+      if (heightRoSettleRef.current != null) {
+        clearTimeout(heightRoSettleRef.current);
+        heightRoSettleRef.current = null;
+      }
       heightAnimRef.current?.stop();
       heightAnimRef.current = null;
       titleHeightAnimRef.current?.stop();
@@ -627,6 +638,16 @@ export const SettingsView: React.FC<{
     const id = window.setTimeout(() => searchInputRef.current?.focus(), 40);
     return () => window.clearTimeout(id);
   }, [open, showSearchField]);
+
+  useEffect(() => {
+    if (!open) return;
+    const syncMax = () => {
+      setSettingsMaxHeight(Math.min(Math.round(window.innerHeight * 0.88), 840));
+    };
+    syncMax();
+    window.addEventListener("resize", syncMax);
+    return () => window.removeEventListener("resize", syncMax);
+  }, [open]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -661,35 +682,83 @@ export const SettingsView: React.FC<{
     const bodyEl = bodyMeasureRef.current;
     if (!headerEl || !bodyEl) return;
 
-    const apply = () => {
-      const bodyH = Math.max(bodyEl.scrollHeight, bodyEl.offsetHeight);
-      if (bodyH < 48) return;
+    const measureNextH = () => {
+      const bodyH = Math.max(bodyEl.scrollHeight, bodyEl.offsetHeight, 1);
       const maxH = Math.min(Math.round(window.innerHeight * 0.88), 840);
       const natural =
         headerEl.offsetHeight + bodyH + SETTINGS_SHELL_PAD_PX * 2;
-      const nextH = Math.min(Math.max(natural, 320), maxH);
+      return Math.min(Math.max(natural, 320), maxH);
+    };
 
+    const commitPanelHeight = (nextH: number) => {
       if (!heightPrimedRef.current) {
         heightAnimRef.current?.stop();
         heightAnimRef.current = null;
         panelHeight.jump(nextH);
         heightPrimedRef.current = true;
+        heightTargetRef.current = nextH;
         return;
       }
 
-      if (Math.abs(panelHeight.get() - nextH) < 0.5) return;
+      if (heightTargetRef.current != null && Math.abs(heightTargetRef.current - nextH) < 1) {
+        return;
+      }
+      if (Math.abs(panelHeight.get() - nextH) < 0.5) {
+        heightTargetRef.current = nextH;
+        return;
+      }
+
+      heightTargetRef.current = nextH;
       heightAnimRef.current?.stop();
-      heightAnimRef.current = animate(panelHeight, nextH, MORPH_SPRING);
+      heightAnimRef.current = animate(panelHeight, nextH, {
+        ...MORPH_SPRING,
+        onComplete: () => {
+          heightAnimRef.current = null;
+        },
+      });
     };
 
-    apply();
-    const ro = new ResizeObserver(apply);
+    const applyNow = () => {
+      if (heightRoSettleRef.current != null) {
+        clearTimeout(heightRoSettleRef.current);
+        heightRoSettleRef.current = null;
+      }
+      commitPanelHeight(measureNextH());
+    };
+
+    const applyFromRo = () => {
+      if (heightRoRafRef.current != null) return;
+      heightRoRafRef.current = requestAnimationFrame(() => {
+        heightRoRafRef.current = null;
+        const nextH = measureNextH();
+        if (heightRoSettleRef.current != null) {
+          clearTimeout(heightRoSettleRef.current);
+        }
+        heightRoSettleRef.current = setTimeout(() => {
+          heightRoSettleRef.current = null;
+          commitPanelHeight(nextH);
+          const settled = measureNextH();
+          if (Math.abs(settled - nextH) >= 1) commitPanelHeight(settled);
+        }, 64);
+      });
+    };
+
+    applyNow();
+    const ro = new ResizeObserver(applyFromRo);
     ro.observe(headerEl);
     ro.observe(bodyEl);
-    window.addEventListener("resize", apply);
+    window.addEventListener("resize", applyNow);
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", apply);
+      window.removeEventListener("resize", applyNow);
+      if (heightRoRafRef.current != null) {
+        cancelAnimationFrame(heightRoRafRef.current);
+        heightRoRafRef.current = null;
+      }
+      if (heightRoSettleRef.current != null) {
+        clearTimeout(heightRoSettleRef.current);
+        heightRoSettleRef.current = null;
+      }
     };
   }, [
     open,
@@ -944,7 +1013,7 @@ export const SettingsView: React.FC<{
                     Settings
                   </h2>
                   <p className="mt-0.5 text-sm font-medium text-stone-500">
-                    System configuration and preferences.
+                    App settings and preferences.
                   </p>
                 </div>
 

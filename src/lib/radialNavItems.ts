@@ -32,7 +32,7 @@ const DEFAULT_ITEMS: RadialNavItemDef[] = [
   },
   {
     id: "settings",
-    label: "System",
+    label: "Settings",
     iconId: "settings",
     hintPlacement: "left",
     action: { kind: "tab", tab: "settings" },
@@ -63,7 +63,7 @@ const MUSIC_ITEMS: RadialNavItemDef[] = [
   },
   {
     id: "settings",
-    label: "System",
+    label: "Settings",
     iconId: "music-settings",
     hintPlacement: "left",
     action: { kind: "music-exit-settings" },

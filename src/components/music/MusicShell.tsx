@@ -252,17 +252,20 @@ export function MusicShell() {
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const ensureGalleryOnViewMount = useRuforgeStore((s) => s.ensureGalleryOnViewMount);
   const settings = useRuforgeStore((s) => s.settings);
+  const bumpSponsorBlockStat = useRuforgeStore((s) => s.bumpSponsorBlockStat);
   const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
   const handlePlayFolderNeighbor = useRuforgeStore((s) => s.handlePlayFolderNeighbor);
+  const sbOwnedByMusic =
+    !!playingFile && isAudioOnlyPath(playingFile.path);
   const sbPlayback = useSponsorBlockPlayback({
     file: playingFile ?? ({ path: "", sourceId: null } as unknown as MediaFile),
     currentTime: playback.currentTime,
-    enabled: !!playingFile && settings.sponsorBlockEnabled,
+    enabled: sbOwnedByMusic && settings.sponsorBlockEnabled,
     settings,
     seekTo: playback.seek,
-    onManualSkip: () => {},
-    onAppearance: () => {},
-    onDemoteUndo: () => {},
+    onManualSkip: (cat) => bumpSponsorBlockStat(cat, "manualSkips"),
+    onAppearance: (cat) => bumpSponsorBlockStat(cat, "appearances"),
+    onDemoteUndo: (cat) => bumpSponsorBlockStat(cat, "undoSignals"),
   });
 
   // Music-only skip: auto-seek past music_offtopic segments when toggle is on
