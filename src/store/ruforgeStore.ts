@@ -75,6 +75,7 @@ import {
 } from "../components/music/musicLikedTracks";
 import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
 import type { MusicQueueSource } from "../components/music/musicQueueSource";
+import type { SponsorBlockSkipCategory } from "../sponsorBlock";
 import { isAudioOnlyPath } from "../mediaKind";
 import {
   claimMainPlayback,
@@ -312,6 +313,11 @@ export interface RuforgeStore extends DownloadQueueSlice {
   ) => Promise<void>;
 
   updateSetting: (key: keyof RuforgeSettings, value: RuforgeSettings[keyof RuforgeSettings]) => Promise<void>;
+  /** Atomic increment for SponsorBlock learning counters (avoids stale closure races). */
+  bumpSponsorBlockStat: (
+    cat: SponsorBlockSkipCategory,
+    field: "appearances" | "manualSkips" | "undoSignals",
+  ) => void;
   mergeHardwareAccelerationFromBackend: (hw: boolean) => void;
   mergeShowDebuggingSettingsFromBackend: (showDebugging: boolean) => void;
 
@@ -974,6 +980,25 @@ export const useRuforgeStore = create<RuforgeStore>()(
         } finally {
           popOutMusicInFlight = false;
         }
+      },
+
+      bumpSponsorBlockStat: (cat, field) => {
+        set((s) => {
+          const cur = s.settings.sponsorBlockCategoryStats[cat] ?? {
+            appearances: 0,
+            manualSkips: 0,
+            undoSignals: 0,
+          };
+          return {
+            settings: {
+              ...s.settings,
+              sponsorBlockCategoryStats: {
+                ...s.settings.sponsorBlockCategoryStats,
+                [cat]: { ...cur, [field]: cur[field] + 1 },
+              },
+            },
+          };
+        });
       },
 
       updateSetting: async (key, value) => {

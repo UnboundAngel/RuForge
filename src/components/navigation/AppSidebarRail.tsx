@@ -16,7 +16,7 @@ const RAIL_ITEMS: RailItem[] = [
   { id: "downloader", iconId: "download", label: "Download" },
   { id: "media", iconId: "videos", label: "Videos" },
   { id: "explorer", iconId: "explorer", label: "YouTube" },
-  { id: "settings", iconId: "settings", label: "System" },
+  { id: "settings", iconId: "settings", label: "Settings" },
 ];
 
 type AppSidebarRailProps = {

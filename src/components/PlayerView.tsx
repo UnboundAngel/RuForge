@@ -188,6 +188,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     typeof s.settings.subtitlePreferredLang === "string" ? s.settings.subtitlePreferredLang : null,
   );
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
+  const bumpSponsorBlockStat = useRuforgeStore((s) => s.bumpSponsorBlockStat);
   const settings = useRuforgeStore((s) => s.settings);
   const hostAudio = useOptionalMainAudioPlayback();
   const audioOnly = isAudioOnlyPath(file.path);
@@ -982,44 +983,25 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     [applyScrubPosition, audioDelegated, hostAudio],
   );
 
-  const patchSbStats = useCallback(
-    (
-      cat: SponsorBlockSkipCategory,
-      patch: Partial<{
-        appearances: number;
-        manualSkips: number;
-        undoSignals: number;
-      }>,
-    ) => {
-      const stats = { ...settings.sponsorBlockCategoryStats };
-      stats[cat] = { ...stats[cat], ...patch };
-      void updateSetting("sponsorBlockCategoryStats", stats);
-    },
-    [settings.sponsorBlockCategoryStats, updateSetting],
-  );
-
   const onSbAppearance = useCallback(
     (cat: SponsorBlockSkipCategory) => {
-      const cur = settings.sponsorBlockCategoryStats[cat];
-      patchSbStats(cat, { appearances: cur.appearances + 1 });
+      bumpSponsorBlockStat(cat, "appearances");
     },
-    [settings.sponsorBlockCategoryStats, patchSbStats],
+    [bumpSponsorBlockStat],
   );
 
   const onSbManualSkip = useCallback(
     (cat: SponsorBlockSkipCategory) => {
-      const cur = settings.sponsorBlockCategoryStats[cat];
-      patchSbStats(cat, { manualSkips: cur.manualSkips + 1 });
+      bumpSponsorBlockStat(cat, "manualSkips");
     },
-    [settings.sponsorBlockCategoryStats, patchSbStats],
+    [bumpSponsorBlockStat],
   );
 
   const onSbDemoteUndo = useCallback(
     (cat: SponsorBlockSkipCategory) => {
-      const cur = settings.sponsorBlockCategoryStats[cat];
-      patchSbStats(cat, { undoSignals: cur.undoSignals + 1 });
+      bumpSponsorBlockStat(cat, "undoSignals");
     },
-    [settings.sponsorBlockCategoryStats, patchSbStats],
+    [bumpSponsorBlockStat],
   );
 
   const sponsorBlock = useSponsorBlockPlayback({

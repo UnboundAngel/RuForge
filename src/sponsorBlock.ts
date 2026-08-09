@@ -51,6 +51,14 @@ export function isSkipCategory(cat: string): cat is SponsorBlockSkipCategory {
   return SKIP_SET.has(cat);
 }
 
+/** Stable id for appearance / auto-skip dedupe when API UUID is missing. */
+export function segmentDedupeKey(s: Pick<SponsorBlockSegment, "UUID" | "category" | "segment">): string {
+  const uuid = s.UUID?.trim();
+  if (uuid) return uuid;
+  const [a, b] = s.segment;
+  return `${s.category}:${a}:${b}`;
+}
+
 export function categoryLabel(cat: SponsorBlockSkipCategory): string {
   const labels: Record<SponsorBlockSkipCategory, string> = {
     sponsor: "Sponsor",
@@ -295,7 +303,8 @@ export function activeSkipSegments(
   t: number,
 ): SponsorBlockSegment[] {
   return segments.filter((s) => {
-    if (!isSkipCategory(s.category) || s.actionType !== "skip") return false;
+    if (!isSkipCategory(s.category)) return false;
+    if (s.actionType.trim().toLowerCase() !== "skip") return false;
     const [a, b] = s.segment;
     return Number.isFinite(a) && Number.isFinite(b) && t >= a && t < b;
   });

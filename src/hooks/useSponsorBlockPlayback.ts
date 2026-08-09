@@ -7,6 +7,7 @@ import {
   activeSkipSegments,
   effectiveCategoryMode,
   isSkipCategory,
+  segmentDedupeKey,
   skipSeekTarget,
   type SponsorBlockSegment,
   type SponsorBlockSkipCategory,
@@ -28,7 +29,9 @@ function mapSegments(raw: Array<Record<string, unknown>> | undefined): SponsorBl
     if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
     const uuid = String(row.UUID ?? row.uuid ?? "");
     const category = String(row.category ?? "");
-    const actionType = String(row.actionType ?? row.action_type ?? "skip");
+    const actionType = String(row.actionType ?? row.action_type ?? "skip")
+      .trim()
+      .toLowerCase();
     out.push({
       segment: [a, b],
       UUID: uuid,
@@ -112,7 +115,7 @@ export function useSponsorBlockPlayback({
 
   useEffect(() => {
     if (!enabled || !primarySkip || !isSkipCategory(primarySkip.category)) return;
-    const key = primarySkip.UUID;
+    const key = segmentDedupeKey(primarySkip);
     if (!key || seenAppearanceRef.current.has(key)) return;
     seenAppearanceRef.current.add(key);
     onAppearance(primarySkip.category);
@@ -132,9 +135,11 @@ export function useSponsorBlockPlayback({
   useEffect(() => {
     if (!enabled) return;
     for (const s of activeSkip) {
-      if (!isSkipCategory(s.category) || s.actionType !== "skip") continue;
+      if (!isSkipCategory(s.category)) continue;
+      const action = s.actionType.trim().toLowerCase();
+      if (action !== "skip") continue;
       if (effectiveCategoryMode(settings, s.category) !== "auto") continue;
-      const key = s.UUID;
+      const key = segmentDedupeKey(s);
       if (!key || autoSkippedRef.current.has(key)) continue;
       const end = s.segment[1];
       if (currentTime >= end - 0.25) continue;
@@ -152,9 +157,10 @@ export function useSponsorBlockPlayback({
   const activeButtonSkipSegment = useMemo(() => {
     if (!enabled || activeSkip.length === 0) return null;
     return activeSkip.find((s) => {
+      const action = s.actionType.trim().toLowerCase();
       return (
         isSkipCategory(s.category) &&
-        s.actionType === "skip" &&
+        action === "skip" &&
         effectiveCategoryMode(settings, s.category) === "button"
       );
     }) ?? null;

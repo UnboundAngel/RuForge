@@ -7,10 +7,15 @@ import {
   SPONSORBLOCK_SKIP_CATEGORIES,
   categoryLabel,
   effectiveCategoryMode,
+  learnedCategoryMode,
   type SponsorBlockCategoryMode,
   type SponsorBlockSkipCategory,
 } from "../../sponsorBlock";
-import { SB_ATTRIBUTION_URL } from "../../sponsorBlockConstants";
+import {
+  SB_ATTRIBUTION_URL,
+  SB_GRADUATE_MIN_APPEARANCES,
+  SB_GRADUATE_MIN_MANUAL_SKIPS,
+} from "../../sponsorBlockConstants";
 import { SettingsDescription } from "./settingsDescription";
 import { SponsorBlockCategoryModeSelect } from "./SponsorBlockCategoryModeSelect";
 
@@ -44,14 +49,20 @@ const CATEGORY_HINTS: Record<SponsorBlockSkipCategory, string> = {
   filler: "Tangents and non-plot filler",
 };
 
-function learnedBadgeIfInteresting(
+function learningHint(
   settings: RuforgeSettings,
   cat: SponsorBlockSkipCategory,
 ): string | null {
   const user = settings.sponsorBlockCategoryModes[cat];
+  if (user !== "button") return null;
   const effective = effectiveCategoryMode(settings, cat);
-  if (user === "button" && effective === "auto") return "Learned: auto-skip";
-  return null;
+  if (effective === "auto") return "Learned: auto-skip";
+  const stats = settings.sponsorBlockCategoryStats[cat];
+  if (!stats || (stats.appearances === 0 && stats.manualSkips === 0)) return null;
+  if (learnedCategoryMode(stats) === "auto") return "Learned: auto-skip";
+  const skips = Math.min(stats.manualSkips, SB_GRADUATE_MIN_MANUAL_SKIPS);
+  const seen = Math.min(stats.appearances, SB_GRADUATE_MIN_APPEARANCES);
+  return `Learning ${skips}/${SB_GRADUATE_MIN_MANUAL_SKIPS} skips · ${seen}/${SB_GRADUATE_MIN_APPEARANCES} seen`;
 }
 
 type CategoryRowProps = {
@@ -62,17 +73,24 @@ type CategoryRowProps = {
 };
 
 function SponsorBlockCategoryRow({ cat, settings, onModeChange, onResetLearning }: CategoryRowProps) {
-  const learned = learnedBadgeIfInteresting(settings, cat);
+  const hint = learningHint(settings, cat);
   const off = settings.sponsorBlockCategoryModes[cat] === "off";
+  const learned = hint?.startsWith("Learned") ?? false;
 
   return (
-    <div className="group rf-settings-row pl-6">
+    <div className="group rf-settings-row">
       <div className="rf-settings-row-label space-y-0.5">
         <div className="flex items-center gap-2 flex-wrap">
           <h4 className={off ? "text-stone-400" : "text-stone-100"}>{categoryLabel(cat)}</h4>
-          {learned ? (
-            <span className="text-[9px] font-black uppercase tracking-widest text-[color:var(--accent)] px-2 py-0.5 rounded-md border border-[color-mix(in_srgb,var(--accent),transparent_70%)]">
-              {learned}
+          {hint ? (
+            <span
+              className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ${
+                learned
+                  ? "text-[color:var(--accent)] border-[color-mix(in_srgb,var(--accent),transparent_70%)]"
+                  : "text-stone-400 border-white/10"
+              }`}
+            >
+              {hint}
             </span>
           ) : null}
         </div>
@@ -107,7 +125,8 @@ export const SponsorBlockSettingsTree: React.FC = () => {
     cat: SponsorBlockSkipCategory,
     patch: Partial<RuforgeSettings["sponsorBlockCategoryStats"][SponsorBlockSkipCategory]>,
   ) => {
-    const stats = { ...settings.sponsorBlockCategoryStats };
+    const current = useRuforgeStore.getState().settings.sponsorBlockCategoryStats;
+    const stats = { ...current };
     stats[cat] = { ...stats[cat], ...patch };
     void updateSetting("sponsorBlockCategoryStats", stats);
   };

@@ -18,7 +18,7 @@ Shipping version: 0.3.1 (unreleased)
 
 Last shipped to users: 0.3.0
 
-Last updated: 2026-08-08 (Settings media outer shell)
+Last updated: 2026-08-09 (Settings morph perf + SB double-count)
 
 Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Discord Rich Presence end-to-end (Rust worker, Settings toggles, main-window transport, onboarding). Settings is a centered popup with categorized top tabs and search instead of a full page. Webview reload no longer clears Discord IPC. Media Session OS keys; music crossfade; desktop Dynamic Island overlay with headphones output; video end screen; Video Library grid and faster snapshot. Browser Companion remains developer-gated on localhost.
 
@@ -68,7 +68,8 @@ reads this for the last shipped delta, not the git tree.
 
 **0.3.1 (unreleased, in tree):**
 
-- Settings: centered popup with categorized top tabs (Preferences / Library / System), iconed pills, and settings search.
+- Settings: centered popup with categorized top tabs (Preferences / Library / System), iconed pills, and settings search. Sidebar + Alt radial say Settings (not System). Height morph no longer thrash-restarts on every ResizeObserver tick; empty search shrinks; maxHeight follows window resize; yt-dlp/Deno status only fetched on Downloads.
+- SponsorBlock: adaptive skip learning actually persists (atomic stat bumps); auto-skip works without UUID; Playback category tree layout fixed; learning progress shown per category. Music mode no longer double-counts learning when a hidden PlayerView owns video.
 - Downloader: immersive active-download hero shows poster + preparing/downloading/finishing phases (fixes silent start stall and fake 100% during merge).
 - Discord: Rich Presence Rust worker, General Settings privacy toggles, main-window transport, and island onboarding step (ships with 0.4.0 gate; Debugging preview available). Island Discord step polish: media frame + Settings-path compact; Alt hold finishes after collapse. Webview reload no longer disables Discord IPC mid-remount.
 
