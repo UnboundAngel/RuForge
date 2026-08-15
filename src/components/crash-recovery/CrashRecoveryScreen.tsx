@@ -1,4 +1,6 @@
 import { RotateCcw } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import { motionDuration, overlayFadeTransition } from "../../lib/overlayMotion";
 
 import { CrashErrorDetails } from "./CrashErrorDetails";
 import { CrashRecoveryHero } from "./CrashRecoveryHero";
@@ -42,8 +44,9 @@ export function CrashRecoveryScreen({
   preview = false,
   className,
 }: CrashRecoveryScreenProps) {
+  const reduceMotion = useReducedMotion();
   return (
-    <div
+    <motion.div
       className={className ?? "rf-crash-screen fixed inset-0 z-[100000] flex flex-col overflow-hidden"}
       style={{ backgroundColor: "var(--bg)", color: "var(--text)" }}
       data-rf-crash-recovery={variant}
@@ -51,6 +54,10 @@ export function CrashRecoveryScreen({
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="rf-crash-recovery-title"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={motionDuration(reduceMotion, overlayFadeTransition)}
     >
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.18]"
@@ -85,6 +92,6 @@ export function CrashRecoveryScreen({
           />
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

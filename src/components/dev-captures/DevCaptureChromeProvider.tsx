@@ -253,7 +253,7 @@ export function DevCaptureChromeProvider({ children }: { children: ReactNode }) 
         />
       ) : null}
 
-      {chromeEnabled && annotateEntry ? (
+      {chromeEnabled ? (
         <DevCaptureAnnotateModal
           entry={annotateEntry}
           onClose={() => setAnnotateEntry(null)}

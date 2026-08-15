@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence } from "motion/react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { OVERLAY_Z_CLASS } from "../lib/overlayZIndex";
 import {
@@ -23,7 +22,7 @@ type PendingConfirm = ConfirmDialogOptions & {
   resolve: (approved: boolean) => void;
 };
 
-let setPendingHost: ((pending: PendingConfirm | null) => void) | null = null;
+let setPendingHost: ((pending: PendingConfirm) => void) | null = null;
 
 /** Promise resolves `true` on confirm, `false` on cancel or if host is not mounted. */
 export function askConfirm(options: ConfirmDialogOptions): Promise<boolean> {
@@ -36,41 +35,77 @@ export function askConfirm(options: ConfirmDialogOptions): Promise<boolean> {
   });
 }
 
-function ConfirmDialogView({
-  pending,
-  onConfirm,
-  onCancel,
-}: {
-  pending: PendingConfirm;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const confirmLabel = pending.confirmLabel ?? "Confirm";
-  const cancelLabel = pending.cancelLabel ?? "Cancel";
+/** Mount once near the app root (e.g. `App.tsx`). Portaled to `document.body`. */
+export function ConfirmDialogHost() {
+  const [pending, setPending] = useState<PendingConfirm | null>(null);
+  const [open, setOpen] = useState(false);
+  const closingRef = useRef(false);
+  const settledRef = useRef(false);
 
-  return (
+  const takeIncoming = useCallback((next: PendingConfirm) => {
+    setPending((cur) => {
+      if (cur && !settledRef.current) cur.resolve(false);
+      return next;
+    });
+    settledRef.current = false;
+    closingRef.current = false;
+    setOpen(true);
+  }, []);
+
+  setPendingHost = takeIncoming;
+  useEffect(() => {
+    setPendingHost = takeIncoming;
+    return () => {
+      if (setPendingHost === takeIncoming) setPendingHost = null;
+    };
+  }, [takeIncoming]);
+
+  const settle = useCallback((approved: boolean) => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    closingRef.current = true;
+    setPending((current) => {
+      if (current) current.resolve(approved);
+      return current;
+    });
+    setOpen(false);
+  }, []);
+
+  const onConfirm = useCallback(() => settle(true), [settle]);
+  const onCancel = useCallback(() => settle(false), [settle]);
+
+  return createPortal(
     <SettingsModalShell
-      open
+      open={open && pending !== null}
       onClose={onCancel}
+      onExitComplete={() => {
+        if (!closingRef.current) return;
+        closingRef.current = false;
+        setPending(null);
+      }}
       titleId="rf-confirm-title"
-      title={pending.title}
-      description={pending.message}
+      title={pending?.title ?? ""}
+      description={pending?.message}
       eyebrow={null}
       zIndexClass={OVERLAY_Z_CLASS.confirm}
       maxWidthClass="max-w-md"
       footer={
-        <>
-          <SettingsModalBtnSecondary onClick={onCancel}>{cancelLabel}</SettingsModalBtnSecondary>
-          <SettingsModalBtnPrimary
-            onClick={onConfirm}
-            className="bg-red-500/90 text-stone-100 hover:brightness-110"
-          >
-            {confirmLabel}
-          </SettingsModalBtnPrimary>
-        </>
+        pending ? (
+          <>
+            <SettingsModalBtnSecondary onClick={onCancel}>
+              {pending.cancelLabel ?? "Cancel"}
+            </SettingsModalBtnSecondary>
+            <SettingsModalBtnPrimary
+              onClick={onConfirm}
+              className="bg-red-500/90 text-stone-100 hover:brightness-110"
+            >
+              {pending.confirmLabel ?? "Confirm"}
+            </SettingsModalBtnPrimary>
+          </>
+        ) : null
       }
     >
-      {pending.itemPreview ? (
+      {pending?.itemPreview ? (
         <div className="space-y-3">
           <div className="relative aspect-video w-full overflow-hidden rounded-[var(--radius-input)] bg-[#110D0B]">
             <img
@@ -91,47 +126,12 @@ function ConfirmDialogView({
             </SettingsModalSurface>
           ) : null}
         </div>
-      ) : pending.itemMeta ? (
+      ) : pending?.itemMeta ? (
         <SettingsModalSurface>
           <p className="text-[11px] text-stone-500">{pending.itemMeta}</p>
         </SettingsModalSurface>
       ) : null}
-    </SettingsModalShell>
-  );
-}
-
-/** Mount once near the app root (e.g. `App.tsx`). Portaled to `document.body`. */
-export function ConfirmDialogHost() {
-  const [pending, setPending] = useState<PendingConfirm | null>(null);
-
-  useEffect(() => {
-    setPendingHost = setPending;
-    return () => {
-      setPendingHost = null;
-    };
-  }, []);
-
-  const settle = useCallback((approved: boolean) => {
-    setPending((current) => {
-      if (current) current.resolve(approved);
-      return null;
-    });
-  }, []);
-
-  const onConfirm = useCallback(() => settle(true), [settle]);
-  const onCancel = useCallback(() => settle(false), [settle]);
-
-  return createPortal(
-    <AnimatePresence>
-      {pending ? (
-        <ConfirmDialogView
-          key="confirm-dialog"
-          pending={pending}
-          onConfirm={onConfirm}
-          onCancel={onCancel}
-        />
-      ) : null}
-    </AnimatePresence>,
+    </SettingsModalShell>,
     document.body,
   );
 }

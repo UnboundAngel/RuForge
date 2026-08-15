@@ -42,7 +42,7 @@ export const PlaylistDetailView = ({
           {/* Fading Background Backdrop */}
           <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] via-transparent to-transparent pointer-events-none" />
           
-          <div className="relative h-full p-8 pb-32 flex flex-col gap-8 overflow-y-auto z-10">
+          <div className="relative h-full p-8 pb-32 flex flex-col gap-8 overflow-y-auto z-10 rf-scrollbar">
             <button 
               onClick={onBack}
               className="flex items-center gap-3 text-stone-500 hover:text-[color:var(--accent)] transition-colors group self-start"
@@ -112,7 +112,7 @@ export const PlaylistDetailView = ({
       </div>
 
       {/* Right Column: Video List */}
-      <motion.div className="flex-1 overflow-y-auto p-10 bg-[#1D1613]">
+      <motion.div className="flex-1 overflow-y-auto p-10 bg-[#1D1613] rf-scrollbar">
         <div className="max-w-4xl mx-auto space-y-2 relative z-10">
           {playlist.items.map((item, index) => (
             <motion.div

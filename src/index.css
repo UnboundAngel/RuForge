@@ -196,40 +196,38 @@ html[data-rf-window-rounded="1"] #rf-boot {
   scrollbar-width: none;
 }
 
-/* Canonical slim scrollbar: accent thumb, no native arrow buttons. */
-.rf-scrollbar,
-.rf-scrollbar * {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 25%, transparent) transparent;
+/* Native bars hidden. Overlay thumb is .rf-scrollbar-thumb (RfScrollbarHost). */
+.rf-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .rf-scrollbar::-webkit-scrollbar,
-.rf-scrollbar *::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-
 .rf-scrollbar::-webkit-scrollbar-button,
-.rf-scrollbar *::-webkit-scrollbar-button {
+.rf-scrollbar::-webkit-scrollbar-thumb,
+.rf-scrollbar::-webkit-scrollbar-track,
+.rf-scrollbar::-webkit-scrollbar-corner {
   display: none;
   width: 0;
   height: 0;
-}
-
-.rf-scrollbar::-webkit-scrollbar-track,
-.rf-scrollbar *::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.rf-scrollbar::-webkit-scrollbar-thumb,
-.rf-scrollbar *::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
+.rf-scrollbar-thumb {
+  position: absolute;
+  right: 3px;
+  top: 0;
+  width: 5px;
   border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  z-index: 40;
+  touch-action: none;
+  pointer-events: auto;
 }
 
-.rf-scrollbar::-webkit-scrollbar-thumb:hover,
-.rf-scrollbar *::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--accent) 45%, transparent);
+.rf-scrollbar-thumb:hover,
+.rf-scrollbar-thumb[data-dragging="true"] {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .app-container {
@@ -630,18 +628,12 @@ html.ruforge-island-root #root {
   --bg: #000000;
 }
 
-[data-music-mode="true"] .rf-scrollbar,
-[data-music-mode="true"] .rf-scrollbar * {
-  scrollbar-color: color-mix(in srgb, var(--music-accent) 55%, transparent) transparent;
+[data-music-mode="true"] .rf-scrollbar-thumb {
+  background: color-mix(in srgb, var(--music-accent) 45%, transparent);
 }
 
-[data-music-mode="true"] .rf-scrollbar::-webkit-scrollbar-thumb,
-[data-music-mode="true"] .rf-scrollbar *::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--music-accent) 55%, transparent);
-}
-
-[data-music-mode="true"] .rf-scrollbar::-webkit-scrollbar-thumb:hover,
-[data-music-mode="true"] .rf-scrollbar *::-webkit-scrollbar-thumb:hover {
+[data-music-mode="true"] .rf-scrollbar-thumb:hover,
+[data-music-mode="true"] .rf-scrollbar-thumb[data-dragging="true"] {
   background: var(--music-accent);
 }
 
@@ -1473,28 +1465,6 @@ button.rf-yt-profile-pill {
 
 .rf-comments-header[data-scrolled="true"]::after {
   opacity: 1;
-}
-
-.rf-comments-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
-}
-
-.rf-comments-scroll::-webkit-scrollbar {
-  width: 4px;
-}
-
-.rf-comments-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.rf-comments-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-}
-
-.rf-comments-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Code snippet panels — ported from website/docs CodeSnippetPanel */

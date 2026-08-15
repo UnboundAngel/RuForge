@@ -44,7 +44,7 @@ export function MusicHomeSkeleton() {
   return (
     <div
       className="relative w-full h-full overflow-y-auto overflow-x-hidden rf-scrollbar min-h-0"
-      style={{ scrollbarColor: "var(--music-border) transparent", background: "var(--music-surface)" }}
+      style={{ background: "var(--music-surface)" }}
       aria-busy
       aria-label="Loading library"
     >

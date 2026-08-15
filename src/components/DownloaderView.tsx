@@ -38,6 +38,7 @@ import {
 import { downloadJobDisplayFileSizeBytes } from "../downloadJobFileSizes";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
 import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
+import { pageTransition } from "../lib/overlayMotion";
 
 const CLIP_ICON_TRANSITION = { duration: 0.32, ease: [0.23, 1, 0.32, 1] as const };
 
@@ -450,7 +451,13 @@ export const DownloaderView = (props: DownloaderViewProps) => {
     "";
 
   return (
-    <div className="h-full flex flex-col relative overflow-hidden">
+    <motion.div
+      className="h-full flex flex-col relative overflow-hidden"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -12 }}
+      transition={pageTransition}
+    >
       {d.replaceDialogOpen && d.replaceDialogMatch && (
         <DuplicateDownloadDialog
           open
@@ -1073,7 +1080,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           )}
                         </motion.div>
                         {displayHero.isPlaylist && displayHero.playlistItems && (
-                          <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto space-y-1.5 hidden min-[750px]:block">
+                          <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto space-y-1.5 hidden min-[750px]:block rf-scrollbar">
                             {displayHero.playlistItems.map((item, idx) => {
                               const batchJob = d.batchQueuePlaylistView
                                 ? d.batchQueueJobs.find((j) => j.id === item.id)
@@ -1197,6 +1204,6 @@ export const DownloaderView = (props: DownloaderViewProps) => {
           </LayoutGroup>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };

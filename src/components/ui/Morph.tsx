@@ -325,7 +325,7 @@ export function MorphMenu({
         aria-label={open ? ariaLabel : undefined}
         className={cn(
           "absolute bottom-0 z-[60]",
-          menuScrolls ? "overflow-x-hidden overflow-y-auto" : "overflow-hidden",
+          menuScrolls ? "overflow-x-hidden overflow-y-auto rf-scrollbar" : "overflow-hidden",
           align === "start" ? "left-0" : "right-0",
           open || paintedRest
             ? cn(MORPH_MENU_SHELL, shellClassName)

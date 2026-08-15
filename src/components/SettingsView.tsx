@@ -13,6 +13,7 @@ import {
   AnimatePresence,
   useMotionValue,
   useTransform,
+  useReducedMotion,
 } from "motion/react";
 import {
   Bug,
@@ -62,6 +63,12 @@ import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { useDenoStatus } from '../hooks/useDenoStatus';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
 import { OVERLAY_Z_CLASS } from '../lib/overlayZIndex';
+import {
+  motionDuration,
+  overlayFadeTransition,
+  overlayPanelTransition,
+  pageTransition,
+} from '../lib/overlayMotion';
 import { cn } from '../lib/utils';
 import { IconPillTooltip } from './ui/IconPillTooltip';
 import { MORPH_SPRING } from './ui/Morph';
@@ -555,6 +562,8 @@ export const SettingsView: React.FC<{
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [headerCompact, setHeaderCompact] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const [settingsDismissReady, setSettingsDismissReady] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [settingsMaxHeight, setSettingsMaxHeight] = useState(() => {
     if (typeof window === "undefined") return 840;
@@ -614,6 +623,7 @@ export const SettingsView: React.FC<{
   useEffect(() => {
     if (!open) {
       setSearchQuery("");
+      setSettingsDismissReady(false);
       headerCompactRef.current = false;
       setHeaderCompact(false);
       setSearchExpanded(false);
@@ -933,8 +943,6 @@ export const SettingsView: React.FC<{
     notify("JavaScript runtime installed. Downloads will now solve the n-challenge automatically.");
   };
 
-  if (!open) return null;
-
   const navGroups = SETTINGS_NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter(
@@ -956,13 +964,21 @@ export const SettingsView: React.FC<{
   };
 
   return (
-    <div
+    <AnimatePresence>
+    {open ? (
+    <motion.div
+      key="settings-overlay"
       className={`fixed inset-0 ${OVERLAY_Z_CLASS.settings} flex items-center justify-center bg-black/65 p-4 sm:p-6`}
       role="presentation"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={motionDuration(reduceMotion, overlayFadeTransition)}
+      onAnimationComplete={() => setSettingsDismissReady(true)}
     >
       <button
         type="button"
-        className="absolute inset-0 cursor-default"
+        className={`absolute inset-0 cursor-default ${settingsDismissReady ? "" : "pointer-events-none"}`}
         aria-label="Close settings"
         onClick={onClose}
       />
@@ -970,7 +986,10 @@ export const SettingsView: React.FC<{
         role="dialog"
         aria-modal="true"
         aria-labelledby="rf-settings-dialog-title"
-        initial={false}
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+        transition={motionDuration(reduceMotion, overlayPanelTransition)}
         className="relative flex w-full max-w-[56rem] flex-col overflow-hidden rounded-[24px] bg-[#271C18] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
         style={{
           height: panelHeight,
@@ -1230,6 +1249,15 @@ export const SettingsView: React.FC<{
               </p>
             )}
             <div className="space-y-0">
+          <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={isSearching ? "search" : activeTab}
+            className="space-y-0"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={motionDuration(reduceMotion, pageTransition)}
+          >
           {showTab("general") && (
             <div
               className={cn(
@@ -2271,12 +2299,16 @@ export const SettingsView: React.FC<{
               </SettingsSection>
             </div>
           )}
+            </motion.div>
+            </AnimatePresence>
             </div>
             </div>
           </div>
           </div>
         </SettingsSearchRootContext.Provider>
       </motion.div>
-    </div>
+    </motion.div>
+    ) : null}
+    </AnimatePresence>
   );
 };

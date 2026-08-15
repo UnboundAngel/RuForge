@@ -63,10 +63,12 @@ import { useRemovableDrivesPoll } from "./hooks/useRemovableDrivesPoll";
 import { buildEntireLibraryExportPreset } from "./lib/exportSelection";
 import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
 import { askConfirm, ConfirmDialogHost } from "./components/ConfirmDialog";
+import { RfScrollbarHost } from "./components/ui/RfScrollbarHost";
 import { JS_RUNTIME_MISSING_PREFIX } from "./types";
 import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff";
 import { loopModeFromHandoff } from "./playerHandoff";
 import { stageHandoffListenEventId } from "./lib/musicListenSession";
+import { pageFadeTransition } from "./lib/overlayMotion";
 
 function miniKindFromWindowLabel(label: string): "video" | "music" | null {
   if (label === "mini") return "video";
@@ -1137,7 +1139,6 @@ function App() {
     };
   }, []);
 
-  // Focus search on expand
   useEffect(() => {
     if (isSearchExpanded && searchInputRef.current) {
       searchInputRef.current.focus();
@@ -1602,8 +1603,8 @@ function App() {
     if (onboardingOpen) notifyOnboardingModeSwap();
   }, [cycleNavMode, onboardingOpen]);
 
-  if (miniKind === "video") return <MiniPlayer />;
-  if (miniKind === "music") return <MusicMiniPlayer />;
+  if (miniKind === "video") return <><RfScrollbarHost /><MiniPlayer /></>;
+  if (miniKind === "music") return <><RfScrollbarHost /><MusicMiniPlayer /></>;
 
   try {
     const label = getCurrentWindow().label;
@@ -1627,6 +1628,7 @@ function App() {
       style={{ background: navMode === "music" ? "var(--music-bg, #0a0a0a)" : "#271C18" }}
       data-music-mode={navMode === "music" ? "true" : undefined}
     >
+      <RfScrollbarHost />
 
       <RadialNavOverlay
         open={radialNavOpen}
@@ -1697,10 +1699,27 @@ function App() {
 
       <WindowResizeEdges active={!isMainMaximized} />
 
+      <AnimatePresence mode="wait" initial={false}>
       {navMode === "music" ? (
+        <motion.div
+          key="nav-music"
+          className="flex min-h-0 min-w-0 flex-1"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={pageFadeTransition}
+        >
         <MusicShell />
+        </motion.div>
       ) : (
-      <>
+      <motion.div
+        key="nav-default"
+        className="flex min-h-0 min-w-0 flex-1"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={pageFadeTransition}
+      >
       <AppSidebarRail
         activeTab={activeTab}
         settingsOpen={settingsOpen}
@@ -1876,13 +1895,12 @@ function App() {
 
         {/* ── Main Content ─────────────────────────────── */}
         <div className="flex-1 relative z-0 bg-[#1D1613] rounded-tl-[32px] overflow-hidden rf-main-content-shell">
-          {activeTab === "explorer" && !shellBlocked ? (
-            <div
-              ref={explorerWebviewHostRef}
-              className="absolute inset-0 z-[1] pointer-events-none"
-              aria-hidden
-            />
-          ) : null}
+          <div
+            ref={explorerWebviewHostRef}
+            className="absolute inset-0 z-[1] pointer-events-none transition-opacity duration-200 ease-out"
+            style={{ opacity: activeTab === "explorer" && !shellBlocked ? 1 : 0 }}
+            aria-hidden
+          />
           <div
             className="rf-main-content-vignette pointer-events-none absolute inset-0 z-[15] rounded-tl-[32px]"
             aria-hidden
@@ -1895,7 +1913,7 @@ function App() {
           ) : null}
           <main
             ref={assignMainScrollAndUrlDropRef}
-            className={`absolute inset-0 min-h-full bg-[#1D1613] ${activeTab === "explorer" ? "overflow-hidden" : "overflow-y-auto"}`}
+            className={`absolute inset-0 min-h-full bg-[#1D1613] ${activeTab === "explorer" ? "overflow-hidden" : "overflow-y-auto rf-scrollbar"}`}
           >
             <AnimatePresence mode="wait">
               {activeTab === "downloader" && (
@@ -1906,7 +1924,15 @@ function App() {
                 />
               )}
               {activeTab === "explorer" && (
-                <div key="explorer" className="absolute inset-0 min-h-0" aria-hidden />
+                <motion.div
+                  key="explorer"
+                  className="absolute inset-0 min-h-0 bg-[#1D1613]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={pageFadeTransition}
+                  aria-hidden
+                />
               )}
               {activeTab === "media" && (
                 selectedPlaylist ? (
@@ -1932,9 +1958,10 @@ function App() {
             </AnimatePresence>
           </main>
         </div>
-      </div>
-      </>
+        </div>
+      </motion.div>
       )}
+      </AnimatePresence>
 
       {/* Toasts above the video shell; bottom offset clears the player control dock. Below window controls (z-100). */}
       {navMode !== "music" && (
@@ -2059,8 +2086,10 @@ function App() {
       <ExportBundleHost />
       <ConfirmDialogHost />
 
+      <AnimatePresence>
       {crashRecoveryPreview ? (
         <CrashRecoveryScreen
+          key="crash-preview"
           variant={crashRecoveryPreview}
           message={CRASH_RECOVERY_PREVIEW_SAMPLES[crashRecoveryPreview].message}
           detail={CRASH_RECOVERY_PREVIEW_SAMPLES[crashRecoveryPreview].detail}
@@ -2069,6 +2098,7 @@ function App() {
           onReload={() => setCrashRecoveryPreview(null)}
         />
       ) : null}
+      </AnimatePresence>
     </div>
     </MainPlaybackHost>
     </CrashRecoveryPreviewContext.Provider>
