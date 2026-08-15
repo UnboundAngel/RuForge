@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+#[cfg(windows)]
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
@@ -86,33 +89,133 @@ pub fn append_manifest_entry(
     Ok(id)
 }
 
-fn entry_recoverable(media_path: &str, files: &[String]) -> bool {
+fn entry_recoverable(media_path: &str, files: &[String], index: &TrashIndex) -> bool {
     let media = Path::new(media_path);
     if media.is_file() {
         return true;
     }
-    if path_recoverable_from_trash(media) {
+    if index.contains(media) {
         return true;
     }
-    files
-        .iter()
-        .any(|f| path_recoverable_from_trash(Path::new(f)))
+    files.iter().any(|f| index.contains(Path::new(f)))
 }
 
-#[cfg(windows)]
-fn path_recoverable_from_trash(original: &Path) -> bool {
-    find_recycle_pair(original).is_some()
+#[derive(Default)]
+struct TrashIndex {
+    pairs: HashMap<String, (PathBuf, PathBuf)>,
 }
 
-#[cfg(not(windows))]
-fn path_recoverable_from_trash(original: &Path) -> bool {
-    find_freedesktop_trash_pair(original).is_some()
+impl TrashIndex {
+    fn path_key(path: &Path) -> String {
+        path.to_string_lossy().replace('/', "\\").to_ascii_lowercase()
+    }
+
+    fn contains(&self, path: &Path) -> bool {
+        self.pairs.contains_key(&Self::path_key(path))
+    }
+
+    fn pair(&self, path: &Path) -> Option<(PathBuf, PathBuf)> {
+        self.pairs.get(&Self::path_key(path)).cloned()
+    }
+
+    fn for_paths<'a>(paths: impl IntoIterator<Item = &'a str>) -> Self {
+        let mut index = Self::default();
+        #[cfg(windows)]
+        {
+            let mut drives = HashSet::new();
+            for p in paths {
+                if let Some(drive) = Path::new(p).components().next() {
+                    drives.insert(drive.as_os_str().to_string_lossy().into_owned());
+                }
+            }
+            for drive in drives {
+                index.scan_windows_drive(&drive);
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = paths;
+            index.scan_freedesktop();
+        }
+        index
+    }
+
+    #[cfg(windows)]
+    fn scan_windows_drive(&mut self, drive: &str) {
+        let recycle_root = PathBuf::from(format!("{drive}\\$Recycle.Bin"));
+        if !recycle_root.is_dir() {
+            return;
+        }
+        let Ok(sid_dirs) = std::fs::read_dir(&recycle_root) else {
+            return;
+        };
+        for sid_entry in sid_dirs.flatten() {
+            let sid_path = sid_entry.path();
+            if !sid_path.is_dir() {
+                continue;
+            }
+            let Ok(info_files) = std::fs::read_dir(&sid_path) else {
+                continue;
+            };
+            for info_entry in info_files.flatten() {
+                let i_path = info_entry.path();
+                let Some(name) = i_path.file_name().and_then(|n| n.to_str()) else {
+                    continue;
+                };
+                if !name.starts_with("$I") {
+                    continue;
+                }
+                let Some(parsed) = parse_recycle_info_path(&i_path) else {
+                    continue;
+                };
+                let r_name = format!("$R{}", &name[2..]);
+                let r_path = sid_path.join(r_name);
+                if r_path.is_file() {
+                    let key = parsed.replace('/', "\\").to_ascii_lowercase();
+                    self.pairs.insert(key, (r_path, i_path));
+                }
+            }
+        }
+    }
+
+    #[cfg(not(windows))]
+    fn scan_freedesktop(&mut self) {
+        let Some(trash) = trash_home() else {
+            return;
+        };
+        let info_dir = trash.join("info");
+        let files_dir = trash.join("files");
+        let Ok(entries) = std::fs::read_dir(&info_dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let info_path = entry.path();
+            if !info_path.extension().is_some_and(|e| e == "trashinfo") {
+                continue;
+            }
+            let Ok(raw) = std::fs::read_to_string(&info_path) else {
+                continue;
+            };
+            let Some(path_line) = raw.lines().find(|l| l.starts_with("Path=")) else {
+                continue;
+            };
+            let stored = path_line.trim_start_matches("Path=").trim();
+            let Some(base) = info_path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let content = files_dir.join(base);
+            if content.exists() {
+                self.pairs
+                    .insert(Self::path_key(Path::new(stored)), (content, info_path));
+            }
+        }
+    }
 }
 
-#[cfg(windows)]
-fn restore_path_from_trash(original: &Path) -> Result<(), String> {
-    let (r_path, i_path) = find_recycle_pair(original)
-        .ok_or_else(|| format!("Not in Recycle Bin: {}", original.display()))?;
+fn restore_path_from_trash(original: &Path, index: &TrashIndex) -> Result<(), String> {
+    let (r_path, i_path) = index
+        .pair(original)
+        .ok_or_else(|| format!("Not in system trash: {}", original.display()))?;
     if let Some(parent) = original.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -125,73 +228,6 @@ fn restore_path_from_trash(original: &Path) -> Result<(), String> {
     })?;
     let _ = std::fs::remove_file(&i_path);
     Ok(())
-}
-
-#[cfg(not(windows))]
-fn restore_path_from_trash(original: &Path) -> Result<(), String> {
-    let (content, info) = find_freedesktop_trash_pair(original)
-        .ok_or_else(|| format!("Not in trash: {}", original.display()))?;
-    if let Some(parent) = original.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    if original.exists() {
-        return Err(format!("Restore blocked, path exists: {}", original.display()));
-    }
-    std::fs::rename(&content, original).or_else(|_| {
-        std::fs::copy(&content, original).map_err(|e| e.to_string())?;
-        std::fs::remove_file(&content).map_err(|e| e.to_string())
-    })?;
-    let _ = std::fs::remove_file(&info);
-    Ok(())
-}
-
-#[cfg(windows)]
-fn find_recycle_pair(original: &Path) -> Option<(PathBuf, PathBuf)> {
-    let canonical = original.to_string_lossy();
-    let drive = original
-        .components()
-        .next()
-        .map(|c| c.as_os_str().to_string_lossy().to_string())?;
-    let recycle_root = PathBuf::from(format!("{drive}\\$Recycle.Bin"));
-    if !recycle_root.is_dir() {
-        return None;
-    }
-    let target = canonical.replace('/', "\\");
-    let target_lower = target.to_ascii_lowercase();
-
-    let Ok(sid_dirs) = std::fs::read_dir(&recycle_root) else {
-        return None;
-    };
-    for sid_entry in sid_dirs.flatten() {
-        let sid_path = sid_entry.path();
-        if !sid_path.is_dir() {
-            continue;
-        }
-        let Ok(info_files) = std::fs::read_dir(&sid_path) else {
-            continue;
-        };
-        for info_entry in info_files.flatten() {
-            let i_path = info_entry.path();
-            let Some(name) = i_path.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-            if !name.starts_with("$I") {
-                continue;
-            }
-            let Some(parsed) = parse_recycle_info_path(&i_path) else {
-                continue;
-            };
-            if parsed.replace('/', "\\").to_ascii_lowercase() != target_lower {
-                continue;
-            }
-            let r_name = format!("$R{}", &name[2..]);
-            let r_path = sid_path.join(r_name);
-            if r_path.is_file() {
-                return Some((r_path, i_path));
-            }
-        }
-    }
-    None
 }
 
 #[cfg(windows)]
@@ -229,47 +265,16 @@ fn trash_home() -> Option<PathBuf> {
         })
 }
 
-#[cfg(not(windows))]
-fn find_freedesktop_trash_pair(original: &Path) -> Option<(PathBuf, PathBuf)> {
-    let trash = trash_home()?;
-    let info_dir = trash.join("info");
-    let files_dir = trash.join("files");
-    let target = original.to_string_lossy().to_string();
-    let Ok(entries) = std::fs::read_dir(&info_dir) else {
-        return None;
-    };
-    for entry in entries.flatten() {
-        let info_path = entry.path();
-        if !info_path.extension().is_some_and(|e| e == "trashinfo") {
-            continue;
-        }
-        let Ok(raw) = std::fs::read_to_string(&info_path) else {
-            continue;
-        };
-        let Some(path_line) = raw.lines().find(|l| l.starts_with("Path=")) else {
-            continue;
-        };
-        let stored = path_line.trim_start_matches("Path=").trim();
-        if stored != target {
-            continue;
-        }
-        let base = info_path.file_stem()?.to_str()?;
-        let content = files_dir.join(base);
-        if content.exists() {
-            return Some((content, info_path));
-        }
-    }
-    None
-}
-
-#[tauri::command]
-pub fn list_recently_deleted(app: AppHandle) -> Result<Vec<RecentlyDeletedEntry>, String> {
-    let manifest = read_manifest(&app)?;
+fn list_recently_deleted_sync(app: &AppHandle) -> Result<Vec<RecentlyDeletedEntry>, String> {
+    let manifest = read_manifest(app)?;
+    let index = TrashIndex::for_paths(manifest.entries.iter().flat_map(|e| {
+        std::iter::once(e.media_path.as_str()).chain(e.files.iter().map(String::as_str))
+    }));
     Ok(manifest
         .entries
         .into_iter()
         .map(|e| {
-            let recoverable = entry_recoverable(&e.media_path, &e.files);
+            let recoverable = entry_recoverable(&e.media_path, &e.files, &index);
             RecentlyDeletedEntry {
                 id: e.id,
                 title: e.title,
@@ -280,6 +285,13 @@ pub fn list_recently_deleted(app: AppHandle) -> Result<Vec<RecentlyDeletedEntry>
             }
         })
         .collect())
+}
+
+#[tauri::command]
+pub async fn list_recently_deleted(app: AppHandle) -> Result<Vec<RecentlyDeletedEntry>, String> {
+    tokio::task::spawn_blocking(move || list_recently_deleted_sync(&app))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -302,8 +314,11 @@ pub async fn restore_recently_deleted(
         .position(|e| e.id == entry_id)
         .ok_or_else(|| "Recently deleted entry not found".to_string())?;
     let entry = manifest.entries[idx].clone();
+    let index = TrashIndex::for_paths(
+        std::iter::once(entry.media_path.as_str()).chain(entry.files.iter().map(String::as_str)),
+    );
 
-    if !entry_recoverable(&entry.media_path, &entry.files) {
+    if !entry_recoverable(&entry.media_path, &entry.files, &index) {
         return Ok(RestoreRecentlyDeletedResult {
             restored: false,
             recoverable: false,
@@ -319,7 +334,7 @@ pub async fn restore_recently_deleted(
             restored_count += 1;
             continue;
         }
-        match restore_path_from_trash(path) {
+        match restore_path_from_trash(path, &index) {
             Ok(()) => restored_count += 1,
             Err(e) => warnings.push(e),
         }
@@ -329,7 +344,7 @@ pub async fn restore_recently_deleted(
     if !media.is_file() {
         return Ok(RestoreRecentlyDeletedResult {
             restored: false,
-            recoverable: entry_recoverable(&entry.media_path, &entry.files),
+            recoverable: entry_recoverable(&entry.media_path, &entry.files, &index),
             warnings,
         });
     }
@@ -337,13 +352,17 @@ pub async fn restore_recently_deleted(
     if restored_count == 0 && !warnings.is_empty() {
         return Ok(RestoreRecentlyDeletedResult {
             restored: false,
-            recoverable: entry_recoverable(&entry.media_path, &entry.files),
+            recoverable: entry_recoverable(&entry.media_path, &entry.files, &index),
             warnings,
         });
     }
 
     manifest.entries.remove(idx);
     write_manifest(&app, &manifest)?;
+
+    if let Some(lib) = app.try_state::<crate::library::LibraryState>() {
+        let _ = lib.reindex(&app).await;
+    }
 
     Ok(RestoreRecentlyDeletedResult {
         restored: true,

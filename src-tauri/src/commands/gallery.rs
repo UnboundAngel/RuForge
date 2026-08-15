@@ -864,6 +864,95 @@ pub(crate) fn dedupe_gallery_entries(entries: Vec<GalleryEntry>) -> Vec<GalleryE
         .collect()
 }
 
+fn gallery_path_key(path: &str) -> String {
+    crate::commands::media::normalize_media_key(path)
+}
+
+fn playlist_with_items(mut playlist: PlaylistCollection, items: Vec<MediaFile>) -> PlaylistCollection {
+    let combined_duration = items.iter().map(|item| item.duration).sum();
+    let stack_ok = playlist.stack_thumbnail_path.as_ref().is_some_and(|thumb| {
+        items.iter().any(|item| {
+            item.thumbnail_path.as_ref() == Some(thumb)
+                || item.ruforge_poster_path.as_ref() == Some(thumb)
+        })
+    });
+    if !stack_ok {
+        playlist.stack_thumbnail_path = items
+            .first()
+            .and_then(|item| item.ruforge_poster_path.clone().or_else(|| item.thumbnail_path.clone()));
+    }
+    playlist.item_count = items.len() as u32;
+    playlist.combined_duration = combined_duration;
+    playlist.items = items;
+    playlist
+}
+
+pub(crate) fn remove_paths_from_gallery_entries(
+    entries: &[GalleryEntry],
+    keys: &HashSet<String>,
+) -> Vec<GalleryEntry> {
+    if keys.is_empty() {
+        return entries.to_vec();
+    }
+    entries
+        .iter()
+        .filter_map(|entry| match entry {
+            GalleryEntry::Media { file } => {
+                if keys.contains(&gallery_path_key(&file.path)) {
+                    None
+                } else {
+                    Some(entry.clone())
+                }
+            }
+            GalleryEntry::Playlist { playlist } => {
+                let items: Vec<MediaFile> = playlist
+                    .items
+                    .iter()
+                    .filter(|item| !keys.contains(&gallery_path_key(&item.path)))
+                    .cloned()
+                    .collect();
+                if items.is_empty() {
+                    None
+                } else if items.len() == playlist.items.len() {
+                    Some(entry.clone())
+                } else {
+                    Some(GalleryEntry::Playlist {
+                        playlist: playlist_with_items(playlist.clone(), items),
+                    })
+                }
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn retain_existing_media_entries(entries: Vec<GalleryEntry>) -> Vec<GalleryEntry> {
+    entries
+        .into_iter()
+        .filter_map(|entry| match entry {
+            GalleryEntry::Media { file } => {
+                if Path::new(&file.path).is_file() {
+                    Some(GalleryEntry::Media { file })
+                } else {
+                    None
+                }
+            }
+            GalleryEntry::Playlist { mut playlist } => {
+                let items: Vec<MediaFile> = std::mem::take(&mut playlist.items)
+                    .into_iter()
+                    .filter(|item| Path::new(&item.path).is_file())
+                    .collect();
+                if items.is_empty() {
+                    None
+                } else {
+                    Some(GalleryEntry::Playlist {
+                        playlist: playlist_with_items(playlist, items),
+                    })
+                }
+            }
+        })
+        .collect()
+}
+
 /// Sidecars and RuForge thumb dir for a media path (not the primary video file).
 pub(crate) fn remove_media_sidecar_artifacts(media_path: &Path) -> Vec<String> {
     let mut warnings = Vec::new();
@@ -1903,5 +1992,95 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    fn test_media(path: &str) -> MediaFile {
+        MediaFile {
+            name: path.into(),
+            path: path.into(),
+            size: 1,
+            created: 1,
+            duration: 10.0,
+            thumbnail_path: None,
+            ruforge_poster_path: None,
+            subtitle_path: None,
+            chapters: None,
+            download_metadata_hint: None,
+            source_url: None,
+            source_id: None,
+            playlist_index: None,
+            artist: None,
+            album: None,
+            album_artist: None,
+            track_no: None,
+            embedded_cover_path: None,
+            canonical_artist: None,
+            canonical_album: None,
+            canonical_title: None,
+            year: None,
+            mb_release_id: None,
+            match_confidence: None,
+            scrub_sprites_complete: false,
+            scrub_sprite_paths: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn remove_paths_drops_flat_media_case_insensitively() {
+        let entries = vec![
+            GalleryEntry::Media {
+                file: test_media(r"C:\Videos\A.mp4"),
+            },
+            GalleryEntry::Media {
+                file: test_media(r"C:\Videos\B.mp4"),
+            },
+        ];
+        let mut keys = HashSet::new();
+        keys.insert(gallery_path_key(r"c:/videos/a.mp4"));
+        let next = remove_paths_from_gallery_entries(&entries, &keys);
+        assert_eq!(next.len(), 1);
+        match &next[0] {
+            GalleryEntry::Media { file } => assert!(file.path.ends_with("B.mp4")),
+            _ => panic!("expected media"),
+        }
+    }
+
+    #[test]
+    fn remove_paths_drops_empty_playlist() {
+        let entries = vec![GalleryEntry::Playlist {
+            playlist: PlaylistCollection {
+                title: "P".into(),
+                path: "P".into(),
+                item_count: 1,
+                combined_duration: 10.0,
+                stack_thumbnail_path: None,
+                items: vec![test_media("a.mp3")],
+            },
+        }];
+        let mut keys = HashSet::new();
+        keys.insert(gallery_path_key("a.mp3"));
+        let next = remove_paths_from_gallery_entries(&entries, &keys);
+        assert!(next.is_empty());
+    }
+
+    #[test]
+    fn retain_existing_drops_missing_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let alive = dir.path().join("alive.mp4");
+        std::fs::write(&alive, b"x").unwrap();
+        let entries = vec![
+            GalleryEntry::Media {
+                file: test_media(&alive.to_string_lossy()),
+            },
+            GalleryEntry::Media {
+                file: test_media(&dir.path().join("gone.mp4").to_string_lossy()),
+            },
+        ];
+        let next = retain_existing_media_entries(entries);
+        assert_eq!(next.len(), 1);
+        match &next[0] {
+            GalleryEntry::Media { file } => assert_eq!(Path::new(&file.path), alive.as_path()),
+            _ => panic!("expected media"),
+        }
     }
 }

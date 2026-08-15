@@ -2,7 +2,7 @@
 //! desktop store projection and the companion server read from; neither one holds
 //! its own copy of "what exists" beyond a request-scoped snapshot clone.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use crate::commands::gallery::GalleryEntry;
+use crate::commands::gallery::{self, GalleryEntry};
+use crate::commands::media::normalize_media_key;
 
 use super::config::{self};
 use super::scanner::{self, ProbeCache};
@@ -115,11 +116,48 @@ impl LibraryState {
     }
 
     pub async fn desktop_snapshot(&self) -> (String, bool, Vec<GalleryEntry>) {
+        let entries = gallery::retain_existing_media_entries(self.desktop_entries.read().await.clone());
         (
             self.version.read().await.clone(),
             *self.desktop_ready.read().await,
-            self.desktop_entries.read().await.clone(),
+            entries,
         )
+    }
+
+    /// Drop deleted media from the live index immediately so the next snapshot
+    /// cannot resurrect a ghost row (trashed file, leftover metadata).
+    pub async fn forget_media_paths(&self, app: &AppHandle, paths: &[String]) {
+        if paths.is_empty() {
+            return;
+        }
+        let keys: HashSet<String> = paths.iter().map(|p| normalize_media_key(p)).collect();
+
+        {
+            let mut entries = self.desktop_entries.write().await;
+            *entries = gallery::remove_paths_from_gallery_entries(&entries, &keys);
+            let version = scanner::desktop_version_hash(&entries);
+            drop(entries);
+            *self.version.write().await = version;
+        }
+
+        {
+            let mut items = self.companion_items.write().await;
+            items.retain(|_, item| {
+                !keys.contains(&normalize_media_key(&item.source_path.to_string_lossy()))
+            });
+        }
+
+        if let Ok(cache_dir) = app.path().app_cache_dir() {
+            if let Err(e) = self.save_companion_catalog_cache(cache_dir).await {
+                crate::rf_log!(
+                    "library.cache",
+                    log::Level::Warn,
+                    "failed to save companion catalog cache after delete: {e}"
+                );
+            }
+        }
+
+        let _ = app.emit(LIBRARY_CHANGED_EVENT, ());
     }
 
     pub async fn companion_item(&self, id: &str) -> Option<CompanionLibraryItem> {
@@ -181,6 +219,7 @@ impl LibraryState {
     }
 
     async fn publish_desktop(&self, _app: &AppHandle, desktop_entries: Vec<GalleryEntry>) {
+        let desktop_entries = gallery::retain_existing_media_entries(desktop_entries);
         let version = scanner::desktop_version_hash(&desktop_entries);
         *self.desktop_entries.write().await = desktop_entries;
         *self.version.write().await = version;

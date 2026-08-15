@@ -5,7 +5,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::{Mutex, Semaphore};
@@ -85,7 +85,7 @@ fn ffmpeg_slot_map() -> &'static Mutex<HashMap<String, Arc<FfmpegVideoSlot>>> {
 }
 
 // Matches TS mediaPathsMatch (backslashes + lowercase); Linux dev may fold distinct paths.
-fn normalize_media_key(path: &str) -> String {
+pub(crate) fn normalize_media_key(path: &str) -> String {
     path.replace('/', "\\").to_lowercase()
 }
 
@@ -846,7 +846,12 @@ pub async fn delete_media(
     video_path: String,
 ) -> Result<DeleteMediaResult, String> {
     let _ffmpeg_hold = acquire_ffmpeg_lock_for_delete(&video_path).await;
-    delete_media_filesystem(&app, &video_path)
+    let result = delete_media_filesystem(&app, &video_path)?;
+    if let Some(lib) = app.try_state::<crate::library::LibraryState>() {
+        lib.forget_media_paths(&app, std::slice::from_ref(&video_path))
+            .await;
+    }
+    Ok(result)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
