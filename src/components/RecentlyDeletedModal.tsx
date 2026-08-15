@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, Loader2, Undo2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -36,11 +36,14 @@ export function RecentlyDeletedModal({ open, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState<{ id: string; kind: BusyKind } | null>(null);
+  const loadGen = useRef(0);
 
   const refresh = useCallback(async () => {
+    const gen = ++loadGen.current;
     setLoading(true);
     try {
       const list = await listRecentlyDeleted();
+      if (gen !== loadGen.current) return;
       setEntries(list);
       setSelectedId((prev) => {
         if (prev && list.some((e) => e.id === prev)) return prev;
@@ -48,17 +51,19 @@ export function RecentlyDeletedModal({ open, onClose }: Props) {
       });
     } catch (e) {
       console.error(e);
-      notify("Could not load Recently Deleted.", "error");
+      if (gen === loadGen.current) notify("Could not load Recently Deleted.", "error");
     } finally {
-      setLoading(false);
+      if (gen === loadGen.current) setLoading(false);
     }
   }, [notify]);
 
   useEffect(() => {
     if (open) void refresh();
     else {
+      loadGen.current += 1;
       setSelectedId(null);
       setBusy(null);
+      setLoading(false);
     }
   }, [open, refresh]);
 
@@ -86,7 +91,11 @@ export function RecentlyDeletedModal({ open, onClose }: Props) {
           return next;
         });
         notify("Restored to your library.");
-        void fetchEntries();
+        void fetchEntries({
+          manageLoadingStart: false,
+          skipPosterBackfill: true,
+          skipScrubBackfill: true,
+        });
       } else if (!result.recoverable) {
         notify("Files are no longer in the system Recycle Bin.", "warning");
         await refresh();
