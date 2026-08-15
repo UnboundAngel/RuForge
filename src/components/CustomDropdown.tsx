@@ -37,7 +37,7 @@ export const CustomDropdown = ({ value, onChange, options }: { value: string, on
             exit={{ opacity: 0, y: 5 }}
             className="absolute top-full left-0 right-0 mt-2 bg-[#1C1917] border border-white/5 shadow-2xl z-50 overflow-hidden"
           >
-            <motion.div className="max-h-60 overflow-y-auto">
+            <motion.div className="max-h-60 overflow-y-auto rf-scrollbar">
               {options.map((opt) => (
                 <button
                   key={opt.value}

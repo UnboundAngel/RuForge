@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { X } from "lucide-react";
 import ruforgeAppIcon from "../../assets/ruforgeAppIcon.png";
 import { companionQrSvg } from "../../lib/companionQr";
+import {
+  motionDuration,
+  overlayFadeTransition,
+  overlayPanelTransition,
+} from "../../lib/overlayMotion";
 
 const companionAccentBtn =
   "px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95";
@@ -58,26 +64,42 @@ export const CompanionPairingModal: React.FC<CompanionPairingModalProps> = ({
     () => (pairing?.url ? companionQrSvg(pairing.url) : ""),
     [pairing?.url],
   );
+  const reduceMotion = useReducedMotion();
+  const [dismissReady, setDismissReady] = useState(false);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (!open) setDismissReady(false);
+  }, [open]);
 
   return createPortal(
-    <div
+    <AnimatePresence>
+      {open ? (
+    <motion.div
+      key="companion-pairing"
       className="fixed inset-0 z-[900] flex items-center justify-center bg-[#0e0a08]/80 p-4 backdrop-blur-[2px]"
       role="presentation"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={motionDuration(reduceMotion, overlayFadeTransition)}
+      onAnimationComplete={() => setDismissReady(true)}
     >
       <button
         type="button"
-        className="absolute inset-0 cursor-default"
+        className={`absolute inset-0 cursor-default ${dismissReady ? "" : "pointer-events-none"}`}
         aria-label="Close dialog"
         onClick={onClose}
       />
-      <div
+      <motion.div
         role="dialog"
         aria-modal="true"
         aria-labelledby="companion-pairing-title"
         className="relative w-full max-w-[360px] rounded-[var(--radius-modal)] bg-[#1D1613] px-5 py-5 shadow-[0_16px_48px_rgba(0,0,0,0.55)]"
         onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+        transition={motionDuration(reduceMotion, overlayPanelTransition)}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
@@ -169,8 +191,10 @@ export const CompanionPairingModal: React.FC<CompanionPairingModalProps> = ({
             REFRESH CODE
           </button>
         </div>
-      </div>
-    </div>,
+      </motion.div>
+    </motion.div>
+      ) : null}
+    </AnimatePresence>,
     document.body,
   );
 };

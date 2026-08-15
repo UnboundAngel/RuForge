@@ -347,7 +347,7 @@ export function MusicHomeView({
   return (
     <div
       className="relative w-full h-full overflow-y-auto overflow-x-hidden rf-scrollbar min-h-0"
-      style={{ scrollbarColor: "var(--music-border) transparent", background: "var(--music-surface)" }}
+      style={{ background: "var(--music-surface)" }}
     >
       <header className="sticky top-0 z-40 flex h-16 items-center gap-3 pl-8 pr-8 bg-transparent min-w-0">
         <div className="flex items-center gap-2 shrink-0">

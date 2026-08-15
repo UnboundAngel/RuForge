@@ -1529,7 +1529,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 <X size={18} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto px-4 pb-8 space-y-2">
+            <div className="flex-1 overflow-y-auto px-4 pb-8 space-y-2 rf-scrollbar">
               {folderAudioPlaylist.map((item) => {
                 const isActive = item.path === file.path;
                 return (

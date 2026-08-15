@@ -70,7 +70,13 @@ export function TelemetryConsentOverlay({ onComplete }: TelemetryConsentOverlayP
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[145] flex items-center justify-center overflow-hidden p-8">
+      <motion.div
+        key="telemetry-consent"
+        className="fixed inset-0 z-[145] flex items-center justify-center overflow-hidden p-8"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -139,7 +145,7 @@ export function TelemetryConsentOverlay({ onComplete }: TelemetryConsentOverlayP
             </motion.button>
           </div>
         </motion.div>
-      </div>
+      </motion.div>
     </AnimatePresence>
   );
 }

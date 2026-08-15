@@ -219,17 +219,15 @@ export function DevCapturesGrid({ entries, onRefresh }: DevCapturesGridProps) {
         onClose={() => setContextMenu(null)}
       />
 
-      {annotateEntry ? (
-        <DevCaptureAnnotateModal
-          entry={annotateEntry}
-          onClose={() => setAnnotatePath(null)}
-          onSaved={(path) => {
-            setThumbRev((prev) => ({ ...prev, [path]: (prev[path] ?? 0) + 1 }));
-            setAnnotatePath(null);
-            onRefresh();
-          }}
-        />
-      ) : null}
+      <DevCaptureAnnotateModal
+        entry={annotateEntry}
+        onClose={() => setAnnotatePath(null)}
+        onSaved={(path) => {
+          setThumbRev((prev) => ({ ...prev, [path]: (prev[path] ?? 0) + 1 }));
+          setAnnotatePath(null);
+          onRefresh();
+        }}
+      />
     </>
   );
 }

@@ -476,7 +476,7 @@ export function CommentsPanel({
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className="rf-comments-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 pb-8 pt-2"
+        className="rf-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 pb-8 pt-2"
       >
         {loading ? (
           <p className="px-1 py-8 text-[13px] font-medium text-white/45">{loadingLabel}</p>

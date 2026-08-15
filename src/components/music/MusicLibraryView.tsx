@@ -280,7 +280,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto py-2" style={{ scrollbarColor: "var(--music-border) transparent" }}>
+      <div className="flex-1 overflow-y-auto py-2 rf-scrollbar">
         {activeTab === "stats" && (
           <MusicProfileView />
         )}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -24,9 +24,13 @@ import type {
   DevCaptureSegment,
 } from "../../lib/devCapturesTypes";
 import { emptyDevCaptureAnnotation } from "../../lib/devCapturesTypes";
+import {
+  motionDuration,
+  overlayFadeTransition,
+} from "../../lib/overlayMotion";
 
 type DevCaptureAnnotateModalProps = {
-  entry: DevCaptureEntry;
+  entry: DevCaptureEntry | null;
   onClose: () => void;
   onSaved: (path: string) => void;
 };
@@ -64,6 +68,11 @@ export function DevCaptureAnnotateModal({
   onClose,
   onSaved,
 }: DevCaptureAnnotateModalProps) {
+  const lastEntryRef = useRef<DevCaptureEntry | null>(entry);
+  if (entry) lastEntryRef.current = entry;
+  const shown = entry ?? lastEntryRef.current;
+  const reduceMotion = useReducedMotion();
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -132,10 +141,12 @@ export function DevCaptureAnnotateModal({
   }, [annotation, imageSize, segmentDraft, selection, tool]);
 
   useEffect(() => {
+    const path = shown?.path;
+    if (!path) return;
     let cancelled = false;
     void (async () => {
       try {
-        const bytes = await invoke<number[]>("read_dev_capture_png", { path: entry.path });
+        const bytes = await invoke<number[]>("read_dev_capture_png", { path });
         if (cancelled) return;
         const blob = new Blob([Uint8Array.from(bytes)], { type: "image/png" });
         const url = URL.createObjectURL(blob);
@@ -162,7 +173,7 @@ export function DevCaptureAnnotateModal({
       }
       imageRef.current = null;
     };
-  }, [entry.path]);
+  }, [shown?.path]);
 
   useEffect(() => {
     redraw();
@@ -361,7 +372,16 @@ export function DevCaptureAnnotateModal({
   ];
 
   return createPortal(
-    <div className="fixed inset-0 z-[400] flex flex-col bg-[#110D0B] pt-[var(--rf-titlebar-h)]">
+    <AnimatePresence>
+      {entry ? (
+    <motion.div
+      key={entry.path}
+      className="fixed inset-0 z-[400] flex flex-col bg-[#110D0B] pt-[var(--rf-titlebar-h)]"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={motionDuration(reduceMotion, overlayFadeTransition)}
+    >
       <div
         className="fixed top-0 inset-x-0 z-[401] flex h-[var(--rf-titlebar-h)] items-center gap-2 bg-[#110D0B] pl-5"
         style={{ paddingRight: WINDOW_CONTROLS_RESERVE_PX + 20 }}
@@ -503,7 +523,9 @@ export function DevCaptureAnnotateModal({
           {saving ? "Saving…" : "Save"}
         </button>
       </div>
-    </div>,
+    </motion.div>
+      ) : null}
+    </AnimatePresence>,
     document.body,
   );
 }
