@@ -118,8 +118,17 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   const isExpanded = userExpanded && canExpand;
 
   const livePaused = playback?.paused ?? activity.paused;
-  const liveCurrentTime = playback?.currentTime ?? activity.currentTime;
-  const liveDuration = activity.duration > 0 ? activity.duration : (playback?.duration ?? 0);
+  const rawCurrentTime = playback?.currentTime ?? activity.currentTime;
+  const liveDuration =
+    playback && playback.duration > 0
+      ? playback.duration
+      : activity.duration > 0
+        ? activity.duration
+        : 0;
+  const liveCurrentTime =
+    liveDuration > 0
+      ? Math.min(Math.max(0, rawCurrentTime), liveDuration)
+      : Math.max(0, rawCurrentTime);
   const onOwningSurface = hasSession && !activity.awayFromOwningSurface;
 
   const showIslandChrome =

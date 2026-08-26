@@ -93,8 +93,17 @@ type Props = {
 export function MusicLikedView({ onPlayFile, onBack }: Props) {
   const entries = useRuforgeStore((s) => s.entries);
   const playingFile = useRuforgeStore((s) => s.playingFile);
+  const musicDetail = useRuforgeStore((s) => s.musicDetail);
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
+
+  const handleBack = () => {
+    if (musicDetail?.kind === "liked" && musicDetail.backTo === "profile") {
+      useRuforgeStore.setState({ musicDetail: { kind: "profile" } });
+      return;
+    }
+    onBack();
+  };
 
   const tracks = useMemo(() => {
     const all = flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path));
@@ -128,7 +137,7 @@ export function MusicLikedView({ onPlayFile, onBack }: Props) {
         />
         <button
           type="button"
-          onClick={onBack}
+          onClick={handleBack}
           className="absolute top-3 left-3 z-20 flex items-center gap-1.5 text-sm opacity-70 hover:opacity-100 transition-opacity"
           style={{ color: "var(--music-text-primary)" }}
         >

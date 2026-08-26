@@ -51,3 +51,7 @@ Transitioning `width`/`height`/`top`/`left`/`margin` → janky, laggy, drops fra
 ## 11. Hard truncate with no hover reveal
 Device names, track titles, paths, or menu labels cut off with `…` and no way to read the rest on hover. Hides meaning.
 - **Instead:** truncate at rest; slow marquee on hover / row hover (`HoverMarqueeText`, `animate-marquee-slow` for menus).
+
+## 12. The accent-bar section label (vertical red slit)
+A 2–4px rounded accent bar beside every section title (`| All-time top tracks`). Reads like generic generated UI.
+- **Instead:** typographic hierarchy only: size, weight, tracking, and spacing. Match Music Home section heads (`text-2xl font-bold tracking-tight`). Separate sections with gap or tonal panels, not decorator bars.

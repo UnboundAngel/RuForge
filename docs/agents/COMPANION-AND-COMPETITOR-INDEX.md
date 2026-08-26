@@ -16,7 +16,7 @@ Agent-facing map of where companion LAN architecture, competitor research, and r
 | what to copy vs not copy from upstream servers | **`docs/ruforge/research/companion-architecture-extraction.md`** Part 3 | Part 2 reconciliation section |
 | Parabolic, imsyy, ytdlp-interface, dsymbol, yt-dlp GUI comparison, downloader-only competitor, feature matrix | **`docs/ruforge/research/ruforge-competitive-audit.md`** | Not for companion LAN |
 | 4K Video Downloader, winget competitors, SEO rivals, "alternative to", marketing competitors | **`docs/ruforge/research/google-seo-and-domain-strategy.md`** §7 | **`docs/ruforge/research/ruforge-competitive-audit.md`** for product features |
-| public roadmap status for browser companion | **`website/src/content/roadmap.json`** (search `Browser companion`) | **`STATE.md`** / **`AGENTS.md`** Shipped log for in-tree reality |
+| public roadmap status for browser companion | **`website/src/content/roadmap.json`** (search `Browser companion`) | **`STATE.md`** for in-tree reality |
 | companion UI polish, loading screen, pairing modal, QR styling | **`src-tauri/companion-web/index.html`**, **`CompanionPairingModal.tsx`**, **`companionQr.ts`** | Design taste: **`.cursor/rules/design-style.mdc`** |
 | companion dev gate, debugging settings | **`CompanionSettingsSection.tsx`**, `showDebuggingSettings` in store | Companion is dev-gated only until released |
 
@@ -174,7 +174,7 @@ These are **not** RuForge product competitors. They are **upstream server projec
 
 ## Live companion implementation (code map)
 
-Dev-gated behind `showDebuggingSettings` until released. **`STATE.md`** and **`AGENTS.md`** Shipped log describe what is in tree.
+Dev-gated behind `showDebuggingSettings` until released. **`STATE.md`** describes what is in tree.
 
 | Path | Role |
 |------|------|
@@ -197,8 +197,7 @@ Dev-gated behind `showDebuggingSettings` until released. **`STATE.md`** and **`A
 | Path | Use |
 |------|-----|
 | `website/src/content/roadmap.json` | Public row: **"Browser companion support for phone, desktop, and TV"** (`appArea`: Browser, `roadmapStatus`: progress) |
-| `STATE.md` | What is in tree vs last shipped |
-| `AGENTS.md` → Shipped log | Per-change companion LAN lines under `v0.2.2 (unreleased)` |
+| `node scripts/shipped.mjs list` | Per-change companion lines for the current cycle |
 | `docs/ruforge/RuForge.md` | Historical roadmap archive (may lag companion detail; trust code + this index) |
 
 ---

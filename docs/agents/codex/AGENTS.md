@@ -8,7 +8,7 @@ with:
 
 1. `STATE.md`
 2. root `AGENTS.md`
-3. task-specific routing docs from root `AGENTS.md`
+3. task-specific routing from `docs/agents/DOC-ROUTING.md`
 4. this file, only when the task is about Codex, Cursor prompting, audit flows,
    GitHub hygiene, or Codex-specific references
 
@@ -29,8 +29,8 @@ Primary jobs:
 - Maintain Codex memory in `docs/agents/codex/MEMORY.md` when Angel explicitly
   asks for memory updates.
 
-Cursor remains the default implementation agent unless Angel explicitly asks
-Codex to edit code. Jim remains visual-only.
+Cursor (Mint) is the default implementation agent, including UI, unless Angel
+explicitly asks Codex to edit code. There is no Gemini / Jim lane.
 
 ## Source Of Truth
 
@@ -42,7 +42,7 @@ Use current repo paths by name:
 - Companion routing and code map: `docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`
 - Companion architecture: `docs/ruforge/research/companion-architecture-extraction.md`
 - Website and SEO research: `docs/ruforge/research/`
-- Release process: root `AGENTS.md` Release ritual plus `docs/agents/release/`
+- Release process: `.cursor/skills/ruforge-release/SKILL.md` plus `docs/agents/release/`
 - Skills index: `docs/agents/skills/README.md`
 - Codex memory: `docs/agents/codex/MEMORY.md`
 
@@ -128,13 +128,13 @@ Include:
 - what files or areas are likely relevant
 - what not to touch
 - verification to run
-- when to update `AGENTS.md` Shipped log and `STATE.md`
+- when to write `.shipped-entry.txt` and run `node scripts/shipped.mjs add` (see root AGENTS.md; skip docs-only and never-shipped bugs)
 
 Do not micromanage implementation details unless there is a real safety or
 architecture boundary. Constrain scope, not creativity.
 
-For UI work, explicitly route Jim or apply `angel-design-style.skill`. Cursor
-should not do pure styling passes unless Angel asks for that in Cursor.
+For UI work, apply `angel-design-style.skill` and `.cursor/rules/design-style*.mdc`.
+Mint implements visuals in Cursor. Do not route Gemini.
 
 ## GitHub Hygiene
 

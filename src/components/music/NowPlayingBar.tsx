@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "@iconify/react";
-import { Ban, ChevronLeft, ChevronRight, Ellipsis } from "lucide-react";
+import { Ban, ChevronLeft, Ellipsis } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -16,6 +16,17 @@ import {
 import { MusicVolumeControl } from "./MusicVolumeControl";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
+import {
+  dismissMusicMenuPointer,
+  MUSIC_MENU_ICON_SIZE,
+  MUSIC_MENU_TONES,
+  MUSIC_MENU_WIDTH,
+  MusicMenuPanel,
+  MusicMenuRow,
+  MusicMenuSection,
+  MusicMenuSubmenuRow,
+  useMusicMenuEscape,
+} from "./musicMenuUi";
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
@@ -112,15 +123,18 @@ export function NowPlayingBar({
     if (!showMoreMenu) setMorePanel("main");
   }, [showMoreMenu]);
 
+  useMusicMenuEscape(showMoreMenu, () => setShowMoreMenu(false));
+
   useEffect(() => {
     if (!showMoreMenu) return;
     const onDoc = (e: MouseEvent) => {
       if (!utilitiesRef.current?.contains(e.target as Node)) {
+        dismissMusicMenuPointer(e);
         setShowMoreMenu(false);
       }
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("mousedown", onDoc, { capture: true });
+    return () => document.removeEventListener("mousedown", onDoc, { capture: true });
   }, [showMoreMenu]);
 
   const clearPendingRelease = useCallback(() => {
@@ -214,7 +228,8 @@ export function NowPlayingBar({
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       e.preventDefault();
-      const step = e.deltaY > 0 ? -0.05 : 0.05;
+      const stepMag = volume < 0.25 ? 0.02 : 0.05;
+      const step = e.deltaY > 0 ? -stepMag : stepMag;
       const next = Math.max(0, Math.min(1, volume + step));
       setVolume(next);
       if (isMuted && next > 0) setMuted(false);
@@ -410,139 +425,153 @@ export function NowPlayingBar({
             </button>
             <AnimatePresence>
               {showMoreMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
-                  transition={{ duration: 0.12 }}
-                  className="absolute bottom-full mb-2 right-0 z-50 min-w-[200px] overflow-hidden rounded-xl border shadow-2xl"
-                  style={{ background: "var(--music-surface)", borderColor: "var(--music-border)" }}
-                >
-                  <AnimatePresence mode="wait" initial={false}>
-                    {morePanel === "main" ? (
-                      <motion.div
-                        key="more-main"
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -8 }}
-                        transition={{ duration: 0.12 }}
-                        className="py-1"
-                      >
-                        {hasChapters && (
-                          <>
-                            <MoreMenuItem icon="tabler:chevron-left-pipe" label="Previous chapter" onClick={() => { onJumpPrevChapter(); setShowMoreMenu(false); }} />
-                            <MoreMenuItem icon="tabler:chevron-right-pipe" label="Next chapter" onClick={() => { onJumpNextChapter(); setShowMoreMenu(false); }} />
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setMorePanel("speed")}
-                          className="rf-music-more-row"
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    aria-hidden
+                    onMouseDown={(e) => {
+                      dismissMusicMenuPointer(e);
+                      setShowMoreMenu(false);
+                    }}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                    transition={{ duration: 0.1, ease: "easeOut" }}
+                    className="absolute bottom-full mb-2 right-0 z-50"
+                    style={{ width: MUSIC_MENU_WIDTH }}
+                  >
+                    <AnimatePresence mode="wait" initial={false}>
+                      {morePanel === "main" ? (
+                        <motion.div
+                          key="more-main"
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -8 }}
+                          transition={{ duration: 0.12 }}
                         >
-                          <span data-more-icon>
-                            <Icon icon="tabler:gauge" width={15} />
-                          </span>
-                          <span className="flex-1">Playback speed</span>
-                          <span className="tabular-nums opacity-70">{playbackSpeed}×</span>
-                          <ChevronRight size={14} data-more-icon className="opacity-70" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMorePanel("crossfade")}
-                          className="rf-music-more-row"
+                          <MusicMenuPanel>
+                            {hasChapters && (
+                              <MusicMenuSection label="Chapters" tone={MUSIC_MENU_TONES.transport}>
+                                <MusicMenuRow
+                                  tone={MUSIC_MENU_TONES.transport}
+                                  label="Previous chapter"
+                                  icon={<Icon icon="tabler:chevron-left-pipe" width={MUSIC_MENU_ICON_SIZE} />}
+                                  onClick={() => { onJumpPrevChapter(); setShowMoreMenu(false); }}
+                                />
+                                <MusicMenuRow
+                                  tone={MUSIC_MENU_TONES.transport}
+                                  label="Next chapter"
+                                  icon={<Icon icon="tabler:chevron-right-pipe" width={MUSIC_MENU_ICON_SIZE} />}
+                                  onClick={() => { onJumpNextChapter(); setShowMoreMenu(false); }}
+                                />
+                              </MusicMenuSection>
+                            )}
+                            <MusicMenuSection label="Playback" tone={MUSIC_MENU_TONES.playback}>
+                              <MusicMenuSubmenuRow
+                                tone={MUSIC_MENU_TONES.playback}
+                                label="Playback speed"
+                                value={`${playbackSpeed}×`}
+                                icon={<Icon icon="tabler:gauge" width={MUSIC_MENU_ICON_SIZE} />}
+                                onClick={() => setMorePanel("speed")}
+                              />
+                              <MusicMenuSubmenuRow
+                                tone={MUSIC_MENU_TONES.playback}
+                                label="Crossfade"
+                                value={crossfadeSec <= 0 ? "Off" : `${crossfadeSec}s`}
+                                icon={<Icon icon="tabler:arrows-exchange" width={MUSIC_MENU_ICON_SIZE} />}
+                                onClick={() => setMorePanel("crossfade")}
+                              />
+                            </MusicMenuSection>
+                          </MusicMenuPanel>
+                        </motion.div>
+                      ) : morePanel === "speed" ? (
+                        <motion.div
+                          key="more-speed"
+                          initial={{ opacity: 0, x: 8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 8 }}
+                          transition={{ duration: 0.12 }}
                         >
-                          <span data-more-icon>
-                            <Icon icon="tabler:arrows-exchange" width={15} />
-                          </span>
-                          <span className="flex-1">Crossfade</span>
-                          <span className="tabular-nums opacity-70">
-                            {crossfadeSec <= 0 ? "Off" : `${crossfadeSec}s`}
-                          </span>
-                          <ChevronRight size={14} data-more-icon className="opacity-70" />
-                        </button>
-                      </motion.div>
-                    ) : morePanel === "speed" ? (
-                      <motion.div
-                        key="more-speed"
-                        initial={{ opacity: 0, x: 8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 8 }}
-                        transition={{ duration: 0.12 }}
-                        className="py-1"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setMorePanel("main")}
-                          className="rf-music-more-row"
+                          <MusicMenuPanel>
+                            <MusicMenuSection label="Speed" tone={MUSIC_MENU_TONES.playback}>
+                              <MusicMenuRow
+                                tone={MUSIC_MENU_TONES.playback}
+                                label="Back"
+                                icon={<ChevronLeft size={MUSIC_MENU_ICON_SIZE} strokeWidth={2.25} />}
+                                onClick={() => setMorePanel("main")}
+                              />
+                              {PLAYBACK_SPEEDS.map((speed) => (
+                                <MusicMenuRow
+                                  key={speed}
+                                  tone={MUSIC_MENU_TONES.playback}
+                                  label={`${speed}×`}
+                                  active={playbackSpeed === speed}
+                                  icon={<Icon icon="tabler:gauge" width={MUSIC_MENU_ICON_SIZE} />}
+                                  onClick={() => onSetPlaybackSpeed(speed)}
+                                />
+                              ))}
+                            </MusicMenuSection>
+                          </MusicMenuPanel>
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="more-crossfade"
+                          initial={{ opacity: 0, x: 8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 8 }}
+                          transition={{ duration: 0.12 }}
                         >
-                          <ChevronLeft size={14} data-more-icon />
-                          Playback speed
-                        </button>
-                        {PLAYBACK_SPEEDS.map((speed) => (
-                          <button
-                            key={speed}
-                            type="button"
-                            onClick={() => onSetPlaybackSpeed(speed)}
-                            data-selected={playbackSpeed === speed ? "true" : "false"}
-                            className="rf-music-more-row tabular-nums"
-                          >
-                            {speed}×
-                          </button>
-                        ))}
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="more-crossfade"
-                        initial={{ opacity: 0, x: 8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 8 }}
-                        transition={{ duration: 0.12 }}
-                        className="px-3 py-2"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setMorePanel("main")}
-                          className="rf-music-more-row -mx-3"
-                        >
-                          <ChevronLeft size={14} data-more-icon />
-                          Crossfade
-                        </button>
-                        <div className="flex items-center justify-between gap-3 pt-1 pb-2">
-                          <span className="text-xs opacity-70">
-                            {crossfadeSec <= 0 ? "Off" : `${crossfadeSec}s`}
-                          </span>
-                          {crossfadeSec <= 0 ? (
-                            <button
-                              type="button"
-                              className="text-xs opacity-80 hover:opacity-100"
-                              onClick={() => onSetCrossfadeSec(MUSIC_CROSSFADE_SUGGESTED_SEC)}
-                            >
-                              Use {MUSIC_CROSSFADE_SUGGESTED_SEC}s
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="text-xs opacity-80 hover:opacity-100"
-                              onClick={() => onSetCrossfadeSec(0)}
-                            >
-                              Off
-                            </button>
-                          )}
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={MUSIC_CROSSFADE_MAX_SEC}
-                          step={1}
-                          value={crossfadeSec}
-                          onChange={(e) => onSetCrossfadeSec(Number(e.target.value))}
-                          className="w-full accent-[var(--music-accent)]"
-                          aria-label="Crossfade duration"
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
+                          <MusicMenuPanel>
+                            <MusicMenuSection label="Crossfade" tone={MUSIC_MENU_TONES.playback}>
+                              <MusicMenuRow
+                                tone={MUSIC_MENU_TONES.playback}
+                                label="Back"
+                                icon={<ChevronLeft size={MUSIC_MENU_ICON_SIZE} strokeWidth={2.25} />}
+                                onClick={() => setMorePanel("main")}
+                              />
+                              <div className="px-1.5 py-1">
+                                <div className="flex items-center justify-between gap-3 pb-2 text-[11px] text-white/55">
+                                  <span className="tabular-nums">
+                                    {crossfadeSec <= 0 ? "Off" : `${crossfadeSec}s`}
+                                  </span>
+                                  {crossfadeSec <= 0 ? (
+                                    <button
+                                      type="button"
+                                      className="text-[11px] text-white/70 hover:text-white border-0 bg-transparent cursor-pointer p-0"
+                                      onClick={() => onSetCrossfadeSec(MUSIC_CROSSFADE_SUGGESTED_SEC)}
+                                    >
+                                      Use {MUSIC_CROSSFADE_SUGGESTED_SEC}s
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="text-[11px] text-white/70 hover:text-white border-0 bg-transparent cursor-pointer p-0"
+                                      onClick={() => onSetCrossfadeSec(0)}
+                                    >
+                                      Off
+                                    </button>
+                                  )}
+                                </div>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={MUSIC_CROSSFADE_MAX_SEC}
+                                  step={1}
+                                  value={crossfadeSec}
+                                  onChange={(e) => onSetCrossfadeSec(Number(e.target.value))}
+                                  className="w-full accent-[var(--music-accent)]"
+                                  aria-label="Crossfade duration"
+                                />
+                              </div>
+                            </MusicMenuSection>
+                          </MusicMenuPanel>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                </>
               )}
             </AnimatePresence>
           </div>
@@ -582,28 +611,5 @@ export function NowPlayingBar({
         </div>
       </div>
     </div>
-  );
-}
-
-function MoreMenuItem({
-  icon,
-  label,
-  onClick,
-}: {
-  icon: string;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rf-music-more-row"
-    >
-      <span data-more-icon>
-        <Icon icon={icon} width={15} />
-      </span>
-      {label}
-    </button>
   );
 }

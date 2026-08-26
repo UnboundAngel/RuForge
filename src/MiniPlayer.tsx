@@ -596,6 +596,8 @@ export default function MiniPlayer() {
   const [isMuted, setIsMuted] = useState(false);
   const [showVolume, setShowVolume] = useState(false);
   const mediaRef = useRef<HTMLMediaElement>(null);
+  /** Tracks which file path the mounted media element belongs to (after layout). */
+  const mediaPathRef = useRef<string | null>(null);
   /** When set, next `loadedmetadata` on the main media element uses this instead of `readResumeSeconds`. */
   const playInMiniStartTimeRef = useRef<number | null>(null);
   const handoffPausedRef = useRef(false);
@@ -725,6 +727,20 @@ export default function MiniPlayer() {
       mediaRef.current.playbackRate = playbackSpeed;
     }
   }, [playingFile?.path, playbackSpeed]);
+
+  useLayoutEffect(() => {
+    mediaPathRef.current = playingFile?.path ?? null;
+  }, [playingFile?.path]);
+
+  useLayoutEffect(() => {
+    setDuration(0);
+    setProgress(0);
+    setBuffered(0);
+    setScrubPreviewRatio(null);
+    isUserSeekingRef.current = false;
+    const handoffTime = playInMiniStartTimeRef.current;
+    setCurrentTime(handoffTime !== null ? handoffTime : 0);
+  }, [playingFile?.path]);
 
   useEffect(() => {
     setShowSubtitleMenu(false);
@@ -936,6 +952,11 @@ export default function MiniPlayer() {
     }
     if (typeof payload.muted === "boolean") setIsMuted(payload.muted);
 
+    if (mediaPathRef.current !== payload.file.path) {
+      setIsPaused(paused);
+      return;
+    }
+
     const v = mediaRef.current;
     if (!v) return;
     let t = startTime;
@@ -959,6 +980,9 @@ export default function MiniPlayer() {
     if (durReady) {
       playInMiniStartTimeRef.current = null;
       resumeSeekAppliedPathRef.current = payload.file.path;
+      setCurrentTime(t);
+      setDuration(v.duration);
+      setProgress((t / v.duration) * 100);
     }
   };
 
@@ -1057,10 +1081,15 @@ export default function MiniPlayer() {
   };
 
   const applyPlayInMiniHandoff = useCallback((payload: PlayInMiniPayload) => {
-    playInMiniStartTimeRef.current = Number.isFinite(payload.startTime)
+    const startTime = Number.isFinite(payload.startTime)
       ? Math.max(0, payload.startTime)
       : 0;
+    playInMiniStartTimeRef.current = startTime;
     handoffPausedRef.current = payload.paused ?? false;
+    setCurrentTime(startTime);
+    setDuration(0);
+    setProgress(0);
+    setBuffered(0);
     setPlayingFile(payload.file);
     if (payload.navMode) setMiniNavMode(payload.navMode);
     const session = readInitialPlayerLoopModeFromLs();
@@ -2556,11 +2585,14 @@ export default function MiniPlayer() {
                               onChange={(e) => {
                                 const val = parseInt(e.target.value);
                                 if (mediaRef.current) {
-                                  mediaRef.current.muted = false;
                                   setIsMuted(false);
-                                  mediaRef.current.volume = val / 100;
                                   setVolumeLabel(val);
                                   localStorage.setItem("miniplayer-volume", (val / 100).toString());
+                                  applyMediaOutputState(
+                                    mediaRef.current,
+                                    (val / 100) * endFadeGainRef.current,
+                                    false,
+                                  );
                                 }
                               }}
                               className="w-16 h-1 bg-white/25 rounded-full appearance-none cursor-pointer accent-[color:var(--accent)] hover:bg-white/35 transition-all [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-white"
@@ -2630,7 +2662,7 @@ export default function MiniPlayer() {
                               currentTime: media?.currentTime ?? 0,
                               paused: media ? media.paused : true,
                               playbackSpeed,
-                              volume: media?.volume ?? volumeLabel / 100,
+                              volume: volumeLabel / 100,
                               muted: isMuted,
                             };
                             if (media && playingFile) {
@@ -2688,7 +2720,7 @@ export default function MiniPlayer() {
                               currentTime: media?.currentTime ?? 0,
                               paused: media ? media.paused : true,
                               playbackSpeed,
-                              volume: media?.volume ?? volumeLabel / 100,
+                              volume: volumeLabel / 100,
                               muted: isMuted,
                             };
                             if (media && playingFile) {
@@ -2758,7 +2790,7 @@ export default function MiniPlayer() {
                               currentTime: media?.currentTime ?? 0,
                               paused: media ? media.paused : true,
                               playbackSpeed,
-                              volume: media?.volume ?? volumeLabel / 100,
+                              volume: volumeLabel / 100,
                               muted: isMuted,
                             };
                             if (media && playingFile) {

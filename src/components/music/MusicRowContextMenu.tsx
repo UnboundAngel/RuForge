@@ -1,6 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
-import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { useMemo } from "react";
 import { ListVideo, FolderOpen, User, Disc3, Play, Music2, Heart } from "lucide-react";
 import { albumKeyFromFile, fileHasBrowsableAlbum, musicTrackIdentityKey } from "./musicShelfDedup";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
@@ -9,6 +7,13 @@ import type { MediaFile } from "@/types";
 import { openInFileManager } from "@/openInFileManager";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { artistKeyFromFile, primaryArtist } from "./musicArtist";
+import {
+  MUSIC_MENU_ICON_SIZE,
+  MUSIC_MENU_TONES,
+  MusicFloatingMenu,
+  MusicMenuRow,
+  MusicMenuSection,
+} from "./musicMenuUi";
 
 export type MusicMenuContext =
   | { kind: "song"; file: MediaFile }
@@ -28,9 +33,6 @@ type Props = {
   onClose: () => void;
 };
 
-const ROW =
-  "flex items-center gap-[9px] w-full px-3 h-9 text-[13px] text-[#c0c0c0] hover:text-white hover:bg-white/[0.07] border-0 outline-none text-left cursor-pointer transition-colors duration-100";
-
 export function MusicRowContextMenu({ menu, onClose }: Props) {
   const enqueueManualQueue = useRuforgeStore((s) => s.enqueueManualQueue);
   const toggleMusicLike = useRuforgeStore((s) => s.toggleMusicLike);
@@ -44,43 +46,24 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
     [entries],
   );
 
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menu) return;
-    const handle = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handle, { capture: true });
-    return () => document.removeEventListener("mousedown", handle, { capture: true });
-  }, [menu, onClose]);
-
-  useEffect(() => {
-    if (!menu) return;
-    const handle = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handle);
-    return () => document.removeEventListener("keydown", handle);
-  }, [menu, onClose]);
-
   if (!menu) return null;
 
   const { context } = menu;
-  const left = Math.min(menu.x, window.innerWidth - 224);
-  const top = Math.min(menu.y, window.innerHeight - 240);
+  const icon = MUSIC_MENU_ICON_SIZE;
   const menuAriaLabel =
     context.kind === "song"
       ? `Actions for ${context.file.name}`
       : `Actions for ${context.displayName}`;
 
   function act(fn: () => void) {
-    return () => { fn(); onClose(); };
+    return () => {
+      fn();
+      onClose();
+    };
   }
 
-  let rows: React.ReactNode;
+  let measureKey = String(menu.x);
+  let body: React.ReactNode;
 
   if (context.kind === "song") {
     const { file } = context;
@@ -89,104 +72,146 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
     const hasArtist = !!artistKey;
     const hasAlbum = fileHasBrowsableAlbum(file, libraryTracks);
     const liked = musicLikedKeys.includes(musicTrackIdentityKey(file, primaryArtist));
+    measureKey = `${file.path}:${liked}:${hasArtist}:${hasAlbum}:${menu.onPlay ? 1 : 0}`;
 
-    rows = (
+    body = (
       <>
-        {menu.onPlay && (
-          <button className={ROW} onClick={act(menu.onPlay)}>
-            <Play size={14} strokeWidth={2} />
-            Play
-          </button>
-        )}
-        <button
-          className={ROW}
-          style={liked ? { color: "var(--music-accent)" } : undefined}
-          onClick={act(() => toggleMusicLike(file))}
-        >
-          <Heart size={14} strokeWidth={2} fill={liked ? "currentColor" : "none"} />
-          {liked ? "Remove from Liked Songs" : "Add to Liked Songs"}
-        </button>
-        <button className={ROW} onClick={act(() => enqueueManualQueue(file.path))}>
-          <ListVideo size={14} strokeWidth={2} />
-          Add to queue
-        </button>
-        <button className={ROW} onClick={act(() => openMusicSong(file.path))}>
-          <Music2 size={14} strokeWidth={2} />
-          Go to song
-        </button>
-        {(hasArtist || hasAlbum) && <div className="h-1" />}
-        {hasArtist && (
-          <button className={ROW} onClick={act(() => openMusicArtist(artistKey))}>
-            <User size={14} strokeWidth={2} />
-            Go to artist
-          </button>
-        )}
-        {hasAlbum && (
-          <button className={ROW} onClick={act(() => openMusicAlbum(artistKey, albumKey))}>
-            <Disc3 size={14} strokeWidth={2} />
-            Go to album
-          </button>
-        )}
-        <div className="h-1" />
-        <button className={ROW} onClick={act(() => void openInFileManager(file.path))}>
-          <FolderOpen size={14} strokeWidth={2} />
-          Show in folder
-        </button>
+        <MusicMenuSection label="Playback" tone={MUSIC_MENU_TONES.playback}>
+          {menu.onPlay && (
+            <MusicMenuRow
+              tone={MUSIC_MENU_TONES.playback}
+              label="Play"
+              icon={<Play size={icon} strokeWidth={2.25} />}
+              onClick={act(menu.onPlay)}
+            />
+          )}
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playback}
+            label={liked ? "Unlike" : "Like"}
+            active={liked}
+            icon={
+              <Heart
+                size={icon}
+                strokeWidth={2.25}
+                fill={liked ? "currentColor" : "none"}
+              />
+            }
+            onClick={act(() => toggleMusicLike(file))}
+          />
+        </MusicMenuSection>
+
+        <MusicMenuSection label="Queue" tone={MUSIC_MENU_TONES.queue}>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.queue}
+            label="Add to queue"
+            icon={<ListVideo size={icon} strokeWidth={2.25} />}
+            onClick={act(() => enqueueManualQueue(file.path))}
+          />
+        </MusicMenuSection>
+
+        <MusicMenuSection label="Go to" tone={MUSIC_MENU_TONES.navigate}>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.navigate}
+            label="Song"
+            icon={<Music2 size={icon} strokeWidth={2.25} />}
+            onClick={act(() => openMusicSong(file.path))}
+          />
+          {hasArtist && (
+            <MusicMenuRow
+              tone={MUSIC_MENU_TONES.navigate}
+              label="Artist"
+              icon={<User size={icon} strokeWidth={2.25} />}
+              onClick={act(() => openMusicArtist(artistKey))}
+            />
+          )}
+          {hasAlbum && (
+            <MusicMenuRow
+              tone={MUSIC_MENU_TONES.navigate}
+              label="Album"
+              icon={<Disc3 size={icon} strokeWidth={2.25} />}
+              onClick={act(() => openMusicAlbum(artistKey, albumKey))}
+            />
+          )}
+        </MusicMenuSection>
+
+        <MusicMenuSection label="File" tone={MUSIC_MENU_TONES.file}>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.file}
+            label="Show in folder"
+            icon={<FolderOpen size={icon} strokeWidth={2.25} />}
+            onClick={act(() => void openInFileManager(file.path))}
+          />
+        </MusicMenuSection>
       </>
     );
   } else if (context.kind === "artist") {
-    rows = (
+    measureKey = `${context.artistKey}:${menu.onPlay ? 1 : 0}`;
+    body = (
       <>
-        {menu.onPlay && (
-          <button className={ROW} onClick={act(menu.onPlay)}>
-            <Play size={14} strokeWidth={2} />
-            Play all
-          </button>
-        )}
-        <button className={ROW} onClick={act(() => openMusicArtist(context.artistKey))}>
-          <User size={14} strokeWidth={2} />
-          Go to artist
-        </button>
+        <MusicMenuSection label="Playback" tone={MUSIC_MENU_TONES.playback}>
+          {menu.onPlay && (
+            <MusicMenuRow
+              tone={MUSIC_MENU_TONES.playback}
+              label="Play all"
+              icon={<Play size={icon} strokeWidth={2.25} />}
+              onClick={act(menu.onPlay)}
+            />
+          )}
+        </MusicMenuSection>
+        <MusicMenuSection label="Go to" tone={MUSIC_MENU_TONES.navigate}>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.navigate}
+            label="Artist"
+            icon={<User size={icon} strokeWidth={2.25} />}
+            onClick={act(() => openMusicArtist(context.artistKey))}
+          />
+        </MusicMenuSection>
       </>
     );
   } else {
-    rows = (
+    measureKey = `${context.albumKey}:${context.artistKey}:${menu.onPlay ? 1 : 0}`;
+    body = (
       <>
-        {menu.onPlay && (
-          <button className={ROW} onClick={act(menu.onPlay)}>
-            <Play size={14} strokeWidth={2} />
-            Play album
-          </button>
-        )}
-        <button className={ROW} onClick={act(() => openMusicAlbum(context.artistKey, context.albumKey))}>
-          <Disc3 size={14} strokeWidth={2} />
-          Go to album
-        </button>
-        {context.artistKey && (
-          <button className={ROW} onClick={act(() => openMusicArtist(context.artistKey))}>
-            <User size={14} strokeWidth={2} />
-            Go to artist
-          </button>
-        )}
+        <MusicMenuSection label="Playback" tone={MUSIC_MENU_TONES.playback}>
+          {menu.onPlay && (
+            <MusicMenuRow
+              tone={MUSIC_MENU_TONES.playback}
+              label="Play album"
+              icon={<Play size={icon} strokeWidth={2.25} />}
+              onClick={act(menu.onPlay)}
+            />
+          )}
+        </MusicMenuSection>
+        <MusicMenuSection label="Go to" tone={MUSIC_MENU_TONES.navigate}>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.navigate}
+            label="Album"
+            icon={<Disc3 size={icon} strokeWidth={2.25} />}
+            onClick={act(() => openMusicAlbum(context.artistKey, context.albumKey))}
+          />
+          {context.artistKey && (
+            <MusicMenuRow
+              tone={MUSIC_MENU_TONES.navigate}
+              label="Artist"
+              icon={<User size={icon} strokeWidth={2.25} />}
+              onClick={act(() => openMusicArtist(context.artistKey))}
+            />
+          )}
+        </MusicMenuSection>
       </>
     );
   }
 
-  const portal = (
-    <motion.div
-      ref={menuRef}
-      initial={{ opacity: 0, scale: 0.94, y: -5 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.94, y: -5 }}
-      transition={{ duration: 0.1, ease: "easeOut" }}
-      style={{ position: "fixed", left, top, zIndex: 9999 }}
-      className="w-52 bg-[#0f0f0f] border border-white/[0.11] rounded-[18px] shadow-2xl overflow-hidden"
-      aria-label={menuAriaLabel}
-      onClick={(e) => e.stopPropagation()}
+  return (
+    <MusicFloatingMenu
+      open
+      x={menu.x}
+      y={menu.y}
+      onClose={onClose}
+      ariaLabel={menuAriaLabel}
+      measureKey={measureKey}
     >
-      {rows}
-    </motion.div>
+      {body}
+    </MusicFloatingMenu>
   );
-
-  return createPortal(portal, document.body);
 }

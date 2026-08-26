@@ -471,7 +471,7 @@ fn apply_event_to_snapshot(dir: &Path, event: &TrackPlayedEvent) -> Result<(), S
     {
         row.play_count = row.play_count.saturating_add(1);
         row.listen_time_sec += listened;
-        row.last_played = event.started_at.max(row.last_played);
+        row.last_played = event.ended_at.max(row.last_played);
         if !path.is_empty() {
             row.path = path.clone();
         }
@@ -489,7 +489,7 @@ fn apply_event_to_snapshot(dir: &Path, event: &TrackPlayedEvent) -> Result<(), S
             artist,
             play_count: 1,
             listen_time_sec: listened,
-            last_played: event.started_at,
+            last_played: event.ended_at,
         });
     }
 
@@ -586,7 +586,7 @@ fn rebuild_snapshot_from_sources(dir: &Path) -> Result<ListenSnapshot, String> {
             .and_modify(|row| {
                 row.play_count = row.play_count.saturating_add(1);
                 row.listen_time_sec += listened;
-                row.last_played = row.last_played.max(event.started_at);
+                row.last_played = row.last_played.max(event.ended_at);
                 if !path.is_empty() {
                     row.path = path.clone();
                 }
@@ -604,7 +604,7 @@ fn rebuild_snapshot_from_sources(dir: &Path) -> Result<ListenSnapshot, String> {
                 artist,
                 play_count: 1,
                 listen_time_sec: listened,
-                last_played: event.started_at,
+                last_played: event.ended_at,
             });
     }
 
@@ -1032,6 +1032,7 @@ mod tests {
         assert_eq!(snap.stats.len(), 1);
         assert_eq!(snap.stats[0].play_count, 1);
         assert_eq!(snap.stats[0].listen_time_sec, 120.0);
+        assert_eq!(snap.stats[0].last_played, 1_700_000_120_000);
     }
 
     #[test]

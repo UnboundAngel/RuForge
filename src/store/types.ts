@@ -37,9 +37,9 @@ export type MusicDetail =
   | { kind: "artist"; key: string }
   | { kind: "album"; artistKey: string; key: string }
   | { kind: "song"; path: string }
-  | { kind: "liked" }
+  | { kind: "liked"; backTo?: "profile" }
   | { kind: "profile" }
-  | { kind: "stats" };
+  | { kind: "stats"; backTo?: "profile" };
 
 /** Signed-in YouTube account read from the embedded Explorer session. */
 export type YouTubeExplorerProfile = {

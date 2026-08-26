@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { stopMusicMiniForMainClaim } from "@/lib/mainPlaybackClaim";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -18,6 +18,9 @@ import {
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
 import { isAudioOnlyPath } from "@/mediaKind";
+import {
+  writeMusicPlaybackSession,
+} from "@/lib/musicPlaybackSessionStorage";
 import { readPlaybackSpeed, writePlaybackSpeed } from "@/playbackSpeedStorage";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
@@ -161,6 +164,7 @@ export function useMusicPlayback(
   const [crossfadeSec, setCrossfadeSecState] = useState(() => readMusicCrossfadeSec());
 
   const isDraggingRef = useRef(false);
+  const lastPlaybackPersistRef = useRef(0);
   const scrubGenerationRef = useRef(0);
   const primaryPathRef = useRef<string | null>(null);
   const sessionRecentKeysRef = useRef<string[]>([]);
@@ -627,6 +631,12 @@ export function useMusicPlayback(
     resolvePrimaryDuration,
   ]);
 
+  useLayoutEffect(() => {
+    if (!playingFile || !isAudioOnlyPath(playingFile.path) || activityOwner) return;
+    setCurrentTime(0);
+    setDuration(0);
+  }, [playingFile?.path, activityOwner, playingFile]);
+
   useEffect(() => {
     const el = getPrimary();
     const secondary = getSecondary();
@@ -668,6 +678,7 @@ export function useMusicPlayback(
     const needsLoad = primaryPathRef.current !== path;
 
     if (needsLoad) {
+      lastPlaybackPersistRef.current = 0;
       if (phaseRef.current === "overlapping") {
         abortCrossfade("user-skip");
       } else {
@@ -1175,12 +1186,39 @@ export function useMusicPlayback(
     const el = getPrimary();
     if (!el) return;
 
+    const writeSessionFromMedia = (media: HTMLAudioElement, pausedNow: boolean) => {
+      const file = playingFileRef.current;
+      if (!file) return;
+      writeMusicPlaybackSession({
+        path: file.path,
+        paused: pausedNow,
+        currentTime: media.currentTime,
+        playbackSpeed: playbackSpeedRef.current,
+      });
+    };
+
+    const persistPlaybackSnapshot = (media: HTMLAudioElement, pausedNow: boolean) => {
+      const file = playingFileRef.current;
+      if (!file || !Number.isFinite(media.duration) || media.duration <= 0) return;
+      if (pausedNow) {
+        writeSessionFromMedia(media, true);
+        return;
+      }
+      const now = Date.now();
+      if (now - lastPlaybackPersistRef.current <= 4000) return;
+      lastPlaybackPersistRef.current = now;
+      const t = media.currentTime;
+      if (t <= 0.5) return;
+      writeSessionFromMedia(media, false);
+    };
+
     const onTimeUpdate = (ev: Event) => {
       if (ev.target !== el || el !== getPrimary()) return;
       if (!isDraggingRef.current) setCurrentTime(el.currentTime);
       if (!el.paused && playingFileRef.current) {
         tickListenAccumulator();
         void onListenTimeUpdateTick();
+        persistPlaybackSnapshot(el, false);
       } else {
         pauseListenAccumulator();
       }
@@ -1188,12 +1226,16 @@ export function useMusicPlayback(
     };
 
     const onLoadedMetadata = () => setDuration(el.duration);
-    const onPlay = () => setPaused(false);
+    const onPlay = () => {
+      setPaused(false);
+      persistPlaybackSnapshot(el, false);
+    };
     const onPause = () => {
       if (phaseRef.current === "overlapping" && outgoingElRef.current && !outgoingElRef.current.paused) {
         return;
       }
       setPaused(true);
+      persistPlaybackSnapshot(el, true);
     };
     const onEnded = () => {
       void handleEnded();
@@ -1215,10 +1257,23 @@ export function useMusicPlayback(
   }, [getPrimary, handleEnded, armOrTickCrossfade, primaryIsA, playingFile?.path]);
 
   useEffect(() => {
+    const flushSession = () => {
+      const file = playingFileRef.current;
+      const media = getPrimary();
+      if (!file || !media || !Number.isFinite(media.duration) || media.duration <= 0) return;
+      writeMusicPlaybackSession({
+        path: file.path,
+        paused: media.paused,
+        currentTime: media.currentTime,
+        playbackSpeed: playbackSpeedRef.current,
+      });
+    };
+    window.addEventListener("pagehide", flushSession);
     return () => {
+      window.removeEventListener("pagehide", flushSession);
       stopRampLoop();
     };
-  }, [stopRampLoop]);
+  }, [getPrimary, stopRampLoop]);
 
   return {
     paused,
