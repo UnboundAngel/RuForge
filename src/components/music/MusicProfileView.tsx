@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Children, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { ChevronLeft, ChevronRight, Disc3, Heart, Music2, Play } from "lucide-react";
+import { ChevronLeft, Disc3, Heart, Music2, Play } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
@@ -99,9 +99,14 @@ function GlanceStat({ label, value, hint, labelTone, onClick }: GlanceStatProps)
       type={onClick ? "button" : undefined}
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center justify-center text-center gap-2.5 px-3 py-5 sm:px-4 sm:py-6 min-w-0 w-full",
-        onClick && "transition-colors hover:bg-white/[0.04] cursor-pointer",
+        "flex flex-col items-center justify-center text-center gap-2.5 px-3 py-5 sm:px-4 sm:py-6 min-w-0 w-full rounded-[16px] transition-[background,transform] duration-150",
+        onClick && "hover:bg-white/[0.05] active:scale-[0.99] cursor-pointer",
       )}
+      style={{
+        background: onClick
+          ? "color-mix(in srgb, var(--music-accent) 5%, var(--music-surface-raised) 95%)"
+          : "color-mix(in srgb, var(--music-surface-raised) 72%, transparent)",
+      }}
     >
       <span
         className="text-[11px] font-bold uppercase tracking-[0.14em] leading-none"
@@ -125,47 +130,93 @@ function GlanceStat({ label, value, hint, labelTone, onClick }: GlanceStatProps)
   );
 }
 
-function HorizontalScrollHint({ children }: { children: ReactNode }) {
+function ProfileScrollRow({ title, children }: { title: string; children: ReactNode }) {
+  const clipRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [overflows, setOverflows] = useState(false);
+  const [fadeLeft, setFadeLeft] = useState(false);
+  const [fadeRight, setFadeRight] = useState(false);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const check = () => setOverflows(el.scrollWidth > el.clientWidth + 8);
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    el.addEventListener("scroll", check);
-    return () => {
-      ro.disconnect();
-      el.removeEventListener("scroll", check);
+    const clip = clipRef.current;
+    const scroll = scrollRef.current;
+    if (!clip || !scroll) return;
+
+    const applyCoverSquish = (cover: HTMLElement, ratio: number, rootBounds: DOMRect) => {
+      if (ratio >= 0.995) {
+        cover.style.transform = "";
+        cover.style.transformOrigin = "";
+        return;
+      }
+
+      const scale = 0.88 + ratio * 0.12;
+      const rect = cover.getBoundingClientRect();
+      const clipRight = rect.right > rootBounds.right + 0.5;
+      const clipLeft = rect.left < rootBounds.left - 0.5;
+      cover.style.transform = `scale(${scale.toFixed(3)})`;
+      cover.style.transformOrigin = clipRight && !clipLeft
+        ? "right center"
+        : clipLeft && !clipRight
+          ? "left center"
+          : "center center";
     };
-  }, []);
+
+    const sync = () => {
+      const rootBounds = clip.getBoundingClientRect();
+      const overflow = scroll.scrollWidth > scroll.clientWidth + 4;
+      setFadeLeft(overflow && scroll.scrollLeft > 4);
+      setFadeRight(overflow && scroll.scrollLeft < scroll.scrollWidth - scroll.clientWidth - 4);
+
+      for (const item of scroll.children) {
+        if (!(item instanceof HTMLElement)) continue;
+        const cover = item.querySelector<HTMLElement>("[data-profile-scroll-cover]");
+        if (!cover) continue;
+
+        const rect = cover.getBoundingClientRect();
+        const visibleLeft = Math.max(rect.left, rootBounds.left);
+        const visibleRight = Math.min(rect.right, rootBounds.right);
+        const visibleWidth = Math.max(0, visibleRight - visibleLeft);
+        const ratio = rect.width > 0 ? visibleWidth / rect.width : 1;
+        applyCoverSquish(cover, ratio, rootBounds);
+      }
+    };
+
+    sync();
+    scroll.addEventListener("scroll", sync, { passive: true });
+    const ro = new ResizeObserver(sync);
+    ro.observe(scroll);
+    ro.observe(clip);
+    const mo = new MutationObserver(sync);
+    mo.observe(scroll, { childList: true, subtree: true });
+
+    return () => {
+      scroll.removeEventListener("scroll", sync);
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [children]);
 
   return (
-    <div className="relative">
-      <div ref={scrollRef} className="flex gap-5 sm:gap-6 overflow-x-auto pb-2 rf-scrollbar">
-        {children}
+    <section>
+      <SectionLabel>{title}</SectionLabel>
+      <div
+        ref={clipRef}
+        className="rf-profile-scroll-clip overflow-hidden min-w-0"
+        data-fade-left={fadeLeft ? "true" : undefined}
+        data-fade-right={fadeRight ? "true" : undefined}
+      >
+        <div
+          ref={scrollRef}
+          className="flex gap-5 sm:gap-6 overflow-x-auto pb-2 px-0.5 scroll-smooth rf-scrollbar"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {Children.map(children, (child) => (
+            <div key={child && typeof child === "object" && "key" in child ? child.key : undefined} className="shrink-0">
+              {child}
+            </div>
+          ))}
+        </div>
       </div>
-      {overflows && (
-        <>
-          <div
-            className="pointer-events-none absolute inset-y-0 right-0 w-14"
-            style={{ background: "linear-gradient(to left, var(--music-bg), transparent)" }}
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-0.5 pr-0.5 text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: "var(--music-text-muted)" }}
-            aria-hidden
-          >
-            <span>More</span>
-            <ChevronRight size={14} />
-          </div>
-        </>
-      )}
-    </div>
+    </section>
   );
 }
 
@@ -198,7 +249,11 @@ function SpotlightTrack({ row, lookup, onPlay, onContextMenu, menuOpen }: Spotli
         menuOpen && "ring-1 ring-white/20 rounded-[var(--r-media,16px)]",
       )}
     >
-      <div className="relative aspect-square w-full overflow-hidden rounded-[var(--r-media,16px)]">
+      <div className="aspect-square w-full flex items-center justify-center overflow-visible">
+        <div
+          data-profile-scroll-cover
+          className="relative w-full h-full overflow-hidden rounded-[var(--r-media,16px)] transition-transform duration-150 ease-out will-change-transform"
+        >
         {coverSrc ? (
           <img src={coverSrc} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: "cover" }} />
         ) : (
@@ -214,6 +269,7 @@ function SpotlightTrack({ row, lookup, onPlay, onContextMenu, menuOpen }: Spotli
             <Play size={14} fill="white" className="text-white" aria-hidden />
           </div>
         )}
+        </div>
       </div>
       <div className="min-w-0 px-0.5">
         <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: "var(--music-accent)" }}>
@@ -254,17 +310,22 @@ function SpotlightArtist({ row, lookup, onOpen, onContextMenu, menuOpen }: Spotl
         menuOpen && "ring-1 ring-white/20 rounded-2xl",
       )}
     >
-      <div className="relative w-[5.25rem] h-[5.25rem] sm:w-[5.75rem] sm:h-[5.75rem] rounded-full overflow-hidden">
-        {tracks.length > 0 ? (
-          <LikedSongsCover files={tracks} className="w-full h-full" />
-        ) : (
-          <div
-            className="flex h-full w-full items-center justify-center"
-            style={{ background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
-          >
-            <Disc3 size={24} />
-          </div>
-        )}
+      <div className="flex items-center justify-center overflow-visible h-[5.25rem] sm:h-[5.75rem]">
+        <div
+          data-profile-scroll-cover
+          className="relative w-[5.25rem] h-[5.25rem] sm:w-[5.75rem] sm:h-[5.75rem] rounded-full overflow-hidden transition-transform duration-150 ease-out will-change-transform"
+        >
+          {tracks.length > 0 ? (
+            <LikedSongsCover files={tracks} className="w-full h-full" />
+          ) : (
+            <div
+              className="flex h-full w-full items-center justify-center"
+              style={{ background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
+            >
+              <Disc3 size={24} />
+            </div>
+          )}
+        </div>
       </div>
       <div className="min-w-0 w-full px-0.5">
         <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: "var(--music-accent)" }}>
@@ -310,22 +371,27 @@ function RecentChip({ entry, lookup, onPlay, onContextMenu, menuOpen }: RecentCh
         menuOpen && "ring-1 ring-white/20 rounded-[14px]",
       )}
     >
-      <div className="relative aspect-square w-full overflow-hidden rounded-[14px]">
-        {coverSrc ? (
-          <img src={coverSrc} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: "cover" }} />
-        ) : (
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{ background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
-          >
-            <Music2 size={20} />
-          </div>
-        )}
-        {file && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-150 group-hover/recent:opacity-100">
-            <Play size={12} fill="white" className="text-white" aria-hidden />
-          </div>
-        )}
+      <div className="aspect-square w-full flex items-center justify-center overflow-visible">
+        <div
+          data-profile-scroll-cover
+          className="relative w-full h-full overflow-hidden rounded-[14px] transition-transform duration-150 ease-out will-change-transform"
+        >
+          {coverSrc ? (
+            <img src={coverSrc} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: "cover" }} />
+          ) : (
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
+            >
+              <Music2 size={20} />
+            </div>
+          )}
+          {file && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-150 group-hover/recent:opacity-100">
+              <Play size={12} fill="white" className="text-white" aria-hidden />
+            </div>
+          )}
+        </div>
       </div>
       <div className="min-w-0">
         <p className="text-[11px] font-semibold truncate leading-tight" style={{ color: "var(--music-text-primary)" }}>
@@ -521,11 +587,8 @@ export function MusicProfileView({ onBack }: Props) {
       </div>
 
       <div className="flex flex-col gap-12 px-8 sm:px-10 pb-14 max-w-4xl w-full mx-auto">
-        <section
-          className="rounded-[20px] overflow-hidden"
-          style={{ background: "color-mix(in srgb, var(--music-surface) 88%, transparent)" }}
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-white/10">
+        <section>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
             <GlanceStat
               label="Listened"
               value={formatListenDuration(snapshot.allTimeListenSec)}
@@ -550,9 +613,7 @@ export function MusicProfileView({ onBack }: Props) {
         </section>
 
         {(snapshot.topTrack || snapshot.topArtist) && (
-          <section>
-            <SectionLabel>Your highlights</SectionLabel>
-            <HorizontalScrollHint>
+          <ProfileScrollRow title="Your highlights">
               {snapshot.topTrack && (() => {
                 const topFile = resolveStatFile(snapshot.topTrack, lookup);
                 return (
@@ -577,8 +638,7 @@ export function MusicProfileView({ onBack }: Props) {
                   }}
                 />
               )}
-            </HorizontalScrollHint>
-          </section>
+          </ProfileScrollRow>
         )}
 
         {snapshot.likedCount > 0 && (
@@ -628,9 +688,7 @@ export function MusicProfileView({ onBack }: Props) {
         )}
 
         {snapshot.recent.length > 0 && (
-          <section>
-            <SectionLabel>Recently played</SectionLabel>
-            <HorizontalScrollHint>
+          <ProfileScrollRow title="Recently played">
               {snapshot.recent.map((entry) => {
                 const file = resolveStatFile(entry, lookup);
                 return (
@@ -644,8 +702,7 @@ export function MusicProfileView({ onBack }: Props) {
                   />
                 );
               })}
-            </HorizontalScrollHint>
-          </section>
+          </ProfileScrollRow>
         )}
 
         <section className="pt-1">

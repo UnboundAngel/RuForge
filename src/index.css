@@ -1068,6 +1068,29 @@ html.ruforge-island-root #root {
   opacity: 1;
 }
 
+.rf-profile-scroll-clip {
+  -webkit-mask-image: linear-gradient(to right, #000, #000);
+  mask-image: linear-gradient(to right, #000, #000);
+  transition:
+    -webkit-mask-image 0.2s ease,
+    mask-image 0.2s ease;
+}
+
+.rf-profile-scroll-clip[data-fade-right="true"]:not([data-fade-left="true"]) {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 32px), transparent 100%);
+}
+
+.rf-profile-scroll-clip[data-fade-left="true"]:not([data-fade-right="true"]) {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 100%);
+}
+
+.rf-profile-scroll-clip[data-fade-left="true"][data-fade-right="true"] {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+}
+
 .rf-music-queue-grip {
   opacity: 0;
   cursor: default;

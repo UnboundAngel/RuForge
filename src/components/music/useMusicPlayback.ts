@@ -97,6 +97,12 @@ type PendingCrossfade = {
   } | null;
 };
 
+type PendingMusicResume = {
+  currentTime: number;
+  paused: boolean;
+  playbackSpeed: number;
+};
+
 type PlaybackState = {
   paused: boolean;
   currentTime: number;
@@ -165,6 +171,7 @@ export function useMusicPlayback(
 
   const isDraggingRef = useRef(false);
   const lastPlaybackPersistRef = useRef(0);
+  const pendingResumeRef = useRef<PendingMusicResume | null>(null);
   const scrubGenerationRef = useRef(0);
   const primaryPathRef = useRef<string | null>(null);
   const sessionRecentKeysRef = useRef<string[]>([]);
@@ -233,6 +240,38 @@ export function useMusicPlayback(
   const applyPrimaryOutput = useCallback(() => {
     applyElOutput(getPrimary(), primaryGainRef.current);
   }, [applyElOutput, getPrimary]);
+
+  const applyPendingResume = useCallback((el: HTMLAudioElement) => {
+    const pending = pendingResumeRef.current;
+    if (!pending) return false;
+    const dur = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+    const startAt =
+      dur > 0
+        ? Math.min(Math.max(0, pending.currentTime), dur)
+        : Math.max(0, pending.currentTime);
+    pendingResumeRef.current = null;
+    el.currentTime = startAt;
+    setCurrentTime(startAt);
+    el.playbackRate = pending.playbackSpeed;
+    if (!pending.paused) {
+      void el.play()
+        .then(() => setPaused(false))
+        .catch(() => setPaused(true));
+    } else {
+      el.pause();
+      setPaused(true);
+    }
+    return true;
+  }, []);
+
+  const tryApplyPendingResume = useCallback(
+    (el: HTMLAudioElement) => {
+      if (!pendingResumeRef.current) return;
+      if (el.readyState < HTMLMediaElement.HAVE_METADATA) return;
+      applyPendingResume(el);
+    },
+    [applyPendingResume],
+  );
 
   const stopRampLoop = useCallback(() => {
     if (rampRafRef.current != null) {
@@ -715,18 +754,23 @@ export function useMusicPlayback(
     const resume = musicPlayerResume;
     if (needsLoad) {
       if (resume) {
+        pendingResumeRef.current = {
+          currentTime: Math.max(0, resume.currentTime),
+          paused: resume.paused,
+          playbackSpeed: resume.playbackSpeed,
+        };
         clearMusicPlayerResume();
-        const startAt = Math.max(0, resume.currentTime);
-        el.currentTime = startAt;
-        el.playbackRate = resume.playbackSpeed;
-        if (!resume.paused) {
-          void el.play()
-            .then(() => setPaused(false))
-            .catch(() => setPaused(true));
-        } else {
-          setPaused(true);
-        }
       } else {
+        pendingResumeRef.current = null;
+      }
+
+      const onResumeMetadata = () => {
+        tryApplyPendingResume(el);
+      };
+      el.addEventListener("loadedmetadata", onResumeMetadata, { once: true });
+      queueMicrotask(() => tryApplyPendingResume(el));
+
+      if (!resume) {
         void el.play()
           .then(() => setPaused(false))
           .catch(() => setPaused(true));
@@ -750,6 +794,7 @@ export function useMusicPlayback(
     getPrimary,
     getSecondary,
     mediaEpoch,
+    tryApplyPendingResume,
   ]);
 
   useEffect(() => {
@@ -1225,7 +1270,10 @@ export function useMusicPlayback(
       armOrTickCrossfade();
     };
 
-    const onLoadedMetadata = () => setDuration(el.duration);
+    const onLoadedMetadata = () => {
+      setDuration(el.duration);
+      tryApplyPendingResume(el);
+    };
     const onPlay = () => {
       setPaused(false);
       persistPlaybackSnapshot(el, false);
@@ -1254,13 +1302,13 @@ export function useMusicPlayback(
       el.removeEventListener("pause", onPause);
       el.removeEventListener("ended", onEnded);
     };
-  }, [getPrimary, handleEnded, armOrTickCrossfade, primaryIsA, playingFile?.path]);
+  }, [getPrimary, handleEnded, armOrTickCrossfade, primaryIsA, playingFile?.path, tryApplyPendingResume]);
 
   useEffect(() => {
     const flushSession = () => {
       const file = playingFileRef.current;
       const media = getPrimary();
-      if (!file || !media || !Number.isFinite(media.duration) || media.duration <= 0) return;
+      if (!file || !media) return;
       writeMusicPlaybackSession({
         path: file.path,
         paused: media.paused,
@@ -1269,8 +1317,10 @@ export function useMusicPlayback(
       });
     };
     window.addEventListener("pagehide", flushSession);
+    window.addEventListener("beforeunload", flushSession);
     return () => {
       window.removeEventListener("pagehide", flushSession);
+      window.removeEventListener("beforeunload", flushSession);
       stopRampLoop();
     };
   }, [getPrimary, stopRampLoop]);

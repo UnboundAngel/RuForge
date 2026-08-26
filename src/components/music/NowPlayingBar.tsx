@@ -4,6 +4,8 @@ import { Icon } from "@iconify/react";
 import { Ban, ChevronLeft, Ellipsis } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
+import { formatDuration } from "@/components/downloader/downloaderFormat";
+import { useScrubberHover } from "@/hooks/useScrubberHover";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
@@ -118,6 +120,7 @@ export function NowPlayingBar({
   const pendingReleaseRef = useRef(false);
   const pendingReleaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scrubPct, setScrubPct] = useState<number | null>(null);
+  const { hoverPercent, isHovering, onMouseMove, onMouseLeave } = useScrubberHover(scrubTrackRef);
 
   useEffect(() => {
     if (!showMoreMenu) setMorePanel("main");
@@ -252,6 +255,12 @@ export function NowPlayingBar({
       ? (scrubPctRef.current ?? scrubPct ?? 0)
       : duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
 
+  const previewPct =
+    scrubPct !== null ? (scrubPctRef.current ?? scrubPct) : hoverPercent;
+  const showScrubHoverTime =
+    duration > 0 && (isHovering || scrubPct !== null);
+  const scrubHoverTimeSec = (previewPct / 100) * duration;
+
   if (!playingFile) return null;
 
   return (
@@ -315,7 +324,7 @@ export function NowPlayingBar({
         <MusicLikeButton file={playingFile} className={cn(barBtnClass, "overflow-visible")} size={17} />
         </div>
 
-        <div className="flex flex-col items-center justify-center gap-1.5 min-w-0">
+        <div className="flex h-full min-w-0 flex-col items-center justify-end gap-1 pb-2.5 pt-1">
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
@@ -365,17 +374,66 @@ export function NowPlayingBar({
               <Icon icon="tabler:player-track-next-filled" width={17} />
             </button>
           </div>
-          <div
-            ref={scrubTrackRef}
-            className="group/scrub w-full max-w-lg h-1 rounded-full cursor-pointer relative"
-            style={{ background: "rgba(255,255,255,0.2)" }}
-            onMouseDown={handleScrubMouseDown}
-          >
-            <div className="absolute inset-y-0 left-0 rounded-full pointer-events-none" style={{ width: `${pct}%`, background: "var(--music-text-primary)" }} />
+          <div className="relative w-full max-w-lg">
             <div
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full opacity-0 group-hover/scrub:opacity-100 transition-opacity pointer-events-none"
-              style={{ left: `${pct}%`, background: "var(--music-text-primary)" }}
-            />
+              ref={scrubTrackRef}
+              className="group/scrub relative w-full cursor-pointer pb-0.5 pt-1.5"
+              onMouseDown={handleScrubMouseDown}
+              onMouseMove={(e) => {
+                if (!isScrubbingRef.current) onMouseMove(e);
+              }}
+              onMouseLeave={onMouseLeave}
+            >
+              {showScrubHoverTime && (
+                <div
+                  className="pointer-events-none absolute bottom-full z-10 mb-1.5 -translate-x-1/2 rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums"
+                  style={{
+                    left: `clamp(1.25rem, ${previewPct}%, calc(100% - 1.25rem))`,
+                    color: "var(--music-text-primary)",
+                    background: "rgba(0, 0, 0, 0.78)",
+                    borderColor: "rgba(255, 255, 255, 0.14)",
+                  }}
+                >
+                  {formatDuration(scrubHoverTimeSec)}
+                </div>
+              )}
+              <div
+                className="relative h-1 w-full rounded-full"
+                style={{ background: "rgba(255,255,255,0.2)" }}
+              >
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full pointer-events-none"
+                  style={{ width: `${pct}%`, background: "var(--music-text-primary)" }}
+                />
+                {showScrubHoverTime && (
+                  <div
+                    className="absolute inset-y-0 w-px pointer-events-none opacity-70"
+                    style={{
+                      left: `${previewPct}%`,
+                      background: "var(--music-text-primary)",
+                    }}
+                  />
+                )}
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full opacity-0 group-hover/scrub:opacity-100 transition-opacity pointer-events-none"
+                  style={{ left: `${pct}%`, background: "var(--music-text-primary)" }}
+                />
+              </div>
+            </div>
+            <div className="pointer-events-none mt-0.5 flex items-center justify-between select-none">
+              <span
+                className="text-[10px] tabular-nums"
+                style={{ color: "var(--music-text-muted)" }}
+              >
+                0:00
+              </span>
+              <span
+                className="text-[10px] tabular-nums"
+                style={{ color: "var(--music-text-muted)" }}
+              >
+                {duration > 0 ? formatDuration(duration) : "0:00"}
+              </span>
+            </div>
           </div>
         </div>
 
