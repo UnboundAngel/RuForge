@@ -1,90 +1,126 @@
 # RuForge
 
-RuForge is a local-first desktop app built around yt-dlp: download YouTube video and audio, keep a library on disk, watch offline, and listen in a separate music mode that feels more like a streaming app than a file browser.
+Desktop app for downloading YouTube video and audio with yt-dlp, storing a local library, and playing it back. Aimed at people who want YouTube plus a music shell on disk, not a general media server.
 
-my friend and i just wanted to watch YouTube videos without ads and offline. i figured i'd just build everything we both wanted in one place rather than piecing together a bunch of different tools.
+**0.3.0**, pre-1.0. Shipped installs and the auto-updater are Windows (NSIS). Linux is local `tauri dev` only.
 
-i don't know if there's better things out there, but what i do know is that RuForge works well for what it is. it's a little niche. it's not Plex, Jellyfin, or Kodi, though i personally use those for movies. RuForge is built around YouTube and doesn't try to be a general-purpose media manager. i don't plan on turning it into one or supporting platforms beyond YouTube right now.
+## Screenshots
 
-## scope
+![Downloader](website/src/assets/screenshots/01-download-2vids.webp)
 
-**Windows only** for installs and the auto-updater. i run `npm run tauri dev` on Linux locally, but that is dev-only on my machine, not a shipped target.
+![Download in progress](website/src/assets/screenshots/02-download-downloading.webp)
 
-for a full feature walkthrough, docs, and release history, see [ruforge.app](https://ruforge.app) (changelog at [/changelog](https://ruforge.app/changelog)).
+![Explorer](website/src/assets/screenshots/03-explorer.webp)
 
-## what it does
+![Library](website/src/assets/screenshots/04-library.webp)
 
-### downloads
+![Settings](website/src/assets/screenshots/05-settings.webp)
 
-downloads run on yt-dlp with a hero-centered queue and multi-item carousel for batches, parallel jobs, playlist batch intake with retry for failed tracks, audio-only mode, duplicate handling, and optional comment sidecars. cookies come from your browser or the embedded YouTube Explorer. subtitles, quality picks, and concurrency are all configurable in settings. everything you download lands on disk and in the in-app library.
+## Features
 
-the built-in Explorer is mainly for cookies and session flows, but you can also add videos to the download queue while you browse.
+### Downloads
 
-### video library and player
+- YouTube and YouTube Music URLs through bundled yt-dlp, ffmpeg, and ffprobe. Drop intake accepts YouTube watch and playlist URLs only.
+- Centered hero plus queue; up to 6 parallel jobs (default 1); playlist batches retry failed tracks up to 3 attempts.
+- Audio-only (`m4a` / `mp3` / `opus`), quality presets, optional subtitle sidecars and `{stem}.comments.json`.
+- Cookies: none, Internal Explorer session, Firefox / Edge / Safari / Brave, or a cookies.txt file.
+- Duplicate handling (prompt, or skip automatically). Queue survives the session (`ruforge-download-queue`).
+- Embedded Explorer (YouTube) for cookies/session and queue-from-browse. Music Explore embeds `music.youtube.com`.
 
-the video library scans your download folders (Videos, Music, Movies, Shows, Playlists buckets), tracks watch progress on each card, and opens into a player with keyboard controls, playback speed, custom subtitle overlay, chapters, SponsorBlock, scrub hover previews, a comments drawer, and resume where you left off. the activity island keeps playback and transport controls available when you leave the player tab. pop out to a video mini player when you want something smaller on screen. if the app crashes, a recovery screen offers reload with optional error details.
+### Library and player
 
-### windows integration
+- Vault buckets: `Videos/`, `Music/`, `Movies/`, `Shows/`, `Playlists/`, `Unsorted/`. Extra scan folders are optional.
+- Player: keyboard shortcuts, playback speed, chapters, drag-position subtitle overlay, SponsorBlock (on by default), scrub hover previews, comments panel, resume.
+- Activity island while you leave the player tab. Separate video mini player window.
+- Windows taskbar thumbnail buttons: like, previous, play/pause, next.
+- Crash recovery screen after a renderer failure.
 
-while video is playing in the main window, the Windows taskbar thumbnail shows transport controls (previous, play/pause, next).
+### Music mode
 
-### music mode
+- Own shell: Home, Explore, Library; now-playing bar; artist / album / track pages; liked songs; listen stats.
+- Track pages show MusicBrainz-backed credits. Playlist batches write `Playlists/{folder}/.ruforge-playlist.json`.
+- Separate music mini player. Switch modes from the sidebar or hold Alt for the radial menu.
 
-music mode is its own shell: Home, Explore, and Library tabs, a now-playing bar, artist/album/track pages with MusicBrainz-backed sidecars, liked songs, and listen stats. playlist batch downloads write `.ruforge-playlist.json` sidecars under `Playlists/{folder}/` so batch status survives restarts. track detail uses a gatefold layout with liner-notes-style credits. Explore embeds music.youtube.com so you can pick tracks and queue audio-only batch downloads. there is a separate music mini player. it shares cookies with the main Explorer but it is not the same UI.
+### Housekeeping
 
-switch modes from the sidebar or hold Alt for the radial menu.
+- Storage limit (default 50GB) blocks new Internal Vault downloads when usage meets the cap. Authorize Cleanup and Recently Deleted restore.
+- Export bundle copies selected media off disk. In-app app updates. yt-dlp self-update and optional Deno install from Settings (Deno lands in app data, not PATH).
+- Optional Discord Rich Presence (off by default). Launch at startup and minimize to tray.
 
-### housekeeping
+## Tech stack
 
-storage cap with Authorize Cleanup when you need space back, Recently Deleted restore, export bundle for copying media off disk, in-app RuForge updates, and yt-dlp self-update from Settings.
+Declared in `package.json` / `src-tauri/Cargo.toml` / `src-tauri/tauri.conf.json`:
 
-## stack
+- Tauri `2` (`Cargo.lock`: 2.11.1), Rust 2021 edition, identifier `com.attic.ruforge`
+- React `^19.1.0`, TypeScript `~5.8.3`, Vite `^6.3.5`, Tailwind CSS `^4.0.0`, Zustand `^5.0.13`
+- Bundled sidecars: `binaries/yt-dlp`, `binaries/ffmpeg`, `binaries/ffprobe`
+- Updater endpoint: `https://raw.githubusercontent.com/UnboundAngel/RuForge/main/updater.json`
+- Deep link scheme: `ruforge`
 
-Tauri v2, Rust backend, React and TypeScript frontend, Zustand for main-window state. yt-dlp, ffmpeg, and ffprobe ship as bundled sidecars. Deno is optional: install from Settings when YouTube downloads need a JS runtime; it lands in app data, not the system path.
+## Getting started
 
-## status
-
-version 0.2.1 shipped. two of us use it every day. still pre-1.0 and actively developed; see the [roadmap](https://ruforge.app/roadmap) and [changelog](https://ruforge.app/changelog) on the site for what is new and what is next.
-
-[GitHub Discussions](https://github.com/UnboundAngel/RuForge/discussions) are open if you want to ask something or share how you're using it.
-
-## install
-
-download the latest setup `.exe` from the [Releases](https://github.com/UnboundAngel/RuForge/releases) page and run it. Windows may show a SmartScreen warning the first time, click "more info" then "run anyway". no additional software required (yt-dlp, ffmpeg, and ffprobe are bundled; Deno is optional from Settings if YouTube needs it).
-
-## building from source
-
-clone the repo:
+Prerequisites: Node.js TODO(verify). Rust TODO(verify) (crate edition 2021). Windows builds need WebView2. `npm run dev:app` is a PowerShell script.
 
 ```bash
 git clone https://github.com/UnboundAngel/RuForge.git
 cd RuForge
-```
-
-install dependencies:
-
-```bash
 npm install
 ```
 
-run in development:
+Windows dev (Tauri plus Companion asset watcher):
 
-```bash
-npm run tauri dev
+```powershell
+npm run dev:app
 ```
 
-build for production:
+Tauri only (Windows or Linux):
 
 ```bash
-npm run tauri build
+npm run tauri -- dev
 ```
 
-builds land in `src-tauri/target/release/`. standalone exe is `ruforge.exe`, installers are under `bundle/nsis/` and `bundle/msi/`.
+Frontend alone (Vite, no Rust shell):
 
-## privacy
+```bash
+npm run dev
+```
 
-no telemetry in a standard session. an optional debugging suite (off by default) includes developer tooling and gated telemetry for maintainer use. see the [privacy policy](https://ruforge.app/legal/privacy) on the site for what leaves your machine.
+Production web assets, then the desktop bundle (`beforeBuildCommand` already runs `npm run build`):
 
-## license
+```bash
+npm run tauri -- build
+```
 
-Apache-2.0. see [LICENSE](./LICENSE).
+NSIS installer under `src-tauri/target/release/bundle/nsis/`. Binary `src-tauri/target/release/ruforge.exe`. Tests: `npm test`.
+
+Windows installers: [Releases](https://github.com/UnboundAngel/RuForge/releases).
+
+## Configuration
+
+No root `.env.example`. Dev server: `http://localhost:1420` (`strictPort`). If `TAURI_DEV_HOST` is set, HMR uses port `1421`. Compile-time telemetry keys for signed builds: `src-tauri/TELEMETRY.example.env` (`APTABASE_APP_KEY`, `APTABASE_HOST`, `GLITCHTIP_DSN`). Usage and crash telemetry are off by default and sit on the Debugging settings tab.
+
+User data:
+
+- Settings: WebView `localStorage` key `ruforge-settings`
+- Library paths: tauri-plugin-store file `library-config.json`
+- Default vault: `C:\RuForge\Media` (Windows) or `$HOME/RuForge/Media`. Default output: `C:\Downloads` (Windows) or the OS downloads dir
+- Tauri `app_data_dir` for `com.attic.ruforge`: `bin/` (yt-dlp, Deno), `explorer-data/` (Explorer profile), `recently-deleted.json`
+- Tauri `app_local_data_dir`: `hardware-acceleration.json`
+
+## Project structure
+
+- `src/` - React/TypeScript UI (main, mini, music-mini, island, notify windows)
+- `src-tauri/` - Rust backend, sidecars, NSIS bundle, companion-web (debug-gated)
+- `scripts/` - Windows dev/build helpers (`dev-app.ps1`, signed build)
+- `website/` - Public site (separate `package.json`)
+- `docs/` - Agent and research docs
+- `public/` - Static assets copied into the web build
+- `imports/` - Upstream reference checkouts, not the app
+
+## Contributing
+
+Public repo: [UnboundAngel/RuForge](https://github.com/UnboundAngel/RuForge). App code is `src/` and `src-tauri/`.
+
+## License
+
+Apache License 2.0. See [LICENSE](./LICENSE).

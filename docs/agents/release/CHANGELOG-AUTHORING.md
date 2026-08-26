@@ -2,7 +2,7 @@
 
 **Note:** `docs/changes.html` is **not in the repo**. Release authoring uses `docs/agents/release/versioner.html` and `docs/agents/release/versions/version-*.json` until/unless `changes.html` returns.
 
-You are reading this because the release ritual (AGENTS.md, step 6) sent you
+You are reading this because the release skill (step 8) sent you
 here, or you are extending the version graph. This is authoring detail only.
 It is deliberately NOT in AGENTS.md so the per-task agent path stays thin.
 Do not read this for normal bug-fix or feature work. Only at release, or when
@@ -33,7 +33,7 @@ Three parts below, moved verbatim from AGENTS.md with no content change:
 
 **Preview:** `npx --yes serve docs/agents/release` from repo root, then open **`/versioner.html`**.
 
-**Roles:** **Chad** — manifests, registry, loader, **`VersionGraphFormat`**. **Jim** — CSS-only on **`versioner.html`** (avoid changing **`VersionGraphFormat`** wiring unless coordinated).
+**Roles:** **Mint** owns manifests, registry, loader, **`VersionGraphFormat`**, and `versioner.html` styling. Do not split this to Gemini.
 
 **`versioner.html` UX (maintainer/bot notes):**
 
@@ -50,9 +50,9 @@ Three parts below, moved verbatim from AGENTS.md with no content change:
 - **Format is HTML only — not Markdown.** Use the structured layout in **`### Structured version block`** below. Inline SVGs in the template are **layout stand-ins**; production UI should use the **Iconify** slugs the maintainer chooses (see **Category icons (in-app)** below).
 - **Why HTML:** Easier for agents to emit consistent, parseable trees than Markdown dialects — still **not** the user-facing surface.
 - **Order:** **Newest version first** inside `<main>`.
-- **Workflow:** **Jim (Gemini)** may own the **first visual pass** on `docs/changes.html` (spacing, typography, faded rules, cream-on-brown harmony) **without changing the DOM contract** (`rf-*` classes, `data-version`, section nesting). **Chad / agents** then **fill and maintain** list rows, counts, and copy when code changes land. On release, distill for `updater.json` `notes` / GitHub Release as needed.
-- **Divider lines (agents + Jim):** **Avoid** flat, full-width, low-contrast gray rules that “cut” the panel (they read cheap and fight the warm brown shell). **Prefer** the same language as the **Video Library** date headers: **rules that fade out** toward the edges, **muted cream / gold** (`#EDD79C`-family) with soft alpha — see `docs/changes.html` gradients. If a separator does not fade and harmonize with the brown shell, **do not add it**; use whitespace instead.
-- **Policy:** Do not replace this workflow with a Markdown twin unless the maintainer updates this section of `AGENTS.md`.
+- **Workflow:** Mint fills and maintains list rows, counts, and copy when code changes land. On release, distill for `updater.json` `notes` / GitHub Release as needed. Do not change the DOM contract (`rf-*` classes, `data-version`, section nesting) unless Angel asks.
+- **Divider lines:** **Avoid** flat, full-width, low-contrast gray rules that “cut” the panel (they read cheap and fight the warm brown shell). **Prefer** the same language as the **Video Library** date headers: **rules that fade out** toward the edges, **muted cream / gold** (`#EDD79C`-family) with soft alpha — see `docs/changes.html` gradients. If a separator does not fade and harmonize with the brown shell, **do not add it**; use whitespace instead.
+- **Policy:** Do not replace this workflow with a Markdown twin unless the maintainer updates this section.
 
 **[NEW: Canvas Architecture Workflow — `docs/changes.html` only]**
 - **Architecture (Canvas Graph):** The **changes.html** changelog UI uses an interactive dependency graph on a canvas; the underlying data remains LLM-readable JSON inside that file.
@@ -141,4 +141,4 @@ When you add or extend a release in **`docs/changes.html`**, follow this **layou
 
 **Live reference:** Open `docs/changes.html` in a browser — the newest `<section class="rf-release">` is the **full** copy-paste reference. When adding a new version, **duplicate that section**, bump `id` / `data-version`, reset lists, and **recompute** each `.rf-count`.
 
-**Handoff (Jim):** Run a visuals-only pass on `docs/changes.html` (and optionally the future in-app changelog shell) using RuForge **brown + muted cream**; **do not** change class names, `data-version`, or list semantics. Honor **faded dividers**; no harsh full-width gray rules.
+**Handoff:** Visual pass on `docs/changes.html` (and optionally the future in-app changelog shell) uses RuForge **brown + muted cream**; **do not** change class names, `data-version`, or list semantics. Honor **faded dividers**; no harsh full-width gray rules. Mint does this in Cursor.

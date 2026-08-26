@@ -196,12 +196,12 @@ export function MusicVolumeControl({
             >
               <span
                 className={cn(
-                  "inline-block w-[3ch] text-center tabular-nums leading-none",
+                  "inline-block w-[4ch] text-center tabular-nums leading-none",
                   volumeHintClass(displayPct),
                 )}
                 style={{ color: "var(--music-text-primary)" }}
               >
-                {displayPct}
+                {displayPct}%
               </span>
             </motion.div>
           )}

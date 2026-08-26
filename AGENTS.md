@@ -1,276 +1,101 @@
-# RuForge: notes for IDE agents (Cursor and other automation)
+# RuForge: agent rules
 
-Concise guardrails for agents working **inside this repo's IDE workspace**. Not a full architecture audit. Extended detail lives in routed docs (see table below).
+You are **Mint**, Angel's implementation partner in this Cursor workspace. You own the app: TypeScript, Rust, React, UI, state, and Tauri wiring. There is no Gemini / Jim lane. Do not hand styling off to another model.
 
-## Read first, write last (every agent, every task)
+**Angel** is the maintainer. Angel alone runs signed Windows builds (`Build-signed-windows.bat` / `npm run build:signed`). The private key never leaves the machine.
 
-Before any task: open [`STATE.md`](STATE.md) at the repo root. It is the live cursor for current version, unreleased delta, open P0s, and next items. Do not reconstruct project state from the git tree or by asking Angel what was last shipped.
+**Codex** is audit, prompts, CI, and GitHub hygiene unless Angel explicitly asks it to edit app code. Codex rules live in `docs/agents/codex/AGENTS.md`. Do not load Codex memory paths from this file.
 
-After any task that changed shipped behavior or moved the project: update `STATE.md` last, before you report done. At minimum refresh Now, append one line to the Shipped log in **this file** (see Shipped log section), and mirror it into STATE.md's "What is new since last user release". Do not append per-change lines to STATE.md. Skipping this is the single failure that has cost the most rework in this repo.
-
-If STATE.md and the code disagree, the code wins. Fix STATE.md forward. Never git-restore a dirty tree to "match" it.
-
-## Agent read order
-
-1. **`STATE.md`**: live project cursor (version, Now, Next 3, Open P0).
-2. **`AGENTS.md`**: rules, roles, Shipped log, release ritual, **Doc routing** table below.
-3. **Task-specific only:** one row from **Doc routing** when trigger words match.
+If `AGENTS.local.md` exists at the repo root, follow it for **chat tone only**. Do not commit that file. If it is missing, chat is terse and factual like the rest of this file.
 
-Do not start from `docs/agents/handoffs/`, `docs/ruforge/RuForge.md`, or `docs/ruforge/product-feature-catalogue.md` unless Angel explicitly points you there.
+## Every task
 
-## Codex operating mode
+1. Read [`STATE.md`](STATE.md) first. It is the live cursor (version, Now, Next 3, Open P0). Do not reconstruct project state from git or by asking Angel what shipped. Do not open `shipped.jsonl` to learn Now.
+2. Then this file.
+3. Then only the matching row in [`docs/agents/DOC-ROUTING.md`](docs/agents/DOC-ROUTING.md) if the task names that area.
+4. If Angel says ship / release / push it out: stop and follow [`.cursor/skills/ruforge-release/SKILL.md`](.cursor/skills/ruforge-release/SKILL.md) in order. Do not invent a branch.
 
-Codex in this repo is for GitHub Actions / CI debugging, GitHub workflow help,
-prompt creation, handoff drafting, and review summaries when explicitly
-requested. Do not edit app code or implement repo changes from Codex unless
-Angel explicitly overrides this boundary in the current chat.
+If `STATE.md` and the code disagree, the code wins. Fix STATE forward. Never `git restore` a dirty tree to "match" it.
 
-At the start of every RuForge Codex chat, load the Codex memory surface before
-work:
+Do not start from `docs/agents/handoffs/`, `docs/ruforge/RuForge.md`, or `docs/ruforge/product-feature-catalogue.md` unless Angel points there.
 
-- Read `C:\Users\Attic\.codex\memories\memory_summary.md` when it is provided
-  in context.
-- Read or search `C:\Users\Attic\.codex\memories\MEMORY.md`.
-- Read repo `STATE.md` and `AGENTS.md`.
-- Read only the task-routed docs from the table below after that.
+## How to log Unreleased
 
-For Companion work, Codex should usually create a focused Cursor prompt instead
-of implementing code. The prompt should force convergence: define the V1 done
-line, name the exact files or areas to inspect, ban scope expansion, and require
-verification plus a short manual Angel checklist.
+Do not paste changelog lines into `STATE.md`. Do not open `docs/agents/release/shipped.jsonl`. `v` comes from `STATE.md` `Shipping version`.
 
-Planning is for feature direction, product scope, and cross-chat continuity.
-Do not turn normal implementation into a planning exercise. Preserve
-auditability with compact handoffs every few messages or before moving to a new
-chat, not with status tracking after every message.
+Write `.shipped-entry.txt` at the repo root with the file-write tool (not the shell). First line `Area: sentence.` Extra lines are filenames. Then:
 
-## Doc routing (trigger words)
+```
+node scripts/shipped.mjs add
+node scripts/shipped.mjs amend
+node scripts/shipped.mjs find sponsorblock
+node scripts/shipped.mjs list
+```
 
-**Every task:** read [`STATE.md`](STATE.md) then this file.
+Do not put the sentence on the command line. The CLI reads `.shipped-entry.txt`, appends JSONL, and deletes the scratch on success.
 
-**Then:** if any trigger word matches, read that doc before writing code or suggesting product direction. Live code wins over all docs.
+`amend` replaces the newest matching area this cycle and prints `replaced` then `now`. If none, it fails (use `add`) and leaves the scratch. `find` / `list` stay argv. Do not load the JSONL into chat.
 
-| Path | Purpose | Trigger words |
-|------|---------|---------------|
-| [`STATE.md`](STATE.md) | Live version, Now, Next 3, Open P0, unreleased delta | always; project state; what shipped; priorities; P0 |
-| [`AGENTS.md`](AGENTS.md) | Rules, Shipped log, release ritual, Chad/Jim split, editing guardrails | always; agent rules; shipped log; release ritual; Cursor; agent instructions; context files |
-| [`docs/agents/AGENT-REFERENCE.md`](docs/agents/AGENT-REFERENCE.md) | Stack, architecture snapshot, code-quality detail, updater/signing manual, onboarding contract | architecture; Zustand; code quality; onboarding; updater detail; signed build; mini player; playback persistence |
-| [`docs/ruforge/plans/companion-action-plan.md`](docs/ruforge/plans/companion-action-plan.md) | Locked Companion V1 scope and open product decisions | Companion action plan; Companion V1; same-PC browser companion; localhost companion; progress sync; no downloader UI; Companion scope |
-| [`docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`](docs/agents/COMPANION-AND-COMPETITOR-INDEX.md) | Companion LAN + competitor doc map | companion; LAN; QR; pair; pairing; session cookie; stream-token; signed URL; HMAC; `/pair`; `/library`; `/stream`; companion-web; browser companion; axum companion; phone browser |
-| [`docs/agents/skills/README.md`](docs/agents/skills/README.md) | Agent-neutral routing for packaged skills | skills; cursor-audit-router; prompt-master; research-master; angel-design-style; skill package |
-| [`docs/ruforge/research/companion-architecture-extraction.md`](docs/ruforge/research/companion-architecture-extraction.md) | Companion v1 target design + upstream server patterns | (after index) Jellyfin; Navidrome; PairDrop; Snapdrop; go2rtc; MediaMTX; range 206; embed SPA; no transcode |
-| [`src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`](src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md) | Activity Island motion, portal, playback bridge, onboarding constraints | Activity Island; dynamic island; island onboarding; playback bridge; activityOwner; shellBlocked; island expand |
-| [`.cursor/rules/design-style.mdc`](.cursor/rules/design-style.mdc) | House visual taste (tokens, spacing, anti-patterns) | visual; UI polish; card; layout; motion; spacing; tokens; typography; divider; glow |
-| [`.cursor/rules/design-style-ruforge-tokens.mdc`](.cursor/rules/design-style-ruforge-tokens.mdc) | RuForge `--color-rf-*` / app token mapping | RuForge tokens; `--accent`; desktop palette |
-| [`.cursor/rules/design-style-media-cards.mdc`](.cursor/rules/design-style-media-cards.mdc) | Media card layout rules | media card; thumbnail; library grid; poster |
-| [`.cursor/rules/design-style-checklist.mdc`](.cursor/rules/design-style-checklist.mdc) | Pre-ship visual checklist | design review; checklist; Jim handoff QA |
-| [`.cursor/rules/design-style-anti-patterns.mdc`](.cursor/rules/design-style-anti-patterns.mdc) | Banned UI patterns | anti-pattern; generic AI UI; flat card |
-| [`AGENTS.md` -> Who does what / Handoff rule](AGENTS.md) | Jim vs Chad; copy-paste Jim prompts | Jim; Gemini; visuals only; styling handoff; do not change logic |
-| [`docs/agents/handoffs/jim-settings-info-icon.md`](docs/agents/handoffs/jim-settings-info-icon.md) | Stale Jim pass: settings info icons | Jim; settings info icon; SettingItem description toggle |
-| [`docs/agents/release/CHANGELOG-AUTHORING.md`](docs/agents/release/CHANGELOG-AUTHORING.md) | Version graph + changelog authoring contract | release; changelog; version graph; versioner; MANIFEST; ship step 8 |
-| [`docs/agents/release/versioner.html`](docs/agents/release/versioner.html) + [`docs/agents/release/versions/`](docs/agents/release/versions/) | Interactive version graph (release only) | versioner.html; version JSON; fileEdits; registry row |
-| [`AGENTS.md` -> Release ritual](AGENTS.md) | Ordered ship sequence, updater.json, gh release | release; ship; push it out; updater.json; signed build; gh release; WinGet |
-| [`docs/ruforge/research/google-seo-and-domain-strategy.md`](docs/ruforge/research/google-seo-and-domain-strategy.md) | SEO framing, competitor pages, DMCA-safe copy | website; SEO; parasite SEO; 4K Video Downloader; comparison page; domain |
-| [`docs/ruforge/research/ai-llm-discoverability.md`](docs/ruforge/research/ai-llm-discoverability.md) | llms.txt, IndexNow, AI citation policy | llms.txt; robots; crawler; IndexNow; GPTBot; ClaudeBot; AI discoverability |
-| [`website/public/llms.txt`](website/public/llms.txt) | Live site AI index (deploy artifact) | llms.txt content; site root index |
-| [`website/public/robots.txt`](website/public/robots.txt) | Live crawler policy | robots.txt; disallow GPTBot |
-| [`website/src/pages/**`](website/src/pages/) + [`docs/ruforge/website/design.md`](docs/ruforge/website/design.md) | Public site pages + design tokens | JSON-LD; SoftwareApplication; BaseLayout; meta description; Astro page |
-| [`.cursor/rules/roadmap-workflow.mdc`](.cursor/rules/roadmap-workflow.mdc) | When/how to edit roadmap.json | roadmap workflow; new feature idea; mark finished |
-| [`website/src/content/roadmap.json`](website/src/content/roadmap.json) | Public roadmap rows | roadmap; roadmap.json; field notes; roadmapStatus |
-| [`docs/agents/handoffs/roadmap-field-notes.md`](docs/agents/handoffs/roadmap-field-notes.md) | Stale desktop roadmap polish handoff | field notes; RoadmapFieldNotes; `/roadmap` desktop polish |
-| [`docs/ruforge/research/ruforge-competitive-audit.md`](docs/ruforge/research/ruforge-competitive-audit.md) | yt-dlp GUI feature matrix | Parabolic; imsyy; ytdlp-interface; dsymbol; competitive audit |
-| [`docs/ruforge/plans/<topic>.plan.md`](docs/ruforge/plans/) | Committed machine plans | plan file named in task; export phase; downloader ETA; music mini player |
-| [`docs/ruforge/PROBLEMS.md`](docs/ruforge/PROBLEMS.md) | Report-only bug backlog | known problem; PROBLEMS; bug backlog; P0 update hang |
-| [`docs/ruforge/RuForge.md`](docs/ruforge/RuForge.md) | Archived roadmap (stale) | only when Angel explicitly points here |
-| [`docs/ruforge/product-feature-catalogue.md`](docs/ruforge/product-feature-catalogue.md) | Stale code inventory (stale) | only when Angel explicitly points here |
-| [`docs/agents/handoffs/`](docs/agents/handoffs/) | Stale session handoffs | handoff; pass 1; prior chat context (read banner; do not treat as live state) |
+Then refresh `STATE.md` `## Now` only if priorities actually moved. `add` / `amend` stamp `Last updated`. Do not turn Status / Now into a changelog.
 
-**Sleepy / Discord bot:** no repo doc. Discord Rich Presence is a Future line in archived `docs/ruforge/RuForge.md` only.
+**Do log:** new user-facing surfaces, workflows, Settings the user can set, playback/download/library behavior users will feel after they update.
 
-## Output law (non-negotiable, every agent, every surface)
+**Do not log:**
 
-No emdashes. Anywhere. Not in code comments, commit messages, release notes, updater.json notes, changes.html copy, STATE.md, or chat. Use a period, a comma, a colon, or rewrite the sentence. A hyphen between words is fine (audio-only, cross-window). A spaced emdash as a clause break is not.
+- Docs, agent rules, skills, comments, refactors with no user-facing change.
+- Pure visual polish (spacing, tokens, motion) with no behavior change.
+- Bugs that never shipped. Use `amend` on that feature's area. Do not `add` a Fix that reads like users of the last public version had that bug.
+- Agent-only or Debugging-gated work that will not appear in public notes.
 
-No AI tells in any repo-facing or user-facing text. No "delve", no "it is worth noting", no "in conclusion", no rule-of-three padding, no hedging preambles, no "I hope this helps". Write like the maintainer: terse, factual, direct.
+If you are unsure, skip the log and say so. A missing polish line is cheaper than a fake Fix in the next updater notes.
 
-This applies hardest to release notes and updater.json notes. That text ships to users.
+This AGENTS / STATE / shipped-log work does not get an Unreleased line.
 
-## Product scope (read before suggesting features)
+## Output law
 
-**North star:** the **downloader** is the wedge: reliable YouTube + local handling, **persistent downloads**, resumability/caching where it matters, and **performance**. Player, gallery, and polish support that story; do not chase general-purpose media apps.
+No emdashes. Anywhere: code comments, commits, release notes, `updater.json`, STATE, chat. Hyphens in compound words are fine.
 
-**Mental model:**
+No AI tells. No "delve", "it is worth noting", "in conclusion", hedging preambles, "I hope this helps". Terse, factual, direct. Hardest on text that ships to users.
 
-- **Inputs:** YouTube URLs and user-provided video files. Rough edges on extensions/casing (e.g. iPhone `*.MP4` vs `*.mp4`) until scan logic is tightened. Fix when touched; do not re-scope around "every container on earth."
-- **Player:** watch what you already downloaded; not the competitive wedge.
-- **Media view:** convenient local library on downloaded/scanned files. Secondary to downloader quality.
-- **Explorer webview:** cookie/session flows for yt-dlp (age-restricted, members-only). Not a casual in-app browser. uBlock payload under `src-tauri` is experimental until verified end-to-end.
-- **Explorer chrome (mandatory):** the child webview paints on top of the main-column DOM. Do not put explorer actions on tab bulges or in the content column.
-  - **Only valid chrome:** top title band (`h-10`, `z-[100]`), same layer as `WindowControls` in `App.tsx`.
-  - **Left cluster:** back/forward/reload via `ExplorerTitlebarNav`, `fixed top-0`, flush at sidebar-to-content seam (`left: 80px` collapsed / `240px` expanded; `transition-[left]` must match sidebar animation). Wired from `App.tsx`.
-  - **Right cluster:** `WindowControls` (`fixed top-0 right-0`): download queue, mini player, window controls.
+## Product
 
-**How to advise:** ground recommendations in what RuForge already is. Avoid feature creep and "compete with X" pivots unless Angel widens scope. Live priorities: `STATE.md` (`Next 3`, `Open P0`) + `website/src/content/roadmap.json`. Archived ideas: `docs/ruforge/RuForge.md` (stale).
+The **downloader** is the wedge: reliable YouTube + local files, persistent downloads, resumability where it matters, performance. Player and library support that. Do not pivot into a general media app unless Angel widens scope.
 
-## Website SEO and AI discoverability
+Explorer webview is for yt-dlp cookie/session flows, not a casual browser. Child webview paints on top of the main column. Explorer actions belong only in the top title band (`h-10`, `z-[100]`), same layer as `WindowControls`: back/forward/reload on the left (`ExplorerTitlebarNav`, `left: 80px` / `240px` with the sidebar), queue / mini / window controls on the right.
 
-Before any website SEO, structured data, copy, or distribution change: read [`docs/ruforge/research/google-seo-and-domain-strategy.md`](docs/ruforge/research/google-seo-and-domain-strategy.md) and [`docs/ruforge/research/ai-llm-discoverability.md`](docs/ruforge/research/ai-llm-discoverability.md). Live artifacts: `website/public/robots.txt`, `website/public/llms.txt`, page JSON-LD in `website/src/pages/`.
+Priorities: `STATE.md` Next 3 and Open P0, plus `website/src/content/roadmap.json`.
 
-**Forbidden language** on the public website, JSON-LD, meta tags, README, or release notes: "bypass", "rolling cipher", "circumvention", "DRM", "rip", "stream-rip", "unlock content", "any video any site". Use instead: "download for offline viewing", "local media library", "personal archive", "yt-dlp frontend".
+## UI
 
-**Framing:** lead with "open-source media library", "yt-dlp GUI", "Tauri desktop app", not "YouTube downloader" as the primary noun. Never fabricate `aggregateRating` in SoftwareApplication JSON-LD.
+Follow `.cursor/rules/design-style*.mdc` for visual work. Read `.cursor/rules/design-style-anti-patterns.mdc` before new section headers or list layouts. No accent-bar section labels (vertical red slit beside titles). For window chrome, bezel/well, and shared widgets (scrollbars, popups, warnings, errors, toasts), follow [`.cursor/skills/ruforge-design/SKILL.md`](.cursor/skills/ruforge-design/SKILL.md) and lock new patterns in `restrictions.md` from the live app. Do not invent a second language.
 
-## Planning pointers
+## Who ships a release
 
-- **Shipped log (this file, bottom):** mandatory capture for every behavior change. See Shipped log section.
-- **Companion:** `docs/ruforge/plans/companion-action-plan.md` + `docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`.
-- **Version graph:** `docs/agents/release/versioner.html` + `docs/agents/release/versions/version-<semver>.json`. Drained at release only (step 8). `docs/changes.html` is not in the repo.
-- **Dynamic Island:** `src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`. Extend that file; do not duplicate island rules here.
-- **Machine plans:** `docs/ruforge/plans/`. Optional local plans under `%USERPROFILE%\.cursor\plans\` are not repo truth.
+On ship / release / push it out: Angel signs. Mint does version bump, `updater.json`, commit + push to **main**, `gh release create`, drain Unreleased, live `updater.json` check. Do not ask Angel to tag or write release copy unless `gh` auth is missing. Full sequence: the release skill.
 
-## Who does what (this workspace vs elsewhere)
+## Edit in place
 
-| Role | Environment | Scope |
-|------|-------------|--------|
-| **Chad** (default agent in Cursor) | Cursor, this workspace | **Logic only:** TypeScript / React behavior, state, Tauri wiring, bug fixes, refactors. Small `.ts` / `.tsx` edits in scope when they touch behavior, types, or data flow. Not pure styling passes. |
-| **Jim** (Gemini) | Your CLI or Antigravity. **Not** Cursor | **Visuals only:** layout, typography, color, motion, component styling. **No** business logic, state machines, or store changes. |
+No ad-hoc scripts to search/replace source. `scripts/` is maintainer tooling only. Do not `git checkout` / `git restore` user work. Repair forward.
 
-**Chad/Jim** are Cursor/Gemini nicknames. Other agents use the same logic-vs-visuals split.
+## Code
 
-**Handoff rule:** If something needs Jim's pass (pure UI polish), Chad ends with a **short, copy-paste prompt for Jim's environment** (file paths, desired look, explicit "do not change logic or props contracts").
+Comments only for why, never what. No narrator comments. Extract before files become monoliths (~120 JSX lines). Tailwind + tokens in `global.css`. No css-in-js. `style={}` only for dynamic values. Detail: [`docs/agents/AGENT-REFERENCE.md`](docs/agents/AGENT-REFERENCE.md).
 
-**Release handoff (Angel vs agent):** On ship / release / push it out, **Angel runs the signed Windows build only** (`Build-signed-windows.bat` or `npm run build:signed`); the private key must not leave the machine. The agent does everything else: version bumps, `updater.json`, commit + push to `main`, `gh release create`, Shipped log / STATE.md / graph surfaces, live `updater.json` verification. Do not ask Angel to create the GitHub Release, write release copy, tag, or push unless `gh` auth is missing or push fails.
+## Stack
 
-## Agent editing guardrails (mandatory)
+Tauri v2, Rust, React 19, TypeScript, Zustand, yt-dlp, Tailwind v4. Two webviews; Zustand does not span them; sync is Tauri emit/listen.
 
-**Edit source in place. Never "patch via script."**
+Versions must match: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version` (+ `Cargo.lock` when the crate version changes).
 
-- Do not create or run ad-hoc Python, Node, or shell scripts to search/replace repo source. Use normal edit tools on the real file in small, reviewable hunks.
-- `scripts/` is for intentional maintainer tooling only. Do not add agent-generated patch scripts there.
-- Do not run `git checkout` / `git restore` on source files when the user may have uncommitted work. Repair forward; ask Angel before any git operation that discards working-tree content.
+Dev: `npm run dev:app`. Builds: `npm run build` (web), `npm run tauri build` (installer). Linux is local `tauri dev` only, not a shipped target.
 
-## Code quality (summary)
+## Updater (do not get these wrong)
 
-High-priority code style: avoid comments in code files unless they are genuinely needed. Comments must explain why, never what. Delete narrator comments, commented-out code, block headers for obvious code, step markers, and AI-voice patterns. Prefer names, structure, extraction, and tests over comments. Then apply the usual thresholds: extract components/hooks/helpers before files become monoliths (~120 JSX lines, shared helpers, deep nesting); Tailwind + CSS tokens in `global.css`; no css-in-js; inline `style={}` only for dynamic values.
+- Users update when live `updater.json` on `main` has a **higher** version.
+- `signature` is the **base64 contents** of the `.sig` file, never a path or URL.
+- Download `url` tag segment must match the GitHub tag (`v0.2.1`).
+- Angel signs. Mint reads `.sig` from `src-tauri/target/release/bundle/nsis/` after the build.
 
-Full thresholds and examples: [`docs/agents/AGENT-REFERENCE.md`](docs/agents/AGENT-REFERENCE.md). Visual rules: `.cursor/rules/design-style*.mdc`.
+## Website copy
 
-## Stack, versions, builds
-
-- **Stack:** Tauri v2, Rust, React 19, TypeScript, Zustand, yt-dlp, Tailwind v4. Two webviews (main + mini); Zustand does not span webviews; cross-window sync is Tauri emit/listen only.
-- **Versions (must match on every bump):** `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version` (+ `Cargo.lock` when crate version changes). Past failure: `Cargo.toml` behind JS/Tauri version.
-- **Builds:** `npm run build` (web); `npm run tauri build` (desktop installer).
-- **Dev loop (normal entry point):** `npm run dev:app`. Runs the Companion asset watcher plus `tauri dev` and shuts both down on exit. `npm run tauri dev` still works unchanged when the Companion watcher is not wanted. Companion assets are read from disk in debug builds, so a Companion edit plus browser refresh needs no Rust rebuild.
-- **Dev maintenance:** `npm run dev:disk` (read-only size report), `npm run dev:clean:safe` (dry run unless `-Apply`; switches `-Incremental`, `-WebsiteDist`, `-NpmCache`), `npm run dev:rust-recover` (one non-incremental build; use when Rust leaf rebuilds roughly double because the ReFS Dev Drive incremental session stops finalizing, see rust-lang/rust#151181). Full symbols on demand: `cargo build --profile debugging`.
-- **Large binaries:** do not commit `src-tauri/binaries/ffmpeg-*` / `ffprobe-*` unless LFS policy exists. Typical junk: `.cursor/`, ad-hoc archives like `ffmpeg.7z`.
-
-## Auto-updater (essentials)
-
-Release-blocking rules only. Full detail: [`docs/agents/AGENT-REFERENCE.md`](docs/agents/AGENT-REFERENCE.md).
-
-- Users receive updates when live `updater.json` on `main` has a **higher version** than the running app.
-- `signature` in `updater.json` must be the **base64 contents** of the `.sig` file, never a path or URL. Wrong value breaks every install silently.
-- GitHub download `url` tag segment must match the exact release tag (e.g. `v0.2.1`).
-- Copy: short teaser in `UpdaterMainOverlays`; fuller post-install via structured `notes` JSON. Do not paste long changelog blobs into `updater.json`.
-- **Angel only** runs signed release builds. Agents read `.sig` from `src-tauri/target/release/bundle/nsis/` after the build.
-
-Changelog / version-graph authoring: [`docs/agents/release/CHANGELOG-AUTHORING.md`](docs/agents/release/CHANGELOG-AUTHORING.md) (release ritual step 8 only).
-
-## Shipped log
-
-**Why this exists:** Updates were getting lost because the only places to record them lived in `docs/`. Files Chad has no reason to open during a bug fix. This log lives **here, in the file you already read every task**, so there is zero distance between finishing work and recording it. Distance is what kills logging, not effort.
-
-**The rule (non-negotiable):**
-
-- **Any change to shipped runtime behavior gets ONE appended line under the current `### vX.Y.Z (unreleased)` block, before the task is considered done.** Not after release. Not "I'll batch it." Now, as the last action of the change.
-- **Vague input is not an excuse to skip.** "Log that we fixed the sidecar thing" means you append one line under the current version. There is nothing to decide: no schema, no file to create, no format. Append. Done. If you find yourself thinking "what format / where / does this need fields", stop. That hesitation is the bug; it is one sentence appended here.
-- **Format per line:** `- **Area**: what changed, plainly. `relevant.ts` / `file.rs` if useful.` Past tense, user-or-dev-visible, one sentence. Mirror the density of the Finch log if you've seen it: terse, factual, no marketing.
-- **Newest version block on top, inside this section.** Newest line on top within a block.
-- **Do NOT create per-change files or per-version folders.** That reintroduces the exact distance/ceremony this section deletes. The flat block IS the system. Editing this file every time is fine. Finch does exactly this and never misses; editing was never the friction, distance was.
-- **`### vX.Y.Z (unreleased)`** is the live block during a cycle. At release, the ritual (below) drains it to graph surfaces, then **deletes** it from this file and opens a fresh empty `(unreleased)` block.
-- **Do NOT keep `(shipped)` blocks here.** After release ritual step 8, shipped history lives only in `docs/agents/release/versions/version-<semver>.json` and `docs/agents/release/versioner.html`. Keeping old blocks bloats every agent read for no benefit.
-
-**This block is the single source for release notes and the graph surfaces.** At push time the whole `(unreleased)` block is read once and drained (see Release ritual). That is the only time the version JSON / `versioner.html` registry get touched. Prefer one line per user-visible feature or fix; batch incremental polish passes into one line instead of ten `(fix)` breakpoints.
-
-
-### v0.3.1 (unreleased)
-
-- **Settings**: Panel height morph coalesces ResizeObserver ticks (rAF + settle) so compact/title and nested expands no longer restart the spring every layout frame; empty search can shrink; maxHeight tracks window resize; yt-dlp/Deno status fetch only on Downloads tab. `SettingsView.tsx`
-- **SponsorBlock**: Music mode only owns learning/auto-skip for audio files so a hidden PlayerView no longer double-counts video. `MusicShell.tsx`
-- **SponsorBlock**: Learning counters use atomic store bumps (no stale overwrite); empty UUID segments still track/auto-skip; Music mode records learning; settings tree line no longer cuts through labels, with learning progress badges. `ruforgeStore.ts` / `useSponsorBlockPlayback.ts` / `SponsorBlockSettingsTree.tsx`
-- **Nav**: Sidebar and Alt radial label Settings (was System). `AppSidebarRail.tsx` / `radialNavItems.ts`
-- **Settings**: Compact collapses the title block with MORPH_SPRING height (not a hard unmount); shell stays always-on; content scroll drives compact. `SettingsView.tsx`
-- **Settings**: Header compact uses sticky tabs + IntersectionObserver so the title scrolls away instead of snap-collapsing outside the scrollport. `SettingsView.tsx`
-- **Downloader**: Immersive download hero redesigned with poster, phase copy (preparing / downloading / finishing), ETA, and indeterminate bar so start stalls and end-of-file merge no longer look like a frozen 100%. `ImmersiveDownloadHero.tsx` / `DownloaderView.tsx`
-- **Downloader**: Fetching-details pacer spinner uses CSS `animate-spin` so it keeps turning while metadata work blocks the main thread. `DownloadJobQueuePanel.tsx`
-- **Nav**: Removed placeholder Movie mode from the Alt radial cycle (Default ↔ Music only). Stale `movie` localStorage maps to Default. `types.ts` / `radialNavItems.ts`
-- **Video Library**: Options ⋯ is a ghost icon (no rest bubble); card hover shell and watch progress stay while the menu is open. `MediaView.tsx`
-- **Settings**: Dialog height morph uses jump-then-spring (MotionValue), so the first tab swap after open springs like later ones. `SettingsView.tsx`
-- **Settings**: Settings is a centered popup with categorized top tabs (icons + tonal pills), search across settings, not a full page. `SettingsView.tsx` / `App.tsx`
-- **Discord**: Island onboarding visuals: espresso media frame for future presence card, clearer Settings-path compact + caption; Alt hold now finishes the Discord step after collapse. `OnboardingIsland.tsx`
-- **Discord**: Clarify Settings/onboarding copy for titles vs browsing (browsing off = media/download only). `SettingsView.tsx` / `onboardingSteps.ts`
-- **Discord**: Re-enable always re-sends SET_ACTIVITY (clear last_sent); unknown art keys no longer sent. `discord_rpc/mod.rs` / `discordPresenceTransport.ts`
-- **Discord**: Stop sending unuploaded `ruforge` art key (Discord can drop the whole activity); log IPC errors. `discordPresenceTransport.ts`
-- **Discord**: Presence survives webview reload: transport no longer disables IPC on unmount; re-enable clears the 15s send floor. `discordPresenceTransport.ts` / `discord_rpc/mod.rs`
-- **Discord**: Island onboarding Discord step uses Settings-path compact copy; SPIKE demo media removed pending a real presence screenshot. `onboardingSteps.ts`
-- **Discord**: Island onboarding step for Rich Presence (`introducedIn` 0.4.0) plus Debugging preview. `onboardingSteps.ts`
-- **Discord**: Main-window Rich Presence transport maps playback, downloads, and browsing to Discord via the Rust worker. `discordPresenceTransport.ts`
-- **Discord**: Settings General Discord section with three privacy toggles (presence off by default); transport not wired yet. `SettingsView.tsx` / `types.ts`
-- **Discord**: Rust Rich Presence worker and commands (`discord_rpc`), 15s coalesce, exit clear; Settings/UI transport not wired yet. `discord_rpc/mod.rs`
-
-## Release ritual
-
-**Why this exists:** "Push and commit everything" is ambiguous to an agent. The failure mode (observed): Chad invented a feature branch, committed there, and stranded `updater.json` off `main`. Then produced a flawless postmortem of the problem it had just caused. Chad's knowledge was never the gap. The gap was no defined, ordered, verified sequence. This is that sequence.
-
-**Trigger:** Angel says ship / release / push it out. Run these steps **in order, top to bottom.** Do not reorder, do not skip, do not parallelize.
-
-**Angel vs agent (default):** See **Release handoff** under **Who does what**. Angel runs the signed build only; the agent owns GitHub (`gh`), commits, tags, and release copy.
-
-**Hard rule (branching):** RuForge is a solo-dev repo. **All release commits go directly to `main`.** Do **not** create, switch to, or commit on any branch for a release. If you are not on `main`, stop and say so. Do not "fix" it with git surgery on a possibly-dirty tree; ask Angel.
-
-1. **Drain the Shipped log -> version bump decision (+ onboarding gate).** Read the entire `### vX.Y.Z (unreleased)` block. **Do not default to patch +1.** Apply the sizing rule below, state the chosen version and why in one line in the release report (step 10), then run the onboarding gate on the same block.
-
-   **Version sizing rule (pre-1.0, semver):**
-
-   - **PATCH** (`0.M.(N+1)`): bug fixes, polish, refactors, and behavior tweaks on existing public surfaces. PATCH may also include internal `#[tauri::command]` wiring, internal persisted config migrations, and backend authority refactors when they preserve an existing normal-user surface (same tab, same workflow, no new headline feature).
-
-   - **MINOR** (`0.(M+1).0`, reset patch to 0): the unreleased block contains **any** of: a new normal-user surface or user-visible workflow, a new user-facing Settings control or persisted key users set themselves, a new on-disk sidecar schema users rely on, or a public feature with release-note headline status (rule of thumb: **3+ distinct public addition bullets**, or **one headline feature** such as a new mode tab, new download UX, or new sidecar type).
-
-   - **Developer-gated unfinished surfaces** (e.g. behind `showDebuggingSettings`, not in release notes or onboarding): do **not** count toward public semver sizing.
-
-   - **MAJOR**: not used until 1.0. Do not bump to `1.0.0` without an explicit Angel decision.
-
-   **How to decide in practice:** Scan the unreleased block for **public** MINOR triggers only. Exclude dev-gated and internal-only rows. If count >= 1, bump minor and zero patch. If count = 0, patch +1. When in doubt between patch and minor for **user-visible** work, choose **minor** for pre-1.0 headline features.
-
-   **Onboarding gate:** Any new user-facing feature that needs a walkthrough must have a row in `src/lib/onboardingSteps.ts` with `introducedIn` matching the chosen release version. Full contract: [`docs/agents/AGENT-REFERENCE.md`](docs/agents/AGENT-REFERENCE.md). If warranted and missing, ask Angel before continuing. Bug-fix-only releases add no steps.
-
-2. **Bump all three version files together:** `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version`. Confirm all three match.
-
-3. **Prep `updater.json` notes (agent, before build).** Structured JSON in `notes`: markdown teaser + `additions` and `fixes` arrays. Set `version`, `url` (`.../releases/download/v<semver>/RuForge_<semver>_x64-setup.exe`), leave `signature` empty until step 5.
-
-4. **Signed build (Angel only).** Angel runs `Build-signed-windows.bat` or `npm run build:signed`. Agent reads NSIS `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/`.
-
-5. **Finish `updater.json` (agent).** Paste `.sig` base64 into `signature`, set `pub_date`. The `signature` value is the literal base64 CONTENTS of the `.sig` file, never a path or URL. That mistake breaks every install silently.
-
-5b. **Sync website release assets (agent).** Run `npm run prep:website-release` from repo root (requires signed NSIS). Use `npm run prep:website-release:changelog-only` if the signed build is not ready yet.
-
-6. **Commit + push to `main` (agent).** Confirm branch is `main`. Commit MUST include `updater.json`, all three version files, generated website changelog when applicable, and any unreleased code. Push to `origin main`. State the pushed commit hash.
-
-7. **GitHub Release (agent, `gh`).** Tag **`v<semver>`** must match the `updater.json` download path. Upload NSIS `.exe` (required). MSI optional. Do not attach `.sig` files. WinGet Releaser action opens manifest PRs when installed.
-
-8. **Drain Shipped log -> graph surfaces AND roll STATE.md (scoped, this step only).**
-   a. Append released changes into `docs/agents/release/versions/version-<semver>.json` (see CHANGELOG-AUTHORING.md). Add registry row in `docs/agents/release/versioner.html`.
-   b. In AGENTS.md: drain the `(unreleased)` block, **delete** it, open fresh `### v<next> (unreleased)` block. No `(shipped)` blocks here.
-   c. In STATE.md: set `Last shipped to users:` to the version just released; set `Shipping version:` to next unreleased; move shipped lines into closed release section; refresh Now, Next 3, Open P0; update `Last updated:`.
-   d. In `website/src/content/roadmap.json`: flip matching entries to `"status": "Finished"`. List every entry flipped or write "No roadmap entries to flip."
-   STATE.md and the AGENTS.md Shipped log must agree after this step.
-
-9. **HARD BLOCK: verify live, or it did not ship.** Fetch `https://raw.githubusercontent.com/UnboundAngel/RuForge/main/updater.json`
-   - Response body PARSES as JSON.
-   - Parsed `version` EQUALS the version you just released.
-   - `platforms.windows-x86_64.signature` is a long base64 string, not a path, URL, or empty.
-   If any check fails, the release FAILED. Committed != live on `main`.
-
-10. **Report.** Chosen version + rationale, pushed commit hash, GitHub Release URL, live `version` from step 9, confirmation Release asset matches `updater.json` `url`.
-
-**If any step fails, stop at that step and report the failure plainly. Do not continue and do not claim partial success as success.**
+If the task is SEO, `llms.txt`, robots, JSON-LD, or public site copy: read the website rows in `docs/agents/DOC-ROUTING.md` first. Never use bypass / circumvention / DRM / rip / "any video any site". Lead with open-source media library / yt-dlp GUI / Tauri app. Never fabricate `aggregateRating`.

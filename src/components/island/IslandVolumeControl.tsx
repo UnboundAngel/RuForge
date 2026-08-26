@@ -96,7 +96,8 @@ export function IslandVolumeControl({ volume, isMuted, onVolume, onMuted }: Prop
         onMuted(true);
         return;
       }
-      const step = e.deltaY > 0 ? -0.05 : 0.05;
+      const stepMag = volume < 0.25 ? 0.02 : 0.05;
+      const step = e.deltaY > 0 ? -stepMag : stepMag;
       const next = clamp01(volume + step);
       onVolume(next);
       if (isMuted && next > 0) onMuted(false);

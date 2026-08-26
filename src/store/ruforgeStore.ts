@@ -88,6 +88,10 @@ import {
 import { readPlaybackSpeed } from "../playbackSpeedStorage";
 import type { PlayInMiniPayload, PlayInMusicMiniPayload } from "../playerHandoff";
 import { writePlaybackPos } from "../playbackStorage";
+import {
+  clearMusicPlaybackSession,
+  writeMusicPlaybackSession,
+} from "../lib/musicPlaybackSessionStorage";
 import { parkAndStopVideoPlayback } from "../lib/videoPlaybackPark";
 import {
   buildMusicEffectivePlaylist,
@@ -333,10 +337,10 @@ export interface RuforgeStore extends DownloadQueueSlice {
   openMusicArtist: (key: string) => void;
   openMusicAlbum: (artistKey: string, key: string) => void;
   openMusicSong: (path: string) => void;
-  openMusicLiked: () => void;
+  openMusicLiked: (opts?: { backTo?: "profile" }) => void;
   /** Music mode + listening stats (profile destination for the YouTube account chip). */
   openProfilePage: () => void;
-  openMusicStats: () => void;
+  openMusicStats: (opts?: { backTo?: "profile" }) => void;
   closeMusicDetail: () => void;
   refreshStorageStats: () => Promise<void>;
   openAuthorizeCleanupModal: () => Promise<void>;
@@ -640,6 +644,13 @@ export const useRuforgeStore = create<RuforgeStore>()(
           const restoreParkedVideo =
             !isAudioOnlyPath(playingFile.path) &&
             parkedVideoFile?.path === playingFile.path;
+          if (isAudioOnlyPath(playingFile.path) && !get().musicPlayerResume) {
+            writeMusicPlaybackSession({
+              path: playingFile.path,
+              paused: true,
+              currentTime: 0,
+            });
+          }
           set({
             playingFile,
             loopMode,
@@ -656,6 +667,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
                 : {}),
           });
         } else {
+          clearMusicPlaybackSession();
           set({ playingFile });
           tryFlushDeferredScrubBackfill(get);
         }
@@ -744,9 +756,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       stopPlayback: () => {
         claimMainPlayback();
+        clearMusicPlaybackSession();
         set({
           playingFile: null,
           musicQueueSource: null,
+          musicPlayerResume: null,
           activityOwner: null,
           activityHandoff: null,
           parkedVideoFile: null,
@@ -775,6 +789,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
             playerResumeAt: null,
           });
         }
+        get().clearMusicPlayerResume();
         get().setPlayingFile(file);
 
         if (prev?.path !== file.path) {
@@ -795,18 +810,26 @@ export const useRuforgeStore = create<RuforgeStore>()(
           musicQueueSource: source,
           playingFile: file,
           loopMode,
+          musicPlayerResume: null,
           activityOwner: null,
           activityHandoff: null,
           playerResumeAt: null,
         });
+        writeMusicPlaybackSession({
+          path: file.path,
+          paused: true,
+          currentTime: 0,
+        });
       },
 
       handlePlayFolderNeighbor: (file) => {
+        get().clearMusicPlayerResume();
         get().setPlayingFile(file);
       },
 
       handlePlayPlaylist: (files, shuffle = false, source = null) => {
         if (files.length === 0) return;
+        get().clearMusicPlayerResume();
         let queue = [...files];
         if (shuffle) {
           if (get().navMode === "music") {
@@ -1188,7 +1211,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       openMusicArtist: (key) => set({ musicDetail: { kind: "artist", key } }),
       openMusicAlbum: (artistKey, key) => set({ musicDetail: { kind: "album", artistKey, key } }),
       openMusicSong: (path) => set({ musicDetail: { kind: "song", path } }),
-      openMusicLiked: () => set({ musicDetail: { kind: "liked" } }),
+      openMusicLiked: (opts) => set({ musicDetail: { kind: "liked", backTo: opts?.backTo } }),
       openProfilePage: () => {
         localStorage.setItem("ruforge-nav-mode", "music");
         set({
@@ -1197,7 +1220,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
           musicDetail: { kind: "profile" },
         });
       },
-      openMusicStats: () => set({ musicDetail: { kind: "stats" } }),
+      openMusicStats: (opts) => set({
+        musicDetail: { kind: "stats", backTo: opts?.backTo },
+      }),
       closeMusicDetail: () => set({ musicDetail: null }),
 
       refreshStorageStats: async () => {

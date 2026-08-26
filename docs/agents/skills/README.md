@@ -8,8 +8,8 @@ Root project truth still comes first:
 
 1. `STATE.md`
 2. `AGENTS.md`
-3. A task-routed doc from the `AGENTS.md` Doc routing table
-4. A skill from this folder only when its trigger matches the task
+3. A task-routed doc from `docs/agents/DOC-ROUTING.md`
+4. A skill from this folder, or `.cursor/skills/` (release, design), only when its trigger matches the task
 
 ## How To Read A Skill
 
@@ -42,6 +42,8 @@ Some skills were originally written for Claude. Any agent may use them.
 
 | Skill | Package | Use when |
 |------|---------|----------|
+| RuForge design | `.cursor/skills/ruforge-design/SKILL.md` | UI chrome restrictions (bezel/well, popups, errors). Lock new patterns from the live app into `restrictions.md`. |
+| RuForge release | `.cursor/skills/ruforge-release/SKILL.md` | Angel says ship / release / push it out, or the task is updater.json / gh release / a public version bump. |
 | Cursor audit router | `cursor-audit-router.skill` | Auditing Cursor output or writing a message Angel will paste back into Cursor. |
 | Prompt master | `prompt-master.skill` | Writing, tightening, adapting, or splitting prompts for Cursor, Codex, Gemini, Perplexity, or another AI tool. |
 | Research master | `research-master.skill` | The task depends on current external facts: APIs, versions, pricing, policies, competitors, SEO, stores, hosting, AI tool capabilities, or any explicit research request. |

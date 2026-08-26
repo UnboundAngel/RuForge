@@ -102,7 +102,7 @@ Island steps: read `src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABIL
 - **Feature steps:** 16:9 media slot; optional `settingsGate` on existing `RuforgeSettings` booleans only. Do not invent settings keys.
 - **Dev:** `import.meta.env.DEV` replays full registry; Settings > Debugging has Replay onboarding when `showDebuggingSettings` is on.
 - **Code (when authorized):** `src/lib/onboardingSteps.ts`, `src/lib/onboardingStorage.ts`, `src/components/onboarding/`, media under `src/assets/onboarding/` via Vite import (not `convertFileSrc`).
-- **Release gate:** scan unreleased Shipped log for user-facing features needing a walkthrough; ask Angel before ship if a step is warranted but missing.
+- **Release gate:** run `node scripts/shipped.mjs list` and scan for user-facing features needing a walkthrough; ask Angel before ship if a step is warranted but missing.
 
 ## When unsure
 

@@ -73,6 +73,10 @@ import { useMainWindowMaximized } from "@/hooks/useMainWindowMaximized";
 import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
 import { MusicRightPanel, type RightPanelTab } from "./MusicRightPanel";
+import {
+  MusicExpandedContextMenu,
+  type MusicExpandedContextMenuState,
+} from "./MusicExpandedContextMenu";
 import { useSponsorBlockPlayback } from "@/hooks/useSponsorBlockPlayback";
 import { getRecentHistory, type PlayHistoryEntry } from "./musicPlayHistory";
 import { importLegacyListenDataIfNeeded } from "@/lib/musicListenLegacyImport";
@@ -119,6 +123,7 @@ type ExpandedOverlayProps = {
   isPaused: boolean;
   isMuted: boolean;
   onTogglePlay: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 };
 
 function ExpandedOverlay({
@@ -127,13 +132,20 @@ function ExpandedOverlay({
   isPaused,
   isMuted,
   onTogglePlay,
+  onContextMenu,
 }: ExpandedOverlayProps) {
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const artist = playingFile?.artist ?? playingFile?.albumArtist
     ?? (playingFile?.name.includes(" - ") ? playingFile.name.split(" - ")[0].trim() : "");
 
   return (
-    <div className="absolute inset-0 z-[2] pointer-events-none overflow-hidden">
+    <div
+      className="absolute inset-0 z-[2] overflow-hidden"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu?.(e);
+      }}
+    >
       <AudioHeroStage
         coverSrc={coverSrc}
         audioEl={audioEl}
@@ -165,6 +177,7 @@ export function MusicShell() {
   const activeView = useRuforgeStore((s) => s.musicView);
   const setMusicView = useRuforgeStore((s) => s.setMusicView);
   const [playerExpanded, setPlayerExpanded] = useState(false);
+  const [expandedMenu, setExpandedMenu] = useState<MusicExpandedContextMenuState | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [currentMusicExploreUrl, setCurrentMusicExploreUrl] = useState("");
   const [musicExplorePageContext, setMusicExplorePageContext] = useState<MusicExplorePageContext>(
@@ -305,7 +318,8 @@ export function MusicShell() {
 
   useEffect(() => {
     void importLegacyListenDataIfNeeded()
-      .then(() => Promise.all([refreshListenIntegrity(), refreshListenSnapshot()]));
+      .then(() => Promise.all([refreshListenIntegrity(), refreshListenSnapshot()]))
+      .then(() => setHistoryEntries(getRecentHistory()));
   }, []);
 
   useEffect(() => {
@@ -435,6 +449,14 @@ export function MusicShell() {
   useEffect(() => {
     if (playerExpanded && rightPanelTab === "segments") setRightPanelTab("queue");
   }, [playerExpanded, playingFile?.path]);
+
+  useEffect(() => {
+    if (!playerExpanded) setExpandedMenu(null);
+  }, [playerExpanded]);
+
+  useEffect(() => {
+    setExpandedMenu(null);
+  }, [playingFile?.path]);
 
   const resyncExploreWebview = useCallback(() => {
     musicExploreLastBoundsRef.current = null;
@@ -1160,6 +1182,10 @@ export function MusicShell() {
                       isPaused={playback.paused}
                       isMuted={isMuted}
                       onTogglePlay={playback.togglePlay}
+                      onContextMenu={(e) => {
+                        if (!playingFile) return;
+                        setExpandedMenu({ x: e.clientX, y: e.clientY });
+                      }}
                     />
                   ) : musicDetail?.kind === "artist" ? (
                     <motion.div key={`artist-${musicDetail.key}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0">
@@ -1360,6 +1386,24 @@ export function MusicShell() {
           ) : null}
         </AnimatePresence>
       </motion.div>
+
+      <MusicExpandedContextMenu
+        menu={expandedMenu}
+        file={playingFile}
+        paused={playback.paused}
+        currentTime={playback.currentTime}
+        hasPrevInQueue={playback.hasPrevInQueue}
+        hasNextInQueue={playback.hasNextInQueue}
+        onClose={() => setExpandedMenu(null)}
+        onTogglePlay={playback.togglePlay}
+        onSkipPrev={playback.skipPrev}
+        onSkipNext={playback.skipNext}
+        onOpenQueue={() => {
+          setRightPanelTab("queue");
+          setRightPanelOpen(true);
+        }}
+        onCollapse={() => setPlayerExpanded(false)}
+      />
     </div>
   );
 }

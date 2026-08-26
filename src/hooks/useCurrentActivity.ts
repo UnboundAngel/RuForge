@@ -18,6 +18,7 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
 
 type LiveBridgeCache = {
+  path: string | null;
   paused: boolean;
   currentTime: number;
   duration: number;
@@ -122,9 +123,13 @@ export function useCurrentActivity(): CurrentActivity {
     }
 
     if (playback) {
+      const path = file?.path ?? null;
       const dur = resolveDuration(file, playback.duration);
+      let currentTime = Math.max(0, playback.currentTime);
+      if (dur > 0) currentTime = Math.min(currentTime, dur);
       const next = {
-        currentTime: Math.max(0, playback.currentTime),
+        path,
+        currentTime,
         duration: dur,
         paused: playback.paused,
       };
@@ -132,10 +137,11 @@ export function useCurrentActivity(): CurrentActivity {
       return { currentTime: next.currentTime, duration: next.duration };
     }
 
-    if (lastLiveBridgeRef.current) {
+    const cached = lastLiveBridgeRef.current;
+    if (cached && cached.path === (file?.path ?? null)) {
       return {
-        currentTime: lastLiveBridgeRef.current.currentTime,
-        duration: lastLiveBridgeRef.current.duration,
+        currentTime: cached.currentTime,
+        duration: cached.duration,
       };
     }
 

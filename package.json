@@ -17,6 +17,7 @@
     "build:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-signed-windows.ps1",
     "prep:website-release": "node scripts/sync-website-release.mjs",
     "prep:website-release:changelog-only": "node scripts/sync-website-release.mjs --skip-installer --skip-build",
+    "shipped": "node scripts/shipped.mjs",
     "test": "vitest run"
   },
   "dependencies": {
