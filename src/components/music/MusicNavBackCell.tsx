@@ -53,6 +53,7 @@ export function MusicNavBackCell({ collapsed, shellBlack, inLeftStack = false, o
               }
             : undefined
         }
+        aria-label="Back to RuForge"
         data-tooltip={collapsed ? "Back to RuForge" : "Back to RuForge (Ctrl+B toggles nav)"}
       >
         <ChevronLeft size={16} className="shrink-0" />

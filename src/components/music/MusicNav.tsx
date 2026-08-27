@@ -178,6 +178,7 @@ export function MusicNav({
                   ? "rf-music-tooltip-anchor justify-center w-10 h-10 p-0"
                   : "gap-3 px-3 py-2.5 w-full",
               )}
+              aria-label={collapsed ? `${item.label} (${NAV_SHORTCUT_LABELS[item.id]})` : undefined}
               data-tooltip={collapsed ? `${item.label} (${NAV_SHORTCUT_LABELS[item.id]})` : undefined}
             >
               {active && !collapsed && (

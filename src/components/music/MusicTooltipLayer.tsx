@@ -27,10 +27,17 @@ function clampTip(anchor: DOMRect, tip: DOMRect): TipPos {
 
 const ANCHOR_SELECTOR = ".rf-music-tooltip-anchor[data-tooltip]";
 
+type Props = {
+  /** Native Explore webview paints over DOM; hide tips while it is up. */
+  disabled?: boolean;
+};
+
 /** Portal tooltips for music chrome anchors (data-tooltip on .rf-music-tooltip-anchor). */
-export function MusicTooltipLayer() {
+export function MusicTooltipLayer({ disabled = false }: Props) {
   const tipRef = useRef<HTMLSpanElement>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
   const [label, setLabel] = useState<string | null>(null);
   const [pos, setPos] = useState<TipPos | null>(null);
 
@@ -42,6 +49,7 @@ export function MusicTooltipLayer() {
   }, []);
 
   const show = useCallback((anchor: HTMLElement) => {
+    if (disabledRef.current) return;
     const text = anchor.getAttribute("data-tooltip")?.trim();
     if (!text) return;
     anchorRef.current = anchor;
@@ -98,6 +106,10 @@ export function MusicTooltipLayer() {
       document.removeEventListener("focusout", onFocusOut);
     };
   }, [show, hide]);
+
+  useEffect(() => {
+    if (disabled) hide();
+  }, [disabled, hide]);
 
   useLayoutEffect(() => {
     if (!label) return;
