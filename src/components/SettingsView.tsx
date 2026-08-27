@@ -565,6 +565,7 @@ export const SettingsView: React.FC<{
   const reduceMotion = useReducedMotion();
   const [settingsDismissReady, setSettingsDismissReady] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
+  const [panelMeasured, setPanelMeasured] = useState(false);
   const [settingsMaxHeight, setSettingsMaxHeight] = useState(() => {
     if (typeof window === "undefined") return 840;
     return Math.min(Math.round(window.innerHeight * 0.88), 840);
@@ -627,6 +628,7 @@ export const SettingsView: React.FC<{
       headerCompactRef.current = false;
       setHeaderCompact(false);
       setSearchExpanded(false);
+      setPanelMeasured(false);
       heightPrimedRef.current = false;
       titleHeightPrimedRef.current = false;
       heightTargetRef.current = null;
@@ -688,12 +690,14 @@ export const SettingsView: React.FC<{
 
   useLayoutEffect(() => {
     if (!open) return;
-    const headerEl = headerMeasureRef.current;
-    const bodyEl = bodyMeasureRef.current;
-    if (!headerEl || !bodyEl) return;
 
-    const measureNextH = () => {
-      const bodyH = Math.max(bodyEl.scrollHeight, bodyEl.offsetHeight, 1);
+    const measureNextH = (headerEl: HTMLDivElement, bodyEl: HTMLDivElement) => {
+      const bodyH = Math.max(
+        bodyEl.scrollHeight,
+        bodyEl.offsetHeight,
+        settingsScrollRef.current?.scrollHeight ?? 0,
+        1,
+      );
       const maxH = Math.min(Math.round(window.innerHeight * 0.88), 840);
       const natural =
         headerEl.offsetHeight + bodyH + SETTINGS_SHELL_PAD_PX * 2;
@@ -707,6 +711,7 @@ export const SettingsView: React.FC<{
         panelHeight.jump(nextH);
         heightPrimedRef.current = true;
         heightTargetRef.current = nextH;
+        setPanelMeasured(true);
         return;
       }
 
@@ -728,39 +733,78 @@ export const SettingsView: React.FC<{
       });
     };
 
+    const bodyScrollHeight = () => {
+      const bodyEl = bodyMeasureRef.current;
+      if (!bodyEl) return 0;
+      return Math.max(
+        bodyEl.scrollHeight,
+        bodyEl.offsetHeight,
+        settingsScrollRef.current?.scrollHeight ?? 0,
+      );
+    };
+
     const applyNow = () => {
+      const headerEl = headerMeasureRef.current;
+      const bodyEl = bodyMeasureRef.current;
+      if (!headerEl || !bodyEl) return false;
       if (heightRoSettleRef.current != null) {
         clearTimeout(heightRoSettleRef.current);
         heightRoSettleRef.current = null;
       }
-      commitPanelHeight(measureNextH());
+      if (bodyScrollHeight() < 48) return false;
+      commitPanelHeight(measureNextH(headerEl, bodyEl));
+      return true;
     };
 
     const applyFromRo = () => {
       if (heightRoRafRef.current != null) return;
       heightRoRafRef.current = requestAnimationFrame(() => {
         heightRoRafRef.current = null;
-        const nextH = measureNextH();
+        const headerEl = headerMeasureRef.current;
+        const bodyEl = bodyMeasureRef.current;
+        if (!headerEl || !bodyEl) return;
+        if (bodyScrollHeight() < 48) return;
+        const nextH = measureNextH(headerEl, bodyEl);
         if (heightRoSettleRef.current != null) {
           clearTimeout(heightRoSettleRef.current);
         }
         heightRoSettleRef.current = setTimeout(() => {
           heightRoSettleRef.current = null;
           commitPanelHeight(nextH);
-          const settled = measureNextH();
+          const settledHeader = headerMeasureRef.current;
+          const settledBody = bodyMeasureRef.current;
+          if (!settledHeader || !settledBody) return;
+          const settled = measureNextH(settledHeader, settledBody);
           if (Math.abs(settled - nextH) >= 1) commitPanelHeight(settled);
         }, 64);
       });
     };
 
-    applyNow();
-    const ro = new ResizeObserver(applyFromRo);
-    ro.observe(headerEl);
-    ro.observe(bodyEl);
+    let retryFrames = 0;
+    let retryRaf = 0;
+    let ro: ResizeObserver | null = null;
+    const ensureObservers = () => {
+      const headerEl = headerMeasureRef.current;
+      const bodyEl = bodyMeasureRef.current;
+      if (!headerEl || !bodyEl || ro) return;
+      ro = new ResizeObserver(applyFromRo);
+      ro.observe(headerEl);
+      ro.observe(bodyEl);
+    };
+
+    const retryMeasure = () => {
+      ensureObservers();
+      if (applyNow()) return;
+      retryFrames += 1;
+      if (retryFrames < 16) retryRaf = requestAnimationFrame(retryMeasure);
+    };
+
+    retryMeasure();
     window.addEventListener("resize", applyNow);
     return () => {
-      ro.disconnect();
+      ro?.disconnect();
       window.removeEventListener("resize", applyNow);
+      cancelAnimationFrame(retryRaf);
       if (heightRoRafRef.current != null) {
         cancelAnimationFrame(heightRoRafRef.current);
         heightRoRafRef.current = null;
@@ -992,7 +1036,7 @@ export const SettingsView: React.FC<{
         transition={motionDuration(reduceMotion, overlayPanelTransition)}
         className="relative flex w-full max-w-[56rem] flex-col overflow-hidden rounded-[24px] bg-[#271C18] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
         style={{
-          height: panelHeight,
+          ...(panelMeasured ? { height: panelHeight } : { minHeight: 320 }),
           maxHeight: settingsMaxHeight,
           padding: SETTINGS_SHELL_PAD_PX,
         }}
