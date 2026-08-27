@@ -51,7 +51,7 @@ export function MusicLikeButton({ file, className, size = 17 }: Props) {
         "relative shrink-0 flex h-8 w-8 items-center justify-center rounded-full border-0 bg-transparent overflow-visible transition-colors duration-150",
         className,
       )}
-      style={{ color: liked ? "var(--music-accent)" : "var(--music-text-muted)" }}
+      style={{ color: liked ? "var(--music-accent)" : "rgba(255, 255, 255, 0.52)" }}
       aria-label={liked ? "Remove from Liked Songs" : "Add to Liked Songs"}
       aria-pressed={liked}
       onClick={(e) => {
@@ -116,7 +116,7 @@ export function MusicLikeButton({ file, className, size = 17 }: Props) {
         <Heart
           size={size}
           strokeWidth={2}
-          className="opacity-60"
+          className={liked ? "opacity-0" : "opacity-100"}
           aria-hidden
         />
         <Heart

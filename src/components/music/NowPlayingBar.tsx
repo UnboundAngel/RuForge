@@ -250,16 +250,29 @@ export function NowPlayingBar({
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
   const artist = playingFile ? rawArtistFromFile(playingFile) : "";
   const artistNavKey = playingFile ? artistKeyFromFile(playingFile) : "";
+  const displayDuration =
+    duration > 0
+      ? duration
+      : playingFile && playingFile.duration > 0
+        ? playingFile.duration
+        : 0;
   const pct =
     isScrubbingRef.current || scrubPctRef.current !== null
       ? (scrubPctRef.current ?? scrubPct ?? 0)
-      : duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+      : displayDuration > 0
+        ? Math.min(100, (currentTime / displayDuration) * 100)
+        : 0;
 
   const previewPct =
     scrubPct !== null ? (scrubPctRef.current ?? scrubPct) : hoverPercent;
   const showScrubHoverTime =
-    duration > 0 && (isHovering || scrubPct !== null);
-  const scrubHoverTimeSec = (previewPct / 100) * duration;
+    displayDuration > 0 && (isHovering || scrubPct !== null);
+  const scrubHoverTimeSec = (previewPct / 100) * displayDuration;
+
+  const displayCurrentTime =
+    scrubPct !== null && displayDuration > 0
+      ? ((scrubPctRef.current ?? scrubPct) / 100) * displayDuration
+      : currentTime;
 
   if (!playingFile) return null;
 
@@ -273,7 +286,7 @@ export function NowPlayingBar({
       }}
     >
       <div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1fr)] items-center gap-x-4 px-4">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0 w-fit max-w-full">
         <div
           role="button"
           tabIndex={0}
@@ -284,7 +297,7 @@ export function NowPlayingBar({
               onToggleExpand();
             }
           }}
-          className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer"
+          className="flex items-center gap-3 min-w-0 text-left cursor-pointer"
           aria-label={expanded ? "Collapse player" : "Expand player"}
         >
           {coverSrc ? (
@@ -304,7 +317,7 @@ export function NowPlayingBar({
               </svg>
             </div>
           )}
-          <div className="min-w-0 flex-1" style={{ color: "var(--music-text-primary)" }}>
+          <div className="min-w-0 max-w-[min(280px,32vw)]" style={{ color: "var(--music-text-primary)" }}>
             <MarqueeText text={playingFile.name} className="text-sm font-medium leading-tight" layoutKey={playingFile.path} />
             {artist && artistNavKey && (
               <button
@@ -321,7 +334,7 @@ export function NowPlayingBar({
             )}
           </div>
         </div>
-        <MusicLikeButton file={playingFile} className={cn(barBtnClass, "overflow-visible")} size={17} />
+        <MusicLikeButton file={playingFile} className="overflow-visible opacity-100 hover:opacity-100" size={17} />
         </div>
 
         <div className="flex h-full min-w-0 flex-col items-center justify-end gap-1 pb-2.5 pt-1">
@@ -425,13 +438,13 @@ export function NowPlayingBar({
                 className="text-[10px] tabular-nums"
                 style={{ color: "var(--music-text-muted)" }}
               >
-                0:00
+                {formatDuration(displayCurrentTime)}
               </span>
               <span
                 className="text-[10px] tabular-nums"
                 style={{ color: "var(--music-text-muted)" }}
               >
-                {duration > 0 ? formatDuration(duration) : "0:00"}
+                {displayDuration > 0 ? formatDuration(displayDuration) : "--:--"}
               </span>
             </div>
           </div>

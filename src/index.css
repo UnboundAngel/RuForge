@@ -964,10 +964,12 @@ html.ruforge-island-root #root {
 }
 
 /* ── Music Right Sidebar ─────────────────────────────── */
-.rf-music-right-panel {
-  border-top-right-radius: var(--music-panel-radius);
-  border-bottom-right-radius: var(--music-panel-radius);
+.rf-music-right-panel[data-open="true"] {
   overflow: hidden;
+}
+
+.rf-music-right-panel[data-open="false"] {
+  overflow: visible;
 }
 
 .rf-music-panel-tab {
