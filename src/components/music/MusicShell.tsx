@@ -72,7 +72,8 @@ import {
 import { useMainWindowMaximized } from "@/hooks/useMainWindowMaximized";
 import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
-import { MusicRightPanel, type RightPanelTab } from "./MusicRightPanel";
+import { MusicRightPanel, MusicRightPanelMini, type RightPanelTab } from "./MusicRightPanel";
+import { MusicTooltipLayer } from "./MusicTooltipLayer";
 import {
   MusicExpandedContextMenu,
   type MusicExpandedContextMenuState,
@@ -192,6 +193,8 @@ export function MusicShell() {
   // Right panel state
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("queue");
+  const [rightPanelMiniHintKey, setRightPanelMiniHintKey] = useState(0);
+  const prevRightPanelOpenRef = useRef(rightPanelOpen);
   const [musicOnlySkip, setMusicOnlySkipState] = useState(() => readMusicOnlySkip());
   const [historyEntries, setHistoryEntries] = useState<PlayHistoryEntry[]>(() => getRecentHistory());
   const [activeTrackMeta, setActiveTrackMeta] = useState<MusicMetaSidecar | null>(null);
@@ -449,6 +452,14 @@ export function MusicShell() {
   useEffect(() => {
     if (playerExpanded && rightPanelTab === "segments") setRightPanelTab("queue");
   }, [playerExpanded, playingFile?.path]);
+
+  useEffect(() => {
+    const wasOpen = prevRightPanelOpenRef.current;
+    prevRightPanelOpenRef.current = rightPanelOpen;
+    if (wasOpen && !rightPanelOpen) {
+      setRightPanelMiniHintKey((k) => k + 1);
+    }
+  }, [rightPanelOpen]);
 
   useEffect(() => {
     if (!playerExpanded) setExpandedMenu(null);
@@ -1002,6 +1013,16 @@ export function MusicShell() {
   const shellBlack = playerExpanded;
 
   const leftSlotWidth = navCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_FULL;
+  const mainPanelRadius = showExploreStrip
+    ? rightPanelOpen
+      ? "0 0 0 0"
+      : "0 var(--music-panel-radius) 0 0"
+    : [
+        navCollapsed ? "var(--music-panel-radius)" : "0",
+        rightPanelOpen ? "0" : "var(--music-panel-radius)",
+        rightPanelOpen ? "0" : "var(--music-panel-radius)",
+        navCollapsed ? "var(--music-panel-radius)" : "0",
+      ].join(" ");
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1070,16 +1091,29 @@ export function MusicShell() {
           className="flex flex-1 min-h-0 min-w-0 basis-0 overflow-hidden"
           style={{ gap: showExploreStrip ? 0 : "var(--music-shell-gap)" }}
         >
-          {/* Left L-column: nav + Back share one surface; bottom row aligns with Explore boot bar. */}
+          {/* Left L-column: expanded = shared surface; collapsed = floating pills on shell chrome. */}
           <div
-            className="flex flex-col shrink-0 min-h-0 overflow-hidden transition-[width] duration-200 ease-out"
+            className={cn(
+              "flex flex-col shrink-0 min-h-0 overflow-hidden transition-[width] duration-200 ease-out",
+              navCollapsed && "justify-between",
+            )}
             style={{
               width: leftSlotWidth,
-              background: shellBlack ? "var(--music-bg)" : "var(--music-surface)",
-              borderRadius: "var(--music-panel-radius) 0 0 var(--music-panel-radius)",
+              background: navCollapsed
+                ? "transparent"
+                : shellBlack
+                  ? "var(--music-bg)"
+                  : "var(--music-surface)",
+              borderRadius: navCollapsed
+                ? 0
+                : "var(--music-panel-radius) 0 0 var(--music-panel-radius)",
             }}
           >
-            <div className="flex-1 min-h-0 basis-0 overflow-hidden">
+            <div
+              className={cn(
+                navCollapsed ? "shrink-0 overflow-visible" : "flex-1 min-h-0 basis-0 overflow-hidden",
+              )}
+            >
               <MusicNav
                 activeView={activeView}
                 captureScreenLabel={`music-${activeView}`}
@@ -1135,7 +1169,7 @@ export function MusicShell() {
           </div>
 
           {/* Right: main panel + Explore boot bar (bottom row aligns with Back on the left). */}
-          <div className="flex flex-col flex-1 min-w-0 min-h-0 basis-0 overflow-hidden">
+          <div className="relative flex flex-col flex-1 min-w-0 min-h-0 basis-0 overflow-hidden">
             <div
               className={cn(
                 "relative flex-1 min-h-0 basis-0 overflow-hidden min-w-0",
@@ -1143,9 +1177,7 @@ export function MusicShell() {
               )}
               style={{
                 background: playerExpanded ? "transparent" : "var(--music-surface)",
-                borderRadius: showExploreStrip
-                  ? "0 var(--music-panel-radius) 0 0"
-                  : "var(--music-panel-radius)",
+                borderRadius: mainPanelRadius,
               }}
             >
               <div ref={assignWebviewHostRef} className="absolute inset-0 z-0" />
@@ -1159,7 +1191,7 @@ export function MusicShell() {
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.25 }}
                       className="absolute inset-0 z-[1] pointer-events-none overflow-hidden"
-                      style={{ borderRadius: "var(--music-panel-radius)" }}
+                      style={{ borderRadius: mainPanelRadius }}
                     >
                       <AudioHeroStage
                         coverSrc={coverSrc}
@@ -1241,6 +1273,7 @@ export function MusicShell() {
                         onOpenAlbum={openMusicAlbum}
                         onSearchYoutubeMusic={handleSearchYoutubeMusic}
                         historyEntries={historyEntries}
+                        reserveRightMiniPanel={!rightPanelOpen}
                       />
                     </motion.div>
                   ) : activeView === "explore" ? (
@@ -1287,9 +1320,19 @@ export function MusicShell() {
                 onReload={() => void handleReloadExplore()}
               />
             )}
+            {!rightPanelOpen && (
+              <MusicRightPanelMini
+                activeTab={rightPanelTab}
+                onTabChange={(t) => {
+                  setRightPanelTab(t);
+                  setRightPanelOpen(true);
+                }}
+                showSegmentsTab={showSegmentsTab}
+                hintKey={rightPanelMiniHintKey}
+              />
+            )}
           </div>
 
-          {showSegmentsTab && !rightPanelOpen && rightPanelTab !== "segments" ? null : null}
           <MusicRightPanel
             open={rightPanelOpen}
             onClose={() => setRightPanelOpen(false)}
@@ -1387,6 +1430,7 @@ export function MusicShell() {
         </AnimatePresence>
       </motion.div>
 
+      <MusicTooltipLayer />
       <MusicExpandedContextMenu
         menu={expandedMenu}
         file={playingFile}

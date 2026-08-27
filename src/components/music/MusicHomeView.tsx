@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Play, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Play, Search, X, ChevronLeft, ChevronRight, Waves, Brain } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
 import { albumCoverPathWithFallback } from "@/albumCoverPath";
@@ -25,7 +25,146 @@ import { MusicAlbumShelf } from "./MusicAlbumShelf";
 import { MUSIC_ALBUM_SHELF_GAP_HOME_PX } from "@/lib/musicAlbumShelfLayout";
 import { MusicHomeRecentSection } from "./MusicHomeRecentSection";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
+import { cn } from "@/lib/utils";
 import type { PlayHistoryEntry } from "./musicPlayHistory";
+
+type HomeFilter = "all" | "relax" | "focus";
+
+const HOME_FILTERS: {
+  id: HomeFilter;
+  label: string;
+  icon: typeof Waves | null;
+  accent: string;
+  accentBg: string;
+  accentBgMuted: string;
+}[] = [
+  {
+    id: "all",
+    label: "All",
+    icon: null,
+    accent: "var(--music-text-primary)",
+    accentBg: "var(--music-text-primary)",
+    accentBgMuted: "#2a2a2a",
+  },
+  {
+    id: "relax",
+    label: "Relax",
+    icon: Waves,
+    accent: "#6ec4dc",
+    accentBg: "#357d92",
+    accentBgMuted: "#1e3d45",
+  },
+  {
+    id: "focus",
+    label: "Focus",
+    icon: Brain,
+    accent: "#d4b65a",
+    accentBg: "#9a8044",
+    accentBgMuted: "#3d3520",
+  },
+];
+
+const FILTER_LABEL_WIDTH: Record<HomeFilter, number> = {
+  all: 24,
+  relax: 54,
+  focus: 50,
+};
+
+const FILTER_MORPH_MS = "260ms";
+const FILTER_MORPH_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+const FILTER_PILL_SHADOW =
+  "0 1px 3px rgb(0 0 0 / 0.42), 0 0 0 1px rgb(255 255 255 / 0.07)";
+const FILTER_PILL_SHADOW_COMPACT =
+  "0 2px 6px rgb(0 0 0 / 0.48), 0 0 0 1px rgb(255 255 255 / 0.09)";
+const FILTER_PILL_SHADOW_ACTIVE =
+  "0 3px 10px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.12)";
+
+type HomeFilterPillProps = {
+  filter: (typeof HOME_FILTERS)[number];
+  isActive: boolean;
+  compact: boolean;
+  onSelect: () => void;
+};
+
+function HomeFilterPill({ filter, isActive, compact, onSelect }: HomeFilterPillProps) {
+  const Icon = filter.icon;
+  const showLabel = isActive || filter.id === "all" || !compact;
+
+  const pillShadow = compact
+    ? isActive
+      ? FILTER_PILL_SHADOW_ACTIVE
+      : FILTER_PILL_SHADOW_COMPACT
+    : FILTER_PILL_SHADOW;
+
+  const style = isActive
+    ? filter.id === "all"
+      ? {
+          background: "var(--music-text-primary)",
+          color: "var(--music-bg)",
+          boxShadow: pillShadow,
+        }
+      : {
+          background: filter.accentBg,
+          color: "#ffffff",
+          boxShadow: pillShadow,
+        }
+    : compact
+      ? {
+          background: "#2c2c2c",
+          color: filter.id === "all" ? "var(--music-text-secondary)" : filter.accent,
+          boxShadow: pillShadow,
+        }
+      : {
+          background: filter.accentBgMuted,
+          color: filter.id === "all" ? "var(--music-text-secondary)" : filter.accent,
+          boxShadow: pillShadow,
+        };
+
+  const morphStyle = {
+    transition: `max-width ${FILTER_MORPH_MS} ${FILTER_MORPH_EASE}, opacity ${FILTER_MORPH_MS} ${FILTER_MORPH_EASE}, padding ${FILTER_MORPH_MS} ${FILTER_MORPH_EASE}`,
+  } as const;
+
+  if (!Icon) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex h-8 items-center rounded-full px-3.5 text-xs font-bold uppercase tracking-wider cursor-pointer border-0 shrink-0 transition-[background,color,box-shadow] duration-200"
+        style={style}
+        aria-pressed={isActive}
+      >
+        {filter.label}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="flex h-8 items-center rounded-full text-xs font-bold uppercase tracking-wider cursor-pointer border-0 overflow-hidden shrink-0 transition-[background,color,box-shadow] duration-200"
+      style={style}
+      aria-pressed={isActive}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center">
+        <Icon size={14} strokeWidth={2.25} />
+      </span>
+      <span
+        className="overflow-hidden whitespace-nowrap block"
+        style={{
+          ...morphStyle,
+          maxWidth: showLabel ? FILTER_LABEL_WIDTH[filter.id] : 0,
+          opacity: showLabel ? 1 : 0,
+          paddingRight: showLabel ? 14 : 0,
+        }}
+        aria-hidden={!showLabel}
+      >
+        {filter.label}
+      </span>
+    </button>
+  );
+}
 
 type MusicHomeViewProps = {
   onPlayFile: (file: MediaFile, playlist?: MediaFile[], source?: MusicQueueSource | null) => void;
@@ -33,6 +172,8 @@ type MusicHomeViewProps = {
   onOpenAlbum: (artistKey: string, albumKey: string) => void;
   onSearchYoutubeMusic?: (query: string) => void;
   historyEntries?: PlayHistoryEntry[];
+  /** Leave room for the collapsed right-panel hover rail. */
+  reserveRightMiniPanel?: boolean;
 };
 
 /** Seeded shuffle: stable for the session based on a random seed frozen on first render. */
@@ -196,6 +337,7 @@ export function MusicHomeView({
   onOpenAlbum,
   onSearchYoutubeMusic,
   historyEntries = [],
+  reserveRightMiniPanel = true,
 }: MusicHomeViewProps) {
   const entries = useRuforgeStore((s) => s.entries);
   const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
@@ -203,14 +345,37 @@ export function MusicHomeView({
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const sessionSeedRef = useRef(Math.floor(Math.random() * 0xffffffff));
 
-  const [activeFilter, setActiveFilter] = useState<"all" | "relax" | "focus">("all");
+  const [activeFilter, setActiveFilter] = useState<HomeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [headerCompact, setHeaderCompact] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const searching = searchQuery.trim().length > 0;
+  const searchExpanded = searchFocused || searching;
   const searchSource = musicQueueSource("search", "Search");
   const quickPicksSource = searching
     ? searchSource
     : musicQueueSource("quick_picks", "Quick picks");
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
+
+  const onHomeScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const y = el.scrollTop;
+    setHeaderCompact((prev) => {
+      if (!prev && y > 44) return true;
+      if (prev && y < 10) return false;
+      return prev;
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    onHomeScroll();
+    el.addEventListener("scroll", onHomeScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onHomeScroll);
+  }, [onHomeScroll]);
 
   const tracks = useMemo(
     () => flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path)),
@@ -346,58 +511,60 @@ export function MusicHomeView({
 
   return (
     <div
+      ref={scrollRef}
       className="relative w-full h-full overflow-y-auto overflow-x-hidden rf-scrollbar min-h-0"
       style={{ background: "var(--music-surface)" }}
     >
-      <header className="sticky top-0 z-40 flex h-16 items-center gap-3 pl-8 pr-8 bg-transparent min-w-0">
-        <div className="flex items-center gap-2 shrink-0">
-          {(["all", "relax", "focus"] as const).map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              onClick={() => setActiveFilter(filter)}
-              className="px-4.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border border-transparent"
-              style={{
-                background: activeFilter === filter ? "var(--music-text-primary)" : "rgba(255, 255, 255, 0.08)",
-                color: activeFilter === filter ? "var(--music-bg)" : "var(--music-text-secondary)",
-              }}
-              onMouseEnter={(e) => {
-                if (activeFilter !== filter) {
-                  e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)";
-                  e.currentTarget.style.color = "var(--music-text-primary)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeFilter !== filter) {
-                  e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
-                  e.currentTarget.style.color = "var(--music-text-secondary)";
-                }
-              }}
-            >
-              {filter}
-            </button>
+      <header
+        className={cn(
+          "sticky top-0 z-40 flex h-16 items-center gap-4 pl-8 min-w-0 bg-transparent",
+          reserveRightMiniPanel
+            ? "pr-[calc(var(--music-sidebar-collapsed-width)+1.25rem)]"
+            : "pr-8",
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center shrink-0 gap-1 transition-[background,padding,gap] duration-300 ease-out",
+            headerCompact ? "rounded-full bg-[var(--music-surface-raised)] p-1 shadow-[0_2px_8px_rgb(0_0_0_/_0.38),0_0_0_1px_rgb(255_255_255_/_0.06)]" : "gap-2",
+          )}
+        >
+          {HOME_FILTERS.map((filter) => (
+            <HomeFilterPill
+              key={filter.id}
+              filter={filter}
+              isActive={activeFilter === filter.id}
+              compact={headerCompact}
+              onSelect={() => setActiveFilter(filter.id)}
+            />
           ))}
         </div>
 
-        <div className="flex-1 min-w-0 flex justify-center px-2">
+        <div className="ml-auto shrink-0">
           <div
-            className="relative w-full max-w-md rounded-full overflow-hidden"
+            className={cn(
+              "relative rounded-full overflow-hidden transition-[width] duration-250 ease-out",
+              searchExpanded ? "w-[11rem]" : "w-[6.75rem]",
+            )}
             style={{
-              background: "rgba(255, 255, 255, 0.1)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
+              background: "var(--music-surface-raised)",
             }}
           >
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search songs, albums, artists"
-              className="w-full pl-10 pr-9 py-2 text-xs md:text-sm rounded-full outline-none border-0 bg-transparent placeholder:text-white/50"
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder="Search"
+              className={cn(
+                "w-full py-2 text-xs md:text-sm rounded-full outline-none border-0 bg-transparent placeholder:text-white/45",
+                searchExpanded ? "pl-9 pr-8" : "pl-9 pr-3.5",
+              )}
               style={{ color: "var(--music-text-primary)" }}
             />
             <Search
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
               size={15}
               style={{ color: "var(--music-text-secondary)" }}
             />
@@ -405,14 +572,13 @@ export function MusicHomeView({
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[var(--music-text-secondary)] hover:text-white transition-colors flex items-center justify-center"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--music-text-secondary)] hover:text-white transition-colors flex items-center justify-center"
               >
                 <X size={14} />
               </button>
             )}
           </div>
         </div>
-
       </header>
 
       {filteredTracks.length === 0 ? (

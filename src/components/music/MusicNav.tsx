@@ -80,16 +80,26 @@ export function MusicNav({
     : sideColumn
       ? "var(--music-panel-radius) 0 0 0"
       : baseStyle.borderRadius;
-  const navStyle: CSSProperties = inLeftStack
-    ? { width: "100%", background: "transparent", borderRadius: 0 }
-    : {
-        width: collapsed ? "var(--music-sidebar-collapsed-width)" : "var(--music-sidebar-width)",
-        ...baseStyle,
-        borderRadius,
-      };
+  const collapsedPill = collapsed && inLeftStack;
+  const navStyle: CSSProperties = collapsedPill
+    ? {
+        width: "var(--music-sidebar-collapsed-width)",
+        background: shellFrame ? "var(--music-bg)" : "var(--music-surface)",
+        borderRadius: "var(--music-panel-radius)",
+      }
+    : inLeftStack
+      ? { width: "100%", background: "transparent", borderRadius: 0 }
+      : {
+          width: collapsed ? "var(--music-sidebar-collapsed-width)" : "var(--music-sidebar-width)",
+          ...baseStyle,
+          borderRadius,
+        };
   return (
     <nav
-      className="flex flex-col h-full overflow-hidden transition-[width] duration-200 ease-out"
+      className={cn(
+        "flex flex-col transition-[width] duration-200 ease-out",
+        collapsedPill ? "h-auto shrink-0 overflow-visible" : "h-full overflow-hidden",
+      )}
       style={navStyle}
     >
       <div
@@ -99,10 +109,15 @@ export function MusicNav({
         )}
       >
         {collapsed ? (
-          <RuForgeCaptureTrigger
-            screenLabel={captureScreenLabel}
-            imgClassName="h-7 w-7 rounded-md object-cover"
-          />
+          <span
+            className="rf-music-tooltip-anchor inline-flex"
+            data-tooltip="RuForge Music"
+          >
+            <RuForgeCaptureTrigger
+              screenLabel={captureScreenLabel}
+              imgClassName="h-7 w-7 rounded-md object-cover"
+            />
+          </span>
         ) : (
           <>
             <div className="flex items-center gap-2.5 min-w-0">
@@ -180,16 +195,17 @@ export function MusicNav({
         })}
       </div>
 
-      {panelSlot ? (
+      {panelSlot && !collapsedPill ? (
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{panelSlot}</div>
-      ) : (
+      ) : !collapsedPill ? (
         <div className="flex-1 min-h-0" />
-      )}
+      ) : null}
 
       {footerSlot ? (
         <div
           className={cn(
-            "shrink-0 pb-2 mt-auto",
+            "shrink-0 pb-2",
+            !collapsedPill && "mt-auto",
             collapsed ? "px-1.5 flex justify-center" : "px-2 w-full",
           )}
         >
