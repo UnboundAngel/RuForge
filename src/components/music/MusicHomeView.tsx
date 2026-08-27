@@ -350,6 +350,8 @@ export function MusicHomeView({
   const [searchFocused, setSearchFocused] = useState(false);
   const [headerCompact, setHeaderCompact] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const compactSentinelRef = useRef<HTMLDivElement>(null);
   const searching = searchQuery.trim().length > 0;
   const searchExpanded = searchFocused || searching;
   const searchSource = musicQueueSource("search", "Search");
@@ -358,10 +360,16 @@ export function MusicHomeView({
     : musicQueueSource("quick_picks", "Quick picks");
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
 
-  const onHomeScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const y = el.scrollTop;
+  const syncHeaderCompact = useCallback(() => {
+    const scroller = scrollRef.current;
+    const sentinel = compactSentinelRef.current;
+    let y = scroller?.scrollTop ?? 0;
+    if (sentinel && headerRef.current) {
+      y = Math.max(
+        y,
+        headerRef.current.getBoundingClientRect().bottom - sentinel.getBoundingClientRect().top,
+      );
+    }
     setHeaderCompact((prev) => {
       if (!prev && y > 44) return true;
       if (prev && y < 10) return false;
@@ -369,18 +377,31 @@ export function MusicHomeView({
     });
   }, []);
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    onHomeScroll();
-    el.addEventListener("scroll", onHomeScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onHomeScroll);
-  }, [onHomeScroll]);
+  const assignScrollRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollRef.current = node;
+      if (node) syncHeaderCompact();
+    },
+    [syncHeaderCompact],
+  );
 
   const tracks = useMemo(
     () => flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path)),
     [entries],
   );
+  const homeScrollReady = tracks.length > 0;
+
+  useEffect(() => {
+    if (!homeScrollReady) {
+      setHeaderCompact(false);
+      return;
+    }
+    syncHeaderCompact();
+    document.addEventListener("scroll", syncHeaderCompact, { passive: true, capture: true });
+    return () => {
+      document.removeEventListener("scroll", syncHeaderCompact, true);
+    };
+  }, [homeScrollReady, syncHeaderCompact]);
 
   // Filter & search tracks in real-time
   const filteredTracks = useMemo(() => {
@@ -511,11 +532,13 @@ export function MusicHomeView({
 
   return (
     <div
-      ref={scrollRef}
-      className="relative w-full h-full overflow-y-auto overflow-x-hidden rf-scrollbar min-h-0"
+      ref={assignScrollRef}
+      onScroll={syncHeaderCompact}
+      className="absolute inset-0 overflow-y-auto overflow-x-hidden rf-scrollbar min-h-0"
       style={{ background: "var(--music-surface)" }}
     >
       <header
+        ref={headerRef}
         className={cn(
           "sticky top-0 z-40 flex h-16 items-center gap-4 pl-8 min-w-0 bg-transparent",
           reserveRightMiniPanel
@@ -580,6 +603,7 @@ export function MusicHomeView({
           </div>
         </div>
       </header>
+      <div ref={compactSentinelRef} className="h-0 w-full overflow-hidden pointer-events-none" aria-hidden />
 
       {filteredTracks.length === 0 ? (
           <MusicHomeSearchEmpty

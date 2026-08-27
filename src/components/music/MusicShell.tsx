@@ -1173,7 +1173,7 @@ export function MusicShell() {
             <div
               className={cn(
                 "relative flex-1 min-h-0 basis-0 overflow-hidden min-w-0",
-                !playerExpanded && activeView !== "explore" && "rf-scrollbar overflow-y-auto",
+                !playerExpanded && activeView !== "explore" && activeView !== "home" && "rf-scrollbar overflow-y-auto",
               )}
               style={{
                 background: playerExpanded ? "transparent" : "var(--music-surface)",
@@ -1181,7 +1181,7 @@ export function MusicShell() {
               }}
             >
               <div ref={assignWebviewHostRef} className="absolute inset-0 z-0" />
-              <div className="relative z-[1] min-h-0 min-w-0 h-full w-full">
+              <div className="relative z-[1] min-h-0 min-w-0 h-full w-full overflow-hidden">
                 <AnimatePresence>
                   {playerExpanded && playingFile && (
                     <motion.div
