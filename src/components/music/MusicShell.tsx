@@ -35,7 +35,12 @@ import {
   getEmbeddedExplorerWebview,
   MUSIC_EXPLORE_RELOAD_IN_PLACE_SCRIPT,
 } from "@/explorerWebviewLifecycle";
-import { youtubeMusicSearchUrl, extractYouTubeVideoId } from "@/youtubeUrl";
+import {
+  youtubeMusicSearchUrl,
+  extractYouTubeVideoId,
+  classifyMusicExploreUrl,
+} from "@/youtubeUrl";
+import { enqueuePastedExploreWatch } from "@/lib/enqueuePastedExploreWatch";
 import {
   MUSIC_EXPLORE_INIT_SCRIPT,
   MUSIC_EXPLORE_NOW_PLAYING_EVENT,
@@ -663,6 +668,20 @@ export function MusicShell() {
   }, [downloadJobs]);
 
   const handlePasteUrlReady = useCallback((url: string) => {
+    const kind = classifyMusicExploreUrl(url);
+    if (kind === "watch") {
+      setPanelMode("pick");
+      setPasteUrl("");
+      setPanelOpen(false);
+      void enqueuePastedExploreWatch(url).then((decision) => {
+        if (decision === "enqueue") {
+          setDockMinimized(false);
+          setDockPanelSession(true);
+        }
+      });
+      return;
+    }
+
     setPasteUrl(url);
     setPanelMode("pick");
     setPanelOpen(true);
@@ -1430,7 +1449,7 @@ export function MusicShell() {
         </AnimatePresence>
       </motion.div>
 
-      <MusicTooltipLayer />
+      <MusicTooltipLayer disabled={exploreWebviewActive} />
       <MusicExpandedContextMenu
         menu={expandedMenu}
         file={playingFile}
