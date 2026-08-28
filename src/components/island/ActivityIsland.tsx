@@ -129,12 +129,10 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
     liveDuration > 0
       ? Math.min(Math.max(0, rawCurrentTime), liveDuration)
       : Math.max(0, rawCurrentTime);
-  const onOwningSurface = hasSession && !activity.awayFromOwningSurface;
-
+  // Compact / expandable only when away from the owning surface.
+  // Paused on music/player must not leave a dead non-expandable pill.
   const showIslandChrome =
-    activity.awayFromOwningSurface ||
-    isExpanded ||
-    (hasSession && livePaused && onOwningSurface);
+    activity.awayFromOwningSurface || isExpanded;
 
   const updateMode = Boolean(updateAvailable);
   const updateExpanded = updateMode && !updateAvailable!.collapsed;

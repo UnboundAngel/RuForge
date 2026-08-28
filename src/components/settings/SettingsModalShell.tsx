@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { X, type LucideIcon } from "lucide-react";
 import { OVERLAY_Z_CLASS } from "../../lib/overlayZIndex";
@@ -57,12 +58,12 @@ export function SettingsModalShell({
     if (!disableDismiss) onClose();
   };
 
-  return (
+  const overlay = (
     <AnimatePresence onExitComplete={onExitComplete}>
       {open ? (
         <motion.div
           key={titleId}
-          className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-black/65 p-4`}
+          className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-black/80 p-4`}
           role="presentation"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -144,6 +145,9 @@ export function SettingsModalShell({
       ) : null}
     </AnimatePresence>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(overlay, document.body);
 }
 
 export function SettingsModalSurface({
@@ -191,7 +195,7 @@ export function SettingsModalBtnSecondary({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`${btnBase} text-stone-500 hover:font-extrabold hover:text-stone-200 ${className}`}
+      className={`${btnBase} text-stone-500 hover:text-stone-200 ${className}`}
     >
       {children}
     </button>
@@ -214,7 +218,7 @@ export function SettingsModalBtnGhost({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`${btnBase} bg-[#1D1613] text-[color:var(--accent)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] hover:bg-stone-800 ${className}`}
+      className={`${btnBase} text-[color:var(--accent)] hover:brightness-110 ${className}`}
     >
       {children}
     </button>
@@ -250,12 +254,14 @@ export function SettingsModalTextInput({
   placeholder,
   disabled,
   id,
+  autoFocus,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   disabled?: boolean;
   id?: string;
+  autoFocus?: boolean;
 }) {
   return (
     <input
@@ -265,7 +271,8 @@ export function SettingsModalTextInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      className="w-full rounded-[var(--radius-input)] bg-[#261d18] px-4 py-3 text-[13px] text-stone-200 outline-none placeholder:text-stone-600 focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent),transparent_55%)] disabled:opacity-50"
+      autoFocus={autoFocus}
+      className="w-full rounded-xl bg-[#261d18] px-4 py-3.5 text-[15px] font-medium text-stone-100 outline-none placeholder:text-stone-600 placeholder:font-normal focus:bg-[#2a211c] transition-colors disabled:opacity-50"
     />
   );
 }

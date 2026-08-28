@@ -31,12 +31,14 @@ Do:
 - Default: bezel is `#271C18` and includes the left sidebar plus the title band. Well is `#1D1613` in the main column, `rounded-tl-[32px]`, reads as carved into the bezel.
 - Music: bezel wraps the whole window (`var(--music-bg, #0a0a0a)` on the shell). Sidebar and main are sibling wells with a gap, thin light stroke, matching corner radius.
 - Keep the well darker than the bezel. Keep the well's top-left (or all-around, in Music) radius large.
+- Depth between bezel and well is **fill contrast** (lighter surround, darker pocket). Do not fake that nest with engraved inset lips on every nested control.
 
 Don't:
 
 - Flatten bezel and well into one fill.
 - Put explorer actions in the well. Explorer chrome stays on the title band (see root AGENTS.md).
 - Treat the bezel as a decorative border you can skip on a new full-screen surface. New primary surfaces nest the same way.
+- Engrave chips/buttons into a plate with dual-lip inset shadows. That is not bezel/well nesting.
 
 Tokens / classes:
 
@@ -136,20 +138,22 @@ Where: Shared modal chrome (`SettingsModalShell`). Delete confirm, Recently Dele
 
 Do:
 
-- Centered over `bg-black/65`. Panel is well fill `#1D1613`, `rounded-[var(--radius-modal)]` (24px), `max-w-md` for confirms / `max-w-lg` for longer tools. Functional lift shadow only (`0_16px_48px` black 0.45).
+- Centered over `bg-black/80`, portaled to `document.body` so the scrim covers island, window controls, and titleband chrome (not trapped under a lower stacking context).
 - Hierarchy: title `text-base font-semibold text-stone-100` top-left. Optional eyebrow above (confirms omit it). Body copy `text-[12px] text-stone-500`. Footer right-aligned.
 - Close X is a bare icon, `text-stone-500`, lightens on hover (`hover:text-stone-200`). No circle, no fill, no border.
 - Enter: overlay fades 0.2s, panel opacity + `y: 12` + scale `0.98 → 1` in 0.22s, ease `[0.16, 1, 0.3, 1]`. Exit is the reverse, slightly less Y. No snap. Honor reduced motion (duration 0).
+- Ghost / secondary footer actions are text-only. No engraved inset plate behind Back/Cancel.
 
 Don't:
 
 - A second overlay language (frosted card, yellow banner, window-chrome X in a circle).
 - Snap the panel in or out.
 - Divider lines under the title.
+- Hard-corner recessed Ghost buttons (`inset` shadow plates).
 
 Tokens / classes:
 
-- `--radius-modal` 24px, `--radius-input` 12px, overlay `bg-black/65`, panel `#1D1613`
+- `--radius-modal` 24px, `--radius-input` 12px, overlay `bg-black/80`, panel `#1D1613`, portal `document.body`
 
 Code: `src/components/settings/SettingsModalShell.tsx`
 

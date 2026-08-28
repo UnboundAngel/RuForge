@@ -55,3 +55,7 @@ Device names, track titles, paths, or menu labels cut off with `…` and no way 
 ## 12. The accent-bar section label (vertical red slit)
 A 2–4px rounded accent bar beside every section title (`| All-time top tracks`). Reads like generic generated UI.
 - **Instead:** typographic hierarchy only: size, weight, tracking, and spacing. Match Music Home section heads (`text-2xl font-bold tracking-tight`). Separate sections with gap or tonal panels, not decorator bars.
+
+## 13. Engraved / stamped controls
+Chips, buttons, badges, or media frames with dual-lip inset shadows (light top edge + dark bottom edge) or a deep carved sink (`inset 2px 2px 8px…`) so the control looks pressed into the panel.
+- **Instead:** tonal fills only for resting controls. Soft outer shadow only when something floats (menus, dialogs). Large well vignettes on page shells stay allowed — that is not engraving a button.

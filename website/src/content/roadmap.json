@@ -181,7 +181,8 @@
     "difficulty": "High",
     "featureName": "User-created playlists from library items",
     "priority": "Extremely important",
-    "status": "To-Do"
+    "status": "To-Do",
+    "roadmapStatus": "progress"
   },
   {
     "appArea": "Music Library",

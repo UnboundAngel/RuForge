@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, memo, type ReactNode } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music, FileText, FolderOutput, Shuffle, FolderOpen } from "lucide-react";
+import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Layers, Play, Music, FileText, FolderOutput, Shuffle, FolderOpen, Clock, ListPlus, Plus, ListVideo } from "lucide-react";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import { isAudioOnlyPath } from "../mediaKind";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -19,6 +19,14 @@ import { youtubeUrlsMatch } from "../youtubeUrl";
 import { useGalleryScrubExtracting } from "../scrubSpriteGallerySync";
 import { galleryScrollChromeAmount } from "../lib/galleryScrollChrome";
 import { MorphMenu, type MorphMenuItem } from "./ui/Morph";
+import { SaveToPlaylistModal } from "./SaveToPlaylistModal";
+import {
+  WATCH_LATER_ID,
+  isVirtualPlaylistPath,
+  parseVirtualPlaylistId,
+  virtualPlaylistPath,
+} from "../virtualPlaylists";
+import { PlaylistEmptyThumb } from "./PlaylistEmptyThumb";
 import { cn } from "../lib/utils";
 
 type ThumbnailBar = { show: boolean; widthPct: number; completed: boolean };
@@ -152,53 +160,51 @@ const PlaylistStackCard = ({
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
   const mainThumbnail =
     playlist.stackThumbnailPath ||
-    (playlist.items[0]?.thumbnailPath || playlist.items[0]?.ruforgePosterPath);
+    playlist.items[0]?.thumbnailPath ||
+    playlist.items[0]?.ruforgePosterPath;
+  const countLabel =
+    playlist.itemCount === 0
+      ? "No videos"
+      : `${playlist.itemCount} video${playlist.itemCount === 1 ? "" : "s"}`;
 
   return (
-    <motion.div
-      whileHover={{ y: -8, scale: 1.02 }}
-      className="relative aspect-video group cursor-pointer"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+    <div
+      className="group cursor-pointer flex flex-col gap-2.5"
       onClick={onClick}
       onContextMenu={onContextMenu}
     >
-      <motion.div 
-        animate={{ rotate: isHovered ? -4 : -2, y: isHovered ? -12 : -4, x: isHovered ? -8 : -2 }}
-        className="absolute inset-0 bg-stone-800 rounded-2xl border border-white/5 shadow-xl opacity-40"
-      />
-      <motion.div 
-        animate={{ rotate: isHovered ? 4 : 2, y: isHovered ? -8 : -2, x: isHovered ? 8 : 2 }}
-        className="absolute inset-0 bg-stone-800 rounded-2xl border border-white/5 shadow-xl opacity-60"
-      />
-      <div className="absolute inset-0 glass rounded-2xl overflow-hidden shadow-2xl transition-all border border-white/10 z-10">
-        <div className="absolute inset-0 bg-black/60 flex items-center justify-center overflow-hidden">
-          {mainThumbnail ? (
-            <img src={convertFileSrc(mainThumbnail)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-all duration-700" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#2a221e]">
-              <Layers className="w-12 h-12 text-stone-700" strokeWidth={1.25} />
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-          <div className="absolute top-3 left-3 px-2 py-1 bg-[color:var(--accent)] rounded-full flex items-center gap-1.5 shadow-2xl z-20">
-            <Layers size={10} className="text-stone-950" />
-            <span className="text-[9px] font-black text-stone-950 uppercase tracking-widest">{playlist.itemCount} Videos</span>
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center">
-             <div className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 transition-all duration-500">
-                <Play size={20} fill="currentColor" />
-             </div>
-          </div>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 p-4 space-y-1 bg-gradient-to-t from-black to-transparent z-10">
-          <h3 className="text-[13px] font-bold text-stone-100 leading-[1.3] truncate">{playlist.title.replace(/_/g, " ")}</h3>
+      <div className="relative aspect-video rounded-[var(--r-media,16px)] overflow-hidden bg-[#2a221e]">
+        {mainThumbnail ? (
+          <img
+            src={convertFileSrc(mainThumbnail)}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover transition-[filter] duration-200 group-hover:brightness-110"
+          />
+        ) : (
+          <PlaylistEmptyThumb className="absolute inset-0" />
+        )}
+
+        {/* YouTube-style right count strip */}
+        <div className="absolute inset-y-0 right-0 w-[28%] min-w-[4.5rem] bg-black/70 flex flex-col items-center justify-center gap-1.5 px-2">
+          <ListVideo size={18} strokeWidth={2} className="text-white" />
+          <span className="text-[11px] font-semibold text-white text-center leading-tight">
+            {countLabel}
+          </span>
         </div>
       </div>
-    </motion.div>
+
+      <div className="px-0.5 min-w-0">
+        <h3 className="text-[13px] font-bold text-stone-100 leading-snug truncate">
+          {playlist.title.replace(/_/g, " ")}
+        </h3>
+        <p className="mt-0.5 text-[11px] font-medium text-stone-500 truncate">Playlist</p>
+        <p className="mt-0.5 text-[11px] font-medium text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity">
+          View full playlist
+        </p>
+      </div>
+    </div>
   );
 };
 const VideoCard = memo(function VideoCard({
@@ -206,11 +212,17 @@ const VideoCard = memo(function VideoCard({
   progressBar,
   onDelete,
   onExtract,
+  onSaveToPlaylist,
+  onToggleWatchLater,
+  inWatchLater,
 }: {
   file: MediaFile;
   progressBar: ThumbnailBar;
   onDelete: (file: MediaFile) => void;
   onExtract: (file: MediaFile) => void;
+  onSaveToPlaylist: (file: MediaFile) => void;
+  onToggleWatchLater: (file: MediaFile) => void;
+  inWatchLater: boolean;
 }) {
   const handlePlayFile = useRuforgeStore((s) => s.handlePlayFile);
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
@@ -327,6 +339,18 @@ const VideoCard = memo(function VideoCard({
         },
       },
       {
+        id: "watch-later",
+        label: inWatchLater ? "Remove from Watch later" : "Save to Watch later",
+        icon: <Clock size={14} className="shrink-0 ml-1.5" />,
+        onSelect: () => onToggleWatchLater(file),
+      },
+      {
+        id: "save-playlist",
+        label: "Save to playlist",
+        icon: <ListPlus size={14} className="shrink-0 ml-1.5" />,
+        onSelect: () => onSaveToPlaylist(file),
+      },
+      {
         id: "previews",
         label: "Previews",
         icon: <ImageIcon size={14} className="shrink-0 ml-1.5" />,
@@ -386,7 +410,17 @@ const VideoCard = memo(function VideoCard({
       },
     );
     return rows;
-  }, [file, handlePlayFile, onDelete, onExtract, openExportPanel, setGalleryActiveMenu]);
+  }, [
+    file,
+    handlePlayFile,
+    inWatchLater,
+    onDelete,
+    onExtract,
+    onSaveToPlaylist,
+    onToggleWatchLater,
+    openExportPanel,
+    setGalleryActiveMenu,
+  ]);
 
   return (
     <div
@@ -584,8 +618,12 @@ export const MediaView = ({
   const removeGalleryExtractingPath = useRuforgeStore((s) => s.removeGalleryExtractingPath);
   const handlePlayPlaylist = useRuforgeStore((s) => s.handlePlayPlaylist);
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
+  const toggleWatchLater = useRuforgeStore((s) => s.toggleWatchLater);
+  const deleteVirtualPlaylist = useRuforgeStore((s) => s.deleteVirtualPlaylist);
+  const libraryScanRevision = useRuforgeStore((s) => s.libraryScanRevision);
 
   const [menuPos, setMenuPos] = useState({ left: 0, top: 0 });
+  const [savePaths, setSavePaths] = useState<string[] | null>(null);
   const galleryMenuRef = useRef<HTMLDivElement>(null);
   const libraryScrollRef = useRef<HTMLDivElement>(null);
   const libraryHeaderRef = useRef<HTMLDivElement>(null);
@@ -794,7 +832,8 @@ export const MediaView = ({
     const matched = libraryEntries.filter((entry) => {
       const title = entry.kind === "media" ? entry.name : entry.title;
       if (q && !title.toLowerCase().includes(q)) return false;
-      if (filter === "all") return true;
+      if (filter === "all") return entry.kind === "media";
+      if (filter === "playlists") return entry.kind === "playlist";
       if (entry.kind === "playlist") return false;
       const file = entry as MediaFile;
       if (filter === "in-progress") return isInProgressFile(file);
@@ -803,29 +842,68 @@ export const MediaView = ({
     });
 
     return [...matched].sort((a, b) => {
+      if (a.kind === "playlist" && b.kind === "playlist") {
+        const aWatch = a.path === virtualPlaylistPath(WATCH_LATER_ID);
+        const bWatch = b.path === virtualPlaylistPath(WATCH_LATER_ID);
+        if (aWatch && !bWatch) return -1;
+        if (!aWatch && bWatch) return 1;
+        if (isVirtualPlaylistPath(a.path) && !isVirtualPlaylistPath(b.path)) return -1;
+        if (!isVirtualPlaylistPath(a.path) && isVirtualPlaylistPath(b.path)) return 1;
+      }
       const timeA = a.kind === "media" ? a.created : a.items[0]?.created || 0;
       const timeB = b.kind === "media" ? b.created : b.items[0]?.created || 0;
       return timeB - timeA;
     });
-  }, [libraryEntries, searchQuery, filter]);
+  }, [libraryEntries, searchQuery, filter, libraryScanRevision]);
 
-  const datedGroups = useMemo(
-    () => groupEntriesByDate(filteredEntries),
+  const playlistStacks = useMemo(
+    () => filteredEntries.filter((e): e is PlaylistCollection => e.kind === "playlist"),
     [filteredEntries],
   );
 
+  const mediaOnlyEntries = useMemo(
+    () => filteredEntries.filter((e): e is GalleryEntry & { kind: "media" } => e.kind === "media"),
+    [filteredEntries],
+  );
+
+  const datedGroups = useMemo(
+    () => groupEntriesByDate(filter === "playlists" ? [] : mediaOnlyEntries),
+    [mediaOnlyEntries, filter],
+  );
+
+  const watchLaterPaths = useMemo(() => {
+    const wl = playlistStacks.find((p) => p.path === virtualPlaylistPath(WATCH_LATER_ID));
+    return new Set((wl?.items ?? []).map((i) => i.path.replace(/\//g, "\\").toLowerCase()));
+  }, [playlistStacks]);
+
   const progressBarsByPath = useMemo(() => {
     const map = new Map<string, ThumbnailBar>();
-    for (const entry of filteredEntries) {
-      if (entry.kind !== "media") continue;
+    for (const entry of mediaOnlyEntries) {
       map.set(entry.path, getPlaybackThumbnailBar(entry.path, entry.duration));
     }
     return map;
-  }, [filteredEntries]);
+  }, [mediaOnlyEntries]);
 
   const emptyProgressBar = useMemo<ThumbnailBar>(
     () => ({ show: false, widthPct: 0, completed: false }),
     [],
+  );
+
+  const handleToggleWatchLater = useCallback(
+    (file: MediaFile) => {
+      const added = toggleWatchLater(file.path);
+      notify(added ? "Saved to Watch later" : "Removed from Watch later");
+      setGalleryActiveMenu(null);
+    },
+    [notify, setGalleryActiveMenu, toggleWatchLater],
+  );
+
+  const handleSaveToPlaylist = useCallback(
+    (file: MediaFile) => {
+      setGalleryActiveMenu(null);
+      setSavePaths([file.path]);
+    },
+    [setGalleryActiveMenu],
   );
 
   const emptyCopy =
@@ -833,10 +911,17 @@ export const MediaView = ({
       ? "nothing in progress right now"
       : filter === "watched"
         ? "nothing finished yet"
-        : searchQuery.trim()
-          ? "no matches for that search"
-          : "dang.. library's empty";
+        : filter === "playlists"
+          ? "no playlists yet — create one"
+          : searchQuery.trim()
+            ? "no matches for that search"
+            : "dang.. library's empty";
 
+  const showPlaylistSection = filter === "playlists";
+  const showEmptyState =
+    filter === "playlists"
+      ? playlistStacks.length === 0 && Boolean(searchQuery.trim())
+      : filteredEntries.length === 0;
   return (
     <motion.div 
       initial={{ opacity: 0, y: 12 }}
@@ -866,10 +951,10 @@ export const MediaView = ({
           <div className="flex justify-center py-40">
             <Loader2 className="animate-spin text-[color:var(--accent)] opacity-20" size={60} />
           </div>
-        ) : filteredEntries.length === 0 ? (
+        ) : showEmptyState ? (
           <div className="py-36 text-center space-y-2">
             <p className="text-stone-400 font-medium text-sm">{emptyCopy}</p>
-            {filter !== "all" && (
+            {filter !== "all" && filter !== "playlists" && (
               <p className="text-stone-600 text-xs font-medium">
                 switch to All to browse everything
               </p>
@@ -877,48 +962,94 @@ export const MediaView = ({
           </div>
         ) : (
           <div className="space-y-12">
-            {datedGroups.map(({ label, entries: groupEntries }) => (
-              <section key={label} className="space-y-5">
-                <h2 className="text-[12px] font-bold text-stone-500 tracking-[0.18em] uppercase">
-                  {label}
-                </h2>
-                <div className={gridLayoutClass}>
-                  {groupEntries.map((entry) => {
-                    if (entry.kind === "playlist") {
-                      return (
-                        <PlaylistStackCard
-                          key={entry.path}
-                          playlist={entry}
-                          onClick={() => onPlaylistClick(entry)}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setGalleryActiveMenu({
-                              path: entry.path,
-                              x: e.clientX,
-                              y: e.clientY,
-                              floating: true,
-                            });
-                          }}
-                        />
-                      );
-                    }
-                    return (
-                      <VideoCard
-                        key={entry.path}
-                        file={entry}
-                        progressBar={progressBarsByPath.get(entry.path) ?? emptyProgressBar}
-                        onDelete={handleDelete}
-                        onExtract={handleExtract}
-                      />
-                    );
-                  })}
+            {showPlaylistSection ? (
+              <section className="space-y-5">
+                <div className="flex items-end justify-between gap-4">
+                  <h2 className="text-[12px] font-bold text-stone-500 tracking-[0.18em] uppercase">
+                    Playlists
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setSavePaths([])}
+                    className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500 hover:text-[color:var(--accent)] transition-colors"
+                  >
+                    <Plus size={12} />
+                    New
+                  </button>
                 </div>
+                {playlistStacks.length === 0 ? (
+                  <div className="py-16 text-center space-y-3">
+                    <p className="text-stone-400 font-medium text-sm">{emptyCopy}</p>
+                    <button
+                      type="button"
+                      onClick={() => setSavePaths([])}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] text-[11px] font-semibold text-stone-200 hover:bg-white/[0.1] transition-colors"
+                    >
+                      <Plus size={12} />
+                      Create playlist
+                    </button>
+                  </div>
+                ) : (
+                  <div className={gridLayoutClass}>
+                    {playlistStacks.map((entry) => (
+                      <PlaylistStackCard
+                        key={entry.path}
+                        playlist={entry}
+                        onClick={() => onPlaylistClick(entry)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setGalleryActiveMenu({
+                            path: entry.path,
+                            x: e.clientX,
+                            y: e.clientY,
+                            floating: true,
+                          });
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
-            ))}
+            ) : null}
+
+            {filter !== "playlists"
+              ? datedGroups.map(({ label, entries: groupEntries }) => (
+                  <section key={label} className="space-y-5">
+                    <h2 className="text-[12px] font-bold text-stone-500 tracking-[0.18em] uppercase">
+                      {label}
+                    </h2>
+                    <div className={gridLayoutClass}>
+                      {groupEntries.map((entry) => {
+                        if (entry.kind === "playlist") return null;
+                        return (
+                          <VideoCard
+                            key={entry.path}
+                            file={entry}
+                            progressBar={progressBarsByPath.get(entry.path) ?? emptyProgressBar}
+                            onDelete={handleDelete}
+                            onExtract={handleExtract}
+                            onSaveToPlaylist={handleSaveToPlaylist}
+                            onToggleWatchLater={handleToggleWatchLater}
+                            inWatchLater={watchLaterPaths.has(
+                              entry.path.replace(/\//g, "\\").toLowerCase(),
+                            )}
+                          />
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))
+              : null}
           </div>
         )}
       </div>
+
+      <SaveToPlaylistModal
+        open={savePaths !== null}
+        onClose={() => setSavePaths(null)}
+        mediaPaths={savePaths ?? []}
+      />
 
       <AnimatePresence>
         {floatingMenu && (
@@ -928,7 +1059,7 @@ export const MediaView = ({
             animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={{ opacity: 0, scale: 0.96, x: -8 }}
             transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed w-44 bg-[#1D1613]/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-[100] overflow-hidden"
+            className="fixed w-max bg-[#271C18] rounded-2xl z-[100] overflow-hidden shadow-[0_10px_28px_rgba(0,0,0,0.45)]"
             style={{
               left: menuPos.left,
               top: menuPos.top,
@@ -940,6 +1071,8 @@ export const MediaView = ({
               const entry = libraryEntries.find((e) => e.path === floatingMenu.path);
               if (!entry || entry.kind !== "playlist") return null;
               const playlist = entry;
+              const virtual = isVirtualPlaylistPath(playlist.path);
+              const virtualId = parseVirtualPlaylistId(playlist.path);
               return (
                 <div className="p-1">
                   <div className="px-2.5 py-2 mb-0.5">
@@ -982,7 +1115,10 @@ export const MediaView = ({
                   <div className="h-px bg-white/5 my-1 mx-2" />
                   <button
                     onClick={() => {
-                      openExportPanel({ paths: [playlist.path], label: playlist.title });
+                      openExportPanel({
+                        paths: playlist.items.map((i) => i.path),
+                        label: playlist.title,
+                      });
                       setGalleryActiveMenu(null);
                     }}
                     className="w-full px-2.5 py-2 flex items-center gap-2.5 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"
@@ -990,16 +1126,31 @@ export const MediaView = ({
                     <FolderOutput size={14} className="shrink-0 ml-1.5" />
                     <span className="text-[11px] font-bold truncate">Export</span>
                   </button>
-                  <button
-                    onClick={() => {
-                      void openInFileManager(playlist.path);
-                      setGalleryActiveMenu(null);
-                    }}
-                    className="w-full px-2.5 py-2 flex items-center gap-2.5 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"
-                  >
-                    <FolderOpen size={14} className="shrink-0 ml-1.5" />
-                    <span className="text-[11px] font-bold truncate">Open folder</span>
-                  </button>
+                  {!virtual ? (
+                    <button
+                      onClick={() => {
+                        void openInFileManager(playlist.path);
+                        setGalleryActiveMenu(null);
+                      }}
+                      className="w-full px-2.5 py-2 flex items-center gap-2.5 hover:bg-white/5 transition-colors text-stone-300 hover:text-white rounded-lg"
+                    >
+                      <FolderOpen size={14} className="shrink-0 ml-1.5" />
+                      <span className="text-[11px] font-bold truncate">Open folder</span>
+                    </button>
+                  ) : virtualId && virtualId !== WATCH_LATER_ID ? (
+                    <button
+                      onClick={() => {
+                        if (deleteVirtualPlaylist(virtualId)) {
+                          notify("Playlist deleted");
+                        }
+                        setGalleryActiveMenu(null);
+                      }}
+                      className="w-full px-2.5 py-2 flex items-center gap-2.5 hover:bg-white/5 transition-colors text-rose-400 hover:text-rose-300 rounded-lg"
+                    >
+                      <Trash2 size={14} className="shrink-0 ml-1.5" />
+                      <span className="text-[11px] font-bold truncate">Delete playlist</span>
+                    </button>
+                  ) : null}
                 </div>
               );
             })()}

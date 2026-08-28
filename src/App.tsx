@@ -1779,9 +1779,16 @@ function App() {
 
                 <div className="relative flex items-end pb-1 px-6">
                   <div className="flex items-end">
-                    {(['all', 'in-progress', 'watched'] as const).map((t) => {
+                    {(['all', 'playlists', 'in-progress', 'watched'] as const).map((t) => {
                       const isActive = galleryFilter === t;
-                      const label = t === 'all' ? 'All' : t === 'in-progress' ? 'In Progress' : 'Watched';
+                      const label =
+                        t === 'all'
+                          ? 'All'
+                          : t === 'playlists'
+                            ? 'Playlists'
+                            : t === 'in-progress'
+                              ? 'In Progress'
+                              : 'Watched';
                       return (
                         <button
                           key={t}

@@ -91,9 +91,9 @@ const MENU_WIDTH = 176;
 /** Keep open menus inside the webview / window (island overlay is short). */
 const MENU_VIEWPORT_PAD_PX = 8;
 
-/** Opaque RuForge menu panel (matches Settings / island version menus). */
+/** Opaque RuForge menu panel — bezel fill + soft float shadow (no engraved inset lip). */
 export const MORPH_MENU_SHELL =
-  "border border-white/10 bg-[#271C18] shadow-[0_8px_24px_rgba(0,0,0,0.45)]";
+  "bg-[#271C18] shadow-[0_10px_28px_rgba(0,0,0,0.45)]";
 
 function MorphMenuRow({
   item,

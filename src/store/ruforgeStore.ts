@@ -103,6 +103,27 @@ import type {
   ExportPanelPreset,
 } from "../lib/exportTypes";
 import type { ActivityHandoffSnapshot, ActivityOwner } from "../lib/activityTypes";
+import {
+  WATCH_LATER_ID,
+  addPathsToRecord,
+  collectMediaIndex,
+  createVirtualPlaylistRecord,
+  loadVirtualPlaylistRecords,
+  mergeVirtualPlaylistsIntoEntries,
+  moveRecordItem,
+  mutateVirtualRecords,
+  parseVirtualPlaylistId,
+  pathInWatchLater,
+  pruneStalePathsInRecords,
+  removePathFromAllRecords,
+  removePathFromRecord,
+  reorderRecordItems,
+  saveVirtualPlaylistRecords,
+  setRecordThumbnail,
+  stripVirtualPlaylists,
+  virtualPlaylistPath,
+  type VirtualPlaylistRecord,
+} from "../virtualPlaylists";
 
 export type {
   ActiveTab,
@@ -360,6 +381,19 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setGalleryFilter: (f: GalleryFilter) => void;
   setGalleryScrollChrome: (n: number) => void;
   setSelectedPlaylist: (p: PlaylistCollection | null) => void;
+  /** Re-merge localStorage virtual playlists into `entries` (and refresh `selectedPlaylist`). */
+  refreshVirtualPlaylists: () => void;
+  createVirtualPlaylist: (title: string, seedPaths?: string[]) => string;
+  deleteVirtualPlaylist: (id: string) => boolean;
+  renameVirtualPlaylist: (id: string, title: string) => void;
+  addToVirtualPlaylist: (id: string, paths: string[]) => void;
+  removeFromVirtualPlaylist: (id: string, path: string) => void;
+  reorderVirtualPlaylist: (id: string, fromIndex: number, toIndex: number) => void;
+  moveVirtualPlaylistItem: (id: string, path: string, where: "top" | "bottom") => void;
+  setVirtualPlaylistThumbnail: (id: string, path: string | null) => void;
+  toggleWatchLater: (path: string) => boolean;
+  isInWatchLater: (path: string) => boolean;
+  listVirtualPlaylistRecords: () => VirtualPlaylistRecord[];
   setIsSearchExpanded: (v: boolean | ((p: boolean) => boolean)) => void;
   setSearchValue: (v: string) => void;
   setLastExplorerUrl: (url: string) => void;
@@ -474,6 +508,30 @@ function waitForVideoMiniReadyThen(onReady: () => void | Promise<void>): Promise
   });
 }
 
+function syncVirtualPlaylistsIntoState(
+  entries: GalleryEntry[],
+  selectedPlaylist: PlaylistCollection | null,
+  records?: VirtualPlaylistRecord[],
+): { entries: GalleryEntry[]; selectedPlaylist: PlaylistCollection | null } {
+  const disk = stripVirtualPlaylists(entries);
+  const mediaIndex = collectMediaIndex(disk);
+  let nextRecords = records ?? loadVirtualPlaylistRecords();
+  const pruned = pruneStalePathsInRecords(nextRecords, mediaIndex);
+  if (pruned.changed) {
+    saveVirtualPlaylistRecords(pruned.records);
+    nextRecords = pruned.records;
+  }
+  const merged = mergeVirtualPlaylistsIntoEntries(disk, nextRecords);
+  let nextSelected = selectedPlaylist;
+  if (selectedPlaylist && parseVirtualPlaylistId(selectedPlaylist.path)) {
+    const hit = merged.find(
+      (e) => e.kind === "playlist" && e.path === selectedPlaylist.path,
+    );
+    nextSelected = hit && hit.kind === "playlist" ? hit : null;
+  }
+  return { entries: merged, selectedPlaylist: nextSelected };
+}
+
 /** Clears all pending auto-dismiss timers (e.g. window unload, Vite HMR module dispose). */
 export function clearRuforgeNotificationDismissTimers(): void {
   for (const handle of notificationDismissTimers.values()) {
@@ -579,7 +637,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       metadataError: null,
       isFocused: false,
 
-      entries: [],
+      entries: mergeVirtualPlaylistsIntoEntries([]),
       galleryDedupeSweptRoots: [],
       libraryScanRevision: 0,
       galleryLoading: true,
@@ -1294,6 +1352,113 @@ export const useRuforgeStore = create<RuforgeStore>()(
         set({ galleryScrollChrome: next });
       },
       setSelectedPlaylist: (p) => set({ selectedPlaylist: p }),
+
+      refreshVirtualPlaylists: () => {
+        set((s) => {
+          const synced = syncVirtualPlaylistsIntoState(s.entries, s.selectedPlaylist);
+          return {
+            entries: synced.entries,
+            selectedPlaylist: synced.selectedPlaylist,
+            libraryScanRevision: s.libraryScanRevision + 1,
+          };
+        });
+      },
+
+      createVirtualPlaylist: (title, seedPaths = []) => {
+        const record = createVirtualPlaylistRecord(title, seedPaths);
+        mutateVirtualRecords((recs) => [...recs, record]);
+        get().refreshVirtualPlaylists();
+        return record.id;
+      },
+
+      deleteVirtualPlaylist: (id) => {
+        if (id === WATCH_LATER_ID) return false;
+        let removed = false;
+        mutateVirtualRecords((recs) => {
+          const next = recs.filter((r) => r.id !== id);
+          removed = next.length !== recs.length;
+          return next;
+        });
+        if (!removed) return false;
+        const path = virtualPlaylistPath(id);
+        set((s) => ({
+          selectedPlaylist:
+            s.selectedPlaylist?.path === path ? null : s.selectedPlaylist,
+        }));
+        get().refreshVirtualPlaylists();
+        return true;
+      },
+
+      renameVirtualPlaylist: (id, title) => {
+        const trimmed = title.trim();
+        if (!trimmed || id === WATCH_LATER_ID) return;
+        mutateVirtualRecords((recs) =>
+          recs.map((r) =>
+            r.id === id ? { ...r, title: trimmed, updatedAt: Date.now() } : r,
+          ),
+        );
+        get().refreshVirtualPlaylists();
+      },
+
+      addToVirtualPlaylist: (id, paths) => {
+        if (paths.length === 0) return;
+        mutateVirtualRecords((recs) =>
+          recs.map((r) => (r.id === id ? addPathsToRecord(r, paths) : r)),
+        );
+        get().refreshVirtualPlaylists();
+      },
+
+      removeFromVirtualPlaylist: (id, path) => {
+        mutateVirtualRecords((recs) =>
+          recs.map((r) => (r.id === id ? removePathFromRecord(r, path) : r)),
+        );
+        get().refreshVirtualPlaylists();
+      },
+
+      reorderVirtualPlaylist: (id, fromIndex, toIndex) => {
+        mutateVirtualRecords((recs) =>
+          recs.map((r) =>
+            r.id === id ? reorderRecordItems(r, fromIndex, toIndex) : r,
+          ),
+        );
+        get().refreshVirtualPlaylists();
+      },
+
+      moveVirtualPlaylistItem: (id, path, where) => {
+        mutateVirtualRecords((recs) =>
+          recs.map((r) => (r.id === id ? moveRecordItem(r, path, where) : r)),
+        );
+        get().refreshVirtualPlaylists();
+      },
+
+      setVirtualPlaylistThumbnail: (id, path) => {
+        mutateVirtualRecords((recs) =>
+          recs.map((r) => (r.id === id ? setRecordThumbnail(r, path) : r)),
+        );
+        get().refreshVirtualPlaylists();
+      },
+
+      toggleWatchLater: (path) => {
+        let liked = false;
+        mutateVirtualRecords((recs) =>
+          recs.map((r) => {
+            if (r.id !== WATCH_LATER_ID) return r;
+            const has = r.items.some((i) => mediaPathsMatch(i.path, path));
+            if (has) {
+              liked = false;
+              return removePathFromRecord(r, path);
+            }
+            liked = true;
+            return addPathsToRecord(r, [path]);
+          }),
+        );
+        get().refreshVirtualPlaylists();
+        return liked;
+      },
+
+      isInWatchLater: (path) => pathInWatchLater(path),
+
+      listVirtualPlaylistRecords: () => loadVirtualPlaylistRecords(),
       setIsSearchExpanded: (v) =>
         set((s) => ({
           isSearchExpanded: typeof v === "function" ? v(s.isSearchExpanded) : v,
@@ -1417,11 +1582,15 @@ export const useRuforgeStore = create<RuforgeStore>()(
           const unique = snapshot.entries;
           if (myToken !== galleryFetchToken) return;
           if (galleryPosterEpoch !== posterEpoch || galleryScrubEpoch !== scrubEpoch) return;
-          set((s) => ({
-            entries: unique,
-            galleryDesktopReady: snapshot.ready,
-            libraryScanRevision: s.libraryScanRevision + 1,
-          }));
+          set((s) => {
+            const synced = syncVirtualPlaylistsIntoState(unique, s.selectedPlaylist);
+            return {
+              entries: synced.entries,
+              selectedPlaylist: synced.selectedPlaylist,
+              galleryDesktopReady: snapshot.ready,
+              libraryScanRevision: s.libraryScanRevision + 1,
+            };
+          });
           const mediaFiles = unique.flatMap((e) =>
             e.kind === "media" ? [e as MediaFile] : (e as PlaylistCollection).items,
           );
@@ -1479,22 +1648,33 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       removeGalleryEntryByPath: (path) => {
         galleryFetchToken += 1;
-        set((s) => ({
-          entries: removePathFromGalleryEntries(s.entries, path),
-          libraryScanRevision: s.libraryScanRevision + 1,
-          galleryLoading: false,
-          galleryDesktopReady: true,
-        }));
+        mutateVirtualRecords((recs) => removePathFromAllRecords(recs, path));
+        set((s) => {
+          const without = removePathFromGalleryEntries(s.entries, path);
+          const synced = syncVirtualPlaylistsIntoState(without, s.selectedPlaylist);
+          return {
+            entries: synced.entries,
+            selectedPlaylist: synced.selectedPlaylist,
+            libraryScanRevision: s.libraryScanRevision + 1,
+            galleryLoading: false,
+            galleryDesktopReady: true,
+          };
+        });
       },
 
       upsertGalleryMediaFile: (file) => {
         galleryFetchToken += 1;
-        set((s) => ({
-          entries: upsertMediaIntoGalleryEntries(s.entries, file),
-          libraryScanRevision: s.libraryScanRevision + 1,
-          galleryLoading: false,
-          galleryDesktopReady: true,
-        }));
+        set((s) => {
+          const upserted = upsertMediaIntoGalleryEntries(s.entries, file);
+          const synced = syncVirtualPlaylistsIntoState(upserted, s.selectedPlaylist);
+          return {
+            entries: synced.entries,
+            selectedPlaylist: synced.selectedPlaylist,
+            libraryScanRevision: s.libraryScanRevision + 1,
+            galleryLoading: false,
+            galleryDesktopReady: true,
+          };
+        });
       },
 
       invalidateEntries: async (opts) => {
