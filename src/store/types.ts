@@ -60,7 +60,7 @@ export type SettingsTab =
   | "advanced"
   | "debugging";
 
-export type GalleryFilter = "all" | "in-progress" | "watched";
+export type GalleryFilter = "all" | "playlists" | "in-progress" | "watched";
 
 export { DEFAULT_OUTPUT_DIR, RUFORGE_INTERNAL_DIR };
 

@@ -24,10 +24,11 @@ These are the rules that matter most. Break these and the output is wrong.
 2. **No glows.** No colored `box-shadow` halos, no `drop-shadow` glow, no neon edges. Glow is banned outright.
 3. **Shadows are functional only.** A shadow appears to *signal* something: this element floats, or content has scrolled under a sticky header. Never a default decoration on every card. When used: soft, thin, low-opacity, same hue family as the background.
 4. **Never letterbox media on a black background.** Images fill their frame with `object-fit: cover` and crop. If the aspect ratio mismatches, crop. Never pad with bars. A muddy dark blob with black side-bars is the single worst anti-pattern (see `design-style-anti-patterns` rule).
-5. **Depth = tonal layers, not effects.** Darkest background → lighter surface → lighter nested surface → lightest interactive element. Build the "popping out of a pocket" feel with stacked tonal contrast.
+5. **Depth = tonal layers, not effects.** Darkest background → lighter surface → lighter nested surface → lightest interactive element. Build the "popping out of a pocket" feel with stacked tonal contrast (fill hierarchy), not with inset shadows that make chips/buttons look engraved or stamped into the surface.
 6. **Don't default to Inter/system-ui on a flat white card.** Use a characterful sans and a real tonal theme picked for the app's purpose.
 7. **Sameness is a statement.** Two sections look identical ONLY if they hold equal value. Don't render "Albums", "Recently added", and "Rediscover" pixel-identical. Differentiate by card size, art treatment, or density.
 8. **Truncated text must marquee on hover.** If a label can ellipsize off-screen or out of its cell (`truncate`, single-line overflow), hover (or row hover) must reveal the full string with a slow horizontal marquee. Prefer `HoverMarqueeText` / `MarqueeText` (`animate-marquee` or `animate-marquee-slow`). Do not leave important names permanently unreadable behind `…`.
+9. **No engraved controls.** Do not use dual-lip inset shadows (`inset` light top + dark bottom, or deep `inset 2px 2px…` sinks) on buttons, chips, badges, or media frames to fake a carved/stamped look. Soft outer float shadows and large well vignettes are fine. Engraving is not.
 
 ---
 

@@ -222,7 +222,9 @@ html[data-rf-window-rounded="1"] #rf-boot {
   background: color-mix(in srgb, var(--accent) 28%, transparent);
   z-index: 40;
   touch-action: none;
-  pointer-events: auto;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
 }
 
 .rf-scrollbar-thumb:hover,

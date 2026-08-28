@@ -2,9 +2,14 @@ import { useEffect } from "react";
 
 const THUMB_CLASS = "rf-scrollbar-thumb";
 const MIN_THUMB = 32;
+/** Subpixel / layout noise — not a real scroll need. */
+const MIN_OVERFLOW = 2;
+/** Near-full thumb = tiny overflow reading as a stuck accent line. */
+const MAX_THUMB_RATIO = 0.96;
 
 type Bind = {
   thumb: HTMLElement;
+  layout: () => void;
   stop: () => void;
 };
 
@@ -15,6 +20,18 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
+function hideThumb(thumb: HTMLElement) {
+  thumb.style.opacity = "0";
+  thumb.style.visibility = "hidden";
+  thumb.style.pointerEvents = "none";
+}
+
+function showThumb(thumb: HTMLElement) {
+  thumb.style.opacity = "1";
+  thumb.style.visibility = "visible";
+  thumb.style.pointerEvents = "auto";
+}
+
 function bindRfScrollbar(el: HTMLElement) {
   if (bound.has(el)) return;
   if (el.classList.contains("scrollbar-none")) return;
@@ -22,6 +39,7 @@ function bindRfScrollbar(el: HTMLElement) {
   const thumb = document.createElement("div");
   thumb.className = THUMB_CLASS;
   thumb.setAttribute("aria-hidden", "true");
+  hideThumb(thumb);
 
   const style = getComputedStyle(el);
   if (style.position === "static") el.style.position = "relative";
@@ -40,15 +58,21 @@ function bindRfScrollbar(el: HTMLElement) {
 
   const layout = () => {
     const { scrollTop, scrollHeight, clientHeight } = el;
-    const maxScroll = scrollHeight - clientHeight;
-    if (maxScroll <= 1) {
-      thumb.style.opacity = "0";
-      thumb.style.pointerEvents = "none";
+    if (clientHeight <= 0) {
+      hideThumb(thumb);
       return;
     }
-    thumb.style.opacity = "1";
-    thumb.style.pointerEvents = "auto";
+    const maxScroll = scrollHeight - clientHeight;
+    if (maxScroll <= MIN_OVERFLOW) {
+      hideThumb(thumb);
+      return;
+    }
     thumbH = Math.max(MIN_THUMB, (clientHeight / scrollHeight) * clientHeight);
+    if (thumbH / clientHeight >= MAX_THUMB_RATIO) {
+      hideThumb(thumb);
+      return;
+    }
+    showThumb(thumb);
     const maxThumb = Math.max(0, clientHeight - thumbH);
     thumbTop = maxThumb <= 0 ? 0 : (scrollTop / maxScroll) * maxThumb;
     paint();
@@ -100,14 +124,20 @@ function bindRfScrollbar(el: HTMLElement) {
 
   thumb.addEventListener("pointerdown", onPointerDown);
   el.addEventListener("scroll", onScroll, { passive: true });
+
   const ro = new ResizeObserver(() => layout());
   ro.observe(el);
+  // Content size changes often do not resize the scroller box itself.
+  for (const child of el.children) {
+    if (child !== thumb && child instanceof Element) ro.observe(child);
+  }
 
   layout();
   requestAnimationFrame(layout);
 
   bound.set(el, {
     thumb,
+    layout,
     stop: () => {
       endDrag();
       thumb.removeEventListener("pointerdown", onPointerDown);
@@ -131,7 +161,14 @@ export function startRfScrollbars(root: ParentNode = document.body): () => void 
       if (!el.isConnected || !el.classList.contains("rf-scrollbar")) unbindRfScrollbar(el);
     }
     root.querySelectorAll<HTMLElement>(".rf-scrollbar").forEach((el) => {
-      if (el.isConnected) bindRfScrollbar(el);
+      if (!el.isConnected) return;
+      const existing = bound.get(el);
+      if (existing) {
+        // Kids may have grown after bind — remeasure overflow.
+        existing.layout();
+        return;
+      }
+      bindRfScrollbar(el);
     });
   };
 
