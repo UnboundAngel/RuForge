@@ -76,6 +76,9 @@ export function useSponsorBlockPlayback({
   onDemoteUndo,
 }: UseSponsorBlockPlaybackArgs) {
   const [segments, setSegments] = useState<SponsorBlockSegment[]>([]);
+  /** Path segments were loaded for; null while loading / cleared on track change. */
+  const segmentsPathRef = useRef<string | null>(null);
+  const [segmentsPath, setSegmentsPath] = useState<string | null>(null);
   const seenAppearanceRef = useRef<Set<string>>(new Set());
   const autoSkippedRef = useRef<Set<string>>(new Set());
   const lastAutoSkipRef = useRef<{ end: number; at: number; category: SponsorBlockSkipCategory } | null>(
@@ -86,43 +89,57 @@ export function useSponsorBlockPlayback({
     seenAppearanceRef.current.clear();
     autoSkippedRef.current.clear();
     lastAutoSkipRef.current = null;
+    // Drop prior-track segments immediately so skip effects cannot seek using them.
+    segmentsPathRef.current = null;
+    setSegmentsPath(null);
+    setSegments([]);
+
     if (!enabled || !file.sourceId?.trim()) {
-      setSegments([]);
       return;
     }
+    const path = file.path;
     let cancelled = false;
     void invoke<EnsurePayload>("ensure_sponsorblock_segments", {
-      mediaPath: file.path,
+      mediaPath: path,
       force: false,
     })
       .then((r) => {
-        if (!cancelled) setSegments(mapSegments(r.segments));
+        if (cancelled) return;
+        segmentsPathRef.current = path;
+        setSegmentsPath(path);
+        setSegments(mapSegments(r.segments));
       })
       .catch(() => {
-        if (!cancelled) setSegments([]);
+        if (cancelled) return;
+        segmentsPathRef.current = path;
+        setSegmentsPath(path);
+        setSegments([]);
       });
     return () => {
       cancelled = true;
     };
   }, [file.path, file.sourceId, enabled]);
 
+  const segmentsForCurrentFile =
+    enabled && segmentsPath === file.path && segmentsPathRef.current === file.path;
+
   const activeSkip = useMemo(
-    () => (enabled ? activeSkipSegments(segments, currentTime) : []),
-    [segments, currentTime, enabled],
+    () => (segmentsForCurrentFile ? activeSkipSegments(segments, currentTime) : []),
+    [segments, currentTime, segmentsForCurrentFile],
   );
 
   const primarySkip = activeSkip[0] ?? null;
 
   useEffect(() => {
-    if (!enabled || !primarySkip || !isSkipCategory(primarySkip.category)) return;
+    if (!segmentsForCurrentFile || !primarySkip || !isSkipCategory(primarySkip.category)) return;
     const key = segmentDedupeKey(primarySkip);
     if (!key || seenAppearanceRef.current.has(key)) return;
     seenAppearanceRef.current.add(key);
     onAppearance(primarySkip.category);
-  }, [enabled, primarySkip, onAppearance]);
+  }, [segmentsForCurrentFile, primarySkip, onAppearance]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!segmentsForCurrentFile) return;
     const last = lastAutoSkipRef.current;
     if (!last) return;
     if (performance.now() - last.at > SB_DEMOTE_UNDO_WINDOW_SEC * 1000) return;
@@ -130,10 +147,10 @@ export function useSponsorBlockPlayback({
       onDemoteUndo(last.category);
       lastAutoSkipRef.current = null;
     }
-  }, [currentTime, enabled, onDemoteUndo]);
+  }, [currentTime, segmentsForCurrentFile, onDemoteUndo]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!segmentsForCurrentFile) return;
     for (const s of activeSkip) {
       if (!isSkipCategory(s.category)) continue;
       const action = s.actionType.trim().toLowerCase();
@@ -152,10 +169,10 @@ export function useSponsorBlockPlayback({
       seekTo(end);
       return;
     }
-  }, [currentTime, activeSkip, enabled, settings, seekTo]);
+  }, [currentTime, activeSkip, segmentsForCurrentFile, settings, seekTo]);
 
   const activeButtonSkipSegment = useMemo(() => {
-    if (!enabled || activeSkip.length === 0) return null;
+    if (!segmentsForCurrentFile || activeSkip.length === 0) return null;
     return activeSkip.find((s) => {
       const action = s.actionType.trim().toLowerCase();
       return (
@@ -164,47 +181,48 @@ export function useSponsorBlockPlayback({
         effectiveCategoryMode(settings, s.category) === "button"
       );
     }) ?? null;
-  }, [enabled, activeSkip, settings]);
+  }, [segmentsForCurrentFile, activeSkip, settings]);
 
   const handleSkipClick = useCallback(() => {
+    if (!segmentsForCurrentFile) return;
     const target = skipSeekTarget(segments, currentTime);
     if (target == null) return;
     const active = activeSkipSegments(segments, currentTime);
     const cat = active[0]?.category;
     if (cat && isSkipCategory(cat)) onManualSkip(cat);
     seekTo(target);
-  }, [segments, currentTime, seekTo, onManualSkip]);
+  }, [segmentsForCurrentFile, segments, currentTime, seekTo, onManualSkip]);
 
   const sbChapterLabel = useMemo(() => {
-    if (!enabled) return null;
+    if (!segmentsForCurrentFile) return null;
     for (const s of segments) {
       if (s.category !== "chapter" || s.actionType !== "chapter") continue;
       const [a, b] = s.segment;
       if (currentTime >= a && currentTime < b) return s.description?.trim() || null;
     }
     return null;
-  }, [segments, currentTime, enabled]);
+  }, [segments, currentTime, segmentsForCurrentFile]);
 
   const poiMarkers = useMemo(() => {
-    if (!enabled) return [] as number[];
+    if (!segmentsForCurrentFile) return [] as number[];
     return segments
       .filter((s) => s.category === "poi_highlight" && s.actionType === "poi")
       .map((s) => s.segment[0])
       .filter((t) => Number.isFinite(t) && t >= 0);
-  }, [segments, enabled]);
+  }, [segments, segmentsForCurrentFile]);
 
   const chapterRanges = useMemo(() => {
-    if (!enabled) return [] as { start: number; end: number }[];
+    if (!segmentsForCurrentFile) return [] as { start: number; end: number }[];
     return segments
       .filter((s) => s.category === "chapter" && s.actionType === "chapter")
       .map((s) => ({ start: s.segment[0], end: s.segment[1] }))
       .filter((r) => Number.isFinite(r.start) && Number.isFinite(r.end) && r.end > r.start);
-  }, [segments, enabled]);
+  }, [segments, segmentsForCurrentFile]);
 
   const showSkipButton = useMemo(() => {
-    if (!enabled) return false;
+    if (!segmentsForCurrentFile) return false;
     return activeButtonSkipSegment !== null;
-  }, [enabled, activeButtonSkipSegment]);
+  }, [segmentsForCurrentFile, activeButtonSkipSegment]);
 
   const activeSkipCategory = useMemo(() => {
     return activeButtonSkipSegment?.category as SponsorBlockSkipCategory | null;
@@ -226,7 +244,7 @@ export function useSponsorBlockPlayback({
   }, [activeSkipCategory]);
 
   const scrubOverlay = useMemo(() => {
-    if (!enabled) {
+    if (!segmentsForCurrentFile) {
       return {
         skipRanges: [],
         chapterRanges: [],
@@ -253,20 +271,26 @@ export function useSponsorBlockPlayback({
       .filter((p) => Number.isFinite(p.time) && p.time >= 0);
 
     return { skipRanges, chapterRanges, poiTimes };
-  }, [segments, enabled]);
+  }, [segments, segmentsForCurrentFile]);
 
   const refreshSegments = useCallback(() => {
     if (!file.sourceId?.trim()) return;
+    const path = file.path;
     void invoke<EnsurePayload>("ensure_sponsorblock_segments", {
-      mediaPath: file.path,
+      mediaPath: path,
       force: true,
     })
-      .then((r) => setSegments(mapSegments(r.segments)))
+      .then((r) => {
+        segmentsPathRef.current = path;
+        setSegmentsPath(path);
+        setSegments(mapSegments(r.segments));
+      })
       .catch(() => {});
   }, [file.path, file.sourceId]);
 
   return {
-    segments,
+    segments: segmentsForCurrentFile ? segments : [],
+    segmentsPath,
     showSkipButton,
     skipButtonLabel,
     handleSkipClick,

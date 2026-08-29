@@ -344,7 +344,18 @@ function HeroForeground({
 
   return (
     <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-      <div className="relative" style={{ width: artSize, height: artSize }}>
+      {/*
+        Clip to the cover box on the right/top/bottom so a tucked disc cannot
+        poke out past the jacket. Negative left inset keeps the resting peek visible.
+      */}
+      <div
+        className="relative"
+        style={{
+          width: artSize,
+          height: artSize,
+          clipPath: "inset(0 0 0 -62%)",
+        }}
+      >
         <div
           className="absolute z-0 pointer-events-none"
           style={{

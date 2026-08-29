@@ -320,7 +320,8 @@ export function MusicShell() {
     onDemoteUndo: (cat) => bumpSponsorBlockStat(cat, "undoSignals"),
   });
 
-  // Music-only skip: auto-seek past music_offtopic segments when toggle is on
+  // Music-only skip: auto-seek past music_offtopic segments when toggle is on.
+  // sbPlayback.segments is empty until loaded for the current path (no stale cross-track seeks).
   const musicOnlySkippedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!musicOnlySkip) return;
