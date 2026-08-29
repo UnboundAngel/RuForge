@@ -1663,7 +1663,16 @@ fn move_media_bundle(from_media: &Path, dest_media: &Path) -> Result<(), String>
 
     // Move flat sidecars: all known extensions across both stem variants.
     for candidate in [src_stem, strip_ytdlp_stream_suffix(src_stem)] {
-        for ext in ["info.json", "..info.json", "jpg", "webp", "sponsorblock.json", "comments.json"] {
+        for ext in [
+            "info.json",
+            "..info.json",
+            "jpg",
+            "webp",
+            "sponsorblock.json",
+            "musicmeta.json",
+            "lyrics.json",
+            "comments.json",
+        ] {
             let name = if ext == "..info.json" {
                 format!("{}..info.json", candidate)
             } else {

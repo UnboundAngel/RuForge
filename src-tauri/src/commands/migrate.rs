@@ -68,6 +68,7 @@ fn collect_sidecar_paths(parent: &Path, stem: &str) -> Vec<PathBuf> {
             format!("{candidate}..info.json"),
             format!("{candidate}.sponsorblock.json"),
             format!("{candidate}.musicmeta.json"),
+            format!("{candidate}.lyrics.json"),
             format!("{candidate}.comments.json"),
         ] {
             let p = parent.join(&name);

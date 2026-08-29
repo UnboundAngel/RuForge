@@ -44,6 +44,7 @@ pub fn collect_sidecar_sources_exact_stem(parent: &Path, stem: &str) -> Vec<Path
         format!("{stem}..info.json"),
         format!("{stem}.sponsorblock.json"),
         format!("{stem}.musicmeta.json"),
+        format!("{stem}.lyrics.json"),
         format!("{stem}.comments.json"),
     ] {
         let p = parent.join(&name);
@@ -76,6 +77,7 @@ pub fn collect_sidecar_sources(parent: &Path, stem: &str) -> Vec<PathBuf> {
             format!("{candidate}..info.json"),
             format!("{candidate}.sponsorblock.json"),
             format!("{candidate}.musicmeta.json"),
+            format!("{candidate}.lyrics.json"),
             format!("{candidate}.comments.json"),
         ] {
             let p = parent.join(&name);

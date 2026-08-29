@@ -66,6 +66,7 @@ use crate::commands::music_listen_log::{
     music_listen_get_integrity, music_listen_get_snapshot, music_listen_import_legacy,
     music_listen_rebuild_snapshot, music_listen_transfer,
 };
+use crate::commands::lyrics::{backfill_lyrics, ensure_lyrics, read_lyrics};
 use crate::commands::musicmeta::{
     backfill_music_meta, ensure_artist_meta_sidecar, ensure_music_meta, get_artist_info,
     read_artist_meta_sidecar, read_music_meta,
@@ -345,6 +346,9 @@ pub fn run() {
             ensure_sponsorblock_segments,
             ensure_music_meta,
             read_music_meta,
+            ensure_lyrics,
+            read_lyrics,
+            backfill_lyrics,
             backfill_music_meta,
             get_artist_info,
             read_artist_meta_sidecar,

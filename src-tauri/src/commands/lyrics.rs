@@ -1,0 +1,711 @@
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
+
+use crate::commands::musicmeta::{
+    build_http_client, clean_music_title, read_sidecar as read_musicmeta_sidecar,
+    sidecar_path_for as musicmeta_sidecar_path, MusicMetaSidecarDto,
+};
+use crate::utils::{duration_from_ytdlp_info_json, is_audio_only_ext, resolve_info_json_path};
+
+const LRCLIB_API_BASE: &str = "https://lrclib.net";
+const SIDECAR_SCHEMA_VERSION: u32 = 1;
+const SOURCE_TAG: &str = "lrclib";
+/// Negative-cache TTL: miss sidecars are retryable after this window.
+const NEGATIVE_CACHE_SECS: i64 = 7 * 24 * 60 * 60;
+/// Docs: /api/get only matches when duration differs by at most ±2 seconds.
+const DURATION_TOLERANCE_SECS: f64 = 2.0;
+const BACKFILL_GAP_MS: u64 = 250;
+
+// ---- Sidecar -------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LyricsSidecarDto {
+    pub schema_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synced_lyrics: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plain_lyrics: Option<String>,
+    pub fetched_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matched_track_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub matched_artist_name: Option<String>,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LyricsEnsureResult {
+    pub sidecar: LyricsSidecarDto,
+    pub from_cache: bool,
+    pub match_step: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LyricsBackfillProgress {
+    pub done: u32,
+    pub total: u32,
+    pub current_title: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LyricsQuery {
+    pub artist: String,
+    pub title: String,
+    pub album: Option<String>,
+    pub duration: Option<f64>,
+    /// `canonical` when musicmeta fields drove the query; `fallback` for artist+name.
+    pub identity: &'static str,
+}
+
+#[derive(Debug, Clone)]
+pub struct LyricsMatchOutcome {
+    pub sidecar: LyricsSidecarDto,
+    pub match_step: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LrclibTrack {
+    #[serde(default)]
+    track_name: Option<String>,
+    #[serde(default)]
+    artist_name: Option<String>,
+    #[serde(default)]
+    duration: Option<f64>,
+    #[serde(default)]
+    plain_lyrics: Option<String>,
+    #[serde(default)]
+    synced_lyrics: Option<String>,
+    #[serde(default)]
+    instrumental: Option<bool>,
+}
+
+pub fn sidecar_path_for(parent: &Path, stem: &str) -> PathBuf {
+    parent.join(format!("{stem}.lyrics.json"))
+}
+
+pub fn read_sidecar(path: &Path) -> Option<LyricsSidecarDto> {
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+fn write_sidecar(path: &Path, dto: &LyricsSidecarDto) -> bool {
+    let Ok(json) = serde_json::to_string_pretty(dto) else {
+        return false;
+    };
+    std::fs::write(path, json).is_ok()
+}
+
+fn iso_now() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+fn non_empty(s: Option<&str>) -> Option<String> {
+    s.map(str::trim).filter(|t| !t.is_empty()).map(String::from)
+}
+
+fn duration_usable(d: Option<f64>) -> Option<f64> {
+    d.filter(|v| v.is_finite() && *v >= 1.0 && *v <= 3600.0)
+}
+
+fn within_duration_tolerance(local: f64, remote: f64) -> bool {
+    (local - remote).abs() <= DURATION_TOLERANCE_SECS
+}
+
+fn has_lyrics(dto: &LyricsSidecarDto) -> bool {
+    dto.synced_lyrics
+        .as_ref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+        || dto
+            .plain_lyrics
+            .as_ref()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+}
+
+fn negative_cache_fresh(dto: &LyricsSidecarDto) -> bool {
+    if has_lyrics(dto) {
+        return false;
+    }
+    let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&dto.fetched_at) else {
+        return false;
+    };
+    let age = chrono::Utc::now().signed_duration_since(parsed.with_timezone(&chrono::Utc));
+    age.num_seconds() < NEGATIVE_CACHE_SECS
+}
+
+fn miss_sidecar() -> LyricsSidecarDto {
+    LyricsSidecarDto {
+        schema_version: SIDECAR_SCHEMA_VERSION,
+        synced_lyrics: None,
+        plain_lyrics: None,
+        fetched_at: iso_now(),
+        matched_track_name: None,
+        matched_artist_name: None,
+        source: SOURCE_TAG.to_string(),
+    }
+}
+
+fn hit_sidecar(track: &LrclibTrack) -> LyricsSidecarDto {
+    let synced = non_empty(track.synced_lyrics.as_deref());
+    let plain = non_empty(track.plain_lyrics.as_deref());
+    LyricsSidecarDto {
+        schema_version: SIDECAR_SCHEMA_VERSION,
+        synced_lyrics: synced,
+        plain_lyrics: plain,
+        fetched_at: iso_now(),
+        matched_track_name: non_empty(track.track_name.as_deref()),
+        matched_artist_name: non_empty(track.artist_name.as_deref()),
+        source: SOURCE_TAG.to_string(),
+    }
+}
+
+fn track_is_usable(track: &LrclibTrack) -> bool {
+    if track.instrumental == Some(true) {
+        return true;
+    }
+    non_empty(track.synced_lyrics.as_deref()).is_some()
+        || non_empty(track.plain_lyrics.as_deref()).is_some()
+}
+
+// ---- Duration / identity -------------------------------------------------
+
+fn lofty_duration_secs(media: &Path) -> Option<f64> {
+    use lofty::file::AudioFile;
+    use lofty::probe::Probe;
+
+    let tagged = Probe::open(media).ok()?.read().ok()?;
+    let secs = tagged.properties().duration().as_secs_f64();
+    duration_usable(Some(secs))
+}
+
+fn resolve_duration(media: &Path) -> Option<f64> {
+    let from_info = duration_usable(Some(duration_from_ytdlp_info_json(media)).filter(|&d| d > 0.0));
+    if from_info.is_some() {
+        return from_info;
+    }
+    if media.is_file() {
+        return lofty_duration_secs(media);
+    }
+    None
+}
+
+fn artist_from_stem(stem: &str) -> Option<String> {
+    stem.find(" - ")
+        .map(|i| stem[..i].trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn title_from_stem(stem: &str) -> String {
+    if let Some(i) = stem.find(" - ") {
+        let t = stem[i + 3..].trim();
+        if !t.is_empty() {
+            return clean_music_title(t);
+        }
+    }
+    clean_music_title(stem)
+}
+
+fn read_info_identity(parent: &Path, stem: &str) -> (Option<String>, Option<String>, Option<String>) {
+    let Some(info_path) = resolve_info_json_path(parent, stem) else {
+        return (None, None, None);
+    };
+    let Ok(txt) = std::fs::read_to_string(&info_path) else {
+        return (None, None, None);
+    };
+    let Ok(j) = serde_json::from_str::<serde_json::Value>(&txt) else {
+        return (None, None, None);
+    };
+    let title = j["title"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(clean_music_title);
+    let artist = j["artist"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .or_else(|| {
+            j["uploader"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+        })
+        .or_else(|| {
+            j["creator"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+        });
+    let album = j["album"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+    (artist, title, album)
+}
+
+fn read_tag_identity(media: &Path) -> (Option<String>, Option<String>, Option<String>) {
+    if !media.is_file() {
+        return (None, None, None);
+    }
+    use lofty::prelude::*;
+    use lofty::probe::Probe;
+
+    let Ok(tagged) = Probe::open(media).and_then(|p| p.read()) else {
+        return (None, None, None);
+    };
+    let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
+        return (None, None, None);
+    };
+    let artist = tag
+        .artist()
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty());
+    let title = tag
+        .title()
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+        .map(|s| clean_music_title(&s));
+    let album = tag.album().map(|s| s.to_string()).filter(|s| !s.is_empty());
+    (artist, title, album)
+}
+
+fn query_from_musicmeta(meta: &MusicMetaSidecarDto, duration: Option<f64>) -> Option<LyricsQuery> {
+    let artist = non_empty(meta.canonical_artist.as_deref())?;
+    let title = non_empty(meta.canonical_title.as_deref())?;
+    let album = non_empty(meta.canonical_album.as_deref());
+    Some(LyricsQuery {
+        artist,
+        title,
+        album,
+        duration,
+        identity: "canonical",
+    })
+}
+
+fn query_fallback(
+    media: &Path,
+    parent: &Path,
+    stem: &str,
+    duration: Option<f64>,
+) -> Option<LyricsQuery> {
+    let (tag_artist, tag_title, tag_album) = read_tag_identity(media);
+    let (yt_artist, yt_title, yt_album) = read_info_identity(parent, stem);
+
+    let title = tag_title
+        .or(yt_title)
+        .unwrap_or_else(|| title_from_stem(stem));
+    if title.is_empty() {
+        return None;
+    }
+    let artist = tag_artist.or(yt_artist).or_else(|| artist_from_stem(stem))?;
+    let album = tag_album.or(yt_album);
+    Some(LyricsQuery {
+        artist,
+        title,
+        album,
+        duration,
+        identity: "fallback",
+    })
+}
+
+fn build_queries(media: &Path) -> Vec<LyricsQuery> {
+    let Some(parent) = media.parent() else {
+        return Vec::new();
+    };
+    let Some(stem) = media.file_stem().and_then(|s| s.to_str()) else {
+        return Vec::new();
+    };
+
+    let duration = resolve_duration(media);
+    let mut out = Vec::new();
+
+    let musicmeta_path = musicmeta_sidecar_path(parent, stem);
+    if let Some(meta) = read_musicmeta_sidecar(&musicmeta_path) {
+        if let Some(q) = query_from_musicmeta(&meta, duration) {
+            out.push(q);
+        }
+    }
+
+    if let Some(q) = query_fallback(media, parent, stem, duration) {
+        let dup = out.iter().any(|existing| {
+            existing.artist.eq_ignore_ascii_case(&q.artist)
+                && existing.title.eq_ignore_ascii_case(&q.title)
+        });
+        if !dup {
+            out.push(q);
+        }
+    }
+
+    out
+}
+
+// ---- LRCLIB HTTP ---------------------------------------------------------
+
+async fn honor_retry_after(resp: &reqwest::Response) {
+    if resp.status().as_u16() != 429 {
+        return;
+    }
+    let secs = resp
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(1)
+        .clamp(1, 30);
+    tokio::time::sleep(Duration::from_secs(secs)).await;
+}
+
+async fn lrclib_get(query: &LyricsQuery) -> Option<LrclibTrack> {
+    let client = build_http_client()?;
+    let mut req = client.get(format!("{LRCLIB_API_BASE}/api/get")).query(&[
+        ("track_name", query.title.as_str()),
+        ("artist_name", query.artist.as_str()),
+    ]);
+    if let Some(album) = query.album.as_deref() {
+        req = req.query(&[("album_name", album)]);
+    }
+    if let Some(dur) = duration_usable(query.duration) {
+        req = req.query(&[("duration", format!("{dur:.0}"))]);
+    }
+
+    let resp = req.send().await.ok()?;
+    if resp.status().as_u16() == 429 {
+        honor_retry_after(&resp).await;
+        return None;
+    }
+    if resp.status().as_u16() == 404 {
+        return None;
+    }
+    if !resp.status().is_success() {
+        return None;
+    }
+    let track: LrclibTrack = resp.json().await.ok()?;
+    if track_is_usable(&track) {
+        Some(track)
+    } else {
+        None
+    }
+}
+
+async fn lrclib_search(query: &LyricsQuery) -> Option<LrclibTrack> {
+    let client = build_http_client()?;
+    let mut req = client
+        .get(format!("{LRCLIB_API_BASE}/api/search"))
+        .query(&[
+            ("track_name", query.title.as_str()),
+            ("artist_name", query.artist.as_str()),
+        ]);
+    if let Some(album) = query.album.as_deref() {
+        req = req.query(&[("album_name", album)]);
+    }
+
+    let resp = req.send().await.ok()?;
+    if resp.status().as_u16() == 429 {
+        honor_retry_after(&resp).await;
+        return None;
+    }
+    if !resp.status().is_success() {
+        return None;
+    }
+    let tracks: Vec<LrclibTrack> = resp.json().await.ok()?;
+    pick_search_match(query.duration, tracks)
+}
+
+fn pick_search_match(local_duration: Option<f64>, tracks: Vec<LrclibTrack>) -> Option<LrclibTrack> {
+    let usable: Vec<LrclibTrack> = tracks.into_iter().filter(track_is_usable).collect();
+    if usable.is_empty() {
+        return None;
+    }
+
+    let Some(local) = duration_usable(local_duration) else {
+        return usable.into_iter().next();
+    };
+
+    let mut best: Option<(f64, LrclibTrack)> = None;
+    for track in usable {
+        let remote = track.duration.unwrap_or(0.0);
+        if !remote.is_finite() || remote <= 0.0 {
+            continue;
+        }
+        if !within_duration_tolerance(local, remote) {
+            continue;
+        }
+        let delta = (local - remote).abs();
+        match &best {
+            Some((best_delta, _)) if delta >= *best_delta => {}
+            _ => best = Some((delta, track)),
+        }
+    }
+    best.map(|(_, t)| t)
+}
+
+/// Shared fetch: /api/get then /api/search by duration delta, across query identities.
+pub async fn fetch_lyrics_for_queries(queries: &[LyricsQuery]) -> LyricsMatchOutcome {
+    for query in queries {
+        let step_get = format!("get:{}", query.identity);
+        if let Some(track) = lrclib_get(query).await {
+            return LyricsMatchOutcome {
+                sidecar: hit_sidecar(&track),
+                match_step: step_get,
+            };
+        }
+
+        let step_search = format!("search:{}", query.identity);
+        if let Some(track) = lrclib_search(query).await {
+            return LyricsMatchOutcome {
+                sidecar: hit_sidecar(&track),
+                match_step: step_search,
+            };
+        }
+    }
+
+    LyricsMatchOutcome {
+        sidecar: miss_sidecar(),
+        match_step: "miss".to_string(),
+    }
+}
+
+/// One shared ensure path used by download, backfill, and manual refetch.
+pub async fn ensure_lyrics_for_path(media: &Path, force: bool) -> Option<LyricsEnsureResult> {
+    let ext = media
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !ext.is_empty() && !is_audio_only_ext(&ext) {
+        return None;
+    }
+
+    let parent = media.parent()?;
+    let stem = media.file_stem()?.to_str()?;
+    let sidecar_path = sidecar_path_for(parent, stem);
+
+    if !force {
+        if let Some(cached) = read_sidecar(&sidecar_path) {
+            if has_lyrics(&cached) || negative_cache_fresh(&cached) {
+                return Some(LyricsEnsureResult {
+                    sidecar: cached,
+                    from_cache: true,
+                    match_step: "cache".to_string(),
+                });
+            }
+        }
+    }
+
+    let queries = build_queries(media);
+    if queries.is_empty() {
+        let miss = miss_sidecar();
+        let _ = write_sidecar(&sidecar_path, &miss);
+        return Some(LyricsEnsureResult {
+            sidecar: miss,
+            from_cache: false,
+            match_step: "miss:no-identity".to_string(),
+        });
+    }
+
+    let outcome = fetch_lyrics_for_queries(&queries).await;
+    let _ = write_sidecar(&sidecar_path, &outcome.sidecar);
+    Some(LyricsEnsureResult {
+        sidecar: outcome.sidecar,
+        from_cache: false,
+        match_step: outcome.match_step,
+    })
+}
+
+// ---- Library walk / callers ---------------------------------------------
+
+fn push_if_audio(path: PathBuf, out: &mut Vec<PathBuf>) {
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !is_audio_only_ext(&ext) {
+        return;
+    }
+    out.push(path);
+}
+
+fn collect_audio_files(dir: &Path, depth: u32, max_depth: u32, out: &mut Vec<PathBuf>) {
+    if depth > max_depth || !dir.is_dir() {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut entries: Vec<PathBuf> = rd.filter_map(|e| e.ok().map(|e| e.path())).collect();
+    entries.sort();
+    for p in entries {
+        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.starts_with('.') || name == crate::utils::THUMB_DIR_NAME {
+            continue;
+        }
+        if p.is_file() {
+            push_if_audio(p, out);
+        } else if p.is_dir() {
+            collect_audio_files(&p, depth + 1, max_depth, out);
+        }
+    }
+}
+
+fn library_audio_files(roots: &[String]) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for root in roots {
+        let p = PathBuf::from(root.trim());
+        if p.is_dir() {
+            collect_audio_files(&p, 0, 12, &mut out);
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn needs_fetch(path: &Path, force: bool) -> bool {
+    if force {
+        return true;
+    }
+    let Some(parent) = path.parent() else {
+        return false;
+    };
+    let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    let sidecar = sidecar_path_for(parent, stem);
+    match read_sidecar(&sidecar) {
+        None => true,
+        Some(dto) => !has_lyrics(&dto) && !negative_cache_fresh(&dto),
+    }
+}
+
+/// Post-download hook: write lyrics next to a finished audio path (after musicmeta when possible).
+pub async fn ensure_lyrics_after_download(media: &Path) {
+    let _ = ensure_lyrics_for_path(media, false).await;
+}
+
+#[tauri::command]
+pub async fn ensure_lyrics(
+    media_path: String,
+    force: Option<bool>,
+) -> Option<LyricsEnsureResult> {
+    ensure_lyrics_for_path(Path::new(&media_path), force.unwrap_or(false)).await
+}
+
+#[tauri::command]
+pub async fn read_lyrics(media_path: String) -> Option<LyricsSidecarDto> {
+    let media = PathBuf::from(&media_path);
+    let parent = media.parent()?;
+    let stem = media.file_stem()?.to_str()?;
+    read_sidecar(&sidecar_path_for(parent, stem))
+}
+
+#[tauri::command]
+pub async fn backfill_lyrics(
+    app: AppHandle,
+    roots: Vec<String>,
+    force: Option<bool>,
+) -> Result<u32, String> {
+    let force = force.unwrap_or(false);
+    let all = library_audio_files(&roots);
+    let targets: Vec<PathBuf> = all
+        .into_iter()
+        .filter(|p| needs_fetch(p, force))
+        .collect();
+    let total = targets.len() as u32;
+    let mut done: u32 = 0;
+    let mut wrote: u32 = 0;
+
+    let _ = app.emit(
+        "lyrics-backfill-progress",
+        LyricsBackfillProgress {
+            done,
+            total,
+            current_title: None,
+        },
+    );
+
+    for path in targets {
+        let title = path.file_stem().and_then(|s| s.to_str()).map(String::from);
+        if let Some(result) = ensure_lyrics_for_path(&path, force).await {
+            if !result.from_cache {
+                wrote += 1;
+            }
+        }
+        done += 1;
+        let _ = app.emit(
+            "lyrics-backfill-progress",
+            LyricsBackfillProgress {
+                done,
+                total,
+                current_title: title,
+            },
+        );
+        if done < total {
+            tokio::time::sleep(Duration::from_millis(BACKFILL_GAP_MS)).await;
+        }
+    }
+
+    Ok(wrote)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pick_search_prefers_closest_duration_within_tolerance() {
+        let tracks = vec![
+            LrclibTrack {
+                track_name: Some("A".into()),
+                artist_name: Some("X".into()),
+                duration: Some(200.0),
+                plain_lyrics: Some("far".into()),
+                synced_lyrics: None,
+                instrumental: None,
+            },
+            LrclibTrack {
+                track_name: Some("B".into()),
+                artist_name: Some("X".into()),
+                duration: Some(232.0),
+                plain_lyrics: Some("near".into()),
+                synced_lyrics: None,
+                instrumental: None,
+            },
+            LrclibTrack {
+                track_name: Some("C".into()),
+                artist_name: Some("X".into()),
+                duration: Some(250.0),
+                plain_lyrics: Some("out".into()),
+                synced_lyrics: None,
+                instrumental: None,
+            },
+        ];
+        let picked = pick_search_match(Some(233.0), tracks).expect("pick");
+        assert_eq!(picked.track_name.as_deref(), Some("B"));
+    }
+
+    #[test]
+    fn pick_search_rejects_outside_tolerance() {
+        let tracks = vec![LrclibTrack {
+            track_name: Some("A".into()),
+            artist_name: Some("X".into()),
+            duration: Some(200.0),
+            plain_lyrics: Some("x".into()),
+            synced_lyrics: None,
+            instrumental: None,
+        }];
+        assert!(pick_search_match(Some(233.0), tracks).is_none());
+    }
+}
