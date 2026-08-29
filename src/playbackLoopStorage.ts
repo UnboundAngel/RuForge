@@ -19,7 +19,7 @@ export function readLoopModeForPath(path: string): LoopMode {
 }
 
 export function writeLoopModeForPath(path: string, mode: LoopMode): void {
-  if (mode === "all") {
+  if (mode === "all" || mode === "off") {
     localStorage.removeItem(`${LOOP_KEY_PREFIX}${path}`);
     return;
   }
@@ -34,9 +34,10 @@ export function resolveLoopModeForPlay(
   pathMode: LoopMode,
   sessionMode: LoopMode,
 ): LoopMode {
+  // Per-path "one" still wins when revisiting a track that was pinned.
+  // Session "all" / "one" must survive skip, prev, and refresh (via miniplayer-loop LS).
   if (pathMode === "one") return "one";
-  if (sessionMode === "all") return "all";
-  return "off";
+  return sessionMode;
 }
 
 /** Exclusive end of the user-chosen span; idle endless tail starts here when set. */

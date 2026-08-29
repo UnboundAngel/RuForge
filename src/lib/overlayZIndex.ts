@@ -5,6 +5,7 @@
  */
 export const OVERLAY_Z_CLASS = {
   settings: "z-[300]",
+  downloader: "z-[300]",
   fullscreen: "z-[400]",
   confirm: "z-[450]",
   updater: "z-[600]",

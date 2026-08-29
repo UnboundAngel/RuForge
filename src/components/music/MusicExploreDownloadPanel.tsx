@@ -23,6 +23,7 @@ import {
   classifyMusicExploreUrl,
   resolveMusicExplorePasteUrl,
   extractYouTubeVideoId,
+  extractYouTubePlaylistId,
   canonicalYouTubeWatchUrl,
   youtubeUrlsMatch,
 } from "@/youtubeUrl";
@@ -431,7 +432,13 @@ export function MusicExploreDownloadPanel({
     sidecarMetadata?: PlaylistSidecarMetadata,
   ) => {
     const opts = buildAudioOpts();
-    const folderName = playlistTitle ? sanitizePlaylistFolderName(playlistTitle) : undefined;
+    const realPlaylistBatch =
+      tracks.length > 1 ||
+      Boolean(listUrl && (isMusicYouTubePlaylistUrl(listUrl) || extractYouTubePlaylistId(listUrl)));
+    const folderName =
+      realPlaylistBatch && playlistTitle
+        ? sanitizePlaylistFolderName(playlistTitle)
+        : undefined;
     for (let i = 0; i < tracks.length; i++) {
       const track = tracks[i];
       enqueueDownload(

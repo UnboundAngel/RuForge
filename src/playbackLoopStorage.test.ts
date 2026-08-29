@@ -35,10 +35,19 @@ describe("cycleLoopMode", () => {
 describe("resolveLoopModeForPlay", () => {
   it("path one wins", () => {
     expect(resolveLoopModeForPlay("one", "all")).toBe("one");
+    expect(resolveLoopModeForPlay("one", "off")).toBe("one");
   });
 
   it("keeps session all when path is off", () => {
     expect(resolveLoopModeForPlay("off", "all")).toBe("all");
+  });
+
+  it("keeps session one across tracks when path has no pin", () => {
+    expect(resolveLoopModeForPlay("off", "one")).toBe("one");
+  });
+
+  it("keeps session off when path is off", () => {
+    expect(resolveLoopModeForPlay("off", "off")).toBe("off");
   });
 });
 

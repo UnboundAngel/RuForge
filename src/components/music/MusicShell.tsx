@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
@@ -28,6 +28,10 @@ import { AudioHeroStage } from "@/components/player/AudioHeroStage";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
+import {
+  type IslandSkipDir,
+} from "@/components/island/islandSkipMotion";
+import { takeIslandSkipDirForHero } from "@/lib/islandSkipDirection";
 import {
   ensureEmbeddedExplorerWebview,
   EXPLORER_PAUSE_MEDIA_SCRIPT,
@@ -128,6 +132,7 @@ type ExpandedOverlayProps = {
   audioEl: HTMLAudioElement | null;
   isPaused: boolean;
   isMuted: boolean;
+  skipDir: IslandSkipDir;
   onTogglePlay: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
@@ -137,12 +142,24 @@ function ExpandedOverlay({
   audioEl,
   isPaused,
   isMuted,
+  skipDir,
   onTogglePlay,
   onContextMenu,
 }: ExpandedOverlayProps) {
   const playingFile = useRuforgeStore((s) => s.playingFile);
+  const reduceMotion = useReducedMotion();
+  const trackKey = playingFile?.path ?? "";
   const artist = playingFile?.artist ?? playingFile?.albumArtist
     ?? (playingFile?.name.includes(" - ") ? playingFile.name.split(" - ")[0].trim() : "");
+
+  const metaTransition = reduceMotion
+    ? { duration: 0.18, ease: "easeOut" as const }
+    : { duration: 0.28, ease: "easeOut" as const };
+  const metaVariants = {
+    enter: { opacity: 0, y: skipDir * 8 },
+    center: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: skipDir * -6 },
+  };
 
   return (
     <div
@@ -155,24 +172,38 @@ function ExpandedOverlay({
       <AudioHeroStage
         coverSrc={coverSrc}
         audioEl={audioEl}
-        connectKey={playingFile?.path ?? ""}
+        connectKey={trackKey}
+        skipDir={skipDir}
         isPaused={isPaused}
         isMuted={isMuted}
         layer="foreground"
         onTogglePlay={onTogglePlay}
       />
-      <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-1 z-20 px-6 max-w-lg mx-auto w-full">
-        <MarqueeText
-          text={playingFile?.name ?? ""}
-          className="text-base font-semibold text-white/90 w-full"
-          centered
-        />
-        {artist && (
-          <div className="text-sm text-white/55 text-center w-full truncate">{artist}</div>
-        )}
-        {playingFile?.album && (
-          <div className="text-xs text-white/35 text-center w-full truncate">{playingFile.album}</div>
-        )}
+      <div className="absolute bottom-6 left-0 right-0 z-20 px-6 max-w-lg mx-auto w-full overflow-hidden">
+        <AnimatePresence initial={false} custom={skipDir} mode="sync">
+          <motion.div
+            key={trackKey || "empty-meta"}
+            custom={skipDir}
+            variants={metaVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={metaTransition}
+            className="flex flex-col items-center gap-1 w-full"
+          >
+            <MarqueeText
+              text={playingFile?.name ?? ""}
+              className="text-base font-semibold text-white/90 w-full"
+              centered
+            />
+            {artist && (
+              <div className="text-sm text-white/55 text-center w-full truncate">{artist}</div>
+            )}
+            {playingFile?.album && (
+              <div className="text-xs text-white/35 text-center w-full truncate">{playingFile.album}</div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -637,7 +668,8 @@ export function MusicShell() {
           );
           s.releaseHeldDownloadJobs();
           s.pumpDownloadQueue();
-          setDockMinimized(false);
+          // Singles stay dock-only; do not expand the Explore download panel.
+          setDockMinimized(true);
           setDockPanelSession(true);
         });
       },
@@ -675,7 +707,8 @@ export function MusicShell() {
       setPanelOpen(false);
       void enqueuePastedExploreWatch(url).then((decision) => {
         if (decision === "enqueue") {
-          setDockMinimized(false);
+          // Singles stay dock-only; do not expand the Explore download panel.
+          setDockMinimized(true);
           setDockPanelSession(true);
         }
       });
@@ -1031,6 +1064,19 @@ export function MusicShell() {
   const showSegmentsTab = hasChaptersForPanel || hasSbSegmentsForPanel;
   const shellBlack = playerExpanded;
 
+  const heroTrackKey = playingFile?.path ?? "";
+  const heroSkipDirRef = useRef<IslandSkipDir>(1);
+  const heroTrackKeyRef = useRef(heroTrackKey);
+  if (!playerExpanded) {
+    heroTrackKeyRef.current = heroTrackKey;
+  } else if (heroTrackKey !== heroTrackKeyRef.current) {
+    if (heroTrackKeyRef.current !== "") {
+      heroSkipDirRef.current = takeIslandSkipDirForHero();
+    }
+    heroTrackKeyRef.current = heroTrackKey;
+  }
+  const heroSkipDir = heroSkipDirRef.current;
+
   const leftSlotWidth = navCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_FULL;
   const mainPanelRadius = showExploreStrip
     ? rightPanelOpen
@@ -1216,6 +1262,7 @@ export function MusicShell() {
                         coverSrc={coverSrc}
                         audioEl={playback.audioEl}
                         connectKey={playingFile.path}
+                        skipDir={heroSkipDir}
                         isPaused={playback.paused}
                         isMuted={isMuted}
                         layer="background"
@@ -1232,6 +1279,7 @@ export function MusicShell() {
                       audioEl={playback.audioEl}
                       isPaused={playback.paused}
                       isMuted={isMuted}
+                      skipDir={heroSkipDir}
                       onTogglePlay={playback.togglePlay}
                       onContextMenu={(e) => {
                         if (!playingFile) return;
@@ -1348,6 +1396,7 @@ export function MusicShell() {
                 }}
                 showSegmentsTab={showSegmentsTab}
                 hintKey={rightPanelMiniHintKey}
+                shellFrame={shellBlack}
               />
             )}
           </div>
@@ -1361,6 +1410,7 @@ export function MusicShell() {
               if (!rightPanelOpen) setRightPanelOpen(true);
             }}
             shellFrame={shellBlack}
+            cancelFlexGap={!showExploreStrip}
             playingFile={playingFile}
             currentTime={playback.currentTime}
             duration={playback.duration}

@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ImmersiveDownloadPhase = "preparing" | "downloading" | "finishing";
@@ -42,6 +43,7 @@ type ImmersiveDownloadHeroProps = {
   speedLabel: string | null;
   eta?: string | null;
   phase: ImmersiveDownloadPhase;
+  onStop?: () => void;
 };
 
 export function ImmersiveDownloadHero({
@@ -51,6 +53,7 @@ export function ImmersiveDownloadHero({
   speedLabel,
   eta,
   phase,
+  onStop,
 }: ImmersiveDownloadHeroProps) {
   const pct = Number.isFinite(percentage)
     ? Math.min(100, Math.max(0, percentage))
@@ -84,7 +87,10 @@ export function ImmersiveDownloadHero({
     >
       <div className="flex w-full max-w-lg flex-col items-stretch gap-6">
         {thumbnail?.trim() ? (
-          <div className="relative mx-auto w-full max-w-sm overflow-hidden rounded-[20px] bg-[#241c18] aspect-video">
+          <div
+            data-downloader-hero-thumb
+            className="relative mx-auto w-full max-w-sm overflow-hidden rounded-[20px] bg-[#241c18] aspect-video"
+          >
             <img
               src={thumbnail.trim()}
               alt=""
@@ -145,6 +151,19 @@ export function ImmersiveDownloadHero({
             </p>
           )}
         </div>
+
+        {onStop ? (
+          <div className="flex justify-center pt-1">
+            <button
+              type="button"
+              onClick={onStop}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-stone-500 transition-colors hover:text-stone-200"
+            >
+              <Ban size={12} strokeWidth={2.5} aria-hidden />
+              Stop download
+            </button>
+          </div>
+        ) : null}
       </div>
     </motion.div>
   );

@@ -164,6 +164,14 @@
   },
   {
     "appArea": "Download Screen",
+    "difficulty": "Medium",
+    "featureName": "Download dock with expandable hero popup",
+    "priority": "High",
+    "status": "To-Do",
+    "roadmapStatus": "progress"
+  },
+  {
+    "appArea": "Download Screen",
     "difficulty": "High",
     "featureName": "Storage estimate before enqueue",
     "priority": "High",

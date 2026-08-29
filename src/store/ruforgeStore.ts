@@ -168,6 +168,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   activeTab: ActiveTab;
   /** Settings is a centered overlay; does not replace the underlying tab. */
   settingsOpen: boolean;
+  /** Download hero is a large overlay; library (or explorer) stays the underlying tab. */
+  downloaderOpen: boolean;
   settingsTab: SettingsTab;
   galleryFilter: GalleryFilter;
   /** 0–1 Video Library tab chrome reveal (throttled from MediaView scroll; not raw scrollTop). */
@@ -377,6 +379,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setActiveTab: (tab: ActiveTab) => void;
   openSettings: () => void;
   closeSettings: () => void;
+  openDownloader: () => void;
+  closeDownloader: () => void;
   setSettingsTab: (tab: SettingsTab) => void;
   setGalleryFilter: (f: GalleryFilter) => void;
   setGalleryScrollChrome: (n: number) => void;
@@ -606,8 +610,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
       musicDetail: null,
       storageStats: null,
 
-      activeTab: "downloader",
+      activeTab: "media",
       settingsOpen: false,
+      downloaderOpen: false,
       settingsTab: "general",
       galleryFilter: "all",
       galleryScrollChrome: 0,
@@ -676,6 +681,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const loopMode = playingFile
           ? resolveLoopModeForPlay(readLoopModeForPath(playingFile.path), get().loopMode)
           : get().loopMode;
+        if (loopMode !== get().loopMode) {
+          writePlayerLoopModeToLs(loopMode);
+        }
 
         if (
           playingFile &&
@@ -861,6 +869,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
           readLoopModeForPath(file.path),
           get().loopMode,
         );
+        if (loopMode !== get().loopMode) {
+          writePlayerLoopModeToLs(loopMode);
+        }
         set({
           folderAudioPlaylist: playlist,
           musicEndlessExtended: false,
@@ -1332,18 +1343,25 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       setActiveTab: (tab) => {
         if (tab === "settings") {
-          set({ settingsOpen: true });
+          set({ settingsOpen: true, downloaderOpen: false });
+          return;
+        }
+        if (tab === "downloader") {
+          set({ downloaderOpen: true, settingsOpen: false });
           return;
         }
         set({
           activeTab: tab,
           settingsOpen: false,
+          downloaderOpen: false,
           ...(tab !== "media" ? { galleryScrollChrome: 0 } : {}),
         });
         if (tab !== "player") tryFlushDeferredScrubBackfill(get);
       },
-      openSettings: () => set({ settingsOpen: true }),
+      openSettings: () => set({ settingsOpen: true, downloaderOpen: false }),
       closeSettings: () => set({ settingsOpen: false }),
+      openDownloader: () => set({ downloaderOpen: true, settingsOpen: false }),
+      closeDownloader: () => set({ downloaderOpen: false }),
       setSettingsTab: (tab) => set({ settingsTab: tab }),
       setGalleryFilter: (f) => set({ galleryFilter: f, galleryScrollChrome: 0 }),
       setGalleryScrollChrome: (n) => {

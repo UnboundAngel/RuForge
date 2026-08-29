@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 import {
+  Ban,
   Globe,
   Clock,
   Download,
@@ -38,7 +39,6 @@ import {
 import { downloadJobDisplayFileSizeBytes } from "../downloadJobFileSizes";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
 import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
-import { pageTransition } from "../lib/overlayMotion";
 
 const CLIP_ICON_TRANSITION = { duration: 0.32, ease: [0.23, 1, 0.32, 1] as const };
 
@@ -364,7 +364,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
         const rawTitle = (d.focusedJob.title ?? m?.title ?? "").trim();
         if (needs && !rawTitle) {
           return {
-            title: d.downloadStartPending ? "Starting download…" : "Fetching details…",
+            title: d.downloadStartPending ? "Starting soon…" : "Fetching details…",
             duration: 0,
             fileSizeBytes: null,
             isPlaylist: false,
@@ -394,7 +394,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
           title: statusOnly
             ? ""
             : d.downloadStartPending
-              ? "Starting download…"
+              ? "Starting soon…"
               : d.metadataLoading
                 ? "Fetching details…"
                 : (d.libraryDuplicateTitle ?? "Already in your library"),
@@ -451,13 +451,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
     "";
 
   return (
-    <motion.div
-      className="h-full flex flex-col relative overflow-hidden"
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12 }}
-      transition={pageTransition}
-    >
+    <div className="relative flex h-full flex-col overflow-hidden">
       {d.replaceDialogOpen && d.replaceDialogMatch && (
         <DuplicateDownloadDialog
           open
@@ -738,7 +732,10 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   className="relative group mx-auto hidden w-full max-w-2xl px-4 pt-2 min-[700px]:block sm:pt-4"
                 >
                   <AnimatePresence>
-                    {!d.showUrlBubble && d.urlSourceHint === "clipboard" && d.clipboardPastedHint && (
+                    {!d.downloadStartPending &&
+                      !d.showUrlBubble &&
+                      d.urlSourceHint === "clipboard" &&
+                      d.clipboardPastedHint && (
                       <motion.p
                         key="clipboard-pasted-hint"
                         initial={{ opacity: 0, y: 6, scale: 0.96 }}
@@ -750,7 +747,9 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         Pasted from clipboard
                       </motion.p>
                     )}
-                    {!d.showUrlBubble && d.urlSourceHint === "explorer" && (
+                    {!d.downloadStartPending &&
+                      !d.showUrlBubble &&
+                      d.urlSourceHint === "explorer" && (
                       <motion.p
                         key="explorer-added-hint"
                         initial={{ opacity: 0, y: 6, scale: 0.96 }}
@@ -763,30 +762,78 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       </motion.p>
                     )}
                   </AnimatePresence>
-                  <div
-                    className="w-full cursor-text"
-                    onClick={() => d.handleUrlClick()}
-                    role="presentation"
-                  >
-                    <input
-                      type="text"
-                      value={d.url}
-                      onChange={(e) => d.handleUrlChange(e.target.value)}
-                      onFocus={d.handleUrlFocus}
-                      onBlur={d.handleUrlBlur}
-                      onPaste={(e) => d.handleUrlPaste(e)}
-                      placeholder="Paste link"
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      autoCorrect="off"
-                      className={
-                        d.url.trim()
-                          ? "w-full border-none bg-transparent text-center text-sm font-semibold tracking-tight text-stone-100 outline-none transition-colors sm:text-base"
-                          : "w-full border-none bg-transparent text-center text-lg font-black uppercase tracking-[0.18em] text-stone-100 outline-none transition-colors placeholder:text-stone-700 sm:text-xl"
-                      }
-                    />
-                  </div>
-                  {d.clipboardOfferUrl && (
+                  <AnimatePresence mode="wait" initial={false}>
+                    {d.downloadStartPending ? (
+                      <motion.p
+                        key="starting-soon"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                        className="w-full text-center text-lg font-black uppercase tracking-[0.18em] text-stone-100 sm:text-xl"
+                        aria-live="polite"
+                      >
+                        <span className="inline-flex items-baseline gap-0.5">
+                          Starting soon
+                          <motion.span
+                            aria-hidden
+                            className="inline-flex gap-0.5"
+                            initial="rest"
+                            animate="pulse"
+                          >
+                            {[0, 1, 2].map((i) => (
+                              <motion.span
+                                key={i}
+                                className="inline-block"
+                                variants={{
+                                  rest: { opacity: 0.25 },
+                                  pulse: { opacity: [0.25, 1, 0.25] },
+                                }}
+                                transition={{
+                                  duration: 1.1,
+                                  repeat: Infinity,
+                                  ease: "easeInOut",
+                                  delay: i * 0.18,
+                                }}
+                              >
+                                .
+                              </motion.span>
+                            ))}
+                          </motion.span>
+                        </span>
+                      </motion.p>
+                    ) : (
+                      <motion.div
+                        key="url-field"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                        className="w-full cursor-text"
+                        onClick={() => d.handleUrlClick()}
+                        role="presentation"
+                      >
+                        <input
+                          type="text"
+                          value={d.url}
+                          onChange={(e) => d.handleUrlChange(e.target.value)}
+                          onFocus={d.handleUrlFocus}
+                          onBlur={d.handleUrlBlur}
+                          onPaste={(e) => d.handleUrlPaste(e)}
+                          placeholder="Paste link"
+                          spellCheck={false}
+                          autoCapitalize="off"
+                          autoCorrect="off"
+                          className={
+                            d.url.trim()
+                              ? "w-full border-none bg-transparent text-center text-sm font-semibold tracking-tight text-stone-100 outline-none transition-colors sm:text-base"
+                              : "w-full border-none bg-transparent text-center text-lg font-black uppercase tracking-[0.18em] text-stone-100 outline-none transition-colors placeholder:text-stone-700 sm:text-xl"
+                          }
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  {!d.downloadStartPending && d.clipboardOfferUrl && (
                     <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 pt-3 text-center">
                       <span className="text-[8px] font-black uppercase tracking-[0.2em] text-stone-500">
                         Clipboard has a YouTube link:
@@ -807,7 +854,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       loading={d.metadataLoading || d.downloadStartPending}
                     />
                     <AnimatePresence initial={false}>
-                      {(d.metadataLoading || d.downloadStartPending) && (
+                      {d.metadataLoading && !d.downloadStartPending && (
                         <motion.p
                           key="url-fetch-status"
                           initial={{ opacity: 0, y: 4 }}
@@ -817,10 +864,20 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           className="text-center text-[10px] font-bold uppercase tracking-[0.2em] text-stone-500"
                           aria-live="polite"
                         >
-                          {d.downloadStartPending ? "Starting download…" : "Fetching details…"}
+                          Fetching details…
                         </motion.p>
                       )}
                     </AnimatePresence>
+                    {d.downloadStartPending ? (
+                      <button
+                        type="button"
+                        onClick={d.handleStopActiveDownload}
+                        className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-stone-500 transition-colors hover:text-stone-200"
+                      >
+                        <Ban size={12} strokeWidth={2.5} aria-hidden />
+                        Cancel
+                      </button>
+                    ) : null}
                   </div>
                   {d.metadataError && (
                     <motion.div
@@ -1073,7 +1130,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                   }`}
                                 >
                                   <Download size={14} />
-                                  {d.downloadStartPending ? "Starting…" : "Download"}
+                                  {d.downloadStartPending ? "Starting soon…" : "Download"}
                                 </button>
                               )}
                             </div>
@@ -1165,6 +1222,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       speedLabel={heroSpeedLabel}
                       eta={d.progress?.eta}
                       phase={immersivePhase}
+                      onStop={d.handleStopActiveDownload}
                     />
                   ) : null}
                   {isMultiItemDownload && downloadCarouselItems ? (
@@ -1176,19 +1234,21 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             ? "Finishing up"
                             : "Downloading"}
                       </p>
-                      <MultiDownloadSlotCarousel
-                        items={downloadCarouselItems}
-                        currentIndex={downloadCarouselCurrentIndex}
-                        percentage={
-                          immersivePhase === "preparing"
-                            ? 0
-                            : d.progress?.percentage || 0
-                        }
-                        speedLabel={
-                          immersivePhase === "downloading" ? heroSpeedLabel : null
-                        }
-                        currentTitle={multiDownloadTitle}
-                      />
+                      <div data-downloader-hero-thumb className="w-full max-w-lg">
+                        <MultiDownloadSlotCarousel
+                          items={downloadCarouselItems}
+                          currentIndex={downloadCarouselCurrentIndex}
+                          percentage={
+                            immersivePhase === "preparing"
+                              ? 0
+                              : d.progress?.percentage || 0
+                          }
+                          speedLabel={
+                            immersivePhase === "downloading" ? heroSpeedLabel : null
+                          }
+                          currentTitle={multiDownloadTitle}
+                        />
+                      </div>
                       {immersivePhase !== "downloading" ? (
                         <p className="max-w-md text-center text-sm font-medium text-stone-500">
                           {immersivePhase === "preparing"
@@ -1196,6 +1256,14 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             : "Merging and writing the file. Progress may sit near the end."}
                         </p>
                       ) : null}
+                      <button
+                        type="button"
+                        onClick={d.handleStopActiveDownload}
+                        className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-stone-500 transition-colors hover:text-stone-200"
+                      >
+                        <Ban size={12} strokeWidth={2.5} aria-hidden />
+                        Stop download
+                      </button>
                     </div>
                   ) : null}
                 </motion.div>
@@ -1204,6 +1272,6 @@ export const DownloaderView = (props: DownloaderViewProps) => {
           </LayoutGroup>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };

@@ -202,7 +202,7 @@ export async function replayLastDownloadBatch(): Promise<void> {
 
   const handlers = getDownloaderReplayHandlers();
   if (!handlers) {
-    notify("Open the Download tab first so replay handlers are registered.", "warning");
+    notify("Open Downloads first so replay handlers are registered.", "warning");
     return;
   }
 

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Clock, Play } from "lucide-react";
 import type { MediaFile } from "@/types";
 import { albumCoverPathWithFallback } from "@/albumCoverPath";
-import { buildRecentAddedGroups } from "@/lib/musicRecentGroups";
+import { buildRecentAddedFeed, buildRecentAddedGroups } from "@/lib/musicRecentGroups";
 import { MUSIC_ALBUM_SHELF_GAP_RECENT_PX } from "@/lib/musicAlbumShelfLayout";
 import { formatRelativePlayed } from "@/lib/musicRelativeTime";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
@@ -28,29 +28,17 @@ type Props = {
   menu: MusicRowContextMenuState | null;
 };
 
-function RecentSubHeader({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 mb-5 px-2">
-      <h3
-        className="text-sm font-semibold tracking-widest uppercase shrink-0"
-        style={{ color: "var(--music-text-muted)" }}
-      >
-        {label}
-      </h3>
-      <div
-        className="h-px flex-grow rounded-full min-w-8"
-        style={{ background: "rgba(255, 255, 255, 0.06)" }}
-      />
-    </div>
-  );
-}
-
 function resolveHistoryFile(
   entry: PlayHistoryEntry,
   byPath: Map<string, MediaFile>,
   byIdentity: Map<string, MediaFile>,
 ): MediaFile | undefined {
   return byPath.get(entry.path) ?? byIdentity.get(entry.identityKey);
+}
+
+/** MediaFile.created is Unix seconds; relative formatter expects ms. */
+function formatAddedAt(createdSec: number): string {
+  return formatRelativePlayed(createdSec * 1000);
 }
 
 export function MusicHomeRecentSection({
@@ -67,6 +55,7 @@ export function MusicHomeRecentSection({
   const [isAnimating, setIsAnimating] = useState(false);
 
   const added = useMemo(() => buildRecentAddedGroups(tracks), [tracks]);
+  const addedFeed = useMemo(() => buildRecentAddedFeed(added), [added]);
 
   const lookup = useMemo(() => {
     const byPath = new Map<string, MediaFile>();
@@ -93,8 +82,7 @@ export function MusicHomeRecentSection({
     return out;
   }, [historyEntries, lookup]);
 
-  const hasAddedContent =
-    added.playlists.length > 0 || added.songs.length > 0 || added.albums.length > 0;
+  const hasAddedContent = addedFeed.length > 0 || added.albums.length > 0;
 
   const switchTab = (tab: RecentTab) => {
     if (tab === activeTab) return;
@@ -158,45 +146,44 @@ export function MusicHomeRecentSection({
                 </p>
               )}
 
-              {added.playlists.length > 0 && (
+              {addedFeed.length > 0 && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {added.playlists.map((pl) => (
-                    <MusicRecentPlaylistCard
-                      key={pl.folderKey}
-                      title={pl.title}
-                      tracks={pl.tracks}
-                      onClick={() => onPlayFile(
-                        pl.tracks[0]!,
-                        pl.tracks,
-                        musicQueueSource("playlist", pl.title),
-                      )}
-                      onContextMenu={(e) =>
-                        setMenu({
-                          context: { kind: "song", file: pl.tracks[0]! },
-                          x: e.clientX,
-                          y: e.clientY,
-                          onPlay: () => onPlayFile(
+                  {addedFeed.map((item) => {
+                    if (item.kind === "playlist") {
+                      const pl = item.group;
+                      return (
+                        <MusicRecentPlaylistCard
+                          key={`pl:${pl.folderKey}`}
+                          title={pl.title}
+                          tracks={pl.tracks}
+                          onClick={() => onPlayFile(
                             pl.tracks[0]!,
                             pl.tracks,
                             musicQueueSource("playlist", pl.title),
-                          ),
-                        })
-                      }
-                    />
-                  ))}
-                </div>
-              )}
+                          )}
+                          onContextMenu={(e) =>
+                            setMenu({
+                              context: { kind: "song", file: pl.tracks[0]! },
+                              x: e.clientX,
+                              y: e.clientY,
+                              onPlay: () => onPlayFile(
+                                pl.tracks[0]!,
+                                pl.tracks,
+                                musicQueueSource("playlist", pl.title),
+                              ),
+                            })
+                          }
+                        />
+                      );
+                    }
 
-              {added.songs.length > 0 && (
-                <div>
-                  <RecentSubHeader label="Singles & tracks" />
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
-                    {added.songs.map((file) => (
-                      <MusicQuickPickRow
-                        key={file.path}
-                        file={file}
-                        variant="glass"
-                        menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
+                    const file = item.file;
+                    return (
+                      <MusicRecentPlaylistCard
+                        key={`song:${file.path}`}
+                        title={file.name}
+                        tracks={[file]}
+                        metaLabel={formatAddedAt(file.created)}
                         onClick={() => onPlayFile(
                           file,
                           [file],
@@ -215,14 +202,25 @@ export function MusicHomeRecentSection({
                           })
                         }
                       />
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               )}
 
               {added.albums.length > 0 && (
                 <div>
-                  <RecentSubHeader label="Albums" />
+                  <div className="flex items-center gap-3 mb-5 px-2">
+                    <h3
+                      className="text-sm font-semibold tracking-widest uppercase shrink-0"
+                      style={{ color: "var(--music-text-muted)" }}
+                    >
+                      Albums
+                    </h3>
+                    <div
+                      className="h-px flex-grow rounded-full min-w-8"
+                      style={{ background: "rgba(255, 255, 255, 0.06)" }}
+                    />
+                  </div>
                   <MusicAlbumShelf
                     items={added.albums}
                     gap={MUSIC_ALBUM_SHELF_GAP_RECENT_PX}

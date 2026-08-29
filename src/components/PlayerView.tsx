@@ -29,7 +29,8 @@ import { useScrubberThumbs } from "../useScrubberThumbs";
 import { useScrubberHover } from "../hooks/useScrubberHover";
 import { readResumeSeconds, writePlaybackPos } from "../playbackStorage";
 import { readPlaybackSpeed, writePlaybackSpeed } from "../playbackSpeedStorage";
-import { loopModeAriaLabel, loopModeIcon } from "../playbackLoopStorage";
+import { loopModeAriaLabel } from "../playbackLoopStorage";
+import { LoopModeSwapIcon } from "./ui/LoopModeSwapIcon";
 import { useVideoAmbientBackdrop } from "../useVideoAmbientBackdrop";
 import {
   readAudioAutoAdvanceFolder,
@@ -2024,7 +2025,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                       onClick={() => cycleLoopMode()}
                       className={`${playerBarBtnClass} ${loopMode !== "off" ? "text-[color:var(--accent)] bg-white/10" : ""}`}
                     >
-                      <Icon icon={loopModeIcon(loopMode)} width={16} height={16} />
+                      <LoopModeSwapIcon mode={loopMode} size={16} />
                     </button>
                   </Tooltip>
                   <div className="relative">

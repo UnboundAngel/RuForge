@@ -27,6 +27,7 @@ import {
   Layers,
 } from "lucide-react";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
+import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "./types";
 import type { LibrarySnapshot } from "./lib/libraryConfig";
 import { hydratePlatformDefaultPaths } from "./platformPaths";
@@ -43,7 +44,6 @@ import {
   type LoopMode,
   cycleLoopMode,
   loopModeAriaLabel,
-  loopModeIcon,
   readLoopModeForPath,
   resolveLoopModeForPlay,
   writeLoopModeForPath,
@@ -992,7 +992,9 @@ export default function MiniPlayer() {
       return;
     }
     const session = readInitialPlayerLoopModeFromLs();
-    setLoopMode(resolveLoopModeForPlay(readLoopModeForPath(playingFile.path), session));
+    const next = resolveLoopModeForPlay(readLoopModeForPath(playingFile.path), session);
+    if (next !== session) writePlayerLoopModeToLs(next);
+    setLoopMode(next);
   }, [playingFile?.path]);
 
   useEffect(() => {
@@ -1093,7 +1095,9 @@ export default function MiniPlayer() {
     setPlayingFile(payload.file);
     if (payload.navMode) setMiniNavMode(payload.navMode);
     const session = readInitialPlayerLoopModeFromLs();
-    setLoopMode(resolveLoopModeForPlay(readLoopModeForPath(payload.file.path), session));
+    const nextLoop = resolveLoopModeForPlay(readLoopModeForPath(payload.file.path), session);
+    if (nextLoop !== session) writePlayerLoopModeToLs(nextLoop);
+    setLoopMode(nextLoop);
     incrementViewCount(payload.file);
     void emit("stop-playback", "mini-player");
     getCurrentWindow().setFocus().catch(console.error);
@@ -2336,17 +2340,7 @@ export default function MiniPlayer() {
                               onClick={cycleLoop}
                               className={`transition-all p-1 rounded-lg ${loopMode !== "off" ? 'text-[color:var(--accent)] bg-[color:var(--accent)]/10' : 'text-stone-400 hover:text-white'}`}
                             >
-                              <AnimatePresence mode="wait" initial={false}>
-                                <motion.div
-                                  key={loopMode}
-                                  initial={{ opacity: 0, rotate: -20, scale: 0.8 }}
-                                  animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                                  exit={{ opacity: 0, rotate: 20, scale: 0.8 }}
-                                  transition={{ duration: 0.15 }}
-                                >
-                                  <Icon icon={loopModeIcon(loopMode)} width={isMini ? 16 : 20} />
-                                </motion.div>
-                              </AnimatePresence>
+                              <LoopModeSwapIcon mode={loopMode} size={isMini ? 16 : 20} />
                             </button>
                           </Tooltip>
 
@@ -2493,17 +2487,7 @@ export default function MiniPlayer() {
                           className={`transition-all p-1 rounded-lg active:scale-90 ${loopMode !== "off" ? 'bg-[color:var(--accent)]/20' : 'opacity-40 hover:opacity-100'}`}
                           title={loopModeAriaLabel(loopMode)}
                         >
-                          <AnimatePresence mode="wait" initial={false}>
-                            <motion.div
-                              key={loopMode}
-                              initial={{ opacity: 0, rotate: -20, scale: 0.8 }}
-                              animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                              exit={{ opacity: 0, rotate: 20, scale: 0.8 }}
-                              transition={{ duration: 0.15 }}
-                            >
-                              <Icon icon={loopModeIcon(loopMode)} width={winSize.width < 380 ? 16 : 20} />
-                            </motion.div>
-                          </AnimatePresence>
+                          <LoopModeSwapIcon mode={loopMode} size={winSize.width < 380 ? 16 : 20} />
                         </button>
                      </div>
                   </motion.div>
@@ -2646,7 +2630,7 @@ export default function MiniPlayer() {
                           className={`relative z-10 transition-all p-1 active:scale-90 flex items-center justify-center ${controlBtnSize} shrink-0 ${loopMode !== "off" ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
                           title={loopModeAriaLabel(loopMode)}
                         >
-                          <Icon icon={loopModeIcon(loopMode)} width={controlIconWidth} />
+                          <LoopModeSwapIcon mode={loopMode} size={controlIconWidth} />
                         </button>
                       </div>
 
@@ -2920,7 +2904,7 @@ export default function MiniPlayer() {
                                     ${loopMode !== "off" ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
                                   title={loopModeAriaLabel(loopMode)}
                                 >
-                                  <Icon icon={loopModeIcon(loopMode)} width={14} />
+                                  <LoopModeSwapIcon mode={loopMode} size={14} />
                                 </button>
                               )}
                             </div>

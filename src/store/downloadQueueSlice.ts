@@ -1439,11 +1439,6 @@ export const createDownloadQueueSlice: StateCreator<
           (message, type) => get().notify(message, type),
         );
         void get().refreshStorageStats();
-        const jobs = get().downloadJobs;
-        const busy = jobs.some(
-          (j) => j.status === "queued" || j.status === "downloading",
-        );
-        if (!busy) get().setActiveTab("media");
       } else if (payload.timedOut) {
         void deliverUserNotification(
           {

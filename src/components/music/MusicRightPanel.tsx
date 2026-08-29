@@ -6,7 +6,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { History, PanelRightClose, PanelRightOpen } from "lucide-react";
 
@@ -30,12 +30,21 @@ const HOVER_ARM_RIGHT = "8px";
 const HOVER_ARM_WIDTH = "40px";
 const ZONE_HIT_PAD = 16;
 
+/** Matches design restriction: width 0.22s, ease [0.4, 0, 0.2, 1]. */
+const PANEL_WIDTH_TRANSITION =
+  "width 0.22s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1)";
+
 type Props = {
   open: boolean;
   onClose: () => void;
   activeTab: RightPanelTab;
   onTabChange: (t: RightPanelTab) => void;
   shellFrame: boolean;
+  /**
+   * When the parent flex row uses `--music-shell-gap`, reclaim that gap while
+   * closed (width 0) so the main column does not leave an empty chrome strip.
+   */
+  cancelFlexGap?: boolean;
   playingFile: MediaFile | null;
   currentTime: number;
   duration: number;
@@ -58,6 +67,8 @@ type MiniProps = {
   onTabChange: (t: RightPanelTab) => void;
   showSegmentsTab: boolean;
   hintKey: number;
+  /** Immersive player: match left rail pitch black. */
+  shellFrame?: boolean;
 };
 
 const PANEL_WIDTH = "var(--music-right-panel-width, 272px)";
@@ -86,13 +97,16 @@ function tabItemsFor(showSegmentsTab: boolean): TabDef[] {
   return showSegmentsTab ? [QUEUE_TAB, HISTORY_TAB, SEGMENTS_TAB] : [QUEUE_TAB, HISTORY_TAB];
 }
 
-const miniPillStyle: CSSProperties = {
-  borderRadius: "var(--music-panel-radius)",
-  background: "var(--music-surface-raised)",
-  border: "1px solid var(--music-border)",
-  boxShadow:
-    "0 10px 36px rgb(0 0 0 / 0.52), 0 0 0 1px rgb(255 255 255 / 0.05)",
-};
+function miniPillStyle(shellFrame: boolean): CSSProperties {
+  return {
+    borderRadius: "var(--music-panel-radius)",
+    background: shellFrame ? "var(--music-bg)" : "var(--music-surface-raised)",
+    border: "1px solid var(--music-border)",
+    boxShadow: shellFrame
+      ? "0 10px 36px rgb(0 0 0 / 0.62), 0 0 0 1px rgb(255 255 255 / 0.04)"
+      : "0 10px 36px rgb(0 0 0 / 0.52), 0 0 0 1px rgb(255 255 255 / 0.05)",
+  };
+}
 
 /** Hover popup on the main column edge; no layout width when minimized. */
 export function MusicRightPanelMini({
@@ -100,6 +114,7 @@ export function MusicRightPanelMini({
   onTabChange,
   showSegmentsTab,
   hintKey,
+  shellFrame = false,
 }: MiniProps) {
   const [hovered, setHovered] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
@@ -192,7 +207,7 @@ export function MusicRightPanelMini({
           transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
           onPointerEnter={() => setHovered(true)}
           style={{
-            ...miniPillStyle,
+            ...miniPillStyle(shellFrame),
             pointerEvents: showPill ? "auto" : "none",
           }}
         >
@@ -240,6 +255,7 @@ export function MusicRightPanel({
   activeTab,
   onTabChange,
   shellFrame,
+  cancelFlexGap = false,
   playingFile,
   currentTime,
   duration,
@@ -256,8 +272,7 @@ export function MusicRightPanel({
   musicOnlySkip,
   onToggleMusicOnlySkip,
 }: Props) {
-  if (!open) return null;
-
+  const reduceMotion = useReducedMotion();
   const hasChapters = !!(chapters && chapters.length >= 2);
   const hasSbSegments = sbSegments.some((s) => s.actionType === "skip");
   const showSegmentsTab = hasChapters || hasSbSegments;
@@ -274,19 +289,22 @@ export function MusicRightPanel({
   const queueSource = resolveQueueSourceLabel(musicQueueSource, nextRowIsEndless);
 
   const panelBg = shellFrame ? "var(--music-bg)" : "var(--music-surface)";
+  const closedMargin = cancelFlexGap ? "calc(-1 * var(--music-shell-gap))" : 0;
 
   return (
-    <motion.aside
+    <aside
       className="rf-music-right-panel h-full shrink-0 min-h-0 flex flex-col overflow-hidden"
       data-shell-frame={shellFrame ? "true" : "false"}
-      data-open="true"
-      initial={false}
-      animate={{ width: PANEL_WIDTH }}
-      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+      data-open={open ? "true" : "false"}
       style={{
+        width: open ? PANEL_WIDTH : 0,
+        marginLeft: open ? 0 : closedMargin,
         background: panelBg,
         borderRadius: "0 var(--music-panel-radius) var(--music-panel-radius) 0",
+        pointerEvents: open ? "auto" : "none",
+        transition: reduceMotion ? undefined : PANEL_WIDTH_TRANSITION,
       }}
+      aria-hidden={!open}
     >
       <div
         className="relative h-full flex flex-col overflow-hidden min-w-0"
@@ -357,7 +375,7 @@ export function MusicRightPanel({
           )}
         </div>
       </div>
-    </motion.aside>
+    </aside>
   );
 }
 

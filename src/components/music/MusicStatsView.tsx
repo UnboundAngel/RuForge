@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronLeft, Disc3, Music2, Play } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import type { MediaFile } from "@/types";
@@ -188,10 +189,12 @@ type CompactTrackRowProps = {
 function CompactTrackRow({ rank, row, lookup, onPlay, onOpen, onContextMenu, menuOpen }: CompactTrackRowProps) {
   const file = resolveStatFile(row, lookup);
   const playingPath = useRuforgeStore((s) => s.playingFile?.path);
+  const playback = useOptionalMainAudioPlayback();
   const cover = coverForStat(row, lookup);
   const coverSrc = cover ? convertFileSrc(cover) : null;
   const artist = row.artist.trim();
   const isPlaying = !!file && playingPath === file.path;
+  const showPauseOnHover = isPlaying && playback != null && !playback.paused;
 
   const handleClick = () => {
     if (file && onPlay) {
@@ -221,6 +224,7 @@ function CompactTrackRow({ rank, row, lookup, onPlay, onOpen, onContextMenu, men
       <MusicTrackIndexPlay
         indexLabel={rank}
         isPlaying={isPlaying}
+        showPause={showPauseOnHover}
         iconSize={12}
         labelClassName="text-[11px] font-bold"
       />
