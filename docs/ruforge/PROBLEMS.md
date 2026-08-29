@@ -4,7 +4,7 @@ This file is for **reporting broken behavior only**. Do not implement fixes here
 
 For project context, read `STATE.md`. For open bugs to fix, read this file after a report-only update.
 
-Last updated: 2026-06-28
+Last updated: 2026-08-29
 
 ---
 
@@ -404,6 +404,38 @@ Comment says the cap is for music auto-save audio, but it applies to all jobs. `
 
 ---
 
+## P6 - Music artist shelf groups YouTube reuploads under the uploader channel
+
+**Severity:** Medium (wrong artist shelf labels; identity UI vs filename disagree)  
+**Status:** Open  
+**Reported:** 2026-08-29
+
+### Symptom
+
+Home / Library Artists shelves group ~16 Juice WRLD reuploads under channel names (ColaBeats, Easter Records, zdogg, Unreleased, etc.) instead of Juice WRLD. The real artist exists only as the `Artist - Title` filename stem prefix.
+
+### Expected
+
+Reuploads whose stem is `Juice WRLD - …` shelf under Juice WRLD when tags are empty.
+
+### Actual
+
+`extract_music_meta` fills `MediaFile.artist` from info.json `artist` → `uploader` → `creator` before the filename stem split. Uploader is always present for YouTube downloads, so the stem heuristic never runs. Shelf code uses `t.artist ?? t.albumArtist` (not `canonicalArtist`).
+
+### Relevant code
+
+| Area | Location |
+|------|----------|
+| Resolve order | `src-tauri/src/commands/gallery.rs` > `extract_music_meta` |
+| Home shelf | `src/components/music/MusicHomeView.tsx` (artists `useMemo`) |
+| Library Artists | `src/components/music/MusicLibraryView.tsx` (artists `useMemo`) |
+
+### Suspected cause (for fix pass)
+
+Uploader-before-stem ordering. Fix has blast radius into library grouping, stats keys, and any path that trusts `MediaFile.artist`. Do not fold into lyrics query work.
+
+---
+
 ## Backlog (add issues here)
 
 | ID | Title | Severity | Status |
@@ -413,6 +445,7 @@ Comment says the cap is for music auto-save audio, but it applies to all jobs. `
 | P3 | Update available should use expanded Dynamic Island, not side card | Medium | Open |
 | P4 | Pause during pre-spawn simulate marks job failed | High | Open |
 | P5 | Global 2-minute wall clock aborts long downloads | High | Open |
+| P6 | Music artist shelf groups YouTube reuploads under uploader channel | Medium | Open |
 
 ### Section template
 

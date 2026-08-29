@@ -275,11 +275,39 @@ pub fn probe_canonical_identity(media: &Path) -> (Option<String>, Option<String>
 }
 
 /// Walk audio files under roots (same rules as backfill). Cap with `limit` when set.
-pub fn collect_library_audio_limited(roots: &[String], limit: Option<usize>) -> Vec<PathBuf> {
+pub const LIBRARY_SAMPLE_SEED: u64 = 0x4C52_434C_4942; // "LRCLIB"
+
+#[derive(Debug, Clone, Copy)]
+pub enum LibraryAudioSample {
+    /// First N paths after a full recursive sort (legacy / reproducible prefix).
+    SortedPrefix,
+    /// Shuffle with a fixed seed, then take N.
+    Random { seed: u64 },
+}
+
+pub fn collect_library_audio_limited(
+    roots: &[String],
+    limit: Option<usize>,
+    sample: LibraryAudioSample,
+) -> Vec<PathBuf> {
     let mut all = library_audio_files(roots);
-    if let Some(n) = limit {
-        if all.len() > n {
-            all.truncate(n);
+    match sample {
+        LibraryAudioSample::SortedPrefix => {
+            if let Some(n) = limit {
+                all.truncate(n.min(all.len()));
+            }
+        }
+        LibraryAudioSample::Random { seed } => {
+            use rand::rngs::StdRng;
+            use rand::{Rng, SeedableRng};
+            let mut rng = StdRng::seed_from_u64(seed);
+            for i in (1..all.len()).rev() {
+                let j = rng.gen_range(0..=i);
+                all.swap(i, j);
+            }
+            if let Some(n) = limit {
+                all.truncate(n.min(all.len()));
+            }
         }
     }
     all
@@ -343,22 +371,26 @@ fn read_info_identity(parent: &Path, stem: &str) -> (Option<String>, Option<Stri
     (artist, title, album)
 }
 
-fn read_tag_identity(media: &Path) -> (Option<String>, Option<String>, Option<String>) {
+fn read_tag_identity(media: &Path) -> (Option<String>, Option<String>, Option<String>, Option<String>) {
     if !media.is_file() {
-        return (None, None, None);
+        return (None, None, None, None);
     }
     use lofty::prelude::*;
     use lofty::probe::Probe;
 
     let Ok(tagged) = Probe::open(media).and_then(|p| p.read()) else {
-        return (None, None, None);
+        return (None, None, None, None);
     };
     let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) else {
-        return (None, None, None);
+        return (None, None, None, None);
     };
     let artist = tag
         .artist()
         .map(|s| s.to_string())
+        .filter(|s| !s.is_empty());
+    let album_artist = tag
+        .get_string(&lofty::tag::ItemKey::AlbumArtist)
+        .map(String::from)
         .filter(|s| !s.is_empty());
     let title = tag
         .title()
@@ -366,7 +398,54 @@ fn read_tag_identity(media: &Path) -> (Option<String>, Option<String>, Option<St
         .filter(|s| !s.is_empty())
         .map(|s| clean_music_title(&s));
     let album = tag.album().map(|s| s.to_string()).filter(|s| !s.is_empty());
-    (artist, title, album)
+    (artist, album_artist, title, album)
+}
+
+fn read_info_album_artist(parent: &Path, stem: &str) -> Option<String> {
+    let info_path = resolve_info_json_path(parent, stem)?;
+    let txt = std::fs::read_to_string(&info_path).ok()?;
+    let j: serde_json::Value = serde_json::from_str(&txt).ok()?;
+    j["album_artist"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .or_else(|| {
+            j["channel"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+        })
+}
+
+/// Same resolution order as gallery `MediaFile.artist` / `albumArtist` (tags → info → stem).
+fn media_file_artist_fields(
+    media: &Path,
+    parent: &Path,
+    stem: &str,
+) -> (Option<String>, Option<String>, Option<String>, Option<String>) {
+    let (tag_artist, tag_album_artist, tag_title, tag_album) = read_tag_identity(media);
+    let (yt_artist, yt_title, yt_album) = read_info_identity(parent, stem);
+    let yt_album_artist = read_info_album_artist(parent, stem);
+
+    let artist = tag_artist
+        .clone()
+        .or(yt_artist)
+        .or_else(|| artist_from_stem(stem));
+    let album_artist = tag_album_artist.or(yt_album_artist);
+    let title = tag_title
+        .or(yt_title)
+        .or_else(|| {
+            let t = title_from_stem(stem);
+            if t.is_empty() {
+                None
+            } else {
+                Some(t)
+            }
+        });
+    let album = tag_album.or(yt_album);
+    (artist, album_artist, title, album)
 }
 
 fn query_from_musicmeta(meta: &MusicMetaSidecarDto) -> Option<(String, String, Option<String>)> {
@@ -381,17 +460,9 @@ fn query_fallback_pair(
     parent: &Path,
     stem: &str,
 ) -> Option<(String, String, Option<String>)> {
-    let (tag_artist, tag_title, tag_album) = read_tag_identity(media);
-    let (yt_artist, yt_title, yt_album) = read_info_identity(parent, stem);
-
-    let title = tag_title
-        .or(yt_title)
-        .unwrap_or_else(|| title_from_stem(stem));
-    if title.is_empty() {
-        return None;
-    }
-    let artist = tag_artist.or(yt_artist).or_else(|| artist_from_stem(stem))?;
-    let album = tag_album.or(yt_album);
+    let (artist, _album_artist, title, album) = media_file_artist_fields(media, parent, stem);
+    let artist = artist?;
+    let title = title.filter(|t| !t.is_empty())?;
     Some((artist, title, album))
 }
 
@@ -514,16 +585,56 @@ fn build_queries(media: &Path) -> Vec<LyricsQuery> {
     let mut out = Vec::new();
 
     let musicmeta_path = musicmeta_sidecar_path(parent, stem);
-    if let Some(meta) = read_musicmeta_sidecar(&musicmeta_path) {
-        if let Some((artist, title, album)) = query_from_musicmeta(&meta) {
-            out.extend(expand_query_candidates(
-                artist,
-                title,
-                album,
-                duration,
-                "canonical",
-                0,
-            ));
+    let meta = read_musicmeta_sidecar(&musicmeta_path);
+    let canonical_pair = meta.as_ref().and_then(|m| query_from_musicmeta(m));
+
+    if let Some((artist, title, album)) = canonical_pair.clone() {
+        out.extend(expand_query_candidates(
+            artist,
+            title,
+            album,
+            duration,
+            "canonical",
+            0,
+        ));
+    }
+
+    let (file_artist, file_album_artist, file_title, file_album) =
+        media_file_artist_fields(media, parent, stem);
+    let tag_title = canonical_pair
+        .as_ref()
+        .map(|(_, t, _)| t.clone())
+        .or(file_title);
+    let tag_album = canonical_pair
+        .as_ref()
+        .and_then(|(_, _, a)| a.clone())
+        .or(file_album);
+
+    if let (Some(artist), Some(title)) = (file_artist, tag_title.clone()) {
+        let start = out.len();
+        for q in expand_query_candidates(
+            artist,
+            title,
+            tag_album.clone(),
+            duration,
+            "artist",
+            start,
+        ) {
+            push_unique_query(&mut out, q);
+        }
+    }
+
+    if let (Some(artist), Some(title)) = (file_album_artist, tag_title) {
+        let start = out.len();
+        for q in expand_query_candidates(
+            artist,
+            title,
+            tag_album,
+            duration,
+            "album-artist",
+            start,
+        ) {
+            push_unique_query(&mut out, q);
         }
     }
 
@@ -532,9 +643,10 @@ fn build_queries(media: &Path) -> Vec<LyricsQuery> {
         for q in expand_query_candidates(artist, title, album, duration, "fallback", start) {
             push_unique_query(&mut out, q);
         }
-        for (i, q) in out.iter_mut().enumerate() {
-            q.candidate_index = i;
-        }
+    }
+
+    for (i, q) in out.iter_mut().enumerate() {
+        q.candidate_index = i;
     }
 
     out

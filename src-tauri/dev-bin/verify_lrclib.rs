@@ -3,18 +3,20 @@
 //! ```text
 //! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib
 //! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib -- library <root> [N]
+//! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib -- library <root> [N] --sorted
 //! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib -- library <root> [N] --write
 //! ```
 //!
-//! Library mode defaults to dry-run (full match chain, no sidecar writes).
-//! Pass `--write` to persist `.lyrics.json`.
+//! Library mode defaults to seeded random sample + dry-run (no sidecar writes).
+//! `--sorted` restores the alphabetical path prefix. `--write` persists `.lyrics.json`.
 
 use std::collections::BTreeMap;
 
 use ruforge_lib::commands::lyrics::{
     collect_library_audio_limited, ensure_lyrics_for_path_with_write, fetch_lyrics_for_queries,
     probe_canonical_identity, probe_duration, verify_no_duration_search_guard,
-    verify_no_duration_search_miss_when_no_agree, LyricsQuery,
+    verify_no_duration_search_miss_when_no_agree, LibraryAudioSample, LyricsQuery,
+    LIBRARY_SAMPLE_SEED,
 };
 
 #[tokio::main]
@@ -26,17 +28,18 @@ async fn main() {
             args.remove(0);
             let write = take_flag(&mut args, "--write");
             let _ = take_flag(&mut args, "--dry-run");
+            let sorted = take_flag(&mut args, "--sorted");
             let root = args
                 .first()
                 .cloned()
-                .expect("usage: verify_lrclib library <root> [N] [--write]");
+                .expect("usage: verify_lrclib library <root> [N] [--sorted] [--write]");
             let limit: Option<usize> = args.get(1).and_then(|s| s.parse().ok());
-            run_library_report(&root, limit, write).await;
+            run_library_report(&root, limit, write, sorted).await;
         }
         Some(other) => {
             eprintln!("unknown mode {other:?}");
             eprintln!("usage: verify_lrclib");
-            eprintln!("       verify_lrclib library <root> [N] [--write]");
+            eprintln!("       verify_lrclib library <root> [N] [--sorted] [--write]");
             std::process::exit(2);
         }
     }
@@ -123,6 +126,10 @@ fn trunc(s: &str, max: usize) -> String {
 fn step_bucket(step: &str) -> &'static str {
     if step.starts_with("get:canonical") {
         "get:canonical"
+    } else if step.starts_with("get:artist") {
+        "get:artist"
+    } else if step.starts_with("get:album-artist") {
+        "get:album-artist"
     } else if step.starts_with("get:fallback") {
         "get:fallback"
     } else if step.starts_with("search:") {
@@ -145,12 +152,24 @@ fn is_match(step: &str, synced: &Option<String>, plain: &Option<String>, matched
         || matched.as_ref().map(|s| !s.trim().is_empty()).unwrap_or(false)
 }
 
-async fn run_library_report(root: &str, limit: Option<usize>, write: bool) {
-    let paths = collect_library_audio_limited(&[root.to_string()], limit);
+async fn run_library_report(root: &str, limit: Option<usize>, write: bool, sorted: bool) {
+    let sample = if sorted {
+        LibraryAudioSample::SortedPrefix
+    } else {
+        LibraryAudioSample::Random {
+            seed: LIBRARY_SAMPLE_SEED,
+        }
+    };
+    let paths = collect_library_audio_limited(&[root.to_string()], limit, sample);
     let n = paths.len();
     eprintln!("root={root}");
     eprintln!("limit={}", limit.map(|v| v.to_string()).unwrap_or_else(|| "all".into()));
     eprintln!("tracks={n}");
+    if sorted {
+        eprintln!("sample=sorted-prefix");
+    } else {
+        eprintln!("sample=random seed=0x{LIBRARY_SAMPLE_SEED:X}");
+    }
     if write {
         eprintln!("mode=write (force refetch; writes .lyrics.json)");
     } else {
