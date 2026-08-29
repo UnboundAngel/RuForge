@@ -1271,6 +1271,8 @@ pub async fn start_download_job(
                                         opts,
                                     )
                                     .await;
+                                    crate::commands::lyrics::ensure_lyrics_after_download(&audio_path)
+                                        .await;
                                 }
                             });
                         }

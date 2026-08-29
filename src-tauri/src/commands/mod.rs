@@ -9,6 +9,7 @@ pub mod explorer_embed;
 pub mod ffprobe;
 pub mod gallery;
 pub mod media;
+pub mod lyrics;
 pub mod musicmeta;
 pub mod music_listen_log;
 pub mod recently_deleted;

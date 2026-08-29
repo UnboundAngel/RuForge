@@ -22,7 +22,7 @@ fn mb_rate_gate() -> &'static tokio::sync::Mutex<Instant> {
     })
 }
 
-fn user_agent() -> String {
+pub fn user_agent() -> String {
     format!(
         "RuForge/{} ( https://ruforge.app )",
         env!("CARGO_PKG_VERSION")
@@ -401,7 +401,7 @@ async fn rate_gate_wait() {
     *last = Instant::now();
 }
 
-fn build_http_client() -> Option<reqwest::Client> {
+pub fn build_http_client() -> Option<reqwest::Client> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .user_agent(user_agent())

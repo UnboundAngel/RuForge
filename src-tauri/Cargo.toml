@@ -89,6 +89,11 @@ path = "dev-bin/verify_track_enrich.rs"
 required-features = ["dev-verify-bins"]
 
 [[bin]]
+name = "verify_lrclib"
+path = "dev-bin/verify_lrclib.rs"
+required-features = ["dev-verify-bins"]
+
+[[bin]]
 name = "verify_gallery_folder"
 path = "dev-bin/verify_gallery_folder.rs"
 required-features = ["dev-verify-bins"]
