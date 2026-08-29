@@ -10,13 +10,14 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
 import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
-import { loopModeAriaLabel, loopModeIcon } from "@/playbackLoopStorage";
+import { loopModeAriaLabel } from "@/playbackLoopStorage";
 import {
   MUSIC_CROSSFADE_MAX_SEC,
   MUSIC_CROSSFADE_SUGGESTED_SEC,
 } from "./musicCrossfadeStorage";
 import { MusicVolumeControl } from "./MusicVolumeControl";
 import { MusicLikeButton } from "./MusicLikeButton";
+import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 import {
   dismissMusicMenuPointer,
@@ -301,16 +302,17 @@ export function NowPlayingBar({
           aria-label={expanded ? "Collapse player" : "Expand player"}
         >
           {coverSrc ? (
-            <img
-              src={coverSrc}
-              alt=""
-              className="w-12 h-12 shrink-0 object-cover"
-              style={{ borderRadius: "var(--music-card-radius)" }}
-            />
+            <div className="w-12 h-12 shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-black shadow-md ring-1 ring-white/10">
+              <img
+                src={coverSrc}
+                alt=""
+                className="block h-full w-full object-cover"
+              />
+            </div>
           ) : (
             <div
-              className="w-12 h-12 shrink-0 flex items-center justify-center"
-              style={{ borderRadius: "var(--music-card-radius)", background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
+              className="w-12 h-12 shrink-0 flex items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-black shadow-md ring-1 ring-white/10"
+              style={{ color: "var(--music-text-muted)" }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
@@ -473,7 +475,7 @@ export function NowPlayingBar({
             style={{ color: loopMode !== "off" ? "var(--music-accent)" : "var(--music-text-primary)" }}
             aria-label={loopModeAriaLabel(loopMode)}
           >
-            <Icon icon={loopModeIcon(loopMode)} width={16} height={16} />
+            <LoopModeSwapIcon mode={loopMode} size={16} />
           </button>
 
           <MusicVolumeControl

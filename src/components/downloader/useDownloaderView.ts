@@ -1326,7 +1326,7 @@ export function useDownloaderView({
     }
   }, []);
 
-  /** App.tsx switches `activeTab` before invoking (main-webview intake). */
+  /** App.tsx opens the downloader overlay before invoking (main-webview intake). */
   const handleDroppedYoutubeUrls = useCallback(
     async (urls: readonly string[]) => {
       if (urls.length === 0) return;
@@ -1682,6 +1682,30 @@ export function useDownloaderView({
     clearUrlBubbleCopied,
     removeDownloadJob,
   ]);
+
+  const handleStopActiveDownload = useCallback(() => {
+    pendingDownloadUrlRef.current = null;
+    setDownloadStartPending(false);
+    downloadStartInflightRef.current = false;
+    const st = useRuforgeStore.getState();
+    const active = st.downloadJobs.filter(
+      (j) =>
+        j.status === "queued" ||
+        j.status === "downloading" ||
+        j.status === "paused",
+    );
+    const focused = st.focusedJobId
+      ? active.find((j) => j.id === st.focusedJobId)
+      : null;
+    const targets = focused
+      ? [focused]
+      : active.filter((j) => j.status === "downloading").length > 0
+        ? active.filter((j) => j.status === "downloading")
+        : active;
+    for (const job of targets) {
+      void removeDownloadJob(job.id, { manual: true });
+    }
+  }, [removeDownloadJob]);
 
   useEffect(() => {
     if (!showUrlBubble) clearUrlBubbleCopied();
@@ -2122,6 +2146,7 @@ export function useDownloaderView({
     urlChipLayoutTransition,
     handleBrowserChange,
     handleDownloadClick: () => void handleDownloadClick(),
+    handleStopActiveDownload,
     handleDuplicateChoice,
     handleUrlFocus,
     handleUrlClick,

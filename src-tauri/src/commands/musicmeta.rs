@@ -351,7 +351,7 @@ fn title_from_stem(stem: &str) -> String {
     clean_music_title(stem)
 }
 
-fn normalize_identity_token(raw: &str) -> String {
+pub fn normalize_identity_token(raw: &str) -> String {
     raw.trim()
         .to_lowercase()
         .chars()

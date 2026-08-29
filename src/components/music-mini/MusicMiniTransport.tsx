@@ -1,7 +1,8 @@
-import { SkipForward, SkipBack, Shuffle, Repeat, Repeat1 } from "lucide-react";
+import { SkipForward, SkipBack, Shuffle } from "lucide-react";
 import type { LoopMode } from "@/playbackLoopStorage";
 import { loopModeAriaLabel } from "@/playbackLoopStorage";
 import { cn } from "@/lib/utils";
+import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 
 type Props = {
@@ -77,11 +78,7 @@ export function MusicMiniTransport({
         onClick={onLoop}
         aria-label={loopModeAriaLabel(loopMode)}
       >
-        {loopMode === "one" ? (
-          <Repeat1 size={18} strokeWidth={2.5} />
-        ) : (
-          <Repeat size={18} strokeWidth={2.5} />
-        )}
+        <LoopModeSwapIcon mode={loopMode} size={18} />
       </button>
     </div>
   );

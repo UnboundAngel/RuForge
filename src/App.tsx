@@ -52,7 +52,7 @@ import { flattenGalleryScanToMediaFiles } from "./galleryScan";
 import { ExplorerWatchQueueButton } from "./components/ExplorerWatchQueueButton";
 import { ExplorerTitlebarNav } from "./components/ExplorerTitlebarNav";
 import { TitlebarHoverButton } from "./components/TitlebarHoverButton";
-import { DownloaderView } from "./components/DownloaderView";
+import { DownloaderOverlay } from "./components/downloader/DownloaderOverlay";
 import { PlayerView, type PlayerViewHandle } from "./components/PlayerView";
 import { SettingsView } from "./components/SettingsView";
 import { MediaView } from "./components/MediaView";
@@ -280,6 +280,9 @@ function App() {
   const settingsOpen = useRuforgeStore((s) => s.settingsOpen);
   const openSettings = useRuforgeStore((s) => s.openSettings);
   const closeSettings = useRuforgeStore((s) => s.closeSettings);
+  const downloaderOpen = useRuforgeStore((s) => s.downloaderOpen);
+  const openDownloader = useRuforgeStore((s) => s.openDownloader);
+  const closeDownloader = useRuforgeStore((s) => s.closeDownloader);
   const galleryFilter = useRuforgeStore((s) => s.galleryFilter);
   const setGalleryFilter = useRuforgeStore((s) => s.setGalleryFilter);
   const galleryScrollChromeRaw = useRuforgeStore((s) => s.galleryScrollChrome);
@@ -343,7 +346,7 @@ function App() {
     duplicateModalOpen: downloaderDuplicateDialogOpen,
     onDroppedYoutubeUrls: async (urls) => {
       flushSync(() => {
-        setActiveTab("downloader");
+        openDownloader();
       });
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => {
@@ -352,7 +355,7 @@ function App() {
       });
       const h = getYoutubeUrlDropHandler();
       if (!h) {
-        notify("Drop could not be handled. Open the Download tab and try again.");
+        notify("Drop could not be handled. Open Downloads and try again.");
         return;
       }
       await h(urls);
@@ -378,6 +381,7 @@ function App() {
   const explorerLinuxEmbedRef = useRef(false);
   const explorerWebviewLabelRef = useRef(EMBEDDED_EXPLORER_WEBVIEW_LABEL);
   const prevActiveTabRef = useRef<ActiveTab>(activeTab);
+  const prevExplorerSurfaceRef = useRef(false);
   /** One reload when entering Explorer; layout sync must not re-arm this. */
   const explorerReloadPendingRef = useRef(false);
   const explorerLastSyncedBoundsRef = useRef<ExplorerBounds | null>(null);
@@ -396,10 +400,10 @@ function App() {
   const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
   const storageStats = useRuforgeStore((s) => s.storageStats);
 
-  /** DownloaderView unmounts off-tab; restore session queue if memory was cleared during churn. */
+  /** DownloaderView unmounts when the overlay closes; restore session queue if memory was cleared. */
   useEffect(() => {
     restoreDownloadQueueFromSessionIfEmpty();
-  }, [activeTab, restoreDownloadQueueFromSessionIfEmpty]);
+  }, [activeTab, downloaderOpen, restoreDownloadQueueFromSessionIfEmpty]);
 
   useEffect(() => {
     void (async () => {
@@ -822,15 +826,24 @@ function App() {
   }, []);
 
   // Manage Embedded Explorer Webview.
-  // Deps: `activeTab` only. Sidebar toggles schedule via explorerScheduleSyncRef
-  // so listeners are not torn down during the 500ms width transition.
+  // Deps: tab + overlays. Native explorer paints above DOM, so hide it while
+  // the download or settings overlay is open.
   useEffect(() => {
     let active = true;
-    const wasOnExplorer = prevActiveTabRef.current === "explorer";
-    const onExplorer = activeTab === "explorer";
-    const enteringExplorer = !wasOnExplorer && onExplorer;
+    const explorerSurfaceActive =
+      activeTab === "explorer" &&
+      !downloaderOpen &&
+      !settingsOpen &&
+      !shellBlocked;
+    const wasOnExplorer = prevExplorerSurfaceRef.current;
+    const onExplorer = explorerSurfaceActive;
+    const tabEnteringExplorer =
+      prevActiveTabRef.current !== "explorer" && activeTab === "explorer";
+    const tabLeavingExplorer =
+      prevActiveTabRef.current === "explorer" && activeTab !== "explorer";
     prevActiveTabRef.current = activeTab;
-    if (enteringExplorer) {
+    prevExplorerSurfaceRef.current = onExplorer;
+    if (tabEnteringExplorer) {
       explorerReloadPendingRef.current = true;
       explorerLastSyncedBoundsRef.current = null;
       if (mainContentRef.current) {
@@ -838,7 +851,7 @@ function App() {
       }
       onYoutubeAuthSurfaceEnter();
     }
-    if (wasOnExplorer && !onExplorer) {
+    if (tabLeavingExplorer) {
       onYoutubeAuthSurfaceLeave();
     }
     if (!onExplorer) {
@@ -918,7 +931,7 @@ function App() {
           explorerWebviewCreatingRef.current = false;
           if (!active) return;
           explorerWebviewRef.current = webview;
-          if (activeTab === "explorer") {
+          if (onExplorer) {
             void maybeReloadExplorerOnEnter();
             scheduleExplorerProfileProbeAfterShow("explorer-open");
           }
@@ -937,7 +950,7 @@ function App() {
         webview.setPosition(new LogicalPosition(finalX, finalY)),
         webview.setSize(new LogicalSize(finalW, finalH)),
       ]);
-      if (activeTab === "explorer") {
+      if (onExplorer) {
         scheduleExplorerProfileProbeAfterShow("explorer-open");
       }
     };
@@ -1034,7 +1047,7 @@ function App() {
       resizeObserver?.disconnect();
       unlistenWindowResize?.();
     };
-  }, [activeTab, isMainMaximized]);
+  }, [activeTab, downloaderOpen, settingsOpen, shellBlocked, isMainMaximized]);
 
   useEffect(() => {
     if (activeTab !== "explorer") return;
@@ -1557,7 +1570,11 @@ function App() {
     };
   }, [activeTab, shellBlocked, setLastExplorerUrl]);
 
-  const showExplorerToolbar = activeTab === "explorer" && !shellBlocked;
+  const showExplorerToolbar =
+    activeTab === "explorer" &&
+    !shellBlocked &&
+    !downloaderOpen &&
+    !settingsOpen;
 
   const onExplorerBack = useCallback(async () => {
     try {
@@ -1639,6 +1656,14 @@ function App() {
 
       {!shellBlocked ? (
         <SettingsView open={settingsOpen} onClose={closeSettings} />
+      ) : null}
+      {!shellBlocked ? (
+        <DownloaderOverlay
+          open={downloaderOpen}
+          onClose={closeDownloader}
+          internalDir={internalVault}
+          storageFull={storageBlocksNewDownloads}
+        />
       ) : null}
 
       {showExplorerToolbar && (
@@ -1723,13 +1748,19 @@ function App() {
       <AppSidebarRail
         activeTab={activeTab}
         settingsOpen={settingsOpen}
+        downloaderOpen={downloaderOpen}
         navMode={navMode}
-        captureScreenLabel={activeTab}
+        captureScreenLabel={downloaderOpen ? "downloader" : activeTab}
         disabled={shellBlocked}
         onSelectTab={(tab) => {
           if (tab === "settings") {
             if (settingsOpen) closeSettings();
             else openSettings();
+            return;
+          }
+          if (tab === "downloader") {
+            if (downloaderOpen) closeDownloader();
+            else openDownloader();
             return;
           }
           setActiveTab(tab);
@@ -1905,7 +1936,15 @@ function App() {
           <div
             ref={explorerWebviewHostRef}
             className="absolute inset-0 z-[1] pointer-events-none transition-opacity duration-200 ease-out"
-            style={{ opacity: activeTab === "explorer" && !shellBlocked ? 1 : 0 }}
+            style={{
+              opacity:
+                activeTab === "explorer" &&
+                !shellBlocked &&
+                !downloaderOpen &&
+                !settingsOpen
+                  ? 1
+                  : 0,
+            }}
             aria-hidden
           />
           <div
@@ -1923,13 +1962,6 @@ function App() {
             className={`absolute inset-0 min-h-full bg-[#1D1613] ${activeTab === "explorer" ? "overflow-hidden" : "overflow-y-auto rf-scrollbar"}`}
           >
             <AnimatePresence mode="wait">
-              {activeTab === "downloader" && (
-                <DownloaderView
-                  key="downloader"
-                  internalDir={internalVault}
-                  storageFull={storageBlocksNewDownloads}
-                />
-              )}
               {activeTab === "explorer" && (
                 <motion.div
                   key="explorer"

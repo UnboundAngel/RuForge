@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 use crate::commands::musicmeta::{
-    build_http_client, clean_music_title, read_sidecar as read_musicmeta_sidecar,
-    sidecar_path_for as musicmeta_sidecar_path, MusicMetaSidecarDto,
+    build_http_client, clean_music_title, normalize_identity_token,
+    read_sidecar as read_musicmeta_sidecar, sidecar_path_for as musicmeta_sidecar_path,
+    MusicMetaSidecarDto,
 };
 use crate::utils::{duration_from_ytdlp_info_json, is_audio_only_ext, resolve_info_json_path};
 
@@ -43,6 +44,21 @@ pub struct LyricsEnsureResult {
     pub sidecar: LyricsSidecarDto,
     pub from_cache: bool,
     pub match_step: String,
+    /// Duration sent to LRCLIB, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_secs: Option<f64>,
+    /// Which probe produced `duration_secs`: `info.json`, `lofty`, or `none`.
+    pub duration_source: String,
+    /// LRCLIB record duration when a match returned one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_duration: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DurationProbe {
+    pub secs: Option<f64>,
+    /// `info.json` | `lofty` | `none`
+    pub source: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -67,6 +83,8 @@ pub struct LyricsQuery {
 pub struct LyricsMatchOutcome {
     pub sidecar: LyricsSidecarDto,
     pub match_step: String,
+    pub query_duration: Option<f64>,
+    pub matched_duration: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -186,15 +204,59 @@ fn lofty_duration_secs(media: &Path) -> Option<f64> {
     duration_usable(Some(secs))
 }
 
-fn resolve_duration(media: &Path) -> Option<f64> {
+/// Same order for music: Lofty (file) first, then yt-dlp info.json as fallback.
+pub fn probe_duration(media: &Path) -> DurationProbe {
+    if media.is_file() {
+        if let Some(secs) = lofty_duration_secs(media) {
+            return DurationProbe {
+                secs: Some(secs),
+                source: "lofty",
+            };
+        }
+    }
     let from_info = duration_usable(Some(duration_from_ytdlp_info_json(media)).filter(|&d| d > 0.0));
     if from_info.is_some() {
-        return from_info;
+        return DurationProbe {
+            secs: from_info,
+            source: "info.json",
+        };
     }
-    if media.is_file() {
-        return lofty_duration_secs(media);
+    DurationProbe {
+        secs: None,
+        source: "none",
     }
-    None
+}
+
+fn resolve_duration(media: &Path) -> Option<f64> {
+    probe_duration(media).secs
+}
+
+/// Canonical artist/title from `{stem}.musicmeta.json`, for report tables.
+pub fn probe_canonical_identity(media: &Path) -> (Option<String>, Option<String>) {
+    let Some(parent) = media.parent() else {
+        return (None, None);
+    };
+    let Some(stem) = media.file_stem().and_then(|s| s.to_str()) else {
+        return (None, None);
+    };
+    let Some(meta) = read_musicmeta_sidecar(&musicmeta_sidecar_path(parent, stem)) else {
+        return (None, None);
+    };
+    (
+        non_empty(meta.canonical_artist.as_deref()),
+        non_empty(meta.canonical_title.as_deref()),
+    )
+}
+
+/// Walk audio files under roots (same rules as backfill). Cap with `limit` when set.
+pub fn collect_library_audio_limited(roots: &[String], limit: Option<usize>) -> Vec<PathBuf> {
+    let mut all = library_audio_files(roots);
+    if let Some(n) = limit {
+        if all.len() > n {
+            all.truncate(n);
+        }
+    }
+    all
 }
 
 fn artist_from_stem(stem: &str) -> Option<String> {
@@ -420,17 +482,27 @@ async fn lrclib_search(query: &LyricsQuery) -> Option<LrclibTrack> {
         return None;
     }
     let tracks: Vec<LrclibTrack> = resp.json().await.ok()?;
-    pick_search_match(query.duration, tracks)
+    pick_search_match(query, tracks)
 }
 
-fn pick_search_match(local_duration: Option<f64>, tracks: Vec<LrclibTrack>) -> Option<LrclibTrack> {
+fn identity_agrees(query: &str, candidate: Option<&str>) -> bool {
+    let Some(candidate) = candidate.map(str::trim).filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    normalize_identity_token(query) == normalize_identity_token(candidate)
+}
+
+fn pick_search_match(query: &LyricsQuery, tracks: Vec<LrclibTrack>) -> Option<LrclibTrack> {
     let usable: Vec<LrclibTrack> = tracks.into_iter().filter(track_is_usable).collect();
     if usable.is_empty() {
         return None;
     }
 
-    let Some(local) = duration_usable(local_duration) else {
-        return usable.into_iter().next();
+    let Some(local) = duration_usable(query.duration) else {
+        return usable.into_iter().find(|track| {
+            identity_agrees(&query.artist, track.artist_name.as_deref())
+                && identity_agrees(&query.title, track.track_name.as_deref())
+        });
     };
 
     let mut best: Option<(f64, LrclibTrack)> = None;
@@ -459,6 +531,8 @@ pub async fn fetch_lyrics_for_queries(queries: &[LyricsQuery]) -> LyricsMatchOut
             return LyricsMatchOutcome {
                 sidecar: hit_sidecar(&track),
                 match_step: step_get,
+                query_duration: query.duration,
+                matched_duration: duration_usable(track.duration),
             };
         }
 
@@ -467,6 +541,8 @@ pub async fn fetch_lyrics_for_queries(queries: &[LyricsQuery]) -> LyricsMatchOut
             return LyricsMatchOutcome {
                 sidecar: hit_sidecar(&track),
                 match_step: step_search,
+                query_duration: query.duration,
+                matched_duration: duration_usable(track.duration),
             };
         }
     }
@@ -474,11 +550,22 @@ pub async fn fetch_lyrics_for_queries(queries: &[LyricsQuery]) -> LyricsMatchOut
     LyricsMatchOutcome {
         sidecar: miss_sidecar(),
         match_step: "miss".to_string(),
+        query_duration: queries.first().and_then(|q| q.duration),
+        matched_duration: None,
     }
 }
 
 /// One shared ensure path used by download, backfill, and manual refetch.
 pub async fn ensure_lyrics_for_path(media: &Path, force: bool) -> Option<LyricsEnsureResult> {
+    ensure_lyrics_for_path_with_write(media, force, true).await
+}
+
+/// Same match chain as ensure; when `write` is false, never touches the sidecar.
+pub async fn ensure_lyrics_for_path_with_write(
+    media: &Path,
+    force: bool,
+    write: bool,
+) -> Option<LyricsEnsureResult> {
     let ext = media
         .extension()
         .and_then(|s| s.to_str())
@@ -492,6 +579,8 @@ pub async fn ensure_lyrics_for_path(media: &Path, force: bool) -> Option<LyricsE
     let stem = media.file_stem()?.to_str()?;
     let sidecar_path = sidecar_path_for(parent, stem);
 
+    let dur = probe_duration(media);
+
     if !force {
         if let Some(cached) = read_sidecar(&sidecar_path) {
             if has_lyrics(&cached) || negative_cache_fresh(&cached) {
@@ -499,6 +588,9 @@ pub async fn ensure_lyrics_for_path(media: &Path, force: bool) -> Option<LyricsE
                     sidecar: cached,
                     from_cache: true,
                     match_step: "cache".to_string(),
+                    duration_secs: dur.secs,
+                    duration_source: dur.source.to_string(),
+                    matched_duration: None,
                 });
             }
         }
@@ -507,21 +599,85 @@ pub async fn ensure_lyrics_for_path(media: &Path, force: bool) -> Option<LyricsE
     let queries = build_queries(media);
     if queries.is_empty() {
         let miss = miss_sidecar();
-        let _ = write_sidecar(&sidecar_path, &miss);
+        if write {
+            let _ = write_sidecar(&sidecar_path, &miss);
+        }
         return Some(LyricsEnsureResult {
             sidecar: miss,
             from_cache: false,
             match_step: "miss:no-identity".to_string(),
+            duration_secs: dur.secs,
+            duration_source: dur.source.to_string(),
+            matched_duration: None,
         });
     }
 
     let outcome = fetch_lyrics_for_queries(&queries).await;
-    let _ = write_sidecar(&sidecar_path, &outcome.sidecar);
+    if write {
+        let _ = write_sidecar(&sidecar_path, &outcome.sidecar);
+    }
     Some(LyricsEnsureResult {
         sidecar: outcome.sidecar,
         from_cache: false,
         match_step: outcome.match_step,
+        duration_secs: outcome.query_duration.or(dur.secs),
+        duration_source: dur.source.to_string(),
+        matched_duration: outcome.matched_duration,
     })
+}
+
+/// Exercise no-duration search: first usable hit is wrong identity; must refuse or
+/// skip to an agreeing later hit. Returns (skipped_wrong_first, accepted_or_none).
+pub fn verify_no_duration_search_guard() -> (bool, Option<String>) {
+    let query = LyricsQuery {
+        artist: "Radiohead".into(),
+        title: "Karma Police".into(),
+        album: None,
+        duration: None,
+        identity: "canonical",
+    };
+    let tracks = vec![
+        LrclibTrack {
+            track_name: Some("Creep".into()),
+            artist_name: Some("Radiohead".into()),
+            duration: Some(238.0),
+            plain_lyrics: Some("wrong first hit".into()),
+            synced_lyrics: None,
+            instrumental: None,
+        },
+        LrclibTrack {
+            track_name: Some("Karma Police".into()),
+            artist_name: Some("Radiohead".into()),
+            duration: Some(264.0),
+            plain_lyrics: Some("right".into()),
+            synced_lyrics: None,
+            instrumental: None,
+        },
+    ];
+    let picked = pick_search_match(&query, tracks);
+    let name = picked.and_then(|t| t.track_name);
+    let skipped_wrong = name.as_deref() != Some("Creep");
+    (skipped_wrong, name)
+}
+
+/// No agreeing record at all with duration stripped: must miss.
+pub fn verify_no_duration_search_miss_when_no_agree() -> bool {
+    let query = LyricsQuery {
+        artist: "Radiohead".into(),
+        title: "Karma Police".into(),
+        album: None,
+        duration: None,
+        identity: "canonical",
+    };
+    let tracks = vec![LrclibTrack {
+        track_name: Some("Creep".into()),
+        artist_name: Some("Radiohead".into()),
+        duration: Some(238.0),
+        plain_lyrics: Some("wrong only".into()),
+        synced_lyrics: None,
+        instrumental: None,
+    }];
+    pick_search_match(&query, tracks).is_none()
 }
 
 // ---- Library walk / callers ---------------------------------------------
@@ -664,6 +820,16 @@ pub async fn backfill_lyrics(
 mod tests {
     use super::*;
 
+    fn q(duration: Option<f64>) -> LyricsQuery {
+        LyricsQuery {
+            artist: "X".into(),
+            title: "Wanted".into(),
+            album: None,
+            duration,
+            identity: "canonical",
+        }
+    }
+
     #[test]
     fn pick_search_prefers_closest_duration_within_tolerance() {
         let tracks = vec![
@@ -692,7 +858,7 @@ mod tests {
                 instrumental: None,
             },
         ];
-        let picked = pick_search_match(Some(233.0), tracks).expect("pick");
+        let picked = pick_search_match(&q(Some(233.0)), tracks).expect("pick");
         assert_eq!(picked.track_name.as_deref(), Some("B"));
     }
 
@@ -706,6 +872,18 @@ mod tests {
             synced_lyrics: None,
             instrumental: None,
         }];
-        assert!(pick_search_match(Some(233.0), tracks).is_none());
+        assert!(pick_search_match(&q(Some(233.0)), tracks).is_none());
+    }
+
+    #[test]
+    fn no_duration_skips_wrong_first_hit() {
+        let (skipped, name) = verify_no_duration_search_guard();
+        assert!(skipped);
+        assert_eq!(name.as_deref(), Some("Karma Police"));
+    }
+
+    #[test]
+    fn no_duration_misses_without_identity_agree() {
+        assert!(verify_no_duration_search_miss_when_no_agree());
     }
 }

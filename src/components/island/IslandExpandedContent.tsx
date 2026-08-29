@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
 import type { DynamicIslandContent } from "./DynamicIsland";
-import { loopModeAriaLabel, loopModeIcon } from "@/playbackLoopStorage";
+import { loopModeAriaLabel } from "@/playbackLoopStorage";
 import { HoverMarqueeText } from "@/components/music/HoverMarqueeText";
 import { IslandAudioOutputControl } from "./IslandAudioOutputControl";
 import { IslandVolumeControl } from "./IslandVolumeControl";
@@ -14,6 +14,7 @@ import {
   islandSkipExpandedVariants,
   type IslandSkipDir,
 } from "./islandSkipMotion";
+import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 
 const islandBtnClass =
@@ -486,11 +487,7 @@ export function IslandExpandedContent({
                     active={content.loopMode !== "off"}
                     onClick={onToggleLoop}
                   >
-                    <Icon
-                      icon={loopModeIcon(content.loopMode)}
-                      width={15}
-                      height={15}
-                    />
+                    <LoopModeSwapIcon mode={content.loopMode} size={15} />
                   </IslandIconButton>
                 </div>
               </div>

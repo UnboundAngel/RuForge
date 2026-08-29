@@ -3,6 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Shuffle, Play, ChevronLeft, MapPin, Music2, Disc3 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
@@ -195,6 +196,8 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, mot
   const coverSrc = cover ? convertFileSrc(cover) : null;
   const displayTitle = file.canonicalTitle || file.name;
   const displayAlbum = resolveDisplayAlbum(file);
+  const playback = useOptionalMainAudioPlayback();
+  const showPauseOnHover = isPlaying && playback != null && !playback.paused;
 
   return (
     <motion.div
@@ -210,6 +213,7 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, mot
       <MusicTrackIndexPlay
         indexLabel={index + 1}
         isPlaying={isPlaying}
+        showPause={showPauseOnHover}
         iconSize={12}
         className="h-7 w-7"
         labelClassName="text-xs"

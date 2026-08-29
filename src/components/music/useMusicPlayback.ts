@@ -1131,6 +1131,7 @@ export function useMusicPlayback(
     if (!result) return false;
 
     applyMusicEndlessAdvance(result.folderAudioPlaylistAfter, result.endlessFromIndex);
+    noteIslandSkipDir(1);
     setPendingListenEndReason("manual_switch");
     handlePlayFolderNeighbor(result.next);
     return true;
@@ -1188,6 +1189,7 @@ export function useMusicPlayback(
 
     if (result) {
       await endListenSession("completed");
+      noteIslandSkipDir(1);
       if (result.playingFromManualQueue) {
         applyManualQueueAdvance(result.manualQueueContextIndex);
       } else {

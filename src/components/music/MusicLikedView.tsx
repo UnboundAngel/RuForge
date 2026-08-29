@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Shuffle, Play, ChevronLeft, MoreHorizontal } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
@@ -29,6 +30,8 @@ function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: 
   const cover = bestCoverPath(file);
   const coverSrc = cover ? convertFileSrc(cover) : null;
   const artist = file.artist ?? file.albumArtist ?? "";
+  const playback = useOptionalMainAudioPlayback();
+  const showPauseOnHover = isPlaying && playback != null && !playback.paused;
 
   return (
     <div
@@ -38,7 +41,7 @@ function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: 
       onClick={onClick}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
     >
-      <MusicTrackIndexPlay indexLabel={index + 1} isPlaying={isPlaying} />
+      <MusicTrackIndexPlay indexLabel={index + 1} isPlaying={isPlaying} showPause={showPauseOnHover} />
       {coverSrc ? (
         <img src={coverSrc} alt="" className="w-11 h-11 shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
       ) : (

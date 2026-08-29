@@ -35,10 +35,17 @@ export type RecentAddedGroups = {
   albums: AlbumGroup[];
 };
 
+/** Chronological home feed: multi-track playlists + singles, newest first. */
+export type RecentFeedItem =
+  | { kind: "playlist"; group: RecentPlaylistGroup }
+  | { kind: "song"; file: MediaFile };
+
 export type BuildRecentAddedOptions = {
   playlistLimit?: number;
   songLimit?: number;
   albumLimit?: number;
+  /** Max items in the interleaved recently-added feed. */
+  feedLimit?: number;
 };
 
 function sortTracksForPlaylist(tracks: MediaFile[]): MediaFile[] {
@@ -83,7 +90,15 @@ export function buildRecentAddedGroups(
   const songLimit = opts.songLimit ?? 12;
   const albumLimit = opts.albumLimit ?? 6;
 
-  const playlists = groupPlaylistDownloads(tracks).slice(0, playlistLimit);
+  const allPlaylistGroups = groupPlaylistDownloads(tracks);
+  // One-track "playlist" folders are singles that landed under Playlists/.
+  const playlists = allPlaylistGroups
+    .filter((g) => g.tracks.length > 1)
+    .slice(0, playlistLimit);
+  const singletonPlaylistTracks = allPlaylistGroups
+    .filter((g) => g.tracks.length === 1)
+    .map((g) => g.tracks[0]!);
+
   const playlistPaths = new Set<string>();
   for (const p of playlists) {
     for (const t of p.tracks) playlistPaths.add(t.path);
@@ -105,7 +120,10 @@ export function buildRecentAddedGroups(
 
   const seen = new Set<string>();
   const songs: MediaFile[] = [];
-  for (const t of [...tracks].sort((a, b) => b.created - a.created)) {
+  const songPool = [...singletonPlaylistTracks, ...tracks].sort(
+    (a, b) => b.created - a.created,
+  );
+  for (const t of songPool) {
     if (playlistPaths.has(t.path) || albumPaths.has(t.path)) continue;
     const key = musicTrackIdentityKey(t, primaryArtist);
     if (seen.has(key)) continue;
@@ -115,4 +133,24 @@ export function buildRecentAddedGroups(
   }
 
   return { playlists, songs, albums };
+}
+
+export function buildRecentAddedFeed(
+  groups: RecentAddedGroups,
+  feedLimit = 12,
+): RecentFeedItem[] {
+  const items: { at: number; item: RecentFeedItem }[] = [
+    ...groups.playlists.map((group) => ({
+      at: group.newestCreated,
+      item: { kind: "playlist" as const, group },
+    })),
+    ...groups.songs.map((file) => ({
+      at: file.created,
+      item: { kind: "song" as const, file },
+    })),
+  ];
+  return items
+    .sort((a, b) => b.at - a.at)
+    .slice(0, feedLimit)
+    .map((x) => x.item);
 }

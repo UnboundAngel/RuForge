@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MediaFile } from "@/types";
 import {
+  buildRecentAddedFeed,
   buildRecentAddedGroups,
   groupPlaylistDownloads,
   playlistDisplayTitle,
@@ -54,6 +55,12 @@ describe("musicRecentGroups", () => {
         playlistIndex: 1,
       }),
       track({
+        path: "/lib/Playlists/PL/02.mp3",
+        name: "P2",
+        created: 101,
+        playlistIndex: 2,
+      }),
+      track({
         path: "/lib/Music/Solo/solo.mp3",
         name: "Solo",
         artist: "Artist",
@@ -77,9 +84,64 @@ describe("musicRecentGroups", () => {
     ];
     const { playlists, songs, albums } = buildRecentAddedGroups(tracks);
     expect(playlists).toHaveLength(1);
+    expect(playlists[0]?.tracks).toHaveLength(2);
     expect(songs).toHaveLength(1);
     expect(songs[0]?.name).toBe("Solo");
     expect(albums).toHaveLength(1);
     expect(albums[0]?.album).toBe("Eden");
+  });
+
+  it("treats one-track playlist folders as singles", () => {
+    const tracks = [
+      track({
+        path: "/lib/Playlists/Juice/01.mp3",
+        name: "Broke Boy",
+        created: 200,
+        playlistIndex: 1,
+      }),
+      track({
+        path: "/lib/Playlists/Mix/01.mp3",
+        name: "A",
+        created: 100,
+        playlistIndex: 1,
+      }),
+      track({
+        path: "/lib/Playlists/Mix/02.mp3",
+        name: "B",
+        created: 110,
+        playlistIndex: 2,
+      }),
+    ];
+    const groups = buildRecentAddedGroups(tracks);
+    expect(groups.playlists).toHaveLength(1);
+    expect(groups.playlists[0]?.title).toBe("Mix");
+    expect(groups.songs.map((s) => s.name)).toEqual(["Broke Boy"]);
+  });
+
+  it("orders recently added feed by newest first across playlists and songs", () => {
+    const tracks = [
+      track({
+        path: "/lib/Playlists/OldMix/01.mp3",
+        name: "A",
+        created: 50,
+        playlistIndex: 1,
+      }),
+      track({
+        path: "/lib/Playlists/OldMix/02.mp3",
+        name: "B",
+        created: 60,
+        playlistIndex: 2,
+      }),
+      track({
+        path: "/lib/Music/New/solo.mp3",
+        name: "Fresh",
+        created: 200,
+      }),
+    ];
+    const feed = buildRecentAddedFeed(buildRecentAddedGroups(tracks));
+    expect(feed.map((x) => (x.kind === "song" ? x.file.name : x.group.title))).toEqual([
+      "Fresh",
+      "OldMix",
+    ]);
   });
 });

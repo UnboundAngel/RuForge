@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Shuffle, Play, ChevronLeft } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath } from "@/mediaKind";
 import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
@@ -26,6 +27,8 @@ type TrackRowProps = {
 
 function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: TrackRowProps) {
   const trackNum = file.trackNo ?? index + 1;
+  const playback = useOptionalMainAudioPlayback();
+  const showPauseOnHover = isPlaying && playback != null && !playback.paused;
   return (
     <div
       className="group/row flex items-center gap-4 px-4 py-2.5 rounded w-full transition-colors cursor-pointer"
@@ -37,6 +40,7 @@ function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: 
       <MusicTrackIndexPlay
         indexLabel={trackNum}
         isPlaying={isPlaying}
+        showPause={showPauseOnHover}
         iconSize={12}
         className="h-6 w-6"
         labelClassName="text-xs"

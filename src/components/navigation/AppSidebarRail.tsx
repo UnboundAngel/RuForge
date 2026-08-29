@@ -1,4 +1,5 @@
 import { RuForgeCaptureTrigger } from "@/components/dev-captures/RuForgeCaptureTrigger";
+import { VideoDownloadRailButton } from "@/components/downloader/VideoDownloadDockChip";
 import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
@@ -22,6 +23,7 @@ const RAIL_ITEMS: RailItem[] = [
 type AppSidebarRailProps = {
   activeTab: ActiveTab;
   settingsOpen?: boolean;
+  downloaderOpen?: boolean;
   navMode: NavMode;
   captureScreenLabel: string;
   disabled?: boolean;
@@ -31,6 +33,7 @@ type AppSidebarRailProps = {
 export function AppSidebarRail({
   activeTab,
   settingsOpen = false,
+  downloaderOpen = false,
   navMode,
   captureScreenLabel,
   disabled,
@@ -51,10 +54,20 @@ export function AppSidebarRail({
 
       <nav className="flex flex-1 flex-col items-center gap-1 px-1 py-2">
         {RAIL_ITEMS.map((item) => {
+          if (item.id === "downloader") {
+            return (
+              <VideoDownloadRailButton
+                key={item.id}
+                overlayOpen={downloaderOpen}
+                disabled={disabled}
+                onToggle={() => onSelectTab("downloader")}
+              />
+            );
+          }
           const isActive =
             item.id === "settings"
               ? settingsOpen
-              : !settingsOpen && activeTab === item.id;
+              : !settingsOpen && !downloaderOpen && activeTab === item.id;
           return (
             <button
               key={item.id}
