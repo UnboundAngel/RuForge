@@ -52,6 +52,9 @@ pub struct LyricsEnsureResult {
     /// LRCLIB record duration when a match returned one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_duration: Option<f64>,
+    /// Which query-candidate index produced the hit (None on miss/cache).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -77,6 +80,8 @@ pub struct LyricsQuery {
     pub duration: Option<f64>,
     /// `canonical` when musicmeta fields drove the query; `fallback` for artist+name.
     pub identity: &'static str,
+    /// Index in the query-candidate chain (0 = raw pair, 1 = strip artist prefix, 2 = title split, …).
+    pub candidate_index: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +90,7 @@ pub struct LyricsMatchOutcome {
     pub match_step: String,
     pub query_duration: Option<f64>,
     pub matched_duration: Option<f64>,
+    pub candidate_index: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -126,6 +132,26 @@ fn iso_now() -> String {
 
 fn non_empty(s: Option<&str>) -> Option<String> {
     s.map(str::trim).filter(|t| !t.is_empty()).map(String::from)
+}
+
+/// Undo common yt-dlp Windows filename sanitization before LRCLIB query strings.
+/// `normalize_identity_token` only strips non-ascii-alnum to spaces; it does not fold.
+fn fold_query_text(raw: &str) -> String {
+    raw.chars()
+        .map(|c| match c {
+            '\u{FF02}' | '\u{201C}' | '\u{201D}' => '"',
+            '\u{FF07}' | '\u{2018}' | '\u{2019}' => '\'',
+            '\u{29F8}' | '\u{FF0F}' => '/',
+            '\u{29F9}' | '\u{FF3C}' => '\\',
+            '\u{FF1A}' => ':',
+            '\u{FF1F}' => '?',
+            '\u{FF0A}' => '*',
+            '\u{FF5C}' => '|',
+            '\u{FF1C}' => '<',
+            '\u{FF1E}' => '>',
+            c => c,
+        })
+        .collect()
 }
 
 fn duration_usable(d: Option<f64>) -> Option<f64> {
@@ -343,25 +369,18 @@ fn read_tag_identity(media: &Path) -> (Option<String>, Option<String>, Option<St
     (artist, title, album)
 }
 
-fn query_from_musicmeta(meta: &MusicMetaSidecarDto, duration: Option<f64>) -> Option<LyricsQuery> {
+fn query_from_musicmeta(meta: &MusicMetaSidecarDto) -> Option<(String, String, Option<String>)> {
     let artist = non_empty(meta.canonical_artist.as_deref())?;
     let title = non_empty(meta.canonical_title.as_deref())?;
     let album = non_empty(meta.canonical_album.as_deref());
-    Some(LyricsQuery {
-        artist,
-        title,
-        album,
-        duration,
-        identity: "canonical",
-    })
+    Some((artist, title, album))
 }
 
-fn query_fallback(
+fn query_fallback_pair(
     media: &Path,
     parent: &Path,
     stem: &str,
-    duration: Option<f64>,
-) -> Option<LyricsQuery> {
+) -> Option<(String, String, Option<String>)> {
     let (tag_artist, tag_title, tag_album) = read_tag_identity(media);
     let (yt_artist, yt_title, yt_album) = read_info_identity(parent, stem);
 
@@ -373,13 +392,114 @@ fn query_fallback(
     }
     let artist = tag_artist.or(yt_artist).or_else(|| artist_from_stem(stem))?;
     let album = tag_album.or(yt_album);
-    Some(LyricsQuery {
-        artist,
-        title,
-        album,
-        duration,
-        identity: "fallback",
-    })
+    Some((artist, title, album))
+}
+
+/// Strip a leading `Artist - ` from title when the prefix matches `artist` under
+/// `normalize_identity_token`.
+fn strip_matching_artist_prefix(title: &str, artist: &str) -> Option<String> {
+    let Some(i) = title.find(" - ") else {
+        return None;
+    };
+    let prefix = title[..i].trim();
+    let rest = title[i + 3..].trim();
+    if rest.is_empty() {
+        return None;
+    }
+    if normalize_identity_token(prefix) != normalize_identity_token(artist) {
+        return None;
+    }
+    Some(rest.to_string())
+}
+
+/// Split title on the first ` - ` into (artist, title), ignoring any prior artist field.
+fn split_title_artist_pair(title: &str) -> Option<(String, String)> {
+    let Some(i) = title.find(" - ") else {
+        return None;
+    };
+    let artist = title[..i].trim();
+    let rest = title[i + 3..].trim();
+    if artist.is_empty() || rest.is_empty() {
+        return None;
+    }
+    Some((artist.to_string(), rest.to_string()))
+}
+
+fn push_unique_query(out: &mut Vec<LyricsQuery>, q: LyricsQuery) {
+    let dup = out.iter().any(|existing| {
+        existing.artist.eq_ignore_ascii_case(&q.artist)
+            && existing.title.eq_ignore_ascii_case(&q.title)
+    });
+    if !dup {
+        out.push(q);
+    }
+}
+
+/// Expand one artist/title pair into the LRCLIB candidate chain:
+/// 0 raw pair, 1 strip matching artist prefix, 2 title-split artist/title.
+fn expand_query_candidates(
+    artist: String,
+    title: String,
+    album: Option<String>,
+    duration: Option<f64>,
+    identity: &'static str,
+    start_index: usize,
+) -> Vec<LyricsQuery> {
+    let artist = fold_query_text(&artist);
+    let title = fold_query_text(&title);
+    let album = album.map(|a| fold_query_text(&a));
+    let mut out = Vec::new();
+    let mut idx = start_index;
+
+    push_unique_query(
+        &mut out,
+        LyricsQuery {
+            artist: artist.clone(),
+            title: title.clone(),
+            album: album.clone(),
+            duration,
+            identity,
+            candidate_index: idx,
+        },
+    );
+    idx = start_index + out.len();
+
+    if let Some(stripped) = strip_matching_artist_prefix(&title, &artist) {
+        let before = out.len();
+        push_unique_query(
+            &mut out,
+            LyricsQuery {
+                artist: artist.clone(),
+                title: stripped,
+                album: album.clone(),
+                duration,
+                identity,
+                candidate_index: idx,
+            },
+        );
+        if out.len() > before {
+            idx += 1;
+        }
+    }
+
+    if let Some((split_artist, split_title)) = split_title_artist_pair(&title) {
+        push_unique_query(
+            &mut out,
+            LyricsQuery {
+                artist: split_artist,
+                title: split_title,
+                album: album.clone(),
+                duration,
+                identity,
+                candidate_index: idx,
+            },
+        );
+    }
+
+    for (i, q) in out.iter_mut().enumerate() {
+        q.candidate_index = start_index + i;
+    }
+    out
 }
 
 fn build_queries(media: &Path) -> Vec<LyricsQuery> {
@@ -395,18 +515,25 @@ fn build_queries(media: &Path) -> Vec<LyricsQuery> {
 
     let musicmeta_path = musicmeta_sidecar_path(parent, stem);
     if let Some(meta) = read_musicmeta_sidecar(&musicmeta_path) {
-        if let Some(q) = query_from_musicmeta(&meta, duration) {
-            out.push(q);
+        if let Some((artist, title, album)) = query_from_musicmeta(&meta) {
+            out.extend(expand_query_candidates(
+                artist,
+                title,
+                album,
+                duration,
+                "canonical",
+                0,
+            ));
         }
     }
 
-    if let Some(q) = query_fallback(media, parent, stem, duration) {
-        let dup = out.iter().any(|existing| {
-            existing.artist.eq_ignore_ascii_case(&q.artist)
-                && existing.title.eq_ignore_ascii_case(&q.title)
-        });
-        if !dup {
-            out.push(q);
+    if let Some((artist, title, album)) = query_fallback_pair(media, parent, stem) {
+        let start = out.len();
+        for q in expand_query_candidates(artist, title, album, duration, "fallback", start) {
+            push_unique_query(&mut out, q);
+        }
+        for (i, q) in out.iter_mut().enumerate() {
+            q.candidate_index = i;
         }
     }
 
@@ -489,7 +616,12 @@ fn identity_agrees(query: &str, candidate: Option<&str>) -> bool {
     let Some(candidate) = candidate.map(str::trim).filter(|s| !s.is_empty()) else {
         return false;
     };
-    normalize_identity_token(query) == normalize_identity_token(candidate)
+    let q = normalize_identity_token(query);
+    let c = normalize_identity_token(candidate);
+    if q.is_empty() || c.is_empty() {
+        return false;
+    }
+    q == c
 }
 
 fn pick_search_match(query: &LyricsQuery, tracks: Vec<LrclibTrack>) -> Option<LrclibTrack> {
@@ -533,6 +665,7 @@ pub async fn fetch_lyrics_for_queries(queries: &[LyricsQuery]) -> LyricsMatchOut
                 match_step: step_get,
                 query_duration: query.duration,
                 matched_duration: duration_usable(track.duration),
+                candidate_index: Some(query.candidate_index),
             };
         }
 
@@ -543,6 +676,7 @@ pub async fn fetch_lyrics_for_queries(queries: &[LyricsQuery]) -> LyricsMatchOut
                 match_step: step_search,
                 query_duration: query.duration,
                 matched_duration: duration_usable(track.duration),
+                candidate_index: Some(query.candidate_index),
             };
         }
     }
@@ -552,6 +686,7 @@ pub async fn fetch_lyrics_for_queries(queries: &[LyricsQuery]) -> LyricsMatchOut
         match_step: "miss".to_string(),
         query_duration: queries.first().and_then(|q| q.duration),
         matched_duration: None,
+        candidate_index: None,
     }
 }
 
@@ -591,6 +726,7 @@ pub async fn ensure_lyrics_for_path_with_write(
                     duration_secs: dur.secs,
                     duration_source: dur.source.to_string(),
                     matched_duration: None,
+                    candidate_index: None,
                 });
             }
         }
@@ -609,6 +745,7 @@ pub async fn ensure_lyrics_for_path_with_write(
             duration_secs: dur.secs,
             duration_source: dur.source.to_string(),
             matched_duration: None,
+            candidate_index: None,
         });
     }
 
@@ -623,6 +760,7 @@ pub async fn ensure_lyrics_for_path_with_write(
         duration_secs: outcome.query_duration.or(dur.secs),
         duration_source: dur.source.to_string(),
         matched_duration: outcome.matched_duration,
+        candidate_index: outcome.candidate_index,
     })
 }
 
@@ -635,6 +773,7 @@ pub fn verify_no_duration_search_guard() -> (bool, Option<String>) {
         album: None,
         duration: None,
         identity: "canonical",
+        candidate_index: 0,
     };
     let tracks = vec![
         LrclibTrack {
@@ -668,6 +807,7 @@ pub fn verify_no_duration_search_miss_when_no_agree() -> bool {
         album: None,
         duration: None,
         identity: "canonical",
+        candidate_index: 0,
     };
     let tracks = vec![LrclibTrack {
         track_name: Some("Creep".into()),
@@ -827,7 +967,62 @@ mod tests {
             album: None,
             duration,
             identity: "canonical",
+            candidate_index: 0,
         }
+    }
+
+    #[test]
+    fn expand_strips_matching_artist_prefix() {
+        let qs = expand_query_candidates(
+            "Juice WRLD".into(),
+            "Juice WRLD - Relocate".into(),
+            None,
+            Some(208.0),
+            "canonical",
+            0,
+        );
+        assert_eq!(qs.len(), 2);
+        assert_eq!(qs[0].title, "Juice WRLD - Relocate");
+        assert_eq!(qs[0].candidate_index, 0);
+        assert_eq!(qs[1].artist, "Juice WRLD");
+        assert_eq!(qs[1].title, "Relocate");
+        assert_eq!(qs[1].candidate_index, 1);
+    }
+
+    #[test]
+    fn expand_title_split_for_reupload_channel() {
+        let qs = expand_query_candidates(
+            "SUMERIAN".into(),
+            "BAD OMENS - THE DEATH OF PEACE OF MIND".into(),
+            None,
+            Some(240.0),
+            "canonical",
+            0,
+        );
+        assert_eq!(qs.len(), 2);
+        assert_eq!(qs[0].artist, "SUMERIAN");
+        assert_eq!(qs[1].artist, "BAD OMENS");
+        assert_eq!(qs[1].title, "THE DEATH OF PEACE OF MIND");
+        assert_eq!(qs[1].candidate_index, 1);
+    }
+
+    #[test]
+    fn fold_query_text_undoes_ytdlp_windows_sanitization() {
+        assert_eq!(
+            fold_query_text("Dax - \u{FF02}Dear Santa\u{FF02}"),
+            "Dax - \"Dear Santa\""
+        );
+        assert_eq!(
+            fold_query_text("Five Degrees \u{29F8} Cut Lil Peep"),
+            "Five Degrees / Cut Lil Peep"
+        );
+    }
+
+    #[test]
+    fn identity_agrees_refuses_when_normalize_wipes_cjk() {
+        assert!(!identity_agrees("照井順政", Some("照井順政")));
+        assert!(!identity_agrees("Radiohead", Some("照井順政")));
+        assert!(identity_agrees("Radiohead", Some("Radiohead")));
     }
 
     #[test]

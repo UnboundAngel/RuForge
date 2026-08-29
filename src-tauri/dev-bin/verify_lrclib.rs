@@ -59,6 +59,7 @@ async fn run_smoke() {
             album: Some("Baldur's Gate 3 (Original Game Soundtrack)".into()),
             duration: Some(233.0),
             identity: "canonical",
+            candidate_index: 0,
         },
         LyricsQuery {
             artist: "Portal".into(),
@@ -66,6 +67,7 @@ async fn run_smoke() {
             album: Some("Portal".into()),
             duration: Some(176.0),
             identity: "canonical",
+            candidate_index: 0,
         },
         LyricsQuery {
             artist: "Radiohead".into(),
@@ -73,27 +75,23 @@ async fn run_smoke() {
             album: Some("OK Computer".into()),
             duration: Some(264.0),
             identity: "canonical",
+            candidate_index: 0,
         },
     ];
 
     for (i, q) in cases.iter().enumerate() {
         eprintln!("--- case {} ---", i + 1);
         eprintln!(
-            "query artist={:?} title={:?} album={:?} duration={:?} identity={}",
-            q.artist, q.title, q.album, q.duration, q.identity
+            "query artist={:?} title={:?} album={:?} duration={:?} identity={} cand={}",
+            q.artist, q.title, q.album, q.duration, q.identity, q.candidate_index
         );
         let outcome = fetch_lyrics_for_queries(std::slice::from_ref(q)).await;
         let hit = outcome.sidecar.synced_lyrics.is_some()
             || outcome.sidecar.plain_lyrics.is_some()
             || outcome.sidecar.matched_track_name.is_some();
         eprintln!("match_step={}", outcome.match_step);
+        eprintln!("candidate_index={:?}", outcome.candidate_index);
         eprintln!("raw={}", if hit { "match" } else { "miss" });
-        eprintln!(
-            "matched_track={:?} matched_artist={:?} matched_duration={:?}",
-            outcome.sidecar.matched_track_name,
-            outcome.sidecar.matched_artist_name,
-            outcome.matched_duration
-        );
         println!("{}", serde_json::to_string_pretty(&outcome.sidecar).unwrap());
     }
 
@@ -161,12 +159,13 @@ async fn run_library_report(root: &str, limit: Option<usize>, write: bool) {
     eprintln!();
 
     println!(
-        "{:<28} {:<18} {:<22} {:>8} {:<10} {:<16} {:>8}",
-        "STEM", "CANON_ARTIST", "CANON_TITLE", "DUR", "DUR_SRC", "STEP", "Δ_SEARCH"
+        "{:<26} {:<16} {:<20} {:>7} {:<9} {:<16} {:>4} {:>8}",
+        "STEM", "CANON_ARTIST", "CANON_TITLE", "DUR", "DUR_SRC", "STEP", "CAND", "Δ_SEARCH"
     );
-    println!("{}", "-".repeat(120));
+    println!("{}", "-".repeat(128));
 
     let mut step_counts: BTreeMap<&'static str, u32> = BTreeMap::new();
+    let mut cand_counts: BTreeMap<String, u32> = BTreeMap::new();
     let mut matches: u32 = 0;
     let mut dur_src_counts: BTreeMap<&'static str, u32> = BTreeMap::new();
 
@@ -180,21 +179,26 @@ async fn run_library_report(root: &str, limit: Option<usize>, write: bool) {
         *dur_src_counts.entry(dur_probe.source).or_insert(0) += 1;
 
         let result = ensure_lyrics_for_path_with_write(path, true, write).await;
-        let (step, matched_dur, synced, plain, matched_name) = match &result {
+        let (step, matched_dur, synced, plain, matched_name, cand) = match &result {
             Some(r) => (
                 r.match_step.as_str(),
                 r.matched_duration,
                 r.sidecar.synced_lyrics.clone(),
                 r.sidecar.plain_lyrics.clone(),
                 r.sidecar.matched_track_name.clone(),
+                r.candidate_index,
             ),
-            None => ("skip", None, None, None, None),
+            None => ("skip", None, None, None, None, None),
         };
 
         let bucket = step_bucket(step);
         *step_counts.entry(bucket).or_insert(0) += 1;
         if is_match(step, &synced, &plain, &matched_name) {
             matches += 1;
+            let key = cand
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "-".into());
+            *cand_counts.entry(key).or_insert(0) += 1;
         }
 
         let delta = if bucket == "search" {
@@ -210,15 +214,19 @@ async fn run_library_report(root: &str, limit: Option<usize>, write: bool) {
             .secs
             .map(|d| format!("{d:.1}"))
             .unwrap_or_else(|| "-".into());
+        let cand_s = cand
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "-".into());
 
         println!(
-            "{:<28} {:<18} {:<22} {:>8} {:<10} {:<16} {:>8}",
-            trunc(stem, 28),
-            trunc(fmt_opt(&canon_artist), 18),
-            trunc(fmt_opt(&canon_title), 22),
+            "{:<26} {:<16} {:<20} {:>7} {:<9} {:<16} {:>4} {:>8}",
+            trunc(stem, 26),
+            trunc(fmt_opt(&canon_artist), 16),
+            trunc(fmt_opt(&canon_title), 20),
             dur_s,
             dur_probe.source,
             trunc(step, 16),
+            cand_s,
             delta
         );
 
@@ -241,6 +249,10 @@ async fn run_library_report(root: &str, limit: Option<usize>, write: bool) {
     println!("step_distribution:");
     for (k, v) in &step_counts {
         println!("  {k}: {v}");
+    }
+    println!("hit_candidate_distribution:");
+    for (k, v) in &cand_counts {
+        println!("  cand_{k}: {v}");
     }
     println!("duration_source_distribution:");
     for (k, v) in &dur_src_counts {
