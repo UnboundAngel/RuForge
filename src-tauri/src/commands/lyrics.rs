@@ -1100,6 +1100,46 @@ pub async fn ensure_lyrics(
     ensure_lyrics_for_path(Path::new(&media_path), force.unwrap_or(false)).await
 }
 
+/// Manual lookup with caller-supplied artist/title, written next to `media_path`.
+#[tauri::command]
+pub async fn lookup_lyrics(
+    media_path: String,
+    artist: String,
+    title: String,
+) -> Option<LyricsEnsureResult> {
+    let media = Path::new(&media_path);
+    let parent = media.parent()?;
+    let stem = media.file_stem()?.to_str()?;
+    let sidecar_path = sidecar_path_for(parent, stem);
+
+    let artist = artist.trim();
+    let title = title.trim();
+    if artist.is_empty() || title.is_empty() {
+        return None;
+    }
+
+    let dur = probe_duration(media);
+    let queries = expand_query_candidates(
+        artist.to_string(),
+        title.to_string(),
+        None,
+        dur.secs,
+        "manual",
+        0,
+    );
+    let outcome = fetch_lyrics_for_queries(&queries).await;
+    let _ = write_sidecar(&sidecar_path, &outcome.sidecar);
+    Some(LyricsEnsureResult {
+        sidecar: outcome.sidecar,
+        from_cache: false,
+        match_step: outcome.match_step,
+        duration_secs: outcome.query_duration.or(dur.secs),
+        duration_source: dur.source.to_string(),
+        matched_duration: outcome.matched_duration,
+        candidate_index: outcome.candidate_index,
+    })
+}
+
 #[tauri::command]
 pub async fn read_lyrics(media_path: String) -> Option<LyricsSidecarDto> {
     let media = PathBuf::from(&media_path);

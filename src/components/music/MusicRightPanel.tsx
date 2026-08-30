@@ -17,10 +17,11 @@ import type { PlayHistoryEntry } from "./musicPlayHistory";
 import { MusicQueueTab } from "./MusicQueueTab";
 import { MusicHistoryTab } from "./MusicHistoryTab";
 import { MusicSegmentsTab } from "./MusicSegmentsTab";
+import { MusicNowPlayingPanel } from "./MusicNowPlayingPanel";
 import { nextQueueRowIsEndless, resolveQueueSourceLabel } from "./musicQueueSource";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 
-export type RightPanelTab = "queue" | "history" | "segments";
+export type RightPanelTab = "nowPlaying" | "queue" | "history" | "segments";
 
 /** Clear custom scrollbar thumb (right 3px + 5px wide). */
 const MINI_PANEL_RIGHT_INSET = "14px";
@@ -46,6 +47,10 @@ type Props = {
    */
   cancelFlexGap?: boolean;
   playingFile: MediaFile | null;
+  coverSrc: string | null;
+  trackTitle: string;
+  trackArtist: string;
+  audioEl: HTMLAudioElement | null;
   currentTime: number;
   duration: number;
   effectivePlaylist: MediaFile[];
@@ -60,20 +65,29 @@ type Props = {
   sbSegments: SponsorBlockSegment[];
   musicOnlySkip: boolean;
   onToggleMusicOnlySkip: () => void;
+  onToggleExpand?: () => void;
 };
 
 type MiniProps = {
   activeTab: RightPanelTab;
   onTabChange: (t: RightPanelTab) => void;
   showSegmentsTab: boolean;
+  /** Show Now Playing reopen when a track is playing and the rail is minimized. */
+  showNowPlaying: boolean;
   hintKey: number;
   /** Immersive player: match left rail pitch black. */
   shellFrame?: boolean;
 };
 
-const PANEL_WIDTH = "var(--music-right-panel-width, 272px)";
+const PANEL_WIDTH = "var(--music-right-panel-width, 320px)";
 
 type TabDef = { id: RightPanelTab; label: string; icon: ReactNode };
+
+const NOW_PLAYING_TAB: TabDef = {
+  id: "nowPlaying",
+  label: "Now Playing",
+  icon: <Icon icon="solar:music-note-bold" width={19} height={19} aria-hidden />,
+};
 
 const QUEUE_TAB: TabDef = {
   id: "queue",
@@ -93,8 +107,9 @@ const SEGMENTS_TAB: TabDef = {
   icon: <Icon icon="tabler:line-dashed" width={19} height={19} aria-hidden />,
 };
 
-function tabItemsFor(showSegmentsTab: boolean): TabDef[] {
-  return showSegmentsTab ? [QUEUE_TAB, HISTORY_TAB, SEGMENTS_TAB] : [QUEUE_TAB, HISTORY_TAB];
+function tabItemsFor(showSegmentsTab: boolean, showNowPlaying: boolean): TabDef[] {
+  const utility = showSegmentsTab ? [QUEUE_TAB, HISTORY_TAB, SEGMENTS_TAB] : [QUEUE_TAB, HISTORY_TAB];
+  return showNowPlaying ? [NOW_PLAYING_TAB, ...utility] : utility;
 }
 
 function miniPillStyle(shellFrame: boolean): CSSProperties {
@@ -113,6 +128,7 @@ export function MusicRightPanelMini({
   activeTab,
   onTabChange,
   showSegmentsTab,
+  showNowPlaying,
   hintKey,
   shellFrame = false,
 }: MiniProps) {
@@ -165,7 +181,11 @@ export function MusicRightPanelMini({
   }, [hovered, pointerInsideZone]);
 
   const showPill = hovered || hintVisible;
-  const tabItems = tabItemsFor(showSegmentsTab);
+  const tabItems = tabItemsFor(showSegmentsTab, showNowPlaying);
+  const expandTab =
+    activeTab === "nowPlaying" && !showNowPlaying
+      ? "queue"
+      : activeTab;
 
   return (
     <div
@@ -214,7 +234,7 @@ export function MusicRightPanelMini({
           <div className="flex justify-center shrink-0 h-11 items-center px-2 pt-0.5">
             <button
               type="button"
-              onClick={() => onTabChange(activeTab)}
+              onClick={() => onTabChange(expandTab)}
               className="rf-music-tooltip-anchor w-8 h-8 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
               style={{ color: "var(--music-text-secondary)" }}
               aria-label="Expand panel"
@@ -257,6 +277,10 @@ export function MusicRightPanel({
   shellFrame,
   cancelFlexGap = false,
   playingFile,
+  coverSrc,
+  trackTitle,
+  trackArtist,
+  audioEl,
   currentTime,
   duration,
   effectivePlaylist,
@@ -271,14 +295,17 @@ export function MusicRightPanel({
   sbSegments,
   musicOnlySkip,
   onToggleMusicOnlySkip,
+  onToggleExpand,
 }: Props) {
   const reduceMotion = useReducedMotion();
   const hasChapters = !!(chapters && chapters.length >= 2);
   const hasSbSegments = sbSegments.some((s) => s.actionType === "skip");
   const showSegmentsTab = hasChapters || hasSbSegments;
+  const nowPlaying = activeTab === "nowPlaying";
 
   const musicEndlessFromIndex = useRuforgeStore((s) => s.musicEndlessFromIndex);
   const musicQueueSource = useRuforgeStore((s) => s.musicQueueSource);
+  const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const nextRowIsEndless = nextQueueRowIsEndless({
     manualQueueLength: manualQueue.length,
     playlistIndex,
@@ -310,70 +337,94 @@ export function MusicRightPanel({
         className="relative h-full flex flex-col overflow-hidden min-w-0"
         style={{ width: PANEL_WIDTH }}
       >
-        <div className="shrink-0 flex items-center justify-between px-3 h-10 gap-2">
-          <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1">
-            <TabButton
-              active={activeTab === "queue"}
-              onClick={() => onTabChange("queue")}
-              label="Queue"
-            />
-            <TabButton
-              active={activeTab === "history"}
-              onClick={() => onTabChange("history")}
-              label="Recent"
-            />
-            {showSegmentsTab && (
-              <TabButton
-                active={activeTab === "segments"}
-                onClick={() => onTabChange("segments")}
-                label="Segments"
-              />
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rf-music-tooltip-anchor shrink-0 w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
-            style={{ color: "var(--music-text-secondary)" }}
-            aria-label="Minimize panel"
-            data-tooltip="Minimize panel"
-          >
-            <PanelRightClose size={15} />
-          </button>
-        </div>
-
-        <div className="flex-1 min-h-0 overflow-hidden relative">
-          <TabPanel active={activeTab === "queue"}>
-            <MusicQueueTab
+        {nowPlaying && playingFile ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <MusicNowPlayingPanel
               playingFile={playingFile}
+              coverSrc={coverSrc}
+              title={trackTitle}
+              artist={trackArtist}
+              audioEl={audioEl}
               effectivePlaylist={effectivePlaylist}
               playlistIndex={playlistIndex}
               manualQueue={manualQueue}
-              queueSource={queueSource}
+              onClose={onClose}
+              onSeek={onSeek}
               onPlay={onPlay}
+              onOpenQueue={() => onTabChange("queue")}
+              onOpenArtist={openMusicArtist}
+              shellFrame={shellFrame}
+              onToggleExpand={onToggleExpand}
             />
-          </TabPanel>
-          <TabPanel active={activeTab === "history"}>
-            <MusicHistoryTab
-              playingFile={playingFile}
-              entries={historyEntries}
-              onPlay={onPlayHistory ?? onPlay}
-            />
-          </TabPanel>
-          {showSegmentsTab && (
-            <TabPanel active={activeTab === "segments"}>
-              <MusicSegmentsTab
-                currentTime={currentTime}
-                duration={duration}
-                chapters={chapters}
-                sbSegments={sbSegments}
-                musicOnlySkip={musicOnlySkip}
-                onToggleMusicOnlySkip={onToggleMusicOnlySkip}
-                onSeek={onSeek}
-              />
-            </TabPanel>
-          )}
-        </div>
+          </div>
+        ) : (
+          <>
+            <div className="shrink-0 flex items-center justify-between px-3 h-10 gap-2">
+              <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1">
+                <TabButton
+                  active={activeTab === "queue"}
+                  onClick={() => onTabChange("queue")}
+                  label="Queue"
+                />
+                <TabButton
+                  active={activeTab === "history"}
+                  onClick={() => onTabChange("history")}
+                  label="Recent"
+                />
+                {showSegmentsTab && (
+                  <TabButton
+                    active={activeTab === "segments"}
+                    onClick={() => onTabChange("segments")}
+                    label="Segments"
+                  />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rf-music-tooltip-anchor shrink-0 w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
+                style={{ color: "var(--music-text-secondary)" }}
+                aria-label="Minimize panel"
+                data-tooltip="Minimize panel"
+              >
+                <PanelRightClose size={15} />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-hidden relative">
+              <TabPanel active={activeTab === "queue"}>
+                <MusicQueueTab
+                  playingFile={playingFile}
+                  effectivePlaylist={effectivePlaylist}
+                  playlistIndex={playlistIndex}
+                  manualQueue={manualQueue}
+                  queueSource={queueSource}
+                  onPlay={onPlay}
+                />
+              </TabPanel>
+              <TabPanel active={activeTab === "history"}>
+                <MusicHistoryTab
+                  playingFile={playingFile}
+                  entries={historyEntries}
+                  onPlay={onPlayHistory ?? onPlay}
+                />
+              </TabPanel>
+              {showSegmentsTab && (
+                <TabPanel active={activeTab === "segments"}>
+                  <MusicSegmentsTab
+                    currentTime={currentTime}
+                    duration={duration}
+                    chapters={chapters}
+                    sbSegments={sbSegments}
+                    musicOnlySkip={musicOnlySkip}
+                    onToggleMusicOnlySkip={onToggleMusicOnlySkip}
+                    onSeek={onSeek}
+                  />
+                </TabPanel>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </aside>
   );

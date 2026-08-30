@@ -87,6 +87,18 @@ export function ensureLyrics(
   });
 }
 
+export function lookupLyrics(
+  mediaPath: string,
+  artist: string,
+  title: string,
+): Promise<LyricsEnsureResult | null> {
+  return invoke<LyricsEnsureResult | null>("lookup_lyrics", {
+    mediaPath,
+    artist,
+    title,
+  });
+}
+
 /** Largest index with line.time <= t, or -1 before the first stamp. */
 export function activeLineIndex(lines: LyricsLine[], t: number): number {
   let lo = 0;

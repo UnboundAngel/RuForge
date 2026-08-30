@@ -1,4 +1,4 @@
-import { Children, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronLeft, Disc3, Heart, Music2, Play } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -30,6 +30,7 @@ import {
 } from "./musicListenStats";
 import { musicQueueSource } from "./musicQueueSource";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { MusicEdgeSquishScroll } from "./MusicEdgeSquishScroll";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -131,91 +132,12 @@ function GlanceStat({ label, value, hint, labelTone, onClick }: GlanceStatProps)
 }
 
 function ProfileScrollRow({ title, children }: { title: string; children: ReactNode }) {
-  const clipRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [fadeLeft, setFadeLeft] = useState(false);
-  const [fadeRight, setFadeRight] = useState(false);
-
-  useEffect(() => {
-    const clip = clipRef.current;
-    const scroll = scrollRef.current;
-    if (!clip || !scroll) return;
-
-    const applyCoverSquish = (cover: HTMLElement, ratio: number, rootBounds: DOMRect) => {
-      if (ratio >= 0.995) {
-        cover.style.transform = "";
-        cover.style.transformOrigin = "";
-        return;
-      }
-
-      const scale = 0.88 + ratio * 0.12;
-      const rect = cover.getBoundingClientRect();
-      const clipRight = rect.right > rootBounds.right + 0.5;
-      const clipLeft = rect.left < rootBounds.left - 0.5;
-      cover.style.transform = `scale(${scale.toFixed(3)})`;
-      cover.style.transformOrigin = clipRight && !clipLeft
-        ? "right center"
-        : clipLeft && !clipRight
-          ? "left center"
-          : "center center";
-    };
-
-    const sync = () => {
-      const rootBounds = clip.getBoundingClientRect();
-      const overflow = scroll.scrollWidth > scroll.clientWidth + 4;
-      setFadeLeft(overflow && scroll.scrollLeft > 4);
-      setFadeRight(overflow && scroll.scrollLeft < scroll.scrollWidth - scroll.clientWidth - 4);
-
-      for (const item of scroll.children) {
-        if (!(item instanceof HTMLElement)) continue;
-        const cover = item.querySelector<HTMLElement>("[data-profile-scroll-cover]");
-        if (!cover) continue;
-
-        const rect = cover.getBoundingClientRect();
-        const visibleLeft = Math.max(rect.left, rootBounds.left);
-        const visibleRight = Math.min(rect.right, rootBounds.right);
-        const visibleWidth = Math.max(0, visibleRight - visibleLeft);
-        const ratio = rect.width > 0 ? visibleWidth / rect.width : 1;
-        applyCoverSquish(cover, ratio, rootBounds);
-      }
-    };
-
-    sync();
-    scroll.addEventListener("scroll", sync, { passive: true });
-    const ro = new ResizeObserver(sync);
-    ro.observe(scroll);
-    ro.observe(clip);
-    const mo = new MutationObserver(sync);
-    mo.observe(scroll, { childList: true, subtree: true });
-
-    return () => {
-      scroll.removeEventListener("scroll", sync);
-      ro.disconnect();
-      mo.disconnect();
-    };
-  }, [children]);
-
   return (
     <section>
       <SectionLabel>{title}</SectionLabel>
-      <div
-        ref={clipRef}
-        className="rf-profile-scroll-clip overflow-hidden min-w-0"
-        data-fade-left={fadeLeft ? "true" : undefined}
-        data-fade-right={fadeRight ? "true" : undefined}
-      >
-        <div
-          ref={scrollRef}
-          className="flex gap-5 sm:gap-6 overflow-x-auto pb-2 px-0.5 scroll-smooth rf-scrollbar"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-        >
-          {Children.map(children, (child) => (
-            <div key={child && typeof child === "object" && "key" in child ? child.key : undefined} className="shrink-0">
-              {child}
-            </div>
-          ))}
-        </div>
-      </div>
+      <MusicEdgeSquishScroll contentClassName="gap-5 sm:gap-6 pb-2">
+        {children}
+      </MusicEdgeSquishScroll>
     </section>
   );
 }
