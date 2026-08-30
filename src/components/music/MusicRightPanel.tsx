@@ -305,8 +305,9 @@ export function MusicRightPanel({
   const nowPlaying = activeTab === "nowPlaying";
 
   // WebView2: a full-width body kept clipped at width 0 can leave a blank
-  // composited layer after expand (clickable, invisible). Mount only while open;
-  // open width snaps so the first paint is full-size; close still eases shut.
+  // composited layer after expand (clickable, invisible). Keep the aside in
+  // the flex row so width can ease both ways; mount the body only while open
+  // (and through the close ease) so nothing stays painted at width 0.
   const [bodyMounted, setBodyMounted] = useState(open);
   const [bodyGen, setBodyGen] = useState(0);
   useEffect(() => {
@@ -349,8 +350,7 @@ export function MusicRightPanel({
         background: panelBg,
         borderRadius: "var(--music-panel-radius)",
         pointerEvents: open ? "auto" : "none",
-        // Snap open (avoids blank WebView2 layer); ease closed only.
-        transition: reduceMotion || open ? undefined : PANEL_WIDTH_TRANSITION,
+        transition: reduceMotion ? undefined : PANEL_WIDTH_TRANSITION,
       }}
       aria-hidden={!open}
     >

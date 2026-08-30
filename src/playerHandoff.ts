@@ -40,6 +40,8 @@ export type PlayInMusicMiniPayload = {
   musicEndlessExtended?: boolean;
   musicEndlessFromIndex?: number | null;
   musicLikedKeys?: string[];
+  musicShuffleOn?: boolean;
+  musicShuffleBasePlaylist?: MediaFile[];
 };
 
 export type SendToMusicMainPayload = {

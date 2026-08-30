@@ -89,7 +89,12 @@ function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: 
 }
 
 type Props = {
-  onPlayFile: (file: MediaFile, playlist: MediaFile[], source: MusicQueueSource) => void;
+  onPlayFile: (
+    file: MediaFile,
+    playlist: MediaFile[],
+    source: MusicQueueSource,
+    opts?: { shuffle?: boolean },
+  ) => void;
   onBack: () => void;
 };
 
@@ -122,7 +127,7 @@ export function MusicLikedView({ onPlayFile, onBack }: Props) {
       likedKeys: musicLikedKeys,
       seed: Date.now() & 0xffffffff,
     });
-    onPlayFile(shuffled[0]!, shuffled, LIKED_SOURCE);
+    onPlayFile(shuffled[0]!, tracks, LIKED_SOURCE, { shuffle: true });
   };
 
   return (

@@ -59,6 +59,7 @@ import { MigrateLibraryModal } from './MigrateLibraryModal';
 import { MusicMetaBackfillModal } from './MusicMetaBackfillModal';
 import { DevCapturesSection } from './dev-captures/DevCapturesSection';
 import { CompanionSettingsSection } from './settings/CompanionSettingsSection';
+import { AccentColorPicker } from './settings/AccentColorPicker';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { useDenoStatus } from '../hooks/useDenoStatus';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
@@ -614,8 +615,6 @@ export const SettingsView: React.FC<{
     invokeError: denoError,
     install: installDeno,
   } = useDenoStatus(activeTab === "downloads");
-
-  const accentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => setAppVersion(null));
@@ -1935,30 +1934,14 @@ export const SettingsView: React.FC<{
                   title="Accent Color"
                   description="Primary color for buttons and highlights."
                   control={
-                    <div className="flex items-center gap-2">
-                      <input
-                        ref={accentInputRef}
-                        type="color"
-                        className="sr-only"
-                        aria-label="Pick accent color"
-                        value={
-                          typeof settings.accentColor === "string" && settings.accentColor.startsWith("#")
-                            ? settings.accentColor
-                            : "#EDCF9B"
-                        }
-                        onChange={(e) => updateSetting("accentColor", e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => accentInputRef.current?.click()}
-                        className="p-1.5 bg-[#1D1613] rounded-2xl shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] border border-white/5"
-                      >
-                        <div
-                          className="w-10 h-10 rounded-xl border-2 border-white/10 shadow-lg cursor-pointer active:scale-90 transition-transform"
-                          style={{ backgroundColor: settings.accentColor }}
-                        />
-                      </button>
-                    </div>
+                    <AccentColorPicker
+                      value={
+                        typeof settings.accentColor === "string" && settings.accentColor.startsWith("#")
+                          ? settings.accentColor
+                          : "#EDCF9B"
+                      }
+                      onChange={(hex) => updateSetting("accentColor", hex)}
+                    />
                   }
                 />
                 <SettingItem

@@ -167,7 +167,12 @@ function HomeFilterPill({ filter, isActive, compact, onSelect }: HomeFilterPillP
 }
 
 type MusicHomeViewProps = {
-  onPlayFile: (file: MediaFile, playlist?: MediaFile[], source?: MusicQueueSource | null) => void;
+  onPlayFile: (
+    file: MediaFile,
+    playlist?: MediaFile[],
+    source?: MusicQueueSource | null,
+    opts?: { shuffle?: boolean },
+  ) => void;
   onOpenArtist: (artistKey: string) => void;
   onOpenAlbum: (artistKey: string, albumKey: string) => void;
   onSearchYoutubeMusic?: (query: string) => void;

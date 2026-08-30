@@ -32,16 +32,11 @@ import { primaryArtist } from "@/components/music/musicArtist";
 import { musicTrackIdentityKey } from "@/components/music/musicShelfDedup";
 import { MUSIC_MINI_VOLUME_KEY } from "./musicMiniConstants";
 import {
-  beginListenSession,
-  endListenSession,
-  flushListenSessionAccum,
-  onListenTimeUpdateTick,
-  pauseListenAccumulator,
-  setPendingListenEndReason,
-  stageHandoffListenEventId,
-  takePendingListenEndReason,
-  tickListenAccumulator,
-} from "@/lib/musicListenSession";
+  buildShuffledQueueFromBase,
+  readMusicShuffleOnFromLs,
+  restoreQueueFromBase,
+  writeMusicShuffleOnToLs,
+} from "@/components/music/musicShuffleQueue";
 
 export type TrackDirection = "next" | "prev" | null;
 
@@ -140,7 +135,8 @@ export function useMusicMiniPlayback() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loopMode, setLoopMode] = useState<LoopMode>("off");
-  const [shuffled, setShuffled] = useState(false);
+  const [shuffled, setShuffled] = useState(readMusicShuffleOnFromLs);
+  const [shuffleBase, setShuffleBase] = useState<MediaFile[]>([]);
   const [direction, setDirection] = useState<TrackDirection>(null);
   const [volume, setVolume] = useState(readStoredVolume);
   const [muted, setMuted] = useState(false);
@@ -255,6 +251,17 @@ export function useMusicMiniPlayback() {
       setMusicLikedKeys(payload.musicLikedKeys ?? []);
       sessionRecentKeysRef.current = [];
       setLoopMode(loopModeFromHandoff(payload));
+      const base =
+        payload.musicShuffleBasePlaylist?.length
+          ? payload.musicShuffleBasePlaylist
+          : snapshot;
+      setShuffleBase(base);
+      const shuffleOn =
+        typeof payload.musicShuffleOn === "boolean"
+          ? payload.musicShuffleOn
+          : readMusicShuffleOnFromLs();
+      setShuffled(shuffleOn);
+      writeMusicShuffleOnToLs(shuffleOn);
       if (typeof payload.volume === "number") {
         setVolume(payload.volume);
         writeStoredVolume(payload.volume);
@@ -607,7 +614,40 @@ export function useMusicMiniPlayback() {
       return next;
     });
   }, [playingFile]);
-  const toggleShuffle = useCallback(() => setShuffled((s) => !s), []);
+
+  const toggleShuffle = useCallback(() => {
+    setShuffled((prev) => {
+      const next = !prev;
+      writeMusicShuffleOnToLs(next);
+      if (!playingFile) return next;
+
+      if (!next) {
+        const restored = restoreQueueFromBase(
+          shuffleBase.length > 0 ? shuffleBase : effectivePlaylist,
+          playingFile,
+        );
+        if (restored) {
+          setEffectivePlaylist(restored);
+          const idx = restored.findIndex((f) => f.path === playingFile.path);
+          if (idx >= 0) setPlaylistIndex(idx);
+        }
+        return next;
+      }
+
+      const base = shuffleBase.length > 0 ? shuffleBase : effectivePlaylist;
+      setShuffleBase(base);
+      if (base.length > 1) {
+        const queue = buildShuffledQueueFromBase({
+          base,
+          current: playingFile,
+          likedKeys: musicLikedKeys,
+        });
+        setEffectivePlaylist(queue);
+        setPlaylistIndex(0);
+      }
+      return next;
+    });
+  }, [playingFile, shuffleBase, effectivePlaylist, musicLikedKeys]);
 
   const persistPosition = useCallback(() => {
     const el = audioRef.current;

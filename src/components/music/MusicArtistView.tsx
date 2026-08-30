@@ -326,7 +326,12 @@ function SectionLabel({ children, mutedColor }: { children: React.ReactNode; mut
 
 type Props = {
   artistKey: string;
-  onPlayFile: (file: MediaFile, playlist: MediaFile[], source: MusicQueueSource) => void;
+  onPlayFile: (
+    file: MediaFile,
+    playlist: MediaFile[],
+    source: MusicQueueSource,
+    opts?: { shuffle?: boolean },
+  ) => void;
   onOpenAlbum: (albumKey: string) => void;
   onBack: () => void;
 };
@@ -450,7 +455,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
       likedKeys: musicLikedKeys,
       seed: Date.now() & 0xffffffff,
     });
-    onPlayFile(shuffled[0]!, shuffled, artistSource);
+    onPlayFile(shuffled[0]!, tracks, artistSource, { shuffle: true });
   };
 
   if (tracks.length === 0) {

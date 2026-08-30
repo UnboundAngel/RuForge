@@ -1081,9 +1081,10 @@ export function MusicShell() {
     file: MediaFile,
     playlist?: MediaFile[],
     source?: MusicQueueSource | null,
+    opts?: { shuffle?: boolean },
   ) => {
     setPendingListenEndReason("manual_switch");
-    playMusicQueue(file, playlist ?? [file], source ?? null);
+    playMusicQueue(file, playlist ?? [file], source ?? null, opts);
   }, [playMusicQueue]);
 
   const handleBack = useCallback(() => {
