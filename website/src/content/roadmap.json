@@ -167,7 +167,7 @@
     "difficulty": "Medium",
     "featureName": "Download dock with expandable hero popup",
     "priority": "High",
-    "status": "To-Do",
+    "status": "Finished",
     "roadmapStatus": "progress"
   },
   {
@@ -189,7 +189,7 @@
     "difficulty": "High",
     "featureName": "User-created playlists from library items",
     "priority": "Extremely important",
-    "status": "To-Do",
+    "status": "Finished",
     "roadmapStatus": "progress"
   },
   {
@@ -295,7 +295,7 @@
     "difficulty": "Medium",
     "featureName": "Theme and accent picker",
     "priority": "Medium",
-    "status": "To-Do"
+    "status": "Finished"
   },
   {
     "appArea": "Settings Screen",

@@ -1,0 +1,105 @@
+{
+  "nodes": [
+    {
+      "id": "t-settings-popup",
+      "type": "task",
+      "label": "Settings centered popup",
+      "agent": "chad",
+      "details": [
+        "Settings is a centered popup with categorized top tabs, search, and height morph polish."
+      ],
+      "files": ["src/components/SettingsView.tsx", "src/App.tsx"]
+    },
+    {
+      "id": "t-download-dock",
+      "type": "task",
+      "label": "Download rail dock overlay",
+      "agent": "chad",
+      "details": [
+        "Library is home; download opens from the rail dock with immersive prepare/download/finish hero and dock morph."
+      ],
+      "files": [
+        "src/components/downloader/ImmersiveDownloadHero.tsx",
+        "src/components/downloader/DownloaderOverlay.tsx",
+        "src/components/DownloaderView.tsx"
+      ]
+    },
+    {
+      "id": "t-virtual-playlists",
+      "type": "task",
+      "label": "Video virtual playlists",
+      "agent": "chad",
+      "details": [
+        "Watch Later and user virtual playlists with create/add/remove and YouTube-style detail."
+      ],
+      "files": ["src/virtualPlaylists.ts", "src/components/PlaylistDetailView.tsx", "src/components/MediaView.tsx"]
+    },
+    {
+      "id": "t-music-lyrics-rail",
+      "type": "task",
+      "label": "Lyrics and Now Playing rail",
+      "agent": "chad",
+      "details": [
+        "LRCLIB lyrics with cache/lookup; Now Playing right rail; sticky shuffle; Spotify-style transport."
+      ],
+      "files": [
+        "src/components/music/MusicLyricsView.tsx",
+        "src/components/music/MusicNowPlayingPanel.tsx",
+        "src/lib/lyrics.ts"
+      ]
+    },
+    {
+      "id": "t-discord-presence",
+      "type": "task",
+      "label": "Discord Rich Presence",
+      "agent": "chad",
+      "details": [
+        "Optional Rich Presence for watching, listening, downloading, and browsing; staleness clear; stable browse timer."
+      ],
+      "files": [
+        "src/lib/discordPresenceTransport.ts",
+        "src-tauri/src/discord_rpc/mod.rs",
+        "src/lib/onboardingSteps.ts"
+      ]
+    },
+    {
+      "id": "t-accent-picker",
+      "type": "task",
+      "label": "Custom accent color picker",
+      "agent": "chad",
+      "details": [
+        "Dark accent color picker beside the Accent Color swatch in Settings."
+      ],
+      "files": ["src/components/settings/AccentColorPicker.tsx", "src/components/SettingsView.tsx"]
+    },
+    {
+      "id": "f-download-queue",
+      "type": "fix",
+      "label": "Multi-download prepare hang and staging UX",
+      "agent": "chad",
+      "details": [
+        "Internal cookie prepare hang fixed; held multi-link no longer fakes Preparing; Stop/Clear dismiss the batch."
+      ],
+      "files": [
+        "src-tauri/src/commands/downloader.rs",
+        "src/components/downloader/useDownloaderView.ts"
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-settings-popup" },
+    { "source": "t-settings-popup", "target": "ruforge" },
+    { "source": "chad", "target": "t-download-dock" },
+    { "source": "t-download-dock", "target": "ruforge" },
+    { "source": "chad", "target": "t-virtual-playlists" },
+    { "source": "t-virtual-playlists", "target": "ruforge" },
+    { "source": "chad", "target": "t-music-lyrics-rail" },
+    { "source": "t-music-lyrics-rail", "target": "ruforge" },
+    { "source": "chad", "target": "t-discord-presence" },
+    { "source": "t-discord-presence", "target": "ruforge" },
+    { "source": "chad", "target": "t-accent-picker" },
+    { "source": "t-accent-picker", "target": "ruforge" },
+    { "source": "chad", "target": "f-download-queue" },
+    { "source": "f-download-queue", "target": "ruforge" }
+  ]
+}

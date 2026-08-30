@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 
 pub const CLIENT_ID: &str = "1535637767730626720";
 pub const SET_ACTIVITY_FLOOR: Duration = Duration::from_secs(15);
+/// Clear Discord card if the main webview stops heartbeating (destroyed / hung).
+pub const STALE_AFTER: Duration = Duration::from_secs(45);
 
 const BACKOFF_STEPS: &[Duration] = &[
     Duration::from_secs(2),
@@ -229,6 +231,7 @@ fn worker_loop(rx: Receiver<WorkerMsg>, status: Arc<Mutex<SharedStatus>>) {
     let mut dirty = false;
     let mut force_flush = false;
     let mut last_send_at: Option<Instant> = None;
+    let mut last_ui_at: Option<Instant> = None;
     let mut backoff_idx = 0usize;
     let mut next_connect_at = Instant::now();
     let mut shutting_down = false;
@@ -239,12 +242,14 @@ fn worker_loop(rx: Receiver<WorkerMsg>, status: Arc<Mutex<SharedStatus>>) {
                 Ok(WorkerMsg::SetEnabled(next)) => {
                     enabled = next;
                     set_status(&status, |s| s.enabled = next);
+                    last_ui_at = Some(Instant::now());
                     if !next {
                         desired = None;
                         dirty = false;
                         force_flush = true;
                         backoff_idx = 0;
                         last_send_at = None;
+                        last_ui_at = None;
                     } else {
                         // Remount / re-enable must re-issue SET_ACTIVITY even when the
                         // snapshot is unchanged. Discord may have dropped the card while
@@ -259,6 +264,8 @@ fn worker_loop(rx: Receiver<WorkerMsg>, status: Arc<Mutex<SharedStatus>>) {
                     }
                 }
                 Ok(WorkerMsg::SetActivity(payload)) => {
+                    // Heartbeat even when payload matches last_sent (UI still alive).
+                    last_ui_at = Some(Instant::now());
                     if Some(&payload) == last_sent.as_ref() && Some(&payload) == desired.as_ref() {
                         continue;
                     }
@@ -266,6 +273,7 @@ fn worker_loop(rx: Receiver<WorkerMsg>, status: Arc<Mutex<SharedStatus>>) {
                     dirty = true;
                 }
                 Ok(WorkerMsg::Clear) => {
+                    last_ui_at = Some(Instant::now());
                     desired = None;
                     dirty = false;
                     force_flush = true;
@@ -310,6 +318,18 @@ fn worker_loop(rx: Receiver<WorkerMsg>, status: Arc<Mutex<SharedStatus>>) {
             }
             thread::sleep(WORKER_TICK);
             continue;
+        }
+
+        // Main webview gone / hung: drop the card so Discord does not keep stale presence.
+        if last_sent.is_some()
+            && last_ui_at
+                .map(|t| t.elapsed() >= STALE_AFTER)
+                .unwrap_or(false)
+        {
+            desired = None;
+            dirty = false;
+            force_flush = true;
+            last_ui_at = None;
         }
 
         if client.is_none() {

@@ -37,6 +37,17 @@ import {
   restoreQueueFromBase,
   writeMusicShuffleOnToLs,
 } from "@/components/music/musicShuffleQueue";
+import {
+  beginListenSession,
+  endListenSession,
+  flushListenSessionAccum,
+  onListenTimeUpdateTick,
+  pauseListenAccumulator,
+  setPendingListenEndReason,
+  stageHandoffListenEventId,
+  takePendingListenEndReason,
+  tickListenAccumulator,
+} from "@/lib/musicListenSession";
 
 export type TrackDirection = "next" | "prev" | null;
 

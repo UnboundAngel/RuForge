@@ -25,6 +25,21 @@ type DiscordActivityPayload = {
   smallText: string | null;
 };
 
+/** Keep browse elapsed time across tab swaps (library ↔ explorer ↔ settings). */
+let browseSessionStartedAt: number | null = null;
+
+type MediaSessionAnchor = {
+  identity: string;
+  startTimestamp: number;
+  endTimestamp: number | null;
+};
+
+/** Stable progress bar while the same track plays (ignore brief currentTime=0 flickers). */
+let mediaSession: MediaSessionAnchor | null = null;
+
+/** Must stay under Rust STALE_AFTER (3 × 15s floor). */
+const HEARTBEAT_MS = 15_000;
+
 function isMainPresenceWindow(): boolean {
   try {
     const label = getCurrentWindow().label;
@@ -62,6 +77,11 @@ function nowUnix(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+function resetPresenceSessions() {
+  browseSessionStartedAt = null;
+  mediaSession = null;
+}
+
 function baseAssets(): Pick<
   DiscordActivityPayload,
   "largeImage" | "largeText" | "smallImage" | "smallText"
@@ -84,31 +104,76 @@ function mediaPayload(
   currentTime: number,
   duration: number,
 ): DiscordActivityPayload {
-  let startTimestamp: number | null = null;
-  let endTimestamp: number | null = null;
-  if (!paused) {
-    const t = Math.max(0, currentTime);
-    startTimestamp = nowUnix() - Math.floor(t);
-    if (duration > 0 && Number.isFinite(duration)) {
-      endTimestamp = startTimestamp + Math.floor(duration);
-    }
+  browseSessionStartedAt = null;
+
+  if (paused) {
+    mediaSession = null;
+    return {
+      kind,
+      details,
+      state,
+      startTimestamp: null,
+      endTimestamp: null,
+      ...baseAssets(),
+    };
   }
+
+  const t = Math.max(0, currentTime);
+  const dur = duration > 0 && Number.isFinite(duration) ? Math.floor(duration) : 0;
+  const identity = `${kind}\0${details}\0${state ?? ""}\0${dur}`;
+  const computedStart = nowUnix() - Math.floor(t);
+  const computedEnd = dur > 0 ? computedStart + dur : null;
+
+  // Tab swaps can briefly report 0:00 while the same track is still playing.
+  if (
+    mediaSession &&
+    mediaSession.identity === identity &&
+    t < 1.5 &&
+    nowUnix() - mediaSession.startTimestamp > 3
+  ) {
+    return {
+      kind,
+      details,
+      state,
+      startTimestamp: mediaSession.startTimestamp,
+      endTimestamp: mediaSession.endTimestamp,
+      ...baseAssets(),
+    };
+  }
+
+  if (
+    !mediaSession ||
+    mediaSession.identity !== identity ||
+    Math.abs(mediaSession.startTimestamp - computedStart) > 2
+  ) {
+    mediaSession = {
+      identity,
+      startTimestamp: computedStart,
+      endTimestamp: computedEnd,
+    };
+  }
+
   return {
     kind,
     details,
     state,
-    startTimestamp,
-    endTimestamp,
+    startTimestamp: mediaSession.startTimestamp,
+    endTimestamp: mediaSession.endTimestamp,
     ...baseAssets(),
   };
 }
 
 function browsePayload(details: string): DiscordActivityPayload {
+  mediaSession = null;
+  if (browseSessionStartedAt == null) {
+    browseSessionStartedAt = nowUnix();
+  }
   return {
     kind: "playing",
     details,
     state: null,
-    startTimestamp: null,
+    // Stable start so Discord elapsed time does not reset on every page swap.
+    startTimestamp: browseSessionStartedAt,
     endTimestamp: null,
     ...baseAssets(),
   };
@@ -231,11 +296,13 @@ export function setupDiscordPresenceTransport(): () => void {
         if (lastEnabled !== enabled) {
           await invoke("discord_rpc_set_enabled", { enabled });
           lastEnabled = enabled;
+          if (!enabled) resetPresenceSessions();
         }
         if (!enabled) continue;
 
         const snapshot = buildSnapshot();
         if (!snapshot) {
+          resetPresenceSessions();
           await invoke("discord_rpc_clear_activity");
         } else {
           await invoke("discord_rpc_set_activity", { payload: snapshot });
@@ -259,6 +326,7 @@ export function setupDiscordPresenceTransport(): () => void {
   refresh();
   const unsubBridge = subscribeMainPlaybackBridge(refresh);
   const unsubStore = useRuforgeStore.subscribe(refresh);
+  const heartbeat = window.setInterval(refresh, HEARTBEAT_MS);
 
   void invoke<DiscordRpcStatus>("discord_rpc_status")
     .then((status) => {
@@ -269,8 +337,10 @@ export function setupDiscordPresenceTransport(): () => void {
     .catch((err) => console.error("[discord-presence] status", err));
 
   return () => {
+    window.clearInterval(heartbeat);
     unsubBridge();
     unsubStore();
+    resetPresenceSessions();
   };
 }
 
