@@ -22,7 +22,9 @@ import { MusicExploreDownloadPanel } from "./MusicExploreDownloadPanel";
 import { ExploreDownloadDockChip } from "./MusicExploreDownloadCollapsed";
 import { useMusicDownloadCelebrations } from "@/hooks/useMusicDownloadCelebrations";
 import { NowPlayingBar } from "./NowPlayingBar";
+import { MusicLyricsView } from "./MusicLyricsView";
 import { MusicStorageStrip } from "./MusicStorageStrip";
+import { readLyrics, sidecarHasLyrics } from "@/lib/lyrics";
 import { useMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { AudioHeroStage } from "@/components/player/AudioHeroStage";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
@@ -133,7 +135,10 @@ type ExpandedOverlayProps = {
   isPaused: boolean;
   isMuted: boolean;
   skipDir: IslandSkipDir;
+  lyricsOpen: boolean;
+  onSeek: (seconds: number) => void;
   onTogglePlay: () => void;
+  onLyricsAvailabilityChange?: (available: boolean) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
 
@@ -143,7 +148,10 @@ function ExpandedOverlay({
   isPaused,
   isMuted,
   skipDir,
+  lyricsOpen,
+  onSeek,
   onTogglePlay,
+  onLyricsAvailabilityChange,
   onContextMenu,
 }: ExpandedOverlayProps) {
   const playingFile = useRuforgeStore((s) => s.playingFile);
@@ -169,42 +177,55 @@ function ExpandedOverlay({
         onContextMenu?.(e);
       }}
     >
-      <AudioHeroStage
-        coverSrc={coverSrc}
-        audioEl={audioEl}
-        connectKey={trackKey}
-        skipDir={skipDir}
-        isPaused={isPaused}
-        isMuted={isMuted}
-        layer="foreground"
-        onTogglePlay={onTogglePlay}
-      />
-      <div className="absolute bottom-6 left-0 right-0 z-20 px-6 max-w-lg mx-auto w-full overflow-hidden">
-        <AnimatePresence initial={false} custom={skipDir} mode="sync">
-          <motion.div
-            key={trackKey || "empty-meta"}
-            custom={skipDir}
-            variants={metaVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={metaTransition}
-            className="flex flex-col items-center gap-1 w-full"
-          >
-            <MarqueeText
-              text={playingFile?.name ?? ""}
-              className="text-base font-semibold text-white/90 w-full"
-              centered
-            />
-            {artist && (
-              <div className="text-sm text-white/55 text-center w-full truncate">{artist}</div>
-            )}
-            {playingFile?.album && (
-              <div className="text-xs text-white/35 text-center w-full truncate">{playingFile.album}</div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+      {lyricsOpen && playingFile ? (
+        <MusicLyricsView
+          mediaPath={playingFile.path}
+          audioEl={audioEl}
+          title={playingFile.name}
+          artist={artist}
+          onSeek={onSeek}
+          onAvailabilityChange={onLyricsAvailabilityChange}
+        />
+      ) : (
+        <>
+          <AudioHeroStage
+            coverSrc={coverSrc}
+            audioEl={audioEl}
+            connectKey={trackKey}
+            skipDir={skipDir}
+            isPaused={isPaused}
+            isMuted={isMuted}
+            layer="foreground"
+            onTogglePlay={onTogglePlay}
+          />
+          <div className="absolute bottom-6 left-0 right-0 z-20 px-6 max-w-lg mx-auto w-full overflow-hidden">
+            <AnimatePresence initial={false} custom={skipDir} mode="sync">
+              <motion.div
+                key={trackKey || "empty-meta"}
+                custom={skipDir}
+                variants={metaVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={metaTransition}
+                className="flex flex-col items-center gap-1 w-full"
+              >
+                <MarqueeText
+                  text={playingFile?.name ?? ""}
+                  className="text-base font-semibold text-white/90 w-full"
+                  centered
+                />
+                {artist && (
+                  <div className="text-sm text-white/55 text-center w-full truncate">{artist}</div>
+                )}
+                {playingFile?.album && (
+                  <div className="text-xs text-white/35 text-center w-full truncate">{playingFile.album}</div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -214,6 +235,8 @@ export function MusicShell() {
   const activeView = useRuforgeStore((s) => s.musicView);
   const setMusicView = useRuforgeStore((s) => s.setMusicView);
   const [playerExpanded, setPlayerExpanded] = useState(false);
+  const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [lyricsAvailable, setLyricsAvailable] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState<MusicExpandedContextMenuState | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [currentMusicExploreUrl, setCurrentMusicExploreUrl] = useState("");
@@ -504,6 +527,21 @@ export function MusicShell() {
 
   useEffect(() => {
     setExpandedMenu(null);
+  }, [playingFile?.path]);
+
+  useEffect(() => {
+    const path = playingFile?.path;
+    if (!path) {
+      setLyricsAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    void readLyrics(path).then((sidecar) => {
+      if (!cancelled) setLyricsAvailable(sidecarHasLyrics(sidecar));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [playingFile?.path]);
 
   const resyncExploreWebview = useCallback(() => {
@@ -1006,7 +1044,18 @@ export function MusicShell() {
   }, [cycleNavMode]);
 
   const handleToggleExpand = useCallback(() => {
-    setPlayerExpanded((prev) => !prev);
+    setPlayerExpanded((prev) => {
+      if (prev) setLyricsOpen(false);
+      return !prev;
+    });
+  }, []);
+
+  const handleToggleLyrics = useCallback(() => {
+    setLyricsOpen((prev) => {
+      const next = !prev;
+      if (next) setPlayerExpanded(true);
+      return next;
+    });
   }, []);
 
   const handleReloadExplore = useCallback(async () => {
@@ -1281,7 +1330,10 @@ export function MusicShell() {
                       isPaused={playback.paused}
                       isMuted={isMuted}
                       skipDir={heroSkipDir}
+                      lyricsOpen={lyricsOpen}
+                      onSeek={playback.seek}
                       onTogglePlay={playback.togglePlay}
+                      onLyricsAvailabilityChange={setLyricsAvailable}
                       onContextMenu={(e) => {
                         if (!playingFile) return;
                         setExpandedMenu({ x: e.clientX, y: e.clientY });
@@ -1465,6 +1517,8 @@ export function MusicShell() {
                 currentTime={playback.currentTime}
                 duration={playback.duration}
                 expanded={playerExpanded}
+                lyricsOpen={lyricsOpen}
+                lyricsAvailable={lyricsAvailable}
                 playbackSpeed={playback.playbackSpeed}
                 crossfadeSec={playback.crossfadeSec}
                 hasChapters={playback.hasChapters}
@@ -1473,7 +1527,6 @@ export function MusicShell() {
                 onTogglePlay={playback.togglePlay}
                 onSkipPrev={playback.skipPrev}
                 onSkipNext={playback.skipNext}
-                onSkipBySeconds={playback.skipBySeconds}
                 onJumpPrevChapter={playback.jumpPrevChapter}
                 onJumpNextChapter={playback.jumpNextChapter}
                 onSetPlaybackSpeed={playback.setPlaybackSpeed}
@@ -1481,6 +1534,7 @@ export function MusicShell() {
                 onBeginScrub={playback.beginScrub}
                 onReleaseScrub={playback.releaseScrub}
                 onToggleExpand={handleToggleExpand}
+                onToggleLyrics={handleToggleLyrics}
                 rightPanelOpen={rightPanelOpen}
                 onToggleRightPanel={() => setRightPanelOpen((p) => !p)}
               />
@@ -1516,7 +1570,10 @@ export function MusicShell() {
           setRightPanelTab("queue");
           setRightPanelOpen(true);
         }}
-        onCollapse={() => setPlayerExpanded(false)}
+        onCollapse={() => {
+          setLyricsOpen(false);
+          setPlayerExpanded(false);
+        }}
       />
     </div>
   );

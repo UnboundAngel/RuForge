@@ -3,20 +3,21 @@
 //! ```text
 //! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib
 //! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib -- library <root> [N]
-//! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib -- library <root> [N] --sorted
-//! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib -- library <root> [N] --write
+//! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib -- library <root> [N] [--sorted] [--write]
+//! cargo run -p ruforge --features dev-verify-bins --bin verify_lrclib -- backfill <root> [root...]
 //! ```
 //!
 //! Library mode defaults to seeded random sample + dry-run (no sidecar writes).
 //! `--sorted` restores the alphabetical path prefix. `--write` persists `.lyrics.json`.
+//! `backfill` mirrors `backfill_lyrics`: write sidecars, skip fresh cache, 250ms gaps.
 
 use std::collections::BTreeMap;
 
 use ruforge_lib::commands::lyrics::{
     collect_library_audio_limited, ensure_lyrics_for_path_with_write, fetch_lyrics_for_queries,
-    probe_canonical_identity, probe_duration, verify_no_duration_search_guard,
-    verify_no_duration_search_miss_when_no_agree, LibraryAudioSample, LyricsQuery,
-    LIBRARY_SAMPLE_SEED,
+    probe_canonical_identity, probe_duration, read_sidecar, sidecar_path_for,
+    verify_no_duration_search_guard, verify_no_duration_search_miss_when_no_agree,
+    LibraryAudioSample, LyricsQuery, LIBRARY_SAMPLE_SEED,
 };
 
 #[tokio::main]
@@ -36,10 +37,28 @@ async fn main() {
             let limit: Option<usize> = args.get(1).and_then(|s| s.parse().ok());
             run_library_report(&root, limit, write, sorted).await;
         }
+        Some("backfill") => {
+            args.remove(0);
+            if args.is_empty() {
+                eprintln!("usage: verify_lrclib backfill <root> [root...]");
+                std::process::exit(2);
+            }
+            run_backfill(&args).await;
+        }
+        Some("read") => {
+            args.remove(0);
+            let path = args
+                .first()
+                .cloned()
+                .expect("usage: verify_lrclib read <media-path>");
+            run_read_probe(&path);
+        }
         Some(other) => {
             eprintln!("unknown mode {other:?}");
             eprintln!("usage: verify_lrclib");
             eprintln!("       verify_lrclib library <root> [N] [--sorted] [--write]");
+            eprintln!("       verify_lrclib backfill <root> [root...]");
+            eprintln!("       verify_lrclib read <media-path>");
             std::process::exit(2);
         }
     }
@@ -276,5 +295,127 @@ async fn run_library_report(root: &str, limit: Option<usize>, write: bool, sorte
     println!("duration_source_distribution:");
     for (k, v) in &dur_src_counts {
         println!("  {k}: {v}");
+    }
+}
+
+/// Same write path as `backfill_lyrics` (force=false, persist sidecars, 250ms gaps).
+async fn run_backfill(roots: &[String]) {
+    let paths = collect_library_audio_limited(roots, None, LibraryAudioSample::SortedPrefix);
+    let audio_total = paths.len();
+    eprintln!("roots={roots:?}");
+    eprintln!("audio_total={audio_total}");
+    eprintln!("mode=backfill (force=false; writes .lyrics.json; skips fresh cache)");
+    eprintln!();
+
+    let mut step_counts: BTreeMap<&'static str, u32> = BTreeMap::new();
+    let mut cand_counts: BTreeMap<String, u32> = BTreeMap::new();
+    let mut wrote: u32 = 0;
+    let mut skipped_cache: u32 = 0;
+    let mut matches: u32 = 0;
+    let mut fetched: u32 = 0;
+
+    for (i, path) in paths.iter().enumerate() {
+        let result = ensure_lyrics_for_path_with_write(path, false, true).await;
+        match &result {
+            None => {
+                *step_counts.entry("skip").or_insert(0) += 1;
+            }
+            Some(r) if r.from_cache => {
+                skipped_cache += 1;
+                *step_counts.entry("cache").or_insert(0) += 1;
+            }
+            Some(r) => {
+                wrote += 1;
+                fetched += 1;
+                let step = r.match_step.as_str();
+                let bucket = step_bucket(step);
+                *step_counts.entry(bucket).or_insert(0) += 1;
+                if is_match(
+                    step,
+                    &r.sidecar.synced_lyrics,
+                    &r.sidecar.plain_lyrics,
+                    &r.sidecar.matched_track_name,
+                ) {
+                    matches += 1;
+                    let key = r
+                        .candidate_index
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "-".into());
+                    *cand_counts.entry(key).or_insert(0) += 1;
+                }
+            }
+        }
+
+        if i + 1 < audio_total {
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        }
+    }
+
+    println!();
+    println!("=== TOTALS ===");
+    println!("audio_total={audio_total}");
+    println!("wrote={wrote}");
+    println!("skipped_cache={skipped_cache}");
+    if fetched > 0 {
+        println!(
+            "match_rate={:.1}% ({matches}/{fetched})  (among newly written)",
+            (matches as f64) * 100.0 / (fetched as f64)
+        );
+    } else {
+        println!("match_rate=n/a (nothing fetched)");
+    }
+    println!("step_distribution:");
+    for (k, v) in &step_counts {
+        println!("  {k}: {v}");
+    }
+    println!("hit_candidate_distribution:");
+    for (k, v) in &cand_counts {
+        println!("  cand_{k}: {v}");
+    }
+}
+
+fn run_read_probe(media_path: &str) {
+    use std::path::PathBuf;
+    let media = PathBuf::from(media_path);
+    println!("media_path_arg={media_path}");
+    println!("media_exists={}", media.is_file());
+    let Some(parent) = media.parent() else {
+        println!("fail=no_parent");
+        return;
+    };
+    let Some(stem) = media.file_stem().and_then(|s| s.to_str()) else {
+        println!("fail=no_stem");
+        return;
+    };
+    let sidecar = sidecar_path_for(parent, stem);
+    println!("stem={stem}");
+    println!("sidecar_path={}", sidecar.display());
+    println!("sidecar_exists={}", sidecar.is_file());
+    match std::fs::read_to_string(&sidecar) {
+        Ok(content) => {
+            println!("sidecar_bytes={}", content.len());
+            match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(v) => {
+                    println!(
+                        "json_keys={:?}",
+                        v.as_object().map(|o| o.keys().collect::<Vec<_>>())
+                    );
+                }
+                Err(e) => println!("json_parse_err={e}"),
+            }
+            match read_sidecar(&sidecar) {
+                Some(dto) => {
+                    let synced = dto.synced_lyrics.as_deref().unwrap_or("").trim().len();
+                    let plain = dto.plain_lyrics.as_deref().unwrap_or("").trim().len();
+                    println!("dto_ok=true synced_len={synced} plain_len={plain}");
+                    println!(
+                        "matched_artist={:?} matched_track={:?}",
+                        dto.matched_artist_name, dto.matched_track_name
+                    );
+                }
+                None => println!("dto_ok=false (read_sidecar returned None)"),
+            }
+        }
+        Err(e) => println!("sidecar_read_err={e}"),
     }
 }

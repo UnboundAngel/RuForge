@@ -19,6 +19,8 @@ import { MusicVolumeControl } from "./MusicVolumeControl";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
+import { MusicLyricsMicIcon } from "@/components/icons/MusicLyricsMicIcon";
+import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import {
   dismissMusicMenuPointer,
   MUSIC_MENU_ICON_SIZE,
@@ -41,6 +43,8 @@ type Props = {
   currentTime: number;
   duration: number;
   expanded: boolean;
+  lyricsOpen: boolean;
+  lyricsAvailable: boolean;
   playbackSpeed: number;
   crossfadeSec: number;
   hasChapters: boolean;
@@ -49,7 +53,6 @@ type Props = {
   onTogglePlay: () => void;
   onSkipPrev: () => void;
   onSkipNext: () => void;
-  onSkipBySeconds: (delta: number) => void;
   onJumpPrevChapter: () => void;
   onJumpNextChapter: () => void;
   onSetPlaybackSpeed: (speed: number) => void;
@@ -57,6 +60,7 @@ type Props = {
   onBeginScrub: () => void;
   onReleaseScrub: (seconds: number) => void;
   onToggleExpand: () => void;
+  onToggleLyrics: () => void;
   /** Right panel toggle: omit to hide the button. */
   rightPanelOpen?: boolean;
   onToggleRightPanel?: () => void;
@@ -67,6 +71,8 @@ export function NowPlayingBar({
   currentTime,
   duration,
   expanded,
+  lyricsOpen,
+  lyricsAvailable,
   playbackSpeed,
   crossfadeSec,
   hasChapters,
@@ -75,7 +81,6 @@ export function NowPlayingBar({
   onTogglePlay,
   onSkipPrev,
   onSkipNext,
-  onSkipBySeconds,
   onJumpPrevChapter,
   onJumpNextChapter,
   onSetPlaybackSpeed,
@@ -83,6 +88,7 @@ export function NowPlayingBar({
   onBeginScrub,
   onReleaseScrub,
   onToggleExpand,
+  onToggleLyrics,
   rightPanelOpen,
   onToggleRightPanel,
 }: Props) {
@@ -97,6 +103,9 @@ export function NowPlayingBar({
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
+  const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
+  const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
+  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
 
   const activeJobs = downloadJobs.filter(
     (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
@@ -109,6 +118,7 @@ export function NowPlayingBar({
     }
   }, [activeJobs, removeDownloadJob]);
 
+  const [shuffleOn, setShuffleOn] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [morePanel, setMorePanel] = useState<"main" | "speed" | "crossfade">("main");
   const [volumeInteractTick, setVolumeInteractTick] = useState(0);
@@ -247,6 +257,35 @@ export function NowPlayingBar({
     cycleLoopMode();
   }, [cycleLoopMode]);
 
+  const toggleShuffle = useCallback(() => {
+    setShuffleOn((prev) => {
+      const next = !prev;
+      if (next && playingFile) {
+        const idx = folderAudioPlaylist.findIndex((f) => f.path === playingFile.path);
+        const played = idx >= 0 ? folderAudioPlaylist.slice(0, idx) : [];
+        const upcoming =
+          idx >= 0
+            ? folderAudioPlaylist.slice(idx + 1)
+            : folderAudioPlaylist.filter((f) => f.path !== playingFile.path);
+        if (upcoming.length > 1) {
+          const shuffled = buildSmartShuffleOrder({
+            pool: upcoming,
+            current: playingFile,
+            likedKeys: musicLikedKeys,
+            seed: Date.now() & 0xffffffff,
+          });
+          setFolderAudioPlaylist([...played, playingFile, ...shuffled]);
+        }
+      }
+      return next;
+    });
+  }, [
+    playingFile,
+    folderAudioPlaylist,
+    musicLikedKeys,
+    setFolderAudioPlaylist,
+  ]);
+
   const coverPath = playingFile ? bestCoverPath(playingFile) : null;
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
   const artist = playingFile ? rawArtistFromFile(playingFile) : "";
@@ -286,7 +325,7 @@ export function NowPlayingBar({
         background: "var(--music-shell-chrome)",
       }}
     >
-      <div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,1fr)] items-center gap-x-4 px-4">
+      <div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,1.8fr)_minmax(248px,1.15fr)] items-center gap-x-3 px-4">
         <div className="flex items-center gap-2.5 min-w-0 w-fit max-w-full">
         <div
           role="button"
@@ -343,6 +382,16 @@ export function NowPlayingBar({
           <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
+              onClick={toggleShuffle}
+              className={cn(barBtnClass, shuffleOn && "opacity-100")}
+              style={{ color: shuffleOn ? "var(--music-accent)" : "var(--music-text-primary)" }}
+              aria-label={shuffleOn ? "Disable shuffle" : "Enable shuffle"}
+              aria-pressed={shuffleOn}
+            >
+              <Icon icon="tabler:arrows-shuffle" width={17} />
+            </button>
+            <button
+              type="button"
               onClick={onSkipPrev}
               disabled={!hasPrevInQueue && currentTime <= 3}
               className={cn(barBtnClass, "disabled:opacity-25")}
@@ -350,15 +399,6 @@ export function NowPlayingBar({
               aria-label="Previous track"
             >
               <Icon icon="tabler:player-track-prev-filled" width={17} />
-            </button>
-            <button
-              type="button"
-              onClick={() => onSkipBySeconds(-15)}
-              className={cn(barBtnClass)}
-              style={{ color: "var(--music-text-primary)" }}
-              aria-label="Rewind 15 seconds"
-            >
-              <Icon icon="tabler:rewind-backward-15" width={18} />
             </button>
             <button
               type="button"
@@ -371,15 +411,6 @@ export function NowPlayingBar({
             </button>
             <button
               type="button"
-              onClick={() => onSkipBySeconds(15)}
-              className={cn(barBtnClass)}
-              style={{ color: "var(--music-text-primary)" }}
-              aria-label="Forward 15 seconds"
-            >
-              <Icon icon="tabler:rewind-forward-15" width={18} />
-            </button>
-            <button
-              type="button"
               onClick={onSkipNext}
               disabled={!hasNextInQueue}
               className={cn(barBtnClass, "disabled:opacity-25")}
@@ -387,6 +418,15 @@ export function NowPlayingBar({
               aria-label="Next track"
             >
               <Icon icon="tabler:player-track-next-filled" width={17} />
+            </button>
+            <button
+              type="button"
+              onClick={toggleLoop}
+              className={cn(barBtnClass, loopMode !== "off" && "opacity-100")}
+              style={{ color: loopMode !== "off" ? "var(--music-accent)" : "var(--music-text-primary)" }}
+              aria-label={loopModeAriaLabel(loopMode)}
+            >
+              <LoopModeSwapIcon mode={loopMode} size={16} />
             </button>
           </div>
           <div className="relative w-full max-w-lg">
@@ -454,7 +494,7 @@ export function NowPlayingBar({
 
         <div
           ref={utilitiesRef}
-          className="flex items-center justify-end gap-0.5"
+          className="flex min-w-0 items-center justify-end gap-1.5 pl-1"
         >
           {hasActiveDownloads && (
             <button
@@ -470,23 +510,48 @@ export function NowPlayingBar({
 
           <button
             type="button"
-            onClick={toggleLoop}
-            className={cn(barBtnClass, loopMode !== "off" && "opacity-100")}
-            style={{ color: loopMode !== "off" ? "var(--music-accent)" : "var(--music-text-primary)" }}
-            aria-label={loopModeAriaLabel(loopMode)}
+            onClick={onToggleLyrics}
+            className={cn(barBtnClass, "rf-music-tooltip-anchor", lyricsOpen && "opacity-100")}
+            style={{
+              color: lyricsOpen
+                ? "var(--music-accent)"
+                : lyricsAvailable
+                  ? "var(--music-text-primary)"
+                  : "var(--music-text-muted)",
+            }}
+            aria-label={
+              lyricsOpen
+                ? "Hide lyrics"
+                : lyricsAvailable
+                  ? "Show lyrics"
+                  : "No lyrics for this track"
+            }
+            aria-pressed={lyricsOpen}
+            data-tooltip={
+              lyricsOpen
+                ? "Hide lyrics"
+                : lyricsAvailable
+                  ? "Lyrics"
+                  : "No lyrics"
+            }
           >
-            <LoopModeSwapIcon mode={loopMode} size={16} />
+            <MusicLyricsMicIcon available={lyricsAvailable} size={18} />
           </button>
 
-          <MusicVolumeControl
-            volume={volume}
-            isMuted={isMuted}
-            onVolume={setVolume}
-            onMuted={setMuted}
-            interactTick={volumeInteractTick}
-          />
+          {onToggleRightPanel && (
+            <button
+              type="button"
+              onClick={onToggleRightPanel}
+              className={cn(barBtnClass, "rf-music-tooltip-anchor")}
+              style={{ color: rightPanelOpen ? "var(--music-accent)" : "var(--music-text-primary)" }}
+              aria-label={rightPanelOpen ? "Close queue panel" : "Open queue panel"}
+              data-tooltip={rightPanelOpen ? "Close queue panel" : "Open queue panel"}
+            >
+              <Icon icon="material-symbols:queue-music-rounded" width={16} />
+            </button>
+          )}
 
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setShowMoreMenu((s) => !s)}
@@ -649,6 +714,14 @@ export function NowPlayingBar({
             </AnimatePresence>
           </div>
 
+          <MusicVolumeControl
+            volume={volume}
+            isMuted={isMuted}
+            onVolume={setVolume}
+            onMuted={setMuted}
+            interactTick={volumeInteractTick}
+          />
+
           <button
             type="button"
             onClick={() => void handlePopOut(currentTime, { paused, playbackSpeed })}
@@ -658,19 +731,6 @@ export function NowPlayingBar({
           >
             <Icon icon="material-symbols:ad-group-outline" width={16} />
           </button>
-
-          {onToggleRightPanel && (
-            <button
-              type="button"
-              onClick={onToggleRightPanel}
-              className={cn(barBtnClass, "rf-music-tooltip-anchor")}
-              style={{ color: rightPanelOpen ? "var(--music-accent)" : "var(--music-text-primary)" }}
-              aria-label={rightPanelOpen ? "Close queue panel" : "Open queue panel"}
-              data-tooltip={rightPanelOpen ? "Close queue panel" : "Open queue panel"}
-            >
-              <Icon icon="material-symbols:queue-music-rounded" width={16} />
-            </button>
-          )}
 
           <button
             type="button"
