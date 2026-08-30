@@ -227,7 +227,12 @@ function ArtistRow({ artist, trackCount, cover, onClick, onContextMenu }: Artist
 }
 
 type Props = {
-  onPlayFile: (file: MediaFile, playlist: MediaFile[], source: MusicQueueSource) => void;
+  onPlayFile: (
+    file: MediaFile,
+    playlist: MediaFile[],
+    source: MusicQueueSource,
+    opts?: { shuffle?: boolean },
+  ) => void;
   onOpenArtist: (artistKey: string) => void;
   onOpenAlbum: (artistKey: string, albumKey: string) => void;
 };
@@ -370,7 +375,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
                             likedKeys: musicLikedKeys,
                             seed: Date.now() & 0xffffffff,
                           });
-                          onPlayFile(shuffled[0]!, shuffled, LIKED_SOURCE);
+                          onPlayFile(shuffled[0]!, likedTracks, LIKED_SOURCE, { shuffle: true });
                         }}
                         className="flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors hover:bg-white/10"
                         style={{ borderColor: "var(--music-border)", color: "var(--music-text-primary)" }}

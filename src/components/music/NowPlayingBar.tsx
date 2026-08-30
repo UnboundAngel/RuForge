@@ -20,7 +20,6 @@ import { MusicLikeButton } from "./MusicLikeButton";
 import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 import { MusicLyricsMicIcon } from "@/components/icons/MusicLyricsMicIcon";
-import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import {
   dismissMusicMenuPointer,
   MUSIC_MENU_ICON_SIZE,
@@ -97,16 +96,15 @@ export function NowPlayingBar({
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const loopMode = useRuforgeStore((s) => s.loopMode);
+  const musicShuffleOn = useRuforgeStore((s) => s.musicShuffleOn);
   const setVolume = useRuforgeStore((s) => s.setVolume);
   const setMuted = useRuforgeStore((s) => s.setMuted);
   const cycleLoopMode = useRuforgeStore((s) => s.cycleLoopMode);
+  const toggleMusicShuffle = useRuforgeStore((s) => s.toggleMusicShuffle);
   const handlePopOut = useRuforgeStore((s) => s.handlePopOut);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
-  const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
-  const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
-  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
 
   const activeJobs = downloadJobs.filter(
     (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
@@ -119,7 +117,6 @@ export function NowPlayingBar({
     }
   }, [activeJobs, removeDownloadJob]);
 
-  const [shuffleOn, setShuffleOn] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [morePanel, setMorePanel] = useState<"main" | "speed" | "crossfade">("main");
   const [volumeInteractTick, setVolumeInteractTick] = useState(0);
@@ -258,35 +255,6 @@ export function NowPlayingBar({
     cycleLoopMode();
   }, [cycleLoopMode]);
 
-  const toggleShuffle = useCallback(() => {
-    setShuffleOn((prev) => {
-      const next = !prev;
-      if (next && playingFile) {
-        const idx = folderAudioPlaylist.findIndex((f) => f.path === playingFile.path);
-        const played = idx >= 0 ? folderAudioPlaylist.slice(0, idx) : [];
-        const upcoming =
-          idx >= 0
-            ? folderAudioPlaylist.slice(idx + 1)
-            : folderAudioPlaylist.filter((f) => f.path !== playingFile.path);
-        if (upcoming.length > 1) {
-          const shuffled = buildSmartShuffleOrder({
-            pool: upcoming,
-            current: playingFile,
-            likedKeys: musicLikedKeys,
-            seed: Date.now() & 0xffffffff,
-          });
-          setFolderAudioPlaylist([...played, playingFile, ...shuffled]);
-        }
-      }
-      return next;
-    });
-  }, [
-    playingFile,
-    folderAudioPlaylist,
-    musicLikedKeys,
-    setFolderAudioPlaylist,
-  ]);
-
   const coverPath = playingFile ? bestCoverPath(playingFile) : null;
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
   const artist = playingFile ? rawArtistFromFile(playingFile) : "";
@@ -383,11 +351,11 @@ export function NowPlayingBar({
           <div className="relative z-10 flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
-              onClick={toggleShuffle}
-              className={cn(barBtnClass, shuffleOn && "[&>*]:opacity-100")}
-              style={{ color: shuffleOn ? "var(--music-accent)" : "var(--music-text-primary)" }}
-              aria-label={shuffleOn ? "Disable shuffle" : "Enable shuffle"}
-              aria-pressed={shuffleOn}
+              onClick={toggleMusicShuffle}
+              className={cn(barBtnClass, musicShuffleOn && "[&>*]:opacity-100")}
+              style={{ color: musicShuffleOn ? "var(--music-accent)" : "var(--music-text-primary)" }}
+              aria-label={musicShuffleOn ? "Disable shuffle" : "Enable shuffle"}
+              aria-pressed={musicShuffleOn}
             >
               <Icon icon="tabler:arrows-shuffle" width={17} />
             </button>

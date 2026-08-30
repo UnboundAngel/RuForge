@@ -74,6 +74,12 @@ import {
   toggleTrackLike,
 } from "../components/music/musicLikedTracks";
 import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
+import {
+  buildShuffledQueueFromBase,
+  readMusicShuffleOnFromLs,
+  restoreQueueFromBase,
+  writeMusicShuffleOnToLs,
+} from "../components/music/musicShuffleQueue";
 import type { MusicQueueSource } from "../components/music/musicQueueSource";
 import type { SponsorBlockSkipCategory } from "../sponsorBlock";
 import { isAudioOnlyPath } from "../mediaKind";
@@ -238,6 +244,16 @@ export interface RuforgeStore extends DownloadQueueSlice {
    */
   musicQueueSource: MusicQueueSource | null;
   /**
+   * Sticky music shuffle (Spotify-like). Survives track changes; off→on reshuffles.
+   * Flat LS key, same idea as loopMode.
+   */
+  musicShuffleOn: boolean;
+  /**
+   * Unshuffled context order for the current play source.
+   * Used to restore sequential order when shuffle turns off.
+   */
+  musicShuffleBasePlaylist: MediaFile[];
+  /**
    * Manual queue paths (FIFO). Drained before effectivePlaylist advances.
    * Paths only — resolved to MediaFile on playback by useMusicPlayback.
    */
@@ -312,6 +328,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setMuted: (muted: boolean) => void;
   setLoopMode: (mode: LoopMode) => void;
   cycleLoopMode: () => void;
+  setMusicShuffleOn: (on: boolean) => void;
+  toggleMusicShuffle: () => void;
   stopPlayback: () => void;
 
   handlePlayFile: (
@@ -323,6 +341,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
     file: MediaFile,
     playlist: MediaFile[],
     source: MusicQueueSource | null,
+    opts?: { shuffle?: boolean },
   ) => void;
   handlePlayFolderNeighbor: (file: MediaFile) => void;
   handlePlayPlaylist: (
@@ -590,6 +609,7 @@ function tryFlushDeferredScrubBackfill(get: () => RuforgeStore) {
 const pathsInit = readInitialPathsFromLs();
 const playerInitVolume = readInitialPlayerVolumeFromLs();
 const playerInitLoopMode = readInitialPlayerLoopModeFromLs();
+const playerInitMusicShuffle = readMusicShuffleOnFromLs();
 const initialDownloadQueue = loadInitialDownloadQueueState();
 
 export const useRuforgeStore = create<RuforgeStore>()(
@@ -657,6 +677,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
       musicEndlessExtended: false,
       musicEndlessFromIndex: null,
       musicQueueSource: null,
+      musicShuffleOn: playerInitMusicShuffle,
+      musicShuffleBasePlaylist: [],
       manualQueue: [],
       playingFromManualQueue: false,
       manualQueueContextIndex: null,
@@ -820,12 +842,58 @@ export const useRuforgeStore = create<RuforgeStore>()(
         get().setLoopMode(cycleLoopMode(get().loopMode));
       },
 
+      setMusicShuffleOn: (on) => {
+        writeMusicShuffleOnToLs(on);
+        const {
+          playingFile,
+          folderAudioPlaylist,
+          musicShuffleBasePlaylist,
+          musicLikedKeys,
+        } = get();
+
+        if (!on) {
+          const restored = restoreQueueFromBase(musicShuffleBasePlaylist, playingFile);
+          set({
+            musicShuffleOn: false,
+            ...(restored ? { folderAudioPlaylist: restored } : {}),
+          });
+          return;
+        }
+
+        const base =
+          musicShuffleBasePlaylist.length > 0
+            ? musicShuffleBasePlaylist
+            : folderAudioPlaylist;
+        if (!playingFile || base.length <= 1) {
+          set({
+            musicShuffleOn: true,
+            musicShuffleBasePlaylist: base,
+          });
+          return;
+        }
+
+        set({
+          musicShuffleOn: true,
+          musicShuffleBasePlaylist: base,
+          folderAudioPlaylist: buildShuffledQueueFromBase({
+            base,
+            current: playingFile,
+            likedKeys: musicLikedKeys,
+          }),
+        });
+      },
+
+      toggleMusicShuffle: () => {
+        get().setMusicShuffleOn(!get().musicShuffleOn);
+      },
+
       stopPlayback: () => {
         claimMainPlayback();
         clearMusicPlaybackSession();
         set({
           playingFile: null,
           musicQueueSource: null,
+          musicShuffleBasePlaylist: [],
           musicPlayerResume: null,
           activityOwner: null,
           activityHandoff: null,
@@ -863,7 +931,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
         }
       },
 
-      playMusicQueue: (file, playlist, source) => {
+      playMusicQueue: (file, playlist, source, opts) => {
         claimMainPlayback();
         const loopMode = resolveLoopModeForPlay(
           readLoopModeForPath(file.path),
@@ -872,11 +940,33 @@ export const useRuforgeStore = create<RuforgeStore>()(
         if (loopMode !== get().loopMode) {
           writePlayerLoopModeToLs(loopMode);
         }
+
+        let musicShuffleOn = get().musicShuffleOn;
+        if (opts?.shuffle === true) {
+          musicShuffleOn = true;
+          writeMusicShuffleOnToLs(true);
+        } else if (opts?.shuffle === false) {
+          musicShuffleOn = false;
+          writeMusicShuffleOnToLs(false);
+        }
+
+        const base = [...playlist];
+        let queue = base;
+        if (musicShuffleOn && base.length > 1) {
+          queue = buildShuffledQueueFromBase({
+            base,
+            current: file,
+            likedKeys: get().musicLikedKeys,
+          });
+        }
+
         set({
-          folderAudioPlaylist: playlist,
+          folderAudioPlaylist: queue,
           musicEndlessExtended: false,
           musicEndlessFromIndex: null,
           musicQueueSource: source,
+          musicShuffleOn,
+          musicShuffleBasePlaylist: base,
           playingFile: file,
           loopMode,
           musicPlayerResume: null,
@@ -899,8 +989,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
       handlePlayPlaylist: (files, shuffle = false, source = null) => {
         if (files.length === 0) return;
         get().clearMusicPlayerResume();
-        let queue = [...files];
+        const base = [...files];
+        let queue = base;
+        let musicShuffleOn = get().musicShuffleOn;
         if (shuffle) {
+          musicShuffleOn = true;
+          writeMusicShuffleOnToLs(true);
           if (get().navMode === "music") {
             queue = buildSmartShuffleOrder({
               pool: files,
@@ -908,22 +1002,33 @@ export const useRuforgeStore = create<RuforgeStore>()(
               seed: Date.now() & 0xffffffff,
             });
           } else {
+            queue = [...files];
             for (let i = queue.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
-              [queue[i], queue[j]] = [queue[j], queue[i]];
+              [queue[i], queue[j]] = [queue[j]!, queue[i]!];
             }
           }
+        } else if (musicShuffleOn && files.length > 1) {
+          queue = buildSmartShuffleOrder({
+            pool: files,
+            likedKeys: get().musicLikedKeys,
+            seed: Date.now() & 0xffffffff,
+          });
         }
         set({
           folderAudioPlaylist: queue,
           musicEndlessExtended: false,
           musicEndlessFromIndex: null,
           musicQueueSource: source ?? null,
+          musicShuffleOn,
+          musicShuffleBasePlaylist: base,
           activeTab: "player",
         });
-        get().setPlayingFile(queue[0]);
+        get().setPlayingFile(queue[0]!);
         get().notify(
-          shuffle ? `Shuffling ${files.length} items` : `Playing ${files.length} items`,
+          shuffle || musicShuffleOn
+            ? `Shuffling ${files.length} items`
+            : `Playing ${files.length} items`,
         );
       },
 
@@ -999,6 +1104,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
           musicEndlessExtended,
           musicEndlessFromIndex,
           musicLikedKeys,
+          musicShuffleOn,
+          musicShuffleBasePlaylist,
           manualQueue,
           playingFromManualQueue,
           manualQueueContextIndex,
@@ -1045,6 +1152,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
           musicEndlessExtended,
           musicEndlessFromIndex,
           musicLikedKeys: [...musicLikedKeys],
+          musicShuffleOn,
+          musicShuffleBasePlaylist: [...musicShuffleBasePlaylist],
         };
 
         try {
