@@ -38,6 +38,7 @@ import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowCo
 import { HoverMarqueeText } from "./HoverMarqueeText";
 import { MusicEdgeSquishScroll } from "./MusicEdgeSquishScroll";
 import { buildCombinedQueuePaths } from "./musicQueueReorder";
+import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 
 const HEADER_EASE = [0.4, 0, 0.2, 1] as const;
 const CREDITS_PREVIEW = 3;
@@ -536,27 +537,22 @@ export function MusicNowPlayingPanel({
                 Open queue
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => onPlay(nextFile)}
-              className="flex w-full items-center gap-3 rounded-lg px-0.5 py-0.5 text-left border-0 bg-transparent transition-[background-color] duration-150 hover:bg-white/[0.06]"
-            >
-              <NextCover file={nextFile} />
-              <div className="min-w-0 flex-1">
-                <p
-                  className="truncate text-[13px] font-semibold"
-                  style={{ color: "var(--music-text-primary)" }}
-                >
-                  {nextFile.name}
-                </p>
-                <p
-                  className="truncate text-[11px]"
-                  style={{ color: "var(--music-text-muted)" }}
-                >
-                  {nextFile.artist ?? nextFile.albumArtist ?? "Unknown artist"}
-                </p>
-              </div>
-            </button>
+            <NextQueueRow
+              file={nextFile}
+              menuOpen={
+                menu?.context.kind === "song" && menu.context.file.path === nextFile.path
+              }
+              onPlay={() => onPlay(nextFile)}
+              onOpenArtist={(key) => (onOpenArtist ?? openMusicArtist)(key)}
+              onContextMenu={(x, y) => {
+                setMenu({
+                  context: { kind: "song", file: nextFile },
+                  x,
+                  y,
+                  onPlay: () => onPlay(nextFile),
+                });
+              }}
+            />
           </NpCard>
         ) : null}
         </div>
@@ -648,17 +644,96 @@ function RelatedSongTile({
   );
 }
 
-function NextCover({ file }: { file: MediaFile }) {
+function NextQueueRow({
+  file,
+  menuOpen,
+  onPlay,
+  onOpenArtist,
+  onContextMenu,
+}: {
+  file: MediaFile;
+  menuOpen: boolean;
+  onPlay: () => void;
+  onOpenArtist: (artistKey: string) => void;
+  onContextMenu: (x: number, y: number) => void;
+}) {
   const path = bestCoverPath(file);
   const src = path ? convertFileSrc(path) : null;
+  const artistLabel = file.artist ?? file.albumArtist ?? "Unknown artist";
+  const nextArtistKey = artistKeyFromFile(file);
+
   return (
     <div
-      className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg"
-      style={{ background: "var(--music-surface)" }}
+      className="group/next relative flex w-full items-center gap-3 rounded-lg px-0.5 py-0.5 text-left transition-[background-color] duration-150 hover:bg-white/[0.06] cursor-pointer"
+      onClick={onPlay}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu(e.clientX, e.clientY);
+      }}
     >
-      {src ? (
-        <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
-      ) : null}
+      <div
+        className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg"
+        style={{ background: "var(--music-surface)" }}
+      >
+        {src ? (
+          <img
+            src={src}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            draggable={false}
+          />
+        ) : (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ color: "var(--music-text-muted)" }}
+          >
+            <Icon icon="solar:music-note-bold" width={18} height={18} aria-hidden />
+          </div>
+        )}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity duration-150 group-hover/next:opacity-100">
+          <PlayPauseMorphIcon playing={false} size={18} className="text-white ml-0.5" />
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p
+          className="truncate text-[13px] font-semibold"
+          style={{ color: "var(--music-text-primary)" }}
+        >
+          {file.name}
+        </p>
+        {nextArtistKey ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenArtist(nextArtistKey);
+            }}
+            className="mt-0.5 block max-w-full truncate text-left text-[11px] border-0 bg-transparent p-0 hover:underline"
+            style={{ color: "var(--music-text-muted)" }}
+          >
+            {artistLabel}
+          </button>
+        ) : (
+          <p className="mt-0.5 truncate text-[11px]" style={{ color: "var(--music-text-muted)" }}>
+            {artistLabel}
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        className={cn(
+          "rf-music-row-menu shrink-0 w-6 h-6 flex items-center justify-center rounded border-0 bg-transparent transition-opacity duration-100",
+          menuOpen ? "opacity-100" : "opacity-0 group-hover/next:opacity-100",
+        )}
+        style={{ color: "var(--music-text-muted)" }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onContextMenu(e.clientX, e.clientY);
+        }}
+        aria-label="More options"
+      >
+        <MoreHorizontal size={16} />
+      </button>
     </div>
   );
 }

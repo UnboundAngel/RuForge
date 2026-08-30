@@ -1181,16 +1181,7 @@ export function MusicShell() {
   const heroSkipDir = heroSkipDirRef.current;
 
   const leftSlotWidth = navCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_FULL;
-  const mainPanelRadius = showExploreStrip
-    ? rightPanelOpen
-      ? "0 0 0 0"
-      : "0 var(--music-panel-radius) 0 0"
-    : [
-        navCollapsed ? "var(--music-panel-radius)" : "0",
-        rightPanelOpen ? "0" : "var(--music-panel-radius)",
-        rightPanelOpen ? "0" : "var(--music-panel-radius)",
-        navCollapsed ? "var(--music-panel-radius)" : "0",
-      ].join(" ");
+  const panelRadius = "var(--music-panel-radius)";
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1250,14 +1241,15 @@ export function MusicShell() {
         className="relative z-[3] flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden"
         style={{
           paddingTop: "var(--music-shell-gap)",
+          paddingBottom: "var(--music-shell-gap)",
           paddingLeft: "var(--music-shell-gap)",
           paddingRight: "var(--music-shell-gap)",
         }}
       >
-        {/* Main row: sidebar + content + chapters. No gap when Explore strip active. */}
+        {/* Main row: sidebar + content + right panel as separate floating islands. */}
         <div
           className="flex flex-1 min-h-0 min-w-0 basis-0 overflow-hidden"
-          style={{ gap: showExploreStrip ? 0 : "var(--music-shell-gap)" }}
+          style={{ gap: "var(--music-shell-gap)" }}
         >
           {/* Left L-column: expanded = shared surface; collapsed = floating pills on shell chrome. */}
           <div
@@ -1272,9 +1264,7 @@ export function MusicShell() {
                 : shellBlack
                   ? "var(--music-bg)"
                   : "var(--music-surface)",
-              borderRadius: navCollapsed
-                ? 0
-                : "var(--music-panel-radius) 0 0 var(--music-panel-radius)",
+              borderRadius: navCollapsed ? 0 : panelRadius,
             }}
           >
             <div
@@ -1336,17 +1326,19 @@ export function MusicShell() {
             />
           </div>
 
-          {/* Right: main panel + Explore boot bar (bottom row aligns with Back on the left). */}
-          <div className="relative flex flex-col flex-1 min-w-0 min-h-0 basis-0 overflow-hidden">
+          {/* Center island: main panel + Explore boot bar (bottom row aligns with Back on the left). */}
+          <div
+            className="relative flex flex-col flex-1 min-w-0 min-h-0 basis-0 overflow-hidden"
+            style={{
+              background: playerExpanded ? "transparent" : "var(--music-surface)",
+              borderRadius: panelRadius,
+            }}
+          >
             <div
               className={cn(
                 "relative flex-1 min-h-0 basis-0 overflow-hidden min-w-0",
                 !playerExpanded && activeView !== "explore" && activeView !== "home" && "rf-scrollbar overflow-y-auto",
               )}
-              style={{
-                background: playerExpanded ? "transparent" : "var(--music-surface)",
-                borderRadius: mainPanelRadius,
-              }}
             >
               <div ref={assignWebviewHostRef} className="absolute inset-0 z-0" />
               <div className="relative z-[1] min-h-0 min-w-0 h-full w-full overflow-hidden">
@@ -1359,7 +1351,7 @@ export function MusicShell() {
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.25 }}
                       className="absolute inset-0 z-[1] pointer-events-none overflow-hidden"
-                      style={{ borderRadius: mainPanelRadius }}
+                      style={{ borderRadius: panelRadius }}
                     >
                       <AudioHeroStage
                         coverSrc={coverSrc}
@@ -1522,7 +1514,7 @@ export function MusicShell() {
               if (!rightPanelOpen) setRightPanelOpen(true);
             }}
             shellFrame={shellBlack}
-            cancelFlexGap={!showExploreStrip}
+            cancelFlexGap
             playingFile={playingFile}
             coverSrc={coverSrc}
             trackTitle={trackTitle}

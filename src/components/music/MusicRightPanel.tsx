@@ -6,7 +6,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { History, PanelRightClose, PanelRightOpen } from "lucide-react";
 
@@ -34,6 +34,7 @@ const ZONE_HIT_PAD = 16;
 /** Matches design restriction: width 0.22s, ease [0.4, 0, 0.2, 1]. */
 const PANEL_WIDTH_TRANSITION =
   "width 0.22s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1)";
+const MODE_SWAP_EASE = [0.4, 0, 0.2, 1] as const;
 
 type Props = {
   open: boolean;
@@ -327,7 +328,7 @@ export function MusicRightPanel({
         width: open ? PANEL_WIDTH : 0,
         marginLeft: open ? 0 : closedMargin,
         background: panelBg,
-        borderRadius: "0 var(--music-panel-radius) var(--music-panel-radius) 0",
+        borderRadius: "var(--music-panel-radius)",
         pointerEvents: open ? "auto" : "none",
         transition: reduceMotion ? undefined : PANEL_WIDTH_TRANSITION,
       }}
@@ -337,94 +338,116 @@ export function MusicRightPanel({
         className="relative h-full flex flex-col overflow-hidden min-w-0"
         style={{ width: PANEL_WIDTH }}
       >
-        {nowPlaying && playingFile ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <MusicNowPlayingPanel
-              playingFile={playingFile}
-              coverSrc={coverSrc}
-              title={trackTitle}
-              artist={trackArtist}
-              audioEl={audioEl}
-              effectivePlaylist={effectivePlaylist}
-              playlistIndex={playlistIndex}
-              manualQueue={manualQueue}
-              onClose={onClose}
-              onSeek={onSeek}
-              onPlay={onPlay}
-              onOpenQueue={() => onTabChange("queue")}
-              onOpenArtist={openMusicArtist}
-              shellFrame={shellFrame}
-              onToggleExpand={onToggleExpand}
-            />
-          </div>
-        ) : (
-          <>
-            <div className="shrink-0 flex items-center justify-between px-3 h-10 gap-2">
-              <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1">
-                <TabButton
-                  active={activeTab === "queue"}
-                  onClick={() => onTabChange("queue")}
-                  label="Queue"
-                />
-                <TabButton
-                  active={activeTab === "history"}
-                  onClick={() => onTabChange("history")}
-                  label="Recent"
-                />
-                {showSegmentsTab && (
+        <AnimatePresence mode="wait" initial={false}>
+          {nowPlaying && playingFile ? (
+            <motion.div
+              key="nowPlaying"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0, x: reduceMotion ? 0 : -14 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: reduceMotion ? 0 : -14 }}
+              transition={{
+                duration: reduceMotion ? 0 : 0.2,
+                ease: MODE_SWAP_EASE,
+              }}
+            >
+              <MusicNowPlayingPanel
+                playingFile={playingFile}
+                coverSrc={coverSrc}
+                title={trackTitle}
+                artist={trackArtist}
+                audioEl={audioEl}
+                effectivePlaylist={effectivePlaylist}
+                playlistIndex={playlistIndex}
+                manualQueue={manualQueue}
+                onClose={onClose}
+                onSeek={onSeek}
+                onPlay={onPlay}
+                onOpenQueue={() => onTabChange("queue")}
+                onOpenArtist={openMusicArtist}
+                shellFrame={shellFrame}
+                onToggleExpand={onToggleExpand}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="utility"
+              className="flex min-h-0 flex-1 flex-col"
+              initial={{ opacity: 0, x: reduceMotion ? 0 : 14 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: reduceMotion ? 0 : 14 }}
+              transition={{
+                duration: reduceMotion ? 0 : 0.2,
+                ease: MODE_SWAP_EASE,
+              }}
+            >
+              <div className="shrink-0 flex items-center justify-between px-3 h-10 gap-2">
+                <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1">
                   <TabButton
-                    active={activeTab === "segments"}
-                    onClick={() => onTabChange("segments")}
-                    label="Segments"
+                    active={activeTab === "queue"}
+                    onClick={() => onTabChange("queue")}
+                    label="Queue"
                   />
-                )}
+                  <TabButton
+                    active={activeTab === "history"}
+                    onClick={() => onTabChange("history")}
+                    label="Recent"
+                  />
+                  {showSegmentsTab && (
+                    <TabButton
+                      active={activeTab === "segments"}
+                      onClick={() => onTabChange("segments")}
+                      label="Segments"
+                    />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rf-music-tooltip-anchor shrink-0 w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
+                  style={{ color: "var(--music-text-secondary)" }}
+                  aria-label="Minimize panel"
+                  data-tooltip="Minimize panel"
+                >
+                  <PanelRightClose size={15} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rf-music-tooltip-anchor shrink-0 w-7 h-7 flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity"
-                style={{ color: "var(--music-text-secondary)" }}
-                aria-label="Minimize panel"
-                data-tooltip="Minimize panel"
-              >
-                <PanelRightClose size={15} />
-              </button>
-            </div>
 
-            <div className="flex-1 min-h-0 overflow-hidden relative">
-              <TabPanel active={activeTab === "queue"}>
-                <MusicQueueTab
-                  playingFile={playingFile}
-                  effectivePlaylist={effectivePlaylist}
-                  playlistIndex={playlistIndex}
-                  manualQueue={manualQueue}
-                  queueSource={queueSource}
-                  onPlay={onPlay}
-                />
-              </TabPanel>
-              <TabPanel active={activeTab === "history"}>
-                <MusicHistoryTab
-                  playingFile={playingFile}
-                  entries={historyEntries}
-                  onPlay={onPlayHistory ?? onPlay}
-                />
-              </TabPanel>
-              {showSegmentsTab && (
-                <TabPanel active={activeTab === "segments"}>
-                  <MusicSegmentsTab
-                    currentTime={currentTime}
-                    duration={duration}
-                    chapters={chapters}
-                    sbSegments={sbSegments}
-                    musicOnlySkip={musicOnlySkip}
-                    onToggleMusicOnlySkip={onToggleMusicOnlySkip}
-                    onSeek={onSeek}
+              <div className="flex-1 min-h-0 overflow-hidden relative">
+                <TabPanel active={activeTab === "queue"}>
+                  <MusicQueueTab
+                    playingFile={playingFile}
+                    effectivePlaylist={effectivePlaylist}
+                    playlistIndex={playlistIndex}
+                    manualQueue={manualQueue}
+                    queueSource={queueSource}
+                    onPlay={onPlay}
                   />
                 </TabPanel>
-              )}
-            </div>
-          </>
-        )}
+                <TabPanel active={activeTab === "history"}>
+                  <MusicHistoryTab
+                    playingFile={playingFile}
+                    entries={historyEntries}
+                    onPlay={onPlayHistory ?? onPlay}
+                  />
+                </TabPanel>
+                {showSegmentsTab && (
+                  <TabPanel active={activeTab === "segments"}>
+                    <MusicSegmentsTab
+                      currentTime={currentTime}
+                      duration={duration}
+                      chapters={chapters}
+                      sbSegments={sbSegments}
+                      musicOnlySkip={musicOnlySkip}
+                      onToggleMusicOnlySkip={onToggleMusicOnlySkip}
+                      onSeek={onSeek}
+                    />
+                  </TabPanel>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </aside>
   );

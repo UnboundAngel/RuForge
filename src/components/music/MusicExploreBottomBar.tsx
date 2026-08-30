@@ -430,8 +430,7 @@ export function MusicExploreBottomBar({
     <div
       className="flex w-full min-w-0 flex-col shrink-0"
       style={{
-        background: shellBlack ? "var(--music-bg)" : "var(--music-surface)",
-        borderBottomRightRadius: "var(--music-panel-radius)",
+        background: shellBlack ? "var(--music-bg)" : "transparent",
       }}
     >
       {!pasteMode && (

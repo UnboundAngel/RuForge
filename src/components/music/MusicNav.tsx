@@ -52,7 +52,7 @@ type Props = {
   onToggleCollapse: () => void;
   shellFrame?: boolean;
   /**
-   * Stacked left column: nav gets top-left radius only; MusicNavBackCell below owns bottom-left.
+   * Stacked left column: parent L-column owns the island fill/radius.
    */
   sideColumn?: boolean;
   /** Nav sits inside the shared left L-column shell (no own fill/radius). */
@@ -78,7 +78,7 @@ export function MusicNav({
   const borderRadius = inLeftStack
     ? 0
     : sideColumn
-      ? "var(--music-panel-radius) 0 0 0"
+      ? "var(--music-panel-radius)"
       : baseStyle.borderRadius;
   const collapsedPill = collapsed && inLeftStack;
   const navStyle: CSSProperties = collapsedPill
