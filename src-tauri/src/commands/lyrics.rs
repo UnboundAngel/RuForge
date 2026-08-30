@@ -506,8 +506,110 @@ fn push_unique_query(out: &mut Vec<LyricsQuery>, q: LyricsQuery) {
     }
 }
 
+/// First credited artist for LRCLIB queries. Same separators as `primaryArtist` in
+/// `musicArtist.ts`, plus `/` (LRCLIB often joins collabs with a slash).
+fn primary_query_artist(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    let mut cut = trimmed.len();
+
+    for (i, ch) in trimmed.char_indices() {
+        if ch == ',' || ch == '&' || ch == '/' {
+            cut = cut.min(i);
+            break;
+        }
+    }
+
+    let bytes = lower.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i].is_ascii_whitespace() {
+            let start = i;
+            while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            let rest = &lower[i..];
+            let sep = if rest.starts_with("feat.") || rest.starts_with("feat ") {
+                Some(if rest.starts_with("feat.") { 5 } else { 4 })
+            } else if rest.starts_with("ft.") || rest.starts_with("ft ") {
+                Some(if rest.starts_with("ft.") { 3 } else { 2 })
+            } else if rest.starts_with('x')
+                && rest.len() > 1
+                && rest.as_bytes()[1].is_ascii_whitespace()
+            {
+                Some(1)
+            } else {
+                None
+            };
+            if let Some(sep_len) = sep {
+                let after = i + sep_len;
+                if after < bytes.len() && bytes[after].is_ascii_whitespace() {
+                    cut = cut.min(start);
+                    break;
+                }
+            }
+            continue;
+        }
+        i += 1;
+    }
+
+    trimmed[..cut].trim().to_string()
+}
+
+fn push_artist_title_variants(
+    out: &mut Vec<LyricsQuery>,
+    artist: &str,
+    title: &str,
+    album: &Option<String>,
+    duration: Option<f64>,
+    identity: &'static str,
+) {
+    push_unique_query(
+        out,
+        LyricsQuery {
+            artist: artist.to_string(),
+            title: title.to_string(),
+            album: album.clone(),
+            duration,
+            identity,
+            candidate_index: 0,
+        },
+    );
+
+    if let Some(stripped) = strip_matching_artist_prefix(title, artist) {
+        push_unique_query(
+            out,
+            LyricsQuery {
+                artist: artist.to_string(),
+                title: stripped,
+                album: album.clone(),
+                duration,
+                identity,
+                candidate_index: 0,
+            },
+        );
+    }
+
+    if let Some((split_artist, split_title)) = split_title_artist_pair(title) {
+        push_unique_query(
+            out,
+            LyricsQuery {
+                artist: split_artist,
+                title: split_title,
+                album: album.clone(),
+                duration,
+                identity,
+                candidate_index: 0,
+            },
+        );
+    }
+}
+
 /// Expand one artist/title pair into the LRCLIB candidate chain:
-/// 0 raw pair, 1 strip matching artist prefix, 2 title-split artist/title.
+/// raw pair, strip matching artist prefix, title-split, then primary-artist variants.
 fn expand_query_candidates(
     artist: String,
     title: String,
@@ -520,51 +622,12 @@ fn expand_query_candidates(
     let title = fold_query_text(&title);
     let album = album.map(|a| fold_query_text(&a));
     let mut out = Vec::new();
-    let mut idx = start_index;
 
-    push_unique_query(
-        &mut out,
-        LyricsQuery {
-            artist: artist.clone(),
-            title: title.clone(),
-            album: album.clone(),
-            duration,
-            identity,
-            candidate_index: idx,
-        },
-    );
-    idx = start_index + out.len();
+    push_artist_title_variants(&mut out, &artist, &title, &album, duration, identity);
 
-    if let Some(stripped) = strip_matching_artist_prefix(&title, &artist) {
-        let before = out.len();
-        push_unique_query(
-            &mut out,
-            LyricsQuery {
-                artist: artist.clone(),
-                title: stripped,
-                album: album.clone(),
-                duration,
-                identity,
-                candidate_index: idx,
-            },
-        );
-        if out.len() > before {
-            idx += 1;
-        }
-    }
-
-    if let Some((split_artist, split_title)) = split_title_artist_pair(&title) {
-        push_unique_query(
-            &mut out,
-            LyricsQuery {
-                artist: split_artist,
-                title: split_title,
-                album: album.clone(),
-                duration,
-                identity,
-                candidate_index: idx,
-            },
-        );
+    let primary = primary_query_artist(&artist);
+    if !primary.is_empty() && !primary.eq_ignore_ascii_case(&artist) {
+        push_artist_title_variants(&mut out, &primary, &title, &album, duration, identity);
     }
 
     for (i, q) in out.iter_mut().enumerate() {
@@ -736,6 +799,32 @@ fn identity_agrees(query: &str, candidate: Option<&str>) -> bool {
     q == c
 }
 
+/// Artist match: equality or whole-token-run containment either way.
+/// Empty normalize refuses. Token boundaries so "von" does not match "vonnegut".
+fn artist_agrees(query: &str, candidate: Option<&str>) -> bool {
+    let Some(candidate) = candidate.map(str::trim).filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    let q = normalize_identity_token(query);
+    let c = normalize_identity_token(candidate);
+    if q.is_empty() || c.is_empty() {
+        return false;
+    }
+    if q == c {
+        return true;
+    }
+    token_run_contains(&c, &q) || token_run_contains(&q, &c)
+}
+
+fn token_run_contains(haystack: &str, needle: &str) -> bool {
+    let h: Vec<&str> = haystack.split_whitespace().collect();
+    let n: Vec<&str> = needle.split_whitespace().collect();
+    if n.is_empty() || n.len() > h.len() {
+        return false;
+    }
+    h.windows(n.len()).any(|w| w == n.as_slice())
+}
+
 fn pick_search_match(query: &LyricsQuery, tracks: Vec<LrclibTrack>) -> Option<LrclibTrack> {
     let usable: Vec<LrclibTrack> = tracks.into_iter().filter(track_is_usable).collect();
     if usable.is_empty() {
@@ -744,7 +833,7 @@ fn pick_search_match(query: &LyricsQuery, tracks: Vec<LrclibTrack>) -> Option<Lr
 
     let Some(local) = duration_usable(query.duration) else {
         return usable.into_iter().find(|track| {
-            identity_agrees(&query.artist, track.artist_name.as_deref())
+            artist_agrees(&query.artist, track.artist_name.as_deref())
                 && identity_agrees(&query.title, track.track_name.as_deref())
         });
     };
@@ -1135,6 +1224,60 @@ mod tests {
         assert!(!identity_agrees("照井順政", Some("照井順政")));
         assert!(!identity_agrees("Radiohead", Some("照井順政")));
         assert!(identity_agrees("Radiohead", Some("Radiohead")));
+    }
+
+    #[test]
+    fn artist_agrees_token_run_not_equality() {
+        assert!(artist_agrees(
+            "King Von",
+            Some("King Von/A Boogie Wit da Hoodie")
+        ));
+        assert!(artist_agrees(
+            "King Von/A Boogie Wit da Hoodie",
+            Some("King Von")
+        ));
+        assert!(artist_agrees(
+            "King Von",
+            Some("King Von & A Boogie Wit da Hoodie")
+        ));
+        assert!(!artist_agrees("von", Some("vonnegut")));
+        assert!(!artist_agrees("照井順政", Some("照井順政")));
+        assert!(!artist_agrees("King Von", None));
+    }
+
+    #[test]
+    fn primary_query_artist_splits_slash_and_comma() {
+        assert_eq!(
+            primary_query_artist("King Von/A Boogie Wit da Hoodie"),
+            "King Von"
+        );
+        assert_eq!(
+            primary_query_artist("King Von, A Boogie Wit da Hoodie"),
+            "King Von"
+        );
+        assert_eq!(
+            primary_query_artist("King Von & A Boogie Wit da Hoodie"),
+            "King Von"
+        );
+        assert_eq!(primary_query_artist("King Von feat. Guest"), "King Von");
+        assert_eq!(primary_query_artist("Solo Artist"), "Solo Artist");
+    }
+
+    #[test]
+    fn expand_adds_primary_from_slash_collab() {
+        let qs = expand_query_candidates(
+            "King Von/A Boogie Wit da Hoodie".into(),
+            "My Fault".into(),
+            None,
+            Some(191.0),
+            "canonical",
+            0,
+        );
+        assert_eq!(qs.len(), 2);
+        assert_eq!(qs[0].artist, "King Von/A Boogie Wit da Hoodie");
+        assert_eq!(qs[1].artist, "King Von");
+        assert_eq!(qs[1].title, "My Fault");
+        assert_eq!(qs[1].candidate_index, 1);
     }
 
     #[test]
