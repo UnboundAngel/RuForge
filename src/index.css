@@ -232,6 +232,18 @@ html[data-rf-window-rounded="1"] #rf-boot {
   background: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
+/* Overlay thumb only while the scroller is hovered (or thumb dragged). */
+.rf-scrollbar.rf-scrollbar-hover > .rf-scrollbar-thumb {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.15s ease;
+}
+.rf-scrollbar.rf-scrollbar-hover:hover > .rf-scrollbar-thumb,
+.rf-scrollbar.rf-scrollbar-hover > .rf-scrollbar-thumb[data-dragging="true"] {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
 .app-container {
   background-color: var(--bg);
   background-image: 
@@ -609,7 +621,7 @@ html.ruforge-island-root #root {
   --music-sidebar-collapsed-width: 56px;
   --music-nav-width: var(--music-sidebar-width);
   --music-nav-width-collapsed: var(--music-sidebar-collapsed-width);
-  --music-right-panel-width: 272px;
+  --music-right-panel-width: 320px;
   --music-nowplaying-height: 90px;
   --music-storage-strip-height: 36px;
   --music-bottom-idle: 12px;

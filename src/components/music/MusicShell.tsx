@@ -169,6 +169,10 @@ function ExpandedOverlay({
     exit: { opacity: 0, y: skipDir * -6 },
   };
 
+  const surfaceTransition = reduceMotion
+    ? { duration: 0 }
+    : { duration: 0.2, ease: [0.4, 0, 0.2, 1] as const };
+
   return (
     <div
       className="absolute inset-0 z-[2] overflow-hidden"
@@ -177,55 +181,73 @@ function ExpandedOverlay({
         onContextMenu?.(e);
       }}
     >
-      {lyricsOpen && playingFile ? (
-        <MusicLyricsView
-          mediaPath={playingFile.path}
-          audioEl={audioEl}
-          title={playingFile.name}
-          artist={artist}
-          onSeek={onSeek}
-          onAvailabilityChange={onLyricsAvailabilityChange}
-        />
-      ) : (
-        <>
-          <AudioHeroStage
-            coverSrc={coverSrc}
-            audioEl={audioEl}
-            connectKey={trackKey}
-            skipDir={skipDir}
-            isPaused={isPaused}
-            isMuted={isMuted}
-            layer="foreground"
-            onTogglePlay={onTogglePlay}
-          />
-          <div className="absolute bottom-6 left-0 right-0 z-20 px-6 max-w-lg mx-auto w-full overflow-hidden">
-            <AnimatePresence initial={false} custom={skipDir} mode="sync">
-              <motion.div
-                key={trackKey || "empty-meta"}
-                custom={skipDir}
-                variants={metaVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={metaTransition}
-                className="flex flex-col items-center gap-1 w-full"
-              >
-                <MarqueeText
-                  text={playingFile?.name ?? ""}
-                  className="text-base font-semibold text-white/90 w-full"
-                  centered
-                />
-                {artist && (
-                  <div className="text-sm text-white/55 text-center w-full truncate">{artist}</div>
-                )}
-                {playingFile?.album && (
-                  <div className="text-xs text-white/35 text-center w-full truncate">{playingFile.album}</div>
-                )}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </>
-      )}
+      <AnimatePresence mode="wait" initial={false}>
+        {lyricsOpen && playingFile ? (
+          <motion.div
+            key="lyrics"
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={surfaceTransition}
+          >
+            <MusicLyricsView
+              mediaPath={playingFile.path}
+              audioEl={audioEl}
+              title={playingFile.name}
+              artist={artist}
+              onSeek={onSeek}
+              onAvailabilityChange={onLyricsAvailabilityChange}
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="preview"
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={surfaceTransition}
+          >
+            <AudioHeroStage
+              coverSrc={coverSrc}
+              audioEl={audioEl}
+              connectKey={trackKey}
+              skipDir={skipDir}
+              isPaused={isPaused}
+              isMuted={isMuted}
+              layer="foreground"
+              onTogglePlay={onTogglePlay}
+            />
+            <div className="absolute bottom-6 left-0 right-0 z-20 px-6 max-w-lg mx-auto w-full overflow-hidden">
+              <AnimatePresence initial={false} custom={skipDir} mode="sync">
+                <motion.div
+                  key={trackKey || "empty-meta"}
+                  custom={skipDir}
+                  variants={metaVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={metaTransition}
+                  className="flex flex-col items-center gap-1 w-full"
+                >
+                  <MarqueeText
+                    text={playingFile?.name ?? ""}
+                    className="text-base font-semibold text-white/90 w-full"
+                    centered
+                  />
+                  {artist && (
+                    <div className="text-sm text-white/55 text-center w-full truncate">{artist}</div>
+                  )}
+                  {playingFile?.album && (
+                    <div className="text-xs text-white/35 text-center w-full truncate">{playingFile.album}</div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -254,6 +276,10 @@ export function MusicShell() {
   const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("queue");
   const [rightPanelMiniHintKey, setRightPanelMiniHintKey] = useState(0);
   const prevRightPanelOpenRef = useRef(rightPanelOpen);
+  const prevPlayingPathForNpRef = useRef<string | null>(null);
+  const npUserMinimizedRef = useRef(false);
+  const rightPanelTabRef = useRef(rightPanelTab);
+  rightPanelTabRef.current = rightPanelTab;
   const [musicOnlySkip, setMusicOnlySkipState] = useState(() => readMusicOnlySkip());
   const [historyEntries, setHistoryEntries] = useState<PlayHistoryEntry[]>(() => getRecentHistory());
   const [activeTrackMeta, setActiveTrackMeta] = useState<MusicMetaSidecar | null>(null);
@@ -520,6 +546,27 @@ export function MusicShell() {
       setRightPanelMiniHintKey((k) => k + 1);
     }
   }, [rightPanelOpen]);
+
+  useEffect(() => {
+    const path = playingFile?.path ?? null;
+    const prev = prevPlayingPathForNpRef.current;
+    prevPlayingPathForNpRef.current = path;
+
+    if (!path) {
+      npUserMinimizedRef.current = false;
+      if (rightPanelTabRef.current === "nowPlaying") {
+        setRightPanelOpen(false);
+        setRightPanelTab("queue");
+      }
+      return;
+    }
+
+    if (!prev && path) {
+      npUserMinimizedRef.current = false;
+      setRightPanelTab("nowPlaying");
+      setRightPanelOpen(true);
+    }
+  }, [playingFile?.path]);
 
   useEffect(() => {
     if (!playerExpanded) setExpandedMenu(null);
@@ -1108,6 +1155,12 @@ export function MusicShell() {
 
   const coverPath = playingFile ? bestCoverPath(playingFile) : null;
   const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
+  const trackTitle = playingFile?.name ?? "";
+  const trackArtist =
+    playingFile?.artist
+    ?? playingFile?.albumArtist
+    ?? (playingFile?.name.includes(" - ") ? playingFile.name.split(" - ")[0].trim() : "")
+    ?? "";
   const chapters = playingFile?.chapters ?? null;
   const hasChaptersForPanel = !!(chapters && chapters.length >= 2);
   const hasSbSegmentsForPanel = sbPlayback.segments.some((s) => s.actionType === "skip");
@@ -1444,10 +1497,12 @@ export function MusicShell() {
               <MusicRightPanelMini
                 activeTab={rightPanelTab}
                 onTabChange={(t) => {
+                  if (t === "nowPlaying") npUserMinimizedRef.current = false;
                   setRightPanelTab(t);
                   setRightPanelOpen(true);
                 }}
                 showSegmentsTab={showSegmentsTab}
+                showNowPlaying={!!playingFile}
                 hintKey={rightPanelMiniHintKey}
                 shellFrame={shellBlack}
               />
@@ -1456,15 +1511,23 @@ export function MusicShell() {
 
           <MusicRightPanel
             open={rightPanelOpen}
-            onClose={() => setRightPanelOpen(false)}
+            onClose={() => {
+              if (rightPanelTab === "nowPlaying") npUserMinimizedRef.current = true;
+              setRightPanelOpen(false);
+            }}
             activeTab={rightPanelTab}
             onTabChange={(t) => {
+              if (t === "nowPlaying") npUserMinimizedRef.current = false;
               setRightPanelTab(t);
               if (!rightPanelOpen) setRightPanelOpen(true);
             }}
             shellFrame={shellBlack}
             cancelFlexGap={!showExploreStrip}
             playingFile={playingFile}
+            coverSrc={coverSrc}
+            trackTitle={trackTitle}
+            trackArtist={trackArtist}
+            audioEl={playback.audioEl}
             currentTime={playback.currentTime}
             duration={playback.duration}
             effectivePlaylist={playback.effectivePlaylist}
@@ -1486,6 +1549,7 @@ export function MusicShell() {
             sbSegments={sbPlayback.segments}
             musicOnlySkip={musicOnlySkip}
             onToggleMusicOnlySkip={toggleMusicOnlySkip}
+            onToggleExpand={handleToggleExpand}
           />
         </div>
       </div>
@@ -1536,7 +1600,19 @@ export function MusicShell() {
                 onToggleExpand={handleToggleExpand}
                 onToggleLyrics={handleToggleLyrics}
                 rightPanelOpen={rightPanelOpen}
-                onToggleRightPanel={() => setRightPanelOpen((p) => !p)}
+                onToggleRightPanel={() => {
+                  if (
+                    rightPanelOpen
+                    && (rightPanelTab === "queue"
+                      || rightPanelTab === "history"
+                      || rightPanelTab === "segments")
+                  ) {
+                    setRightPanelOpen(false);
+                    return;
+                  }
+                  setRightPanelTab("queue");
+                  setRightPanelOpen(true);
+                }}
               />
             </motion.div>
           ) : showMusicStorageStrip ? (
