@@ -19,7 +19,7 @@ import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowCo
 import { MusicHomeSearchEmpty } from "./MusicHomeSearchEmpty";
 import { resolveLikedFiles } from "./musicLikedTracks";
 import { LikedSongsCard } from "./LikedSongsCover";
-import { MusicQuickPickRow } from "./MusicQuickPickRow";
+import { MusicQuickPicksGrid, QUICK_PICKS_POOL_CAP } from "./MusicQuickPicksGrid";
 import { MusicAlbumCard } from "./MusicAlbumCard";
 import { MusicAlbumShelf } from "./MusicAlbumShelf";
 import { MUSIC_ALBUM_SHELF_GAP_HOME_PX } from "@/lib/musicAlbumShelfLayout";
@@ -471,7 +471,7 @@ export function MusicHomeView({
     return diversifyTracksByArtist(
       dedupeMusicTracks(pool, primaryArtist),
       2,
-      12,
+      QUICK_PICKS_POOL_CAP,
       primaryArtist,
     );
   }, [filteredTracks]);
@@ -617,31 +617,21 @@ export function MusicHomeView({
           />
         ) : (
           <div className="flex flex-col gap-12 px-6 sm:px-8 lg:px-12 pt-8 pb-16 w-full min-w-0">
-            {/* Quick picks — most listened or suggested */}
+            {/* Quick picks — only as many as fit (max 4×3) */}
             {quickPicks.length > 0 && (
-              <section className="w-full min-w-0">
-                <div className="flex items-end justify-between mb-4">
-                  <h2 className="text-2xl font-bold tracking-tight" style={{ color: "var(--music-text-primary)" }}>
-                    Quick picks
-                  </h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 w-full min-w-0">
-                  {quickPicks.map((file) => (
-                    <MusicQuickPickRow
-                      key={file.path}
-                      file={file}
-                      onClick={() => onPlayFile(file, quickPicks, quickPicksSource)}
-                      menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
-                      onContextMenu={(e) => setMenu({
-                        context: { kind: "song", file },
-                        x: e.clientX,
-                        y: e.clientY,
-                        onPlay: () => onPlayFile(file, quickPicks, quickPicksSource),
-                      })}
-                    />
-                  ))}
-                </div>
-              </section>
+              <MusicQuickPicksGrid
+                files={quickPicks}
+                onPlay={(file) => onPlayFile(file, quickPicks, quickPicksSource)}
+                menuOpenPath={
+                  menu?.context.kind === "song" ? menu.context.file.path : null
+                }
+                onContextMenu={(file, e) => setMenu({
+                  context: { kind: "song", file },
+                  x: e.clientX,
+                  y: e.clientY,
+                  onPlay: () => onPlayFile(file, quickPicks, quickPicksSource),
+                })}
+              />
             )}
 
             <AnimatePresence initial={false}>

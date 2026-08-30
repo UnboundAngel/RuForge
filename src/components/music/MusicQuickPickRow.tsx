@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Clock, MoreHorizontal } from "lucide-react";
 import type { MediaFile } from "@/types";
@@ -5,6 +6,7 @@ import { bestCoverPath } from "@/mediaKind";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
+import { HoverMarqueeText } from "./HoverMarqueeText";
 
 type Props = {
   file: MediaFile;
@@ -38,12 +40,13 @@ export function MusicQuickPickRow({
   const playback = useOptionalMainAudioPlayback();
   const isActive = playingFile?.path === file.path;
   const showPauseOnHover = isActive && playback != null && !playback.paused;
+  const [hovered, setHovered] = useState(false);
   const hoverIconSize = variant === "glass" ? 22 : 18;
 
   const rowClass =
     variant === "glass"
-      ? "group/row relative flex items-center gap-4 rounded-2xl p-3 w-full min-h-[3.75rem] cursor-pointer transition-all duration-300 hover:bg-white/[0.06] active:scale-[0.99]"
-      : "group/row relative flex items-center gap-4 rounded-lg px-3 py-2.5 w-full min-h-[4.5rem] transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.99] cursor-pointer";
+      ? "group/row relative flex items-center gap-4 rounded-2xl p-3 w-full min-w-0 min-h-[3.75rem] cursor-pointer transition-all duration-300 hover:bg-white/[0.06] active:scale-[0.99]"
+      : "group/row relative flex items-center gap-4 rounded-lg px-3 py-2.5 w-full min-w-0 min-h-[4.5rem] transition-[filter,transform] duration-200 hover:brightness-110 active:scale-[0.99] cursor-pointer";
 
   const rowStyle =
     variant === "glass"
@@ -59,6 +62,8 @@ export function MusicQuickPickRow({
       className={rowClass}
       style={rowStyle}
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onContextMenu={(e) => {
         e.preventDefault();
         onContextMenu?.(e);
@@ -90,15 +95,17 @@ export function MusicQuickPickRow({
           />
         </div>
       </div>
-      <div className="min-w-0 flex-1 flex flex-col gap-0.5 pr-1">
-        <div
-          className={`truncate leading-tight group-hover/row:text-white transition-colors ${
-            variant === "glass" ? "text-sm font-semibold" : "text-[15px] font-bold"
-          }`}
-          style={{ color: "var(--music-text-primary)" }}
-        >
-          {file.name}
-        </div>
+      <div className="min-w-0 flex-1 flex flex-col gap-0.5 pr-1 overflow-hidden">
+        <HoverMarqueeText
+          text={file.name}
+          active={hovered}
+          layoutKey={`${file.path}:qp-row-title`}
+          className={
+            variant === "glass"
+              ? "text-sm font-semibold leading-tight text-[var(--music-text-primary)]"
+              : "text-[15px] font-bold leading-tight text-[var(--music-text-primary)]"
+          }
+        />
         <div
           className={`leading-snug min-w-0 ${
             variant === "glass" ? "text-[13px] font-medium" : "text-sm font-medium"

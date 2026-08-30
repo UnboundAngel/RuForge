@@ -3,7 +3,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Play, MoreHorizontal, Shuffle } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
-import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
+import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
 import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import type { MediaFile } from "@/types";
@@ -16,6 +16,7 @@ import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { resolveLikedFiles } from "./musicLikedTracks";
 import { MusicProfileView } from "./MusicProfileView";
 import { LikedSongsCover } from "./LikedSongsCover";
+import { HoverMarqueeText } from "./HoverMarqueeText";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 
@@ -112,6 +113,7 @@ type AlbumRowProps = {
 
 function AlbumRow({ album, artist, cover, coverFallback = null, trackCount, onClick, onContextMenu }: AlbumRowProps) {
   const [coverSrc, setCoverSrc] = useState<string | null>(() => (cover ? convertFileSrc(cover) : null));
+  const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     setCoverSrc(cover ? convertFileSrc(cover) : null);
@@ -125,39 +127,61 @@ function AlbumRow({ album, artist, cover, coverFallback = null, trackCount, onCl
     }
   };
 
+  const meta =
+    artist
+      ? `${artist} · ${trackCount} ${trackCount === 1 ? "song" : "songs"}`
+      : `${trackCount} ${trackCount === 1 ? "song" : "songs"}`;
+
   return (
     <button
       type="button"
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
-      className="group/album flex items-center gap-4 px-4 py-3 rounded w-full text-left transition-colors"
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--music-surface-raised)")}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+      className="group/album flex flex-col gap-2.5 p-2 rounded-xl w-full min-w-0 text-left transition-colors hover:bg-white/[0.04]"
     >
-      {coverSrc ? (
-        <img src={coverSrc} alt="" onError={handleCoverError} className="w-14 h-14 rounded shrink-0 object-cover" style={{ borderRadius: "var(--music-card-radius)" }} />
-      ) : (
-        <div
-          className="w-14 h-14 rounded shrink-0 flex items-center justify-center"
-          style={{ borderRadius: "var(--music-card-radius)", background: "var(--music-surface)", color: "var(--music-text-muted)" }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-          </svg>
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-bold truncate" style={{ color: "var(--music-text-primary)" }}>{album}</div>
-        <div className="text-xs mt-0.5" style={{ color: "var(--music-text-secondary)" }}>
-          {artist && `${artist} · `}{trackCount} {trackCount === 1 ? "song" : "songs"}
+      <div
+        className="relative w-full aspect-square shrink-0 overflow-hidden bg-stone-950"
+        style={{ borderRadius: "var(--music-card-radius)" }}
+      >
+        {coverSrc ? (
+          <img
+            src={coverSrc}
+            alt=""
+            onError={handleCoverError}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover/album:scale-[1.03]"
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ color: "var(--music-text-muted)" }}
+          >
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+            </svg>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover/album:opacity-100 transition-opacity duration-200">
+          <div
+            className="w-11 h-11 rounded-full flex items-center justify-center"
+            style={{ background: "var(--music-accent)" }}
+          >
+            <Play size={18} className="text-white fill-white ml-0.5" />
+          </div>
         </div>
       </div>
-      <span
-        className="opacity-0 group-hover/album:opacity-100 transition-opacity"
-        style={{ color: "var(--music-text-muted)" }}
-      >
-        <Play size={16} />
-      </span>
+      <div className="min-w-0 px-0.5 flex flex-col gap-0.5">
+        <HoverMarqueeText
+          text={album}
+          active={hovered}
+          layoutKey={`${album}:${artist}:lib-album`}
+          className="text-sm font-bold leading-tight text-[var(--music-text-primary)]"
+        />
+        <div className="text-xs truncate leading-snug" style={{ color: "var(--music-text-secondary)" }}>
+          {meta}
+        </div>
+      </div>
     </button>
   );
 }
@@ -165,25 +189,32 @@ function AlbumRow({ album, artist, cover, coverFallback = null, trackCount, onCl
 type ArtistRowProps = {
   artist: string;
   trackCount: number;
+  cover: string | null;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
 
-function ArtistRow({ artist, trackCount, onClick, onContextMenu }: ArtistRowProps) {
+function ArtistRow({ artist, trackCount, cover, onClick, onContextMenu }: ArtistRowProps) {
+  const coverSrc = cover ? convertFileSrc(cover) : null;
+
   return (
     <button
       type="button"
       onClick={onClick}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e); }}
-      className="group/artist flex items-center gap-4 px-4 py-3 rounded w-full text-left transition-colors"
+      className="group/artist flex items-center gap-4 px-3 py-3 rounded-lg w-full min-w-0 text-left transition-colors"
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--music-surface-raised)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "")}
     >
       <div
-        className="w-14 h-14 rounded-full shrink-0 flex items-center justify-center text-lg font-bold"
+        className="w-14 h-14 rounded-full shrink-0 overflow-hidden flex items-center justify-center text-lg font-bold"
         style={{ background: "var(--music-surface-raised)", color: "var(--music-text-secondary)" }}
       >
-        {artist.charAt(0).toUpperCase()}
+        {coverSrc ? (
+          <img src={coverSrc} alt="" className="w-full h-full object-cover" />
+        ) : (
+          artist.charAt(0).toUpperCase()
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-bold truncate" style={{ color: "var(--music-text-primary)" }}>{artist}</div>
@@ -229,15 +260,32 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
   );
 
   const artists = useMemo(() => {
-    const map = new Map<string, { key: string; display: string; tracks: MediaFile[] }>();
+    const map = new Map<
+      string,
+      { key: string; display: string; tracks: MediaFile[]; cover: string | null; coverSquare: boolean }
+    >();
     for (const t of tracks) {
       const raw = t.artist ?? t.albumArtist ?? "";
       if (!raw) continue;
       const key = primaryArtist(raw).toLowerCase();
-      if (!map.has(key)) {
-        map.set(key, { key, display: primaryArtist(raw) || raw, tracks: [] });
+      const cover = bestCoverPath(t);
+      const square = Boolean(cover && hasSquareCover(t));
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          key,
+          display: primaryArtist(raw) || raw,
+          tracks: [t],
+          cover,
+          coverSquare: square,
+        });
+        continue;
       }
-      map.get(key)!.tracks.push(t);
+      existing.tracks.push(t);
+      if (cover && (!existing.cover || (!existing.coverSquare && square))) {
+        existing.cover = cover;
+        existing.coverSquare = square;
+      }
     }
     return [...map.values()].sort((a, b) => a.display.localeCompare(b.display));
   }, [tracks]);
@@ -378,60 +426,69 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
         )}
 
         {activeTab === "albums" && (
-          <div>
+          <div className="px-4 sm:px-6 pr-12 sm:pr-14 pb-4">
             {albums.length === 0 && (
               <p className="text-center py-12 text-sm" style={{ color: "var(--music-text-muted)" }}>
                 No albums found. Download music with album tags to see them here.
               </p>
             )}
-            {albums.map((a) => {
-              const paths = albumCoverPathWithFallback(a.tracks[0]!);
-              return (
-              <AlbumRow
-                key={`${a.artistKey}::${a.albumKey}`}
-                album={a.album}
-                artist={a.artist}
-                cover={paths.primary}
-                coverFallback={paths.fallback}
-                trackCount={a.tracks.length}
-                onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
-                onContextMenu={(e) => setMenu({
-                  context: { kind: "album", artistKey: a.artistKey, albumKey: a.albumKey, displayName: a.album, artistName: a.artist },
-                  x: e.clientX,
-                  y: e.clientY,
-                  onPlay: a.tracks.length > 0
-                    ? () => onPlayFile(a.tracks[0], a.tracks, musicQueueSource("album", a.album))
-                    : undefined,
+            {albums.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+                {albums.map((a) => {
+                  const paths = albumCoverPathWithFallback(a.tracks[0]!);
+                  return (
+                    <AlbumRow
+                      key={`${a.artistKey}::${a.albumKey}`}
+                      album={a.album}
+                      artist={a.artist}
+                      cover={paths.primary}
+                      coverFallback={paths.fallback}
+                      trackCount={a.tracks.length}
+                      onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
+                      onContextMenu={(e) => setMenu({
+                        context: { kind: "album", artistKey: a.artistKey, albumKey: a.albumKey, displayName: a.album, artistName: a.artist },
+                        x: e.clientX,
+                        y: e.clientY,
+                        onPlay: a.tracks.length > 0
+                          ? () => onPlayFile(a.tracks[0], a.tracks, musicQueueSource("album", a.album))
+                          : undefined,
+                      })}
+                    />
+                  );
                 })}
-              />
-              );
-            })}
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === "artists" && (
-          <div>
+          <div className="px-4 sm:px-6 pr-12 sm:pr-14">
             {artists.length === 0 && (
               <p className="text-center py-12 text-sm" style={{ color: "var(--music-text-muted)" }}>
                 No artist tags found. Files named &quot;Artist - Title&quot; will appear here.
               </p>
             )}
-            {artists.map((a) => (
-              <ArtistRow
-                key={a.key}
-                artist={a.display}
-                trackCount={a.tracks.length}
-                onClick={() => onOpenArtist(a.key)}
-                onContextMenu={(e) => setMenu({
-                  context: { kind: "artist", artistKey: a.key, displayName: a.display },
-                  x: e.clientX,
-                  y: e.clientY,
-                  onPlay: a.tracks.length > 0
-                    ? () => onPlayFile(a.tracks[0], a.tracks, musicQueueSource("artist", a.display))
-                    : undefined,
-                })}
-              />
-            ))}
+            {artists.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1">
+                {artists.map((a) => (
+                  <ArtistRow
+                    key={a.key}
+                    artist={a.display}
+                    trackCount={a.tracks.length}
+                    cover={a.cover}
+                    onClick={() => onOpenArtist(a.key)}
+                    onContextMenu={(e) => setMenu({
+                      context: { kind: "artist", artistKey: a.key, displayName: a.display },
+                      x: e.clientX,
+                      y: e.clientY,
+                      onPlay: a.tracks.length > 0
+                        ? () => onPlayFile(a.tracks[0], a.tracks, musicQueueSource("artist", a.display))
+                        : undefined,
+                    })}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { ListMusic, MoreHorizontal } from "lucide-react";
 import type { MediaFile } from "@/types";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 import { LikedSongsCover } from "./LikedSongsCover";
+import { HoverMarqueeText } from "./HoverMarqueeText";
 
 type Props = {
   title: string;
@@ -31,16 +33,19 @@ export function MusicRecentPlaylistCard({
   const isActive =
     !!playingFile && tracks.some((t) => t.path === playingFile.path);
   const showPauseOnHover = isActive && playback != null && !playback.paused;
+  const [hovered, setHovered] = useState(false);
 
   return (
     <button
       type="button"
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onContextMenu={(e) => {
         e.preventDefault();
         onContextMenu?.(e);
       }}
-      className="group/pl relative overflow-hidden flex items-center gap-5 px-3 py-3.5 rounded-2xl text-left transition-all duration-300 w-full hover:bg-white/[0.04] active:scale-[0.995]"
+      className="group/pl relative overflow-hidden flex items-center gap-5 px-3 py-3.5 rounded-2xl text-left transition-all duration-300 w-full min-w-0 hover:bg-white/[0.04] active:scale-[0.995]"
     >
       <div
         className="absolute inset-0 opacity-0 group-hover/pl:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl"
@@ -61,15 +66,17 @@ export function MusicRecentPlaylistCard({
         </div>
       </div>
 
-      <div className="flex-grow min-w-0 z-10">
-        <h3
-          className="text-[17px] font-semibold tracking-tight truncate group-hover/pl:text-white transition-colors"
-          style={{ color: isActive ? "var(--music-accent)" : "var(--music-text-primary)" }}
-        >
-          {title}
-        </h3>
+      <div className="flex-grow min-w-0 z-10 overflow-hidden">
+        <HoverMarqueeText
+          text={title}
+          active={hovered}
+          layoutKey={`${title}:${tracks[0]?.path ?? "pl"}:recent-title`}
+          className={`text-[17px] font-semibold tracking-tight leading-tight ${
+            isActive ? "text-[var(--music-accent)]" : "text-[var(--music-text-primary)]"
+          } group-hover/pl:text-white transition-colors`}
+        />
         <div
-          className="flex items-center gap-2 text-[13px] font-medium mt-1 min-w-0"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-medium mt-1 min-w-0"
           style={{ color: "var(--music-text-secondary)" }}
         >
           <span
@@ -82,7 +89,7 @@ export function MusicRecentPlaylistCard({
             <ListMusic className="w-3.5 h-3.5" />
             Downloaded
           </span>
-          <span className="truncate min-w-0">{secondary}</span>
+          <span className="whitespace-nowrap">{secondary}</span>
         </div>
       </div>
 
