@@ -6,7 +6,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { History, PanelRightClose, PanelRightOpen } from "lucide-react";
 
@@ -32,9 +32,9 @@ const HOVER_ARM_WIDTH = "40px";
 const ZONE_HIT_PAD = 16;
 
 /** Matches design restriction: width 0.22s, ease [0.4, 0, 0.2, 1]. */
+const PANEL_WIDTH_MS = 220;
 const PANEL_WIDTH_TRANSITION =
-  "width 0.22s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1)";
-const MODE_SWAP_EASE = [0.4, 0, 0.2, 1] as const;
+  `width ${PANEL_WIDTH_MS / 1000}s cubic-bezier(0.4, 0, 0.2, 1), margin-left ${PANEL_WIDTH_MS / 1000}s cubic-bezier(0.4, 0, 0.2, 1)`;
 
 type Props = {
   open: boolean;
@@ -304,6 +304,25 @@ export function MusicRightPanel({
   const showSegmentsTab = hasChapters || hasSbSegments;
   const nowPlaying = activeTab === "nowPlaying";
 
+  // WebView2: a full-width body kept clipped at width 0 can leave a blank
+  // composited layer after expand (clickable, invisible). Mount only while open;
+  // open width snaps so the first paint is full-size; close still eases shut.
+  const [bodyMounted, setBodyMounted] = useState(open);
+  const [bodyGen, setBodyGen] = useState(0);
+  useEffect(() => {
+    if (open) {
+      setBodyGen((g) => g + 1);
+      setBodyMounted(true);
+      return;
+    }
+    if (reduceMotion) {
+      setBodyMounted(false);
+      return;
+    }
+    const t = window.setTimeout(() => setBodyMounted(false), PANEL_WIDTH_MS);
+    return () => window.clearTimeout(t);
+  }, [open, reduceMotion]);
+
   const musicEndlessFromIndex = useRuforgeStore((s) => s.musicEndlessFromIndex);
   const musicQueueSource = useRuforgeStore((s) => s.musicQueueSource);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
@@ -330,27 +349,22 @@ export function MusicRightPanel({
         background: panelBg,
         borderRadius: "var(--music-panel-radius)",
         pointerEvents: open ? "auto" : "none",
-        transition: reduceMotion ? undefined : PANEL_WIDTH_TRANSITION,
+        // Snap open (avoids blank WebView2 layer); ease closed only.
+        transition: reduceMotion || open ? undefined : PANEL_WIDTH_TRANSITION,
       }}
       aria-hidden={!open}
     >
-      <div
-        className="relative h-full flex flex-col overflow-hidden min-w-0"
-        style={{ width: PANEL_WIDTH }}
-      >
-        <AnimatePresence mode="wait" initial={false}>
+      {bodyMounted ? (
+        <div
+          key={bodyGen}
+          className="relative flex h-full min-h-0 min-w-0 flex-col"
+          style={{
+            width: PANEL_WIDTH,
+            transform: "translateZ(0)",
+          }}
+        >
           {nowPlaying && playingFile ? (
-            <motion.div
-              key="nowPlaying"
-              className="flex min-h-0 flex-1 flex-col"
-              initial={{ opacity: 0, x: reduceMotion ? 0 : -14 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: reduceMotion ? 0 : -14 }}
-              transition={{
-                duration: reduceMotion ? 0 : 0.2,
-                ease: MODE_SWAP_EASE,
-              }}
-            >
+            <div className="flex min-h-0 flex-1 flex-col">
               <MusicNowPlayingPanel
                 playingFile={playingFile}
                 coverSrc={coverSrc}
@@ -368,19 +382,9 @@ export function MusicRightPanel({
                 shellFrame={shellFrame}
                 onToggleExpand={onToggleExpand}
               />
-            </motion.div>
+            </div>
           ) : (
-            <motion.div
-              key="utility"
-              className="flex min-h-0 flex-1 flex-col"
-              initial={{ opacity: 0, x: reduceMotion ? 0 : 14 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: reduceMotion ? 0 : 14 }}
-              transition={{
-                duration: reduceMotion ? 0 : 0.2,
-                ease: MODE_SWAP_EASE,
-              }}
-            >
+            <div className="flex min-h-0 flex-1 flex-col">
               <div className="shrink-0 flex items-center justify-between px-3 h-10 gap-2">
                 <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1">
                   <TabButton
@@ -445,10 +449,10 @@ export function MusicRightPanel({
                   </TabPanel>
                 )}
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
-      </div>
+        </div>
+      ) : null}
     </aside>
   );
 }
@@ -461,11 +465,8 @@ function TabPanel({
   children: React.ReactNode;
 }) {
   return (
-    <motion.div
+    <div
       className="absolute inset-0 flex flex-col min-h-0"
-      initial={false}
-      animate={{ opacity: active ? 1 : 0 }}
-      transition={{ duration: 0.14, ease: "easeOut" }}
       style={{
         pointerEvents: active ? "auto" : "none",
         visibility: active ? "visible" : "hidden",
@@ -473,7 +474,7 @@ function TabPanel({
       aria-hidden={!active}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 

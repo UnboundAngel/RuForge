@@ -6,7 +6,7 @@ Shipping version: 0.3.1 (unreleased)
 
 Last shipped to users: 0.3.0
 
-Last updated: 2026-08-29 (Unreleased log)
+Last updated: 2026-08-30 (Unreleased log)
 
 Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Settings popup, Discord presence (gated 0.4.0 / Debugging), SponsorBlock learning, downloader hero. Companion still developer-gated on localhost.
 
