@@ -153,21 +153,35 @@ export function MusicNowPlayingPanel({
       .slice(0, RELATED_LIMIT);
   }, [libraryTracks, artistKey, playingFile.path]);
 
-  const artistCoverSrc = useMemo(() => {
-    if (!artistKey) {
-      const self = albumCoverPathWithFallback(playingFile);
-      const path = self.primary ?? self.fallback ?? bestCoverPath(playingFile);
-      return path ? convertFileSrc(path) : null;
+  const artistCoverCandidates = useMemo(() => {
+    const list: string[] = [];
+    const pushFile = (file: MediaFile) => {
+      const paths = albumCoverPathWithFallback(file);
+      for (const p of [paths.primary, paths.fallback, bestCoverPath(file)]) {
+        if (!p) continue;
+        const src = convertFileSrc(p);
+        if (!list.includes(src)) list.push(src);
+      }
+    };
+    // Prefer the playing track — its cover is already proven in the bar.
+    pushFile(playingFile);
+    if (artistKey) {
+      for (const track of libraryTracks) {
+        if (track.path === playingFile.path) continue;
+        if (!fileMatchesArtistKey(track, artistKey)) continue;
+        pushFile(track);
+        if (list.length >= 12) break;
+      }
     }
-    const artistTracks = libraryTracks.filter((t) => fileMatchesArtistKey(t, artistKey));
-    const pool = artistTracks.length > 0 ? artistTracks : [playingFile];
-    for (const track of pool) {
-      const paths = albumCoverPathWithFallback(track);
-      const path = paths.primary ?? paths.fallback ?? bestCoverPath(track);
-      if (path) return convertFileSrc(path);
-    }
-    return null;
+    return list;
   }, [libraryTracks, artistKey, playingFile]);
+
+  const [artistCoverIdx, setArtistCoverIdx] = useState(0);
+  useEffect(() => {
+    setArtistCoverIdx(0);
+  }, [playingFile.path, artistKey]);
+
+  const artistCoverSrc = artistCoverCandidates[artistCoverIdx] ?? null;
 
   const artistDisplayName = useMemo(() => {
     if (artistInfo?.name) return artistInfo.name;
@@ -424,7 +438,10 @@ export function MusicNowPlayingPanel({
           <NpCard className="shrink-0" onClick={openArtist}>
             <div
               className="relative w-full overflow-hidden"
-              style={{ aspectRatio: ABOUT_ARTIST_ASPECT }}
+              style={{
+                aspectRatio: ABOUT_ARTIST_ASPECT,
+                background: "var(--music-surface)",
+              }}
             >
               {artistCoverSrc ? (
                 <img
@@ -441,8 +458,16 @@ export function MusicNowPlayingPanel({
                     transform: "scale(1.22)",
                     transformOrigin: "center center",
                   }}
+                  onError={() => setArtistCoverIdx((i) => i + 1)}
                 />
-              ) : null}
+              ) : (
+                <div
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{ color: "var(--music-text-muted)" }}
+                >
+                  <Icon icon="solar:music-note-bold" width={40} height={40} aria-hidden />
+                </div>
+              )}
               <div
                 className="pointer-events-none absolute inset-0"
                 style={{
