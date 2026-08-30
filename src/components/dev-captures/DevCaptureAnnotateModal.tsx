@@ -235,10 +235,12 @@ export function DevCaptureAnnotateModal({
   };
 
   const copyFilename = async () => {
+    const target = entry ?? lastEntryRef.current;
+    if (!target) return;
     try {
-      await writeText(entry.name);
+      await writeText(target.name);
     } catch {
-      await navigator.clipboard.writeText(entry.name);
+      await navigator.clipboard.writeText(target.name);
     }
     setCopiedName(true);
   };
@@ -327,7 +329,8 @@ export function DevCaptureAnnotateModal({
 
   const handleSave = async () => {
     const img = imageRef.current;
-    if (!img || !imageSize || saving) return;
+    const target = entry ?? lastEntryRef.current;
+    if (!img || !imageSize || saving || !target) return;
     setSaving(true);
     try {
       const offscreen = document.createElement("canvas");
@@ -352,10 +355,10 @@ export function DevCaptureAnnotateModal({
       });
 
       await invoke("write_dev_capture_png", {
-        path: entry.path,
+        path: target.path,
         bytes: Array.from(bytes),
       });
-      onSaved(entry.path);
+      onSaved(target.path);
     } catch (e) {
       console.error("[dev-captures] save failed", e);
       setSaving(false);

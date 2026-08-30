@@ -2,15 +2,15 @@
 
 > Live cursor. Mint reads this FIRST, then `AGENTS.md`. Update LAST after user-visible app behavior that will ship. If this file and the code disagree, the code wins: fix this file forward. Never git-restore a dirty tree to match it.
 
-Shipping version: 0.3.1 (unreleased)
+Shipping version: 0.4.1 (unreleased)
 
-Last shipped to users: 0.3.0
+Last shipped to users: 0.4.0
 
-Last updated: 2026-08-30 (Unreleased log)
+Last updated: 2026-08-30 (shipped 0.4.0)
 
-Status: 0.3.0 live on GitHub and updater.json. 0.3.1 in tree: Settings popup, Discord presence (gated 0.4.0 / Debugging), SponsorBlock learning, downloader hero. Companion still developer-gated on localhost.
+Status: 0.4.0 live on GitHub and updater.json. Settings popup, download rail dock, virtual playlists, lyrics / Now Playing rail, Discord Rich Presence, accent picker shipped. Companion still developer-gated on localhost.
 
-Closed release notes for 0.3.0 and earlier: `docs/agents/release/versions/`. Do not paste them back into this file.
+Closed release notes for 0.4.0 and earlier: `docs/agents/release/versions/`. Do not paste them back into this file.
 
 ## Unreleased
 
@@ -29,7 +29,7 @@ Rules: root `AGENTS.md` → **How to log Unreleased**.
 
 ## Now
 
-Settings is a centered popup with categorized top tabs and search. Download is a rail dock plus expandable hero overlay; library is the default tab. Discord Rich Presence is in tree (reload fix landed). Before public Discord ship: staleness guard (Next 1). Companion Browser V1 remains gated. Other priorities: storage cap, main-app nav restructure.
+0.4.0 is out. Next focus: storage cap before enqueue, main-app nav restructure, website marketing polish after screenshots.
 
 Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shipped target. Windows dev: `npm run dev:app`.
 
@@ -39,9 +39,9 @@ Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shi
 
 ## Next 3 (priority order)
 
-1. Discord Rich Presence staleness guard: clear presence if no snapshot within N×15s (destroyed main webview can leave a stale card). Land before Discord ships to users.
-2. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
-3. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell.
+1. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
+2. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell.
+3. Website hero / marketing pass (3-slide screenshots already in tree).
 
 ## Notes (not P0)
 

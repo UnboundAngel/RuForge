@@ -655,14 +655,14 @@ export function MusicHomeView({
                     </h2>
                     <button
                       type="button"
-                      onClick={openMusicLiked}
+                      onClick={() => openMusicLiked()}
                       className="text-xs font-medium shrink-0 hover:underline"
                       style={{ color: "var(--music-text-secondary)" }}
                     >
                       See all
                     </button>
                   </div>
-                  <LikedSongsCard files={likedTracks} onClick={openMusicLiked} />
+                  <LikedSongsCard files={likedTracks} onClick={() => openMusicLiked()} />
                 </motion.section>
               )}
             </AnimatePresence>
