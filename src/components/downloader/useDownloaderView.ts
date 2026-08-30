@@ -215,30 +215,20 @@ export function useDownloaderView({
 
     setBatchQueueJobIds((prev) => {
       if (pipeline.length > 1) {
+        const pipelineIds = new Set(pipeline.map((j) => j.id));
         if (prev && prev.length > 1) {
-          const merged = [...prev];
+          const merged = prev.filter((id) => pipelineIds.has(id));
           for (const j of pipeline) {
             if (!merged.includes(j.id)) merged.push(j.id);
           }
-          return merged.length > 1 ? merged : prev;
+          return merged.length > 1 ? merged : null;
         }
         return pipeline.map((j) => j.id);
       }
-      return prev;
+      // Drop batch chrome once the active pipeline is a single job (or empty).
+      return null;
     });
   }, [downloadJobs]);
-
-  useEffect(() => {
-    if (!batchQueueJobIds || batchQueueJobIds.length === 0) return;
-    const stillActive = downloadJobs.some(
-      (j) =>
-        batchQueueJobIds.includes(j.id) &&
-        (j.status === "queued" || j.status === "downloading" || j.status === "paused"),
-    );
-    if (!stillActive) {
-      setBatchQueueJobIds(null);
-    }
-  }, [downloadJobs, batchQueueJobIds]);
 
   const batchQueueJobs = useMemo(() => {
     const active = (ids: string[]) => {
@@ -461,8 +451,13 @@ export function useDownloaderView({
   }, [anyDownloading, videoInfo, focusedJob, progress]);
 
   const collectionDownloadCarousel = batchDownloadCarousel ?? playlistDownloadCarousel;
+  /** Held staging is a review queue (Download still required), not a transfer. */
+  const batchIsHeldOnly =
+    batchQueueJobs.length > 0 &&
+    batchQueueJobs.every((j) => j.status === "queued" && j.approval === "held");
   const showImmersiveDownload =
-    focusShowsBigProgress || Boolean(batchDownloadCarousel);
+    focusShowsBigProgress ||
+    (Boolean(batchDownloadCarousel) && !batchIsHeldOnly);
 
   const batchQueueHeroDisplayBytes = useMemo(() => {
     if (batchQueueJobs.length <= 1) return null;
@@ -1644,7 +1639,6 @@ export function useDownloaderView({
   }, [url]);
 
   const handleClearUrl = useCallback(() => {
-    const trimmed = useRuforgeStore.getState().url.trim();
     clipboardReadGenRef.current += 1;
     setDownloaderUrl("");
     setDownloaderFocusedJobId(null);
@@ -1661,17 +1655,14 @@ export function useDownloaderView({
     pendingDownloadUrlRef.current = null;
     setDownloadStartPending(false);
     downloadStartInflightRef.current = false;
-    if (trimmed.startsWith("http")) {
-      for (const job of useRuforgeStore.getState().downloadJobs) {
-        if (
-          job.status === "queued" &&
-          job.approval === "held" &&
-          youtubeUrlsMatch(job.url, trimmed)
-        ) {
-          void removeDownloadJob(job.id);
-        }
+    // Clear stages the whole held review queue, not only the bar URL match.
+    for (const job of useRuforgeStore.getState().downloadJobs) {
+      if (job.status === "queued" && job.approval === "held") {
+        void removeDownloadJob(job.id);
       }
     }
+    setBatchQueueJobIds(null);
+    setBatchQueueSnapshots({});
   }, [
     setDownloaderUrl,
     setDownloaderFocusedJobId,
@@ -1694,18 +1685,24 @@ export function useDownloaderView({
         j.status === "downloading" ||
         j.status === "paused",
     );
+    const batchIds =
+      batchQueueJobIds && batchQueueJobIds.length > 1 ? batchQueueJobIds : null;
     const focused = st.focusedJobId
       ? active.find((j) => j.id === st.focusedJobId)
       : null;
-    const targets = focused
-      ? [focused]
-      : active.filter((j) => j.status === "downloading").length > 0
-        ? active.filter((j) => j.status === "downloading")
-        : active;
+    const targets = batchIds
+      ? active.filter((j) => batchIds.includes(j.id))
+      : focused
+        ? [focused]
+        : active.filter((j) => j.status === "downloading").length > 0
+          ? active.filter((j) => j.status === "downloading")
+          : active;
+    setBatchQueueJobIds(null);
+    setBatchQueueSnapshots({});
     for (const job of targets) {
       void removeDownloadJob(job.id, { manual: true });
     }
-  }, [removeDownloadJob]);
+  }, [batchQueueJobIds, removeDownloadJob]);
 
   useEffect(() => {
     if (!showUrlBubble) clearUrlBubbleCopied();

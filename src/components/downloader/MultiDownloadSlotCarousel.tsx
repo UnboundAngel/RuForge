@@ -28,12 +28,12 @@ function railVideosIconCenter(): { x: number; y: number } {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 
-function slotMetrics(cardWidth: number) {
+function slotMetrics(cardWidth: number, mode: LayoutMode = "pair") {
   const slotRight = cardWidth + SLOT_GAP_PX;
-  const slotCenter = slotRight / 2;
-  const rowWidth = cardWidth * 2 + SLOT_GAP_PX;
+  const rowWidth =
+    mode === "solo" ? cardWidth : cardWidth * 2 + SLOT_GAP_PX;
   const gapCenter = cardWidth + SLOT_GAP_PX / 2;
-  return { slotRight, slotCenter, rowWidth, gapCenter };
+  return { slotRight, rowWidth, gapCenter };
 }
 
 function FlyingThumb({
@@ -137,13 +137,15 @@ export function MultiDownloadSlotCarousel({
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const activeCardRef = useRef<HTMLDivElement>(null);
-  const cardWidthRef = useRef(320);
   const displayIndexRef = useRef(currentIndex);
   const promotingRef = useRef(false);
   const safeIndexRef = useRef(currentIndex);
 
+  const [cardWidth, setCardWidth] = useState(320);
   const [displayIndex, setDisplayIndex] = useState(currentIndex);
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>("pair");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(
+    items.length <= 1 ? "solo" : "pair",
+  );
   const [isPromoting, setIsPromoting] = useState(false);
   const [fly, setFly] = useState<FlyPayload | null>(null);
   const [incomingPreview, setIncomingPreview] = useState(false);
@@ -154,11 +156,13 @@ export function MultiDownloadSlotCarousel({
   const safeIndex = Math.min(Math.max(0, currentIndex), Math.max(0, items.length - 1));
   safeIndexRef.current = safeIndex;
 
-  const { slotRight, slotCenter, rowWidth, gapCenter } = slotMetrics(cardWidthRef.current);
+  const renderMode: LayoutMode =
+    isPromoting || items.length > 1 ? layoutMode : "solo";
+  const { slotRight, rowWidth, gapCenter } = slotMetrics(cardWidth, renderMode);
 
   const activeItem = items[displayIndex];
   const previewItem =
-    layoutMode === "pair" && displayIndex + 1 < items.length
+    renderMode === "pair" && displayIndex + 1 < items.length
       ? items[displayIndex + 1]
       : null;
 
@@ -169,13 +173,13 @@ export function MultiDownloadSlotCarousel({
 
   const showEyebrow =
     eyebrowRemaining > 0 &&
-    layoutMode === "pair" &&
+    renderMode === "pair" &&
     !(isPromoting && promoteTargetIndex != null && promoteTargetIndex >= items.length - 1);
 
   const measureCardWidth = useCallback(() => {
     const card = activeCardRef.current?.querySelector<HTMLElement>("[data-download-card]");
     if (card && card.offsetWidth > 0) {
-      cardWidthRef.current = card.offsetWidth;
+      setCardWidth((w) => (w === card.offsetWidth ? w : card.offsetWidth));
     }
   }, []);
 
@@ -190,13 +194,13 @@ export function MultiDownloadSlotCarousel({
       }
 
       measureCardWidth();
-      const { slotRight: right } = slotMetrics(cardWidthRef.current);
+      const { slotRight: right } = slotMetrics(cardWidth, "pair");
       promoteX.set(right);
       promotingRef.current = true;
       setPromoteTargetIndex(toIndex);
       setIsPromoting(true);
     },
-    [items, measureCardWidth, promoteX],
+    [items, measureCardWidth, promoteX, cardWidth],
   );
 
   useLayoutEffect(() => {
@@ -204,6 +208,17 @@ export function MultiDownloadSlotCarousel({
   });
 
   useLayoutEffect(() => {
+    if (items.length <= 1) {
+      displayIndexRef.current = 0;
+      setDisplayIndex(0);
+      setLayoutMode("solo");
+      promotingRef.current = false;
+      setIsPromoting(false);
+      setPromoteTargetIndex(null);
+      promoteX.set(0);
+      return;
+    }
+
     if (safeIndex < displayIndexRef.current) {
       displayIndexRef.current = safeIndex;
       setDisplayIndex(safeIndex);
@@ -211,7 +226,7 @@ export function MultiDownloadSlotCarousel({
       promotingRef.current = false;
       setIsPromoting(false);
       setPromoteTargetIndex(null);
-      promoteX.set(safeIndex >= items.length - 1 ? slotMetrics(cardWidthRef.current).slotCenter : 0);
+      promoteX.set(0);
       return;
     }
 
@@ -225,12 +240,10 @@ export function MultiDownloadSlotCarousel({
 
     const toIndex = promoteTargetIndex;
     const toSolo = toIndex >= items.length - 1;
-    const { slotCenter: center } = slotMetrics(cardWidthRef.current);
-    const targetX = toSolo ? center : 0;
     let cancelled = false;
 
     const run = async () => {
-      await animate(promoteX, targetX, {
+      await animate(promoteX, 0, {
         duration: SLIDE_DURATION,
         ease: SLOT_EASE,
       });
@@ -243,9 +256,9 @@ export function MultiDownloadSlotCarousel({
       promotingRef.current = false;
       setIsPromoting(false);
       setPromoteTargetIndex(null);
+      promoteX.set(0);
 
       if (!toSolo) {
-        promoteX.set(0);
         setIncomingPreview(true);
         window.setTimeout(() => setIncomingPreview(false), 400);
       }
@@ -298,19 +311,15 @@ export function MultiDownloadSlotCarousel({
             <BatchRemainingEyebrow remaining={eyebrowRemaining} gapCenterX={gapCenter} />
           ) : null}
 
-          {layoutMode === "solo" && !isPromoting ? (
-            <div
-              ref={activeCardRef}
-              className="absolute top-0"
-              style={{ left: slotCenter }}
-            >
+          {renderMode === "solo" && !isPromoting ? (
+            <div ref={activeCardRef} className="absolute top-0 left-0">
               <DownloadQueueItem
                 {...cardProps(activeItem, showLeftProgress, showLeftProgress ? percentage : 0, showLeftProgress ? speedLabel : null)}
               />
             </div>
           ) : null}
 
-          {layoutMode === "pair" && !isPromoting ? (
+          {renderMode === "pair" && !isPromoting ? (
             <>
               <div ref={activeCardRef} className="absolute top-0 left-0">
                 <DownloadQueueItem

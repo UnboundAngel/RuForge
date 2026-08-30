@@ -1,4 +1,5 @@
-const HYDRATION_CONCURRENCY = 2;
+/** One metadata fetch at a time so queued jobs do not stampede yt-dlp simulate. */
+const HYDRATION_CONCURRENCY = 1;
 
 let activeCount = 0;
 const waitQueue: Array<() => void> = [];

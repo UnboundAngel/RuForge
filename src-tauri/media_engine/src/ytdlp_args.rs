@@ -263,4 +263,37 @@ mod tests {
         let tpl = effective_filename_template(&probe, "%(title)s.%(ext)s", &choices, &paths);
         assert!(tpl.starts_with("Videos/"));
     }
+
+    #[test]
+    fn push_auth_prefers_cookie_file_over_browser() {
+        let mut args = Vec::new();
+        push_auth_args(
+            &mut args,
+            Some(&AuthConfig {
+                cookie_file: Some("C:/tmp/cookies.txt".into()),
+                browser_label: Some("chrome:C:/locked/profile".into()),
+            }),
+        );
+        assert_eq!(
+            args,
+            vec!["--cookies".to_string(), "C:/tmp/cookies.txt".to_string()]
+        );
+        assert!(!args.iter().any(|a| a == "--cookies-from-browser"));
+    }
+
+    #[test]
+    fn push_auth_browser_label_uses_cookies_from_browser() {
+        let mut args = Vec::new();
+        push_auth_args(
+            &mut args,
+            Some(&AuthConfig {
+                cookie_file: None,
+                browser_label: Some("firefox".into()),
+            }),
+        );
+        assert_eq!(
+            args,
+            vec!["--cookies-from-browser".to_string(), "firefox".to_string()]
+        );
+    }
 }

@@ -73,6 +73,65 @@ fn resolve_ytdlp_path(app: &AppHandle) -> Result<String, EngineError> {
         .map(|_| "yt-dlp-sidecar".to_string())
 }
 
+/// Direct tokio spawn for inspect/simulate. Tauri shell event channels can stall after
+/// yt-dlp exits when multiple hydrations run (queued downloads), leaving prepare hung.
+async fn output_via_tokio(exe: &Path, args: &[String]) -> Result<ProcessOutput, EngineError> {
+    let mut child = tokio::process::Command::new(exe)
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| {
+            EngineError::new(
+                EngineErrorCode::ProcessLaunchFailure,
+                format!("Failed to launch {}: {}", exe.display(), e),
+            )
+        })?;
+
+    let mut stdout_pipe = child.stdout.take().expect("stdout piped");
+    let mut stderr_pipe = child.stderr.take().expect("stderr piped");
+
+    let collect = async {
+        use tokio::io::AsyncReadExt;
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let (stdout_res, stderr_res, status_res) = tokio::join!(
+            stdout_pipe.read_to_end(&mut stdout),
+            stderr_pipe.read_to_end(&mut stderr),
+            child.wait(),
+        );
+        let _ = stdout_res;
+        let _ = stderr_res;
+        (status_res, stdout, stderr)
+    };
+
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(SUBPROCESS_OUTPUT_TIMEOUT_SECS),
+        collect,
+    )
+    .await
+    {
+        Ok((Ok(status), stdout, stderr)) => Ok(ProcessOutput {
+            status_code: status.code(),
+            stdout,
+            stderr,
+        }),
+        Ok((Err(e), _, _)) => Err(EngineError::new(
+            EngineErrorCode::ProcessLaunchFailure,
+            format!("Failed to run {}: {}", exe.display(), e),
+        )),
+        Err(_) => {
+            let _ = child.start_kill();
+            let _ = child.wait().await;
+            Err(EngineError::new(
+                EngineErrorCode::RuntimeExecutionFailed,
+                format!("yt-dlp timed out after {SUBPROCESS_OUTPUT_TIMEOUT_SECS}s"),
+            ))
+        }
+    }
+}
+
 pub struct TauriProcessLauncher {
     app: AppHandle,
 }
@@ -86,6 +145,11 @@ impl TauriProcessLauncher {
 #[async_trait]
 impl ProcessLauncher for TauriProcessLauncher {
     async fn output(&self, _exe: &Path, args: &[String]) -> Result<ProcessOutput, EngineError> {
+        let path = resolve_ytdlp_path(&self.app)?;
+        if path != "yt-dlp-sidecar" {
+            return output_via_tokio(Path::new(&path), args).await;
+        }
+
         use tauri_plugin_shell::process::CommandEvent;
 
         let shell = ytdlp_shell_command(&self.app)

@@ -7,11 +7,13 @@
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use cookie::Cookie;
 use netscape_cookies::{cookie_dedupe_key, write_netscape_cookies};
 use tauri::{AppHandle, Manager, Url};
 use tempfile::NamedTempFile;
+use tokio::sync::Mutex;
 
 const YOUTUBE_URL: &str = "https://www.youtube.com";
 const MUSIC_YOUTUBE_URL: &str = "https://music.youtube.com";
@@ -226,9 +228,18 @@ fn format_unwritable_export_error(
     )
 }
 
+fn cookie_export_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
 pub async fn export_ruforge_cookies_for_ytdlp(
     app: &AppHandle,
 ) -> Result<RuforgeCookieExport, String> {
+    // Serialize exports: concurrent CookieManager probes from queued hydrations deadlock
+    // or return thin/empty snapshots when two jobs start together.
+    let _export_gate = cookie_export_lock().lock().await;
+
     let app = app.clone();
     let (cookies, probes, missing, raw_before_dedupe) = tauri::async_runtime::spawn_blocking(move || {
         collect_cookies_sync(&app)
