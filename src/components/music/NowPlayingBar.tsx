@@ -35,8 +35,9 @@ import {
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
+/** Dim icons only — root opacity creates a stacking context that loses hits to neighbor overflow. */
 const barBtnClass =
-  "flex h-8 w-8 shrink-0 items-center justify-center transition-opacity opacity-60 hover:opacity-100";
+  "flex h-8 w-8 shrink-0 items-center justify-center [&>*]:opacity-60 hover:[&>*]:opacity-100 [&>*]:transition-opacity";
 
 type Props = {
   paused: boolean;
@@ -326,7 +327,7 @@ export function NowPlayingBar({
       }}
     >
       <div className="grid h-full grid-cols-[minmax(0,1fr)_minmax(0,1.8fr)_minmax(248px,1.15fr)] items-center gap-x-3 px-4">
-        <div className="flex items-center gap-2.5 min-w-0 w-fit max-w-full">
+        <div className="flex min-w-0 max-w-full w-fit items-center gap-2.5 overflow-hidden">
         <div
           role="button"
           tabIndex={0}
@@ -378,12 +379,12 @@ export function NowPlayingBar({
         <MusicLikeButton file={playingFile} className="overflow-visible opacity-100 hover:opacity-100" size={17} />
         </div>
 
-        <div className="flex h-full min-w-0 flex-col items-center justify-end gap-1 pb-2.5 pt-1">
-          <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="relative z-10 flex h-full min-w-0 flex-col items-center justify-end gap-1 pb-2.5 pt-1">
+          <div className="relative z-10 flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={toggleShuffle}
-              className={cn(barBtnClass, shuffleOn && "opacity-100")}
+              className={cn(barBtnClass, shuffleOn && "[&>*]:opacity-100")}
               style={{ color: shuffleOn ? "var(--music-accent)" : "var(--music-text-primary)" }}
               aria-label={shuffleOn ? "Disable shuffle" : "Enable shuffle"}
               aria-pressed={shuffleOn}
@@ -422,7 +423,7 @@ export function NowPlayingBar({
             <button
               type="button"
               onClick={toggleLoop}
-              className={cn(barBtnClass, loopMode !== "off" && "opacity-100")}
+              className={cn(barBtnClass, loopMode !== "off" && "[&>*]:opacity-100")}
               style={{ color: loopMode !== "off" ? "var(--music-accent)" : "var(--music-text-primary)" }}
               aria-label={loopModeAriaLabel(loopMode)}
             >
@@ -500,7 +501,7 @@ export function NowPlayingBar({
             <button
               type="button"
               onClick={handleCancelAllDownloads}
-              className={cn(barBtnClass, "opacity-50 hover:opacity-100")}
+              className={cn(barBtnClass, "[&>*]:opacity-50 hover:[&>*]:opacity-100")}
               style={{ color: "var(--music-text-primary)" }}
               aria-label="Stop all downloads"
             >
@@ -511,7 +512,7 @@ export function NowPlayingBar({
           <button
             type="button"
             onClick={onToggleLyrics}
-            className={cn(barBtnClass, "rf-music-tooltip-anchor", lyricsOpen && "opacity-100")}
+            className={cn(barBtnClass, "rf-music-tooltip-anchor", lyricsOpen && "[&>*]:opacity-100")}
             style={{
               color: lyricsOpen
                 ? "var(--music-accent)"
@@ -555,7 +556,7 @@ export function NowPlayingBar({
             <button
               type="button"
               onClick={() => setShowMoreMenu((s) => !s)}
-              className={cn(barBtnClass, showMoreMenu && "opacity-100")}
+              className={cn(barBtnClass, showMoreMenu && "[&>*]:opacity-100")}
               style={{ color: "var(--music-text-primary)" }}
               aria-label="More controls"
             >
