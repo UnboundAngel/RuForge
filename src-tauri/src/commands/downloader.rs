@@ -821,38 +821,36 @@ pub async fn get_video_info(
     cookie_file: Option<String>,
     display_only: Option<bool>,
 ) -> Result<VideoInfo, String> {
-    let cookie_probe = video_info_cookie_probe(browser_cookies.clone(), cookie_file.clone());
-    let browser_arg = if browser_cookies.as_deref() == Some("ruforge") {
-        ytdlp_browser_cookie_arg(&app, "ruforge").ok()
-    } else {
-        None
-    };
+    // Internal: always CookieManager export. Never --cookies-from-browser on the live WebView2 profile.
+    if browser_cookies.as_deref() == Some("ruforge") {
+        let export = export_ruforge_cookies_for_ytdlp(&app).await?;
+        let path = export.path().display().to_string();
+        let _export_guard = export;
+        let auth = auth_from_download_options(None, Some(&path), None);
+        let request = InspectRequest {
+            url,
+            video_format: format,
+            audio_only: audio_only.unwrap_or(false),
+            display_only: display_only.unwrap_or(false),
+            auth,
+        };
+        let result = engine_state
+            .engine
+            .inspect(request)
+            .await
+            .map_err(|e| e.message)?;
+        return Ok(media_inspection_to_video_info(result.inspection));
+    }
+
+    let browser_arg = browser_cookies
+        .as_deref()
+        .filter(|b| !b.is_empty() && *b != "chrome")
+        .and_then(|b| ytdlp_browser_cookie_arg(&app, b).ok());
     let auth = auth_from_download_options(
         browser_cookies.as_deref(),
         cookie_file.as_deref(),
         browser_arg,
     );
-    if let Some(ref probe) = cookie_probe {
-        if probe.browser_cookies.as_deref() == Some("ruforge") {
-            let export = export_ruforge_cookies_for_ytdlp(&app).await?;
-            let path = export.path().display().to_string();
-            let _export_guard = export;
-            let auth = auth_from_download_options(None, Some(&path), None);
-            let request = InspectRequest {
-                url: url.clone(),
-                video_format: format.clone(),
-                audio_only: audio_only.unwrap_or(false),
-                display_only: display_only.unwrap_or(false),
-                auth,
-            };
-            let result = engine_state
-                .engine
-                .inspect(request)
-                .await
-                .map_err(|e| e.message)?;
-            return Ok(media_inspection_to_video_info(result.inspection));
-        }
-    }
 
     let request = InspectRequest {
         url,
@@ -998,7 +996,7 @@ fn spawn_scrub_previews_for_recent_videos(
 #[tauri::command]
 pub async fn start_download_job(
     app: AppHandle,
-    engine_state: State<'_, MediaEngineState>,
+    _engine_state: State<'_, MediaEngineState>,
     manager: State<'_, DownloadJobManager>,
     job_id: String,
     url: String,
@@ -1007,40 +1005,9 @@ pub async fn start_download_job(
 ) -> Result<(), String> {
     manager.try_claim_active_job(&job_id)?;
 
-    let browser_arg = if options.browser_cookies.as_deref() == Some("ruforge") {
-        ytdlp_browser_cookie_arg(&app, "ruforge").ok()
-    } else {
-        None
-    };
-
-    let inspect_auth = auth_from_download_options(
-        options.browser_cookies.as_deref(),
-        options.cookie_file.as_deref(),
-        browser_arg.clone(),
-    );
-
-    let inspect_result = match engine_state
-        .engine
-        .inspect(InspectRequest {
-            url: url.clone(),
-            video_format: if options.audio_only {
-                None
-            } else {
-                Some(options.format.clone())
-            },
-            audio_only: options.audio_only,
-            display_only: false,
-            auth: inspect_auth.clone(),
-        })
-        .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            manager.release_claim_if_pending(&job_id)?;
-            return Err(e.message);
-        }
-    };
-
+    // Internal cookies must be CookieManager-exported before any yt-dlp spawn.
+    // Never pass chrome:<live WebView2 profile> via --cookies-from-browser for inspect:
+    // the open explorer profile locks the DB and yt-dlp can hang with no progress.
     let cookie_fallback = if ytdlp_has_configured_cookie_source(
         options.browser_cookies.as_deref(),
         options.cookie_file.as_deref(),
@@ -1050,7 +1017,7 @@ pub async fn start_download_job(
         None
     };
 
-    let (download_options, cookie_export_guard) = if inspect_auth.is_some() {
+    let (auth_options, cookie_export_guard) =
         if options.browser_cookies.as_deref() == Some("ruforge") {
             match ytdlp_download_options_with_ruforge_export(&app, &options).await {
                 Ok(pair) => pair,
@@ -1059,12 +1026,26 @@ pub async fn start_download_job(
                     return Err(e);
                 }
             }
-        } else {
+        } else if ytdlp_has_configured_cookie_source(
+            options.browser_cookies.as_deref(),
+            options.cookie_file.as_deref(),
+        ) {
             (options.clone(), None)
+        } else {
+            (download_options_without_cookies(&options), None)
+        };
+
+    let browser_arg = match auth_options.browser_cookies.as_deref() {
+        Some(browser) if browser != "chrome" && browser != "ruforge" => {
+            ytdlp_browser_cookie_arg(&app, browser).ok()
         }
-    } else {
-        (download_options_without_cookies(&options), None)
+        _ => None,
     };
+
+    // Do not re-run dual format inspect here. Hydrate already called get_video_info;
+    // a second simulate pair was hanging after yt-dlp exited (no transfer spawn).
+    // Filename template uses playlist_output_folder from options when present.
+    let download_options = auth_options;
 
     let choices = validated_choices_from_options(
         &download_options.format,
@@ -1084,11 +1065,8 @@ pub async fn start_download_job(
         playlist_index: options.playlist_index,
     };
 
-    let probe_json = inspect_result
-        .metadata_probe
-        .unwrap_or(serde_json::Value::Null);
     let filename_template_eff = effective_filename_template(
-        &probe_json,
+        &serde_json::Value::Null,
         &options.filename_template,
         &choices,
         &paths,
@@ -1139,8 +1117,6 @@ pub async fn start_download_job(
             return Err(e.message);
         }
     };
-    let _ = inspect_result.inspection_id;
-
     let shell = match ytdlp_shell_command(&app) {
         Ok(c) => c,
         Err(e) => {
@@ -1156,6 +1132,13 @@ pub async fn start_download_job(
             return Err(format!("Failed to start yt-dlp download: {}", e));
         }
     };
+
+    crate::rf_log!(
+        "download.ytdlp",
+        log::Level::Warn,
+        "yt-dlp download child spawned for job {}",
+        job_id
+    );
 
     match manager.place_running_child(&job_id, child) {
         Ok(Ok(())) => {}

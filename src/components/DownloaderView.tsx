@@ -1249,13 +1249,46 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           currentTitle={multiDownloadTitle}
                         />
                       </div>
-                      {immersivePhase !== "downloading" ? (
-                        <p className="max-w-md text-center text-sm font-medium text-stone-500">
+                      <div className="w-full max-w-sm">
+                        <div
+                          className="relative h-1.5 overflow-hidden rounded-full bg-white/[0.07]"
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={
+                            immersivePhase === "downloading"
+                              ? Math.round(bigProgressPct)
+                              : undefined
+                          }
+                          aria-busy={immersivePhase !== "downloading"}
+                        >
+                          {immersivePhase === "downloading" ? (
+                            <motion.div
+                              className="absolute inset-y-0 left-0 rounded-full bg-[color:var(--accent)]"
+                              initial={false}
+                              animate={{ width: `${bigProgressPct}%` }}
+                              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                            />
+                          ) : (
+                            <div
+                              className={
+                                immersivePhase === "finishing"
+                                  ? "rf-download-progress-pulse absolute inset-y-0 left-0 right-0 rounded-full bg-[color:var(--accent)]"
+                                  : "rf-download-progress-indeterminate absolute inset-y-0 rounded-full bg-[color:var(--accent)]"
+                              }
+                            />
+                          )}
+                        </div>
+                        <p className="mt-3 text-center text-sm font-medium text-stone-500">
                           {immersivePhase === "preparing"
                             ? "Connecting and starting the transfer. This can take a moment."
-                            : "Merging and writing the file. Progress may sit near the end."}
+                            : immersivePhase === "finishing"
+                              ? "Merging and writing the file. Progress may sit near the end."
+                              : heroSpeedLabel
+                                ? `${Math.round(bigProgressPct)}% · ${heroSpeedLabel}`
+                                : `${Math.round(bigProgressPct)}%`}
                         </p>
-                      ) : null}
+                      </div>
                       <button
                         type="button"
                         onClick={d.handleStopActiveDownload}

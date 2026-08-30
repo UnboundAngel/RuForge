@@ -44,7 +44,7 @@ pub struct StdProcessLauncher;
 impl ProcessLauncher for StdProcessLauncher {
     async fn output(&self, exe: &Path, args: &[String]) -> Result<ProcessOutput, EngineError> {
         validate_executable(exe)?;
-        let child = tokio::process::Command::new(exe)
+        let mut child = tokio::process::Command::new(exe)
             .args(args)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -56,33 +56,45 @@ impl ProcessLauncher for StdProcessLauncher {
                     format!("Failed to launch {}: {}", exe.display(), e),
                 )
             })?;
-        let timed = tokio::time::timeout(
-            Duration::from_secs(SUBPROCESS_OUTPUT_TIMEOUT_SECS),
-            child.wait_with_output(),
-        )
-        .await;
-        let output = match timed {
-            Ok(Ok(o)) => o,
-            Ok(Err(e)) => {
-                return Err(EngineError::new(
-                    EngineErrorCode::ProcessLaunchFailure,
-                    format!("Failed to run {}: {}", exe.display(), e),
-                ));
-            }
-            Err(_) => {
-                return Err(EngineError::new(
-                    EngineErrorCode::RuntimeExecutionFailed,
-                    format!(
-                        "yt-dlp timed out after {SUBPROCESS_OUTPUT_TIMEOUT_SECS}s"
-                    ),
-                ));
-            }
+
+        let mut stdout_pipe = child.stdout.take().expect("stdout piped");
+        let mut stderr_pipe = child.stderr.take().expect("stderr piped");
+
+        let collect = async {
+            use tokio::io::AsyncReadExt;
+            let mut stdout = Vec::new();
+            let mut stderr = Vec::new();
+            let (stdout_res, stderr_res, status_res) = tokio::join!(
+                stdout_pipe.read_to_end(&mut stdout),
+                stderr_pipe.read_to_end(&mut stderr),
+                child.wait(),
+            );
+            let _ = stdout_res;
+            let _ = stderr_res;
+            (status_res, stdout, stderr)
         };
-        Ok(ProcessOutput {
-            status_code: output.status.code(),
-            stdout: output.stdout,
-            stderr: output.stderr,
-        })
+
+        match tokio::time::timeout(Duration::from_secs(SUBPROCESS_OUTPUT_TIMEOUT_SECS), collect)
+            .await
+        {
+            Ok((Ok(status), stdout, stderr)) => Ok(ProcessOutput {
+                status_code: status.code(),
+                stdout,
+                stderr,
+            }),
+            Ok((Err(e), _, _)) => Err(EngineError::new(
+                EngineErrorCode::ProcessLaunchFailure,
+                format!("Failed to run {}: {}", exe.display(), e),
+            )),
+            Err(_) => {
+                let _ = child.start_kill();
+                let _ = child.wait().await;
+                Err(EngineError::new(
+                    EngineErrorCode::RuntimeExecutionFailed,
+                    format!("yt-dlp timed out after {SUBPROCESS_OUTPUT_TIMEOUT_SECS}s"),
+                ))
+            }
+        }
     }
 
     async fn spawn(&self, exe: &Path, args: &[String]) -> Result<SpawnedProcess, EngineError> {
