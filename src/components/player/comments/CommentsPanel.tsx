@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useScrollEdgeState } from "@/hooks/useScrollEdgeState";
 import {
+  Check,
   ChevronDown,
   ChevronUp,
   ListFilter,
@@ -133,6 +134,11 @@ function ReactionButton({
   );
 }
 
+const commentsFloatMenuClass =
+  "absolute right-0 top-full z-50 mt-1 min-w-[11rem] overflow-hidden rounded-2xl border border-white/10 bg-stone-950/95 py-1 shadow-2xl backdrop-blur-xl";
+const commentsFloatItemClass =
+  "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[11px] font-bold outline-none transition-colors hover:bg-white/5";
+
 export function ActionMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -147,7 +153,9 @@ export function ActionMenu() {
 
   return (
     <div
-      className="relative opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+      className={`relative transition-opacity ${
+        isOpen ? "z-30 opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+      }`}
       ref={ref}
     >
       <button
@@ -158,27 +166,24 @@ export function ActionMenu() {
       >
         <MoreVertical size={16} />
       </button>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: -5 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.15 }}
-          className="absolute right-0 top-full z-50 mt-1 w-32 overflow-hidden rounded-xl border border-white/5 bg-[color:var(--color-media-card)] py-1 shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
-        >
-          <button
-            type="button"
-            className="w-full cursor-pointer px-4 py-2 text-left text-[13px] font-medium text-white/90 outline-none transition-colors hover:bg-white/10"
+      <AnimatePresence>
+        {isOpen ? (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className={commentsFloatMenuClass}
           >
-            Report
-          </button>
-          <button
-            type="button"
-            className="w-full cursor-pointer px-4 py-2 text-left text-[13px] font-medium text-white/90 outline-none transition-colors hover:bg-white/10"
-          >
-            Block user
-          </button>
-        </motion.div>
-      )}
+            <button type="button" className={`${commentsFloatItemClass} text-stone-300 hover:text-white`}>
+              Report
+            </button>
+            <button type="button" className={`${commentsFloatItemClass} text-stone-300 hover:text-white`}>
+              Block user
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -211,37 +216,42 @@ export function FilterMenu({
       >
         <ListFilter size={20} strokeWidth={2} />
       </button>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: -5 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.15 }}
-          className="absolute right-0 top-full z-50 mt-2 w-40 overflow-hidden rounded-xl border border-white/5 bg-[color:var(--color-media-card)] py-1 shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
-        >
-          <button
-            type="button"
-            onClick={() => {
-              onChange("top");
-              setIsOpen(false);
-            }}
-            className={`flex w-full cursor-pointer items-center justify-between px-4 py-2 text-left text-[13px] font-medium outline-none transition-colors hover:bg-white/10 ${currentType === "top" ? "font-bold text-sky-400" : "text-white/90"}`}
+      <AnimatePresence>
+        {isOpen ? (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className={commentsFloatMenuClass}
           >
-            <span>Top comments</span>
-            {currentType === "top" && <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onChange("newest");
-              setIsOpen(false);
-            }}
-            className={`flex w-full cursor-pointer items-center justify-between px-4 py-2 text-left text-[13px] font-medium outline-none transition-colors hover:bg-white/10 ${currentType === "newest" ? "font-bold text-sky-400" : "text-white/90"}`}
-          >
-            <span>Newest first</span>
-            {currentType === "newest" && <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />}
-          </button>
-        </motion.div>
-      )}
+            {(
+              [
+                ["top", "Top comments"],
+                ["newest", "Newest first"],
+              ] as const
+            ).map(([type, label]) => {
+              const selected = currentType === type;
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => {
+                    onChange(type);
+                    setIsOpen(false);
+                  }}
+                  className={`${commentsFloatItemClass} ${
+                    selected ? "text-[color:var(--accent)]" : "text-stone-300 hover:text-white"
+                  }`}
+                >
+                  <span>{label}</span>
+                  {selected ? <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} /> : null}
+                </button>
+              );
+            })}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -303,7 +313,7 @@ export function CommentThread({
         />
       )}
 
-      <div className="group relative z-10 flex w-full gap-3">
+      <div className="group relative flex w-full gap-3">
         <div className="group/thread relative flex w-7 shrink-0 select-none flex-col items-center">
           <CommentAvatar user={comment.user} avatar={comment.avatar} />
 
