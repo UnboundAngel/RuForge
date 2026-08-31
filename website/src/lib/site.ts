@@ -5,7 +5,7 @@ export const SITE = {
   url: 'https://ruforge.app',
   tagline: 'Open-source media library and yt-dlp frontend for Windows.',
   description:
-    'Free Tauri desktop app with yt-dlp downloads, SponsorBlock, chapter navigation, and a local media library. No ads. No telemetry in standard use.',
+    'Free Tauri desktop app with yt-dlp downloads, a local media library, music Now Playing, SponsorBlock, and chapter navigation. No ads. No telemetry in standard use.',
   github: 'https://github.com/UnboundAngel/RuForge',
   releases: 'https://github.com/UnboundAngel/RuForge/releases',
   discussions: 'https://github.com/UnboundAngel/RuForge/discussions',

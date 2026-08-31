@@ -1,6 +1,6 @@
 import type { ImageMetadata } from 'astro';
-import downloadQueue from '../assets/tutorials/download/download2.png';
-import playerAudioHero from '../assets/tutorials/player/player-audio-hero.png';
+import heroDownload from '../assets/screenshots/02-download-downloading.webp';
+import heroMusic from '../assets/screenshots/03-music-now-playing.webp';
 import playerChapters from '../assets/tutorials/player/player-chapters.png';
 import sponsorScrub from '../assets/tutorials/sponsor/sponsor-scrub.png';
 
@@ -18,7 +18,7 @@ export interface LandingFeatureRow {
 export const landingFeatureIntro = {
   kicker: 'What you actually get',
   headline: [
-    'Everything streaming won\u2019t give you.',
+    'Download, library, and playback.',
     'Your files, offline, no strings attached.',
   ],
 };
@@ -28,43 +28,43 @@ export const landingFeatureRows: LandingFeatureRow[] = [
     id: 'downloader',
     reverse: false,
     pill: 'Downloader',
-    headline: ['Paste a link and walk away.', 'Playlists, formats, stall watchdog, all of it.'],
+    headline: ['Paste a URL. Hit download.', 'The queue keeps working while you leave the tab.'],
     paragraph:
-      'Multi-item batches stay on a centered card carousel with MB/s on the active row. The corner queue still crossfades thumbnails as jobs move. Music playlist downloads write `.ruforge-playlist.json` sidecars with per-track status. If something hangs too long, RuForge kills it and tells you why.',
+      'yt-dlp under the hood, with a UI that shows size before you commit. Batches use a card carousel with speed on the active job. Pause, resume, reorder, or replace from the queue. If a job stalls, RuForge kills it and marks it failed instead of pretending it is fine.',
     bullets: [
-      'Deno auto-install when yt-dlp needs a JS runtime',
-      'Tells you when the file is already in your library',
-      'Pause, resume, reorder, or replace a job in place',
+      'Video or audio-only (real m4a extraction)',
+      'Playlists land in numbered folders',
+      'Deno installs itself when yt-dlp needs a JS runtime',
     ],
-    image: downloadQueue,
-    imageAlt: 'RuForge downloader with floating queue drawer',
+    image: heroDownload,
+    imageAlt: 'RuForge downloader with an active download in progress',
   },
   {
-    id: 'audio',
+    id: 'music',
     reverse: true,
-    pill: 'Audio-only',
-    headline: ['Audio that isn\u2019t a video in disguise.', 'Player stays alive when there\u2019s no picture.'],
+    pill: 'Music',
+    headline: ['Music mode with a Now Playing rail.', 'Albums, playlists, and cover art that stays put.'],
     paragraph:
-      'Turn on audio-only and you get a real m4a, not a giant video stream squeezed into an audio file. Playback shows a full LED equalizer on the cover instead of a dead black box. Side waveforms move with the music while it plays.',
+      'Explore music.youtube.com in-app, pull playlists as audio, and keep listening from the Now Playing rail. Library shelves group albums and artists. Sidecars track which tracks finished so a partial playlist download is not a mystery.',
     bullets: [
-      'm4a extraction, not a full video re-encoded as audio',
-      '90-bar LED visualizer wired to Web Audio',
-      'Library cards keep cover art on hover',
+      'Audio-only batch downloads from Music Explore',
+      'Now Playing rail with lyrics when available',
+      'Playlist status sidecars under your Playlists folder',
     ],
-    image: playerAudioHero,
-    imageAlt: 'RuForge audio-only player with LED equalizer hero',
+    image: heroMusic,
+    imageAlt: 'RuForge music Now Playing rail with cover art and playback controls',
   },
   {
     id: 'chapters',
     reverse: false,
     pill: 'Chapters',
-    headline: ['Scrub by chapter, not by guesswork.', 'Hover a segment and see the frame.'],
+    headline: ['Chapters on the scrub bar.', 'Hover a segment to preview the frame.'],
     paragraph:
-      'Chapters from the yt-dlp sidecar become their own scrub pills. Hover one and you get a preview pulled from the sprite sheet ffmpeg built when you downloaded. Jump with prev/next, or Shift+arrow if you are in a hurry.',
+      'If the video has chapters in its yt-dlp sidecar, the scrub bar splits into labeled segments. Hover shows a frame from the sprite sheet ffmpeg built after download. Jump with prev/next or Shift+arrow.',
     bullets: [
-      'Sprite sheets on download (off in Settings if you want)',
+      'Sprite sheets generate after download (optional in Settings)',
       'Long chapter titles scroll instead of clipping',
-      'Chapter data lives in the sidecar, no extra API calls',
+      'No extra network call; chapters come from the sidecar',
     ],
     image: playerChapters,
     imageAlt: 'RuForge player chapter scrubber with hover preview',
@@ -73,13 +73,13 @@ export const landingFeatureRows: LandingFeatureRow[] = [
     id: 'sponsorblock',
     reverse: true,
     pill: 'SponsorBlock',
-    headline: ['Sponsor chunks skip on files you already own.', 'Not just in a browser tab.'],
+    headline: ['Skip sponsors on files you already own.', 'Same categories as the browser extension.'],
     paragraph:
-      'First play pulls segments and saves a sidecar next to the video. Intros, self-promo, music tangents, the usual categories. It learns what you skip versus what you sit through.',
+      'First play fetches segments and writes a sidecar next to the video. After that it works offline. Categories include sponsor, intro, outro, self-promo, and music offtopic. It learns what you actually skip.',
     bullets: [
-      'Scrub bar colors match each segment type',
+      'Color-coded ranges on the scrub bar',
       'On by default; tune categories in Settings',
-      'Works offline after the first fetch',
+      'Privacy hash fetch (prefix only, not the full id)',
     ],
     image: sponsorScrub,
     imageAlt: 'RuForge player with SponsorBlock scrub overlay',

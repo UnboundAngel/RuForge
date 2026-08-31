@@ -95,7 +95,7 @@ export const NAV_SECTIONS: NavSection[] = [
         slug: 'explorer',
         title: 'Explorer',
         description:
-          'Embedded webview for cookie and session flows age-restricted or members-only content needs, not general browsing.',
+          'Embedded webview for cookie and session flows when age-restricted or members-only content needs a login, not general browsing.',
         outline: ['When to use it', 'Title bar navigation', 'Cookie export', 'Layout constraints'],
       },
       {

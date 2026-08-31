@@ -6,7 +6,7 @@ Shipping version: 0.4.1 (unreleased)
 
 Last shipped to users: 0.4.0
 
-Last updated: 2026-08-30 (shipped 0.4.0)
+Last updated: 2026-08-30 (Unreleased log)
 
 Status: 0.4.0 live on GitHub and updater.json. Settings popup, download rail dock, virtual playlists, lyrics / Now Playing rail, Discord Rich Presence, accent picker shipped. Companion still developer-gated on localhost.
 
@@ -29,7 +29,7 @@ Rules: root `AGENTS.md` → **How to log Unreleased**.
 
 ## Now
 
-0.4.0 is out. Next focus: storage cap before enqueue, main-app nav restructure, website marketing polish after screenshots.
+0.4.0 is out. App work pause-friendly. Website hero / marketing pass done for the 3-slide set. Next focus: storage cap before enqueue, main-app nav restructure.
 
 Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shipped target. Windows dev: `npm run dev:app`.
 
@@ -41,7 +41,7 @@ Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shi
 
 1. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
 2. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell.
-3. Website hero / marketing pass (3-slide screenshots already in tree).
+3. Re-test mid-download 403 at 720p with cookies (see Notes).
 
 ## Notes (not P0)
 
