@@ -1485,7 +1485,7 @@ button.rf-yt-profile-pill {
 
 .rf-comments-header {
   position: relative;
-  z-index: 2;
+  z-index: 20;
   background: #271c18;
 }
 
