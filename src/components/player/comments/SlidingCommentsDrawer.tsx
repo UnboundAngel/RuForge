@@ -146,7 +146,7 @@ export function SlidingCommentsDrawer({
           width: COMMENTS_PANEL_WIDTH,
           x: animatedX,
         }}
-        className={`absolute bottom-0 right-0 top-0 z-[65] flex flex-col bg-[#271C18] ${
+        className={`absolute bottom-0 right-0 top-0 z-[85] flex flex-col bg-[#271C18] ${
           isOpen || isDragging || isHolding ? "pointer-events-auto" : "pointer-events-none"
         }`}
       >

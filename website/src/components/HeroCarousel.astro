@@ -61,7 +61,7 @@ const carouselId = 'hero-screenshots';
                   {
                     <Image
                       src={slide.image}
-                      alt={`RuForge screenshot: ${slide.name}`}
+                      alt={slide.alt}
                       width={1200}
                       height={675}
                       widths={[640, 960, 1200]}
@@ -95,7 +95,7 @@ const carouselId = 'hero-screenshots';
                       data-index={index}
                       role="tab"
                       aria-controls={`${carouselId}-slide-${index}`}
-                      aria-label={slide.name.replace(/-/g, ' ')}
+                      aria-label={slide.label}
                       aria-selected={index === 0 ? 'true' : 'false'}
                       tabindex={index === 0 ? 0 : -1}
                     >
@@ -121,7 +121,7 @@ const carouselId = 'hero-screenshots';
     ) : (
       <div class="flex aspect-video w-full items-center justify-center rounded-xl bg-rf-surface px-6 text-center text-sm leading-relaxed text-rf-text-muted">
         <p>
-          Add PNG or WebP files to <code class="text-rf-text">website/public/screenshots/</code> (see README).
+          Add PNG or WebP files to <code class="text-rf-text">website/src/assets/screenshots/</code> (see README).
         </p>
       </div>
     )

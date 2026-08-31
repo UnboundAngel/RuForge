@@ -84,8 +84,8 @@ export const FEATURE_PAGES: FeaturePageDef[] = [
     slug: 'media-library',
     title: 'Media Library',
     metaTitle: 'Local media library with auto-scan',
-    metaDescription: 'Browse downloaded videos and audio in a local gallery. Filters, search, duplicate detection, playback persistence.',
-    description: 'Local file scanning with sidecar metadata, watch progress on every card, and automatic deduplication so your library stays clean.',
+    metaDescription: 'Browse downloaded videos and audio in a local gallery. Filters, search, music albums, duplicate detection, playback persistence.',
+    description: 'Local file scanning with sidecar metadata, watch progress on every card, music shelves, and automatic deduplication so your library stays clean.',
     imageDir: 'library',
     sections: [
       {

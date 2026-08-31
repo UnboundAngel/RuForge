@@ -7,7 +7,7 @@ export function softwareApplicationSchema() {
     '@id': `${SITE.url}/#software`,
     name: 'RuForge',
     description:
-      'Free open-source desktop media library and yt-dlp frontend for Windows. Downloads videos and audio for offline viewing, with persistent download queues, SponsorBlock integration, chapter navigation, and a local media library with playback.',
+      'Free open-source desktop media library and yt-dlp frontend for Windows. Downloads videos and audio for offline viewing, with persistent download queues, a local library with music Now Playing, SponsorBlock integration, and chapter navigation.',
     url: SITE.url,
     applicationCategory: 'MultimediaApplication',
     operatingSystem: 'Windows 10, Windows 11',

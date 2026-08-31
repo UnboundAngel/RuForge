@@ -47,7 +47,7 @@ Output: `website/dist/`
 
 ## Home screenshots (carousel)
 
-Put one or more images in **`public/screenshots/`** (sorted by filename). The hero crossfades between them with a progress bar underneath. A single legacy file `public/screenshot.webp` still works if the folder is empty.
+Drop WebP/PNG captures in **`src/assets/screenshots/`** (sorted by filename). `discoverScreenshotSlides()` feeds the hero carousel via Astro `<Image />`. Current set: `01-library`, `02-download-downloading`, `03-music-now-playing` (1200×675).
 
 **Capture frame in the app (dev only):** run `npm run tauri dev`, open DevTools on the main window, then:
 

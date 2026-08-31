@@ -51,7 +51,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
       },
       {
         slug: 'player',
-        title: 'Audio mode',
+        title: 'Music',
         image: '/tutorials/music-mode.webp',
         variant: 'hero',
         shadowColor: 'rgba(150, 115, 65, 1)',

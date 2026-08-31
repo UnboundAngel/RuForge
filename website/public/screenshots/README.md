@@ -4,7 +4,7 @@ Drop WebP/PNG captures in **`website/src/assets/screenshots/`** (sorted by filen
 
 Optional: keep copies in `website/public/screenshots/` for reference; the build reads **`src/assets/screenshots/`** only.
 
-**Naming:** any sort order you want, e.g. `01-downloader.webp`, `02-library.webp`, `03-player.webp`.
+**Naming:** numeric prefix for sort order, e.g. `01-library.webp`, `02-download-downloading.webp`, `03-music-now-playing.webp`.
 
 **Size:** 1200x675 (16:9) recommended.
 
