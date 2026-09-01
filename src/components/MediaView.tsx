@@ -536,7 +536,7 @@ const VideoCard = memo(function VideoCard({
           <div className="flex-1 min-w-0">
             <h3
               className={cn(
-                "text-[15px] font-bold leading-snug line-clamp-2 transition-colors duration-150",
+                "text-[14px] font-bold leading-snug line-clamp-2 transition-colors duration-150",
                 titleHot ? "text-[color:var(--accent)]" : "text-stone-50",
               )}
             >
@@ -822,10 +822,10 @@ export const MediaView = ({
 
   const gridLayoutClass =
     gridDensity === "Cozy"
-      ? "grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-10"
+      ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-8"
       : gridDensity === "Compact"
-        ? "grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-6 gap-y-8"
-        : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-7 gap-y-10";
+        ? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-3 gap-y-6"
+        : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-7";
 
   const filteredEntries = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -938,7 +938,7 @@ export const MediaView = ({
       <div
         ref={libraryScrollRef}
         onScroll={handleLibraryScroll}
-        className="flex-1 overflow-y-auto px-10 xl:px-14 pb-32 rf-scrollbar"
+        className="flex-1 overflow-y-auto px-6 xl:px-10 pb-32 rf-scrollbar"
       >
         <div ref={libraryHeaderRef} className="pt-16 pb-8">
           <h1 className="text-3xl font-black tracking-tight text-stone-50">Video Library</h1>
