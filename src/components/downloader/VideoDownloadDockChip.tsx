@@ -5,6 +5,8 @@ import { useMusicDownloadCelebrations } from "@/hooks/useMusicDownloadCelebratio
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { RadialNavIcon } from "@/components/navigation/RadialNavIcon";
+import { railTooltipAnchorClass } from "@/components/navigation/RailNavTooltip";
+import { downloadShortcutLabel } from "@/lib/shortcutLabels";
 import { extractYouTubeVideoId } from "@/youtubeUrl";
 
 const SIZE = 44;
@@ -83,14 +85,13 @@ export function VideoDownloadRailButton({
       <button
         type="button"
         data-rail-tab="downloader"
+        data-rail-tooltip="Expand downloads"
+        data-rail-shortcut={downloadShortcutLabel()}
         onClick={onToggle}
         disabled={disabled}
         aria-label={`${title}. Expand preview.`}
-        className="group/rail relative flex h-11 w-11 items-center justify-center rounded-xl text-[color:var(--accent)]"
+        className={cn(railTooltipAnchorClass, "group/rail relative flex h-11 w-11 items-center justify-center rounded-xl text-[color:var(--accent)]")}
       >
-        <span className="rf-rail-tooltip absolute left-[calc(100%+10px)] top-1/2 z-[280] -translate-y-1/2 opacity-0 group-hover/rail:opacity-100">
-          Expand downloads
-        </span>
         <span
           className="relative flex items-center justify-center overflow-hidden rounded-full bg-[#1D1613]"
           style={{ width: THUMB, height: THUMB }}
@@ -140,11 +141,14 @@ export function VideoDownloadRailButton({
     <button
       type="button"
       data-rail-tab="downloader"
+      data-rail-tooltip="Download"
+      data-rail-shortcut={downloadShortcutLabel()}
       onClick={onToggle}
       disabled={disabled}
       aria-label="Download"
       aria-current={overlayOpen ? "page" : undefined}
       className={cn(
+        railTooltipAnchorClass,
         "group/rail relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-150",
         overlayOpen
           ? "text-[color:var(--accent)]"
@@ -158,9 +162,6 @@ export function VideoDownloadRailButton({
         />
       ) : null}
       <RadialNavIcon id="download" size={20} />
-      <span className="rf-rail-tooltip absolute left-[calc(100%+10px)] top-1/2 z-[280] -translate-y-1/2 opacity-0 group-hover/rail:opacity-100">
-        Download
-      </span>
     </button>
   );
 }

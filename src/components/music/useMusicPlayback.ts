@@ -999,7 +999,7 @@ export function useMusicPlayback(
         clearManualQueuePlayingState();
       }
       setPendingListenEndReason("skipped");
-      handlePlayFolderNeighbor(prev);
+      handlePlayFolderNeighbor(prev, { clearSessionLoop: true });
     }
   }, [
     playingFile,
@@ -1041,7 +1041,7 @@ export function useMusicPlayback(
     }
 
     setPendingListenEndReason("skipped");
-    handlePlayFolderNeighbor(result.file);
+    handlePlayFolderNeighbor(result.file, { clearSessionLoop: true });
   }, [
     playingFile,
     playlistIndex,
@@ -1133,7 +1133,7 @@ export function useMusicPlayback(
     applyMusicEndlessAdvance(result.folderAudioPlaylistAfter, result.endlessFromIndex);
     noteIslandSkipDir(1);
     setPendingListenEndReason("manual_switch");
-    handlePlayFolderNeighbor(result.next);
+    handlePlayFolderNeighbor(result.next, { clearSessionLoop: true });
     return true;
   }, [
     navMode,

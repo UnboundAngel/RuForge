@@ -13,7 +13,7 @@ import {
   DEFAULT_OUTPUT_DIR,
   RUFORGE_INTERNAL_DIR,
 } from "../platformPaths";
-import { parseLoopMode, type LoopMode } from "../playbackLoopStorage";
+import { readSessionLoopMode, type LoopMode } from "../playbackLoopStorage";
 
 export type { LoopMode };
 
@@ -305,14 +305,15 @@ export function readInitialPlayerVolumeFromLs(): number {
 
 export function readInitialPlayerLoopModeFromLs(): LoopMode {
   try {
-    return parseLoopMode(localStorage.getItem(LS_MINI_LOOP));
+    return readSessionLoopMode(localStorage.getItem(LS_MINI_LOOP));
   } catch {
     return "off";
   }
 }
 
 export function writePlayerLoopModeToLs(mode: LoopMode): void {
-  localStorage.setItem(LS_MINI_LOOP, mode);
+  const session = mode === "one" ? "off" : mode;
+  localStorage.setItem(LS_MINI_LOOP, session);
 }
 
 export { LS_MINI_VOLUME, LS_MINI_LOOP };

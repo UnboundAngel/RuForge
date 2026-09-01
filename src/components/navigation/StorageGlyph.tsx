@@ -1,5 +1,6 @@
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { CLEANUP_SUGGEST_USAGE_RATIO } from "@/cleanupCandidates";
+import { railTooltipAnchorClass } from "@/components/navigation/RailNavTooltip";
 import { cn } from "@/lib/utils";
 
 type StorageGlyphProps = {
@@ -28,9 +29,11 @@ export function StorageGlyph({ size = 28, className }: StorageGlyphProps) {
   return (
     <button
       type="button"
+      data-rail-tooltip={tip}
       onClick={() => void openAuthorizeCleanupModal()}
       aria-label={`Library storage ${tip}. Open cleanup.`}
       className={cn(
+        railTooltipAnchorClass,
         "group/storage relative flex items-center justify-center rounded-xl transition-opacity duration-150 opacity-80 hover:opacity-100",
         className,
       )}
@@ -62,9 +65,6 @@ export function StorageGlyph({ size = 28, className }: StorageGlyphProps) {
           )}
         />
       </svg>
-      <span className="rf-rail-tooltip absolute left-[calc(100%+10px)] top-1/2 z-[280] -translate-y-1/2 opacity-0 group-hover/storage:opacity-100">
-        {tip}
-      </span>
     </button>
   );
 }

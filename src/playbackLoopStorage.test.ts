@@ -3,6 +3,7 @@ import {
   cycleLoopMode,
   musicUserLoopEndIndex,
   parseLoopMode,
+  readSessionLoopMode,
   resolveLoopModeForPlay,
 } from "./playbackLoopStorage";
 
@@ -42,12 +43,18 @@ describe("resolveLoopModeForPlay", () => {
     expect(resolveLoopModeForPlay("off", "all")).toBe("all");
   });
 
-  it("keeps session one across tracks when path has no pin", () => {
-    expect(resolveLoopModeForPlay("off", "one")).toBe("one");
+  it("does not inherit session one on a new path", () => {
+    expect(resolveLoopModeForPlay("off", "one")).toBe("off");
   });
 
   it("keeps session off when path is off", () => {
     expect(resolveLoopModeForPlay("off", "off")).toBe("off");
+  });
+});
+
+describe("readSessionLoopMode", () => {
+  it("migrates session one to off", () => {
+    expect(readSessionLoopMode("one")).toBe("off");
   });
 });
 

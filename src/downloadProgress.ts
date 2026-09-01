@@ -64,11 +64,19 @@ export function formatEtaSeconds(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function clampEtaDisplay(etaSec: number, state: EtaSmoothState): number {
+function clampEtaDisplay(
+  etaSec: number,
+  state: EtaSmoothState,
+  fromByteRate = false,
+): number {
   if (state.lastDisplayedEtaSec == null) return etaSec;
   const prev = state.lastDisplayedEtaSec;
   if (etaSec >= prev) return etaSec;
   const gap = prev - etaSec;
+  if (fromByteRate) {
+    const maxDrop = Math.max(30, gap * 0.4);
+    return Math.max(etaSec, prev - maxDrop);
+  }
   if (gap > MAX_ETA_DECREASE_LARGE_GAP_SEC) {
     return Math.max(etaSec, prev - MAX_ETA_DECREASE_LARGE_GAP_SEC);
   }
@@ -147,10 +155,7 @@ function applyEtaSmoothing(
     ) {
       const remaining = Math.max(0, total - dl);
       let etaSec = remaining / state.emaBps;
-      if (state.emaEtaSec != null) {
-        etaSec = Math.min(etaSec, state.emaEtaSec);
-      }
-      etaSec = clampEtaDisplay(etaSec, state);
+      etaSec = clampEtaDisplay(etaSec, state, true);
       state.lastDisplayedEtaSec = etaSec;
       const speed = formatSpeedFromBps(state.emaBps);
       return {

@@ -620,7 +620,7 @@ export function useMusicMiniPlayback() {
   const toggleLoop = useCallback(() => {
     setLoopMode((prev) => {
       const next = cycleLoopMode(prev);
-      writePlayerLoopModeToLs(next);
+      if (next !== "one") writePlayerLoopModeToLs(next);
       if (playingFile) writeLoopModeForPath(playingFile.path, next);
       return next;
     });

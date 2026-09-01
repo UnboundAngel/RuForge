@@ -12,6 +12,11 @@ import {
 } from "./lib/mainPlaybackClaim";
 import { emitActivityHandoffSync } from "./lib/activityHandoffSync";
 import { registerVideoMiniHandoffSink } from "./lib/videoMiniHandoffBridge";
+import { usePlayerKeyboardShortcuts } from "./hooks/usePlayerKeyboardShortcuts";
+import {
+  PlayerCenterFeedback,
+  usePlayerCenterFeedback,
+} from "./components/player/PlayerCenterFeedback";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import logo from "./assets/ruforgeAppIcon.png";
 import {
@@ -37,6 +42,7 @@ import { useScrubberThumbs } from "./useScrubberThumbs";
 import { useScrubberHover } from "./hooks/useScrubberHover";
 import {
   readResumeSeconds,
+  RESUME_REWIND_SEC,
   writePlaybackPos,
   getPlaybackThumbnailBar,
 } from "./playbackStorage";
@@ -562,21 +568,6 @@ export default function MiniPlayer() {
     };
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") {
-        seek(-15);
-      } else if (e.key === "ArrowRight") {
-        seek(15);
-      } else if (e.key === " ") {
-        togglePlay();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [playingFile, isPaused]); // Added isPaused to ensure togglePlay is fresh
-
   const [isPinned, setIsPinned] = useState(() => localStorage.getItem("miniplayer-pinned") === "true");
   const [miniNavMode, setMiniNavMode] = useState<string>(
     () => localStorage.getItem("ruforge-nav-mode") ?? "default",
@@ -594,7 +585,8 @@ export default function MiniPlayer() {
     return saved ? Math.round(parseFloat(saved) * 100) : 100;
   });
   const [isMuted, setIsMuted] = useState(false);
-  const [showVolume, setShowVolume] = useState(false);
+  const { feedback: centerFeedback, showFeedback: showCenterFeedback } =
+    usePlayerCenterFeedback();
   const mediaRef = useRef<HTMLMediaElement>(null);
   /** Tracks which file path the mounted media element belongs to (after layout). */
   const mediaPathRef = useRef<string | null>(null);
@@ -607,7 +599,6 @@ export default function MiniPlayer() {
   const wasPlayingBeforeScrubRef = useRef(false);
   /** Blocks `timeupdate` from snapping the scrub thumb while a seek is in flight. */
   const isUserSeekingRef = useRef(false);
-  const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPlaybackPersistRef = useRef(0);
   const progressRafRef = useRef<number | null>(null);
   const [playbackSpeed, setPlaybackSpeedState] = useState(() => readPlaybackSpeed());
@@ -993,7 +984,7 @@ export default function MiniPlayer() {
     }
     const session = readInitialPlayerLoopModeFromLs();
     const next = resolveLoopModeForPlay(readLoopModeForPath(playingFile.path), session);
-    if (next !== session) writePlayerLoopModeToLs(next);
+    if (next === "off" || next === "all") writePlayerLoopModeToLs(next);
     setLoopMode(next);
   }, [playingFile?.path]);
 
@@ -1062,16 +1053,21 @@ export default function MiniPlayer() {
       return;
     }
 
+    if (!isFinite(v.duration) || v.duration <= 0) return;
+
     let t: number;
     if (isHandoff) {
       t = handoffTime;
-      if (isFinite(v.duration) && v.duration > 0) {
-        t = Math.min(Math.max(0, t), v.duration);
-        playInMiniStartTimeRef.current = null;
-        resumeSeekAppliedPathRef.current = playingFile.path;
-      }
+      t = Math.min(Math.max(0, t), v.duration);
+      playInMiniStartTimeRef.current = null;
+      resumeSeekAppliedPathRef.current = playingFile.path;
+    } else if (playingAudioOnly) {
+      t = 0;
+      resumeSeekAppliedPathRef.current = playingFile.path;
     } else {
-      t = readResumeSeconds(playingFile.path, v.duration);
+      t = readResumeSeconds(playingFile.path, v.duration, {
+        rewindSeconds: RESUME_REWIND_SEC,
+      });
       resumeSeekAppliedPathRef.current = playingFile.path;
     }
     v.currentTime = t;
@@ -1161,6 +1157,11 @@ export default function MiniPlayer() {
         isMuted,
       );
     }
+    showCenterFeedback({
+      kind: "volume",
+      level: target,
+      muted: target <= 0,
+    });
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -1179,10 +1180,6 @@ export default function MiniPlayer() {
 
     const delta = e.deltaY > 0 ? -0.05 : 0.05;
     adjustVolume(delta);
-    setShowVolume(true);
-    
-    if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-    volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
   };
 
   const handleTimeUpdate = () => {
@@ -1458,9 +1455,11 @@ export default function MiniPlayer() {
       applyMediaOutputState(media, (volumeLabel / 100) * endFadeGainRef.current, isMuted);
       void media.play().catch(() => {});
       setIsPaused(false);
+      showCenterFeedback({ kind: "play" });
     } else {
       media.pause();
       setIsPaused(true);
+      showCenterFeedback({ kind: "pause" });
       savePlaybackPos();
     }
   };
@@ -1471,6 +1470,54 @@ export default function MiniPlayer() {
     const next = Math.min(v.duration, Math.max(0, v.currentTime + seconds));
     applySeekRatio(next / v.duration, { persist: true });
   };
+
+  const changeVolume = useCallback(
+    (v: number) => {
+      const clamped = Math.min(1, Math.max(0, v));
+      const pct = Math.round(clamped * 100);
+      const nextMuted = clamped > 0 ? false : isMuted;
+      setVolumeLabel(pct);
+      localStorage.setItem("miniplayer-volume", String(clamped));
+      if (clamped > 0 && isMuted) setIsMuted(false);
+      const el = mediaRef.current;
+      if (el) {
+        applyMediaOutputState(el, clamped * endFadeGainRef.current, nextMuted);
+      }
+      showCenterFeedback({
+        kind: "volume",
+        level: clamped,
+        muted: nextMuted,
+      });
+    },
+    [isMuted, showCenterFeedback],
+  );
+
+  const toggleSubtitles = useCallback(() => {
+    if (subtitleTracks.length === 0) {
+      showCenterFeedback({ kind: "cc-unavailable" });
+      return;
+    }
+    if (isSubtitlesEnabled) {
+      setIsSubtitlesEnabled(false);
+      showCenterFeedback({ kind: "cc", enabled: false });
+      return;
+    }
+    const track =
+      subtitleTracks.find((t) => t.lang === selectedSubtitleLang) ?? subtitleTracks[0];
+    if (!track) return;
+    setSelectedSubtitleLang(track.lang);
+    setIsSubtitlesEnabled(true);
+    showCenterFeedback({ kind: "cc", enabled: true });
+  }, [subtitleTracks, isSubtitlesEnabled, selectedSubtitleLang, showCenterFeedback]);
+
+  const seekToPercent = useCallback(
+    (fraction: number) => {
+      if (scrubDuration <= 0) return;
+      seekToTimeSeconds(Math.min(scrubDuration, Math.max(0, scrubDuration * fraction)));
+    },
+    [scrubDuration, seekToTimeSeconds],
+  );
+
 
   const showGallery = isMediaSelectorOpen;
 
@@ -1555,11 +1602,40 @@ export default function MiniPlayer() {
     setLoopMode((prev) => {
       const next = cycleLoopMode(prev);
       if (playingFile) writeLoopModeForPath(playingFile.path, next);
-      writePlayerLoopModeToLs(next);
+      if (next !== "one") writePlayerLoopModeToLs(next);
       if (mediaRef.current) mediaRef.current.loop = next === "one";
       return next;
     });
   }, [playingFile]);
+
+  usePlayerKeyboardShortcuts({
+    enabled: Boolean(playingFile),
+    volume: volumeLabel / 100,
+    playbackSpeed,
+    togglePlay,
+    skip: seek,
+    changeVolume,
+    toggleMute: () => {
+      setIsMuted((m) => {
+        const next = !m;
+        const el = mediaRef.current;
+        if (el) {
+          applyMediaOutputState(el, (volumeLabel / 100) * endFadeGainRef.current, next);
+        }
+        showCenterFeedback({
+          kind: "volume",
+          level: volumeLabel / 100,
+          muted: next,
+        });
+        return next;
+      });
+    },
+    setMuted: setIsMuted,
+    cycleLoopMode: cycleLoop,
+    toggleSubtitles,
+    setPlaybackSpeed,
+    seekToPercent: scrubDuration > 0 ? seekToPercent : undefined,
+  });
 
   const incrementViewCount = (file: MediaFile) => {
     const saved = localStorage.getItem(`views-${file.path}`);
@@ -1861,37 +1937,7 @@ export default function MiniPlayer() {
         )}
       </AnimatePresence>
 
-      {/* Dynamic Volume/Mute Overlay (Mini Flush Bottom Right) */}
-      <AnimatePresence>
-        {showVolume && (
-          <motion.div 
-            initial={{ opacity: 0, y: 10, x: 10 }}
-            animate={{ opacity: 1, y: 0, x: 0 }}
-            exit={{ opacity: 0, y: 10, x: 10 }}
-            className={`absolute bottom-0 right-0 z-[80] bg-black/80 backdrop-blur-2xl border-t border-l border-white/10 rounded-tl-2xl ${(isMicroMode || isTinyMode) ? 'p-1.5 px-2 space-x-1.5' : isMini ? 'p-2 space-x-2' : isNarrow ? 'p-3 space-x-3' : 'p-4 space-x-3'} flex items-center pointer-events-none shadow-2xl`}
-          >
-            <div className="text-[color:var(--accent)]">
-              <MiniVolumeIcon
-                size={(isMicroMode || isTinyMode) ? 10 : isMini ? 12 : 16}
-                muted={isMuted}
-                volumePercent={isMuted ? 0 : volumeLabel}
-              />
-            </div>
-            <div className="flex flex-col">
-              <span className={`${(isMicroMode || isTinyMode) ? 'text-[8px]' : isMini ? 'text-[9px]' : 'text-xs'} font-black text-[color:var(--accent)] leading-none`}>{isMuted ? "MUTED" : `${volumeLabel}%`}</span>
-            </div>
-            {!isMuted && (
-              <div className={`${isMini ? 'w-[2px] h-3' : 'w-1 h-6'} bg-stone-900/50 rounded-full relative overflow-hidden ml-1`}>
-                  <motion.div 
-                    className="absolute bottom-0 left-0 right-0 bg-[color:var(--accent)] rounded-full"
-                    initial={{ height: 0 }}
-                    animate={{ height: `${volumeLabel}%` }}
-                  />
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <PlayerCenterFeedback feedback={centerFeedback} />
 
       {/* Top Controls Strip */}
       <div className={`absolute top-0 left-0 right-0 h-12 z-[100] flex items-center justify-between px-3 pointer-events-none group-hover/mini:opacity-100 opacity-0 transition-opacity duration-300 ${(isMicroMode || isTinyMode) ? 'hidden' : ''}`}>
@@ -2164,9 +2210,11 @@ export default function MiniPlayer() {
                         const nextMuted = !mediaRef.current.muted;
                         mediaRef.current.muted = nextMuted;
                         setIsMuted(nextMuted);
-                        setShowVolume(true);
-                        if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-                        volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+                        showCenterFeedback({
+                          kind: "volume",
+                          level: volumeLabel / 100,
+                          muted: nextMuted,
+                        });
                       }
                     }}
                   >
@@ -2219,9 +2267,11 @@ export default function MiniPlayer() {
                       const nextMuted = !mediaRef.current.muted;
                       mediaRef.current.muted = nextMuted;
                       setIsMuted(nextMuted);
-                      setShowVolume(true);
-                      if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-                      volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+                      showCenterFeedback({
+                        kind: "volume",
+                        level: volumeLabel / 100,
+                        muted: nextMuted,
+                      });
                     }
                   }}
                   aria-label={isPaused ? "Play" : "Pause"}
@@ -2419,25 +2469,15 @@ export default function MiniPlayer() {
                           <span>{scrubDuration > 0 ? formatDuration(scrubDuration) : "0:00"}</span>
                         </div>
                         <div className={`flex items-center ${isMini ? 'space-x-1.5' : 'space-x-2'} text-stone-500`}>
-                          <AnimatePresence mode="wait">
-                            {!showVolume && (
-                              <motion.div 
-                                key="static-vol"
-                                initial={{ opacity: 0 }} 
-                                animate={{ opacity: 1 }} 
-                                exit={{ opacity: 0 }}
-                                className={`flex items-center ${isMini ? 'space-x-1' : 'space-x-2'}`}
-                              >
-                                 <MiniVolumeIcon
-                                   size={isMini ? 12 : 16}
-                                   muted={isMuted}
-                                   volumePercent={isMuted ? 0 : volumeLabel}
-                                   className={isMuted ? "text-[color:var(--accent)] opacity-50" : undefined}
-                                 />
-                                 <span className={`${isMini ? 'text-[8px]' : 'text-[10px]'} font-bold`}>{isMuted ? "MUTED" : `${volumeLabel}%`}</span>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
+                          <div className={`flex items-center ${isMini ? 'space-x-1' : 'space-x-2'}`}>
+                            <MiniVolumeIcon
+                              size={isMini ? 12 : 16}
+                              muted={isMuted}
+                              volumePercent={isMuted ? 0 : volumeLabel}
+                              className={isMuted ? "text-[color:var(--accent)] opacity-50" : undefined}
+                            />
+                            <span className={`${isMini ? 'text-[8px]' : 'text-[10px]'} font-bold`}>{isMuted ? "MUTED" : `${volumeLabel}%`}</span>
+                          </div>
                         </div>
                       </div>
                     </motion.div>

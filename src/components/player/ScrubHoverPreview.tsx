@@ -51,9 +51,8 @@ function SponsorBlockSegmentPill({
       className="w-full flex justify-center shrink-0 px-1"
     >
       <span
-        className="inline-flex max-w-full items-center rounded-full border px-3 py-1 text-[11px] font-bold tracking-wide shadow-xl backdrop-blur-md"
+        className="inline-flex max-w-full items-center rounded-full px-3 py-1 text-[11px] font-bold tracking-wide shadow-lg"
         style={{
-          borderColor: style.borderColor,
           backgroundColor: style.backgroundColor,
           color: style.color,
         }}
@@ -130,7 +129,7 @@ export function ScrubHoverPreview({
           )}
         </AnimatePresence>
 
-        <motion.div className="flex w-max max-w-full shrink-0 items-center gap-2 rounded-full border border-white/15 bg-black/85 backdrop-blur-md px-3 py-1.5 shadow-xl">
+        <motion.div className="flex w-max max-w-full shrink-0 items-center gap-2 rounded-sm bg-black/80 px-2 py-1 shadow-xl">
           <span className="text-[12px] font-bold tabular-nums text-white shrink-0">
             {formatTime(hoverTimeSec)}
           </span>
