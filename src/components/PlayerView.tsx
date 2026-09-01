@@ -6,7 +6,6 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
 import {
   Play,
-  Pause,
   Volume2,
   Volume1,
   VolumeX,
@@ -21,15 +20,19 @@ import {
   Layers,
   Ellipsis,
   MessageSquare,
+  ChevronRight,
 } from "lucide-react";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 import { type FfprobeHint, type MediaFile } from "../types";
 import { ScrubHoverPreview } from "./player/ScrubHoverPreview";
+import {
+  PlayerCenterFeedback,
+  usePlayerCenterFeedback,
+} from "./player/PlayerCenterFeedback";
 import { useScrubberThumbs } from "../useScrubberThumbs";
 import { useScrubberHover } from "../hooks/useScrubberHover";
-import { readResumeSeconds, writePlaybackPos } from "../playbackStorage";
+import { readResumeSeconds, RESUME_REWIND_SEC, writePlaybackPos } from "../playbackStorage";
 import { readPlaybackSpeed, writePlaybackSpeed } from "../playbackSpeedStorage";
-import { loopModeAriaLabel } from "../playbackLoopStorage";
 import { LoopModeSwapIcon } from "./ui/LoopModeSwapIcon";
 import { useVideoAmbientBackdrop } from "../useVideoAmbientBackdrop";
 import {
@@ -83,6 +86,14 @@ import {
   SlidingCommentsDrawer,
 } from "./player/comments/SlidingCommentsDrawer";
 import { useVideoComments } from "./player/comments/useVideoComments";
+import { usePlayerKeyboardShortcuts } from "../hooks/usePlayerKeyboardShortcuts";
+import {
+  PlayerBarGroupBubble,
+  PlayerBarInnerButton,
+  PlayerBarTextBubble,
+  playerBarSoloBtnClass,
+} from "./player/PlayerBarCluster";
+import { PlayerBarVolumeBubble } from "./player/PlayerBarVolumeBubble";
 
 const SCRUB_DUCK_OUT_SEC = 0.008;
 const SCRUB_DUCK_IN_SEC = 0.012;
@@ -94,7 +105,7 @@ const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: strin
   const angle = speedToAngle[speed] || 0;
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" className={className}>
-      <path fill="currentColor" opacity="0.4" d="m20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1a10 10 0 0 0-.27-10.44z"/>
+      <path fill="currentColor" d="m20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1a10 10 0 0 0-.27-10.44z"/>
       <path 
         fill="currentColor" 
         d="M10.59 15.41a2 2 0 0 0 2.83 0l5.66-8.49l-8.49 5.66a2 2 0 0 0 0 2.83"
@@ -108,13 +119,10 @@ const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: strin
   );
 };
 
-const playerBarBtnClass =
-  "p-2 rounded-lg text-white/90 hover:text-white hover:bg-white/10 active:scale-95 transition-all shrink-0";
-
 const Tooltip = ({ text, children, side = "bottom", className = "" }: { text: string; children: React.ReactNode; side?: "bottom" | "top"; className?: string }) => {
   const [isHovered, setIsHovered] = useState(false);
   return (
-    <div className={`relative flex flex-col items-center ${className}`} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+    <div className={`relative inline-flex items-center justify-center ${className}`} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
       {children}
       <AnimatePresence>
         {isHovered && (
@@ -123,7 +131,7 @@ const Tooltip = ({ text, children, side = "bottom", className = "" }: { text: st
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className={`absolute ${side === "bottom" ? "bottom-full mb-3" : "top-full mt-3"} px-3 py-1.5 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-xl text-[10px] font-black tracking-widest text-white uppercase whitespace-nowrap z-[100] shadow-2xl shadow-black pointer-events-none left-1/2 -translate-x-1/2`}
+            className={`absolute ${side === "bottom" ? "bottom-full mb-3" : "top-full mt-3"} px-3 py-1.5 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-xl text-[10px] font-black tracking-widest text-white uppercase whitespace-nowrap z-[200] shadow-2xl shadow-black pointer-events-none left-1/2 -translate-x-1/2`}
           >
             {text}
           </motion.div>
@@ -231,14 +239,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         : mediaRef.current?.paused ?? true,
   }));
   const [showControls, setShowControls] = useState(true);
-  const [showVolume, setShowVolume] = useState(false);
   const { hoverPercent: scrubberHoverPos, isHovering: isHoveringScrubber, onMouseMove: onScrubberMouseMove, onMouseLeave: onScrubberMouseLeave } = useScrubberHover(scrubberRef);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubDragPercent, setScrubDragPercent] = useState<number | null>(null);
   const [isPressing, setIsPressing] = useState<"left" | "right" | null>(null);
   const [previousSpeed, setPreviousSpeed] = useState(1);
   const pressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blockClickRef = useRef(false);
   const scrubGenerationRef = useRef(0);
   /** Blocks `timeupdate` from snapping the scrub thumb while a seek is in flight. */
@@ -375,7 +381,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   useEffect(() => {
     lastPlaybackPersistRef.current = 0;
     resumeSeekAppliedPathRef.current = null;
-  }, [file.path, playerResumeAt]);
+  }, [file.path]);
 
   useEffect(() => {
     return () => {
@@ -413,7 +419,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   } | null>(null);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const [showPlayerMoreMenu, setShowPlayerMoreMenu] = useState(false);
-  const [clickFlash, setClickFlash] = useState<"play" | "pause" | null>(null);
+  const { feedback: centerFeedback, showFeedback: showCenterFeedback } =
+    usePlayerCenterFeedback();
   const [skipFlash, setSkipFlash] = useState<{ side: "left" | "right"; amount: number } | null>(null);
   const skipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
@@ -464,6 +471,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (!el) return;
     applyMediaOutputState(el, volume * endFadeGainRef.current, isMuted);
   }, [audioDelegated, volume, isMuted]);
+
+  const applyVolumeToMedia = useCallback(
+    (vol: number, muted: boolean) => {
+      if (audioDelegated) return;
+      const el = mediaRef.current;
+      if (!el) return;
+      applyMediaOutputState(el, vol * endFadeGainRef.current, muted);
+    },
+    [audioDelegated],
+  );
 
   const ensureEndSuggestions = useCallback((): MediaFile[] => {
     const cached = endSuggestionsForPathRef.current;
@@ -576,11 +593,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (audioDelegated && hostAudio) {
       const wasPaused = hostAudio.paused;
       hostAudio.togglePlay();
-      setClickFlash(wasPaused ? "play" : "pause");
+      showCenterFeedback(wasPaused ? { kind: "play" } : { kind: "pause" });
       if (!wasPaused) {
         writePlaybackPos(file.path, hostAudio.currentTime, hostAudio.duration);
       }
-      setTimeout(() => setClickFlash(null), 500);
       return;
     }
     scrubGenerationRef.current += 1;
@@ -590,16 +606,15 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       applyMediaOutputState(media, volume * endFadeGainRef.current, isMuted);
       void media.play().catch(() => {});
       syncPausedFromMedia(false);
-      setClickFlash("play");
+      showCenterFeedback({ kind: "play" });
     } else {
       media.pause();
       syncPausedFromMedia(true);
-      setClickFlash("pause");
+      showCenterFeedback({ kind: "pause" });
       writePlaybackPos(file.path, media.currentTime, media.duration);
     }
     syncVideoBridgeTelemetry();
-    setTimeout(() => setClickFlash(null), 500);
-  }, [file.path, volume, isMuted, audioDelegated, hostAudio]);
+  }, [file.path, volume, isMuted, audioDelegated, hostAudio, showCenterFeedback]);
 
   const handleMediaCanPlay = useCallback((el: HTMLMediaElement) => {
     applyMediaOutputState(el, volume * endFadeGainRef.current, isMuted);
@@ -767,12 +782,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   };
 
   const changeVolume = (v: number) => {
-    setVolume(v);
-    if (v > 0 && isMuted) setMuted(false);
-
-    setShowVolume(true);
-    if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-    volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+    const clamped = Math.min(1, Math.max(0, v));
+    const nextMuted = clamped > 0 ? false : isMuted;
+    setVolume(clamped);
+    if (clamped > 0 && isMuted) setMuted(false);
+    applyVolumeToMedia(clamped, nextMuted);
+    showCenterFeedback({
+      kind: "volume",
+      level: clamped,
+      muted: nextMuted,
+    });
   };
 
   const handleAuxClickMute = (e: React.MouseEvent) => {
@@ -780,9 +799,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     e.preventDefault();
     const nextMuted = !useRuforgeStore.getState().isMuted;
     setMuted(nextMuted);
-    setShowVolume(true);
-    if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-    volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
+    applyVolumeToMedia(volume, nextMuted);
+    showCenterFeedback({ kind: "volume", level: volume, muted: nextMuted });
   };
 
   const toggleFullscreen = () => {
@@ -1038,69 +1056,64 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     if (next !== null) seekToTimeSeconds(chapters[next].start_time);
   }, [chapters, activeChapter?.index, seekToTimeSeconds]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      switch (e.code) {
-        case "Space":
-          e.preventDefault();
-          togglePlay();
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          if (e.shiftKey && chapters) {
-            jumpNextChapter();
-          } else {
-            skip(10);
-          }
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          if (e.shiftKey && chapters) {
-            jumpPrevChapter();
-          } else {
-            skip(-10);
-          }
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          changeVolume(Math.min(1, volume + 0.1));
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          changeVolume(Math.max(0, volume - 0.1));
-          break;
-        case "KeyM": {
-          const next = !useRuforgeStore.getState().isMuted;
-          setMuted(next);
-          setShowVolume(true);
-          if (volumeTimeoutRef.current) clearTimeout(volumeTimeoutRef.current);
-          volumeTimeoutRef.current = setTimeout(() => setShowVolume(false), 2000);
-          break;
-        }
-        case "KeyF":
-          toggleFullscreen();
-          break;
-        case "KeyL": {
-          useRuforgeStore.getState().cycleLoopMode();
-          break;
-        }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+  const toggleSubtitles = useCallback(() => {
+    if (subtitleTracks.length === 0) {
+      showCenterFeedback({ kind: "cc-unavailable" });
+      return;
+    }
+    if (isSubtitlesEnabled) {
+      setIsSubtitlesEnabled(false);
+      onSubtitleToggle?.(false);
+      showCenterFeedback({ kind: "cc", enabled: false });
+      return;
+    }
+    const track =
+      subtitleTracks.find((t) => t.lang === selectedSubtitleLang) ?? subtitleTracks[0];
+    if (!track) return;
+    setSelectedSubtitleLang(track.lang);
+    setIsSubtitlesEnabled(true);
+    void updateSetting("subtitlePreferredLang", track.lang);
+    onSubtitleToggle?.(true);
+    showCenterFeedback({ kind: "cc", enabled: true });
   }, [
+    subtitleTracks,
+    isSubtitlesEnabled,
+    selectedSubtitleLang,
+    onSubtitleToggle,
+    updateSetting,
+    showCenterFeedback,
+  ]);
+
+  const seekToPercent = useCallback(
+    (fraction: number) => {
+      if (scrubDuration <= 0) return;
+      seekToTimeSeconds(Math.min(scrubDuration, Math.max(0, scrubDuration * fraction)));
+    },
+    [scrubDuration, seekToTimeSeconds],
+  );
+
+  usePlayerKeyboardShortcuts({
     volume,
-    chapters,
-    jumpPrevChapter,
-    jumpNextChapter,
+    playbackSpeed,
+    hasChapters: chapters != null && chapters.length > 0,
     togglePlay,
     skip,
     changeVolume,
+    toggleMute: () => {
+      const next = !useRuforgeStore.getState().isMuted;
+      setMuted(next);
+      applyVolumeToMedia(volume, next);
+      showCenterFeedback({ kind: "volume", level: volume, muted: next });
+    },
     setMuted,
     toggleFullscreen,
-  ]);
+    cycleLoopMode: () => useRuforgeStore.getState().cycleLoopMode(),
+    toggleSubtitles,
+    setPlaybackSpeed,
+    seekToPercent: scrubDuration > 0 ? seekToPercent : undefined,
+    jumpPrevChapter: chapters ? jumpPrevChapter : undefined,
+    jumpNextChapter: chapters ? jumpNextChapter : undefined,
+  });
 
   const handleSeeked = useCallback(() => {
     isUserSeekingRef.current = false;
@@ -1324,18 +1337,62 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     vid.preservesPitch = true;
     vid.playbackRate = playbackSpeed;
 
-    const handoffResume =
-      playerResumeAt !== null && Number.isFinite(playerResumeAt);
-    if (!handoffResume && resumeSeekAppliedPathRef.current === file.path) return;
+    const dur = vid.duration;
+    if (!Number.isFinite(dur) || dur <= 0) return;
 
-    const resume = handoffResume
-      ? Math.min(Math.max(0, playerResumeAt), vid.duration || playerResumeAt)
-      : readResumeSeconds(file.path, vid.duration);
-    if (handoffResume) clearPlayerResumeAt();
+    if (resumeSeekAppliedPathRef.current === file.path) return;
+
+    let resume = 0;
+    if (!audioOnly) {
+      resume = readResumeSeconds(file.path, dur, { rewindSeconds: RESUME_REWIND_SEC });
+    }
+
     resumeSeekAppliedPathRef.current = file.path;
     vid.currentTime = resume;
+    setCurrentTime(resume);
+    setProgress((resume / dur) * 100);
     syncVideoBridgeTelemetry();
   };
+
+  useEffect(() => {
+    if (audioDelegated) return;
+    if (playerResumeAt == null || !Number.isFinite(playerResumeAt) || playerResumeAt <= 0) {
+      return;
+    }
+
+    resumeSeekAppliedPathRef.current = null;
+
+    const applyStoreResume = (): boolean => {
+      const vid = mediaRef.current;
+      if (!vid) return false;
+      const dur = vid.duration;
+      if (!Number.isFinite(dur) || dur <= 0) return false;
+
+      const resume = Math.min(Math.max(0, playerResumeAt), dur);
+      vid.currentTime = resume;
+      setCurrentTime(resume);
+      setProgress((resume / dur) * 100);
+      resumeSeekAppliedPathRef.current = file.path;
+      clearPlayerResumeAt();
+      syncVideoBridgeTelemetry();
+      return true;
+    };
+
+    if (applyStoreResume()) return;
+
+    const vid = mediaRef.current;
+    if (!vid) return;
+
+    const onReady = () => {
+      applyStoreResume();
+    };
+    vid.addEventListener("loadedmetadata", onReady);
+    vid.addEventListener("durationchange", onReady);
+    return () => {
+      vid.removeEventListener("loadedmetadata", onReady);
+      vid.removeEventListener("durationchange", onReady);
+    };
+  }, [playerResumeAt, file.path, audioDelegated, clearPlayerResumeAt]);
 
   // Scrubber drag
   const resolveScrubTime = useCallback(
@@ -1428,7 +1485,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  const VolumeIcon = isMuted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+  const VolumeIconCmp = isMuted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+  const volumeIconClass = isMuted ? "w-5 h-5 text-red-500" : "w-5 h-5";
   const playedBarPercent = scrubDragPercent !== null ? scrubDragPercent : progress;
   const coverArtSrc = file.thumbnailPath ?? file.ruforgePosterPath;
 
@@ -1774,24 +1832,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         )}
       </AnimatePresence>
 
-      {/* Click flash feedback */}
-      <AnimatePresence>
-        {clickFlash && (
-          <motion.div
-            key={clickFlash}
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1.2 }}
-            exit={{ opacity: 0, scale: 1.5 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] pointer-events-none"
-          >
-            {clickFlash === "play"
-              ? <Play className="w-[clamp(3.5rem,10vw,6rem)] h-[clamp(3.5rem,10vw,6rem)] text-white fill-white opacity-40" />
-              : <Pause className="w-[clamp(3.5rem,10vw,6rem)] h-[clamp(3.5rem,10vw,6rem)] text-white fill-white opacity-40" />
-            }
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Center feedback (play/pause, volume, captions) */}
+      <PlayerCenterFeedback feedback={centerFeedback} />
 
       {/* Skip feedback overlay */}
       <AnimatePresence mode="popLayout">
@@ -1807,34 +1849,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             <span className="text-[clamp(1.25rem,4vw,2.5rem)] font-black tracking-[0.2em] text-white opacity-40 uppercase whitespace-nowrap">
               {skipFlash.side === "left" ? "−" : "+"}{skipFlash.amount}s
             </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Dynamic Volume/Mute Overlay */}
-      <AnimatePresence>
-        {showVolume && (
-          <motion.div 
-            initial={{ opacity: 0, y: 10, x: 10 }}
-            animate={{ opacity: 1, y: 0, x: 0 }}
-            exit={{ opacity: 0, y: 10, x: 10 }}
-            className="absolute bottom-6 right-6 z-[80] bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 flex items-center gap-3 pointer-events-none shadow-2xl"
-          >
-            <div className="text-white">
-              {isMuted ? <VolumeX size={20} /> : volume > 0.5 ? <Volume2 size={20} /> : <Volume1 size={20} />}
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[11px] font-black text-white leading-none uppercase tracking-widest">{isMuted ? "Muted" : `${Math.round(volume * 100)}%`}</span>
-            </div>
-            {!isMuted && (
-              <div className="w-1.5 h-8 bg-white/10 rounded-full relative overflow-hidden ml-1">
-                  <motion.div 
-                    className="absolute bottom-0 left-0 right-0 bg-white rounded-full"
-                    initial={{ height: 0 }}
-                    animate={{ height: `${volume * 100}%` }}
-                  />
-              </div>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1908,12 +1922,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="absolute bottom-0 left-0 right-0 px-6 sm:px-8 pb-6 sm:pb-8 pt-24 z-[70] bg-gradient-to-t from-black/95 via-black/70 to-transparent pointer-events-none"
+            className="absolute bottom-0 left-0 right-0 px-3 pb-2 pt-20 z-[70] bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"
           >
             {/* Scrubber */}
             <div
               ref={scrubberRef}
-              className={`w-full min-w-0 max-w-full relative cursor-pointer group/scrubber py-3 -my-3 pointer-events-auto ${isScrubbing ? "cursor-grabbing" : ""}`}
+              className={`relative z-10 w-full min-w-0 max-w-full cursor-pointer group/scrubber py-2 pointer-events-auto ${isScrubbing ? "cursor-grabbing" : ""}`}
               onMouseDown={handleScrubMouseDown}
               onMouseMove={onScrubberMouseMove}
               onMouseLeave={onScrubberMouseLeave}
@@ -1970,74 +1984,75 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               )}
             </div>
 
-            {/* Controls dock */}
-            <div className="mt-3 pointer-events-auto min-w-0">
-              <div className="flex items-center justify-between gap-2 rounded-2xl bg-black/70 backdrop-blur-xl border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.55)] px-2 sm:px-3 py-1.5 min-w-0">
-                <div className="flex items-center gap-0.5 sm:gap-1 min-w-0 shrink">
+            {/* Controls */}
+            <div className="relative z-30 mt-2 pointer-events-auto min-w-0">
+              <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 shrink">
                   <Tooltip text={isPaused ? "Play" : "Pause"}>
                     <button
                       type="button"
                       onClick={togglePlay}
-                      className={`${playerBarBtnClass} inline-flex items-center justify-center`}
+                      className={playerBarSoloBtnClass}
                     >
-                      <PlayPauseMorphIcon playing={!isPaused} size={20} />
+                      <PlayPauseMorphIcon playing={!isPaused} size={22} />
                     </button>
                   </Tooltip>
-                  <Tooltip text="Rewind 15s">
-                    <button type="button" onClick={() => skip(-15)} className={playerBarBtnClass}>
-                      <Icon icon="tabler:rewind-backward-15" width={20} />
-                    </button>
-                  </Tooltip>
-                  <Tooltip text="Forward 15s">
-                    <button type="button" onClick={() => skip(15)} className={playerBarBtnClass}>
-                      <Icon icon="tabler:rewind-forward-15" width={20} />
-                    </button>
-                  </Tooltip>
-                  <div className="flex items-center gap-0.5 group/vol ml-0.5">
-                    <Tooltip text={isMuted ? "Unmute" : "Mute"}>
-                      <button type="button" onClick={() => setMuted(!isMuted)} className={playerBarBtnClass}>
-                        <VolumeIcon className="w-5 h-5" />
-                      </button>
-                    </Tooltip>
-                    <div
-                      ref={volumeRef}
-                      className={`relative rounded-full cursor-pointer transition-all ${isVolumeDragging ? "cursor-grabbing" : ""} w-0 opacity-0 group-hover/vol:w-20 sm:group-hover/vol:w-24 group-hover/vol:opacity-100 h-1.5 bg-white/20 shrink-0`}
+
+                  <Tooltip text={isMuted ? "Unmute" : "Mute"} className="shrink-0">
+                    <PlayerBarVolumeBubble
+                      muted={isMuted}
+                      volume={volume}
+                      volumeRef={volumeRef}
+                      isDragging={isVolumeDragging}
+                      onToggleMute={() => setMuted(!isMuted)}
                       onMouseDown={handleVolumeMouseDown}
+                      icon={<VolumeIconCmp className={volumeIconClass} />}
+                    />
+                  </Tooltip>
+
+                  <PlayerBarTextBubble className="hidden sm:inline-flex">
+                    {formatTime(currentTime)} / {isFinite(duration) ? formatTime(duration) : "0:00"}
+                  </PlayerBarTextBubble>
+
+                  {activeChapter && (
+                    <PlayerBarTextBubble
+                      className="hidden sm:inline-flex max-w-[220px]"
+                      onClick={jumpNextChapter}
+                      disabled={chapters != null && activeChapter.index >= chapters.length - 1}
                     >
-                      <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full" style={{ width: `${isMuted ? 0 : volume * 100}%` }} />
-                      <div
-                        className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full shadow border border-[#271C18] transition-opacity ${isVolumeDragging ? "opacity-100" : "opacity-0 group-hover/vol:opacity-100"}`}
-                        style={{ left: `${isMuted ? 0 : volume * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="hidden sm:flex text-[11px] font-mono tabular-nums text-white/75 tracking-wide pl-1 shrink-0">
-                    <span className="text-white">{formatTime(currentTime)}</span>
-                    <span className="text-white/40 mx-1">/</span>
-                    <span>{isFinite(duration) ? formatTime(duration) : "0:00"}</span>
-                  </div>
+                      <span className="truncate">{activeChapter.chapter.title}</span>
+                      <ChevronRight className="ml-0.5 w-4 h-4 shrink-0" />
+                    </PlayerBarTextBubble>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-                  <Tooltip text={loopModeAriaLabel(loopMode)}>
-                    <button
-                      type="button"
+                <PlayerBarGroupBubble>
+                  <Tooltip text="Rewind 15s">
+                    <PlayerBarInnerButton onClick={() => skip(-15)}>
+                      <Icon icon="tabler:rewind-backward-15" width={20} />
+                    </PlayerBarInnerButton>
+                  </Tooltip>
+                  <Tooltip text="Forward 15s">
+                    <PlayerBarInnerButton onClick={() => skip(15)}>
+                      <Icon icon="tabler:rewind-forward-15" width={20} />
+                    </PlayerBarInnerButton>
+                  </Tooltip>
+                  <Tooltip text="Loop">
+                    <PlayerBarInnerButton
                       onClick={() => cycleLoopMode()}
-                      className={`${playerBarBtnClass} ${loopMode !== "off" ? "text-[color:var(--accent)] bg-white/10" : ""}`}
+                      className={loopMode !== "off" ? "text-[color:var(--accent)]" : ""}
                     >
-                      <LoopModeSwapIcon mode={loopMode} size={16} />
-                    </button>
+                      <LoopModeSwapIcon mode={loopMode} size={18} />
+                    </PlayerBarInnerButton>
                   </Tooltip>
                   <div className="relative">
                     <Tooltip text="Playback speed">
-                      <button
-                        type="button"
+                      <PlayerBarInnerButton
                         onClick={() => { setShowSpeedMenu((s) => !s); setShowPlayerMoreMenu(false); }}
-                        className={`${playerBarBtnClass} flex items-center gap-1 ${showSpeedMenu ? "bg-white/10" : ""}`}
+                        className={showSpeedMenu ? "bg-white/[0.11]" : ""}
                       >
                         <SpeedIcon speed={playbackSpeed} className="w-4 h-4" />
-                        <span className="text-[10px] font-black">{playbackSpeed}×</span>
-                      </button>
+                      </PlayerBarInnerButton>
                     </Tooltip>
                     <AnimatePresence>
                       {showSpeedMenu && (
@@ -2046,18 +2061,18 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.95 }}
                           transition={{ duration: 0.15 }}
-                          className="absolute bottom-full mb-2 right-0 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[100px] z-[110]"
+                          className="absolute bottom-full mb-2 right-0 bg-[#282828] rounded-xl overflow-hidden shadow-2xl min-w-[120px] z-[110] py-1"
                         >
                           {PLAYBACK_SPEEDS.map((speed) => (
                             <button
                               key={speed}
                               type="button"
                               onClick={() => { setPlaybackSpeed(speed); setShowSpeedMenu(false); }}
-                              className={`w-full px-4 py-2.5 text-left text-[11px] font-black tracking-widest transition-colors ${
-                                playbackSpeed === speed ? "bg-[#271C18] text-white" : "text-stone-400 hover:bg-white/5 hover:text-white"
+                              className={`w-full px-4 py-2 text-left text-[13px] font-medium transition-colors ${
+                                playbackSpeed === speed ? "text-white bg-white/10" : "text-white/70 hover:bg-white/10 hover:text-white"
                               }`}
                             >
-                              {speed}×
+                              {speed === 1 ? "Normal" : `${speed}`}
                             </button>
                           ))}
                         </motion.div>
@@ -2066,13 +2081,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                   </div>
                   <div className="relative">
                     <Tooltip text="More controls">
-                      <button
-                        type="button"
+                      <PlayerBarInnerButton
                         onClick={() => { setShowPlayerMoreMenu((s) => !s); setShowSpeedMenu(false); setShowTranscriptMenu(false); }}
-                        className={`${playerBarBtnClass} ${showPlayerMoreMenu || showPlaylist ? "bg-white/10" : ""}`}
+                        className={showPlayerMoreMenu || showPlaylist ? "bg-white/[0.11]" : ""}
                       >
-                        <Ellipsis className="w-5 h-5" />
-                      </button>
+                        <Ellipsis className="w-4 h-4" />
+                      </PlayerBarInnerButton>
                     </Tooltip>
                     <AnimatePresence>
                       {showPlayerMoreMenu && (
@@ -2081,7 +2095,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 8, scale: 0.95 }}
                           transition={{ duration: 0.15 }}
-                          className="absolute bottom-full mb-2 right-0 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl min-w-[200px] z-[110] py-1"
+                          className="absolute bottom-full mb-2 right-0 bg-[#282828] rounded-xl overflow-hidden shadow-2xl min-w-[220px] z-[110] py-1"
                         >
                           {file.sourceId && settings.sponsorBlockEnabled && (
                             <button
@@ -2251,26 +2265,26 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                     </AnimatePresence>
                   </div>
                   <Tooltip text="Mini player">
-                    <button type="button" onClick={handlePopOut} className={playerBarBtnClass}>
+                    <PlayerBarInnerButton onClick={handlePopOut}>
                       <Icon icon="material-symbols:ad-group-outline" className="w-4 h-4" />
-                    </button>
+                    </PlayerBarInnerButton>
                   </Tooltip>
                   {!audioOnly && (
                     <Tooltip text="Comments">
-                      <button
-                        type="button"
+                      <PlayerBarInnerButton
                         onClick={toggleCommentsPanel}
-                        className={`${playerBarBtnClass} ${commentsPanelOpen ? "bg-white/10 text-[color:var(--accent)]" : ""}`}
+                        className={commentsPanelOpen ? "text-[color:var(--accent)]" : ""}
                       >
                         <MessageSquare className="w-4 h-4" />
-                      </button>
+                      </PlayerBarInnerButton>
                     </Tooltip>
                   )}
                   <Tooltip text={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
-                    <button type="button" onClick={toggleFullscreen} className={playerBarBtnClass}>
+                    <PlayerBarInnerButton onClick={toggleFullscreen}>
                       {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                    </button>
-                  </Tooltip>                </div>
+                    </PlayerBarInnerButton>
+                  </Tooltip>
+                </PlayerBarGroupBubble>
               </div>
             </div>
           </motion.div>

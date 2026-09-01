@@ -4,6 +4,8 @@ import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
 import { StorageGlyph } from "@/components/navigation/StorageGlyph";
+import { RailTooltipLayer } from "@/components/navigation/RailTooltipLayer";
+import { railTooltipAnchorClass } from "@/components/navigation/RailNavTooltip";
 import type { ActiveTab } from "@/store/types";
 import type { NavMode } from "@/store/types";
 
@@ -73,10 +75,12 @@ export function AppSidebarRail({
               key={item.id}
               type="button"
               data-rail-tab={item.id}
+              data-rail-tooltip={item.label}
               onClick={() => onSelectTab(item.id)}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
               className={cn(
+                railTooltipAnchorClass,
                 "group/rail relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-150",
                 isActive
                   ? "text-[color:var(--accent)]"
@@ -90,9 +94,6 @@ export function AppSidebarRail({
                 />
               ) : null}
               <RadialNavIcon id={item.iconId} size={20} />
-              <span className="rf-rail-tooltip absolute left-[calc(100%+10px)] top-1/2 z-[280] -translate-y-1/2 opacity-0 group-hover/rail:opacity-100">
-                {item.label}
-              </span>
             </button>
           );
         })}
@@ -101,6 +102,7 @@ export function AppSidebarRail({
       <div className="flex shrink-0 flex-col items-center gap-3 pb-4">
         <StorageGlyph />
       </div>
+      <RailTooltipLayer disabled={disabled} />
     </div>
   );
 }

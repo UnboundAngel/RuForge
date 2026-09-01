@@ -34,10 +34,15 @@ export function resolveLoopModeForPlay(
   pathMode: LoopMode,
   sessionMode: LoopMode,
 ): LoopMode {
-  // Per-path "one" still wins when revisiting a track that was pinned.
-  // Session "all" / "one" must survive skip, prev, and refresh (via miniplayer-loop LS).
   if (pathMode === "one") return "one";
-  return sessionMode;
+  if (sessionMode === "all") return "all";
+  return "off";
+}
+
+/** Session loop in LS is off | all only; legacy "one" is treated as off. */
+export function readSessionLoopMode(raw: string | null | undefined): LoopMode {
+  const parsed = parseLoopMode(raw);
+  return parsed === "one" ? "off" : parsed;
 }
 
 /** Exclusive end of the user-chosen span; idle endless tail starts here when set. */

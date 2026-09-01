@@ -69,6 +69,11 @@ import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff"
 import { loopModeFromHandoff } from "./playerHandoff";
 import { stageHandoffListenEventId } from "./lib/musicListenSession";
 import { pageFadeTransition } from "./lib/overlayMotion";
+import {
+  readResumeSeconds,
+  readStoredPlaybackDuration,
+  RESUME_REWIND_SEC,
+} from "./playbackStorage";
 
 function miniKindFromWindowLabel(label: string): "video" | "music" | null {
   if (label === "mini") return "video";
@@ -1172,6 +1177,16 @@ function App() {
       const file = event.payload;
       const st = useRuforgeStore.getState();
       st.setMusicQueueSource(null);
+      const resumeAt = !isAudioOnlyPath(file.path)
+        ? readResumeSeconds(
+            file.path,
+            file.duration > 0 ? file.duration : readStoredPlaybackDuration(file.path),
+            { rewindSeconds: RESUME_REWIND_SEC },
+          )
+        : 0;
+      useRuforgeStore.setState({
+        playerResumeAt: resumeAt > 0 ? resumeAt : null,
+      });
       st.setPlayingFile(file);
       void emit("stop-playback", "main-app");
       st.notify(`Now playing: ${file.name}`);
@@ -1550,6 +1565,30 @@ function App() {
       }
     })();
   }, [navMode, shellBlocked]);
+
+  useEffect(() => {
+    if (navMode === "music" || shellBlocked) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "d") return;
+      const el = document.activeElement;
+      if (el) {
+        const tag = el.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          (el as HTMLElement).isContentEditable
+        ) {
+          return;
+        }
+      }
+      event.preventDefault();
+      if (downloaderOpen) closeDownloader();
+      else openDownloader();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navMode, shellBlocked, downloaderOpen, openDownloader, closeDownloader]);
 
   useEffect(() => {
     if (activeTab !== "explorer" || shellBlocked) return;

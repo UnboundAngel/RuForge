@@ -1528,7 +1528,7 @@ export function MusicShell() {
             manualQueue={playback.manualQueue}
             folderAudioPlaylist={folderAudioPlaylist}
             onSeek={playback.seek}
-            onPlay={(file) => handlePlayFolderNeighbor(file)}
+            onPlay={(file) => handlePlayFolderNeighbor(file, { clearSessionLoop: true })}
             onPlayHistory={(file) => {
               setPendingListenEndReason("manual_switch");
               playMusicQueue(

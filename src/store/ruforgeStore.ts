@@ -93,7 +93,12 @@ import {
 } from "../lib/musicListenSession";
 import { readPlaybackSpeed } from "../playbackSpeedStorage";
 import type { PlayInMiniPayload, PlayInMusicMiniPayload } from "../playerHandoff";
-import { writePlaybackPos } from "../playbackStorage";
+import {
+  readResumeSeconds,
+  readStoredPlaybackDuration,
+  RESUME_REWIND_SEC,
+  writePlaybackPos,
+} from "../playbackStorage";
 import {
   clearMusicPlaybackSession,
   writeMusicPlaybackSession,
@@ -343,7 +348,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
     source: MusicQueueSource | null,
     opts?: { shuffle?: boolean },
   ) => void;
-  handlePlayFolderNeighbor: (file: MediaFile) => void;
+  handlePlayFolderNeighbor: (file: MediaFile, opts?: { clearSessionLoop?: boolean }) => void;
   handlePlayPlaylist: (
     files: MediaFile[],
     shuffle?: boolean,
@@ -700,10 +705,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       setPlayingFile: (playingFile) => {
         const prev = get().playingFile;
+        const sessionMode = readInitialPlayerLoopModeFromLs();
         const loopMode = playingFile
-          ? resolveLoopModeForPlay(readLoopModeForPath(playingFile.path), get().loopMode)
-          : get().loopMode;
-        if (loopMode !== get().loopMode) {
+          ? resolveLoopModeForPlay(readLoopModeForPath(playingFile.path), sessionMode)
+          : sessionMode;
+        if (loopMode !== sessionMode) {
           writePlayerLoopModeToLs(loopMode);
         }
 
@@ -835,7 +841,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
       setLoopMode: (loopMode) => {
         const { playingFile } = get();
         if (playingFile) writeLoopModeForPath(playingFile.path, loopMode);
-        writePlayerLoopModeToLs(loopMode);
+        if (loopMode !== "one") {
+          writePlayerLoopModeToLs(loopMode);
+        }
         set({ loopMode });
       },
       cycleLoopMode: () => {
@@ -907,6 +915,13 @@ export const useRuforgeStore = create<RuforgeStore>()(
         await closeVideoMiniWindow();
 
         const prev = get().playingFile;
+        const videoResumeAt = !isAudioOnlyPath(file.path)
+          ? readResumeSeconds(
+              file.path,
+              file.duration > 0 ? file.duration : readStoredPlaybackDuration(file.path),
+              { rewindSeconds: RESUME_REWIND_SEC },
+            )
+          : 0;
         if (playlist !== undefined) {
           set({
             folderAudioPlaylist: playlist,
@@ -914,13 +929,13 @@ export const useRuforgeStore = create<RuforgeStore>()(
             musicEndlessFromIndex: null,
             musicQueueSource: source ?? null,
             activeTab: "player",
-            playerResumeAt: null,
+            playerResumeAt: videoResumeAt > 0 ? videoResumeAt : null,
           });
         } else {
           set({
             musicQueueSource: source ?? null,
             activeTab: "player",
-            playerResumeAt: null,
+            playerResumeAt: videoResumeAt > 0 ? videoResumeAt : null,
           });
         }
         get().clearMusicPlayerResume();
@@ -933,11 +948,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       playMusicQueue: (file, playlist, source, opts) => {
         claimMainPlayback();
+        const sessionMode = readInitialPlayerLoopModeFromLs();
         const loopMode = resolveLoopModeForPlay(
           readLoopModeForPath(file.path),
-          get().loopMode,
+          sessionMode,
         );
-        if (loopMode !== get().loopMode) {
+        if (loopMode !== sessionMode) {
           writePlayerLoopModeToLs(loopMode);
         }
 
@@ -981,8 +997,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
         });
       },
 
-      handlePlayFolderNeighbor: (file) => {
+      handlePlayFolderNeighbor: (file, opts) => {
         get().clearMusicPlayerResume();
+        if (opts?.clearSessionLoop) {
+          writePlayerLoopModeToLs("off");
+        }
         get().setPlayingFile(file);
       },
 

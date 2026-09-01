@@ -1,6 +1,9 @@
 /** Seconds from end treated as "finished" for resume — reopen starts at 0. */
 export const END_EPSILON_SEC = 1.25;
 
+/** Video reopen rewinds this many seconds before the saved position for context. */
+export const RESUME_REWIND_SEC = 10;
+
 /** Furthest position ≥ this fraction of duration counts as Watched. */
 export const WATCHED_FRACTION = 0.9;
 
@@ -34,13 +37,18 @@ export function readFurthestPlaybackSec(videoPath: string): number {
   return readFurthestSeconds(videoPath);
 }
 
-export function readResumeSeconds(videoPath: string, durationSec: number): number {
+export function readResumeSeconds(
+  videoPath: string,
+  durationSec: number,
+  opts?: { rewindSeconds?: number },
+): number {
   const furthest = readFurthestSeconds(videoPath);
   if (furthest <= 0.25) return 0;
   const dur = effectivePlaybackDuration(videoPath, durationSec);
   if (dur <= 0) return 0;
   if (furthest >= dur - END_EPSILON_SEC) return 0;
-  return furthest;
+  const rewind = Math.max(0, opts?.rewindSeconds ?? 0);
+  return Math.max(0, furthest - rewind);
 }
 
 /** Persists furthest-ever playback position; never decreases the stored value. */

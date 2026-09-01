@@ -16,6 +16,15 @@ export const SPONSORBLOCK_CATEGORY_COLORS: Record<string, string> = {
 /** Scrub overlay opacity from extension barTypes (all categories). */
 export const SPONSORBLOCK_BAR_OPACITY = 0.7;
 
+function contrastingTextOnHex(hex: string): string {
+  const n = Number.parseInt(hex.replace("#", ""), 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.55 ? "#000000" : "#ffffff";
+}
+
 export function sbSegmentColor(category: string, actionType: string): string | null {
   if (actionType === "chapter" || category === "chapter") {
     return SPONSORBLOCK_CATEGORY_COLORS.chapter;
@@ -42,19 +51,16 @@ export function sbScrubRangeStyle(
   };
 }
 
-/** Pill under scrub hover preview (border + tint + readable text). */
+/** Pill under scrub hover preview (solid category fill, contrasting label). */
 export function sbScrubPillStyle(category: string): {
-  borderColor: string;
   backgroundColor: string;
   color: string;
 } {
   const actionType =
     category === "chapter" ? "chapter" : category === "poi_highlight" ? "poi" : "skip";
   const accent = sbSegmentColor(category, actionType) ?? "#a8a8a8";
-  const darkText = new Set(["selfpromo", "intro", "preview", "chapter"]);
   return {
-    borderColor: accent,
-    backgroundColor: `${accent}40`,
-    color: darkText.has(category) ? "#141414" : "#ffffff",
+    backgroundColor: accent,
+    color: contrastingTextOnHex(accent),
   };
 }
