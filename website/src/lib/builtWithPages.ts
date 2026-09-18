@@ -99,7 +99,7 @@ const BUILT_WITH_PAGE_DEFS: BuiltWithPage[] = [
     title: 'Tauri v2 Shell',
     lead: 'Tauri turns the Vite React app into a signed Windows desktop binary with extra windows, sidecars, and IPC.',
     paragraphs: [
-      'Two primary webviews ship today: `main` (full app) and `mini` (always-on-top pop-out). Each loads the same Vite bundle from `dist/` in release, or `http://localhost:1420` during `tauri dev`. Window chrome (minimize, maximize, close, queue drawer, mini toggle) is custom React in `App.tsx`, not native title bars (`decorations: false`).',
+      'Two primary webviews ship today: `main` (full app) and `mini` (always-on-top pop-out). Each loads the same Vite bundle from `dist/` in release, or `http://localhost:1430` during `tauri dev`. Window chrome (minimize, maximize, close, queue drawer, mini toggle) is custom React in `App.tsx`, not native title bars (`decorations: false`).',
       'Rust commands register in `lib.rs` via `generate_handler!`. TypeScript calls them with `invoke` from `@tauri-apps/api/core`. Local media paths go through `convertFileSrc` plus `assetProtocol` scopes in `tauri.conf.json` so `<video>` can read files under your home and download drives.',
       'Cross-window playback does not share Zustand. Main emits `play-in-mini` / `play-media`; mini emits `send-to-main` and `stop-playback`. Each webview has its own JS heap, so events plus a few flat `localStorage` keys bridge state.',
       'The updater plugin fetches `updater.json` from GitHub on startup (`runUpdateCheck` in `updaterCheck.ts`). Signed NSIS builds download and install in-app. Post-install copy can be structured JSON parsed by `updatePostInstall.ts` for the scrollable What is new modal.',
@@ -189,9 +189,9 @@ const BUILT_WITH_PAGE_DEFS: BuiltWithPage[] = [
     title: 'Vite Build Tool',
     lead: 'Vite bundles the desktop React app that Tauri loads in main and mini webviews.',
     paragraphs: [
-      'Root `vite.config.ts` enables `@vitejs/plugin-react` and `@tailwindcss/vite`. Dev server binds port 1420 with `strictPort: true`. `tauri.conf.json` points `devUrl` there for `npm run tauri dev`. The watch config ignores the `src-tauri` tree so Rust rebuild noise does not restart the frontend dev server.',
+      'Root `vite.config.ts` enables `@vitejs/plugin-react` and `@tailwindcss/vite`. Dev server binds port 1430 with `strictPort: true`. `tauri.conf.json` points `devUrl` there for `npm run tauri dev`. The watch config ignores the `src-tauri` tree so Rust rebuild noise does not restart the frontend dev server.',
       'Production path: `beforeBuildCommand` runs `npm run build`, which is `tsc` then `vite build`. Output lands in repo-root `dist/`, referenced as `frontendDist` in Tauri config. Tauri packages that folder into the NSIS/MSI installer.',
-      'Optional `TAURI_DEV_HOST` enables HMR over LAN (protocol ws on port 1421). Chunk size warnings above ~500 kB are a known heads-up, not a release blocker.',
+      'Optional `TAURI_DEV_HOST` enables HMR over LAN (protocol ws on port 1431). Chunk size warnings above ~500 kB are a known heads-up, not a release blocker.',
       'The marketing site in `website/` is a separate Astro project with its own Vite instance (`astro.config.mjs`). Only the root Vite build feeds the desktop bundle.',
     ],
     touchpoints: [

@@ -66,7 +66,7 @@ export const builtWithCodeExamples: Record<string, CodeSnippetSource[]> = {
       file: 'src-tauri/tauri.conf.json',
       startLine: 6,
       endLine: 10,
-      caption: 'Tauri dev loads Vite on port 1420; release builds run `npm run build` into `dist/` first.',
+      caption: 'Tauri dev loads Vite on port 1430; release builds run `npm run build` into `dist/` first.',
     },
     {
       file: 'src-tauri/tauri.conf.json',
@@ -160,7 +160,7 @@ export const builtWithCodeExamples: Record<string, CodeSnippetSource[]> = {
       file: 'vite.config.ts',
       startLine: 8,
       endLine: 18,
-      caption: 'Dev server binds port 1420 for `tauri dev`, enables React + Tailwind v4, and ignores `src-tauri` file churn.',
+      caption: 'Dev server binds port 1430 for `tauri dev`, enables React + Tailwind v4, and ignores `src-tauri` file churn.',
     },
     {
       file: 'src-tauri/tauri.conf.json',

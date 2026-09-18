@@ -33,7 +33,7 @@ describe("parseCrashDetails", () => {
 
   it("strips vite query params from dev stack paths", () => {
     const detail =
-      "    at MusicRowContextMenu (http://localhost:1420/src/components/music/MusicRowContextMenu.tsx?t=123:29:39)";
+      "    at MusicRowContextMenu (http://localhost:1430/src/components/music/MusicRowContextMenu.tsx?t=123:29:39)";
 
     const parsed = parseCrashDetails(
       "Cannot read properties of undefined (reading 'trim')",
