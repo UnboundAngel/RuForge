@@ -13,7 +13,7 @@ export async function fetchSubtitleTracks(videoPath: string): Promise<SubtitleTr
 
 /**
  * `<track src>` is same-origin–sensitive: `convertFileSrc` → `http://asset.localhost/...` fails
- * when the UI runs on `http://localhost:1420` (dev) or a different bundled origin. Read bytes
+ * when the UI runs on `http://localhost:1430` (dev) or a different bundled origin. Read bytes
  * in Rust and expose as `blob:` URLs so tracks load like the document.
  */
 export async function subtitleTracksWithBlobSrc(tracks: SubtitleTrack[]): Promise<SubtitleTrack[]> {

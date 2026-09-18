@@ -16,6 +16,9 @@ const shippedVersion = JSON.parse(
 // https://astro.build/config
 export default defineConfig({
   site: 'https://ruforge.app',
+  server: {
+    port: 4321,
+  },
   integrations: [
     react(),
     sitemap({

@@ -6,9 +6,9 @@ Shipping version: 0.4.1 (unreleased)
 
 Last shipped to users: 0.4.0
 
-Last updated: 2026-09-01 (Unreleased log)
+Last updated: 2026-09-18 (Vite/Tauri dev port 1430)
 
-Status: 0.4.0 live on GitHub and updater.json. Settings popup, download rail dock, virtual playlists, lyrics / Now Playing rail, Discord Rich Presence, accent picker shipped. Companion still developer-gated on localhost.
+Status: 0.4.0 live on GitHub and updater.json. Settings popup, download rail dock, virtual playlists, lyrics / Now Playing rail, Discord Rich Presence, accent picker shipped. Companion still developer-gated on localhost. Local Vite binds 1430 (HMR 1431) so it does not collide with Finch on 1420. Website Astro is pinned to 4321.
 
 Closed release notes for 0.4.0 and earlier: `docs/agents/release/versions/`. Do not paste them back into this file.
 
@@ -31,7 +31,7 @@ Rules: root `AGENTS.md` → **How to log Unreleased**.
 
 0.4.0 is out. App work pause-friendly. Website hero / marketing pass done for the 3-slide set. Next focus: storage cap before enqueue, main-app nav restructure.
 
-Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shipped target. Windows dev: `npm run dev:app`.
+Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shipped target. Windows dev: `npm run dev:app` (Vite on 1430). Website: `npm run dev` in `website/` (Astro on 4321).
 
 ## Open P0 (blocks release)
 
