@@ -129,7 +129,7 @@ export function formatCrashMessage(message: string, errorName?: string): string 
   return `${name}: ${trimmed}`;
 }
 
-function sectionFromFrame(frame: RawFrame): CrashErrorSection {
+function sectionFromFrame(frame: RawFrame, defaultOpen = false): CrashErrorSection {
   const fileName = frame.file.slice(frame.file.lastIndexOf("/") + 1);
   return {
     id: frame.id,
@@ -140,7 +140,7 @@ function sectionFromFrame(frame: RawFrame): CrashErrorSection {
       ? `${frame.fn} · ${fileName}:${frame.line}`
       : `${fileName}:${frame.line}`,
     body: frame.raw,
-    defaultOpen: false,
+    defaultOpen,
   };
 }
 
@@ -186,9 +186,9 @@ export function parseCrashDetails(
   );
 
   if (appFrames[0]) {
-    sections.push(sectionFromFrame(appFrames[0]));
+    sections.push(sectionFromFrame(appFrames[0], true));
   } else if (frames[0] && !nonStackLines) {
-    sections.push(sectionFromFrame(frames[0]));
+    sections.push(sectionFromFrame(frames[0], true));
   }
 
   if (nonStackLines && sections.length <= 1) {
