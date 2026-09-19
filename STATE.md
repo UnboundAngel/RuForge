@@ -6,7 +6,7 @@ Shipping version: 0.4.1 (unreleased)
 
 Last shipped to users: 0.4.0
 
-Last updated: 2026-09-18 (Vite/Tauri dev port 1430)
+Last updated: 2026-09-18 (Unreleased log)
 
 Status: 0.4.0 live on GitHub and updater.json. Settings popup, download rail dock, virtual playlists, lyrics / Now Playing rail, Discord Rich Presence, accent picker shipped. Companion still developer-gated on localhost. Local Vite binds 1430 (HMR 1431) so it does not collide with Finch on 1420. Website Astro is pinned to 4321.
 
