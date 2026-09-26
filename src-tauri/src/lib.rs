@@ -27,6 +27,8 @@ mod taskbar_thumbbar;
 mod taskbar_thumbbar_icons;
 #[cfg(windows)]
 mod windows_audio_brand;
+#[cfg(windows)]
+mod windows_playback_qos;
 
 use std::sync::Mutex;
 
@@ -139,6 +141,7 @@ pub fn run() {
     {
         let app_id = windows_audio_brand::process_app_user_model_id(&context.config().identifier);
         windows_audio_brand::set_explicit_app_user_model_id(&app_id);
+        windows_playback_qos::disable_background_execution_throttling();
     }
 
     let identifier = context.config().identifier.clone();
