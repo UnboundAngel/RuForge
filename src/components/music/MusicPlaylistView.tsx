@@ -236,6 +236,7 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
 
       <MusicPlaylistFinder
         libraryTracks={libraryTracks}
+        playlistTracks={tracks}
         prominent={tracks.length === 0}
         autoFocus={tracks.length === 0 && !untouched}
         inPlaylist={(path) => recordHasPath(record, path)}
