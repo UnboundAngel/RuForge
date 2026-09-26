@@ -1678,6 +1678,71 @@ button.rf-yt-profile-pill {
   line-height: 1.35;
 }
 
+/* Portaled to body, outside [data-music-mode], so colors are literal. */
+.rf-music-tooltip {
+  position: fixed;
+  z-index: 200001;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(18rem, calc(100vw - 1rem));
+  padding: 0.4375rem 0.625rem;
+  border-radius: 0.5rem;
+  background: #282828;
+  color: rgb(255 255 255 / 0.95);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  animation: rf-music-tooltip-in 140ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.rf-music-tooltip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rf-music-tooltip--wrap {
+  align-items: flex-start;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.rf-music-tooltip--wrap .rf-music-tooltip-label {
+  overflow: visible;
+}
+
+.rf-music-tooltip-kbd {
+  flex-shrink: 0;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.3125rem;
+  background: rgb(255 255 255 / 0.1);
+  color: rgb(255 255 255 / 0.6);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+@keyframes rf-music-tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-music-tooltip {
+    animation: none;
+  }
+}
+
 .rf-code-panel {
   overflow: hidden;
   border-radius: 0.625rem;
