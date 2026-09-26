@@ -16,4 +16,4 @@ git pull origin <branch>
 Then run npm install if package-lock.json changed, and npm run dev:app.
 ```
 
-Do not test the UI in a browser unless Angel asks. He tests the UI himself.
+For UI changes, preview before handing off: run `npx vite --port 1430 --strictPort`, load the page in the preinstalled Chromium through Playwright with the Tauri IPC stubbed (`window.__TAURI_INTERNALS__`) and a fake library, screenshot each state that changed, send the screenshots to Angel, and ask for his review. Keep the harness in the scratchpad, not in the repo. Music UI should match Spotify's layout as closely as the design rules allow.
