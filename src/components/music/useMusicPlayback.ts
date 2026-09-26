@@ -8,7 +8,7 @@ import {
   releaseAnalyserGraph,
 } from "@/audioAnalyserGraph";
 import { applyAudioOutputSink } from "@/audioOutputDevices";
-import { applyMediaOutputState } from "@/applyMediaOutputState";
+import { applyMediaOutputState, uiVolumeToGain } from "@/applyMediaOutputState";
 import {
   chapterAtTime,
   nextChapterIndex,
@@ -200,6 +200,7 @@ export function useMusicPlayback(
   const rampStartMsRef = useRef(0);
   const rampPausedElapsedRef = useRef<number | null>(null);
   const rampRafRef = useRef<number | null>(null);
+  const volumeRampRafRef = useRef<number | null>(null);
   const outgoingElRef = useRef<HTMLAudioElement | null>(null);
 
   const playingFileRef = useRef(playingFile);
@@ -238,8 +239,41 @@ export function useMusicPlayback(
   );
 
   const applyPrimaryOutput = useCallback(() => {
+    if (volumeRampRafRef.current != null) {
+      cancelAnimationFrame(volumeRampRafRef.current);
+      volumeRampRafRef.current = null;
+    }
     applyElOutput(getPrimary(), primaryGainRef.current);
   }, [applyElOutput, getPrimary]);
+
+  // Ease el.volume toward the live store volume instead of jumping. Instant
+  // element-volume changes click on the WebAudio-tapped graph (zipper noise),
+  // most audible on the coarse keyboard steps in Music mode. The frame loop
+  // reads volumeRef live so it always converges to the latest value, even on a
+  // fast slider drag where the final pointer event repeats the previous value.
+  const rampPrimaryVolume = useCallback(() => {
+    const el = getPrimary();
+    if (!el) return;
+    el.muted = isMutedRef.current;
+    if (volumeRampRafRef.current != null) return;
+    const step = () => {
+      const cur = getPrimary();
+      if (!cur) {
+        volumeRampRafRef.current = null;
+        return;
+      }
+      const target = uiVolumeToGain(volumeRef.current * primaryGainRef.current);
+      const diff = target - cur.volume;
+      if (Math.abs(diff) < 0.004) {
+        cur.volume = target;
+        volumeRampRafRef.current = null;
+        return;
+      }
+      cur.volume = cur.volume + diff * 0.4;
+      volumeRampRafRef.current = requestAnimationFrame(step);
+    };
+    volumeRampRafRef.current = requestAnimationFrame(step);
+  }, [getPrimary]);
 
   const applyPendingResume = useCallback((el: HTMLAudioElement) => {
     const pending = pendingResumeRef.current;
@@ -802,11 +836,13 @@ export function useMusicPlayback(
   }, [mediaEpoch, syncAudioElState]);
 
   useEffect(() => {
-    applyPrimaryOutput();
     if (phaseRef.current === "overlapping") {
+      applyPrimaryOutput();
       applyElOutput(outgoingElRef.current, secondaryGainRef.current);
+    } else {
+      rampPrimaryVolume();
     }
-  }, [volume, isMuted, applyPrimaryOutput, applyElOutput]);
+  }, [volume, isMuted, applyPrimaryOutput, applyElOutput, rampPrimaryVolume]);
 
   useEffect(() => {
     const el = getPrimary();
@@ -1324,6 +1360,10 @@ export function useMusicPlayback(
       window.removeEventListener("pagehide", flushSession);
       window.removeEventListener("beforeunload", flushSession);
       stopRampLoop();
+      if (volumeRampRafRef.current != null) {
+        cancelAnimationFrame(volumeRampRafRef.current);
+        volumeRampRafRef.current = null;
+      }
     };
   }, [getPrimary, stopRampLoop]);
 

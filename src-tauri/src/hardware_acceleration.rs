@@ -3,9 +3,14 @@ use tauri::{AppHandle, Manager};
 
 const HW_ACCEL_PREF_FILE: &str = "hardware-acceleration.json";
 
+/// wry's Windows defaults, plus native-occlusion off so a fully visible window
+/// on a non-foreground monitor is not treated as a background tab.
 #[cfg(target_os = "windows")]
 const WRY_WIN_DEFAULT_FEATURES: &str =
-    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion";
+
+#[cfg(target_os = "windows")]
+const WIN_VISIBLE_PLAYBACK_ARGS: &str = "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,8 +42,8 @@ impl HardwareAccelerationDisk {
     #[cfg(target_os = "windows")]
     fn disable_gpu_browser_args() -> Option<String> {
         Some(format!(
-            "{} --disable-gpu --disable-gpu-compositing",
-            WRY_WIN_DEFAULT_FEATURES,
+            "{} {} --disable-gpu --disable-gpu-compositing",
+            WRY_WIN_DEFAULT_FEATURES, WIN_VISIBLE_PLAYBACK_ARGS,
         ))
     }
 
@@ -49,10 +54,19 @@ impl HardwareAccelerationDisk {
 
     pub fn webview_additional_browser_args(&self) -> Option<String> {
         if self.hardware_acceleration {
-            None
-        } else {
-            Self::disable_gpu_browser_args()
+            #[cfg(target_os = "windows")]
+            {
+                return Some(format!(
+                    "{} {}",
+                    WRY_WIN_DEFAULT_FEATURES, WIN_VISIBLE_PLAYBACK_ARGS
+                ));
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                return None;
+            }
         }
+        Self::disable_gpu_browser_args()
     }
 
     pub fn save_to_app_disk(&self, app: &AppHandle) -> Result<(), String> {
@@ -82,6 +96,37 @@ where
     if let Some(args) = prefs.webview_additional_browser_args() {
         for w in &mut ctx.config_mut().app.windows {
             w.additional_browser_args = Some(args.clone());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_playback_args_disable_occlusion_throttling() {
+        let on = HardwareAccelerationDisk {
+            hardware_acceleration: true,
+        };
+        let off = HardwareAccelerationDisk {
+            hardware_acceleration: false,
+        };
+        #[cfg(target_os = "windows")]
+        {
+            let a = on.webview_additional_browser_args().expect("hw-on args");
+            assert!(a.contains("CalculateNativeWinOcclusion"));
+            assert!(a.contains("--disable-backgrounding-occluded-windows"));
+            assert!(a.contains("--disable-renderer-backgrounding"));
+            assert!(!a.contains("--disable-gpu"));
+            let b = off.webview_additional_browser_args().expect("hw-off args");
+            assert!(b.contains("--disable-gpu"));
+            assert!(b.contains("CalculateNativeWinOcclusion"));
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            assert!(on.webview_additional_browser_args().is_none());
+            assert!(off.webview_additional_browser_args().is_none());
         }
     }
 }
