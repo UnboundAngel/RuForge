@@ -434,6 +434,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
           crashRecoveryPreview ? "z-[100001]" : "z-[110]"
         }`}
         data-rf-nav-mode={navMode === "music" ? "music" : "media"}
+        data-rf-island-empty={islandState === "idle" && !updateMode && !devCaptureIsland ? "true" : undefined}
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
         <div

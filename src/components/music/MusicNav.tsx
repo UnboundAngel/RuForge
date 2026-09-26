@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Library, Maximize2, Plus } from "lucide-react";
+import { Library, Maximize2, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +36,26 @@ type Props = {
 };
 
 const ICON_BTN =
-  "rf-music-tooltip-anchor shrink-0 flex items-center justify-center rounded-full text-white/60 transition-colors hover:text-white";
+  "rf-music-tooltip-anchor rf-music-press shrink-0 flex items-center justify-center rounded-full text-white/60 hover:text-white";
+
+const RED_HOVER = "hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)]";
+
+/** Library icon that turns into the panel open/close icon on hover, like Spotify's. */
+function PanelToggleIcon({ open, size }: { open: boolean; size: number }) {
+  const Panel = open ? PanelLeftOpen : PanelLeftClose;
+  return (
+    <span className="relative inline-flex shrink-0" style={{ width: size, height: size }} aria-hidden>
+      <Library
+        size={size}
+        className="absolute inset-0 transition-[opacity,scale] duration-200 group-hover/toggle:opacity-0 group-hover/toggle:scale-75"
+      />
+      <Panel
+        size={size}
+        className="absolute inset-0 opacity-0 scale-75 text-[color:var(--music-accent)] transition-[opacity,scale] duration-200 group-hover/toggle:opacity-100 group-hover/toggle:scale-100"
+      />
+    </span>
+  );
+}
 
 /**
  * Spotify's "Your Library" panel. Home and YouTube Music search live in the top bar
@@ -55,16 +74,16 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
           <button
             type="button"
             onClick={onToggleCollapse}
-            className={cn(ICON_BTN, "w-10 h-10")}
-            aria-label="Expand Your Library (Ctrl+B)"
-            data-tooltip="Expand Your Library (Ctrl+B)"
+            className={cn(ICON_BTN, "group/toggle w-10 h-10", RED_HOVER)}
+            aria-label="Open Your Library (Ctrl+B)"
+            data-tooltip="Open Your Library (Ctrl+B)"
           >
-            <Library size={24} />
+            <PanelToggleIcon open size={24} />
           </button>
           <button
             type="button"
             onClick={create}
-            className={cn(ICON_BTN, "w-10 h-10 bg-white/[0.07] hover:bg-white/[0.12]")}
+            className={cn(ICON_BTN, "w-10 h-10 bg-white/[0.07]", RED_HOVER)}
             aria-label="Create playlist (Ctrl+N)"
             data-tooltip="Create playlist (Ctrl+N)"
           >
@@ -83,16 +102,17 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="rf-music-tooltip-anchor flex items-center gap-2 min-w-0 mr-auto text-base font-bold text-white/90 transition-colors hover:text-white"
+          className="group/toggle rf-music-tooltip-anchor rf-music-press-soft flex items-center gap-2.5 min-w-0 mr-auto text-base font-bold text-white/80 hover:text-white"
           aria-label="Collapse Your Library (Ctrl+B)"
           data-tooltip="Collapse Your Library (Ctrl+B)"
         >
+          <PanelToggleIcon open={false} size={22} />
           <span className="truncate">Your Library</span>
         </button>
         <button
           type="button"
           onClick={create}
-          className={cn(ICON_BTN, "w-8 h-8 bg-white/[0.07] hover:bg-white/[0.12]")}
+          className={cn(ICON_BTN, "w-8 h-8 bg-white/[0.07]", RED_HOVER)}
           aria-label="Create playlist (Ctrl+N)"
           data-tooltip="Create playlist (Ctrl+N)"
         >
@@ -101,7 +121,12 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
         <button
           type="button"
           onClick={() => onSelect("library")}
-          className={cn(ICON_BTN, "w-8 h-8 hover:bg-white/[0.07]", libraryActive && "text-white")}
+          className={cn(
+            ICON_BTN,
+            "w-8 h-8",
+            RED_HOVER,
+            libraryActive && "text-[color:var(--music-accent)] hover:text-[color:var(--music-accent)]",
+          )}
           aria-label="Show full library (Alt+3)"
           data-tooltip="Show full library (Alt+3)"
         >

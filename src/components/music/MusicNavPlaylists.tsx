@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Check, List, Mic2, Pin, Search, Volume2, X } from "lucide-react";
+import { ArrowDownAZ, Check, Clock, List, ListOrdered, Mic2, Pin, Search, Volume2, X, type LucideIcon } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { VirtualPlaylistRecord } from "@/virtualPlaylists";
 import type { MediaFile } from "@/types";
@@ -10,6 +10,7 @@ import { LikedSongsCover } from "./LikedSongsCover";
 import { MusicPlaylistCover } from "./MusicPlaylistCover";
 import { resolveLikedFiles } from "./musicLikedTracks";
 import {
+  MUSIC_MENU_ICON_SIZE,
   MUSIC_MENU_TONES,
   MUSIC_MENU_WIDTH,
   MusicFloatingMenu,
@@ -35,10 +36,25 @@ import {
 import { useMusicLibraryTracks, useMusicPlaylistRecords } from "./useMusicPlaylists";
 
 const SORTS: LibrarySort[] = ["recents", "alphabetical", "custom"];
+const SORT_ICONS: Record<LibrarySort, LucideIcon> = {
+  recents: Clock,
+  alphabetical: ArrowDownAZ,
+  custom: ListOrdered,
+};
+
+const RED_HOVER = "hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)]";
+const CHIP = cn(
+  "rf-music-press-soft h-8 shrink-0 flex items-center rounded-full text-sm text-white bg-white/[0.07]",
+  RED_HOVER,
+);
 const FILTERS: { id: Exclude<LibraryFilter, null>; label: string }[] = [
   { id: "playlists", label: "Playlists" },
   { id: "artists", label: "Artists" },
 ];
+
+const ROW_HOVER = "hover:bg-[color-mix(in_srgb,var(--music-accent)_9%,rgba(255,255,255,0.04))]";
+const ROW_ACTIVE =
+  "bg-[color-mix(in_srgb,var(--music-accent)_16%,transparent)] hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,transparent)]";
 
 const songs = (n: number) => `${n} ${n === 1 ? "song" : "songs"}`;
 
@@ -156,6 +172,12 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
 
   if (collapsed) return list;
 
+  const searching = searchOpen || Boolean(query);
+  const closeSearch = () => {
+    setQuery("");
+    setSearchOpen(false);
+  };
+
   return (
     <div className="flex flex-col min-h-0 flex-1">
       <div className="flex items-center gap-2 px-4 pb-2 shrink-0">
@@ -163,7 +185,7 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
           <button
             type="button"
             onClick={() => setFilter(null)}
-            className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full bg-white/[0.07] text-white/80 transition-colors hover:bg-white/[0.12] hover:text-white"
+            className={cn(CHIP, "w-8 px-0 justify-center text-white/80 hover:text-white")}
             aria-label="Clear filters"
           >
             <X size={16} />
@@ -176,8 +198,9 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
             onClick={() => setFilter(filter === f.id ? null : f.id)}
             aria-pressed={filter === f.id}
             className={cn(
-              "h-8 px-3 shrink-0 rounded-full text-sm transition-colors",
-              filter === f.id ? "bg-white text-black" : "bg-white/[0.07] text-white hover:bg-white/[0.12]",
+              CHIP,
+              "px-3",
+              filter === f.id && "bg-[color:var(--music-accent)] text-white hover:bg-[color:var(--music-accent-hover)]",
             )}
           >
             {f.label}
@@ -186,9 +209,26 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
       </div>
 
       <div className="flex items-center gap-2 pl-2 pr-4 pb-1 shrink-0">
-        {searchOpen || query ? (
-          <div className="flex items-center gap-2 h-8 flex-1 min-w-0 rounded-md bg-white/[0.1] px-2 text-white/70">
-            <Search size={16} className="shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div
+            className={cn(
+              "flex items-center h-8 rounded-md overflow-hidden transition-[width,background-color] duration-300 ease-out",
+              searching ? "w-full bg-white/[0.08]" : "w-8 bg-transparent",
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => (searching ? searchRef.current?.focus() : setSearchOpen(true))}
+              className={cn(
+                "rf-music-tooltip-anchor rf-music-press w-8 h-8 shrink-0 flex items-center justify-center rounded-full",
+                searching ? "text-white/70" : cn("text-white/60 hover:text-white", RED_HOVER),
+              )}
+              aria-label="Search in Your Library"
+              data-tooltip={searching ? undefined : "Search in Your Library"}
+              tabIndex={searching ? -1 : 0}
+            >
+              <Search size={16} />
+            </button>
             <input
               ref={searchRef}
               value={query}
@@ -197,38 +237,32 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
                 if (!query) setSearchOpen(false);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setQuery("");
-                  setSearchOpen(false);
-                }
+                if (e.key === "Escape") closeSearch();
               }}
               placeholder="Search in Your Library"
               aria-label="Search in Your Library"
-              className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/50 outline-none"
+              tabIndex={searching ? 0 : -1}
+              className={cn(
+                "min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/50 outline-none caret-[color:var(--music-accent)] transition-opacity duration-200",
+                searching ? "opacity-100 delay-100" : "opacity-0 pointer-events-none",
+              )}
             />
             {query && (
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setQuery("")}
-                className="shrink-0 text-white/60 hover:text-white"
+                onClick={() => {
+                  setQuery("");
+                  searchRef.current?.focus();
+                }}
+                className="rf-music-press w-7 h-7 mr-0.5 shrink-0 flex items-center justify-center rounded-full text-white/60 hover:text-white"
                 aria-label="Clear search"
               >
                 <X size={14} />
               </button>
             )}
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className="rf-music-tooltip-anchor w-8 h-8 mr-auto flex items-center justify-center rounded-full text-white/60 transition-colors hover:text-white hover:bg-white/[0.07]"
-            aria-label="Search in Your Library"
-            data-tooltip="Search in Your Library"
-          >
-            <Search size={16} />
-          </button>
-        )}
+        </div>
         <button
           type="button"
           onClick={(e) => {
@@ -236,13 +270,21 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
             setSortAt(sortAt ? null : { x: r.right - MUSIC_MENU_WIDTH, y: r.bottom + 6 });
           }}
           className={cn(
-            "shrink-0 flex items-center gap-1.5 h-8 pl-2 text-sm text-white/70 transition-colors hover:text-white",
-            sortAt && "text-white",
+            "rf-music-tooltip-anchor rf-music-press-soft shrink-0 flex items-center h-8 pl-2 text-sm text-white/70 hover:text-white",
+            sortAt && "text-[color:var(--music-accent)] hover:text-[color:var(--music-accent)]",
           )}
           aria-label={`Sort by ${LIBRARY_SORT_LABELS[sort]}`}
+          data-tooltip={searching ? `Sort by ${LIBRARY_SORT_LABELS[sort]}` : undefined}
         >
-          {LIBRARY_SORT_LABELS[sort]}
-          <List size={16} />
+          <span
+            className={cn(
+              "overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-300 ease-out",
+              searching ? "max-w-0 opacity-0 mr-0" : "max-w-[120px] opacity-100 mr-1.5",
+            )}
+          >
+            {LIBRARY_SORT_LABELS[sort]}
+          </span>
+          <List size={16} className="shrink-0" />
         </button>
       </div>
 
@@ -255,18 +297,21 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
         onClose={() => setSortAt(null)}
         ariaLabel="Sort Your Library"
       >
-        <MusicMenuSection label="Sort by" tone={MUSIC_MENU_TONES.navigate}>
-          {SORTS.map((key) => (
-            <MusicMenuRow
-              key={key}
-              tone={MUSIC_MENU_TONES.navigate}
-              icon={<span className="block w-[13px]" />}
-              label={LIBRARY_SORT_LABELS[key]}
-              active={key === sort}
-              onClick={() => setSort(key)}
-              trailing={key === sort ? <Check size={14} className="shrink-0 text-[color:var(--music-accent)]" /> : undefined}
-            />
-          ))}
+        <MusicMenuSection label="Sort by" tone={MUSIC_MENU_TONES.playback}>
+          {SORTS.map((key) => {
+            const SortIcon = SORT_ICONS[key];
+            return (
+              <MusicMenuRow
+                key={key}
+                tone={MUSIC_MENU_TONES.playback}
+                icon={<SortIcon size={MUSIC_MENU_ICON_SIZE} />}
+                label={LIBRARY_SORT_LABELS[key]}
+                active={key === sort}
+                onClick={() => setSort(key)}
+                trailing={key === sort ? <Check size={14} className="shrink-0 text-[color:var(--music-accent)]" /> : undefined}
+              />
+            );
+          })}
         </MusicMenuSection>
       </MusicFloatingMenu>
     </div>
@@ -335,7 +380,7 @@ function ArtistRow({ artist, active, onClick }: { artist: SidebarArtist; active:
       onMouseLeave={() => setHovered(false)}
       className={cn(
         "flex items-center gap-3 w-full p-2 rounded-md text-left transition-colors",
-        active ? "bg-white/[0.1] hover:bg-white/[0.14]" : "hover:bg-white/[0.07]",
+        active ? ROW_ACTIVE : ROW_HOVER,
       )}
     >
       {artist.cover ? (
@@ -392,8 +437,8 @@ function LibraryRow({
     dropping
       ? "bg-[color-mix(in_srgb,var(--music-accent)_22%,transparent)]"
       : active
-        ? "bg-white/[0.1] hover:bg-white/[0.14]"
-        : "hover:bg-white/[0.07]",
+        ? ROW_ACTIVE
+        : ROW_HOVER,
   );
   const dropProps = { onDragOver, onDragLeave, onDrop };
 
