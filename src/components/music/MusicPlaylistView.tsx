@@ -237,6 +237,7 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
       )}
 
       <MusicPlaylistFinder
+        playlistId={record.id}
         libraryTracks={libraryTracks}
         playlistTracks={tracks}
         prominent={tracks.length === 0}

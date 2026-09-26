@@ -1,14 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, Music, Plus, RefreshCw, Search, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CloudDownload, Music, Plus, RefreshCw, Search, X } from "lucide-react";
 import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
 import type { MediaFile } from "@/types";
 import { filterTracksByQuery, trackArtistLabel } from "./musicPlaylists";
 import { recommendForPlaylist } from "./musicPlaylistRecommend";
+import type { OutsideTrack } from "./musicOutsideRecommend";
+import {
+  downloadOutsideTrackIntoPlaylist,
+  useOutsideDownloadPercent,
+  useOutsideRecommendations,
+} from "./useMusicOutsideRecommendations";
 
 type Props = {
+  /** Outside songs are downloaded into this playlist. */
+  playlistId: string;
   libraryTracks: MediaFile[];
   /** Songs already in the playlist; recommendations are drawn from these. */
   playlistTracks: MediaFile[];
@@ -21,6 +29,8 @@ type Props = {
 };
 
 const RECOMMEND_COUNT = 10;
+/** YouTube Music songs appended after the library cards. */
+const OUTSIDE_COUNT = 6;
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 const PILL =
@@ -30,7 +40,15 @@ const PILL =
  * Spotify's block under a playlist: "Recommended" songs with Add and Refresh,
  * and a "Find more" search. Rows share the tracklist's padding so the columns line up.
  */
-export function MusicPlaylistFinder({ libraryTracks, playlistTracks, inPlaylist, onAdd, prominent, autoFocus }: Props) {
+export function MusicPlaylistFinder({
+  playlistId,
+  libraryTracks,
+  playlistTracks,
+  inPlaylist,
+  onAdd,
+  prominent,
+  autoFocus,
+}: Props) {
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [round, setRound] = useState(0);
@@ -47,8 +65,34 @@ export function MusicPlaylistFinder({ libraryTracks, playlistTracks, inPlaylist,
     () => pool.filter((t) => !inPlaylist(t.path)).slice(0, RECOMMEND_COUNT),
     [pool, inPlaylist],
   );
-  // Refresh only helps when the library holds more candidates than one page shows.
-  const canRefresh = libraryTracks.length - playlistTracks.length > RECOMMEND_COUNT;
+
+  // YouTube Music is asked only once the shelf scrolls into view, and seeds follow the same
+  // "rank per library change or Refresh" rule so adding a song doesn't refetch.
+  const sectionRef = useRef<HTMLElement>(null);
+  const [onScreen, setOnScreen] = useState(false);
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el || onScreen) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setOnScreen(true);
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [onScreen, libraryTracks.length]);
+  const hasPlaylistTracks = playlistTracks.length > 0;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const seedTracks = useMemo(() => playlistRef.current, [libraryTracks, round, hasPlaylistTracks]);
+  const outside = useOutsideRecommendations({
+    playlistTracks: seedTracks,
+    library: libraryTracks,
+    round,
+    count: OUTSIDE_COUNT,
+    active: onScreen && !prominent,
+  });
+
+  // Refresh helps when the library holds more candidates than one page shows, or YouTube Music can deal more.
+  const canRefresh = libraryTracks.length - playlistTracks.length > RECOMMEND_COUNT || outside.available;
+  const hasShelf = recommended.length > 0 || outside.tracks.length > 0 || outside.loading;
   const results = useMemo(() => filterTracksByQuery(libraryTracks, query), [libraryTracks, query]);
 
   const searchOpen = prominent || searching;
@@ -60,7 +104,7 @@ export function MusicPlaylistFinder({ libraryTracks, playlistTracks, inPlaylist,
   if (libraryTracks.length === 0) return null;
 
   return (
-    <section className={cn("@container px-6 pb-10", prominent ? "mt-2" : "mt-10")}>
+    <section ref={sectionRef} className={cn("@container px-6 pb-10", prominent ? "mt-2" : "mt-10")}>
       <div className={cn(!prominent && "border-t border-white/10 pt-8")}>
         <AnimatePresence mode="wait" initial={false}>
           {searchOpen ? (
@@ -144,13 +188,16 @@ export function MusicPlaylistFinder({ libraryTracks, playlistTracks, inPlaylist,
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25, ease: EASE }}
             >
-              {recommended.length > 0 ? (
+              {hasShelf ? (
                 <CardShelf
                   listKey={round}
                   title="Recommended"
                   subtitle="Based on what's in this playlist"
                   tracks={recommended}
                   onAdd={onAdd}
+                  outside={outside.tracks}
+                  outsideLoading={outside.loading}
+                  playlistId={playlistId}
                   actions={
                     <>
                       {canRefresh && (
@@ -216,11 +263,18 @@ function CardShelf({
   onAdd,
   actions,
   listKey,
+  outside = [],
+  outsideLoading = false,
+  playlistId,
 }: {
   title: string;
   subtitle: string;
   tracks: MediaFile[];
   onAdd: (file: MediaFile) => void;
+  /** YouTube Music songs, shown after the library cards. */
+  outside?: OutsideTrack[];
+  outsideLoading?: boolean;
+  playlistId?: string;
   actions?: React.ReactNode;
   /** Changing it re-deals the cards (Refresh) while the header, and its buttons, stay mounted. */
   listKey?: number;
@@ -244,7 +298,7 @@ function CardShelf({
       ro.disconnect();
       window.clearTimeout(t);
     };
-  }, [tracks]);
+  }, [tracks, outside, outsideLoading]);
 
   const page = (dir: 1 | -1) => {
     const el = scrollRef.current;
@@ -284,6 +338,13 @@ function CardShelf({
           {tracks.map((file, i) => (
             <FinderCard key={file.path} index={i} file={file} onAdd={() => onAdd(file)} />
           ))}
+          {playlistId &&
+            outside.map((track, i) => (
+              <OutsideCard key={`yt:${track.videoId}`} index={tracks.length + i} track={track} playlistId={playlistId} />
+            ))}
+          {outsideLoading &&
+            outside.length === 0 &&
+            [0, 1, 2].map((i) => <SkeletonCard key={`skeleton-${i}`} index={tracks.length + i} />)}
         </AnimatePresence>
       </div>
     </div>
@@ -361,6 +422,135 @@ function FinderCard({ file, index, onAdd }: { file: MediaFile; index: number; on
             {artist || file.album?.trim() || "Unknown artist"}
           </div>
         </div>
+      </div>
+    </motion.div>
+  );
+}
+
+const RING_R = 15;
+const RING_C = 2 * Math.PI * RING_R;
+
+/**
+ * A YouTube Music song the user doesn't own yet. Add downloads it; the card shows the progress,
+ * then leaves on its own once the file lands in the library (the Music shell adds it to the playlist).
+ */
+function OutsideCard({ track, index, playlistId }: { track: OutsideTrack; index: number; playlistId: string }) {
+  const { queued, percent, failed } = useOutsideDownloadPercent(track.url);
+  const busy = queued && !failed;
+  const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.videoId}/hqdefault.jpg`;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12, width: CARD_W + CARD_GAP }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        width: CARD_W + CARD_GAP,
+        transition: { duration: 0.3, ease: EASE, delay: Math.min(index, 8) * 0.04 },
+      }}
+      exit={{ opacity: 0, scale: 0.85, width: 0, transition: { duration: 0.24, ease: EASE, delay: 0.25 } }}
+      className="shrink-0 overflow-hidden"
+      style={{ paddingRight: CARD_GAP }}
+    >
+      <div className="group/card w-[168px] p-2 rounded-lg transition-colors duration-200 hover:bg-white/[0.07]">
+        <div className="relative aspect-square w-full overflow-hidden rounded-md bg-white/[0.07] shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+          <img
+            src={thumb}
+            alt=""
+            draggable={false}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="h-full w-full object-cover"
+          />
+          <span
+            className="rf-music-tooltip-anchor absolute top-2 left-2 w-6 h-6 flex items-center justify-center rounded-full bg-black/70 text-white/80"
+            data-tooltip="Not downloaded"
+            aria-label="Not downloaded"
+          >
+            <CloudDownload size={13} strokeWidth={2.5} aria-hidden />
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              if (!busy) downloadOutsideTrackIntoPlaylist(track, playlistId);
+            }}
+            className={cn(
+              "rf-music-press rf-music-tooltip-anchor absolute bottom-2 right-2 w-10 h-10 flex items-center justify-center rounded-full text-white shadow-[0_8px_20px_rgba(0,0,0,0.5)]",
+              "transition-[opacity,translate,scale,background-color] duration-200",
+              busy ? "bg-black/80" : "bg-[var(--music-accent)] hover:scale-105",
+              busy
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-2 group-hover/card:opacity-100 group-hover/card:translate-y-0 focus-visible:opacity-100 focus-visible:translate-y-0",
+            )}
+            aria-label={busy ? `Downloading ${track.title}` : `Download ${track.title} and add it to this playlist`}
+            data-tooltip={busy ? `Downloading ${Math.round(percent)}%` : failed ? "Download failed. Try again" : "Download and add"}
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {busy ? (
+                <motion.svg
+                  key="ring"
+                  viewBox="0 0 40 40"
+                  className="w-10 h-10 -rotate-90"
+                  initial={{ scale: 0.4, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.4, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 520, damping: 30 }}
+                  aria-hidden
+                >
+                  <circle cx="20" cy="20" r={RING_R} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="3" />
+                  <motion.circle
+                    cx="20"
+                    cy="20"
+                    r={RING_R}
+                    fill="none"
+                    stroke="var(--music-accent)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray={RING_C}
+                    initial={false}
+                    animate={{ strokeDashoffset: RING_C * (1 - Math.max(0.04, percent / 100)) }}
+                    transition={{ duration: 0.4, ease: EASE }}
+                  />
+                </motion.svg>
+              ) : (
+                <motion.span
+                  key="add"
+                  initial={{ scale: 0.4, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.4, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 520, damping: 30 }}
+                  className="flex"
+                >
+                  <Plus size={22} strokeWidth={2.75} />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </button>
+        </div>
+        <div className="mt-2 min-w-0">
+          <div className="truncate text-sm font-bold text-white">{track.title}</div>
+          <div className="truncate text-xs text-white/60 transition-colors group-hover/card:text-white/80">
+            {track.artist || "YouTube Music"}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function SkeletonCard({ index }: { index: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { delay: Math.min(index, 8) * 0.04 } }}
+      exit={{ opacity: 0, width: 0, transition: { duration: 0.2 } }}
+      className="shrink-0 overflow-hidden"
+      style={{ width: CARD_W + CARD_GAP, paddingRight: CARD_GAP }}
+      aria-hidden
+    >
+      <div className="w-[168px] p-2">
+        <div className="aspect-square w-full rounded-md bg-white/[0.07] animate-pulse" />
+        <div className="mt-3 h-3 w-4/5 rounded bg-white/[0.07] animate-pulse" />
+        <div className="mt-2 h-2.5 w-1/2 rounded bg-white/[0.05] animate-pulse" />
       </div>
     </motion.div>
   );

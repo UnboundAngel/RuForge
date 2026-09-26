@@ -106,6 +106,7 @@ import { musicTrackIdentityKey } from "./musicShelfDedup";
 import { setPendingListenEndReason } from "@/lib/musicListenSession";
 import { readMusicOnlySkip, writeMusicOnlySkip } from "./musicOnlySkipStorage";
 import { debugLog } from "@/debug/debugLog";
+import { PendingPlaylistAddsResolver } from "./useMusicOutsideRecommendations";
 import {
   onYoutubeAuthSurfaceEnter,
   onYoutubeAuthSurfaceLeave,
@@ -1250,6 +1251,7 @@ export function MusicShell() {
         color: "var(--music-text-primary)",
       }}
       >
+      <PendingPlaylistAddsResolver />
       <MusicTopBar
         activeView={activeView}
         captureScreenLabel={`music-${activeView}`}

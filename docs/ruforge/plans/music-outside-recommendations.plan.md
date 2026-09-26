@@ -2,7 +2,7 @@
 
 Goal: the playlist page's "Recommended" section suggests songs the user has not downloaded yet, next to the library suggestions it shows today, with an `Add` that downloads the song and then puts it in the playlist.
 
-Status (2026-09-26): research and plan only. Nothing built.
+Status (2026-09-26): phases 1 to 3 built (data, UI, add flow) and previewed with a stubbed radio. Phase 0 (real yt-dlp run on Windows) still open.
 
 ## Today
 
