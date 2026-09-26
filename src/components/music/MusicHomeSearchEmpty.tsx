@@ -73,7 +73,6 @@ export function MusicHomeSearchEmpty({
           </p>
           <p
             className="text-[clamp(2.5rem,8vw,5rem)] font-bold text-black m-[1%] leading-none max-w-full truncate px-2"
-            title={trimmedQuery}
           >
             {trimmedQuery}
           </p>

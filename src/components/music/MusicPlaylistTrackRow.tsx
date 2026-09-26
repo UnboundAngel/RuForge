@@ -87,11 +87,11 @@ export function MusicPlaylistColumnHeader({ prefs, onSort }: HeaderProps) {
             type="button"
             onClick={() => onSort("duration")}
             className={cn(
-              "flex items-center gap-1 w-12 justify-end transition-colors hover:text-white",
+              "rf-music-tooltip-anchor flex items-center gap-1 w-12 justify-end transition-colors hover:text-white",
               prefs.sort === "duration" && "text-white",
             )}
             aria-label="Duration"
-            title="Duration"
+            data-tooltip="Duration"
           >
             {prefs.sort === "duration" && (prefs.desc ? <ChevronDown size={14} /> : <ChevronUp size={14} />)}
             <Clock3 size={16} />
@@ -187,13 +187,11 @@ export function MusicPlaylistTrackRow({
       {dropIndicator && (
         <span
           className={cn(
-            "rf-music-drop-line pointer-events-none absolute left-3 right-4 z-10 h-0.5 rounded-full bg-[var(--music-accent)] shadow-[0_0_8px_var(--music-accent)]",
+            "rf-music-drop-line pointer-events-none absolute left-3 right-4 z-10 h-0.5 rounded-full bg-[var(--music-accent)]",
             dropIndicator === "above" ? "-top-px" : "-bottom-px",
           )}
           aria-hidden
-        >
-          <span className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-[color:var(--music-accent)] bg-[var(--music-surface)]" />
-        </span>
+        />
       )}
 
       <button
@@ -236,12 +234,11 @@ export function MusicPlaylistTrackRow({
               compact ? "text-sm" : "text-base",
               isPlaying ? "text-[color:var(--music-accent)]" : "text-white",
             )}
-            title={title}
           >
             {title}
           </div>
           {!compact && artist && (
-            <div className="truncate text-sm text-white/60 group-hover/row:text-white/80" title={artist}>
+            <div className="truncate text-sm text-white/60 group-hover/row:text-white/80">
               {artist}
             </div>
           )}
@@ -249,11 +246,11 @@ export function MusicPlaylistTrackRow({
       </div>
 
       {compact && (
-        <div className={cn(MID_COL, "truncate text-sm text-white/60 group-hover/row:text-white/80")} title={artist}>
+        <div className={cn(MID_COL, "truncate text-sm text-white/60 group-hover/row:text-white/80")}>
           {artist}
         </div>
       )}
-      <div className={cn(MID_COL, "truncate text-sm text-white/60 group-hover/row:text-white/80")} title={album}>
+      <div className={cn(MID_COL, "truncate text-sm text-white/60 group-hover/row:text-white/80")}>
         {album}
       </div>
       <div className={cn(DATE_COL, "truncate text-sm text-white/60")}>{formatDateAdded(addedAt)}</div>

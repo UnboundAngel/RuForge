@@ -310,7 +310,6 @@ function FinderCard({ file, index, onAdd }: { file: MediaFile; index: number; on
     >
       <div
         className="group/card w-[168px] p-2 rounded-lg transition-colors duration-200 hover:bg-white/[0.07]"
-        title={artist ? `${file.name} · ${artist}` : file.name}
       >
         <div className="relative aspect-square w-full overflow-hidden rounded-md bg-white/[0.07] shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
           {cover ? (

@@ -111,7 +111,6 @@ export function MusicPlaylistHeader({
               type="button"
               onClick={() => setEditing(true)}
               className="block max-w-full text-left my-2"
-              title="Rename"
             >
               <h1 className={`font-black tracking-tight leading-tight truncate text-white ${titleSize}`}>{title}</h1>
             </button>
