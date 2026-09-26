@@ -87,7 +87,7 @@ import { useMainWindowMaximized } from "@/hooks/useMainWindowMaximized";
 import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
 import { MusicRightPanel, MusicRightPanelMini, type RightPanelTab } from "./MusicRightPanel";
-import { MusicTooltipLayer } from "./MusicTooltipLayer";
+import { MusicTooltipLayer } from "@/components/ui/TooltipLayer";
 import {
   MusicExpandedContextMenu,
   type MusicExpandedContextMenuState,

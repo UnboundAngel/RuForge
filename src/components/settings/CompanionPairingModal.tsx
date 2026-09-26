@@ -158,7 +158,8 @@ export const CompanionPairingModal: React.FC<CompanionPairingModalProps> = ({
               type="button"
               onClick={() => void onCopyLink()}
               className="w-full max-w-full break-all px-1 text-center font-mono text-[11px] leading-snug text-stone-400 transition-colors hover:text-[color:var(--accent)]"
-              title={pairing.url}
+              data-tooltip={pairing.url}
+              aria-label="Copy pairing link"
             >
               {pairing.url}
             </button>

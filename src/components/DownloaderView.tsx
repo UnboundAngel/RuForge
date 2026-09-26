@@ -637,7 +637,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                     <button
                       type="button"
                       disabled={d.storageBlocksNewDownloads}
-                      title={
+                      data-tooltip={
                         d.storageBlocksNewDownloads
                           ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
                           : undefined
@@ -910,7 +910,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                       <button
                         type="button"
                         disabled={d.storageBlocksNewDownloads}
-                        title={
+                        data-tooltip={
                           d.storageBlocksNewDownloads
                             ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
                             : undefined
@@ -1041,7 +1041,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             return (
                               <div className="flex items-center gap-1.5">
                                 <HardDrive size={12} className="opacity-50" />
-                                <span title="Approximate size">~{formatApproxFileSize(bytes)}</span>
+                                <span data-tooltip="Approximate size">~{formatApproxFileSize(bytes)}</span>
                               </div>
                             );
                           })()}
@@ -1117,7 +1117,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                 <button
                                   type="button"
                                   disabled={d.storageBlocksNewDownloads || d.downloadStartPending}
-                                  title={
+                                  data-tooltip={
                                     d.storageBlocksNewDownloads
                                       ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
                                       : d.downloadStartPending

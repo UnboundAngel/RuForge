@@ -69,6 +69,8 @@ Priorities: `STATE.md` Next 3 and Open P0, plus `website/src/content/roadmap.jso
 
 Follow `.cursor/rules/design-style*.mdc` for visual work. Read `.cursor/rules/design-style-anti-patterns.mdc` before new section headers or list layouts. No accent-bar section labels (vertical red slit beside titles). For window chrome, bezel/well, and shared widgets (scrollbars, popups, warnings, errors, toasts), follow [`.cursor/skills/ruforge-design/SKILL.md`](.cursor/skills/ruforge-design/SKILL.md) and lock new patterns in `restrictions.md` from the live app. Do not invent a second language.
 
+Custom over native, always. Do not ship browser or OS defaults where RuForge has its own piece: hover labels use `data-tooltip` (served by `TooltipLayer`), never the `title` attribute; the same goes for menus, scrollbars, selects and dialogs. If no custom piece exists yet, build one in the house style instead of falling back to the default.
+
 ## Who ships a release
 
 On ship / release / push it out: Angel signs. Mint does version bump, `updater.json`, commit + push to **main**, `gh release create`, drain Unreleased, live `updater.json` check. Do not ask Angel to tag or write release copy unless `gh` auth is missing. Full sequence: the release skill.

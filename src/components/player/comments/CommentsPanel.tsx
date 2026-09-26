@@ -326,7 +326,8 @@ export function CommentThread({
               }}
               className="absolute z-20 flex w-4 cursor-pointer select-none items-stretch justify-center border-none bg-transparent p-0 outline-none focus:outline-none"
               style={{ left: 6, top: 31, bottom: 0 }}
-              title="Collapse replies"
+              data-tooltip="Collapse replies"
+              aria-label="Collapse replies"
             >
               <div className="h-full w-[1.5px] bg-white/[0.15] transition-all group-hover/thread:w-[2px] group-hover/thread:bg-sky-400" />
             </button>
