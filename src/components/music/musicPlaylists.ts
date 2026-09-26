@@ -39,6 +39,12 @@ export function resolveMusicPlaylistTracks(
   return { tracks, missingPaths };
 }
 
+/** The track the user set as playlist cover, if it is still in the playlist; otherwise the mosaic shows. */
+export function playlistCoverFile(record: VirtualPlaylistRecord, tracks: MediaFile[]): MediaFile | null {
+  const thumb = record.thumbnailPath;
+  return thumb ? tracks.find((t) => mediaPathsMatch(t.path, thumb)) ?? null : null;
+}
+
 function normalizePathKey(path: string): string {
   return path.replace(/\//g, "\\").toLowerCase();
 }

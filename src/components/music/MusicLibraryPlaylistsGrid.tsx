@@ -3,9 +3,8 @@ import { Plus } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { VirtualPlaylistRecord } from "@/virtualPlaylists";
 import type { MediaFile } from "@/types";
-import { mediaPathsMatch } from "@/lib/mediaPathMatch";
 import { MusicPlaylistCover } from "./MusicPlaylistCover";
-import { resolveMusicPlaylistTracks } from "./musicPlaylists";
+import { playlistCoverFile, resolveMusicPlaylistTracks } from "./musicPlaylists";
 import { useMusicLibraryTracks, useMusicPlaylistRecords } from "./useMusicPlaylists";
 
 export function MusicLibraryPlaylistsGrid() {
@@ -53,9 +52,7 @@ function PlaylistTile({
     () => resolveMusicPlaylistTracks(record, libraryTracks).tracks,
     [record, libraryTracks],
   );
-  const coverFile = record.thumbnailPath
-    ? tracks.find((t) => mediaPathsMatch(t.path, record.thumbnailPath!)) ?? null
-    : null;
+  const coverFile = playlistCoverFile(record, tracks);
 
   return (
     <button
