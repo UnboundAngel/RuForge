@@ -19,7 +19,7 @@ import { LikedSongsCover } from "./LikedSongsCover";
 import { HoverMarqueeText } from "./HoverMarqueeText";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
-import { musicTrackDragProps } from "./musicPlaylists";
+import { musicTrackDragProps } from "./musicDragImage";
 import { MusicLibraryPlaylistsGrid } from "./MusicLibraryPlaylistsGrid";
 
 const LIKED_SOURCE = musicQueueSource("liked", "Liked Songs");
@@ -46,7 +46,7 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
 
   return (
     <div
-      {...musicTrackDragProps([file.path])}
+      {...musicTrackDragProps(file)}
       className="group/row flex items-center gap-3 px-4 py-2 rounded w-full transition-colors cursor-pointer"
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--music-surface-raised)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
