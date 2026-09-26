@@ -195,6 +195,7 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
                 selected={selectedPath === file.path}
                 menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
                 reorderable={reorderable}
+                dragging={dragPath === file.path}
                 dropIndicator={
                   dropPath === file.path && dragPath && dragPath !== file.path
                     ? dragIndex < i ? "below" : "above"

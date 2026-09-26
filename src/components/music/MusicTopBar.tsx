@@ -69,15 +69,16 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
           type="button"
           onClick={() => onSelect("home")}
           className={cn(
-            "rf-music-tooltip-anchor rf-music-press w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-white/[0.07]",
-            RED_HOVER,
-            homeActive ? "text-[color:var(--music-accent)]" : "text-white/60 hover:text-white",
+            "rf-music-tooltip-anchor rf-music-press w-10 h-10 shrink-0 flex items-center justify-center rounded-full",
+            homeActive
+              ? "text-white bg-[color-mix(in_srgb,var(--music-accent)_28%,#1f1f1f)] ring-1 ring-[color-mix(in_srgb,var(--music-accent)_55%,transparent)]"
+              : cn("text-white/60 hover:text-white bg-white/[0.07]", RED_HOVER),
           )}
           aria-label="Home (Alt+1)"
           aria-current={homeActive ? "page" : undefined}
           data-tooltip="Home (Alt+1)"
         >
-          <Home size={20} fill={homeActive ? "currentColor" : "none"} />
+          <Home size={20} strokeWidth={homeActive ? 2.5 : 2} />
         </button>
 
         <form

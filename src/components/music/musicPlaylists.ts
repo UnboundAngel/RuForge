@@ -99,10 +99,3 @@ export function readMusicTrackDragData(e: DragEvent): string[] {
   }
 }
 
-/** Spread onto any track row so it can be dropped on a sidebar playlist. */
-export function musicTrackDragProps(paths: string[]) {
-  return {
-    draggable: true,
-    onDragStart: (e: DragEvent) => setMusicTrackDragData(e, paths),
-  };
-}

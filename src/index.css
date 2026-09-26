@@ -763,6 +763,17 @@ html.ruforge-island-root #root {
 .rf-music-press:active:not(:disabled) {
   scale: 0.94;
 }
+/* Playlist reorder: the drop line draws in from the left. */
+.rf-music-drop-line {
+  transform-origin: left center;
+  animation: rf-music-drop-line-in 140ms ease-out;
+}
+@keyframes rf-music-drop-line-in {
+  from {
+    scale: 0 1;
+    opacity: 0;
+  }
+}
 /* Wide text buttons: press feedback without the hover grow. */
 .rf-music-press-soft {
   transition-property: scale, background-color, color, opacity;

@@ -12,6 +12,7 @@ import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import { primaryArtist } from "./musicArtist";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
 import { setMusicTrackDragData } from "./musicPlaylists";
+import { setMusicTrackDragImage } from "./musicDragImage";
 import {
   formatDateAdded,
   trackAlbum,
@@ -110,6 +111,8 @@ type Props = {
   selected: boolean;
   menuOpen: boolean;
   reorderable: boolean;
+  /** This row is the one being dragged. */
+  dragging: boolean;
   dropIndicator: "above" | "below" | null;
   onSelect: () => void;
   onPlay: () => void;
@@ -129,6 +132,7 @@ export function MusicPlaylistTrackRow({
   selected,
   menuOpen,
   reorderable,
+  dragging,
   dropIndicator,
   onSelect,
   onPlay,
@@ -154,6 +158,7 @@ export function MusicPlaylistTrackRow({
       draggable
       onDragStart={(e) => {
         setMusicTrackDragData(e, [file.path]);
+        setMusicTrackDragImage(e, file);
         if (reorderable) onReorderStart();
       }}
       onDragOver={onReorderOver}
@@ -171,21 +176,24 @@ export function MusicPlaylistTrackRow({
       }}
       aria-selected={selected}
       className={cn(
-        "group/row relative select-none rounded-md cursor-default transition-colors",
+        "group/row relative select-none rounded-md cursor-default transition-[background-color,opacity] duration-150",
         ROW_BASE,
         GRID[view],
         compact ? "h-8" : "h-14",
         lit ? "bg-white/[0.14]" : "hover:bg-white/[0.07]",
+        dragging && "opacity-40",
       )}
     >
       {dropIndicator && (
         <span
           className={cn(
-            "pointer-events-none absolute left-4 right-4 h-0.5 rounded-full bg-[var(--music-accent)]",
+            "rf-music-drop-line pointer-events-none absolute left-3 right-4 z-10 h-0.5 rounded-full bg-[var(--music-accent)] shadow-[0_0_8px_var(--music-accent)]",
             dropIndicator === "above" ? "-top-px" : "-bottom-px",
           )}
           aria-hidden
-        />
+        >
+          <span className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-[color:var(--music-accent)] bg-[var(--music-surface)]" />
+        </span>
       )}
 
       <button
@@ -260,12 +268,13 @@ export function MusicPlaylistTrackRow({
         <button
           type="button"
           className={cn(
-            "w-8 h-8 flex items-center justify-center text-white/70 hover:text-white transition-opacity",
+            "rf-music-press w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white",
+            menuOpen && "text-[color:var(--music-accent)] hover:text-[color:var(--music-accent)]",
             lit ? "opacity-100" : "opacity-0 group-hover/row:opacity-100",
           )}
+          // Opening the menu here doesn't select the row, so it stops glowing once the menu closes.
           onClick={(e) => {
             e.stopPropagation();
-            onSelect();
             onContextMenu(e);
           }}
           onDoubleClick={(e) => e.stopPropagation()}
