@@ -7,6 +7,7 @@ import { askConfirm } from "@/components/ConfirmDialog";
 import type { MediaFile } from "@/types";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
+import { useActiveQueueSource } from "./useActiveQueueSource";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { resolveMusicPlaylistTracks } from "./musicPlaylists";
 import { useMusicLibraryTracks, useMusicPlaylistRecords } from "./useMusicPlaylists";
@@ -48,7 +49,7 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
   const enqueueManualQueue = useRuforgeStore((s) => s.enqueueManualQueue);
   const musicShuffleOn = useRuforgeStore((s) => s.musicShuffleOn);
   const toggleMusicShuffle = useRuforgeStore((s) => s.toggleMusicShuffle);
-  const queueSource = useRuforgeStore((s) => s.musicQueueSource);
+  const queueSource = useActiveQueueSource();
   const playback = useOptionalMainAudioPlayback();
   const libraryTracks = useMusicLibraryTracks();
   const playlists = useMusicPlaylistRecords();
@@ -99,7 +100,7 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
   const dragIndex = dragPath ? shown.findIndex((t) => t.path === dragPath) : -1;
   const reorderable = prefs.sort === "custom" && !prefs.desc && query.trim() === "";
   const thisSourceActive =
-    queueSource?.kind === "playlist" && queueSource.label === record.title && playingFile != null;
+    queueSource?.kind === "playlist" && queueSource.label === record.title;
   const playingHere = thisSourceActive && playback != null && !playback.paused;
 
   const playFrom = (file: MediaFile) => onPlayFile(file, shown, source);

@@ -146,7 +146,7 @@ export function MusicPlaylistFinder({ libraryTracks, playlistTracks, inPlaylist,
             >
               {recommended.length > 0 ? (
                 <CardShelf
-                  key={round}
+                  listKey={round}
                   title="Recommended"
                   subtitle="Based on what's in this playlist"
                   tracks={recommended}
@@ -157,15 +157,19 @@ export function MusicPlaylistFinder({ libraryTracks, playlistTracks, inPlaylist,
                         <button
                           type="button"
                           onClick={() => setRound((r) => r + 1)}
-                          className="group/refresh rf-music-press rf-music-tooltip-anchor w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)]"
+                          className="rf-music-press rf-music-tooltip-anchor w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)]"
                           aria-label="Refresh recommendations"
                           data-tooltip="Refresh"
                         >
-                          <RefreshCw
-                            size={16}
-                            className="transition-transform duration-500 group-hover/refresh:rotate-180 group-hover/refresh:text-[color:var(--music-accent)]"
-                            aria-hidden
-                          />
+                          {/* One turn per click: the motion confirms the list changed. */}
+                          <motion.span
+                            className="flex"
+                            initial={false}
+                            animate={{ rotate: round * 360 }}
+                            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                          >
+                            <RefreshCw size={16} aria-hidden />
+                          </motion.span>
                         </button>
                       )}
                       <button type="button" onClick={() => setSearching(true)} className={PILL}>
@@ -211,12 +215,15 @@ function CardShelf({
   tracks,
   onAdd,
   actions,
+  listKey,
 }: {
   title: string;
   subtitle: string;
   tracks: MediaFile[];
   onAdd: (file: MediaFile) => void;
   actions?: React.ReactNode;
+  /** Changing it re-deals the cards (Refresh) while the header, and its buttons, stay mounted. */
+  listKey?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false });
@@ -268,6 +275,7 @@ function CardShelf({
         </div>
       </div>
       <div
+        key={listKey}
         ref={scrollRef}
         className="mt-4 flex overflow-x-auto scroll-smooth px-1 pb-2"
         style={{ scrollbarWidth: "none", maskImage: mask, WebkitMaskImage: mask }}
@@ -310,7 +318,7 @@ function FinderCard({ file, index, onAdd }: { file: MediaFile; index: number; on
               src={convertFileSrc(cover)}
               alt=""
               draggable={false}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
+              className="h-full w-full object-cover"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-white/30">
@@ -326,7 +334,7 @@ function FinderCard({ file, index, onAdd }: { file: MediaFile; index: number; on
             }}
             className={cn(
               "rf-music-press rf-music-tooltip-anchor absolute bottom-2 right-2 w-10 h-10 flex items-center justify-center rounded-full bg-[var(--music-accent)] text-white shadow-[0_8px_20px_rgba(0,0,0,0.5)]",
-              "transition-[opacity,translate,scale] duration-200",
+              "transition-[opacity,translate,scale] duration-200 hover:scale-105",
               added
                 ? "opacity-100 translate-y-0"
                 : "opacity-0 translate-y-2 group-hover/card:opacity-100 group-hover/card:translate-y-0 focus-visible:opacity-100 focus-visible:translate-y-0",
@@ -337,8 +345,8 @@ function FinderCard({ file, index, onAdd }: { file: MediaFile; index: number; on
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
                 key={added ? "added" : "add"}
-                initial={{ scale: 0.4, rotate: -90, opacity: 0 }}
-                animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                initial={{ scale: 0.4, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.4, opacity: 0 }}
                 transition={{ type: "spring", stiffness: 520, damping: 30 }}
                 className="flex"

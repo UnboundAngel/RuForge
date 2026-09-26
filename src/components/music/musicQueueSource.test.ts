@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isPlayingFromQueueSource,
   musicQueueSource,
   nextQueueRowIsEndless,
   queueNextSectionLabel,
@@ -128,5 +129,36 @@ describe("queueNextSectionLabel", () => {
 
   it("uses Next up when no source", () => {
     expect(queueNextSectionLabel(null)).toBe("Next up");
+  });
+});
+
+describe("isPlayingFromQueueSource", () => {
+  const list = [file({ path: "/a.mp3" }), file({ path: "/b.mp3" }), file({ path: "/radio.mp3" })];
+
+  it("is true while the song comes from the source list", () => {
+    expect(isPlayingFromQueueSource({ playingFile: list[1]!, folderAudioPlaylist: list, endlessFromIndex: 2 })).toBe(true);
+    expect(isPlayingFromQueueSource({ playingFile: list[2]!, folderAudioPlaylist: list, endlessFromIndex: null })).toBe(true);
+  });
+
+  it("is false once endless autoplay takes over", () => {
+    expect(isPlayingFromQueueSource({ playingFile: list[2]!, folderAudioPlaylist: list, endlessFromIndex: 2 })).toBe(false);
+  });
+
+  it("is false with nothing playing or a song outside the list", () => {
+    expect(isPlayingFromQueueSource({ playingFile: null, folderAudioPlaylist: list, endlessFromIndex: null })).toBe(false);
+    expect(
+      isPlayingFromQueueSource({ playingFile: file({ path: "/queued.mp3" }), folderAudioPlaylist: list, endlessFromIndex: null }),
+    ).toBe(false);
+  });
+
+  it("stays true while a hand-queued song interrupts the source", () => {
+    expect(
+      isPlayingFromQueueSource({
+        playingFile: file({ path: "/queued.mp3" }),
+        folderAudioPlaylist: list,
+        endlessFromIndex: 2,
+        manualQueueContextIndex: 1,
+      }),
+    ).toBe(true);
   });
 });
