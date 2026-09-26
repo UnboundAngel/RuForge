@@ -129,11 +129,11 @@ export function MusicPlaylistHeader({
         <button
           type="button"
           onClick={onDelete}
-          className="ml-auto w-9 h-9 flex items-center justify-center rounded-full text-[color:var(--music-text-muted)] hover:text-[color:var(--music-text-primary)] hover:bg-white/10 transition-colors"
+          className="ml-auto w-10 h-10 flex items-center justify-center rounded-full bg-white/[0.06] text-[color:var(--music-text-secondary)] transition-colors hover:bg-red-500/15 hover:text-red-400 active:bg-red-500/25"
           aria-label="Delete playlist"
           title="Delete playlist"
         >
-          <Trash2 size={16} />
+          <Trash2 size={17} />
         </button>
       </div>
     </>
