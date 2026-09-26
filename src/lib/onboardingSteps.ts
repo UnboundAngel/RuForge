@@ -99,6 +99,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
         compact: "Turn on Discord",
         expandedCaption:
           "Turn on Show activity on Discord. Turn on Include browsing status too if you want friends to see you in the library when nothing is playing.",
+        skipWhen: "discord-on",
         completeWhen: "discord-on",
       },
     ],
@@ -114,12 +115,4 @@ export function resolveOnboardingSteps(
     if (!lastSeen) return true;
     return semverGreater(step.introducedIn, lastSeen);
   });
-}
-
-export function maxIntroducedIn(steps: readonly OnboardingStep[]): string | null {
-  if (steps.length === 0) return null;
-  return steps.reduce(
-    (max, step) => (semverGreater(step.introducedIn, max) ? step.introducedIn : max),
-    steps[0].introducedIn,
-  );
 }
