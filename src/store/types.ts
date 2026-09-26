@@ -162,6 +162,8 @@ export interface RuforgeSettings {
   autoDownloadPlayingSongs: boolean;
   /** When true, audio download enrich stamps artist genres/MBID on track sidecars. */
   stampTrackSidecarArtistTags: boolean;
+  /** When true, playlist Recommended also suggests YouTube Music songs not in the library (seed ids go to YouTube). */
+  suggestYoutubeMusicSongs: boolean;
   /** When true, single-video downloads fetch YouTube comments into `{stem}.comments.json`. */
   downloadComments: boolean;
   /** When true, anonymous app-launch usage telemetry may be sent (off by default). */
@@ -208,6 +210,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   sponsorBlockCategoryStats: defaultCategoryStats(),
   autoDownloadPlayingSongs: true,
   stampTrackSidecarArtistTags: true,
+  suggestYoutubeMusicSongs: true,
   downloadComments: false,
   telemetryUsageEnabled: false,
   telemetryCrashEnabled: false,
@@ -244,6 +247,7 @@ export function loadMergedSettings(): RuforgeSettings {
       autoDownloadScrubberPreviews: merged.autoDownloadScrubberPreviews !== false,
       autoDownloadPlayingSongs: merged.autoDownloadPlayingSongs !== false,
       stampTrackSidecarArtistTags: merged.stampTrackSidecarArtistTags !== false,
+      suggestYoutubeMusicSongs: merged.suggestYoutubeMusicSongs !== false,
       downloadComments: merged.downloadComments === true,
       showDebuggingSettings: merged.showDebuggingSettings === true,
       debugLogEnabledCategories: Array.isArray(merged.debugLogEnabledCategories)

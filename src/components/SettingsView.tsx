@@ -1762,6 +1762,22 @@ export const SettingsView: React.FC<{
                     />
                   }
                 />
+                <SettingItem
+                  title="Suggest songs from YouTube Music"
+                  description="Playlist recommendations also show songs you haven't downloaded. A song from the playlist is sent to YouTube Music to find similar ones."
+                  active={settings.suggestYoutubeMusicSongs !== false}
+                  control={
+                    <ToggleSlot
+                      active={settings.suggestYoutubeMusicSongs !== false}
+                      onClick={() =>
+                        updateSetting(
+                          "suggestYoutubeMusicSongs",
+                          settings.suggestYoutubeMusicSongs === false,
+                        )
+                      }
+                    />
+                  }
+                />
               </SettingsSection>
               <SettingsSection title="Updates">
                 <SettingItem
