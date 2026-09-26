@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { mediaPathsMatch } from "@/lib/mediaPathMatch";
 import { DEFAULT_MUSIC_PLAYLIST_TITLE, recordHasPath } from "@/virtualPlaylists";
 import { askConfirm } from "@/components/ConfirmDialog";
@@ -10,7 +11,17 @@ import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { resolveMusicPlaylistTracks } from "./musicPlaylists";
 import { useMusicLibraryTracks, useMusicPlaylistRecords } from "./useMusicPlaylists";
 import { MusicPlaylistHeader } from "./MusicPlaylistHeader";
-import { MusicPlaylistTrackRow } from "./MusicPlaylistTrackRow";
+import { MusicPlaylistColumnHeader, MusicPlaylistTrackRow } from "./MusicPlaylistTrackRow";
+import { MusicPlaylistActionBar } from "./MusicPlaylistActionBar";
+import {
+  addedAtFor,
+  filterPlaylistTracks,
+  nextSortOnHeaderClick,
+  readPlaylistViewPrefs,
+  sortPlaylistTracks,
+  writePlaylistViewPrefs,
+  type PlaylistViewPrefs,
+} from "./musicPlaylistSort";
 import { MusicPlaylistFinder } from "./MusicPlaylistFinder";
 
 type Props = {
@@ -34,12 +45,32 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
   const addToVirtualPlaylist = useRuforgeStore((s) => s.addToVirtualPlaylist);
   const removePathsFromVirtualPlaylist = useRuforgeStore((s) => s.removePathsFromVirtualPlaylist);
   const reorderVirtualPlaylistByPath = useRuforgeStore((s) => s.reorderVirtualPlaylistByPath);
+  const enqueueManualQueue = useRuforgeStore((s) => s.enqueueManualQueue);
+  const musicShuffleOn = useRuforgeStore((s) => s.musicShuffleOn);
+  const toggleMusicShuffle = useRuforgeStore((s) => s.toggleMusicShuffle);
+  const queueSource = useRuforgeStore((s) => s.musicQueueSource);
+  const playback = useOptionalMainAudioPlayback();
   const libraryTracks = useMusicLibraryTracks();
   const playlists = useMusicPlaylistRecords();
   const record = playlists.find((p) => p.id === playlistId) ?? null;
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [dropPath, setDropPath] = useState<string | null>(null);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [renameSignal, setRenameSignal] = useState(0);
+  const [prefs, setPrefsState] = useState<PlaylistViewPrefs>(() => readPlaylistViewPrefs(playlistId));
+
+  useEffect(() => {
+    setPrefsState(readPlaylistViewPrefs(playlistId));
+    setQuery("");
+    setSelectedPath(null);
+  }, [playlistId]);
+
+  const setPrefs = (next: PlaylistViewPrefs) => {
+    setPrefsState(next);
+    writePlaylistViewPrefs(playlistId, next);
+  };
 
   const { tracks, missingPaths } = useMemo(
     () => (record ? resolveMusicPlaylistTracks(record, libraryTracks) : { tracks: [], missingPaths: [] }),
@@ -49,6 +80,11 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
     const thumb = record?.thumbnailPath;
     return thumb ? tracks.find((t) => mediaPathsMatch(t.path, thumb)) ?? null : null;
   }, [record?.thumbnailPath, tracks]);
+
+  const shown = useMemo(
+    () => (record ? filterPlaylistTracks(sortPlaylistTracks(tracks, record, prefs.sort, prefs.desc), query) : []),
+    [tracks, record, prefs.sort, prefs.desc, query],
+  );
 
   if (!record) {
     return (
@@ -60,16 +96,30 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
 
   const source = musicQueueSource("playlist", record.title);
   const untouched = record.items.length === 0 && UNTOUCHED_TITLE.test(record.title);
-  const dragIndex = dragPath ? tracks.findIndex((t) => t.path === dragPath) : -1;
+  const dragIndex = dragPath ? shown.findIndex((t) => t.path === dragPath) : -1;
+  const reorderable = prefs.sort === "custom" && !prefs.desc && query.trim() === "";
+  const thisSourceActive =
+    queueSource?.kind === "playlist" && queueSource.label === record.title && playingFile != null;
+  const playingHere = thisSourceActive && playback != null && !playback.paused;
 
-  const handleShuffle = () => {
-    if (tracks.length === 0) return;
+  const playFrom = (file: MediaFile) => onPlayFile(file, shown, source);
+
+  const handlePlay = () => {
+    if (thisSourceActive && playback) {
+      playback.togglePlay();
+      return;
+    }
+    if (shown.length === 0) return;
+    if (!musicShuffleOn) {
+      playFrom(shown[0]!);
+      return;
+    }
     const shuffled = buildSmartShuffleOrder({
-      pool: tracks,
+      pool: shown,
       likedKeys: musicLikedKeys,
       seed: Date.now() & 0xffffffff,
     });
-    onPlayFile(shuffled[0]!, tracks, source, { shuffle: true });
+    onPlayFile(shuffled[0]!, shown, source, { shuffle: true });
   };
 
   const handleDelete = async () => {
@@ -94,12 +144,26 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
         tracks={tracks}
         coverFile={coverFile}
         startEditing={untouched}
+        renameSignal={renameSignal}
         onRename={(title) => renameVirtualPlaylist(record.id, title)}
-        onPlay={() => tracks[0] && onPlayFile(tracks[0], tracks, source)}
-        onShuffle={handleShuffle}
-        onDelete={() => void handleDelete()}
         onBack={onBack}
-      />
+      >
+        <MusicPlaylistActionBar
+          title={record.title}
+          empty={tracks.length === 0}
+          playing={playingHere}
+          shuffleOn={musicShuffleOn}
+          prefs={prefs}
+          query={query}
+          onPlay={handlePlay}
+          onToggleShuffle={toggleMusicShuffle}
+          onAddToQueue={() => shown.forEach((t) => enqueueManualQueue(t.path))}
+          onRename={() => setRenameSignal((n) => n + 1)}
+          onDelete={() => void handleDelete()}
+          onPrefsChange={setPrefs}
+          onQueryChange={setQuery}
+        />
+      </MusicPlaylistHeader>
 
       {missingPaths.length > 0 && (
         <div className="mx-5 mb-2 flex items-center gap-3 rounded-xl bg-white/[0.05] px-4 py-2.5 text-xs text-[color:var(--music-text-secondary)]">
@@ -117,44 +181,57 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
       )}
 
       {tracks.length > 0 && (
-        <section className="px-1">
-          {tracks.map((file, i) => (
-            <MusicPlaylistTrackRow
-              key={file.path}
-              file={file}
-              index={i}
-              isPlaying={playingFile?.path === file.path}
-              menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
-              dropIndicator={
-                dropPath === file.path && dragPath && dragPath !== file.path
-                  ? dragIndex < i ? "below" : "above"
-                  : null
-              }
-              onClick={() => onPlayFile(file, tracks, source)}
-              onContextMenu={(e) => setMenu({
-                context: { kind: "song", file },
-                x: e.clientX,
-                y: e.clientY,
-                onPlay: () => onPlayFile(file, tracks, source),
-                playlistId: record.id,
-              })}
-              onReorderStart={() => setDragPath(file.path)}
-              onReorderOver={(e) => {
-                if (!dragPath) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                if (dropPath !== file.path) setDropPath(file.path);
-              }}
-              onReorderDrop={() => {
-                if (dragPath && dragPath !== file.path) {
-                  reorderVirtualPlaylistByPath(record.id, dragPath, file.path);
+        <div className="@container">
+          <MusicPlaylistColumnHeader prefs={prefs} onSort={(key) => setPrefs(nextSortOnHeaderClick(prefs, key))} />
+          <section className="px-6 pt-2">
+            {shown.map((file, i) => (
+              <MusicPlaylistTrackRow
+                key={file.path}
+                file={file}
+                index={i}
+                view={prefs.view}
+                addedAt={addedAtFor(record, file.path)}
+                isPlaying={playingFile?.path === file.path}
+                selected={selectedPath === file.path}
+                menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
+                reorderable={reorderable}
+                dropIndicator={
+                  dropPath === file.path && dragPath && dragPath !== file.path
+                    ? dragIndex < i ? "below" : "above"
+                    : null
                 }
-                endDrag();
-              }}
-              onReorderEnd={endDrag}
-            />
-          ))}
-        </section>
+                onSelect={() => setSelectedPath(file.path)}
+                onPlay={() => playFrom(file)}
+                onContextMenu={(e) => setMenu({
+                  context: { kind: "song", file },
+                  x: e.clientX,
+                  y: e.clientY,
+                  onPlay: () => playFrom(file),
+                  playlistId: record.id,
+                })}
+                onReorderStart={() => setDragPath(file.path)}
+                onReorderOver={(e) => {
+                  if (!dragPath) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (dropPath !== file.path) setDropPath(file.path);
+                }}
+                onReorderDrop={() => {
+                  if (dragPath && dragPath !== file.path) {
+                    reorderVirtualPlaylistByPath(record.id, dragPath, file.path);
+                  }
+                  endDrag();
+                }}
+                onReorderEnd={endDrag}
+              />
+            ))}
+            {shown.length === 0 && (
+              <p className="py-10 text-center text-sm text-white/60">
+                Nothing in this playlist matches &ldquo;{query.trim()}&rdquo;.
+              </p>
+            )}
+          </section>
+        </div>
       )}
 
       <MusicPlaylistFinder
