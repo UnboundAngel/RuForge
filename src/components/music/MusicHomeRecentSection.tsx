@@ -94,19 +94,19 @@ export function MusicHomeRecentSection({
   };
 
   return (
-    <section className="mt-2">
+    <section className="@container mt-2">
       <div
-        className="relative overflow-hidden rounded-[1.75rem] px-5 py-7 sm:px-7 sm:py-10 pt-8"
+        className="relative overflow-hidden rounded-[1.75rem] px-3 py-7 @lg:px-5 @2xl:px-7 @2xl:py-10 pt-8"
         style={{
           background:
             "linear-gradient(180deg, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.52) 28%, rgba(0, 0, 0, 0.22) 52%, rgba(0, 0, 0, 0.06) 78%, transparent 100%)",
         }}
       >
-        <div className="flex items-baseline gap-6 sm:gap-8 mb-8">
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 @2xl:gap-x-8 mb-8 px-2">
           <button
             type="button"
             onClick={() => switchTab("added")}
-            className={`text-2xl tracking-tight transition-all duration-300 ease-out ${
+            className={`text-xl @md:text-2xl tracking-tight transition-all duration-300 ease-out ${
               activeTab === "added"
                 ? "font-bold scale-100"
                 : "font-medium scale-95 hover:opacity-90"
@@ -120,7 +120,7 @@ export function MusicHomeRecentSection({
           <button
             type="button"
             onClick={() => switchTab("listened")}
-            className={`text-2xl tracking-tight transition-all duration-300 ease-out ${
+            className={`text-xl @md:text-2xl tracking-tight transition-all duration-300 ease-out ${
               activeTab === "listened"
                 ? "font-bold scale-100"
                 : "font-medium scale-95 hover:opacity-90"
@@ -147,7 +147,7 @@ export function MusicHomeRecentSection({
               )}
 
               {addedFeed.length > 0 && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-4">
                   {addedFeed.map((item) => {
                     if (item.kind === "playlist") {
                       const pl = item.group;
@@ -267,7 +267,7 @@ export function MusicHomeRecentSection({
           {activeTab === "listened" && (
             <div>
               {listened.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
+                <div className="grid grid-cols-1 @2xl:grid-cols-2 @5xl:grid-cols-3 gap-x-8 gap-y-2">
                   {listened.map(({ file, playedAt }) => (
                     <MusicQuickPickRow
                       key={file.path}

@@ -11,9 +11,16 @@ import { cn } from "@/lib/utils";
 
 type TipPos = { top: number; left: number };
 
+const SHORTCUT_SUFFIX = /^(.*\S)\s*\(((?:Ctrl|Alt|Shift|Meta)\+[^)]+)\)$/;
+
+function splitShortcut(text: string): { label: string; shortcut: string | null } {
+  const m = SHORTCUT_SUFFIX.exec(text);
+  return m ? { label: m[1], shortcut: m[2] } : { label: text, shortcut: null };
+}
+
 function clampTip(anchor: DOMRect, tip: DOMRect): TipPos {
   const pad = 8;
-  const gap = 6;
+  const gap = 8;
   let top = anchor.top - tip.height - gap;
   if (top < pad) {
     top = anchor.bottom + gap;
@@ -38,10 +45,11 @@ type Props = {
   selector: string;
   /** Native Explore webview paints over DOM; hide tips while it is up. */
   disabled?: boolean;
+  variant?: "app" | "music";
 };
 
 /** Portal tooltips: hover or focus any anchor matching `selector` to show its `data-tooltip`. */
-export function TooltipLayer({ selector, disabled = false }: Props) {
+export function TooltipLayer({ selector, disabled = false, variant = "app" }: Props) {
   const tipRef = useRef<HTMLSpanElement>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
   const disabledRef = useRef(disabled);
@@ -132,14 +140,34 @@ export function TooltipLayer({ selector, disabled = false }: Props) {
 
   if (!label || typeof document === "undefined") return null;
 
+  const wrap = label.length > WRAP_AFTER_CHARS;
+  const style = pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 };
+
+  if (variant === "music") {
+    const { label: text, shortcut } = splitShortcut(label);
+    return createPortal(
+      <span
+        key={label}
+        ref={tipRef}
+        className={cn("rf-music-tooltip", wrap && "rf-music-tooltip--wrap")}
+        style={style}
+        role="tooltip"
+      >
+        <span className="rf-music-tooltip-label">{text}</span>
+        {shortcut && <kbd className="rf-music-tooltip-kbd">{shortcut}</kbd>}
+      </span>,
+      document.body,
+    );
+  }
+
   return createPortal(
     <span
       ref={tipRef}
       className={cn(
         "rf-icon-pill-tooltip rf-icon-pill-tooltip--floating rf-icon-pill-tooltip--normal-case",
-        label.length > WRAP_AFTER_CHARS && "rf-icon-pill-tooltip--wrap",
+        wrap && "rf-icon-pill-tooltip--wrap",
       )}
-      style={pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 }}
+      style={style}
       role="tooltip"
     >
       {label}
@@ -149,7 +177,7 @@ export function TooltipLayer({ selector, disabled = false }: Props) {
 }
 
 export function MusicTooltipLayer({ disabled = false }: { disabled?: boolean }) {
-  return <TooltipLayer selector={MUSIC_TOOLTIP_SELECTOR} disabled={disabled} />;
+  return <TooltipLayer selector={MUSIC_TOOLTIP_SELECTOR} disabled={disabled} variant="music" />;
 }
 
 export function AppTooltipLayer() {

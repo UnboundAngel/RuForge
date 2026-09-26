@@ -539,7 +539,7 @@ export function MusicHomeView({
     <div
       ref={assignScrollRef}
       onScroll={syncHeaderCompact}
-      className="absolute inset-0 overflow-y-auto overflow-x-hidden rf-scrollbar min-h-0"
+      className="@container/home absolute inset-0 overflow-y-auto overflow-x-hidden rf-scrollbar min-h-0"
       style={{ background: "var(--music-surface)" }}
     >
       <header
@@ -621,7 +621,7 @@ export function MusicHomeView({
             onSearchYoutubeMusic={onSearchYoutubeMusic}
           />
         ) : (
-          <div className="flex flex-col gap-12 px-6 sm:px-8 lg:px-12 pt-8 pb-16 w-full min-w-0">
+          <div className="flex flex-col gap-12 px-5 @2xl/home:px-8 @5xl/home:px-12 pt-8 pb-16 w-full min-w-0">
             {/* Quick picks — only as many as fit (max 4×3) */}
             {quickPicks.length > 0 && (
               <MusicQuickPicksGrid
