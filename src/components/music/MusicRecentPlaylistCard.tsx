@@ -45,7 +45,7 @@ export function MusicRecentPlaylistCard({
         e.preventDefault();
         onContextMenu?.(e);
       }}
-      className="group/pl relative overflow-hidden flex items-center gap-5 px-3 py-3.5 rounded-2xl text-left transition-all duration-300 w-full min-w-0 hover:bg-white/[0.04] active:scale-[0.995]"
+      className="group/pl relative overflow-hidden flex items-center gap-4 px-3 py-3.5 rounded-2xl text-left transition-all duration-300 w-full min-w-0 hover:bg-white/[0.04] active:scale-[0.995]"
     >
       <div
         className="absolute inset-0 opacity-0 group-hover/pl:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl"
@@ -93,7 +93,7 @@ export function MusicRecentPlaylistCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 z-10 opacity-0 group-hover/pl:opacity-100 translate-x-2 group-hover/pl:translate-x-0 transition-all duration-300 pr-1 shrink-0">
+      <div className="flex items-center gap-2 z-10 shrink-0 overflow-hidden max-w-0 opacity-0 translate-x-2 group-hover/pl:max-w-28 group-hover/pl:opacity-100 group-hover/pl:translate-x-0 group-hover/pl:pr-1 transition-all duration-300">
         <span
           className="p-2.5 rounded-full"
           style={{ background: "rgba(255,255,255,0.1)", color: "var(--music-text-primary)" }}
@@ -106,7 +106,7 @@ export function MusicRecentPlaylistCard({
         </span>
         {onContextMenu && (
           <span
-            className="p-2.5 rounded-full hidden sm:inline-flex"
+            className="p-2.5 rounded-full inline-flex"
             style={{ color: "var(--music-text-muted)" }}
             onClick={(e) => {
               e.stopPropagation();
