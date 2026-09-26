@@ -644,7 +644,8 @@ html.ruforge-island-root #root {
   --music-text-muted: rgba(255, 255, 255, 0.35);
   --music-accent: #ff0033;
   --music-accent-hover: #ff6688;
-  --music-sidebar-width: 256px;
+  --music-sidebar-width: 280px;
+  --music-library-collapsed-width: 72px;
   --music-sidebar-collapsed-width: 56px;
   --music-nav-width: var(--music-sidebar-width);
   --music-nav-width-collapsed: var(--music-sidebar-collapsed-width);
