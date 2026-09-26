@@ -1,12 +1,25 @@
-import { useMemo } from "react";
-import { ListVideo, FolderOpen, User, Disc3, Play, Music2, Heart } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ChevronRight,
+  Disc3,
+  FolderOpen,
+  Heart,
+  Image,
+  ListMinus,
+  ListPlus,
+  ListVideo,
+  Music2,
+  Play,
+  User,
+} from "lucide-react";
 import { albumKeyFromFile, fileHasBrowsableAlbum, musicTrackIdentityKey } from "./musicShelfDedup";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { isAudioOnlyPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
 import { openInFileManager } from "@/openInFileManager";
 import { useRuforgeStore } from "@/store/ruforgeStore";
-import { artistKeyFromFile, primaryArtist } from "./musicArtist";
+import { artistKeyFromFile, fileMatchesArtistKey, primaryArtist } from "./musicArtist";
+import { MusicAddToPlaylistMenu } from "./MusicAddToPlaylistMenu";
 import {
   MUSIC_MENU_ICON_SIZE,
   MUSIC_MENU_TONES,
@@ -26,6 +39,8 @@ export type MusicRowContextMenuState = {
   y: number;
   /** Caller-provided play action: play this song / play all by artist / play album. */
   onPlay?: () => void;
+  /** Set when the row lives inside a music playlist, enabling remove / set cover. */
+  playlistId?: string;
 };
 
 type Props = {
@@ -40,13 +55,34 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const openMusicAlbum = useRuforgeStore((s) => s.openMusicAlbum);
   const openMusicSong = useRuforgeStore((s) => s.openMusicSong);
+  const removeFromVirtualPlaylist = useRuforgeStore((s) => s.removeFromVirtualPlaylist);
+  const setVirtualPlaylistThumbnail = useRuforgeStore((s) => s.setVirtualPlaylistThumbnail);
+  const [pickerPaths, setPickerPaths] = useState<string[] | null>(null);
   const entries = useRuforgeStore((s) => s.entries);
   const libraryTracks = useMemo(
     () => flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path)),
     [entries],
   );
 
+  useEffect(() => {
+    setPickerPaths(null);
+  }, [menu]);
+
   if (!menu) return null;
+
+  if (pickerPaths) {
+    return (
+      <MusicAddToPlaylistMenu
+        paths={pickerPaths}
+        x={menu.x}
+        y={menu.y}
+        onClose={() => {
+          setPickerPaths(null);
+          onClose();
+        }}
+      />
+    );
+  }
 
   const { context } = menu;
   const icon = MUSIC_MENU_ICON_SIZE;
@@ -65,6 +101,48 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
   let measureKey = String(menu.x);
   let body: React.ReactNode;
 
+  const contextPaths =
+    context.kind === "song"
+      ? [context.file.path]
+      : context.kind === "artist"
+        ? libraryTracks.filter((f) => fileMatchesArtistKey(f, context.artistKey)).map((f) => f.path)
+        : libraryTracks
+            .filter(
+              (f) =>
+                artistKeyFromFile(f) === context.artistKey.trim().toLowerCase()
+                && albumKeyFromFile(f) === context.albumKey.trim().toLowerCase(),
+            )
+            .map((f) => f.path);
+  const { playlistId } = menu;
+
+  const playlistSection = (
+    <MusicMenuSection label="Playlist" tone={MUSIC_MENU_TONES.playlist}>
+      <MusicMenuRow
+        tone={MUSIC_MENU_TONES.playlist}
+        label="Add to playlist"
+        icon={<ListPlus size={icon} strokeWidth={2.25} />}
+        onClick={contextPaths.length > 0 ? () => setPickerPaths(contextPaths) : undefined}
+        trailing={<ChevronRight size={12} className="shrink-0 text-white/35" aria-hidden />}
+      />
+      {playlistId && context.kind === "song" && (
+        <>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playlist}
+            label="Remove from this playlist"
+            icon={<ListMinus size={icon} strokeWidth={2.25} />}
+            onClick={act(() => removeFromVirtualPlaylist(playlistId, context.file.path))}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playlist}
+            label="Use as playlist cover"
+            icon={<Image size={icon} strokeWidth={2.25} />}
+            onClick={act(() => setVirtualPlaylistThumbnail(playlistId, context.file.path))}
+          />
+        </>
+      )}
+    </MusicMenuSection>
+  );
+
   if (context.kind === "song") {
     const { file } = context;
     const artistKey = artistKeyFromFile(file);
@@ -72,7 +150,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
     const hasArtist = !!artistKey;
     const hasAlbum = fileHasBrowsableAlbum(file, libraryTracks);
     const liked = musicLikedKeys.includes(musicTrackIdentityKey(file, primaryArtist));
-    measureKey = `${file.path}:${liked}:${hasArtist}:${hasAlbum}:${menu.onPlay ? 1 : 0}`;
+    measureKey = `${file.path}:${liked}:${hasArtist}:${hasAlbum}:${menu.onPlay ? 1 : 0}:${playlistId ?? ""}`;
 
     body = (
       <>
@@ -108,6 +186,8 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
             onClick={act(() => enqueueManualQueue(file.path))}
           />
         </MusicMenuSection>
+
+        {playlistSection}
 
         <MusicMenuSection label="Go to" tone={MUSIC_MENU_TONES.navigate}>
           <MusicMenuRow
@@ -158,6 +238,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
             />
           )}
         </MusicMenuSection>
+        {playlistSection}
         <MusicMenuSection label="Go to" tone={MUSIC_MENU_TONES.navigate}>
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.navigate}
@@ -182,6 +263,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
             />
           )}
         </MusicMenuSection>
+        {playlistSection}
         <MusicMenuSection label="Go to" tone={MUSIC_MENU_TONES.navigate}>
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.navigate}

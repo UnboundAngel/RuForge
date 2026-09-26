@@ -12,6 +12,8 @@ import { MusicLibraryView } from "./MusicLibraryView";
 import { MusicArtistView } from "./MusicArtistView";
 import { MusicAlbumView } from "./MusicAlbumView";
 import { MusicLikedView } from "./MusicLikedView";
+import { MusicPlaylistView } from "./MusicPlaylistView";
+import { MusicNavPlaylists } from "./MusicNavPlaylists";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { MusicTrackView } from "./MusicTrackView";
 import { MusicProfileView } from "./MusicProfileView";
@@ -349,6 +351,8 @@ export function MusicShell() {
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const openMusicAlbum = useRuforgeStore((s) => s.openMusicAlbum);
   const closeMusicDetail = useRuforgeStore((s) => s.closeMusicDetail);
+  const createMusicPlaylist = useRuforgeStore((s) => s.createMusicPlaylist);
+  const openMusicPlaylist = useRuforgeStore((s) => s.openMusicPlaylist);
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const ensureGalleryOnViewMount = useRuforgeStore((s) => s.ensureGalleryOnViewMount);
@@ -1205,6 +1209,13 @@ export function MusicShell() {
         return;
       }
 
+      if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && key === "n") {
+        e.preventDefault();
+        e.stopPropagation();
+        openMusicPlaylist(createMusicPlaylist());
+        return;
+      }
+
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
 
       if (key === "1") {
@@ -1227,7 +1238,7 @@ export function MusicShell() {
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [resyncExploreWebview, setMusicView]);
+  }, [resyncExploreWebview, setMusicView, createMusicPlaylist, openMusicPlaylist]);
 
   return (
     <div
@@ -1300,22 +1311,25 @@ export function MusicShell() {
                   ) : undefined
                 }
                 panelSlot={
-                  keepExplorePanelMounted ? (
-                    <div className={cn("flex flex-1 min-h-0 flex-col", !showExplorePanel && "hidden")}>
-                      <MusicExploreDownloadPanel
-                        url={explorePanelUrl}
-                        shelfLinks={musicExplorePageContext.shelfLinks}
-                        harvestedTracklist={musicExplorePageContext.harvestedTracklist}
-                        pageTitle={musicExplorePageContext.pageTitle}
-                        webviewHarvestUrls={webviewHarvestUrls}
-                        collapsed={navCollapsed}
-                        dockMinimized={explorePanelDockMode}
-                        onClose={closeExplorePanel}
-                        onMinimize={() => setDockMinimized(true)}
-                        celebrating={downloadCelebrating}
-                      />
-                    </div>
-                  ) : undefined
+                  <>
+                    {!showExplorePanel && <MusicNavPlaylists />}
+                    {keepExplorePanelMounted ? (
+                      <div className={cn("flex flex-1 min-h-0 flex-col", !showExplorePanel && "hidden")}>
+                        <MusicExploreDownloadPanel
+                          url={explorePanelUrl}
+                          shelfLinks={musicExplorePageContext.shelfLinks}
+                          harvestedTracklist={musicExplorePageContext.harvestedTracklist}
+                          pageTitle={musicExplorePageContext.pageTitle}
+                          webviewHarvestUrls={webviewHarvestUrls}
+                          collapsed={navCollapsed}
+                          dockMinimized={explorePanelDockMode}
+                          onClose={closeExplorePanel}
+                          onMinimize={() => setDockMinimized(true)}
+                          celebrating={downloadCelebrating}
+                        />
+                      </div>
+                    ) : null}
+                  </>
                 }
               />
             </div>
@@ -1407,6 +1421,14 @@ export function MusicShell() {
                   ) : musicDetail?.kind === "liked" ? (
                     <motion.div key="liked" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0">
                       <MusicLikedView
+                        onPlayFile={handlePlayFile}
+                        onBack={closeMusicDetail}
+                      />
+                    </motion.div>
+                  ) : musicDetail?.kind === "playlist" ? (
+                    <motion.div key={`playlist-${musicDetail.id}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0">
+                      <MusicPlaylistView
+                        playlistId={musicDetail.id}
                         onPlayFile={handlePlayFile}
                         onBack={closeMusicDetail}
                       />

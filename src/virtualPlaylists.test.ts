@@ -5,6 +5,10 @@ import {
   addPathsToRecord,
   createVirtualPlaylistRecord,
   hydrateVirtualPlaylist,
+  loadVirtualPlaylistRecords,
+  nextDefaultPlaylistTitle,
+  reorderRecordByPath,
+  saveVirtualPlaylistRecords,
   mergeVirtualPlaylistsIntoEntries,
   moveRecordItem,
   pathInWatchLater,
@@ -118,5 +122,32 @@ describe("virtualPlaylists", () => {
     );
     expect(pathInWatchLater("C:\\x\\y.mp4", [record])).toBe(true);
     expect(pathInWatchLater("C:\\x\\z.mp4", [record])).toBe(false);
+  });
+});
+
+describe("music playlists", () => {
+  it("numbers default titles past the highest existing one", () => {
+    const a = createVirtualPlaylistRecord("My Playlist #1", [], 1, "music");
+    const b = createVirtualPlaylistRecord("My Playlist #4", [], 1, "music");
+    const c = createVirtualPlaylistRecord("Road trip", [], 1, "music");
+    expect(nextDefaultPlaylistTitle([])).toBe("My Playlist #1");
+    expect(nextDefaultPlaylistTitle([a, b, c])).toBe("My Playlist #5");
+  });
+
+  it("keeps kind through a localStorage round trip and defaults old records to video", () => {
+    const music = createVirtualPlaylistRecord("Mix", ["C:\\m\\a.mp3"], 1, "music");
+    const legacy = { ...createVirtualPlaylistRecord("Old", [], 1), kind: undefined };
+    saveVirtualPlaylistRecords([music, legacy]);
+    const loaded = loadVirtualPlaylistRecords();
+    expect(loaded.find((r) => r.id === music.id)?.kind).toBe("music");
+    expect(loaded.find((r) => r.id === legacy.id)?.kind).toBe("video");
+    expect(loaded.find((r) => r.id === WATCH_LATER_ID)?.kind).toBe("video");
+  });
+
+  it("reorders by path and ignores unknown paths", () => {
+    const r = createVirtualPlaylistRecord("Mix", ["C:\\a.mp3", "C:\\gone.mp3", "C:\\b.mp3"], 1, "music");
+    const moved = reorderRecordByPath(r, "C:\\b.mp3", "C:\\a.mp3", 2);
+    expect(moved.items.map((i) => i.path)).toEqual(["C:\\b.mp3", "C:\\a.mp3", "C:\\gone.mp3"]);
+    expect(reorderRecordByPath(r, "C:\\nope.mp3", "C:\\a.mp3")).toBe(r);
   });
 });

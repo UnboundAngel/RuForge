@@ -10,6 +10,9 @@ export type VirtualPlaylistItem = {
   addedAt: number;
 };
 
+/** Music playlists live in the Music sidebar; video (default) stays in the main library. */
+export type VirtualPlaylistKind = "video" | "music";
+
 export type VirtualPlaylistRecord = {
   id: string;
   title: string;
@@ -17,7 +20,10 @@ export type VirtualPlaylistRecord = {
   thumbnailPath?: string | null;
   updatedAt: number;
   system?: boolean;
+  kind?: VirtualPlaylistKind;
 };
+
+export const DEFAULT_MUSIC_PLAYLIST_TITLE = "My Playlist";
 
 export function virtualPlaylistPath(id: string): string {
   return `${VIRTUAL_PLAYLIST_PATH_PREFIX}${id}`;
@@ -100,6 +106,7 @@ function normalizeRecord(raw: VirtualPlaylistRecord): VirtualPlaylistRecord | nu
         ? raw.updatedAt
         : Date.now(),
     system: raw.system === true || id === WATCH_LATER_ID,
+    kind: raw.kind === "music" && id !== WATCH_LATER_ID ? "music" : "video",
   };
 }
 
@@ -205,29 +212,6 @@ export function mergeVirtualPlaylistsIntoEntries(
   return [...virtual, ...disk];
 }
 
-export function pruneStalePathsInRecords(
-  records: VirtualPlaylistRecord[],
-  mediaIndex: Map<string, MediaFile>,
-): { records: VirtualPlaylistRecord[]; changed: boolean } {
-  let changed = false;
-  const next = records.map((r) => {
-    const items = r.items.filter((item) => findMedia(mediaIndex, item.path));
-    const thumbOk =
-      !r.thumbnailPath || Boolean(findMedia(mediaIndex, r.thumbnailPath));
-    if (items.length !== r.items.length || !thumbOk) {
-      changed = true;
-      return {
-        ...r,
-        items,
-        thumbnailPath: thumbOk ? r.thumbnailPath : null,
-        updatedAt: Date.now(),
-      };
-    }
-    return r;
-  });
-  return { records: next, changed };
-}
-
 function updateRecord(
   records: VirtualPlaylistRecord[],
   id: string,
@@ -240,6 +224,7 @@ export function createVirtualPlaylistRecord(
   title: string,
   seedPaths: string[] = [],
   now = Date.now(),
+  kind: VirtualPlaylistKind = "video",
 ): VirtualPlaylistRecord {
   const seen = new Set<string>();
   const items: VirtualPlaylistItem[] = [];
@@ -256,7 +241,27 @@ export function createVirtualPlaylistRecord(
     thumbnailPath: null,
     updatedAt: now,
     system: false,
+    kind,
   };
+}
+
+/** Next free "My Playlist #N", counting every record so names never collide across kinds. */
+export function nextDefaultPlaylistTitle(records: VirtualPlaylistRecord[]): string {
+  const pattern = new RegExp(`^${DEFAULT_MUSIC_PLAYLIST_TITLE} #(\\d+)$`);
+  let max = 0;
+  for (const r of records) {
+    const hit = pattern.exec(r.title.trim());
+    if (hit) max = Math.max(max, Number(hit[1]));
+  }
+  return `${DEFAULT_MUSIC_PLAYLIST_TITLE} #${max + 1}`;
+}
+
+export function isMusicPlaylistRecord(record: VirtualPlaylistRecord): boolean {
+  return record.kind === "music";
+}
+
+export function recordHasPath(record: VirtualPlaylistRecord, path: string): boolean {
+  return record.items.some((i) => mediaPathsMatch(i.path, path));
 }
 
 export function addPathsToRecord(
@@ -310,6 +315,22 @@ export function reorderRecordItems(
   if (!row) return record;
   items.splice(toIndex, 0, row);
   return { ...record, items, updatedAt: now };
+}
+
+/**
+ * Path-based reorder so callers working from a filtered or hydrated list never index into
+ * rows they cannot see (missing files stay in the record until the user removes them).
+ */
+export function reorderRecordByPath(
+  record: VirtualPlaylistRecord,
+  fromPath: string,
+  toPath: string,
+  now = Date.now(),
+): VirtualPlaylistRecord {
+  const fromIndex = record.items.findIndex((i) => mediaPathsMatch(i.path, fromPath));
+  const toIndex = record.items.findIndex((i) => mediaPathsMatch(i.path, toPath));
+  if (fromIndex < 0 || toIndex < 0) return record;
+  return reorderRecordItems(record, fromIndex, toIndex, now);
 }
 
 export function moveRecordItem(

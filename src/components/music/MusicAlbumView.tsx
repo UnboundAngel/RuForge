@@ -15,6 +15,7 @@ import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowCo
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
+import { musicTrackDragProps } from "./musicPlaylists";
 
 type TrackRowProps = {
   file: MediaFile;
@@ -31,6 +32,7 @@ function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: 
   const showPauseOnHover = isPlaying && playback != null && !playback.paused;
   return (
     <div
+      {...musicTrackDragProps([file.path])}
       className="group/row flex items-center gap-4 px-4 py-2.5 rounded w-full transition-colors cursor-pointer"
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--music-surface-raised)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}

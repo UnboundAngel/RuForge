@@ -117,19 +117,17 @@ import type { ActivityHandoffSnapshot, ActivityOwner } from "../lib/activityType
 import {
   WATCH_LATER_ID,
   addPathsToRecord,
-  collectMediaIndex,
   createVirtualPlaylistRecord,
   loadVirtualPlaylistRecords,
   mergeVirtualPlaylistsIntoEntries,
   moveRecordItem,
   mutateVirtualRecords,
+  nextDefaultPlaylistTitle,
   parseVirtualPlaylistId,
   pathInWatchLater,
-  pruneStalePathsInRecords,
   removePathFromAllRecords,
   removePathFromRecord,
-  reorderRecordItems,
-  saveVirtualPlaylistRecords,
+  reorderRecordByPath,
   setRecordThumbnail,
   stripVirtualPlaylists,
   virtualPlaylistPath,
@@ -174,6 +172,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   navMode: NavMode;
   musicView: MusicView;
   musicDetail: MusicDetail | null;
+  /** Raw virtual playlist records (Music reads `kind`, order, and missing items from here). */
+  virtualPlaylistRecords: VirtualPlaylistRecord[];
   storageStats: { total_bytes: number; file_count: number } | null;
 
   activeTab: ActiveTab;
@@ -385,6 +385,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   openMusicAlbum: (artistKey: string, key: string) => void;
   openMusicSong: (path: string) => void;
   openMusicLiked: (opts?: { backTo?: "profile" }) => void;
+  openMusicPlaylist: (id: string) => void;
   /** Music mode + listening stats (profile destination for the YouTube account chip). */
   openProfilePage: () => void;
   openMusicStats: (opts?: { backTo?: "profile" }) => void;
@@ -416,7 +417,11 @@ export interface RuforgeStore extends DownloadQueueSlice {
   renameVirtualPlaylist: (id: string, title: string) => void;
   addToVirtualPlaylist: (id: string, paths: string[]) => void;
   removeFromVirtualPlaylist: (id: string, path: string) => void;
+  removePathsFromVirtualPlaylist: (id: string, paths: string[]) => void;
   reorderVirtualPlaylist: (id: string, fromIndex: number, toIndex: number) => void;
+  reorderVirtualPlaylistByPath: (id: string, fromPath: string, toPath: string) => void;
+  /** Creates "My Playlist #N" in Music, seeded with `seedPaths`. Returns the new id. */
+  createMusicPlaylist: (seedPaths?: string[]) => string;
   moveVirtualPlaylistItem: (id: string, path: string, where: "top" | "bottom") => void;
   setVirtualPlaylistThumbnail: (id: string, path: string | null) => void;
   toggleWatchLater: (path: string) => boolean;
@@ -540,15 +545,15 @@ function syncVirtualPlaylistsIntoState(
   entries: GalleryEntry[],
   selectedPlaylist: PlaylistCollection | null,
   records?: VirtualPlaylistRecord[],
-): { entries: GalleryEntry[]; selectedPlaylist: PlaylistCollection | null } {
+): {
+  entries: GalleryEntry[];
+  selectedPlaylist: PlaylistCollection | null;
+  virtualPlaylistRecords: VirtualPlaylistRecord[];
+} {
   const disk = stripVirtualPlaylists(entries);
-  const mediaIndex = collectMediaIndex(disk);
-  let nextRecords = records ?? loadVirtualPlaylistRecords();
-  const pruned = pruneStalePathsInRecords(nextRecords, mediaIndex);
-  if (pruned.changed) {
-    saveVirtualPlaylistRecords(pruned.records);
-    nextRecords = pruned.records;
-  }
+  // No stale-path pruning: an offline drive or partial scan must not empty user playlists.
+  // Hydration skips missing files; deletes through the app still remove them explicitly.
+  const nextRecords = records ?? loadVirtualPlaylistRecords();
   const merged = mergeVirtualPlaylistsIntoEntries(disk, nextRecords);
   let nextSelected = selectedPlaylist;
   if (selectedPlaylist && parseVirtualPlaylistId(selectedPlaylist.path)) {
@@ -557,7 +562,7 @@ function syncVirtualPlaylistsIntoState(
     );
     nextSelected = hit && hit.kind === "playlist" ? hit : null;
   }
-  return { entries: merged, selectedPlaylist: nextSelected };
+  return { entries: merged, selectedPlaylist: nextSelected, virtualPlaylistRecords: nextRecords };
 }
 
 /** Clears all pending auto-dismiss timers (e.g. window unload, Vite HMR module dispose). */
@@ -668,6 +673,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       isFocused: false,
 
       entries: mergeVirtualPlaylistsIntoEntries([]),
+      virtualPlaylistRecords: loadVirtualPlaylistRecords(),
       galleryDedupeSweptRoots: [],
       libraryScanRevision: 0,
       galleryLoading: true,
@@ -1409,6 +1415,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       openMusicAlbum: (artistKey, key) => set({ musicDetail: { kind: "album", artistKey, key } }),
       openMusicSong: (path) => set({ musicDetail: { kind: "song", path } }),
       openMusicLiked: (opts) => set({ musicDetail: { kind: "liked", backTo: opts?.backTo } }),
+      openMusicPlaylist: (id) => set({ musicDetail: { kind: "playlist", id } }),
       openProfilePage: () => {
         localStorage.setItem("ruforge-nav-mode", "music");
         set({
@@ -1505,6 +1512,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
           return {
             entries: synced.entries,
             selectedPlaylist: synced.selectedPlaylist,
+            virtualPlaylistRecords: synced.virtualPlaylistRecords,
             libraryScanRevision: s.libraryScanRevision + 1,
           };
         });
@@ -1512,6 +1520,14 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       createVirtualPlaylist: (title, seedPaths = []) => {
         const record = createVirtualPlaylistRecord(title, seedPaths);
+        mutateVirtualRecords((recs) => [...recs, record]);
+        get().refreshVirtualPlaylists();
+        return record.id;
+      },
+
+      createMusicPlaylist: (seedPaths = []) => {
+        const title = nextDefaultPlaylistTitle(loadVirtualPlaylistRecords());
+        const record = createVirtualPlaylistRecord(title, seedPaths, Date.now(), "music");
         mutateVirtualRecords((recs) => [...recs, record]);
         get().refreshVirtualPlaylists();
         return record.id;
@@ -1530,6 +1546,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
         set((s) => ({
           selectedPlaylist:
             s.selectedPlaylist?.path === path ? null : s.selectedPlaylist,
+          musicDetail:
+            s.musicDetail?.kind === "playlist" && s.musicDetail.id === id ? null : s.musicDetail,
         }));
         get().refreshVirtualPlaylists();
         return true;
@@ -1561,11 +1579,31 @@ export const useRuforgeStore = create<RuforgeStore>()(
         get().refreshVirtualPlaylists();
       },
 
-      reorderVirtualPlaylist: (id, fromIndex, toIndex) => {
+      removePathsFromVirtualPlaylist: (id, paths) => {
+        if (paths.length === 0) return;
         mutateVirtualRecords((recs) =>
           recs.map((r) =>
-            r.id === id ? reorderRecordItems(r, fromIndex, toIndex) : r,
+            r.id === id ? paths.reduce((acc, p) => removePathFromRecord(acc, p), r) : r,
           ),
+        );
+        get().refreshVirtualPlaylists();
+      },
+
+      reorderVirtualPlaylist: (id, fromIndex, toIndex) => {
+        // Indexes come from the hydrated list, which hides missing files the record still holds.
+        const path = virtualPlaylistPath(id);
+        const hydrated = get().entries.find(
+          (e): e is PlaylistCollection => e.kind === "playlist" && e.path === path,
+        );
+        const fromPath = hydrated?.items[fromIndex]?.path;
+        const toPath = hydrated?.items[toIndex]?.path;
+        if (!fromPath || !toPath) return;
+        get().reorderVirtualPlaylistByPath(id, fromPath, toPath);
+      },
+
+      reorderVirtualPlaylistByPath: (id, fromPath, toPath) => {
+        mutateVirtualRecords((recs) =>
+          recs.map((r) => (r.id === id ? reorderRecordByPath(r, fromPath, toPath) : r)),
         );
         get().refreshVirtualPlaylists();
       },
@@ -1733,6 +1771,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
             return {
               entries: synced.entries,
               selectedPlaylist: synced.selectedPlaylist,
+              virtualPlaylistRecords: synced.virtualPlaylistRecords,
               galleryDesktopReady: snapshot.ready,
               libraryScanRevision: s.libraryScanRevision + 1,
             };
@@ -1801,6 +1840,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
           return {
             entries: synced.entries,
             selectedPlaylist: synced.selectedPlaylist,
+            virtualPlaylistRecords: synced.virtualPlaylistRecords,
             libraryScanRevision: s.libraryScanRevision + 1,
             galleryLoading: false,
             galleryDesktopReady: true,
@@ -1816,6 +1856,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
           return {
             entries: synced.entries,
             selectedPlaylist: synced.selectedPlaylist,
+            virtualPlaylistRecords: synced.virtualPlaylistRecords,
             libraryScanRevision: s.libraryScanRevision + 1,
             galleryLoading: false,
             galleryDesktopReady: true,

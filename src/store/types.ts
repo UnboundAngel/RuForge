@@ -38,6 +38,7 @@ export type MusicDetail =
   | { kind: "album"; artistKey: string; key: string }
   | { kind: "song"; path: string }
   | { kind: "liked"; backTo?: "profile" }
+  | { kind: "playlist"; id: string }
   | { kind: "profile" }
   | { kind: "stats"; backTo?: "profile" };
 

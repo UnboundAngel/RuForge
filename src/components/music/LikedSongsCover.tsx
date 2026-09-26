@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Heart } from "lucide-react";
 import { bestCoverPath } from "@/mediaKind";
@@ -19,11 +19,18 @@ export function collectLikedCoverPaths(files: MediaFile[], max = 4): string[] {
 type CoverProps = {
   files: MediaFile[];
   className?: string;
+  /** Shown when no track has art; defaults to the Liked Songs heart. */
+  emptyIcon?: ReactNode;
+  radius?: string;
 };
 
-export function LikedSongsCover({ files, className }: CoverProps) {
+export function LikedSongsCover({
+  files,
+  className,
+  emptyIcon,
+  radius = "var(--music-card-radius, 14px)",
+}: CoverProps) {
   const covers = useMemo(() => collectLikedCoverPaths(files), [files]);
-  const radius = "var(--music-card-radius, 14px)";
 
   if (covers.length === 0) {
     return (
@@ -34,7 +41,9 @@ export function LikedSongsCover({ files, className }: CoverProps) {
           background: "linear-gradient(135deg, #3a0810 0%, #1a1012 45%, #121212 100%)",
         }}
       >
-        <Heart size={40} fill="#ff0033" stroke="#ff0033" strokeWidth={1.5} style={{ opacity: 0.85 }} />
+        {emptyIcon ?? (
+          <Heart size={40} fill="#ff0033" stroke="#ff0033" strokeWidth={1.5} style={{ opacity: 0.85 }} />
+        )}
       </div>
     );
   }
