@@ -14,6 +14,7 @@ import { MusicAlbumView } from "./MusicAlbumView";
 import { MusicLikedView } from "./MusicLikedView";
 import { MusicPlaylistView } from "./MusicPlaylistView";
 import { MusicNavPlaylists } from "./MusicNavPlaylists";
+import { MusicTopBar } from "./MusicTopBar";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { MusicTrackView } from "./MusicTrackView";
 import { MusicProfileView } from "./MusicProfileView";
@@ -129,7 +130,7 @@ function logMusicExploreNavigation(
 
 const sidebarEase = [0.4, 0, 0.2, 1] as const;
 const SIDEBAR_FULL = "var(--music-sidebar-width)";
-const SIDEBAR_COLLAPSED = "var(--music-sidebar-collapsed-width)";
+const SIDEBAR_COLLAPSED = "var(--music-library-collapsed-width)";
 
 type ExpandedOverlayProps = {
   coverSrc: string | null;
@@ -1249,6 +1250,12 @@ export function MusicShell() {
         color: "var(--music-text-primary)",
       }}
       >
+      <MusicTopBar
+        activeView={activeView}
+        captureScreenLabel={`music-${activeView}`}
+        onSelect={setMusicView}
+        onSearchYoutubeMusic={handleSearchYoutubeMusic}
+      />
       <div
         className="relative z-[3] flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden"
         style={{
@@ -1263,39 +1270,24 @@ export function MusicShell() {
           className="flex flex-1 min-h-0 min-w-0 basis-0 overflow-hidden"
           style={{ gap: "var(--music-shell-gap)" }}
         >
-          {/* Left L-column: expanded = shared surface; collapsed = floating pills on shell chrome. */}
+          {/* Left column: Spotify "Your Library" panel (expanded or cover rail), Back to RuForge at the bottom. */}
           <div
-            className={cn(
-              "flex flex-col shrink-0 min-h-0 overflow-hidden transition-[width] duration-200 ease-out",
-              navCollapsed && "justify-between",
-            )}
+            className="flex flex-col shrink-0 min-h-0 overflow-hidden transition-[width] duration-200 ease-out"
             style={{
               width: leftSlotWidth,
-              background: navCollapsed
-                ? "transparent"
-                : shellBlack
-                  ? "var(--music-bg)"
-                  : "var(--music-surface)",
-              borderRadius: navCollapsed ? 0 : panelRadius,
+              background: shellBlack ? "var(--music-bg)" : "var(--music-surface)",
+              borderRadius: panelRadius,
             }}
           >
-            <div
-              className={cn(
-                navCollapsed ? "shrink-0 overflow-visible" : "flex-1 min-h-0 basis-0 overflow-hidden",
-              )}
-            >
+            <div className="flex-1 min-h-0 basis-0 overflow-hidden">
               <MusicNav
                 activeView={activeView}
-                captureScreenLabel={`music-${activeView}`}
                 onSelect={setMusicView}
                 collapsed={navCollapsed}
                 onToggleCollapse={() => {
                   setNavCollapsed((c) => !c);
                   resyncExploreWebview();
                 }}
-                shellFrame={shellBlack}
-                sideColumn
-                inLeftStack
                 footerSlot={
                   showDownloadDockChip ? (
                     <ExploreDownloadDockChip
@@ -1312,9 +1304,9 @@ export function MusicShell() {
                 }
                 panelSlot={
                   <>
-                    {!showExplorePanel && <MusicNavPlaylists />}
+                    {(!showExplorePanel || navCollapsed) && <MusicNavPlaylists collapsed={navCollapsed} />}
                     {keepExplorePanelMounted ? (
-                      <div className={cn("flex flex-1 min-h-0 flex-col", !showExplorePanel && "hidden")}>
+                      <div className={cn("flex flex-1 min-h-0 flex-col", (!showExplorePanel || navCollapsed) && "hidden")}>
                         <MusicExploreDownloadPanel
                           url={explorePanelUrl}
                           shelfLinks={musicExplorePageContext.shelfLinks}

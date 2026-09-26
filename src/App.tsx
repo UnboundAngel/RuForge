@@ -91,6 +91,7 @@ function initialMiniKind(): "video" | "music" | null {
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
+import { MUSIC_TOP_BAR_ISLAND_CLEARANCE_PX, MUSIC_TOP_BAR_MAX_WIDTH_PX } from "./components/music/MusicTopBar";
 import {
   applyYoutubeProfileProbe,
   type YoutubeProfileSessionState,
@@ -1753,13 +1754,27 @@ function App() {
 
       {/* Global Drag Region - Top strip except sidebar logo and window controls.
           WebView drag regions ignore DOM z-index, so the strip must not cover clickable titleband chrome. */}
-      <div
-        className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
-        style={{
-          left: navMode === "music" ? 0 : SIDEBAR_RAIL_PX,
-        }}
-        data-tauri-drag-region
-      />
+      {navMode === "music" ? (
+        <>
+          {/* Music: gaps for the logo (left) and the Home + search bar docked left of center (MusicTopBar). */}
+          <div
+            className="fixed top-0 z-[50] h-[var(--rf-titlebar-h)]"
+            style={{ left: 60, width: `max(0px, calc(50% - ${MUSIC_TOP_BAR_ISLAND_CLEARANCE_PX + MUSIC_TOP_BAR_MAX_WIDTH_PX + 60}px))` }}
+            data-tauri-drag-region
+          />
+          <div
+            className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
+            style={{ left: `calc(50% - ${MUSIC_TOP_BAR_ISLAND_CLEARANCE_PX}px)` }}
+            data-tauri-drag-region
+          />
+        </>
+      ) : (
+        <div
+          className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
+          style={{ left: SIDEBAR_RAIL_PX }}
+          data-tauri-drag-region
+        />
+      )}
 
       <WindowResizeEdges active={!isMainMaximized} />
 
