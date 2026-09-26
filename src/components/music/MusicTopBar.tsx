@@ -69,10 +69,10 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
           type="button"
           onClick={() => onSelect("home")}
           className={cn(
-            "rf-music-tooltip-anchor rf-music-press w-10 h-10 shrink-0 flex items-center justify-center rounded-full",
+            "rf-music-tooltip-anchor rf-music-press w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-white/[0.07] transition-colors duration-200",
             homeActive
-              ? "text-white bg-[color-mix(in_srgb,var(--music-accent)_28%,#1f1f1f)] ring-1 ring-[color-mix(in_srgb,var(--music-accent)_55%,transparent)]"
-              : cn("text-white/60 hover:text-white bg-white/[0.07]", RED_HOVER),
+              ? "text-[color:var(--music-accent)]"
+              : cn("text-white/60 hover:text-white", RED_HOVER),
           )}
           aria-label="Home (Alt+1)"
           aria-current={homeActive ? "page" : undefined}
@@ -86,7 +86,7 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
             e.preventDefault();
             submit();
           }}
-          className="group/search flex items-center h-10 w-[min(420px,32vw)] rounded-full bg-white/[0.07] text-white/60 transition-[background-color,box-shadow] duration-200 hover:bg-[color-mix(in_srgb,var(--music-accent)_10%,rgba(255,255,255,0.07))] focus-within:bg-[color-mix(in_srgb,var(--music-accent)_10%,rgba(255,255,255,0.07))] focus-within:ring-2 focus-within:ring-[color:var(--music-accent)]"
+          className="group/search flex items-center h-10 w-[min(420px,32vw)] rounded-full bg-white/[0.07] text-white/60 transition-colors duration-200 hover:bg-white/[0.10] focus-within:bg-white/[0.13]"
         >
           <button
             type="submit"
