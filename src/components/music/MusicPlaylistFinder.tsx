@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Check, Music, Search } from "lucide-react";
+import { Check, Music, Search, X } from "lucide-react";
 import { bestCoverPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
 import { filterTracksByQuery, trackArtistLabel } from "./musicPlaylists";
@@ -17,24 +17,50 @@ type Props = {
 
 export function MusicPlaylistFinder({ libraryTracks, inPlaylist, onAdd, prominent, autoFocus }: Props) {
   const [query, setQuery] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const results = useMemo(() => filterTracksByQuery(libraryTracks, query), [libraryTracks, query]);
+  const open = prominent || expanded;
+
+  if (!open) {
+    return (
+      <section className="flex justify-end px-5 pt-6 pb-8">
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex items-center gap-2 h-9 px-4 rounded-full text-sm font-semibold bg-white/[0.06] text-[color:var(--music-text-secondary)] transition-colors hover:bg-white/[0.12] hover:text-[color:var(--music-text-primary)]"
+        >
+          <Search size={15} aria-hidden /> Find more
+        </button>
+      </section>
+    );
+  }
 
   return (
-    <section className="px-5 pt-4 pb-8">
-      <h2
-        className={
-          prominent
-            ? "text-lg font-bold text-[color:var(--music-text-primary)]"
-            : "text-sm font-semibold text-[color:var(--music-text-secondary)]"
-        }
-      >
-        {prominent ? "Let's find something for your playlist" : "Find more songs"}
-      </h2>
-      <label className="mt-3 flex items-center gap-2 h-10 max-w-md px-3 rounded-xl bg-white/[0.07] text-[color:var(--music-text-muted)] focus-within:bg-white/[0.1]">
-        <Search size={15} className="shrink-0" aria-hidden />
+    <section className={`mx-5 mb-8 ${prominent ? "mt-4" : "mt-8"}`}>
+      <div className="flex items-start justify-between gap-4">
+        <h2 className="text-2xl font-bold tracking-tight text-[color:var(--music-text-primary)]">
+          Let's find something for your playlist
+        </h2>
+        {!prominent && (
+          <button
+            type="button"
+            onClick={() => {
+              setExpanded(false);
+              setQuery("");
+            }}
+            className="w-9 h-9 shrink-0 flex items-center justify-center rounded-full text-[color:var(--music-text-secondary)] transition-colors hover:bg-white/[0.12] hover:text-[color:var(--music-text-primary)]"
+            aria-label="Close song search"
+            title="Close"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+      <label className="mt-4 flex items-center gap-2 h-11 max-w-xl px-4 rounded-full bg-white/[0.07] text-[color:var(--music-text-muted)] focus-within:bg-white/[0.11]">
+        <Search size={16} className="shrink-0" aria-hidden />
         <input
           value={query}
-          autoFocus={autoFocus}
+          autoFocus={autoFocus || expanded}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search your library for songs"
           aria-label="Search your library for songs"
@@ -43,10 +69,10 @@ export function MusicPlaylistFinder({ libraryTracks, inPlaylist, onAdd, prominen
       </label>
 
       {query.trim() && results.length === 0 && (
-        <p className="mt-4 text-sm text-[color:var(--music-text-muted)]">No songs in your library match.</p>
+        <p className="mt-4 text-sm text-[color:var(--music-text-muted)]">nothing in your library matches that.</p>
       )}
 
-      <div className="mt-2 flex flex-col">
+      <div className="mt-3 flex flex-col">
         {results.map((file) => (
           <FinderRow key={file.path} file={file} added={inPlaylist(file.path)} onAdd={() => onAdd(file)} />
         ))}
