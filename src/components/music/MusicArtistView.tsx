@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Shuffle, Play, ChevronLeft, MapPin, Music2, Disc3 } from "lucide-react";
+import { Shuffle, Play, Pause, ChevronLeft, MapPin, Music2, Disc3 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
@@ -11,9 +11,9 @@ import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
 import { fileMatchesArtistKey, primaryArtist, rawArtistFromFile } from "./musicArtist";
 import { buildMultiTrackAlbumGroups, resolveDisplayAlbum } from "./musicShelfDedup";
-import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
+import { useQueueSourcePlayback } from "./useActiveQueueSource";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import {
@@ -445,18 +445,8 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
     };
   }, [heroAmbiencePath]);
 
-  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
-  const artistSource = musicQueueSource("artist", displayName);
-
-  const handleShuffle = () => {
-    if (tracks.length === 0) return;
-    const shuffled = buildSmartShuffleOrder({
-      pool: tracks,
-      likedKeys: musicLikedKeys,
-      seed: Date.now() & 0xffffffff,
-    });
-    onPlayFile(shuffled[0]!, tracks, artistSource, { shuffle: true });
-  };
+  const artistSource = useMemo(() => musicQueueSource("artist", displayName), [displayName]);
+  const sourcePlayback = useQueueSourcePlayback(artistSource, tracks, onPlayFile);
 
   if (tracks.length === 0) {
     return (
@@ -575,7 +565,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => onPlayFile(tracks[0], tracks, artistSource)}
+            onClick={sourcePlayback.play}
             className="flex items-center gap-2 px-7 py-2.5 text-sm font-semibold transition-opacity hover:opacity-88"
             style={{
               background: ambience.onCanvasPrimary,
@@ -583,16 +573,32 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
               borderRadius: "999px",
             }}
           >
-            <Play size={15} fill="currentColor" /> Play
+            {sourcePlayback.playing ? (
+              <>
+                <Pause size={15} fill="currentColor" /> Pause
+              </>
+            ) : (
+              <>
+                <Play size={15} fill="currentColor" /> Play
+              </>
+            )}
           </button>
           <button
             type="button"
-            onClick={handleShuffle}
-            className="flex h-11 w-11 items-center justify-center rounded-full transition-opacity hover:opacity-90"
-            style={{ color: ambience.onCanvasPrimary, background: ambience.chipBg }}
-            aria-label="Shuffle"
+            onClick={sourcePlayback.toggleShuffle}
+            className="rf-music-tooltip-anchor relative flex h-11 w-11 items-center justify-center rounded-full transition-opacity hover:opacity-90"
+            style={{
+              color: sourcePlayback.shuffleOn ? "var(--music-accent)" : ambience.onCanvasPrimary,
+              background: ambience.chipBg,
+            }}
+            aria-label={sourcePlayback.shuffleOn ? "Disable shuffle" : "Enable shuffle"}
+            aria-pressed={sourcePlayback.shuffleOn}
+            data-tooltip={sourcePlayback.shuffleOn ? "Disable shuffle" : "Enable shuffle"}
           >
             <Shuffle size={16} />
+            {sourcePlayback.shuffleOn && (
+              <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[var(--music-accent)]" />
+            )}
           </button>
         </div>
 

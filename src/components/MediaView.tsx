@@ -4,18 +4,14 @@ import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, Volu
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import { isAudioOnlyPath } from "../mediaKind";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { askConfirm } from "./ConfirmDialog";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { getPlaybackThumbnailBar, getWatchProgress, isVideoWatched } from "../playbackStorage";
 import { formatStorageSize } from "../formatStorageSize";
-import { clearPlaybackStateForDeletedPaths } from "../cleanupCandidates";
-import { deleteMediaAtPath } from "../deleteMedia";
+import { deleteLibraryMedia } from "../deleteLibraryMedia";
 import { openInFileManager } from "../openInFileManager";
-import { releasePlaybackBeforeDelete } from "../releasePlaybackBeforeDelete";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { filterMainLibraryEntries } from "../mainLibraryFilter";
 import { formatDuration } from "./downloader/downloaderFormat";
-import { youtubeUrlsMatch } from "../youtubeUrl";
 import { useGalleryScrubExtracting } from "../scrubSpriteGallerySync";
 import { galleryScrollChromeAmount } from "../lib/galleryScrollChrome";
 import { MorphMenu, type MorphMenuItem } from "./ui/Morph";
@@ -30,23 +26,6 @@ import { PlaylistEmptyThumb } from "./PlaylistEmptyThumb";
 import { cn } from "../lib/utils";
 
 type ThumbnailBar = { show: boolean; widthPct: number; completed: boolean };
-
-function deleteMediaErrorMessage(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (/os error 32|being used by another process/i.test(msg)) {
-    return "This file is still in use. Close the player, wait a moment, then try again.";
-  }
-  return "Failed to delete video.";
-}
-
-async function removeQueueJobsForSourceUrl(sourceUrl: string): Promise<void> {
-  const jobs = useRuforgeStore.getState().downloadJobs;
-  const ids = jobs.filter((j) => youtubeUrlsMatch(j.url, sourceUrl)).map((j) => j.id);
-  const removeDownloadJob = useRuforgeStore.getState().removeDownloadJob;
-  for (const id of ids) {
-    await removeDownloadJob(id);
-  }
-}
 
 function mediaDisplayTitle(file: MediaFile): string {
   return file.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "");
@@ -601,7 +580,6 @@ export const MediaView = ({
   const searchQuery = useRuforgeStore((s) => s.searchValue);
   const filter = useRuforgeStore((s) => s.galleryFilter);
   const notify = useRuforgeStore((s) => s.notify);
-  const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const entries = useRuforgeStore((s) => s.entries);
   const hideAudioFromMainLibrary = useRuforgeStore(
     (s) => s.settings.hideAudioFromMainLibrary !== false,
@@ -612,8 +590,6 @@ export const MediaView = ({
   const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
   const fetchEntries = useRuforgeStore((s) => s.fetchEntries);
   const ensureGalleryOnViewMount = useRuforgeStore((s) => s.ensureGalleryOnViewMount);
-  const removeGalleryEntryByPath = useRuforgeStore((s) => s.removeGalleryEntryByPath);
-  const upsertGalleryMediaFile = useRuforgeStore((s) => s.upsertGalleryMediaFile);
   const addGalleryExtractingPath = useRuforgeStore((s) => s.addGalleryExtractingPath);
   const removeGalleryExtractingPath = useRuforgeStore((s) => s.removeGalleryExtractingPath);
   const handlePlayPlaylist = useRuforgeStore((s) => s.handlePlayPlaylist);
@@ -731,53 +707,10 @@ export const MediaView = ({
   const handleDelete = useCallback(
     async (file: MediaFile) => {
       setGalleryActiveMenu(null);
-      const approved = await askConfirm({
-        title: "Delete video",
-        message: `Move this item to the system Recycle Bin? You can restore it from Recently Deleted while it stays in the bin.`,
-        confirmLabel: "Delete",
-        cancelLabel: "Cancel",
-        itemPreview: file.thumbnailPath ?? file.ruforgePosterPath,
-        itemMeta: `${formatStorageSize(file.size)} • ${file.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "")}`,
-      });
-      if (!approved) {
-        return;
-      }
-
-      await releasePlaybackBeforeDelete([file.path]);
-      const deletingId = notify("Deleting…", "progress");
-      removeGalleryEntryByPath(file.path);
-
-      try {
-        const result = await deleteMediaAtPath(file.path);
-        clearPlaybackStateForDeletedPaths([file.path]);
-        const sourceUrl = file.sourceUrl?.trim();
-        if (sourceUrl) {
-          await removeQueueJobsForSourceUrl(sourceUrl);
-        }
-        if (result.alreadyMissing && !result.removed) {
-          notify("Removed from library (file was already gone).");
-        } else if (result.removed) {
-          notify("Moved to Recycle Bin. Restore from Recently Deleted if needed.");
-        } else {
-          notify("Removed from library.");
-        }
-      } catch (e) {
-        console.error(e);
-        upsertGalleryMediaFile(file);
-        const message = deleteMediaErrorMessage(e);
-        notify(message, message.includes("still in use") ? "warning" : "error");
-      } finally {
-        dismissNotification(deletingId);
-        setGalleryActiveMenu(null);
-      }
+      await deleteLibraryMedia(file);
+      setGalleryActiveMenu(null);
     },
-    [
-      dismissNotification,
-      notify,
-      removeGalleryEntryByPath,
-      setGalleryActiveMenu,
-      upsertGalleryMediaFile,
-    ],
+    [setGalleryActiveMenu],
   );
 
   const handleExtract = useCallback(

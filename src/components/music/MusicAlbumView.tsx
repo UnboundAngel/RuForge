@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Shuffle, Play, ChevronLeft } from "lucide-react";
+import { Shuffle, Play, Pause, ChevronLeft } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath } from "@/mediaKind";
@@ -8,11 +8,12 @@ import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
+import { cn } from "@/lib/utils";
 import { artistKeyFromFile, primaryArtist, rawArtistFromFile } from "./musicArtist";
 import { albumKeyFromFile, resolveDisplayAlbum } from "./musicShelfDedup";
-import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
+import { useQueueSourcePlayback } from "./useActiveQueueSource";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import { musicTrackDragProps } from "./musicDragImage";
@@ -145,19 +146,8 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
   };
   const totalDuration = useMemo(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
 
-  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
-
-  const albumSource = musicQueueSource("album", displayAlbum);
-
-  const handleShuffle = () => {
-    if (tracks.length === 0) return;
-    const shuffled = buildSmartShuffleOrder({
-      pool: tracks,
-      likedKeys: musicLikedKeys,
-      seed: Date.now() & 0xffffffff,
-    });
-    onPlayFile(shuffled[0]!, tracks, albumSource, { shuffle: true });
-  };
+  const albumSource = useMemo(() => musicQueueSource("album", displayAlbum), [displayAlbum]);
+  const sourcePlayback = useQueueSourcePlayback(albumSource, tracks, onPlayFile);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto rf-scrollbar">
@@ -233,21 +223,36 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
       <div className="flex items-center gap-3 px-5 py-3 shrink-0">
         <button
           type="button"
-          onClick={() => onPlayFile(tracks[0], tracks, albumSource)}
+          onClick={sourcePlayback.play}
           className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-opacity hover:opacity-80"
           style={{ background: "var(--music-accent)", color: "#fff" }}
           disabled={tracks.length === 0}
         >
-          <Play size={15} fill="currentColor" /> Play
+          {sourcePlayback.playing ? (
+            <>
+              <Pause size={15} fill="currentColor" /> Pause
+            </>
+          ) : (
+            <>
+              <Play size={15} fill="currentColor" /> Play
+            </>
+          )}
         </button>
         <button
           type="button"
-          onClick={handleShuffle}
-          className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold border transition-colors hover:bg-white/10"
-          style={{ borderColor: "var(--music-border)", color: "var(--music-text-primary)" }}
-          disabled={tracks.length === 0}
+          onClick={sourcePlayback.toggleShuffle}
+          className={cn(
+            "rf-music-tooltip-anchor relative flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold border transition-colors hover:bg-white/10",
+            sourcePlayback.shuffleOn ? "text-[color:var(--music-accent)]" : "text-[color:var(--music-text-primary)]",
+          )}
+          style={{ borderColor: "var(--music-border)" }}
+          aria-pressed={sourcePlayback.shuffleOn}
+          data-tooltip={sourcePlayback.shuffleOn ? "Disable shuffle" : "Enable shuffle"}
         >
           <Shuffle size={15} /> Shuffle
+          {sourcePlayback.shuffleOn && (
+            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[var(--music-accent)]" />
+          )}
         </button>
       </div>
 
