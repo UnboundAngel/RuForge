@@ -19,11 +19,13 @@ import { LikedSongsCover } from "./LikedSongsCover";
 import { HoverMarqueeText } from "./HoverMarqueeText";
 import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
+import { musicTrackDragProps } from "./musicPlaylists";
+import { MusicLibraryPlaylistsGrid } from "./MusicLibraryPlaylistsGrid";
 
 const LIKED_SOURCE = musicQueueSource("liked", "Liked Songs");
 const LIBRARY_SOURCE = musicQueueSource("library", "Library");
 
-type LibTab = "songs" | "albums" | "artists" | "liked" | "stats";
+type LibTab = "songs" | "playlists" | "albums" | "artists" | "liked" | "stats";
 
 type SongRowProps = {
   file: MediaFile;
@@ -44,6 +46,7 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
 
   return (
     <div
+      {...musicTrackDragProps([file.path])}
       className="group/row flex items-center gap-3 px-4 py-2 rounded w-full transition-colors cursor-pointer"
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--music-surface-raised)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
@@ -299,6 +302,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
     { id: "liked", label: "Liked Songs", count: likedTracks.length },
     { id: "stats", label: "Stats" },
     { id: "songs", label: "Songs" },
+    { id: "playlists", label: "Playlists" },
     { id: "albums", label: "Albums" },
     { id: "artists", label: "Artists" },
   ];
@@ -429,6 +433,8 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
             ))}
           </div>
         )}
+
+        {activeTab === "playlists" && <MusicLibraryPlaylistsGrid />}
 
         {activeTab === "albums" && (
           <div className="px-4 sm:px-6 pr-12 sm:pr-14 pb-4">

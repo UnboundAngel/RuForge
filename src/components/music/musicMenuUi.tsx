@@ -47,6 +47,11 @@ export const MUSIC_MENU_TONES = {
     label: "color-mix(in srgb, #93c5fd 70%, white)",
     icon: "#93c5fd",
   },
+  playlist: {
+    panel: "color-mix(in srgb, #f472b6 10%, transparent)",
+    label: "color-mix(in srgb, #f9a8d4 70%, white)",
+    icon: "#f9a8d4",
+  },
   file: {
     panel: "color-mix(in srgb, #fbbf24 10%, transparent)",
     label: "color-mix(in srgb, #fcd34d 70%, white)",

@@ -1,6 +1,7 @@
 import { normalizeChapters } from "./chapters";
 import { normalizeDurationSeconds } from "./components/downloader/downloaderFormat";
 import type { MediaFile } from "./types";
+import { VIRTUAL_PLAYLIST_PATH_PREFIX } from "./virtualPlaylists";
 
 function parseScrubSpritePaths(o: Record<string, unknown>): string[] | undefined {
   const raw = o.scrubSpritePaths ?? o.scrub_sprite_paths;
@@ -114,6 +115,8 @@ export function flattenGalleryScanToMediaFiles(raw: unknown): MediaFile[] {
     if (kind === "media") {
       out.push(mediaFileFromGalleryJson(o));
     } else if (kind === "playlist") {
+      // Virtual playlists reference files already listed under their disk entries.
+      if (typeof o.path === "string" && o.path.startsWith(VIRTUAL_PLAYLIST_PATH_PREFIX)) continue;
       const items = o.items;
       if (Array.isArray(items)) {
         for (const it of items) {

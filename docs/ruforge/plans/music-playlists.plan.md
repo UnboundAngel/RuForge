@@ -36,6 +36,12 @@ So this is mostly a Music UI project on top of a working data layer. No Rust nee
 - **Identity by path.** Moving or re-tagging a file breaks the link. Acceptable for v1 since Liked uses `musicTrackIdentityKey`; consider storing that key alongside `path` so a rescan can re-resolve moved files.
 - **Two webviews.** Music runs in the main webview today, so Zustand is enough. If the mini player ever mutates playlists, sync via emit/listen like the rest.
 
+## Status (2026-09-26)
+
+Phases 1 to 3 are built on `claude/nifty-mayer-e73q2w`, plus the pruning fix (sync no longer prunes; missing songs show a "Remove from playlist" banner on the playlist page). Library flatten now skips virtual playlists so songs in a playlist are not listed twice in Music.
+
+Not yet built: collapsed-sidebar playlist covers, multi-select (Ctrl/Shift), drag sources on Artist page rows and Home rows, and all of Phase 4. There's no duplicate prompt; the checkbox picker replaces it, and adding a song that is already there is a no-op.
+
 ## Phases
 
 ### Phase 1: Add to playlist from anywhere (smallest useful slice)
