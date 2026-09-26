@@ -751,17 +751,17 @@ html.ruforge-island-root #root {
   }
 }
 
-/* Music buttons shrink slightly while pressed. */
+/*
+ * Music icon buttons: hover only brightens (color/background), a press gives a small
+ * give. Growing on hover is kept for primary Play/Add buttons, as in Spotify.
+ */
 .rf-music-press {
   transition-property: scale, background-color, color, opacity;
   transition-duration: 150ms;
   transition-timing-function: ease-out;
 }
-.rf-music-press:hover:not(:disabled) {
-  scale: 1.04;
-}
 .rf-music-press:active:not(:disabled) {
-  scale: 0.94;
+  scale: 0.96;
 }
 /* Playlist reorder: the drop line draws in from the left. */
 .rf-music-drop-line {

@@ -5,6 +5,7 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { VirtualPlaylistRecord } from "@/virtualPlaylists";
 import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
+import { useActiveQueueSource } from "./useActiveQueueSource";
 import { HoverMarqueeText } from "./HoverMarqueeText";
 import { LikedSongsCover } from "./LikedSongsCover";
 import { MusicPlaylistCover } from "./MusicPlaylistCover";
@@ -65,7 +66,7 @@ const songs = (n: number) => `${n} ${n === 1 ? "song" : "songs"}`;
 export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }) {
   const musicDetail = useRuforgeStore((s) => s.musicDetail);
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
-  const queueSource = useRuforgeStore((s) => s.musicQueueSource);
+  const queueSource = useActiveQueueSource();
   const openMusicLiked = useRuforgeStore((s) => s.openMusicLiked);
   const openMusicPlaylist = useRuforgeStore((s) => s.openMusicPlaylist);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);

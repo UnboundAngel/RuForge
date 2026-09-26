@@ -56,3 +56,26 @@ export function nextQueueRowIsEndless(args: {
   if (idxInFolder < 0) return true;
   return idxInFolder >= args.endlessFromIndex;
 }
+
+/**
+ * True while the current song still comes from the source's own tracks. Once endless
+ * autoplay takes over (or the song was never in the source list), the source no longer
+ * counts as playing, the way Spotify drops the playlist's pause state after it ends.
+ */
+export function isPlayingFromQueueSource(args: {
+  playingFile: MediaFile | null;
+  folderAudioPlaylist: MediaFile[];
+  endlessFromIndex: number | null;
+  /** Set while a hand-queued song plays: where the source list resumes afterwards. */
+  manualQueueContextIndex?: number | null;
+}): boolean {
+  const { playingFile, folderAudioPlaylist, endlessFromIndex, manualQueueContextIndex } = args;
+  if (!playingFile) return false;
+  // A hand-queued song interrupts the source without ending it, as in Spotify.
+  const idx =
+    manualQueueContextIndex != null
+      ? manualQueueContextIndex
+      : folderAudioPlaylist.findIndex((f) => f.path === playingFile.path);
+  if (idx < 0) return false;
+  return endlessFromIndex == null || idx < endlessFromIndex;
+}

@@ -47,11 +47,11 @@ function PanelToggleIcon({ open, size }: { open: boolean; size: number }) {
     <span className="relative inline-flex shrink-0" style={{ width: size, height: size }} aria-hidden>
       <Library
         size={size}
-        className="absolute inset-0 transition-[opacity,scale] duration-200 group-hover/toggle:opacity-0 group-hover/toggle:scale-75"
+        className="absolute inset-0 transition-opacity duration-150 group-hover/toggle:opacity-0"
       />
       <Panel
         size={size}
-        className="absolute inset-0 opacity-0 scale-75 text-[color:var(--music-accent)] transition-[opacity,scale] duration-200 group-hover/toggle:opacity-100 group-hover/toggle:scale-100"
+        className="absolute inset-0 opacity-0 text-[color:var(--music-accent)] transition-opacity duration-150 group-hover/toggle:opacity-100"
       />
     </span>
   );
