@@ -65,7 +65,7 @@ function PlaylistTile({
     >
       <MusicPlaylistCover files={tracks} coverFile={coverFile} className="aspect-square w-full" />
       <div className="min-w-0">
-        <div className="text-sm font-bold truncate text-[color:var(--music-text-primary)]" title={record.title}>
+        <div className="text-sm font-bold truncate text-[color:var(--music-text-primary)]">
           {record.title}
         </div>
         <div className="text-xs mt-0.5 text-[color:var(--music-text-secondary)]">

@@ -763,16 +763,71 @@ html.ruforge-island-root #root {
 .rf-music-press:active:not(:disabled) {
   scale: 0.96;
 }
-/* Playlist reorder: the drop line draws in from the left. */
+/* Playlist reorder: the drop line fades in where the song will land. */
 .rf-music-drop-line {
-  transform-origin: left center;
-  animation: rf-music-drop-line-in 140ms ease-out;
+  animation: rf-music-fade-in 100ms ease-out;
 }
-@keyframes rf-music-drop-line-in {
+@keyframes rf-music-fade-in {
   from {
-    scale: 0 1;
     opacity: 0;
   }
+}
+/* Song drag preview: follows the cursor on the menus' raised surface. */
+.rf-music-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 300px;
+  padding: 6px 16px 6px 6px;
+  border-radius: 12px;
+  background: #282828;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.4);
+  color: #fff;
+  line-height: 1.25;
+  will-change: transform;
+}
+.rf-music-drag-ghost > * {
+  animation: rf-music-drag-ghost-in 120ms ease-out;
+}
+@keyframes rf-music-drag-ghost-in {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+}
+.rf-music-drag-ghost-cover {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #3a3a3a;
+}
+.rf-music-drag-ghost-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rf-music-drag-ghost-title,
+.rf-music-drag-ghost-artist {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rf-music-drag-ghost-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.rf-music-drag-ghost-artist {
+  font-size: 12px;
+  color: rgb(255 255 255 / 0.6);
 }
 /* Wide text buttons: press feedback without the hover grow. */
 .rf-music-press-soft {

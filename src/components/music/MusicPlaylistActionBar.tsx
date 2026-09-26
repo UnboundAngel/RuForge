@@ -66,7 +66,7 @@ const SORT_ICONS: Record<PlaylistSortKey, LucideIcon> = {
   duration: Timer,
 };
 
-const MARK_SPRING = { type: "spring", stiffness: 520, damping: 34 } as const;
+const MARK_FADE = { duration: 0.16, ease: "easeOut" } as const;
 
 function anchorBelow(el: HTMLElement, align: "left" | "right"): Anchor {
   const r = el.getBoundingClientRect();
@@ -128,10 +128,10 @@ export function MusicPlaylistActionBar({
           <button
             type="button"
             onClick={onToggleShuffle}
-            className={cn(ICON_BTN, "relative", shuffleOn && "text-[color:var(--music-accent)] hover:text-[color:var(--music-accent)]")}
+            className={cn(ICON_BTN, "rf-music-tooltip-anchor relative", shuffleOn && "text-[color:var(--music-accent)] hover:text-[color:var(--music-accent)]")}
             aria-label={shuffleOn ? "Disable shuffle" : "Enable shuffle"}
             aria-pressed={shuffleOn}
-            title={shuffleOn ? "Disable shuffle" : "Enable shuffle"}
+            data-tooltip={shuffleOn ? "Disable shuffle" : "Enable shuffle"}
           >
             <Shuffle size={26} />
             {shuffleOn && (
@@ -143,9 +143,9 @@ export function MusicPlaylistActionBar({
       <button
         type="button"
         onClick={(e) => setMoreAt(moreAt ? null : anchorBelow(e.currentTarget, "left"))}
-        className={cn(ICON_BTN, moreAt && "text-white")}
+        className={cn(ICON_BTN, "rf-music-tooltip-anchor", moreAt && "text-white")}
         aria-label={`More options for ${title}`}
-        title={`More options for ${title}`}
+        data-tooltip={moreAt ? undefined : `More options for ${title}`}
       >
         <MoreHorizontal size={28} />
       </button>
@@ -279,7 +279,7 @@ export function MusicPlaylistActionBar({
                   active={active}
                   onClick={() => setSort(key)}
                   trailing={
-                    active ? <MenuMark layoutId="playlist-sort-mark" desc={key === "custom" && !prefs.desc ? null : prefs.desc} /> : undefined
+                    active ? <MenuMark key={key} desc={key === "custom" && !prefs.desc ? null : prefs.desc} /> : undefined
                   }
                 />
               );
@@ -294,7 +294,7 @@ export function MusicPlaylistActionBar({
                 label={view === "compact" ? "Compact" : "List"}
                 active={prefs.view === view}
                 onClick={() => onPrefsChange({ ...prefs, view })}
-                trailing={prefs.view === view ? <MenuMark layoutId="playlist-view-mark" desc={null} /> : undefined}
+                trailing={prefs.view === view ? <MenuMark key={view} desc={null} /> : undefined}
               />
             ))}
           </MusicMenuSection>
@@ -305,23 +305,22 @@ export function MusicPlaylistActionBar({
 }
 
 /**
- * The red check on the active row. It pops in when the menu opens and slides to the
- * new row on a pick (shared layoutId); the arrow flips when the direction does.
+ * The red check on the active row. It fades in where it sits, both when the menu opens
+ * and on a new pick, so it never travels across the menu; the arrow flips in place.
  */
-function MenuMark({ layoutId, desc }: { layoutId: string; desc: boolean | null }) {
+function MenuMark({ desc }: { desc: boolean | null }) {
   return (
     <motion.span
-      layoutId={layoutId}
-      initial={{ opacity: 0, scale: 0.4 }}
+      initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={MARK_SPRING}
+      transition={MARK_FADE}
       className="flex items-center gap-1 shrink-0 text-[color:var(--music-accent)]"
     >
       {desc != null && (
         <motion.span
           initial={false}
           animate={{ rotate: desc ? 180 : 0 }}
-          transition={MARK_SPRING}
+          transition={{ duration: 0.18, ease: "easeOut" }}
           className="flex"
         >
           <ArrowUp size={12} strokeWidth={2.5} />
