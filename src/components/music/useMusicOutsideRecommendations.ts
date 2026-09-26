@@ -112,6 +112,21 @@ export function useOutsideRecommendations({
   return { tracks, loading: enabled && loading, available: enabled && seeds.length > 0 };
 }
 
+/**
+ * YouTube Music songs like one song (its radio), minus what the library already has.
+ * Resolves empty when the setting is off, YouTube Music is backing off, or the fetch fails.
+ */
+export async function fetchSimilarOutside(videoId: string, library: MediaFile[]): Promise<OutsideTrack[]> {
+  if (useRuforgeStore.getState().settings.suggestYoutubeMusicSongs === false) return [];
+  if (!readCachedRadio(videoId) && radioBackoffActive()) return [];
+  try {
+    return mergeOutsideRecommendations(await fetchRadio(videoId), library, videoId);
+  } catch {
+    startRadioBackoff();
+    return [];
+  }
+}
+
 /** Queues an audio download for an outside song and remembers to add it to the playlist when it lands. */
 export function downloadOutsideTrackIntoPlaylist(track: OutsideTrack, playlistId: string): void {
   const s = useRuforgeStore.getState();

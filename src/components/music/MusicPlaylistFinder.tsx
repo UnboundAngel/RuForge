@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight, CloudDownload, Music, Plus, RefreshCw, Search, X } from "lucide-react";
@@ -7,9 +7,18 @@ import { cn } from "@/lib/utils";
 import type { MediaFile } from "@/types";
 import { filterTracksByQuery, trackArtistLabel } from "./musicPlaylists";
 import { recommendForPlaylist } from "./musicPlaylistRecommend";
-import type { OutsideTrack } from "./musicOutsideRecommend";
+import { type OutsideTrack, fileVideoId } from "./musicOutsideRecommend";
+import {
+  FOLLOW_UP_COUNT,
+  type ShelfItem,
+  layoutShelf,
+  shelfKey,
+  shelfKeys,
+  similarLibrarySongs,
+} from "./musicShelfFollowUps";
 import {
   downloadOutsideTrackIntoPlaylist,
+  fetchSimilarOutside,
   useOutsideDownloadPercent,
   useOutsideRecommendations,
 } from "./useMusicOutsideRecommendations";
@@ -32,6 +41,10 @@ const RECOMMEND_COUNT = 10;
 /** YouTube Music songs appended after the library cards. */
 const OUTSIDE_COUNT = 6;
 const EASE = [0.22, 1, 0.36, 1] as const;
+const NO_FOLLOW_UPS: ReadonlyMap<string, ShelfItem[]> = new Map();
+
+const localItem = (file: MediaFile): ShelfItem => ({ kind: "local", file });
+const outsideItem = (track: OutsideTrack): ShelfItem => ({ kind: "outside", track });
 
 const PILL =
   "rf-music-press flex items-center gap-2 h-8 px-4 rounded-full text-sm font-bold text-white/70 hover:text-white bg-white/[0.07] hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)]";
@@ -92,7 +105,100 @@ export function MusicPlaylistFinder({
 
   // Refresh helps when the library holds more candidates than one page shows, or YouTube Music can deal more.
   const canRefresh = libraryTracks.length - playlistTracks.length > RECOMMEND_COUNT || outside.available;
-  const hasShelf = recommended.length > 0 || outside.tracks.length > 0 || outside.loading;
+
+  // The shelf holds still while you add: added cards keep their slot (so what they bring in lands
+  // beside them) and YouTube Music's first deal stays put while its downloads land.
+  // An add can rebuild the library list, and re-ranking then drops the added card and its follow-ups.
+  const [localDealt, setLocalDealt] = useState<{ round: number; pool: MediaFile[] }>({ round: -1, pool: [] });
+  useEffect(() => {
+    if (pool.length > 0 && localDealt.round !== round) setLocalDealt({ round, pool });
+  }, [pool, round, localDealt.round]);
+  const localBase = useMemo(() => {
+    const dealt = localDealt.round === round ? localDealt.pool : pool;
+    const inLibrary = new Set(libraryTracks.map((t) => t.path));
+    const out: MediaFile[] = [];
+    let shown = 0;
+    for (const t of dealt) {
+      if (!inLibrary.has(t.path)) continue;
+      if (shown >= RECOMMEND_COUNT) break;
+      out.push(t);
+      if (!inPlaylist(t.path)) shown++;
+    }
+    return out;
+  }, [localDealt, round, pool, libraryTracks, inPlaylist]);
+  const [outsideDealt, setOutsideDealt] = useState<{ round: number; tracks: OutsideTrack[] }>({ round: -1, tracks: [] });
+  useEffect(() => {
+    if (outside.tracks.length > 0 && outsideDealt.round !== round) setOutsideDealt({ round, tracks: outside.tracks });
+  }, [outside.tracks, round, outsideDealt.round]);
+  const outsideBase = !outside.available ? [] : outsideDealt.round === round ? outsideDealt.tracks : outside.tracks;
+  const base = useMemo<ShelfItem[]>(
+    () => [...localBase.map(localItem), ...outsideBase.map(outsideItem)],
+    [localBase, outsideBase],
+  );
+
+  // Spotify: adding a card slips two similar songs in right behind it. Refresh starts over.
+  const [followState, setFollowState] = useState<{ round: number; map: ReadonlyMap<string, ShelfItem[]> }>({
+    round,
+    map: NO_FOLLOW_UPS,
+  });
+  const followUps = followState.round === round ? followState.map : NO_FOLLOW_UPS;
+  const baseRef = useRef(base);
+  baseRef.current = base;
+  const roundRef = useRef(round);
+  roundRef.current = round;
+  const appendFollowUps = useCallback((anchor: string, items: ShelfItem[], forRound: number) => {
+    if (roundRef.current !== forRound || items.length === 0) return;
+    setFollowState((prev) => {
+      const map = new Map(prev.round === forRound ? prev.map : NO_FOLLOW_UPS);
+      const taken = shelfKeys(baseRef.current, map);
+      const have = map.get(anchor) ?? [];
+      const fresh = items.filter((i) => !taken.has(shelfKey(i))).slice(0, FOLLOW_UP_COUNT - have.length);
+      if (fresh.length === 0) return prev;
+      map.set(anchor, [...have, ...fresh]);
+      return { round: forRound, map };
+    });
+  }, []);
+
+  const bringSimilar = (item: ShelfItem) => {
+    const anchor = shelfKey(item);
+    const forRound = round;
+    const taken = shelfKeys(base, followUps);
+    // Library songs by the same artist or album first; the song's YouTube Music radio tops up the rest.
+    const local =
+      item.kind === "local"
+        ? similarLibrarySongs(item.file, libraryTracks, (path) => taken.has(path) || inPlaylist(path)).map(localItem)
+        : [];
+    appendFollowUps(anchor, local, forRound);
+    if (local.length >= FOLLOW_UP_COUNT || !playlistId) return;
+    const videoId = item.kind === "local" ? fileVideoId(item.file) : item.track.videoId;
+    if (!videoId) return;
+    void fetchSimilarOutside(videoId, libraryTracks).then((tracks) => 
+      appendFollowUps(anchor, tracks.map(outsideItem), forRound),
+    );
+  };
+
+  const ownedVideoIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const t of libraryTracks) {
+      const id = fileVideoId(t);
+      if (id) ids.add(id);
+    }
+    return ids;
+  }, [libraryTracks]);
+  const shelfItems = useMemo(
+    () =>
+      layoutShelf(base, followUps, (item) =>
+        item.kind === "local" ? inPlaylist(item.file.path) : ownedVideoIds.has(item.track.videoId),
+      ),
+    [base, followUps, inPlaylist, ownedVideoIds],
+  );
+  const followUpKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const items of followUps.values()) for (const i of items) keys.add(shelfKey(i));
+    return keys;
+  }, [followUps]);
+
+  const hasShelf = shelfItems.length > 0 || outside.loading;
   const results = useMemo(() => filterTracksByQuery(libraryTracks, query), [libraryTracks, query]);
 
   const searchOpen = prominent || searching;
@@ -176,7 +282,12 @@ export function MusicPlaylistFinder({
                 )
               ) : prominent && recommended.length > 0 ? (
                 <div className="mt-8">
-                  <CardShelf title="Recommended" subtitle="Based on your library" tracks={recommended} onAdd={onAdd} />
+                  <CardShelf
+                    title="Recommended"
+                    subtitle="Based on your library"
+                    items={recommended.map(localItem)}
+                    onAdd={onAdd}
+                  />
                 </div>
               ) : null}
             </motion.div>
@@ -193,9 +304,13 @@ export function MusicPlaylistFinder({
                   listKey={round}
                   title="Recommended"
                   subtitle="Based on what's in this playlist"
-                  tracks={recommended}
-                  onAdd={onAdd}
-                  outside={outside.tracks}
+                  items={shelfItems}
+                  grownKeys={followUpKeys}
+                  onAdd={(file) => {
+                    onAdd(file);
+                    bringSimilar(localItem(file));
+                  }}
+                  onOutsideAdd={(track) => bringSimilar(outsideItem(track))}
                   outsideLoading={outside.loading}
                   playlistId={playlistId}
                   actions={
@@ -259,20 +374,23 @@ const SCROLL_BTN =
 function CardShelf({
   title,
   subtitle,
-  tracks,
+  items,
+  grownKeys,
   onAdd,
+  onOutsideAdd,
   actions,
   listKey,
-  outside = [],
   outsideLoading = false,
   playlistId,
 }: {
   title: string;
   subtitle: string;
-  tracks: MediaFile[];
+  /** Library and YouTube Music songs in display order. */
+  items: ShelfItem[];
+  /** Cards an add brought in; they open a slot instead of just fading in. */
+  grownKeys?: ReadonlySet<string>;
   onAdd: (file: MediaFile) => void;
-  /** YouTube Music songs, shown after the library cards. */
-  outside?: OutsideTrack[];
+  onOutsideAdd?: (track: OutsideTrack) => void;
   outsideLoading?: boolean;
   playlistId?: string;
   actions?: React.ReactNode;
@@ -298,7 +416,7 @@ function CardShelf({
       ro.disconnect();
       window.clearTimeout(t);
     };
-  }, [tracks, outside, outsideLoading]);
+  }, [items, outsideLoading]);
 
   const page = (dir: 1 | -1) => {
     const el = scrollRef.current;
@@ -335,34 +453,53 @@ function CardShelf({
         style={{ scrollbarWidth: "none", maskImage: mask, WebkitMaskImage: mask }}
       >
         <AnimatePresence initial={true}>
-          {tracks.map((file, i) => (
-            <FinderCard key={file.path} index={i} file={file} onAdd={() => onAdd(file)} />
-          ))}
-          {playlistId &&
-            outside.map((track, i) => (
-              <OutsideCard key={`yt:${track.videoId}`} index={tracks.length + i} track={track} playlistId={playlistId} />
-            ))}
+          {items.map((item, i) => {
+            const key = shelfKey(item);
+            const grow = grownKeys?.has(key) ?? false;
+            if (item.kind === "local") {
+              const file = item.file;
+              return <FinderCard key={key} index={i} grow={grow} file={file} onAdd={() => onAdd(file)} />;
+            }
+            if (!playlistId) return null;
+            const track = item.track;
+            return (
+              <OutsideCard
+                key={key}
+                index={i}
+                grow={grow}
+                track={track}
+                playlistId={playlistId}
+                onAdded={() => onOutsideAdd?.(track)}
+              />
+            );
+          })}
           {outsideLoading &&
-            outside.length === 0 &&
-            [0, 1, 2].map((i) => <SkeletonCard key={`skeleton-${i}`} index={tracks.length + i} />)}
+            !items.some((i) => i.kind === "outside") &&
+            [0, 1, 2].map((i) => <SkeletonCard key={`skeleton-${i}`} index={items.length + i} />)}
         </AnimatePresence>
       </div>
     </div>
   );
 }
 
-function FinderCard({ file, index, onAdd }: { file: MediaFile; index: number; onAdd: () => void }) {
+/** Where a card starts: grown cards open their slot so the neighbors slide aside. */
+function cardInitial(grow: boolean) {
+  return grow ? { opacity: 0, scale: 0.85, width: 0 } : { opacity: 0, y: 12, width: CARD_W + CARD_GAP };
+}
+
+function FinderCard({ file, index, grow, onAdd }: { file: MediaFile; index: number; grow: boolean; onAdd: () => void }) {
   const cover = bestCoverPath(file);
   const artist = trackArtistLabel(file);
   const [added, setAdded] = useState(false);
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12, width: CARD_W + CARD_GAP }}
+      initial={cardInitial(grow)}
       animate={{
         opacity: 1,
         y: 0,
+        scale: 1,
         width: CARD_W + CARD_GAP,
-        transition: { duration: 0.3, ease: EASE, delay: Math.min(index, 8) * 0.04 },
+        transition: { duration: 0.3, ease: EASE, delay: grow ? 0.2 : Math.min(index, 8) * 0.04 },
       }}
       // Shrink the slot so the cards to the right slide over and close the gap.
       exit={{ opacity: 0, scale: 0.85, width: 0, transition: { duration: 0.24, ease: EASE, delay: 0.25 } }}
@@ -434,18 +571,31 @@ const RING_C = 2 * Math.PI * RING_R;
  * A YouTube Music song the user doesn't own yet. Add downloads it; the card shows the progress,
  * then leaves on its own once the file lands in the library (the Music shell adds it to the playlist).
  */
-function OutsideCard({ track, index, playlistId }: { track: OutsideTrack; index: number; playlistId: string }) {
+function OutsideCard({
+  track,
+  index,
+  grow,
+  playlistId,
+  onAdded,
+}: {
+  track: OutsideTrack;
+  index: number;
+  grow: boolean;
+  playlistId: string;
+  onAdded: () => void;
+}) {
   const { queued, percent, failed } = useOutsideDownloadPercent(track.url);
   const busy = queued && !failed;
   const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.videoId}/hqdefault.jpg`;
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12, width: CARD_W + CARD_GAP }}
+      initial={cardInitial(grow)}
       animate={{
         opacity: 1,
         y: 0,
+        scale: 1,
         width: CARD_W + CARD_GAP,
-        transition: { duration: 0.3, ease: EASE, delay: Math.min(index, 8) * 0.04 },
+        transition: { duration: 0.3, ease: EASE, delay: grow ? 0.2 : Math.min(index, 8) * 0.04 },
       }}
       exit={{ opacity: 0, scale: 0.85, width: 0, transition: { duration: 0.24, ease: EASE, delay: 0.25 } }}
       className="shrink-0 overflow-hidden"
@@ -471,7 +621,9 @@ function OutsideCard({ track, index, playlistId }: { track: OutsideTrack; index:
           <button
             type="button"
             onClick={() => {
-              if (!busy) downloadOutsideTrackIntoPlaylist(track, playlistId);
+              if (busy) return;
+              downloadOutsideTrackIntoPlaylist(track, playlistId);
+              onAdded();
             }}
             className={cn(
               "rf-music-press rf-music-tooltip-anchor absolute bottom-2 right-2 w-10 h-10 flex items-center justify-center rounded-full text-white shadow-[0_8px_20px_rgba(0,0,0,0.5)]",
