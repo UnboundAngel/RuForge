@@ -3,6 +3,7 @@ import { Icon } from "@iconify/react";
 import { Home, Search, X } from "lucide-react";
 import { RuForgeCaptureTrigger } from "@/components/dev-captures/RuForgeCaptureTrigger";
 import { cn } from "@/lib/utils";
+import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MusicView } from "@/store/types";
 
 /** material-symbols:youtube-music, inlined so it renders without the Iconify API. */
@@ -11,6 +12,8 @@ const YOUTUBE_MUSIC_ICON = {
   height: 24,
   body: "<path fill=\"currentColor\" d=\"M12 22q-2.075 0-3.9-.788q-1.825-.787-3.175-2.137q-1.35-1.35-2.137-3.175Q2 14.075 2 12t.788-3.9q.787-1.825 2.137-3.175q1.35-1.35 3.175-2.138Q9.925 2 12 2t3.9.787q1.825.788 3.175 2.138q1.35 1.35 2.137 3.175Q22 9.925 22 12t-.788 3.9q-.787 1.825-2.137 3.175q-1.35 1.35-3.175 2.137Q14.075 22 12 22Zm0-2.5q3.125 0 5.312-2.188Q19.5 15.125 19.5 12q0-3.125-2.188-5.312Q15.125 4.5 12 4.5q-3.125 0-5.312 2.188Q4.5 8.875 4.5 12q0 3.125 2.188 5.312Q8.875 19.5 12 19.5Zm0-1.5q-2.5 0-4.25-1.75T6 12q0-2.5 1.75-4.25T12 6q2.5 0 4.25 1.75T18 12q0 2.5-1.75 4.25T12 18Zm-2-2.5l5.5-3.5L10 8.5Z\"/>",
 };
+
+const RED_HOVER = "hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)]";
 
 type Props = {
   activeView: MusicView;
@@ -22,11 +25,12 @@ type Props = {
 
 /**
  * Spotify's top bar: Home button and a "What do you want to play?" pill in the titlebar band.
- * Spotify centers it; RuForge's Dynamic Island owns the center, so the group docks just left of it.
+ * Centered like Spotify's. The Dynamic Island sits idle (hidden) on the music surface, so they don't collide.
  * Enter searches YouTube Music; the browse icon opens Explore.
  * App.tsx leaves a matching gap in the window drag strip.
  */
 export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearchYoutubeMusic }: Props) {
+  const musicDetail = useRuforgeStore((s) => s.musicDetail);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -49,7 +53,7 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
     inputRef.current?.blur();
   };
 
-  const homeActive = activeView === "home";
+  const homeActive = activeView === "home" && !musicDetail;
   const exploreActive = activeView === "explore";
 
   return (
@@ -60,16 +64,14 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
         </span>
       </div>
 
-      <div
-        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-auto"
-        style={{ right: `calc(50% + ${MUSIC_TOP_BAR_ISLAND_CLEARANCE_PX}px)` }}
-      >
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-auto">
         <button
           type="button"
           onClick={() => onSelect("home")}
           className={cn(
-            "rf-music-tooltip-anchor w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-white/[0.07] transition-[transform,background-color,color] hover:scale-105 hover:bg-white/[0.12]",
-            homeActive ? "text-white" : "text-white/60 hover:text-white",
+            "rf-music-tooltip-anchor rf-music-press w-10 h-10 shrink-0 flex items-center justify-center rounded-full bg-white/[0.07]",
+            RED_HOVER,
+            homeActive ? "text-[color:var(--music-accent)]" : "text-white/60 hover:text-white",
           )}
           aria-label="Home (Alt+1)"
           aria-current={homeActive ? "page" : undefined}
@@ -83,11 +85,11 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
             e.preventDefault();
             submit();
           }}
-          className="group/search flex items-center h-10 w-[min(420px,32vw)] rounded-full bg-white/[0.07] text-white/60 transition-colors hover:bg-white/[0.1] focus-within:bg-white/[0.1] focus-within:ring-2 focus-within:ring-white/80"
+          className="group/search flex items-center h-10 w-[min(420px,32vw)] rounded-full bg-white/[0.07] text-white/60 transition-[background-color,box-shadow] duration-200 hover:bg-[color-mix(in_srgb,var(--music-accent)_10%,rgba(255,255,255,0.07))] focus-within:bg-[color-mix(in_srgb,var(--music-accent)_10%,rgba(255,255,255,0.07))] focus-within:ring-2 focus-within:ring-[color:var(--music-accent)]"
         >
           <button
             type="submit"
-            className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full transition-colors hover:text-white"
+            className="rf-music-press w-10 h-10 shrink-0 flex items-center justify-center rounded-full group-focus-within/search:text-[color:var(--music-accent)] hover:text-white"
             aria-label="Search YouTube Music"
             tabIndex={-1}
           >
@@ -105,7 +107,7 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
             }}
             placeholder="What do you want to play?"
             aria-label="Search YouTube Music (Ctrl+K)"
-            className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/50 outline-none"
+            className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/50 outline-none caret-[color:var(--music-accent)]"
           />
           {query && (
             <button
@@ -114,7 +116,7 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
                 setQuery("");
                 inputRef.current?.focus();
               }}
-              className="w-8 h-8 shrink-0 flex items-center justify-center text-white/60 hover:text-white"
+              className="rf-music-press w-8 h-8 shrink-0 flex items-center justify-center rounded-full text-white/60 hover:text-white"
               aria-label="Clear search"
             >
               <X size={16} />
@@ -125,8 +127,8 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
             type="button"
             onClick={() => onSelect("explore")}
             className={cn(
-              "rf-music-tooltip-anchor w-11 h-10 shrink-0 flex items-center justify-center rounded-r-full transition-colors hover:text-white",
-              exploreActive && "text-white",
+              "rf-music-tooltip-anchor rf-music-press w-11 h-10 shrink-0 flex items-center justify-center rounded-r-full",
+              exploreActive ? "text-[color:var(--music-accent)]" : "hover:text-[color:var(--music-accent)]",
             )}
             aria-label="Explore YouTube Music (Alt+2)"
             aria-current={exploreActive ? "page" : undefined}
@@ -140,7 +142,5 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
   );
 }
 
-/** Space kept between the bar's right edge and the window center (the idle Dynamic Island). */
-export const MUSIC_TOP_BAR_ISLAND_CLEARANCE_PX = 76;
-/** Widest the Home + search group gets (40px Home, 8px gap, 420px pill), plus slack. */
-export const MUSIC_TOP_BAR_MAX_WIDTH_PX = 476;
+/** Half the widest Home + search group (40px Home, 8px gap, 420px pill), plus slack. App.tsx's drag strips stop here. */
+export const MUSIC_TOP_BAR_HALF_WIDTH_PX = 240;

@@ -751,6 +751,27 @@ html.ruforge-island-root #root {
   }
 }
 
+/* Music buttons shrink slightly while pressed. */
+.rf-music-press {
+  transition-property: scale, background-color, color, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+.rf-music-press:hover:not(:disabled) {
+  scale: 1.04;
+}
+.rf-music-press:active:not(:disabled) {
+  scale: 0.94;
+}
+/* Wide text buttons: press feedback without the hover grow. */
+.rf-music-press-soft {
+  transition-property: scale, background-color, color, opacity;
+  transition-duration: 150ms;
+}
+.rf-music-press-soft:active {
+  scale: 0.97;
+}
+
 .rf-music-nav-item {
   color: var(--music-text-secondary);
   transition: color 0.15s ease;
@@ -1425,6 +1446,14 @@ button.rf-yt-profile-pill {
 
 .rf-activity-island-portal[data-rf-nav-mode="music"] .rf-island-shell {
   background-color: var(--rf-island-shell-music);
+}
+
+/* Music centers its search bar in the titlebar; an empty island would sit on top of it. */
+.rf-activity-island-portal[data-rf-nav-mode="music"][data-rf-island-empty="true"] {
+  opacity: 0;
+}
+.rf-activity-island-portal[data-rf-nav-mode="music"][data-rf-island-empty="true"] * {
+  pointer-events: none !important;
 }
 
 @property --rf-island-update-angle {
