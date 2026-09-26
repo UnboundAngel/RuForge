@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  maxIntroducedIn,
-  resolveOnboardingSteps,
-} from "@/lib/onboardingSteps";
+import { resolveOnboardingSteps } from "@/lib/onboardingSteps";
 import {
   readOnboardingLastSeenVersion,
+  semverGreater,
   writeOnboardingLastSeenVersion,
 } from "@/lib/onboardingStorage";
 import { OnboardingIsland } from "./OnboardingIsland";
@@ -24,9 +22,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const current = steps[stepIndex];
 
   const advance = useCallback(() => {
+    // Persist per step so a refresh mid-flow does not replay finished steps.
+    const finished = steps[stepIndex];
+    const lastSeen = readOnboardingLastSeenVersion();
+    if (finished && (!lastSeen || semverGreater(finished.introducedIn, lastSeen))) {
+      writeOnboardingLastSeenVersion(finished.introducedIn);
+    }
     if (stepIndex >= steps.length - 1) {
-      const maxVersion = maxIntroducedIn(steps);
-      if (maxVersion) writeOnboardingLastSeenVersion(maxVersion);
       onComplete();
       return;
     }
