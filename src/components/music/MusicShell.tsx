@@ -1373,25 +1373,41 @@ export function MusicShell() {
                   )}
                 </AnimatePresence>
 
-                <AnimatePresence mode="wait">
-                  {playerExpanded ? (
-                    <ExpandedOverlay
+                {/*
+                  The expanded player sits in its own presence group so it never waits on a page
+                  view's exit; sharing the views' mode="wait" group could leave it unmounted.
+                */}
+                <AnimatePresence>
+                  {playerExpanded && (
+                    <motion.div
                       key="expanded"
-                      coverSrc={coverSrc}
-                      audioEl={playback.audioEl}
-                      isPaused={playback.paused}
-                      isMuted={isMuted}
-                      skipDir={heroSkipDir}
-                      lyricsOpen={lyricsOpen}
-                      onSeek={playback.seek}
-                      onTogglePlay={playback.togglePlay}
-                      onLyricsAvailabilityChange={setLyricsAvailable}
-                      onContextMenu={(e) => {
-                        if (!playingFile) return;
-                        setExpandedMenu({ x: e.clientX, y: e.clientY });
-                      }}
-                    />
-                  ) : musicDetail?.kind === "artist" ? (
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute inset-0 z-[2]"
+                    >
+                      <ExpandedOverlay
+                        coverSrc={coverSrc}
+                        audioEl={playback.audioEl}
+                        isPaused={playback.paused}
+                        isMuted={isMuted}
+                        skipDir={heroSkipDir}
+                        lyricsOpen={lyricsOpen}
+                        onSeek={playback.seek}
+                        onTogglePlay={playback.togglePlay}
+                        onLyricsAvailabilityChange={setLyricsAvailable}
+                        onContextMenu={(e) => {
+                          if (!playingFile) return;
+                          setExpandedMenu({ x: e.clientX, y: e.clientY });
+                        }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence mode="wait">
+                  {playerExpanded ? null : musicDetail?.kind === "artist" ? (
                     <motion.div key={`artist-${musicDetail.key}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0">
                       <MusicArtistView
                         artistKey={musicDetail.key}
