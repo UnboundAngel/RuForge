@@ -165,7 +165,7 @@ function ExportRunningBody({
           {fileTotal > 0 ? `${fileIndex} / ${fileTotal} files` : "Scanning…"}
         </span>
         {bytesTotal && bytesTotal > 0 ? (
-          <span title="Video size only">
+          <span data-tooltip="Video size only">
             Video {formatStorageSize(bytesCopied)} / {formatStorageSize(bytesTotal)}
           </span>
         ) : null}

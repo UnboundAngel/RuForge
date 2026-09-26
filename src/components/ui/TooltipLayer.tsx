@@ -25,15 +25,23 @@ function clampTip(anchor: DOMRect, tip: DOMRect): TipPos {
   return { top, left };
 }
 
-const ANCHOR_SELECTOR = ".rf-music-tooltip-anchor[data-tooltip]";
+/** Labels longer than this wrap onto a second line instead of running past the pill. */
+const WRAP_AFTER_CHARS = 36;
+
+/** Music chrome anchors; the Music shell mounts its own layer so it can hide tips under Explore. */
+export const MUSIC_TOOLTIP_SELECTOR = ".rf-music-tooltip-anchor[data-tooltip]";
+/** Every other `data-tooltip` in the app. Use it instead of the native `title` attribute. */
+export const APP_TOOLTIP_SELECTOR = "[data-tooltip]:not(.rf-music-tooltip-anchor)";
 
 type Props = {
+  /** Which anchors this layer serves (`closest()` selector; the anchor carries `data-tooltip`). */
+  selector: string;
   /** Native Explore webview paints over DOM; hide tips while it is up. */
   disabled?: boolean;
 };
 
-/** Portal tooltips for music chrome anchors (data-tooltip on .rf-music-tooltip-anchor). */
-export function MusicTooltipLayer({ disabled = false }: Props) {
+/** Portal tooltips: hover or focus any anchor matching `selector` to show its `data-tooltip`. */
+export function TooltipLayer({ selector, disabled = false }: Props) {
   const tipRef = useRef<HTMLSpanElement>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
   const disabledRef = useRef(disabled);
@@ -66,7 +74,7 @@ export function MusicTooltipLayer({ disabled = false }: Props) {
     const onPointerOver = (e: PointerEvent) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
-      const anchor = target.closest(ANCHOR_SELECTOR);
+      const anchor = target.closest(selector);
       if (!(anchor instanceof HTMLElement)) return;
       if (anchorRef.current === anchor) return;
       show(anchor);
@@ -83,7 +91,7 @@ export function MusicTooltipLayer({ disabled = false }: Props) {
     const onFocusIn = (e: FocusEvent) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
-      const anchor = target.closest(ANCHOR_SELECTOR);
+      const anchor = target.closest(selector);
       if (anchor instanceof HTMLElement) show(anchor);
     };
 
@@ -105,7 +113,7 @@ export function MusicTooltipLayer({ disabled = false }: Props) {
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
     };
-  }, [show, hide]);
+  }, [selector, show, hide]);
 
   useEffect(() => {
     if (disabled) hide();
@@ -129,6 +137,7 @@ export function MusicTooltipLayer({ disabled = false }: Props) {
       ref={tipRef}
       className={cn(
         "rf-icon-pill-tooltip rf-icon-pill-tooltip--floating rf-icon-pill-tooltip--normal-case",
+        label.length > WRAP_AFTER_CHARS && "rf-icon-pill-tooltip--wrap",
       )}
       style={pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 }}
       role="tooltip"
@@ -137,4 +146,12 @@ export function MusicTooltipLayer({ disabled = false }: Props) {
     </span>,
     document.body,
   );
+}
+
+export function MusicTooltipLayer({ disabled = false }: { disabled?: boolean }) {
+  return <TooltipLayer selector={MUSIC_TOOLTIP_SELECTOR} disabled={disabled} />;
+}
+
+export function AppTooltipLayer() {
+  return <TooltipLayer selector={APP_TOOLTIP_SELECTOR} />;
 }

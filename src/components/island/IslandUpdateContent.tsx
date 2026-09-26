@@ -170,7 +170,7 @@ export function IslandUpdateExpandedContent({
         <button
           type="button"
           disabled={!canInstall}
-          title={
+          data-tooltip={
             canInstall
               ? undefined
               : `Only v${installableVersion} can install in-app. Use GitHub Releases for other versions.`

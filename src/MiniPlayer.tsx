@@ -2248,7 +2248,7 @@ export default function MiniPlayer() {
                   <div className="subtitle-overlay-host">
                     <div
                       ref={subtitleDragRowRef}
-                      title="Drag vertically to reposition (stays above the progress bar)"
+                      data-tooltip="Drag vertically to reposition (stays above the progress bar)"
                       className={`subtitle-overlay-drag-row ${isSubtitlesEnabled ? "" : "pointer-events-none"}`}
                     >
                       <div ref={subtitleOverlayTextRef} className="subtitle-overlay-text" aria-live="off" />
@@ -2525,7 +2525,8 @@ export default function MiniPlayer() {
                         <button 
                           onClick={cycleLoop}
                           className={`transition-all p-1 rounded-lg active:scale-90 ${loopMode !== "off" ? 'bg-[color:var(--accent)]/20' : 'opacity-40 hover:opacity-100'}`}
-                          title={loopModeAriaLabel(loopMode)}
+                          data-tooltip={loopModeAriaLabel(loopMode)}
+                          aria-label={loopModeAriaLabel(loopMode)}
                         >
                           <LoopModeSwapIcon mode={loopMode} size={winSize.width < 380 ? 16 : 20} />
                         </button>
@@ -2591,7 +2592,8 @@ export default function MiniPlayer() {
                               }
                             }}
                             className={`text-stone-400 hover:text-white transition-colors active:scale-95 flex items-center justify-center ${outerBtnSize} z-30`}
-                            title={isMuted ? "Unmute" : "Mute"}
+                            data-tooltip={isMuted ? "Unmute" : "Mute"}
+                            aria-label={isMuted ? "Unmute" : "Mute"}
                           >
                             <MiniVolumeIcon
                               size={outerIconSize}
@@ -2632,7 +2634,8 @@ export default function MiniPlayer() {
                           type="button"
                           onClick={toggleShuffle}
                           className={`relative z-10 transition-all duration-300 ease-out active:scale-90 p-1 flex items-center justify-center ${controlBtnSize} shrink-0 ${isShuffling ? "text-[color:var(--accent)]" : "text-stone-400 hover:text-white"} ${isVolumeHovered ? "opacity-0 invisible pointer-events-none" : "opacity-100 visible"}`}
-                          title={isShuffling ? "Disable shuffle" : "Shuffle"}
+                          data-tooltip={isShuffling ? "Disable shuffle" : "Shuffle"}
+                          aria-label={isShuffling ? "Disable shuffle" : "Shuffle"}
                         >
                           <Icon icon="tabler:arrows-shuffle" width={controlIconWidth} />
                         </button>
@@ -2641,7 +2644,8 @@ export default function MiniPlayer() {
                         <button 
                           onClick={() => seek(-15)} 
                           className={`relative z-10 text-stone-400 hover:text-white transition-all duration-300 ease-out active:scale-90 flex items-center justify-center ${controlBtnSize} shrink-0 ${isVolumeHovered ? "opacity-0 invisible pointer-events-none" : "opacity-100 visible"}`}
-                          title="Rewind 15s"
+                          data-tooltip="Rewind 15s"
+                          aria-label="Rewind 15s"
                         >
                           <Icon icon="tabler:rewind-backward-15" width={rewindForwardIconWidth} />
                         </button>
@@ -2650,7 +2654,8 @@ export default function MiniPlayer() {
                         <button 
                           onClick={togglePlay} 
                           className={`relative z-10 bg-[color:var(--accent)] hover:brightness-110 text-stone-950 transition-all duration-300 active:scale-95 flex items-center justify-center ${playBtnSize} rounded-full shrink-0`}
-                          title={isPaused ? "Play" : "Pause"}
+                          data-tooltip={isPaused ? "Play" : "Pause"}
+                          aria-label={isPaused ? "Play" : "Pause"}
                         >
                           <PlayPauseMorphIcon playing={!isPaused} size={playIconSize} className={isPaused ? "ml-0.5" : undefined} />
                         </button>
@@ -2659,7 +2664,8 @@ export default function MiniPlayer() {
                         <button 
                           onClick={() => seek(15)} 
                           className={`relative z-10 text-stone-400 hover:text-white transition-all duration-300 active:scale-90 flex items-center justify-center ${controlBtnSize} shrink-0`}
-                          title="Forward 15s"
+                          data-tooltip="Forward 15s"
+                          aria-label="Forward 15s"
                         >
                           <Icon icon="tabler:rewind-forward-15" width={rewindForwardIconWidth} />
                         </button>
@@ -2668,7 +2674,8 @@ export default function MiniPlayer() {
                         <button 
                           onClick={cycleLoop}
                           className={`relative z-10 transition-all p-1 active:scale-90 flex items-center justify-center ${controlBtnSize} shrink-0 ${loopMode !== "off" ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
-                          title={loopModeAriaLabel(loopMode)}
+                          data-tooltip={loopModeAriaLabel(loopMode)}
+                          aria-label={loopModeAriaLabel(loopMode)}
                         >
                           <LoopModeSwapIcon mode={loopMode} size={controlIconWidth} />
                         </button>
@@ -2699,7 +2706,8 @@ export default function MiniPlayer() {
                             await closeVideoMiniFromMini();
                           }}
                           className={`relative z-10 text-stone-400 hover:text-white transition-colors flex items-center justify-center ${outerBtnSize} shrink-0`}
-                          title="Back to Library"
+                          data-tooltip="Back to Library"
+                          aria-label="Back to Library"
                         >
                           <ExternalLink size={outerIconSize} strokeWidth={2.5} />
                         </button>
@@ -2727,7 +2735,8 @@ export default function MiniPlayer() {
                           void closeVideoMiniFromMini();
                         }}
                         className="w-6 h-6 flex items-center justify-center rounded-lg text-stone-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
-                        title="Close Player"
+                        data-tooltip="Close Player"
+                        aria-label="Close Player"
                       >
                         <Icon icon="tabler:x" width={16} height={16} />
                       </button>
@@ -2757,7 +2766,8 @@ export default function MiniPlayer() {
                             await closeVideoMiniFromMini();
                           }}
                           className="w-6 h-6 flex items-center justify-center rounded-lg text-stone-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
-                          title="Back to Library"
+                          data-tooltip="Back to Library"
+                          aria-label="Back to Library"
                         >
                           <ExternalLink size={12} strokeWidth={2.5} />
                         </button>
@@ -2773,7 +2783,7 @@ export default function MiniPlayer() {
                           setIsDragging(true);
                           getCurrentWindow().startDragging();
                         }}
-                        title="Drag Window"
+                        data-tooltip="Drag Window"
                       >
                         <div className="grid grid-cols-2 gap-1 opacity-20 pointer-events-none">
                           {[...Array(8)].map((_, i) => <div key={i} className="w-0.5 h-0.5 bg-white rounded-full" />)}
@@ -2798,7 +2808,8 @@ export default function MiniPlayer() {
                           }}
                           className={`w-6 h-6 flex items-center justify-center rounded-lg active:scale-95 transition-all
                             ${isPinned ? 'text-[color:var(--accent)] bg-[color:var(--accent)]/10' : 'text-stone-400 hover:text-white hover:bg-white/10'}`}
-                          title={isPinned ? "Unpin Window" : "Pin Window"}
+                          data-tooltip={isPinned ? "Unpin Window" : "Pin Window"}
+                          aria-label={isPinned ? "Unpin Window" : "Pin Window"}
                         >
                           <Pin size={12} strokeWidth={2.5} className={isPinned ? 'fill-current' : ''} />
                         </button>
@@ -2827,7 +2838,8 @@ export default function MiniPlayer() {
                             await closeVideoMiniFromMini();
                           }}
                           className="w-6 h-6 flex items-center justify-center rounded-lg text-stone-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
-                          title="Back to Library"
+                          data-tooltip="Back to Library"
+                          aria-label="Back to Library"
                         >
                           <ExternalLink size={12} strokeWidth={2.5} />
                         </button>
@@ -2878,7 +2890,8 @@ export default function MiniPlayer() {
                               <button 
                                 onClick={togglePlay} 
                                 className="w-7 h-7 rounded-full bg-[color:var(--accent)] hover:brightness-110 text-stone-950 flex items-center justify-center active:scale-95 transition-all duration-300"
-                                title={isPaused ? "Play" : "Pause"}
+                                data-tooltip={isPaused ? "Play" : "Pause"}
+                                aria-label={isPaused ? "Play" : "Pause"}
                               >
                                 <PlayPauseMorphIcon playing={!isPaused} size={12} className={isPaused ? "ml-0.5" : undefined} />
                               </button>
@@ -2887,7 +2900,8 @@ export default function MiniPlayer() {
                               <button 
                                 onClick={skipToNextTrack} 
                                 className="w-7 h-7 flex items-center justify-center text-stone-400 hover:text-white transition-all duration-300 active:scale-90 disabled:opacity-30"
-                                title="Next track"
+                                data-tooltip="Next track"
+                                aria-label="Next track"
                                 disabled={!(playingAudioOnly ? nextMini : nextVideoMini)}
                               >
                                 <Icon icon="tabler:player-skip-forward-filled" width={14} height={14} />
@@ -2912,7 +2926,8 @@ export default function MiniPlayer() {
                                 <button 
                                   onClick={() => seek(-15)} 
                                   className="w-7 h-7 flex items-center justify-center text-stone-400 hover:text-white transition-all duration-300 active:scale-90"
-                                  title="Rewind 15s"
+                                  data-tooltip="Rewind 15s"
+                                  aria-label="Rewind 15s"
                                 >
                                   <Icon icon="tabler:rewind-backward-15" width={16} />
                                 </button>
@@ -2922,7 +2937,8 @@ export default function MiniPlayer() {
                               <button 
                                 onClick={togglePlay} 
                                 className="w-8 h-8 rounded-full bg-[color:var(--accent)] hover:brightness-110 text-stone-950 flex items-center justify-center active:scale-95 transition-all duration-300"
-                                title={isPaused ? "Play" : "Pause"}
+                                data-tooltip={isPaused ? "Play" : "Pause"}
+                                aria-label={isPaused ? "Play" : "Pause"}
                               >
                                 <PlayPauseMorphIcon playing={!isPaused} size={14} className={isPaused ? "ml-0.5" : undefined} />
                               </button>
@@ -2931,7 +2947,8 @@ export default function MiniPlayer() {
                               <button 
                                 onClick={() => seek(15)} 
                                 className="w-7 h-7 flex items-center justify-center text-stone-400 hover:text-white transition-all duration-300 active:scale-90"
-                                title="Forward 15s"
+                                data-tooltip="Forward 15s"
+                                aria-label="Forward 15s"
                               >
                                 <Icon icon="tabler:rewind-forward-15" width={16} />
                               </button>
@@ -2942,7 +2959,8 @@ export default function MiniPlayer() {
                                   onClick={cycleLoop}
                                   className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all active:scale-90
                                     ${loopMode !== "off" ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
-                                  title={loopModeAriaLabel(loopMode)}
+                                  data-tooltip={loopModeAriaLabel(loopMode)}
+                                  aria-label={loopModeAriaLabel(loopMode)}
                                 >
                                   <LoopModeSwapIcon mode={loopMode} size={14} />
                                 </button>

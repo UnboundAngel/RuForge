@@ -1759,7 +1759,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               <div className="subtitle-overlay-host">
                 <div
                   ref={subtitleDragRowRef}
-                  title="Drag vertically to reposition (stays above the progress bar)"
+                  data-tooltip="Drag vertically to reposition (stays above the progress bar)"
                   className={`subtitle-overlay-drag-row ${isSubtitlesEnabled ? "" : "pointer-events-none"}`}
                 >
                   <div ref={subtitleOverlayTextRef} className="subtitle-overlay-text" aria-live="off" />

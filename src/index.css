@@ -1670,6 +1670,14 @@ button.rf-yt-profile-pill {
   text-transform: none;
 }
 
+.rf-icon-pill-tooltip--wrap {
+  max-width: min(18rem, calc(100vw - 1rem));
+  border-radius: 0.75rem;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.35;
+}
+
 .rf-code-panel {
   overflow: hidden;
   border-radius: 0.625rem;

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { AppTooltipLayer } from "@/components/ui/TooltipLayer";
 import { flushSync } from "react-dom";
 import {
   motion,
@@ -1660,7 +1661,7 @@ function App() {
     if (onboardingOpen) notifyOnboardingModeSwap();
   }, [cycleNavMode, onboardingOpen]);
 
-  if (miniKind === "video") return <><RfScrollbarHost /><MiniPlayer /></>;
+  if (miniKind === "video") return <><RfScrollbarHost /><AppTooltipLayer /><MiniPlayer /></>;
   if (miniKind === "music") return <><RfScrollbarHost /><MusicMiniPlayer /></>;
 
   try {
@@ -1686,6 +1687,7 @@ function App() {
       data-music-mode={navMode === "music" ? "true" : undefined}
     >
       <RfScrollbarHost />
+      <AppTooltipLayer />
 
       <RadialNavOverlay
         open={radialNavOpen}
@@ -1970,7 +1972,7 @@ function App() {
                   onClick={() => setRecentlyDeletedOpen(true)}
                   className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex-shrink-0"
                   aria-label="Recently deleted"
-                  title="Recently deleted"
+                  data-tooltip="Recently deleted"
                 >
                   <Trash2 size={16} />
                 </button>

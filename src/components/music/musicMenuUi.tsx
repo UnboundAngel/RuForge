@@ -21,42 +21,25 @@ export const MUSIC_MENU_WIDTH = 208;
 export const MUSIC_MENU_ICON_SIZE = 13;
 export const MUSIC_MENU_EDGE_PAD = 10;
 
+/** Red and black: sections share one near-black panel with a red label; Playback keeps a faint red wash as the primary group. */
+const NEUTRAL_TONE: MusicMenuTone = {
+  panel: "rgb(255 255 255 / 0.035)",
+  label: "color-mix(in srgb, var(--music-accent) 70%, white)",
+  icon: "#b3b3b3",
+};
+
 export const MUSIC_MENU_TONES = {
   playback: {
     panel: "color-mix(in srgb, var(--music-accent) 10%, transparent)",
     label: "color-mix(in srgb, var(--music-accent) 70%, white)",
     icon: "var(--music-accent)",
   },
-  transport: {
-    panel: "color-mix(in srgb, #38bdf8 10%, transparent)",
-    label: "color-mix(in srgb, #7dd3fc 70%, white)",
-    icon: "#7dd3fc",
-  },
-  player: {
-    panel: "color-mix(in srgb, #a78bfa 10%, transparent)",
-    label: "color-mix(in srgb, #c4b5fd 70%, white)",
-    icon: "#c4b5fd",
-  },
-  navigate: {
-    panel: "color-mix(in srgb, #34d399 10%, transparent)",
-    label: "color-mix(in srgb, #6ee7b7 70%, white)",
-    icon: "#6ee7b7",
-  },
-  queue: {
-    panel: "color-mix(in srgb, #60a5fa 10%, transparent)",
-    label: "color-mix(in srgb, #93c5fd 70%, white)",
-    icon: "#93c5fd",
-  },
-  playlist: {
-    panel: "color-mix(in srgb, #f472b6 10%, transparent)",
-    label: "color-mix(in srgb, #f9a8d4 70%, white)",
-    icon: "#f9a8d4",
-  },
-  file: {
-    panel: "color-mix(in srgb, #fbbf24 10%, transparent)",
-    label: "color-mix(in srgb, #fcd34d 70%, white)",
-    icon: "#fcd34d",
-  },
+  transport: NEUTRAL_TONE,
+  player: NEUTRAL_TONE,
+  navigate: NEUTRAL_TONE,
+  queue: NEUTRAL_TONE,
+  playlist: NEUTRAL_TONE,
+  file: NEUTRAL_TONE,
 } satisfies Record<string, MusicMenuTone>;
 
 export function placeMusicFloatingMenu(

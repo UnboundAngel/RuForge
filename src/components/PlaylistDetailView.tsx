@@ -348,7 +348,7 @@ function PlaylistRow({
         <div
           className="text-stone-600 group-hover:text-stone-400 cursor-grab active:cursor-grabbing shrink-0"
           onClick={(e) => e.stopPropagation()}
-          title="Drag to reorder"
+          data-tooltip="Drag to reorder"
         >
           <GripVertical size={16} />
         </div>

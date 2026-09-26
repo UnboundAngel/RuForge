@@ -77,7 +77,7 @@ export const SponsorBlockScrubOverlay: React.FC<ScrubOverlayProps> = ({
               left: `${leftPct}%`,
               backgroundColor: tickColor,
             }}
-            title={p.description || "Highlight"}
+            data-tooltip={p.description || "Highlight"}
           />
         );
       })}

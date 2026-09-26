@@ -152,7 +152,7 @@ export const MigrateLibraryModal = ({ open, onClose, libraryRoot }: Props) => {
                   >
                     {m.bucket}
                   </span>
-                  <span className="min-w-0 truncate text-stone-500" title={m.oldMediaPath}>
+                  <span className="min-w-0 truncate text-stone-500" data-tooltip={m.oldMediaPath}>
                     {m.oldMediaPath.split(/[\\/]/).pop()}
                   </span>
                 </div>

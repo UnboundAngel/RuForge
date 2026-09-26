@@ -106,7 +106,8 @@ export function DevCaptureThumb({
       <button
         type="button"
         data-rf-capture-trash
-        title="Delete"
+        data-tooltip="Delete"
+        aria-label="Delete"
         className="absolute right-1 top-1 z-10 rounded-md bg-black/60 p-1 text-stone-200 opacity-0 transition-opacity hover:bg-red-500/30 hover:text-red-300 group-hover:opacity-100"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
