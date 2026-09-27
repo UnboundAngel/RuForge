@@ -94,7 +94,7 @@ use crate::commands::music_playlists::{
     read_music_playlists_file, read_playlist_text_file, write_music_playlists_file,
     write_playlist_text_file,
 };
-use crate::commands::music_preview::resolve_music_preview_stream;
+use crate::commands::music_preview::{music_preview_local_hook, resolve_music_preview_stream};
 use crate::commands::recently_deleted::{
     list_recently_deleted, remove_recently_deleted_entry, restore_recently_deleted,
 };
@@ -336,6 +336,7 @@ pub fn run() {
             get_music_browse_info,
             get_playlist_items_page,
             resolve_music_preview_stream,
+            music_preview_local_hook,
             start_download_job,
             pause_download_job,
             stop_all_active_download_jobs,
