@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useOutsideDownloadPercent } from "@/components/music/useMusicOutsideRecommendations";
 import { downloadFeedVideo } from "./downloadFeedVideo";
+import { MetaParts, VideoByline } from "./VideoByline";
 import {
   type FeedPreviewStatus,
   failFeedPreview,
@@ -119,12 +120,12 @@ function DownloadButton({ video }: { video: FeedVideo }) {
       data-tooltip={tooltip}
       aria-label={failed ? `Retry download of ${video.title}` : `Download ${video.title}`}
       className={cn(
-        "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-[transform,background-color,color] duration-150",
+        "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-[transform,background-color,color,opacity] duration-150",
         failed
           ? "bg-rose-500/15 text-rose-300 hover:bg-rose-500/25"
           : busy || done
             ? "text-[color:var(--accent)]"
-            : "bg-white/[0.07] text-stone-200 hover:bg-[color:var(--accent)] hover:text-stone-900 active:scale-95",
+            : "bg-white/[0.07] text-stone-200 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:bg-[color:var(--accent)] hover:text-stone-900 active:scale-95",
       )}
     >
       {busy ? (
@@ -158,7 +159,14 @@ function DownloadButton({ video }: { video: FeedVideo }) {
 }
 
 /** A not-yet-downloaded video from the YouTube feed: preview it in place, one click to keep it. */
-export const FeedVideoCard = memo(function FeedVideoCard({ video }: { video: FeedVideo }) {
+export const FeedVideoCard = memo(function FeedVideoCard({
+  video,
+  shape = "video",
+}: {
+  video: FeedVideo;
+  /** `short` is the tall Shorts shelf: 9:16 frame and a lighter text block with no avatar. */
+  shape?: "video" | "short";
+}) {
   const status = useFeedPreview((s) => (s.id === video.videoId ? s.status : null));
   const progress = useFeedPreview((s) => (s.id === video.videoId ? s.progress : 0));
   const muted = useFeedPreview((s) => s.muted);
@@ -173,7 +181,12 @@ export const FeedVideoCard = memo(function FeedVideoCard({ video }: { video: Fee
 
   return (
     <div className="group/card flex flex-col gap-3 cursor-pointer" onClick={() => void toggleFeedPreview(video)}>
-      <div className="relative aspect-video overflow-hidden rounded-[var(--r-media,16px)] bg-[#1D1613]">
+      <div
+        className={cn(
+          "relative overflow-hidden rounded-[var(--r-media,16px)] bg-[color:var(--rf-well-raised)]",
+          shape === "short" ? "aspect-[9/16]" : "aspect-video",
+        )}
+      >
         {video.thumbnail ? (
           <img
             src={video.thumbnail}
@@ -200,7 +213,7 @@ export const FeedVideoCard = memo(function FeedVideoCard({ video }: { video: Fee
           </button>
         ) : null}
 
-        {video.duration && !status ? (
+        {video.duration && !status && shape === "video" ? (
           <div className="absolute bottom-2.5 right-2.5 z-10 px-2 py-0.5 rounded-md bg-black/75 text-[11px] font-bold text-white tracking-wider tabular-nums">
             {formatDuration(video.duration)}
           </div>
@@ -218,25 +231,32 @@ export const FeedVideoCard = memo(function FeedVideoCard({ video }: { video: Fee
         ) : null}
       </div>
 
-      <div className="flex gap-3 px-0.5">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-[14px] font-bold leading-snug line-clamp-2 text-stone-50 transition-colors duration-150 group-hover/card:text-[color:var(--accent)]">
-            {video.title}
-          </h3>
-          {video.channel ? <p className="mt-1.5 text-[12px] font-medium text-stone-400 truncate">{video.channel}</p> : null}
-          {meta.length > 0 ? (
-            <p className="mt-0.5 text-[12px] font-medium text-stone-500 truncate">
-              {meta.map((part, i) => (
-                <span key={i}>
-                  {i > 0 ? <span className="mx-1.5 text-stone-600">·</span> : null}
-                  {part}
-                </span>
-              ))}
-            </p>
-          ) : null}
+      {shape === "short" ? (
+        <div className="flex gap-2 px-0.5">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[14px] font-semibold leading-snug line-clamp-2 text-stone-50 transition-colors duration-150 group-hover/card:text-[color:var(--accent)]">
+              {video.title}
+            </h3>
+            {video.viewCount != null ? (
+              <p className="mt-1 truncate text-[13px] text-stone-400">{formatViewCount(video.viewCount)}</p>
+            ) : null}
+          </div>
+          <DownloadButton video={video} />
         </div>
-        <DownloadButton video={video} />
-      </div>
+      ) : (
+        <VideoByline
+          channel={video.channel}
+          channelId={video.channelId}
+          verified={video.channelVerified ?? false}
+          title={
+            <h3 className="text-[15px] font-semibold leading-snug line-clamp-2 text-stone-50 transition-colors duration-150 group-hover/card:text-[color:var(--accent)]">
+              {video.title}
+            </h3>
+          }
+          meta={meta.length > 0 ? <MetaParts parts={meta} /> : null}
+          action={<DownloadButton video={video} />}
+        />
+      )}
     </div>
   );
 });

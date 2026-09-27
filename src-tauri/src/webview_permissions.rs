@@ -7,13 +7,20 @@ use tauri::Runtime;
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("webview-permissions")
         .on_webview_ready(|webview| {
+            // Calling with_webview inline here runs on the main thread mid-creation and
+            // hangs the app; queueing it from a task lets the event loop finish first.
             #[cfg(windows)]
-            if let Err(e) = webview.with_webview(|platform| {
-                if let Err(e) = windows_impl::install(&platform.controller()) {
-                    log::warn!("[webview-permissions] install failed: {e}");
-                }
-            }) {
-                log::warn!("[webview-permissions] with_webview failed: {e}");
+            {
+                let webview = webview.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = webview.with_webview(|platform| {
+                        if let Err(e) = windows_impl::install(&platform.controller()) {
+                            log::warn!("[webview-permissions] install failed: {e}");
+                        }
+                    }) {
+                        log::warn!("[webview-permissions] with_webview failed: {e}");
+                    }
+                });
             }
             #[cfg(not(windows))]
             let _ = webview;

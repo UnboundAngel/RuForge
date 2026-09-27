@@ -2,8 +2,6 @@ import { useId, useRef, useState, type MouseEvent } from "react";
 import { ChevronDown, Copy, Check } from "lucide-react";
 
 import { copyPlainText } from "@/lib/copyPlainText";
-import { IconPillTooltip } from "./IconPillTooltip";
-
 export type CodeSnippetPanelProps = {
   file: string;
   languageLabel: string;
@@ -60,18 +58,13 @@ export function CodeSnippetPanel({
           aria-controls={panelId}
           onClick={() => setOpen((value) => !value)}
         >
-          <IconPillTooltip
-            label={file}
-            variant="path"
-            uppercase={false}
-            className="min-w-0 flex-1 overflow-hidden"
-          >
+          <span data-tooltip={file} className="min-w-0 flex-1 overflow-hidden">
             <span className="rf-code-panel__path">
               {dir ? <span className="rf-code-panel__dir">{dir}</span> : null}
               <span className="rf-code-panel__name">{base}</span>
               {ext ? <span className="rf-code-panel__ext">{ext}</span> : null}
             </span>
-          </IconPillTooltip>
+          </span>
           <span className="rf-code-panel__aside">
             <span className="rf-code-panel__hint">
               {languageLabel}

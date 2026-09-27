@@ -200,7 +200,7 @@ export type DownloadEnqueueSource =
   | "urlDrop"
   /** Music: a song downloading straight into a playlist (recommendations, screenshot import). */
   | "musicPlaylistAdd"
-  /** Video Library: a video downloaded straight from the YouTube feed shelf. */
+  /** Video Library: a video downloaded straight from a YouTube feed card. */
   | "libraryFeedAdd";
 
 export type DownloadJobFinishedPayload = {

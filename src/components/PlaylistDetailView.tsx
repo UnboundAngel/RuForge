@@ -123,7 +123,7 @@ export const PlaylistDetailView = ({
     >
       <div className="absolute inset-0 pointer-events-none shadow-[inset_4px_4px_18px_rgba(0,0,0,0.32)] z-20 rounded-tl-[32px]" />
 
-      <div className="relative w-full md:w-[420px] lg:w-[460px] flex flex-col flex-shrink-0 px-6 pt-6 z-10 bg-[#1D1613]">
+      <div className="relative w-full md:w-[420px] lg:w-[460px] flex flex-col flex-shrink-0 px-6 pt-6 z-10 bg-[color:var(--rf-well)]">
         <div className="relative flex-1 w-full rounded-t-[28px] flex flex-col bg-[#271C18]">
           <div className="relative h-full px-7 pt-7 pb-28 flex flex-col overflow-y-auto z-10 rf-scrollbar">
             <button
@@ -200,7 +200,7 @@ export const PlaylistDetailView = ({
         </div>
       </div>
 
-      <motion.div className="flex-1 overflow-y-auto pl-4 pr-8 py-10 bg-[#1D1613] rf-scrollbar">
+      <motion.div className="flex-1 overflow-y-auto pl-4 pr-8 py-10 bg-[color:var(--rf-well)] rf-scrollbar">
         <div className="space-y-3 relative z-10 max-w-3xl">
           {isVirtual ? (
             <MorphLabelMenu

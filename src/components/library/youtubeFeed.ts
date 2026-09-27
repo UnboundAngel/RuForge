@@ -6,14 +6,60 @@ export type FeedVideo = {
   title: string;
   url: string;
   channel: string | null;
+  channelId: string | null;
+  channelVerified: boolean;
   thumbnail: string | null;
   duration: number | null;
   viewCount: number | null;
   /** Unix seconds, approximate: parsed from YouTube's "3 days ago". */
   timestamp: number | null;
+  /** Vertical Short; optional because feeds cached before Shorts were kept lack it. */
+  short?: boolean;
 };
 
 export type FeedPage = { items: FeedVideo[]; hasMore: boolean };
+
+/** One feed video after every this many of the user's own, so the library still leads. */
+export const FEED_EVERY = 3;
+
+export type MixedGridItem<T> = { kind: "file"; file: T } | { kind: "feed"; video: FeedVideo };
+
+/** Mixes feed videos into the library order; whatever feed is left over trails the library. */
+export function interleaveFeed<T>(files: T[], feed: FeedVideo[], every = FEED_EVERY): MixedGridItem<T>[] {
+  const out: MixedGridItem<T>[] = [];
+  let next = 0;
+  files.forEach((file, i) => {
+    out.push({ kind: "file", file });
+    if ((i + 1) % every === 0 && next < feed.length) out.push({ kind: "feed", video: feed[next++] });
+  });
+  for (; next < feed.length; next++) out.push({ kind: "feed", video: feed[next] });
+  return out;
+}
+
+/** Rust `get_video_stats` row: what the flat feed listing leaves out. */
+export type VideoStats = { videoId: string; channel: string | null; channelId: string | null; viewCount: number | null };
+
+export function feedVideoNeedsStats(video: FeedVideo): boolean {
+  return !video.channelId || video.viewCount == null;
+}
+
+export function applyVideoStats(items: FeedVideo[], stats: VideoStats[]): FeedVideo[] {
+  if (stats.length === 0) return items;
+  const byId = new Map(stats.map((s) => [s.videoId, s]));
+  return items.map((video) => {
+    const s = byId.get(video.videoId);
+    if (!s) return video;
+    return {
+      ...video,
+      channel: video.channel ?? s.channel,
+      channelId: video.channelId || s.channelId,
+      viewCount: video.viewCount ?? s.viewCount,
+    };
+  });
+}
+
+/** Rust `FEED_SIGNED_OUT`: the cookies reached YouTube but carry no login. */
+export const FEED_SIGNED_OUT_ERROR = "youtube-feed-signed-out";
 
 export type FeedCookieSource = { browserCookies: string | null; cookieFile: string | null };
 
@@ -95,7 +141,8 @@ export function videoPreviewStartSec(duration: number | null, hookStart: number 
   return Math.max(0, Math.min(duration - VIDEO_PREVIEW_SEC, start));
 }
 
-const CACHE_KEY = "ruforge-youtube-feed-cache";
+/** Versioned: v2 keeps Shorts, which v1 pages had already dropped. */
+const CACHE_KEY = "ruforge-youtube-feed-cache-v2";
 /** Long enough that tab switches and restarts reuse it, short enough that the feed feels alive. */
 export const FEED_CACHE_TTL_MS = 30 * 60 * 1000;
 const BACKOFF_KEY = "ruforge-youtube-feed-backoff";
@@ -108,7 +155,8 @@ export function readCachedFeed(nowMs = Date.now()): CachedFeed | null {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedFeed;
-    if (!Array.isArray(parsed.items) || typeof parsed.at !== "number") return null;
+    // An empty page means the fetch ran signed out; showing it would read as "all caught up".
+    if (!Array.isArray(parsed.items) || parsed.items.length === 0 || typeof parsed.at !== "number") return null;
     if (nowMs - parsed.at > FEED_CACHE_TTL_MS) return null;
     return parsed;
   } catch {

@@ -1,0 +1,74 @@
+import { describe, expect, it } from "vitest";
+import { composeHomeSections, pickChannelSpotlight, shortsPerShelf } from "./homeSections";
+import type { FeedVideo, MixedGridItem } from "./youtubeFeed";
+
+const short = (id: string): FeedVideo => ({
+  videoId: id,
+  title: id,
+  url: `https://www.youtube.com/watch?v=${id}`,
+  channel: null,
+  channelId: null,
+  channelVerified: false,
+  thumbnail: null,
+  duration: null,
+  viewCount: null,
+  timestamp: null,
+  short: true,
+});
+
+const files = (n: number): MixedGridItem<string>[] =>
+  Array.from({ length: n }, (_, i) => ({ kind: "file", file: `v${i}` }));
+
+describe("composeHomeSections", () => {
+  it("breaks video rows up with differently shaped shelves, then trails a plain grid", () => {
+    const sections = composeHomeSections({
+      mixed: files(40),
+      columns: 4,
+      continueFiles: ["c1"],
+      shorts: Array.from({ length: 12 }, (_, i) => short(`s${i}`)),
+      hasPlaylists: true,
+      spotlight: { channel: "CaseOh", channelId: null, files: ["a", "b", "c"] },
+    });
+    expect(sections.map((s) => s.kind)).toEqual([
+      "grid", "continue", "grid", "shorts", "grid", "playlists", "grid", "shorts", "channel", "grid",
+    ]);
+    const grids = sections.filter((s) => s.kind === "grid");
+    expect(grids.map((g) => g.items.length)).toEqual([4, 4, 8, 4, 20]);
+    expect(grids[grids.length - 1]?.title).toBe("Keep exploring");
+  });
+
+  it("skips shelves with nothing to show", () => {
+    const sections = composeHomeSections({
+      mixed: files(3),
+      columns: 4,
+      continueFiles: [],
+      shorts: [short("s1")],
+      hasPlaylists: false,
+      spotlight: null,
+    });
+    expect(sections.map((s) => s.kind)).toEqual(["grid"]);
+  });
+});
+
+describe("pickChannelSpotlight", () => {
+  it("picks the most downloaded channel with at least three videos", () => {
+    const lib = [
+      { id: 1, ch: "A" },
+      { id: 2, ch: "B" },
+      { id: 3, ch: "B" },
+      { id: 4, ch: "B" },
+      { id: 5, ch: "A" },
+    ];
+    const pick = pickChannelSpotlight(lib, (f) => ({ channel: f.ch }), 2);
+    expect(pick?.channel).toBe("B");
+    expect(pick?.files.map((f) => f.id)).toEqual([2, 3]);
+    expect(pickChannelSpotlight(lib.slice(0, 2), (f) => ({ channel: f.ch }), 4)).toBeNull();
+  });
+});
+
+describe("shortsPerShelf", () => {
+  it("fits a few more Shorts than video columns", () => {
+    expect(shortsPerShelf(4)).toBe(6);
+    expect(shortsPerShelf(8)).toBe(8);
+  });
+});
