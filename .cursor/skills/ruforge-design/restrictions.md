@@ -28,7 +28,7 @@ The lighter surround is the **bezel** (app chrome). The darker inset pocket is t
 
 Do:
 
-- Default: bezel is `#271C18` and includes the left sidebar plus the title band. Well is `#1D1613` in the main column, `rounded-tl-[32px]`, reads as carved into the bezel.
+- Default: bezel is `#271C18` and includes the left sidebar plus the title band. Well is `var(--rf-well)` (`#151211`, near-neutral so thumbnails carry the color) in the main column, `rounded-tl-[32px]`, reads as carved into the bezel. Cards, hover shells and placeholders inside it use `var(--rf-well-raised)` (`#201c1a`).
 - Music: bezel wraps the whole window (`var(--music-bg, #0a0a0a)` on the shell). Sidebar and main are sibling wells with a gap, thin light stroke, matching corner radius.
 - Keep the well darker than the bezel. Keep the well's top-left (or all-around, in Music) radius large.
 - Depth between bezel and well is **fill contrast** (lighter surround, darker pocket). Do not fake that nest with engraved inset lips on every nested control.
@@ -43,7 +43,7 @@ Don't:
 Tokens / classes:
 
 - Bezel fill Default: `#271C18` (`rf-chrome-column`, window shell when not Music)
-- Well fill: `#1D1613` (`rf-main-content-shell`)
+- Well fill: `var(--rf-well)` `#151211` (`rf-main-content-shell`); raised surfaces in the well: `var(--rf-well-raised)` `#201c1a`. Both live in `:root` in `src/index.css`. Do not hardcode the hex.
 - Well radius Default: `rounded-tl-[32px]`
 - Window outer: `rf-main-window-shell--rounded` / `--maximized` (`src/index.css`)
 
