@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
-import { Ban, Download, Loader, Loader2, X } from "lucide-react";
+import { Ban, Download, HardDrive, Loader, Loader2, X } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import {
   countActivePlaylistDownloads,
@@ -138,11 +138,7 @@ function TrackRow({
           : downloading
             ? "rgb(255 0 51 / 0.08)"
             : "transparent",
-        boxShadow: selected
-          ? "inset 3px 0 0 var(--music-accent)"
-          : noStorage
-            ? "inset 0 0 0 1px rgb(239 68 68 / 0.7)"
-            : "none",
+        boxShadow: selected ? "inset 3px 0 0 var(--music-accent)" : "none",
       }}
       onMouseEnter={(e) => {
         if (!selected && !downloading) {
@@ -211,14 +207,16 @@ function TrackRow({
             e.stopPropagation();
             void openAuthorizeCleanupModal();
           }}
-          className="rf-music-tooltip-anchor text-[8px] font-semibold shrink-0 text-red-400 outline-none focus:outline-none enabled:hover:underline disabled:cursor-default"
+          aria-label={NOT_ENOUGH_STORAGE_LABEL}
+          className="rf-music-tooltip-anchor shrink-0 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-semibold outline-none transition-colors focus:outline-none bg-[rgb(255_0_51/0.12)] text-[#ff6b85] enabled:hover:bg-[rgb(255_0_51/0.22)] enabled:hover:text-white disabled:cursor-default"
           data-tooltip={
             saveToInternal
-              ? "Authorize Cleanup to make room. It starts on its own once there is space."
-              : "The download folder's disk is too full. It starts on its own once there is space."
+              ? `${NOT_ENOUGH_STORAGE_LABEL}. Click to free up space; it starts on its own once there is space.`
+              : `${NOT_ENOUGH_STORAGE_LABEL}. The download folder's disk is too full; it starts on its own once there is space.`
           }
         >
-          {NOT_ENOUGH_STORAGE_LABEL}
+          <HardDrive size={9} strokeWidth={2.5} aria-hidden />
+          No space
         </button>
       )}
       <button

@@ -32,7 +32,7 @@ import {
   resolveImmersiveDownloadPhase,
 } from "./downloader/ImmersiveDownloadHero";
 import { MultiDownloadSlotCarousel } from "./downloader/MultiDownloadSlotCarousel";
-import { STORAGE_BLOCK_ROW_CLASS, StorageBlockNote } from "./downloader/StorageBlockNote";
+import { StorageBlockNote } from "./downloader/StorageBlockNote";
 import {
   downloadJobMediaNeedsHydration,
   jobHasDownloadTransferStarted,
@@ -1137,7 +1137,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             </div>
                           )}
                           {d.focusedJob?.status === "queued" && d.focusedJob.storageBlock && (
-                            <StorageBlockNote job={d.focusedJob} className="justify-center" />
+                            <StorageBlockNote job={d.focusedJob} className="mt-4 justify-center" />
                           )}
                         </motion.div>
                         {displayHero.isPlaylist && displayHero.playlistItems && (
@@ -1167,9 +1167,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                   key={`playlist-row-${idx}-${item.webpageUrl ?? item.title}`}
                                   className={`flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group ${
                                     dup ? "opacity-55" : ""
-                                  } ${batchJob?.status === "downloading" ? "bg-white/[0.04]" : ""} ${
-                                    batchJob?.storageBlock ? STORAGE_BLOCK_ROW_CLASS : ""
-                                  }`}
+                                  } ${batchJob?.status === "downloading" ? "bg-white/[0.04]" : ""}`}
                                 >
                                   <div className="w-24 aspect-video rounded-lg overflow-hidden bg-stone-900 flex-shrink-0 relative">
                                     {item.thumbnail ? (
@@ -1198,7 +1196,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                         : ""}
                                     </span>
                                     {batchJob?.storageBlock && (
-                                      <StorageBlockNote job={batchJob} className="mt-1" />
+                                      <StorageBlockNote job={batchJob} className="mt-2" />
                                     )}
                                   </div>
                                   <DownloadJobAudioToggle
