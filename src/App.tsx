@@ -2015,7 +2015,7 @@ function App() {
         )}
 
         {/* ── Main Content ─────────────────────────────── */}
-        <div className="flex-1 relative z-0 bg-[#1D1613] rounded-tl-[32px] rounded-bl-2xl overflow-hidden rf-main-content-shell">
+        <div className="flex-1 relative z-0 bg-[color:var(--rf-well)] rounded-tl-[32px] rounded-bl-2xl overflow-hidden rf-main-content-shell">
           <div
             ref={explorerWebviewHostRef}
             className="absolute inset-0 z-[1] pointer-events-none transition-opacity duration-200 ease-out"
@@ -2042,13 +2042,13 @@ function App() {
           ) : null}
           <main
             ref={assignMainScrollAndUrlDropRef}
-            className={`absolute inset-0 min-h-full bg-[#1D1613] ${activeTab === "explorer" ? "overflow-hidden" : "overflow-y-auto rf-scrollbar"}`}
+            className={`absolute inset-0 min-h-full bg-[color:var(--rf-well)] ${activeTab === "explorer" ? "overflow-hidden" : "overflow-y-auto rf-scrollbar"}`}
           >
             <AnimatePresence mode="wait">
               {activeTab === "explorer" && (
                 <motion.div
                   key="explorer"
-                  className="absolute inset-0 min-h-0 bg-[#1D1613]"
+                  className="absolute inset-0 min-h-0 bg-[color:var(--rf-well)]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -2099,7 +2099,7 @@ function App() {
         <div
           className={
             videoPlayerShellVisible
-              ? "pointer-events-auto fixed z-[40] top-[var(--rf-titlebar-h)] bottom-0 right-0 overflow-hidden bg-[#1D1613] rounded-tl-[32px]"
+              ? "pointer-events-auto fixed z-[40] top-[var(--rf-titlebar-h)] bottom-0 right-0 overflow-hidden bg-[color:var(--rf-well)] rounded-tl-[32px]"
               : "pointer-events-none fixed left-[-9999px] top-0 h-px w-px overflow-hidden opacity-0"
           }
           style={videoPlayerShellVisible ? { left: sidebarChromeLeft } : undefined}

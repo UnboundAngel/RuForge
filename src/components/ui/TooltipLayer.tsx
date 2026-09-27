@@ -45,11 +45,10 @@ type Props = {
   selector: string;
   /** Native Explore webview paints over DOM; hide tips while it is up. */
   disabled?: boolean;
-  variant?: "app" | "music";
 };
 
 /** Portal tooltips: hover or focus any anchor matching `selector` to show its `data-tooltip`. */
-export function TooltipLayer({ selector, disabled = false, variant = "app" }: Props) {
+export function TooltipLayer({ selector, disabled = false }: Props) {
   const tipRef = useRef<HTMLSpanElement>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
   const disabledRef = useRef(disabled);
@@ -162,41 +161,24 @@ export function TooltipLayer({ selector, disabled = false, variant = "app" }: Pr
   const wrap = label.length > WRAP_AFTER_CHARS;
   const style = pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 };
 
-  if (variant === "music") {
-    const { label: text, shortcut } = splitShortcut(label);
-    return createPortal(
-      <span
-        key={label}
-        ref={tipRef}
-        className={cn("rf-music-tooltip", wrap && "rf-music-tooltip--wrap")}
-        style={style}
-        role="tooltip"
-      >
-        <span className="rf-music-tooltip-label">{text}</span>
-        {shortcut && <kbd className="rf-music-tooltip-kbd">{shortcut}</kbd>}
-      </span>,
-      document.body,
-    );
-  }
-
+  const { label: text, shortcut } = splitShortcut(label);
   return createPortal(
     <span
+      key={label}
       ref={tipRef}
-      className={cn(
-        "rf-icon-pill-tooltip rf-icon-pill-tooltip--floating rf-icon-pill-tooltip--normal-case",
-        wrap && "rf-icon-pill-tooltip--wrap",
-      )}
+      className={cn("rf-music-tooltip", wrap && "rf-music-tooltip--wrap")}
       style={style}
       role="tooltip"
     >
-      {label}
+      <span className="rf-music-tooltip-label">{text}</span>
+      {shortcut && <kbd className="rf-music-tooltip-kbd">{shortcut}</kbd>}
     </span>,
     document.body,
   );
 }
 
 export function MusicTooltipLayer({ disabled = false }: { disabled?: boolean }) {
-  return <TooltipLayer selector={MUSIC_TOOLTIP_SELECTOR} disabled={disabled} variant="music" />;
+  return <TooltipLayer selector={MUSIC_TOOLTIP_SELECTOR} disabled={disabled} />;
 }
 
 export function AppTooltipLayer() {

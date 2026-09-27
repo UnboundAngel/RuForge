@@ -2,9 +2,14 @@ import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { clearYoutubeProfileCache } from "@/lib/youtubeProfileSession";
 import {
+  FEED_SIGNED_OUT_ERROR,
   type FeedPage,
   type FeedVideo,
+  type VideoStats,
+  applyVideoStats,
+  feedVideoNeedsStats,
   clearCachedFeed,
   clearFeedBackoff,
   feedBackoffActive,
@@ -53,17 +58,44 @@ async function fetchPage(offset: number): Promise<FeedPage> {
   });
 }
 
+const statsRequested = new Set<string>();
+
+/** Fills channel ids and view counts the flat feed leaves out; each video is asked about once. */
+async function enrichFeed(): Promise<void> {
+  const missing = useYoutubeFeedStore
+    .getState()
+    .items.filter((v) => feedVideoNeedsStats(v) && !statsRequested.has(v.videoId))
+    .map((v) => v.videoId);
+  if (missing.length === 0) return;
+  for (const id of missing) statsRequested.add(id);
+  const stats = await invoke<VideoStats[]>("get_video_stats", { videoIds: missing }).catch(() => []);
+  const { items, hasMore } = useYoutubeFeedStore.getState();
+  const merged = applyVideoStats(items, stats);
+  if (merged === items) return;
+  useYoutubeFeedStore.setState({ items: merged });
+  writeCachedFeed(merged, hasMore);
+}
+
 function run(task: () => Promise<void>): Promise<void> {
   if (inFlight) return inFlight;
   useYoutubeFeedStore.setState({ loading: true, error: null });
   inFlight = task()
     .catch((e: unknown) => {
-      startFeedBackoff();
-      useYoutubeFeedStore.setState({ error: String(e), loaded: true });
+      const error = String(e);
+      if (error.includes(FEED_SIGNED_OUT_ERROR) && currentCookies()?.browserCookies === "ruforge") {
+        // The cached avatar keeps the session "signed-in" across launches; live cookies are the truth.
+        clearYoutubeProfileCache();
+        useRuforgeStore.getState().setYoutubeProfileSession({ status: "signed-out", profile: null });
+        clearFeedBackoff();
+      } else {
+        startFeedBackoff();
+      }
+      useYoutubeFeedStore.setState({ error, loaded: true });
     })
     .finally(() => {
       inFlight = null;
       useYoutubeFeedStore.setState({ loading: false });
+      void enrichFeed();
     });
   return inFlight;
 }
@@ -74,6 +106,7 @@ export function loadYoutubeFeed({ force = false } = {}): Promise<void> {
     const cached = readCachedFeed();
     if (cached) {
       useYoutubeFeedStore.setState({ items: cached.items, hasMore: cached.hasMore, loaded: true, error: null });
+      void enrichFeed();
       return Promise.resolve();
     }
     if (feedBackoffActive()) {

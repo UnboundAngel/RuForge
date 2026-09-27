@@ -11,6 +11,8 @@ use super::music_preview::{most_replayed_start, MusicPreviewStream};
 /// The signed-in home feed; yt-dlp maps it to youtube.com/feed/recommended.
 const FEED_URL: &str = ":ytrec";
 const FEED_PAGE_MAX: u32 = 60;
+/// Matched by the frontend (`FEED_SIGNED_OUT_ERROR`) to show the sign-in prompt.
+const FEED_SIGNED_OUT: &str = "youtube-feed-signed-out";
 
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -19,11 +21,15 @@ pub struct YoutubeFeedItem {
     pub title: String,
     pub url: String,
     pub channel: Option<String>,
+    pub channel_id: Option<String>,
+    pub channel_verified: bool,
     pub thumbnail: Option<String>,
     pub duration: Option<f64>,
     pub view_count: Option<u64>,
     /// Unix seconds parsed from "3 days ago", so only as precise as that text.
     pub timestamp: Option<i64>,
+    /// Vertical Short; the library gives these their own tall shelf instead of the 16:9 grid.
+    pub short: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -37,12 +43,12 @@ fn is_video_id(id: &str) -> bool {
     id.len() == 11 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-/// Keeps plain videos only: playlists and mixes have no single file to download, Shorts don't fit
-/// a 16:9 grid, and live or upcoming streams can't be downloaded as a finished video yet.
+/// Keeps single videos and Shorts: playlists and mixes have no single file to download, and live
+/// or upcoming streams can't be downloaded as a finished video yet.
 fn feed_item_from_entry(entry: &Value) -> Option<YoutubeFeedItem> {
     let id = entry.get("id").and_then(Value::as_str)?;
     let url = entry.get("url").and_then(Value::as_str).unwrap_or("");
-    if !is_video_id(id) || url.contains("/shorts/") || url.contains("list=") {
+    if !is_video_id(id) || url.contains("list=") {
         return None;
     }
     let live = entry.get("live_status").and_then(Value::as_str);
@@ -63,11 +69,14 @@ fn feed_item_from_entry(entry: &Value) -> Option<YoutubeFeedItem> {
         title: title.to_string(),
         url: format!("https://www.youtube.com/watch?v={id}"),
         channel,
+        channel_id: entry.get("channel_id").and_then(Value::as_str).map(str::to_string),
+        channel_verified: entry.get("channel_is_verified").and_then(Value::as_bool).unwrap_or(false),
         thumbnail: best_thumbnail_url(entry)
             .or_else(|| Some(format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg"))),
         duration: entry.get("duration").and_then(Value::as_f64).filter(|d| *d > 0.0),
         view_count: entry.get("view_count").and_then(Value::as_u64),
         timestamp: entry.get("timestamp").and_then(Value::as_i64),
+        short: url.contains("/shorts/"),
     })
 }
 
@@ -83,6 +92,23 @@ fn feed_page_from_root(root: &Value, limit: u32) -> YoutubeFeedPage {
         items,
         has_more: entries.len() as u32 >= limit,
     }
+}
+
+/// Google's auth cookies; without one YouTube serves the anonymous (empty) home feed.
+const YOUTUBE_LOGIN_COOKIES: [&str; 3] = ["SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID"];
+
+fn netscape_has_youtube_login(contents: &str) -> bool {
+    contents.lines().any(|line| {
+        let fields: Vec<&str> = line.split('\t').collect();
+        fields.len() >= 7
+            && fields[0].trim_start_matches("#HttpOnly_").ends_with("youtube.com")
+            && YOUTUBE_LOGIN_COOKIES.contains(&fields[5])
+    })
+}
+
+/// Unreadable files pass so yt-dlp reports the real error instead of a false "signed out".
+fn cookie_file_has_youtube_login(path: &str) -> bool {
+    std::fs::read_to_string(path).map_or(true, |c| netscape_has_youtube_login(&c))
 }
 
 /// One page of the user's YouTube home feed. Cookies go on the first attempt because the
@@ -101,7 +127,12 @@ pub async fn get_youtube_feed_page(
     if browser.as_deref().filter(|b| !b.is_empty() && *b != "chrome").is_none()
         && file.as_deref().filter(|f| !f.is_empty()).is_none()
     {
-        return Err("Sign in to YouTube to see your feed".into());
+        return Err(FEED_SIGNED_OUT.into());
+    }
+    if let Some(path) = file.as_deref().filter(|f| !f.is_empty()) {
+        if !cookie_file_has_youtube_login(path) {
+            return Err(FEED_SIGNED_OUT.into());
+        }
     }
     let mut args: Vec<String> = vec![
         "--flat-playlist".into(),
@@ -117,7 +148,77 @@ pub async fn get_youtube_feed_page(
     ytdlp_push_cookie_cli_args(&app, &mut args, file.as_deref(), browser.as_deref())?;
     args.push(FEED_URL.into());
     let root = run_ytdlp_json(&app, args, "YouTube feed").await?;
+    let no_entries = root
+        .get("entries")
+        .and_then(Value::as_array)
+        .map_or(true, Vec::is_empty);
+    // YouTube serves an empty home feed instead of an error when the cookies carry no login.
+    if offset == 0 && no_entries {
+        return Err(FEED_SIGNED_OUT.into());
+    }
     Ok(feed_page_from_root(&root, limit))
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoStats {
+    pub video_id: String,
+    pub channel: Option<String>,
+    pub channel_id: Option<String>,
+    pub view_count: Option<u64>,
+}
+
+fn video_stats_from_player(video_id: &str, player: &Value) -> Option<VideoStats> {
+    let details = player.get("videoDetails")?;
+    Some(VideoStats {
+        video_id: video_id.to_string(),
+        channel: details.get("author").and_then(Value::as_str).map(str::to_string),
+        channel_id: details.get("channelId").and_then(Value::as_str).map(str::to_string),
+        view_count: details.get("viewCount").and_then(Value::as_str).and_then(|v| v.parse().ok()),
+    })
+}
+
+const STATS_CONCURRENCY: usize = 4;
+
+/// Flat feed entries carry no channel id or view count. The player endpoint returns both in
+/// about 10 KB without cookies, far cheaper than a full yt-dlp extraction per card.
+#[tauri::command]
+pub async fn get_video_stats(video_ids: Vec<String>) -> Result<Vec<VideoStats>, String> {
+    use futures_util::StreamExt;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        )
+        .build()
+        .map_err(|e| e.to_string())?;
+    let ids: Vec<String> = video_ids.into_iter().filter(|id| is_video_id(id)).take(FEED_PAGE_MAX as usize).collect();
+    let stats = futures_util::stream::iter(ids)
+        .map(|id| {
+            let client = client.clone();
+            async move {
+                let body = serde_json::json!({
+                    "videoId": id,
+                    "context": { "client": { "clientName": "WEB", "clientVersion": "2.20250101.00.00", "hl": "en" } },
+                });
+                let player: Value = client
+                    .post("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+                    .json(&body)
+                    .send()
+                    .await
+                    .ok()?
+                    .json()
+                    .await
+                    .ok()?;
+                video_stats_from_player(&id, &player)
+            }
+        })
+        .buffer_unordered(STATS_CONCURRENCY)
+        .filter_map(|s| async move { s })
+        .collect()
+        .await;
+    Ok(stats)
 }
 
 /// A progressive stream so a plain `<video>` element can play it: itag 18 is 360p with audio,
@@ -183,7 +284,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn keeps_videos_and_drops_playlists_shorts_and_live() {
+    fn keeps_videos_and_shorts_and_drops_playlists_and_live() {
         let root = json!({
             "entries": [
                 {
@@ -191,6 +292,8 @@ mod tests {
                     "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
                     "title": "A video",
                     "channel": "Someone",
+                    "channel_id": "UCabcdefghijklmnopqrstuv",
+                    "channel_is_verified": true,
                     "duration": 213.0,
                     "view_count": 1200,
                     "timestamp": 1790000000,
@@ -211,10 +314,25 @@ mod tests {
                 title: "A video".into(),
                 url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ".into(),
                 channel: Some("Someone".into()),
+                channel_id: Some("UCabcdefghijklmnopqrstuv".into()),
+                channel_verified: true,
                 thumbnail: Some("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg".into()),
                 duration: Some(213.0),
                 view_count: Some(1200),
                 timestamp: Some(1_790_000_000),
+                short: false,
+            }, YoutubeFeedItem {
+                video_id: "abcdefghijk".into(),
+                title: "Short".into(),
+                url: "https://www.youtube.com/watch?v=abcdefghijk".into(),
+                channel: None,
+                channel_id: None,
+                channel_verified: false,
+                thumbnail: Some("https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg".into()),
+                duration: None,
+                view_count: None,
+                timestamp: None,
+                short: true,
             }]
         );
         assert!(page.has_more);
@@ -248,5 +366,30 @@ mod tests {
         assert_eq!(video_preview_stream_from_root(&json!({ "url": "https://v/a", "vcodec": "none" })), None);
         assert_eq!(video_preview_stream_from_root(&json!({ "url": "https://v/v", "acodec": "none" })), None);
         assert_eq!(video_preview_stream_from_root(&json!({ "url": "manifest.mpd" })), None);
+    }
+
+    #[test]
+    fn reads_channel_and_views_from_the_player_response() {
+        let player = json!({ "videoDetails": { "author": "Dan Dingle", "channelId": "UCY-PrcA-mjq3OhgsAH9C52A", "viewCount": "162571" } });
+        assert_eq!(
+            video_stats_from_player("5hVUPuuo2QM", &player),
+            Some(VideoStats {
+                video_id: "5hVUPuuo2QM".into(),
+                channel: Some("Dan Dingle".into()),
+                channel_id: Some("UCY-PrcA-mjq3OhgsAH9C52A".into()),
+                view_count: Some(162_571),
+            })
+        );
+        assert_eq!(video_stats_from_player("x", &json!({ "playabilityStatus": {} })), None);
+    }
+
+    #[test]
+    fn login_needs_a_youtube_auth_cookie() {
+        let anon = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tVISITOR_INFO1_LIVE\tx\n";
+        assert!(!netscape_has_youtube_login(anon));
+        let google_only = ".google.com\tTRUE\t/\tTRUE\t0\tSAPISID\tx\n";
+        assert!(!netscape_has_youtube_login(google_only));
+        let signed_in = "#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t0\t__Secure-3PAPISID\tx\n";
+        assert!(netscape_has_youtube_login(signed_in));
     }
 }

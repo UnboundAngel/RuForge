@@ -72,7 +72,6 @@ import {
   pageTransition,
 } from '../lib/overlayMotion';
 import { cn } from '../lib/utils';
-import { IconPillTooltip } from './ui/IconPillTooltip';
 import { MORPH_SPRING } from './ui/Morph';
 
 /** Compact chrome rim; thinner than the sticky icon bar (~36px). */
@@ -1222,14 +1221,9 @@ export const SettingsView: React.FC<{
                           }
 
                           return (
-                            <IconPillTooltip
-                              key={item.id}
-                              label={item.label}
-                              uppercase={false}
-                              className="inline-flex"
-                            >
+                            <span key={item.id} data-tooltip={item.label} className="inline-flex">
                               {tabButton}
-                            </IconPillTooltip>
+                            </span>
                           );
                         })}
                       </div>
@@ -1781,7 +1775,7 @@ export const SettingsView: React.FC<{
                 />
                 <SettingItem
                   title="YouTube feed in Video Library"
-                  description="Shows your YouTube home feed under your downloads so you can preview and grab videos without opening YouTube. Uses your signed-in cookies."
+                  description="Mixes videos from your YouTube home feed in with your downloads so you can preview and grab them without opening YouTube. Uses your signed-in cookies."
                   active={settings.showYoutubeFeedInLibrary !== false}
                   control={
                     <ToggleSlot

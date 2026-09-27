@@ -17,15 +17,15 @@ import {
   virtualPlaylistPath,
 } from "../virtualPlaylists";
 import { PlaylistEmptyThumb } from "./PlaylistEmptyThumb";
-import { cn } from "../lib/utils";
 import { GalleryMenuTitle, VideoCard, type ThumbnailBar } from "./library/LibraryVideoCard";
-import { YoutubeFeedShelf } from "./library/YoutubeFeedShelf";
-import { useYoutubeFeedAvailability } from "./library/useYoutubeFeed";
+import { FeedVideoCard } from "./library/FeedVideoCard";
+import { FeedLoadMore } from "./library/FeedLoadMore";
+import { useYoutubeFeed, useYoutubeFeedAvailability } from "./library/useYoutubeFeed";
+import { feedWithoutLibrary, interleaveFeed, type MixedGridItem } from "./library/youtubeFeed";
+import { composeHomeSections, pickChannelSpotlight } from "./library/homeSections";
+import { LibraryHome } from "./library/LibraryHome";
 import { useGridColumns } from "./library/useGridColumns";
 import { fileVideoId } from "./music/musicOutsideRecommend";
-
-/** The feed shelf sits after this many rows of the user's own videos, like YouTube's first shelf. */
-const ROWS_BEFORE_FEED = 2;
 
 function isInProgressFile(file: MediaFile): boolean {
   const progress = getWatchProgress(file.path, file.duration);
@@ -298,7 +298,7 @@ export const MediaView = ({
   const density = gridDensity === "Cozy" || gridDensity === "Compact" ? gridDensity : "Default";
   const { ref: gridMeasureRef, columns } = useGridColumns<HTMLDivElement>(density);
   const gridLayoutClass =
-    density === "Cozy" ? "grid gap-x-5 gap-y-8" : density === "Compact" ? "grid gap-x-3 gap-y-6" : "grid gap-x-4 gap-y-7";
+    density === "Cozy" ? "grid gap-x-5 gap-y-12" : density === "Compact" ? "grid gap-x-3 gap-y-8" : "grid gap-x-4 gap-y-10";
   const gridStyle = useMemo(
     () => ({ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }),
     [columns, density],
@@ -344,10 +344,9 @@ export const MediaView = ({
     [filteredEntries],
   );
 
-  const showFeed = feedEnabled && filter === "all" && !searchQuery.trim();
-  const leadCount = columns * ROWS_BEFORE_FEED;
-  const leadEntries = useMemo(() => mediaOnlyEntries.slice(0, leadCount), [mediaOnlyEntries, leadCount]);
-  const restEntries = useMemo(() => mediaOnlyEntries.slice(leadCount), [mediaOnlyEntries, leadCount]);
+  const homeMode = filter === "all" && !searchQuery.trim();
+  const showFeed = feedEnabled && homeMode;
+  const feed = useYoutubeFeed(showFeed);
 
   const libraryVideoIds = useMemo(() => {
     const ids = new Set<string>();
@@ -359,6 +358,40 @@ export const MediaView = ({
     }
     return ids;
   }, [entries]);
+
+  const gridItems = useMemo(() => interleaveFeed(mediaOnlyEntries, []), [mediaOnlyEntries]);
+
+  const homePlaylists = useMemo(
+    () =>
+      libraryEntries
+        .filter((e): e is PlaylistCollection => e.kind === "playlist" && e.items.length > 0)
+        .slice(0, columns),
+    [libraryEntries, columns],
+  );
+
+  const homeSections = useMemo(() => {
+    if (!homeMode) return [];
+    const continueFiles = mediaOnlyEntries.filter(isInProgressFile).slice(0, Math.max(2, columns - 1));
+    const shelved = new Set<MediaFile>(continueFiles);
+    const spotlight = pickChannelSpotlight(
+      mediaOnlyEntries.filter((f) => !shelved.has(f)),
+      (f) => f.youtube,
+      columns,
+    );
+    for (const f of spotlight?.files ?? []) shelved.add(f);
+    const feedVideos = showFeed ? feedWithoutLibrary(feed.items, libraryVideoIds) : [];
+    return composeHomeSections<MediaFile>({
+      mixed: interleaveFeed(
+        mediaOnlyEntries.filter((f) => !shelved.has(f)),
+        feedVideos.filter((v) => !v.short),
+      ),
+      columns,
+      continueFiles,
+      shorts: feedVideos.filter((v) => v.short),
+      hasPlaylists: homePlaylists.length > 0,
+      spotlight,
+    });
+  }, [homeMode, mediaOnlyEntries, columns, showFeed, feed.items, libraryVideoIds, homePlaylists.length]);
 
   const watchLaterPaths = useMemo(() => {
     const wl = playlistStacks.find((p) => p.path === virtualPlaylistPath(WATCH_LATER_ID));
@@ -410,19 +443,50 @@ export const MediaView = ({
   const showEmptyState =
     filter === "playlists"
       ? playlistStacks.length === 0 && Boolean(searchQuery.trim())
-      : filteredEntries.length === 0;
-  const renderVideoGrid = (files: MediaFile[]) => (
+      : homeMode
+        ? homeSections.length === 0
+        : gridItems.length === 0;
+  const renderVideoGrid = (items: MixedGridItem<MediaFile>[], cols = columns) => (
+    <div
+      className={gridLayoutClass}
+      style={cols === columns ? gridStyle : { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+    >
+      {items.map((item) =>
+        item.kind === "feed" ? (
+          <FeedVideoCard key={`feed-${item.video.videoId}`} video={item.video} />
+        ) : (
+          <VideoCard
+            key={item.file.path}
+            file={item.file}
+            progressBar={progressBarsByPath.get(item.file.path) ?? emptyProgressBar}
+            onDelete={handleDelete}
+            onExtract={handleExtract}
+            onSaveToPlaylist={handleSaveToPlaylist}
+            onToggleWatchLater={handleToggleWatchLater}
+            inWatchLater={watchLaterPaths.has(item.file.path.replace(/\//g, "\\").toLowerCase())}
+          />
+        ),
+      )}
+    </div>
+  );
+
+  const renderPlaylistGrid = (playlists: PlaylistCollection[]) => (
     <div className={gridLayoutClass} style={gridStyle}>
-      {files.map((file) => (
-        <VideoCard
-          key={file.path}
-          file={file}
-          progressBar={progressBarsByPath.get(file.path) ?? emptyProgressBar}
-          onDelete={handleDelete}
-          onExtract={handleExtract}
-          onSaveToPlaylist={handleSaveToPlaylist}
-          onToggleWatchLater={handleToggleWatchLater}
-          inWatchLater={watchLaterPaths.has(file.path.replace(/\//g, "\\").toLowerCase())}
+      {playlists.map((entry) => (
+        <PlaylistStackCard
+          key={entry.path}
+          playlist={entry}
+          onClick={() => onPlaylistClick(entry)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setGalleryActiveMenu({
+              path: entry.path,
+              x: e.clientX,
+              y: e.clientY,
+              floating: true,
+            });
+          }}
         />
       ))}
     </div>
@@ -459,18 +523,13 @@ export const MediaView = ({
             <Loader2 className="animate-spin text-[color:var(--accent)] opacity-20" size={60} />
           </div>
         ) : showEmptyState ? (
-          <div className="space-y-12">
-            <div className={cn("text-center space-y-2", showFeed ? "py-16" : "py-36")}>
-              <p className="text-stone-400 font-medium text-sm">{emptyCopy}</p>
-              {filter !== "all" && filter !== "playlists" && (
-                <p className="text-stone-600 text-xs font-medium">
-                  switch to All to browse everything
-                </p>
-              )}
-            </div>
-            {showFeed ? (
-              <YoutubeFeedShelf columns={columns} gridClass={gridLayoutClass} gridStyle={gridStyle} libraryIds={libraryVideoIds} />
-            ) : null}
+          <div className="text-center space-y-2 py-36">
+            <p className="text-stone-400 font-medium text-sm">{emptyCopy}</p>
+            {filter !== "all" && filter !== "playlists" && (
+              <p className="text-stone-600 text-xs font-medium">
+                switch to All to browse everything
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-12">
@@ -500,37 +559,24 @@ export const MediaView = ({
                     </button>
                   </div>
                 ) : (
-                  <div className={gridLayoutClass} style={gridStyle}>
-                    {playlistStacks.map((entry) => (
-                      <PlaylistStackCard
-                        key={entry.path}
-                        playlist={entry}
-                        onClick={() => onPlaylistClick(entry)}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setGalleryActiveMenu({
-                            path: entry.path,
-                            x: e.clientX,
-                            y: e.clientY,
-                            floating: true,
-                          });
-                        }}
-                      />
-                    ))}
-                  </div>
+                  renderPlaylistGrid(playlistStacks)
                 )}
               </section>
             ) : null}
 
-            {filter !== "playlists" ? (
+            {homeMode ? (
               <>
-                {renderVideoGrid(leadEntries)}
-                {showFeed ? (
-                  <YoutubeFeedShelf columns={columns} gridClass={gridLayoutClass} gridStyle={gridStyle} libraryIds={libraryVideoIds} />
-                ) : null}
-                {restEntries.length > 0 ? renderVideoGrid(restEntries) : null}
+                <LibraryHome
+                  sections={homeSections}
+                  columns={columns}
+                  gridClass={gridLayoutClass}
+                  renderGrid={renderVideoGrid}
+                  renderPlaylists={() => renderPlaylistGrid(homePlaylists)}
+                />
+                {showFeed && feed.hasMore ? <FeedLoadMore key={feed.items.length} /> : null}
               </>
+            ) : filter !== "playlists" ? (
+              renderVideoGrid(gridItems)
             ) : null}
           </div>
         )}

@@ -12,7 +12,8 @@ import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useGalleryScrubExtracting } from "@/scrubSpriteGallerySync";
 import { MorphMenu, type MorphMenuItem } from "@/components/ui/Morph";
 import { cn } from "@/lib/utils";
-import { formatAge } from "./youtubeFeed";
+import { formatAge, formatViewCount } from "./youtubeFeed";
+import { MetaParts, VideoByline } from "./VideoByline";
 
 export type ThumbnailBar = { show: boolean; widthPct: number; completed: boolean };
 
@@ -102,7 +103,7 @@ export const VideoCard = memo(function VideoCard({
   const stillPoster = file.thumbnailPath ?? file.ruforgePosterPath;
   const isAudioItem = isAudioOnlyPath(file.path);
   const title = mediaDisplayTitle(file);
-  const ageLabel = formatAge(file.created);
+  const youtube = file.youtube;
   const shellOpen = isHovered || menuOpen;
   const mountMorph = isHovered || menuOpen;
   const optionsVisible = isHovered || menuOpen;
@@ -297,11 +298,11 @@ export const VideoCard = memo(function VideoCard({
           scale: shellOpen ? 1 : 0.92,
         }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-        className="pointer-events-none absolute -inset-3 -z-10 rounded-[22px] bg-[#241c18] origin-center"
+        className="pointer-events-none absolute -inset-3 -z-10 rounded-[22px] bg-[color:var(--rf-well-raised)] origin-center"
       />
 
       <div className="relative z-10 flex flex-col gap-3">
-        <div className="relative aspect-video overflow-hidden rounded-2xl bg-[#1D1613]">
+        <div className="relative aspect-video overflow-hidden rounded-2xl bg-[color:var(--rf-well-raised)]">
           {stillPoster ? (
             <img
               src={convertFileSrc(stillPoster)}
@@ -309,7 +310,7 @@ export const VideoCard = memo(function VideoCard({
               className="absolute inset-0 w-full h-full object-cover"
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#2a221e]">
+            <div className="absolute inset-0 flex items-center justify-center bg-[color:var(--rf-well-raised)]">
               {isAudioItem ? (
                 <Music className="w-12 h-12 text-stone-700" strokeWidth={1.25} aria-hidden />
               ) : (
@@ -384,61 +385,80 @@ export const VideoCard = memo(function VideoCard({
           )}
         </div>
 
-        <div className="flex gap-3 px-0.5">
-          <div className="flex-1 min-w-0">
+        <VideoByline
+          channel={youtube?.channel}
+          channelId={youtube?.channelId}
+          verified={youtube?.channelVerified ?? false}
+          title={
             <h3
               className={cn(
-                "text-[14px] font-bold leading-snug line-clamp-2 transition-colors duration-150",
+                "text-[15px] font-semibold leading-snug line-clamp-2 transition-colors duration-150",
                 titleHot ? "text-[color:var(--accent)]" : "text-stone-50",
               )}
             >
               {title}
             </h3>
-            <p className="mt-1.5 text-[12px] font-medium text-stone-500 truncate">
-              <span>{formatStorageSize(file.size)}</span>
-              <span className="mx-1.5 text-stone-600">·</span>
-              <span>
-                {views} {views === 1 ? "view" : "views"}
-              </span>
-              <span className="mx-1.5 text-stone-600">·</span>
-              <span>{ageLabel}</span>
-            </p>
-          </div>
-
-          <div
-            className={`relative self-start mt-0.5 transition-opacity duration-150 ${
-              optionsVisible ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            {mountMorph ? (
-              <MorphMenu
-                open={menuOpen}
-                onOpenChange={setMenuOpen}
-                triggerSize={32}
-                align="end"
-                paintedRest={false}
-                aria-label="Video options"
-                trigger={<MoreVertical size={16} strokeWidth={2.25} />}
-                items={menuItems}
-                header={<GalleryMenuTitle text={title} />}
-              />
-            ) : (
-              <button
-                type="button"
-                aria-label="Video options"
-                className="flex h-8 w-8 items-center justify-center text-stone-500 hover:text-stone-200"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsHovered(true);
-                  setMenuOpen(true);
-                }}
-              >
-                <MoreVertical size={16} strokeWidth={2.25} />
-              </button>
-            )}
-          </div>
-        </div>
+          }
+          meta={<LibraryCardMeta file={file} plays={views} />}
+          action={
+            <div
+              className={`relative self-start mt-0.5 transition-opacity duration-150 ${
+                optionsVisible ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              {mountMorph ? (
+                <MorphMenu
+                  open={menuOpen}
+                  onOpenChange={setMenuOpen}
+                  triggerSize={32}
+                  align="end"
+                  paintedRest={false}
+                  aria-label="Video options"
+                  trigger={<MoreVertical size={16} strokeWidth={2.25} />}
+                  items={menuItems}
+                  header={<GalleryMenuTitle text={title} />}
+                />
+              ) : (
+                <button
+                  type="button"
+                  aria-label="Video options"
+                  className="flex h-8 w-8 items-center justify-center text-stone-500 hover:text-stone-200"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsHovered(true);
+                    setMenuOpen(true);
+                  }}
+                >
+                  <MoreVertical size={16} strokeWidth={2.25} />
+                </button>
+              )}
+            </div>
+          }
+        />
       </div>
     </div>
   );
 });
+
+/**
+ * Online numbers are YouTube's, frozen at download; plays are this machine's own count, so they
+ * get their own accent-tinted wording instead of reading as a second view count.
+ */
+function LibraryCardMeta({ file, plays }: { file: MediaFile; plays: number }) {
+  const youtube = file.youtube;
+  const online = [
+    formatViewCount(youtube?.viewCount ?? null),
+    youtube?.publishedAt ? formatAge(youtube.publishedAt) : null,
+  ].filter((part): part is string => Boolean(part));
+  const local = [formatStorageSize(file.size), `added ${formatAge(file.created)}`].map((part) => (
+    <span className="text-stone-500">{part}</span>
+  ));
+  return (
+    <MetaParts
+      parts={[
+        ...(online.length > 0 ? online : local),
+        plays > 0 ? <span className="text-[color:var(--accent)]/80">played {plays}×</span> : null,
+      ]}
+    />
+  );
+}

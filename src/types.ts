@@ -40,6 +40,17 @@ export interface MediaFile {
   mbReleaseId?: string | null;
   /** MusicBrainz match score 0-100. Present only when a lookup matched. */
   matchConfidence?: number | null;
+  /** Channel and online stats from the yt-dlp sidecar, frozen at download time. */
+  youtube?: YoutubeSourceMeta | null;
+}
+
+export interface YoutubeSourceMeta {
+  channel?: string;
+  channelId?: string;
+  channelVerified: boolean;
+  /** Unix seconds the video went public, not when it was downloaded. */
+  publishedAt?: number;
+  viewCount?: number;
 }
 
 export interface PlaylistCollection {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { feedCookieSource, feedWithoutLibrary, formatAge, formatViewCount, mergeFeedPages, type FeedVideo } from "./youtubeFeed";
-import { videoPreviewStartSec } from "./youtubeFeed";
+import { applyVideoStats, interleaveFeed, videoPreviewStartSec } from "./youtubeFeed";
 import { gridColumnsFor } from "./useGridColumns";
 
 const video = (videoId: string): FeedVideo => ({
@@ -8,6 +8,8 @@ const video = (videoId: string): FeedVideo => ({
   title: videoId,
   url: `https://www.youtube.com/watch?v=${videoId}`,
   channel: null,
+  channelId: null,
+  channelVerified: false,
   thumbnail: null,
   duration: null,
   viewCount: null,
@@ -90,9 +92,42 @@ describe("videoPreviewStartSec", () => {
 
 describe("gridColumnsFor", () => {
   it("fits as many cards as the minimum width allows", () => {
-    expect(gridColumnsFor(1247, "Default")).toBe(3);
-    expect(gridColumnsFor(1248, "Default")).toBe(4);
+    expect(gridColumnsFor(1327, "Default")).toBe(3);
+    expect(gridColumnsFor(1328, "Default")).toBe(4);
     expect(gridColumnsFor(200, "Cozy")).toBe(1);
-    expect(gridColumnsFor(1300, "Compact")).toBe(5);
+    expect(gridColumnsFor(1300, "Compact")).toBe(4);
+  });
+
+  it("grows cards instead of adding columns past the density cap", () => {
+    expect(gridColumnsFor(2500, "Default")).toBe(4);
+    expect(gridColumnsFor(2500, "Cozy")).toBe(3);
+    expect(gridColumnsFor(2500, "Compact")).toBe(5);
+  });
+});
+
+describe("interleaveFeed", () => {
+  const label = (items: ReturnType<typeof interleaveFeed<string>>) =>
+    items.map((it) => (it.kind === "file" ? it.file : it.video.videoId));
+
+  it("slots a feed video after every third library video and trails the rest", () => {
+    expect(label(interleaveFeed(["a", "b", "c", "d", "e", "f", "g"], [video("x"), video("y"), video("z")]))).toEqual([
+      "a", "b", "c", "x", "d", "e", "f", "y", "g", "z",
+    ]);
+  });
+
+  it("shows only the feed when the library is empty", () => {
+    expect(label(interleaveFeed<string>([], [video("x")]))).toEqual(["x"]);
+  });
+});
+
+describe("applyVideoStats", () => {
+  it("fills missing channel ids and views without overwriting what the feed had", () => {
+    const withChannel = { ...video("a"), channel: "Feed name" };
+    const [merged] = applyVideoStats([withChannel], [
+      { videoId: "a", channel: "Player name", channelId: "UCabcdefghijklmnopqrstuv", viewCount: 42 },
+    ]);
+    expect(merged.channel).toBe("Feed name");
+    expect(merged.channelId).toBe("UCabcdefghijklmnopqrstuv");
+    expect(merged.viewCount).toBe(42);
   });
 });

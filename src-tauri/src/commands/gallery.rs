@@ -76,6 +76,49 @@ pub struct MediaFile {
     /// Sprite sheet paths under `.ruforge/thumbs/` (read-only at scan time).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scrub_sprite_paths: Vec<String>,
+    /// Channel and online stats from the yt-dlp sidecar, as of download time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub youtube: Option<YoutubeSourceMeta>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct YoutubeSourceMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
+    #[serde(default)]
+    pub channel_verified: bool,
+    /// Unix seconds the video went public (not when it was downloaded).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view_count: Option<u64>,
+}
+
+fn non_empty_str(v: &serde_json::Value) -> Option<String> {
+    v.as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from)
+}
+
+/// yt-dlp `upload_date` is a UTC `YYYYMMDD` day; noon keeps it on the same calendar day everywhere.
+fn upload_date_to_unix(raw: &str) -> Option<i64> {
+    let date = chrono::NaiveDate::parse_from_str(raw.trim(), "%Y%m%d").ok()?;
+    Some(date.and_hms_opt(12, 0, 0)?.and_utc().timestamp())
+}
+
+pub(crate) fn youtube_source_meta(json: &serde_json::Value) -> Option<YoutubeSourceMeta> {
+    let meta = YoutubeSourceMeta {
+        channel: non_empty_str(&json["channel"]).or_else(|| non_empty_str(&json["uploader"])),
+        channel_id: non_empty_str(&json["channel_id"]),
+        channel_verified: json["channel_is_verified"].as_bool().unwrap_or(false),
+        published_at: json["release_timestamp"]
+            .as_i64()
+            .or_else(|| json["timestamp"].as_i64())
+            .or_else(|| json["upload_date"].as_str().and_then(upload_date_to_unix)),
+        view_count: json["view_count"].as_u64(),
+    };
+    (meta != YoutubeSourceMeta::default()).then_some(meta)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -639,6 +682,7 @@ fn scan_media_recursive(dir_path: &std::path::Path, depth: u8) -> Vec<MediaFile>
             match_confidence: canonical.match_confidence,
             scrub_sprites_complete,
             scrub_sprite_paths,
+            youtube: sidecar_json.as_ref().and_then(youtube_source_meta),
         });
     }
     if files.len() >= 2 {
@@ -1085,6 +1129,7 @@ fn media_file_from_path_for_cleanup(path: &Path) -> Option<MediaFile> {
         match_confidence: None,
         scrub_sprites_complete: true,
         scrub_sprite_paths: Vec::new(),
+        youtube: None,
     })
 }
 
@@ -1561,6 +1606,7 @@ fn scan_media_file_direct(path: &std::path::Path) -> Result<MediaFile, String> {
         match_confidence: canonical.match_confidence,
         scrub_sprites_complete,
         scrub_sprite_paths,
+        youtube: sidecar_json.as_ref().and_then(youtube_source_meta),
     })
 }
 
@@ -1801,6 +1847,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn youtube_meta_uses_publish_day_not_download_time() {
+        let meta = youtube_source_meta(&serde_json::json!({
+            "channel": "Dan Dingle",
+            "channel_id": "UCY-PrcA-mjq3OhgsAH9C52A",
+            "channel_is_verified": true,
+            "upload_date": "20260422",
+            "view_count": 130265,
+        }))
+        .expect("meta");
+        assert_eq!(meta.channel.as_deref(), Some("Dan Dingle"));
+        assert!(meta.channel_verified);
+        assert_eq!(meta.published_at, Some(1_776_859_200));
+        assert_eq!(meta.view_count, Some(130_265));
+        assert_eq!(youtube_source_meta(&serde_json::json!({ "title": "local clip" })), None);
+    }
+
+    #[test]
     fn strip_ytdlp_stream_suffix_removes_format_tail() {
         assert_eq!(
             strip_ytdlp_stream_suffix("My Video.f399"),
@@ -1895,6 +1958,7 @@ mod tests {
             match_confidence: None,
             scrub_sprites_complete: true,
             scrub_sprite_paths: Vec::new(),
+            youtube: None,
         };
         let key = media_library_group_key(path, &file);
         assert!(key.starts_with("stem:"));
@@ -1931,6 +1995,7 @@ mod tests {
             match_confidence: None,
             scrub_sprites_complete: true,
             scrub_sprite_paths: Vec::new(),
+            youtube: None,
         };
         let intermediate = MediaFile {
             name: "My Video".into(),
@@ -1959,6 +2024,7 @@ mod tests {
             match_confidence: None,
             scrub_sprites_complete: true,
             scrub_sprite_paths: Vec::new(),
+            youtube: None,
         };
         let muxed_path = Path::new(&muxed.path);
         let inter_path = Path::new(&intermediate.path);
@@ -2031,6 +2097,7 @@ mod tests {
             match_confidence: None,
             scrub_sprites_complete: false,
             scrub_sprite_paths: Vec::new(),
+            youtube: None,
         }
     }
 

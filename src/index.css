@@ -126,6 +126,9 @@
   --color-media-panel: #1e1c1b;
   --color-media-card: #262321;
   --bg: #1c1512;
+  /* Near-neutral so thumbnails carry the color; the bezel stays brand brown. */
+  --rf-well: #151211;
+  --rf-well-raised: #201c1a;
   --surface: rgba(43, 30, 25, 0.7);
   --surface-elevated: rgba(56, 39, 32, 0.85);
   --border: rgba(212, 163, 115, 0.1);
@@ -1650,55 +1653,6 @@ button.rf-yt-profile-pill {
 
 .rf-comments-header[data-scrolled="true"]::after {
   opacity: 1;
-}
-
-/* Code snippet panels — ported from website/docs CodeSnippetPanel */
-.rf-icon-pill-tooltip {
-  width: max-content;
-  max-width: min(14rem, calc(100vw - 1rem));
-  padding: 0.3125rem 0.625rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 9999px;
-  background: #000;
-  color: rgb(255 255 255 / 0.92);
-  font-size: 0.625rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
-  text-align: center;
-  text-transform: uppercase;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.rf-icon-pill-tooltip--floating {
-  position: fixed;
-  z-index: 200001;
-  opacity: 1;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
-}
-
-.rf-icon-pill-tooltip--path {
-  max-width: min(22rem, calc(100vw - 1rem));
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  white-space: normal;
-  text-align: left;
-  line-height: 1.35;
-}
-
-.rf-icon-pill-tooltip--normal-case {
-  text-transform: none;
-}
-
-.rf-icon-pill-tooltip--wrap {
-  max-width: min(18rem, calc(100vw - 1rem));
-  border-radius: 0.75rem;
-  white-space: normal;
-  text-align: left;
-  line-height: 1.35;
 }
 
 /* Portaled to body, outside [data-music-mode], so colors are literal. */

@@ -28,4 +28,5 @@ pub mod system;
 pub mod telemetry;
 pub mod ytdlp_update;
 pub mod youtube_feed;
+pub mod channel_avatar;
 pub mod deno_update;
