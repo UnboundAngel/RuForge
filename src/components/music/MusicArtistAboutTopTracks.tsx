@@ -51,7 +51,7 @@ function TopTrackRow({
         disabled={!playable}
         onClick={() => track.file && onPlay?.(track.file)}
         data-tooltip={playable ? `Play ${track.title}` : undefined}
-        className="group/top flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors enabled:hover:bg-white/[0.06] disabled:cursor-default"
+        className="rf-music-tooltip-anchor group/top flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors enabled:hover:bg-white/[0.06] disabled:cursor-default"
       >
         <span
           className={cn(

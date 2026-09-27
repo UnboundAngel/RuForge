@@ -129,6 +129,17 @@ export function closePlaylistImport(): void {
   useImportSession.setState({ open: false });
 }
 
+/** Puts failed searches back in the queue and searches them again; finished rows are untouched. */
+export function retryPlaylistImport(): void {
+  const s = useImportSession.getState();
+  if (!s.rows.some((r) => r.state === "failed")) return;
+  useImportSession.setState({
+    stopped: null,
+    rows: s.rows.map((r) => (r.state === "failed" ? { ...r, state: "waiting" } : r)),
+  });
+  if (activeRun !== s.runId) void runMatching(s.runId);
+}
+
 /** Stops matching and returns to the paste box. */
 export function resetPlaylistImport(): void {
   useImportSession.setState((s) => ({ phase: "paste", rows: [], notes: [], stopped: null, runId: s.runId + 1 }));

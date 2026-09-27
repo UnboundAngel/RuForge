@@ -8,15 +8,19 @@ import { IMPORT_PROMPT } from "@/playlistImport/importPrompt";
 import { parseImport } from "@/playlistImport/parseImport";
 import {
   closePlaylistImport,
+  DEFAULT_IMPORT_NAME,
   importMergeTarget,
   importRowSaveable,
   resetPlaylistImport,
+  retryPlaylistImport,
   savePlaylistImport,
   startPlaylistImport,
   useImportSession,
 } from "@/playlistImport/importSession";
 import { SettingsModalShell } from "@/components/settings/SettingsModalShell";
+import { useStuckHeader } from "@/hooks/useStuckHeader";
 import { useMusicPreviewBridge } from "./MusicPreviewButton";
+import { MusicPlaylistHeader, formatPlaylistLength } from "./MusicPlaylistHeader";
 import { IMPORT_ROW_GRID, ImportLibraryGroup, ImportRowView } from "./MusicPlaylistImportRow";
 import { showMusicToast } from "./musicToast";
 import { useMusicLibraryTracks } from "./useMusicPlaylists";
@@ -182,18 +186,20 @@ function ReviewStep() {
     setPinned(new Set());
     setOpenAlt(null);
   };
-  const { headerRef, scrolled, moreBelow } = useScrollShadow();
+  const { headerRef, moreBelow } = useMoreBelow();
 
   const counts = useMemo(() => {
     let done = 0;
     let check = 0;
     let missing = 0;
+    let failed = 0;
     for (const r of rows) {
       if (r.state === "done" || r.state === "failed") done++;
+      if (r.state === "failed") failed++;
       if (r.state === "done" && r.bucket === "check") check++;
       if ((r.state === "done" || r.state === "failed") && r.bucket === "missing") missing++;
     }
-    return { done, check, missing };
+    return { done, check, missing, failed };
   }, [rows]);
 
   const indexed = rows.map((row, index) => ({ row, index }));
@@ -205,25 +211,43 @@ function ReviewStep() {
   });
   const matching = counts.done < rows.length;
 
+  const hero = useMemo(() => {
+    let cover: string | null = null;
+    let count = 0;
+    let seconds = 0;
+    for (const r of rows) {
+      const chosen = r.choice >= 0 ? r.candidates[r.choice] : undefined;
+      if (!cover && !r.library && chosen?.track.thumbnail) cover = chosen.track.thumbnail;
+      if (!importRowSaveable(r)) continue;
+      count++;
+      seconds += (r.library ? r.library.duration : chosen?.track.duration) || 0;
+    }
+    return { cover, count, seconds };
+  }, [rows]);
+
   return (
     <div data-music-mode="true" className="flex flex-col">
-      <div
-        ref={headerRef}
-        className="sticky top-0 z-10 -mx-6 flex flex-col gap-3 bg-[#181818] px-6 pb-3 pt-1 transition-shadow duration-150"
-        style={{ boxShadow: scrolled ? "0 8px 16px rgb(0 0 0 / 0.55)" : "none" }}
-      >
-        <input
-          value={name}
-          maxLength={100}
-          onChange={(e) => useImportSession.setState({ name: e.target.value })}
-          placeholder="Playlist name"
-          aria-label="Playlist name"
-          className={cn(FIELD, "h-10 font-semibold")}
+      <div className="-mx-6 [--music-surface:#181818] [mask-image:linear-gradient(to_bottom,transparent,black_24px)]">
+        <MusicPlaylistHeader
+          title={name.trim() || DEFAULT_IMPORT_NAME}
+          tracks={[]}
+          coverFile={null}
+          coverSrc={hero.cover}
+          meta={
+            <>
+              {hero.count} {hero.count === 1 ? "song" : "songs"}
+              {hero.seconds > 0 && `, ${formatPlaylistLength(hero.seconds)}`}
+            </>
+          }
+          startEditing={false}
+          onRename={(next) => useImportSession.setState({ name: next })}
         />
+      </div>
+      <div ref={headerRef} className="flex flex-col gap-3 pb-3">
         {mergeTarget && (
-          <p className="-mt-1 px-1 text-[12px] text-white/50">
+          <p className="text-[12px] text-white/50">
             You already have a playlist called “{mergeTarget.title}”. Saving adds these songs to it and skips any it has.
-            Rename this one to keep them apart.
+            Click the title to rename this one and keep them apart.
           </p>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -251,23 +275,29 @@ function ReviewStep() {
             )}
           </span>
         </div>
-        {notes.length || stopped ? (
+        {!matching && counts.failed > 0 ? (
+          <div className="flex items-center gap-3 text-[12px]">
+            <p className={cn("min-w-0 flex-1", stopped ? "text-[#ff5c7a]" : "text-white/50")}>
+              {stopped ?? `${counts.failed} ${counts.failed === 1 ? "search" : "searches"} failed`}
+            </p>
+            <button
+              type="button"
+              onClick={retryPlaylistImport}
+              className="h-7 shrink-0 rounded-full bg-white/[0.08] px-3 text-[12px] font-bold text-white transition-[background-color,transform] hover:bg-white/[0.12] active:scale-[0.97]"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+        {notes.length ? (
           <div className="flex flex-col gap-1 text-[12px] text-white/50">
-            {stopped ? <p className="text-[#ff5c7a]">{stopped}</p> : null}
             {notes.map((n) => (
               <p key={n}>{n}</p>
             ))}
           </div>
         ) : null}
-        {visible.length ? (
-          <div className={cn(IMPORT_ROW_GRID, "px-2 pt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white/40")}>
-            <span />
-            <span>From your list</span>
-            <span>Match</span>
-            <span />
-          </div>
-        ) : null}
       </div>
+      {visible.length ? <ImportColumnHeader /> : null}
 
       {visible.length ? (
         <ul className="flex flex-col gap-0.5">
@@ -291,30 +321,59 @@ function ReviewStep() {
         </p>
       ) : null}
       <ImportLibraryGroup items={libraryRows} />
-      <div
-        aria-hidden
-        className="pointer-events-none sticky bottom-0 -mx-6 -mb-4 h-10 shrink-0 transition-opacity duration-200"
-        style={{
-          opacity: moreBelow ? 1 : 0,
-          background: "linear-gradient(0deg, #181818 0%, rgb(24 24 24 / 0) 100%)",
-        }}
-      />
+      {/* Sticky insets stop at the body's padding, so the fade hangs below its zero-height anchor to reach the real edge. */}
+      <div aria-hidden className="pointer-events-none sticky bottom-0 h-0">
+        <div
+          className="absolute -inset-x-6 -bottom-4 h-8 transition-opacity duration-200"
+          style={{
+            opacity: moreBelow ? 1 : 0,
+            background: "linear-gradient(0deg, rgb(24 24 24 / 0.85) 0%, rgb(24 24 24 / 0) 100%)",
+          }}
+        />
+      </div>
     </div>
   );
 }
 
-/** Tracks the modal body's scroll so the sticky header lifts and the bottom fades only when there is more. */
-function useScrollShadow() {
+/** Same header as a playlist: sticks to the top and lifts onto a raised surface once rows scroll under it. */
+function ImportColumnHeader() {
+  const { sentinelRef, stuck } = useStuckHeader();
+  return (
+    <>
+      <div ref={sentinelRef} aria-hidden className="h-px -mb-px" />
+      <div
+        className={cn(
+          "sticky top-0 z-10 -mx-6 mb-1 px-6 transition-colors duration-200",
+          stuck ? "bg-[#212121]" : "bg-[#181818]",
+        )}
+      >
+        <div
+          className={cn(
+            IMPORT_ROW_GRID,
+            "h-9 border-b px-2 text-sm text-white/60 transition-colors duration-200",
+            stuck ? "border-transparent" : "border-white/10",
+          )}
+        >
+          <span />
+          <span>Title</span>
+          <span>Match</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Tracks the modal body's scroll so the bottom fades only while there is more below. */
+function useMoreBelow() {
   const headerRef = useRef<HTMLDivElement>(null);
-  const [state, setState] = useState({ scrolled: false, moreBelow: false });
+  const [state, setState] = useState({ moreBelow: false });
 
   useEffect(() => {
     const scroller = headerRef.current?.closest<HTMLElement>(".overflow-y-auto");
     if (!scroller) return;
     const measure = () => {
-      const scrolled = scroller.scrollTop > 1;
       const moreBelow = scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 1;
-      setState((p) => (p.scrolled === scrolled && p.moreBelow === moreBelow ? p : { scrolled, moreBelow }));
+      setState((p) => (p.moreBelow === moreBelow ? p : { moreBelow }));
     };
     measure();
     scroller.addEventListener("scroll", measure, { passive: true });

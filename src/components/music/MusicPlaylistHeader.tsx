@@ -10,9 +10,12 @@ type Props = {
   onEditDescription?: () => void;
   tracks: MediaFile[];
   coverFile: MediaFile | null;
+  coverSrc?: string | null;
+  /** Replaces the song count and length line. */
+  meta?: React.ReactNode;
   startEditing: boolean;
   onRename: (title: string) => void;
-  onBack: () => void;
+  onBack?: () => void;
   /** Action bar; sits on the same tinted backdrop so the color fades out beneath it. */
   children?: React.ReactNode;
 };
@@ -34,6 +37,8 @@ export function MusicPlaylistHeader({
   onEditDescription,
   tracks,
   coverFile,
+  coverSrc,
+  meta,
   startEditing,
   onRename,
   onBack,
@@ -64,23 +69,26 @@ export function MusicPlaylistHeader({
     <div className="relative shrink-0">
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 blur-[60px] brightness-[0.55] saturate-150 scale-[1.3]">
-          <MusicPlaylistCover files={tracks} coverFile={coverFile} className="w-full h-full" radius="0" />
+          <MusicPlaylistCover files={tracks} coverFile={coverFile} src={coverSrc} className="w-full h-full" radius="0" />
         </div>
         <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/40 via-60% to-[var(--music-surface)]" />
       </div>
 
-      <button
-        type="button"
-        onClick={onBack}
-        className="absolute top-3 left-4 z-20 flex items-center gap-1 text-sm text-white/70 hover:text-white transition-colors"
-      >
-        <ChevronLeft size={16} /> Back
-      </button>
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="absolute top-3 left-4 z-20 flex items-center gap-1 text-sm text-white/70 hover:text-white transition-colors"
+        >
+          <ChevronLeft size={16} /> Back
+        </button>
+      ) : null}
 
-      <div className="relative z-10 flex items-end gap-6 px-6 pt-14 pb-6">
+      <div className={`relative z-10 flex items-end gap-6 px-6 pb-6 ${onBack ? "pt-14" : "pt-6"}`}>
         <MusicPlaylistCover
           files={tracks}
           coverFile={coverFile}
+          src={coverSrc}
           className="w-48 h-48 shrink-0 shadow-[0_8px_40px_rgba(0,0,0,0.5)]"
           iconSize={64}
         />
@@ -123,8 +131,12 @@ export function MusicPlaylistHeader({
             </button>
           )}
           <p className="text-sm text-white/70">
-            {tracks.length} {tracks.length === 1 ? "song" : "songs"}
-            {totalDuration > 0 && `, ${formatPlaylistLength(totalDuration)}`}
+            {meta ?? (
+              <>
+                {tracks.length} {tracks.length === 1 ? "song" : "songs"}
+                {totalDuration > 0 && `, ${formatPlaylistLength(totalDuration)}`}
+              </>
+            )}
           </p>
         </div>
       </div>
