@@ -153,14 +153,21 @@ export function downloadOutsideTrackIntoPlaylist(track: OutsideTrack, playlistId
 }
 
 /** Download state of an outside song: null before it is queued, then a 0..100 percentage. */
-export function useOutsideDownloadPercent(url: string): { queued: boolean; percent: number; failed: boolean } {
+export function useOutsideDownloadPercent(url: string): {
+  queued: boolean;
+  percent: number;
+  failed: boolean;
+  /** First line of the failure; music mode has no toast to show it. */
+  error: string | null;
+} {
   return useRuforgeStore(
     useShallow((s) => {
       const job = s.downloadJobs.find((j) => youtubeUrlsMatch(j.url, url));
-      if (!job) return { queued: false, percent: 0, failed: false };
+      if (!job) return { queued: false, percent: 0, failed: false, error: null };
       const failed = job.status === "failed" || job.status === "timed_out";
       const percent = job.status === "completed" ? 100 : Math.max(0, Math.min(100, job.progress?.percentage ?? 0));
-      return { queued: true, percent, failed };
+      const error = failed ? (job.error?.split("\n")[0].trim() || null) : null;
+      return { queued: true, percent, failed, error };
     }),
   );
 }

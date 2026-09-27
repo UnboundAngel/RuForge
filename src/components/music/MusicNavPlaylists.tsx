@@ -37,7 +37,6 @@ import {
 } from "./musicPlaylists";
 import { useMusicLibraryTracks, useMusicPlaylistRecords } from "./useMusicPlaylists";
 import { MusicPlaylistNavMenu, type MusicPlaylistNavMenuState } from "./MusicPlaylistNavMenu";
-
 const SORTS: LibrarySort[] = ["recents", "alphabetical", "custom"];
 const SORT_ICONS: Record<LibrarySort, LucideIcon> = {
   recents: Clock,
@@ -126,6 +125,7 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
       playing={queueSource?.kind === "liked"}
       cover={<LikedSongsCover files={likedTracks} className="w-12 h-12" radius="6px" />}
       onClick={() => openMusicLiked()}
+      onContextMenu={(e) => e.preventDefault()}
     />
   );
 
@@ -164,8 +164,7 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
           ))}
         </>
       )}
-      <MusicPlaylistNavMenu menu={navMenu} onClose={() => setNavMenu(null)} />
-      {!collapsed && listQuery.trim() && !showLiked && playlists.length === 0 && artists.length === 0 && (
+      <MusicPlaylistNavMenu menu={navMenu} onClose={() => setNavMenu(null)} />      {!collapsed && listQuery.trim() && !showLiked && playlists.length === 0 && artists.length === 0 && (
         <p className="px-2 pt-3 text-sm text-white/60">Couldn't find "{listQuery.trim()}"</p>
       )}
       {!collapsed && !listQuery.trim() && !showArtists && records.length === 0 && (

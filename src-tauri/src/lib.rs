@@ -94,12 +94,13 @@ use crate::commands::music_playlists::{
     read_music_playlists_file, read_playlist_text_file, write_music_playlists_file,
     write_playlist_text_file,
 };
-use crate::commands::music_preview::resolve_music_preview_stream;
+use crate::commands::music_preview::{music_preview_local_hook, resolve_music_preview_stream};
 use crate::commands::recently_deleted::{
     list_recently_deleted, remove_recently_deleted_entry, restore_recently_deleted,
 };
 use crate::commands::removable_drives::{
-    export_dest_dir_available, poll_removable_drives, RemovableDrivesState,
+    export_dest_dir_available, get_removable_drives, spawn_removable_drives_watcher,
+    RemovableDrivesState,
 };
 use crate::commands::settings::{
     authorize_cleanup, clear_ruforge_cache, get_hardware_acceleration_browser_args,
@@ -240,6 +241,8 @@ pub fn run() {
                 }
             });
 
+            spawn_removable_drives_watcher(app.handle());
+
             setup_tray(app)?;
 
             focus_protocol::setup_focus_protocol(app)?;
@@ -336,6 +339,7 @@ pub fn run() {
             get_music_browse_info,
             get_playlist_items_page,
             resolve_music_preview_stream,
+            music_preview_local_hook,
             start_download_job,
             pause_download_job,
             stop_all_active_download_jobs,
@@ -413,7 +417,7 @@ pub fn run() {
             island_overlay_ready,
             export_media_bundle,
             cancel_export_bundle,
-            poll_removable_drives,
+            get_removable_drives,
             export_dest_dir_available,
             migrate_library_layout,
             list_recently_deleted,
