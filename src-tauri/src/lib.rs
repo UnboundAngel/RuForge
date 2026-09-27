@@ -99,7 +99,8 @@ use crate::commands::recently_deleted::{
     list_recently_deleted, remove_recently_deleted_entry, restore_recently_deleted,
 };
 use crate::commands::removable_drives::{
-    export_dest_dir_available, poll_removable_drives, RemovableDrivesState,
+    export_dest_dir_available, get_removable_drives, spawn_removable_drives_watcher,
+    RemovableDrivesState,
 };
 use crate::commands::settings::{
     authorize_cleanup, clear_ruforge_cache, get_hardware_acceleration_browser_args,
@@ -239,6 +240,8 @@ pub fn run() {
                     }
                 }
             });
+
+            spawn_removable_drives_watcher(app.handle());
 
             setup_tray(app)?;
 
@@ -413,7 +416,7 @@ pub fn run() {
             island_overlay_ready,
             export_media_bundle,
             cancel_export_bundle,
-            poll_removable_drives,
+            get_removable_drives,
             export_dest_dir_available,
             migrate_library_layout,
             list_recently_deleted,
