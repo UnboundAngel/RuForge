@@ -7,9 +7,11 @@ import {
   RADIO_CACHE_TTL_MS,
   fileVideoId,
   mergeOutsideRecommendations,
+  type OutsideTrack,
+  blendRadios,
   musicRadioUrl,
-  outsidePage,
-  outsideRoundSlot,
+  outsidePageSpread,
+  outsideRoundSeeds,
   radioBackoffActive,
   radioSeeds,
   readCachedRadio,
@@ -120,19 +122,37 @@ describe("mergeOutsideRecommendations", () => {
   });
 });
 
-describe("outsideRoundSlot / outsidePage", () => {
-  it("walks the seeds before paging a radio", () => {
-    expect(outsideRoundSlot(0, 3)).toEqual({ seedIndex: 0, page: 0 });
-    expect(outsideRoundSlot(2, 3)).toEqual({ seedIndex: 2, page: 0 });
-    expect(outsideRoundSlot(3, 3)).toEqual({ seedIndex: 0, page: 1 });
-    expect(outsideRoundSlot(5, 0)).toEqual({ seedIndex: 0, page: 0 });
+describe("outsideRoundSeeds / blendRadios / outsidePageSpread", () => {
+  const out = (id: string, artist: string): OutsideTrack => ({
+    videoId: id,
+    title: `Song ${id}`,
+    artist,
+    thumbnail: null,
+    duration: 200,
+    url: `https://music.youtube.com/watch?v=${id}`,
   });
 
-  it("pages through the pool and wraps", () => {
-    const pool = [1, 2, 3, 4, 5];
-    expect(outsidePage(pool, 0, 2)).toEqual([1, 2]);
-    expect(outsidePage(pool, 2, 2)).toEqual([5, 1]);
-    expect(outsidePage([1, 2], 3, 6)).toEqual([1, 2]);
+  it("walks windows of seeds before paging the blend", () => {
+    const seeds = ["s1", "s2", "s3", "s4", "s5", "s6"];
+    expect(outsideRoundSeeds(seeds, 0)).toEqual({ seedIds: ["s1", "s2", "s3"], page: 0 });
+    expect(outsideRoundSeeds(seeds, 1)).toEqual({ seedIds: ["s4", "s5", "s6"], page: 0 });
+    expect(outsideRoundSeeds(seeds, 2)).toEqual({ seedIds: ["s1", "s2", "s3"], page: 1 });
+    expect(outsideRoundSeeds(["s1"], 4)).toEqual({ seedIds: ["s1"], page: 4 });
+    expect(outsideRoundSeeds([], 1)).toEqual({ seedIds: [], page: 0 });
+  });
+
+  it("interleaves radios and drops repeats", () => {
+    const blended = blendRadios([
+      [out("a", "King Von"), out("b", "King Von")],
+      [out("c", "Drake"), out("a", "King Von")],
+    ]);
+    expect(blended.map((t) => t.videoId)).toEqual(["a", "c", "b"]);
+  });
+
+  it("caps one artist per page and only repeats them when nobody else is left", () => {
+    const pool = [out("1", "King Von"), out("2", "King Von"), out("3", "King Von"), out("4", "Drake")];
+    expect(outsidePageSpread(pool, 0, 3).map((t) => t.videoId)).toEqual(["1", "2", "4"]);
+    expect(outsidePageSpread(pool.slice(0, 3), 0, 3).map((t) => t.videoId)).toEqual(["1", "2", "3"]);
   });
 });
 
