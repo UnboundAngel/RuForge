@@ -164,7 +164,7 @@ fn should_hard_skip_stranded_ytdlp_temp(path: &std::path::Path) -> bool {
     sibling_final_muxed_video_exists(parent, base)
 }
 
-fn resolve_info_json_path(parent: &std::path::Path, stem: &str) -> Option<std::path::PathBuf> {
+pub(crate) fn resolve_info_json_path(parent: &std::path::Path, stem: &str) -> Option<std::path::PathBuf> {
     for candidate in [stem, strip_ytdlp_stream_suffix(stem)] {
         let primary = parent.join(format!("{}.info.json", candidate));
         if primary.is_file() {

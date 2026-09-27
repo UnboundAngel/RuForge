@@ -1,74 +1,99 @@
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Emitter, Manager, State};
 
+/// Fired with a [`RemovableDrivesSnapshot`] whenever the set of removable drives changes.
+pub const REMOVABLE_DRIVES_CHANGED_EVENT: &str = "removable-drives-changed";
+
+/// Drive enumeration is a couple of cheap syscalls, so a native loop is fine; what it
+/// replaces is the webview polling over IPC every 1.5s, which re-rendered the app root.
+const WATCH_INTERVAL: Duration = Duration::from_millis(1500);
+
+#[derive(Default)]
+struct Tracker {
+    previous: HashSet<String>,
+    last_newly_plugged: Option<String>,
+    latest: RemovableDrivesSnapshot,
+}
+
+#[derive(Default)]
 pub struct RemovableDrivesState {
-    previous: Mutex<HashSet<String>>,
-    last_newly_plugged: Mutex<Option<String>>,
+    tracker: Mutex<Tracker>,
 }
 
-impl Default for RemovableDrivesState {
-    fn default() -> Self {
-        Self {
-            previous: Mutex::new(HashSet::new()),
-            last_newly_plugged: Mutex::new(None),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RemovableDrivesPollResult {
+pub struct RemovableDrivesSnapshot {
     pub drives: Vec<String>,
     /// Best default export parent: last newly-plugged root still present, else None.
     pub default_dest: Option<String>,
 }
 
-#[tauri::command]
-pub fn poll_removable_drives(
-    state: State<'_, RemovableDrivesState>,
-) -> Result<RemovableDrivesPollResult, String> {
-    let current = enumerate_removable_roots();
-    let mut previous = state
-        .previous
-        .lock()
-        .map_err(|e| format!("removable drives lock: {e}"))?;
-    let mut last_new = state
-        .last_newly_plugged
-        .lock()
-        .map_err(|e| format!("removable drives lock: {e}"))?;
+impl RemovableDrivesState {
+    /// Re-enumerates drives and returns the new snapshot only when it differs from the last one.
+    fn refresh(&self) -> Option<RemovableDrivesSnapshot> {
+        let current = enumerate_removable_roots();
+        let mut t = self.tracker.lock().ok()?;
 
-    let newly: Vec<String> = current
-        .iter()
-        .filter(|d| !previous.contains(*d))
-        .cloned()
-        .collect();
-
-    if let Some(root) = newly.last() {
-        *last_new = Some(root.clone());
-    }
-
-    let current_set: HashSet<String> = current.iter().cloned().collect();
-    *previous = current_set;
-
-    if let Some(ref root) = *last_new {
-        if !current.contains(root) {
-            *last_new = None;
+        if let Some(root) = current.iter().filter(|d| !t.previous.contains(*d)).last() {
+            t.last_newly_plugged = Some(root.clone());
         }
+        t.previous = current.iter().cloned().collect();
+        if t
+            .last_newly_plugged
+            .as_ref()
+            .is_some_and(|root| !current.contains(root))
+        {
+            t.last_newly_plugged = None;
+        }
+
+        let default_dest = t
+            .last_newly_plugged
+            .as_ref()
+            .filter(|root| export_dest_dir_available_path(Path::new(root.as_str())))
+            .cloned();
+        let next = RemovableDrivesSnapshot {
+            drives: current,
+            default_dest,
+        };
+        if next == t.latest {
+            return None;
+        }
+        t.latest = next.clone();
+        Some(next)
     }
 
-    let default_dest = last_new
-        .as_ref()
-        .filter(|root| export_dest_dir_available_path(Path::new(root.as_str())))
-        .cloned();
+    fn latest(&self) -> RemovableDrivesSnapshot {
+        self.tracker
+            .lock()
+            .map(|t| t.latest.clone())
+            .unwrap_or_default()
+    }
+}
 
-    Ok(RemovableDrivesPollResult {
-        drives: current,
-        default_dest,
-    })
+/// Starts the background watcher. Takes the first reading synchronously so
+/// `get_removable_drives` is already current when the webview asks.
+pub fn spawn_removable_drives_watcher(app: &AppHandle) {
+    app.state::<RemovableDrivesState>().refresh();
+    let app = app.clone();
+    std::thread::Builder::new()
+        .name("removable-drives-watch".into())
+        .spawn(move || loop {
+            std::thread::sleep(WATCH_INTERVAL);
+            if let Some(snapshot) = app.state::<RemovableDrivesState>().refresh() {
+                let _ = app.emit(REMOVABLE_DRIVES_CHANGED_EVENT, snapshot);
+            }
+        })
+        .ok();
+}
+
+#[tauri::command]
+pub fn get_removable_drives(state: State<'_, RemovableDrivesState>) -> RemovableDrivesSnapshot {
+    state.latest()
 }
 
 #[tauri::command]

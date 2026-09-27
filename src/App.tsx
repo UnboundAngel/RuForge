@@ -60,7 +60,7 @@ import { MediaView } from "./components/MediaView";
 import { AuthorizeCleanupModal } from "./components/AuthorizeCleanupModal";
 import { RecentlyDeletedModal } from "./components/RecentlyDeletedModal";
 import { ExportBundleHost } from "./components/ExportBundleModal";
-import { useRemovableDrivesPoll } from "./hooks/useRemovableDrivesPoll";
+import { useRemovableDrives } from "./hooks/useRemovableDrives";
 import { buildEntireLibraryExportPreset } from "./lib/exportSelection";
 import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
 import { askConfirm, ConfirmDialogHost } from "./components/ConfirmDialog";
@@ -316,7 +316,7 @@ function App() {
     Boolean(backgroundVideoFile) && navMode !== "music" && activeTab === "player";
   const notify = useRuforgeStore((s) => s.notify);
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
-  const { removableDrives, defaultRemovableDest } = useRemovableDrivesPoll();
+  const { removableDrives, defaultRemovableDest } = useRemovableDrives();
   const hasRemovableDrive = removableDrives.length > 0;
 
   const handleExportUsbTitlebar = useCallback(async () => {

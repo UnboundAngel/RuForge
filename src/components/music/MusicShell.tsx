@@ -23,12 +23,12 @@ import { MusicExploreBottomBar } from "./MusicExploreBottomBar";
 import { MusicNavBackCell } from "./MusicNavBackCell";
 import { MusicExploreDownloadPanel } from "./MusicExploreDownloadPanel";
 import { ExploreDownloadDockChip } from "./MusicExploreDownloadCollapsed";
-import { useMusicDownloadCelebrations } from "@/hooks/useMusicDownloadCelebrations";
+import { useStoreDownloadCelebrations } from "@/hooks/useMusicDownloadCelebrations";
 import { NowPlayingBar } from "./NowPlayingBar";
 import { MusicLyricsView } from "./MusicLyricsView";
 import { MusicStorageStrip } from "./MusicStorageStrip";
 import { readLyrics, sidecarHasLyrics } from "@/lib/lyrics";
-import { useMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
+import { useMainAudioCurrentTime, useMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { AudioHeroStage } from "@/components/player/AudioHeroStage";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -93,6 +93,7 @@ import {
   type MusicExpandedContextMenuState,
 } from "./MusicExpandedContextMenu";
 import { useSponsorBlockPlayback } from "@/hooks/useSponsorBlockPlayback";
+import type { SponsorBlockSegment } from "@/sponsorBlock";
 import { getRecentHistory, type PlayHistoryEntry } from "./musicPlayHistory";
 import { importLegacyListenDataIfNeeded } from "@/lib/musicListenLegacyImport";
 import { refreshListenIntegrity } from "@/lib/musicListenIntegrity";
@@ -257,6 +258,75 @@ function ExpandedOverlay({
   );
 }
 
+const NO_SB_SEGMENTS: SponsorBlockSegment[] = [];
+
+/**
+ * SponsorBlock skipping follows the playhead, so it lives in its own component: the time ticks
+ * re-render this instead of the whole shell. The shell only hears about segment changes.
+ */
+function MusicSponsorBlockSync({
+  musicOnlySkip,
+  onSegments,
+}: {
+  musicOnlySkip: boolean;
+  onSegments: (segments: SponsorBlockSegment[]) => void;
+}) {
+  const playback = useMainAudioPlayback();
+  const currentTime = useMainAudioCurrentTime();
+  const playingFile = useRuforgeStore((s) => s.playingFile);
+  const settings = useRuforgeStore((s) => s.settings);
+  const bumpSponsorBlockStat = useRuforgeStore((s) => s.bumpSponsorBlockStat);
+  const sbOwnedByMusic =
+    !!playingFile && isAudioOnlyPath(playingFile.path);
+  const sbPlayback = useSponsorBlockPlayback({
+    file: playingFile ?? ({ path: "", sourceId: null } as unknown as MediaFile),
+    currentTime,
+    enabled: sbOwnedByMusic && settings.sponsorBlockEnabled,
+    settings,
+    seekTo: playback.seek,
+    onManualSkip: (cat) => bumpSponsorBlockStat(cat, "manualSkips"),
+    onAppearance: (cat) => bumpSponsorBlockStat(cat, "appearances"),
+    onDemoteUndo: (cat) => bumpSponsorBlockStat(cat, "undoSignals"),
+  });
+  const segments = sbPlayback.segments;
+
+  useEffect(() => {
+    onSegments(segments);
+  }, [segments, onSegments]);
+
+  // Music-only skip: auto-seek past music_offtopic segments when toggle is on.
+  // segments is empty until loaded for the current path (no stale cross-track seeks).
+  const musicOnlySkippedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!musicOnlySkip) return;
+    if (!playingFile) return;
+    const primary = playback.audioEl;
+    const ct =
+      primary && Number.isFinite(primary.currentTime)
+        ? primary.currentTime
+        : currentTime;
+    for (const seg of segments) {
+      if (seg.category !== "music_offtopic") continue;
+      if (seg.actionType !== "skip") continue;
+      const [start, end] = seg.segment;
+      if (ct >= start && ct < end - 0.25) {
+        const key = seg.UUID || `${start}-${end}`;
+        if (musicOnlySkippedRef.current.has(key)) continue;
+        musicOnlySkippedRef.current.add(key);
+        playback.seek(end);
+        return;
+      }
+    }
+  }, [musicOnlySkip, currentTime, playback.audioEl, segments, playingFile, playback.seek]);
+
+  // Reset music-only-skip seen-set when track changes
+  useEffect(() => {
+    musicOnlySkippedRef.current.clear();
+  }, [playingFile?.path]);
+
+  return null;
+}
+
 export function MusicShell() {
   const isMainMaximized = useMainWindowMaximized();
   const activeView = useRuforgeStore((s) => s.musicView);
@@ -346,9 +416,7 @@ export function MusicShell() {
     }
   }, []);
 
-  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
-  const downloadCelebrating = useMusicDownloadCelebrations(downloadJobs);
-  const prevAutoQueueJobsRef = useRef(downloadJobs);
+  const downloadCelebrating = useStoreDownloadCelebrations();
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
   const musicDetail = useRuforgeStore((s) => s.musicDetail);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
@@ -360,51 +428,9 @@ export function MusicShell() {
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const ensureGalleryOnViewMount = useRuforgeStore((s) => s.ensureGalleryOnViewMount);
   const settings = useRuforgeStore((s) => s.settings);
-  const bumpSponsorBlockStat = useRuforgeStore((s) => s.bumpSponsorBlockStat);
   const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
   const handlePlayFolderNeighbor = useRuforgeStore((s) => s.handlePlayFolderNeighbor);
-  const sbOwnedByMusic =
-    !!playingFile && isAudioOnlyPath(playingFile.path);
-  const sbPlayback = useSponsorBlockPlayback({
-    file: playingFile ?? ({ path: "", sourceId: null } as unknown as MediaFile),
-    currentTime: playback.currentTime,
-    enabled: sbOwnedByMusic && settings.sponsorBlockEnabled,
-    settings,
-    seekTo: playback.seek,
-    onManualSkip: (cat) => bumpSponsorBlockStat(cat, "manualSkips"),
-    onAppearance: (cat) => bumpSponsorBlockStat(cat, "appearances"),
-    onDemoteUndo: (cat) => bumpSponsorBlockStat(cat, "undoSignals"),
-  });
-
-  // Music-only skip: auto-seek past music_offtopic segments when toggle is on.
-  // sbPlayback.segments is empty until loaded for the current path (no stale cross-track seeks).
-  const musicOnlySkippedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!musicOnlySkip) return;
-    if (!playingFile) return;
-    const primary = playback.audioEl;
-    const ct =
-      primary && Number.isFinite(primary.currentTime)
-        ? primary.currentTime
-        : playback.currentTime;
-    for (const seg of sbPlayback.segments) {
-      if (seg.category !== "music_offtopic") continue;
-      if (seg.actionType !== "skip") continue;
-      const [start, end] = seg.segment;
-      if (ct >= start && ct < end - 0.25) {
-        const key = seg.UUID || `${start}-${end}`;
-        if (musicOnlySkippedRef.current.has(key)) continue;
-        musicOnlySkippedRef.current.add(key);
-        playback.seek(end);
-        return;
-      }
-    }
-  }, [musicOnlySkip, playback.currentTime, playback.audioEl, sbPlayback.segments, playingFile, playback.seek]);
-
-  // Reset music-only-skip seen-set when track changes
-  useEffect(() => {
-    musicOnlySkippedRef.current.clear();
-  }, [playingFile?.path]);
+  const [sbSegments, setSbSegments] = useState<SponsorBlockSegment[]>(NO_SB_SEGMENTS);
 
   // Refresh history tab when playback changes (snapshot updated by listen session).
   useEffect(() => {
@@ -500,8 +526,10 @@ export function MusicShell() {
     currentMusicExploreUrl,
     musicExplorePageContext,
   ]);
-  const hasActiveDownloadJobs = downloadJobs.some(
-    (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+  const hasActiveDownloadJobs = useRuforgeStore((s) =>
+    s.downloadJobs.some(
+      (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+    ),
   );
   const explorePanelDockMode = dockMinimized || !showExplorePanel;
 
@@ -781,16 +809,22 @@ export function MusicShell() {
   }, []);
 
   // Prune autoQueuedVideoIdsRef when a job is removed so the same song can be re-downloaded.
-  useEffect(() => {
-    const prev = prevAutoQueueJobsRef.current;
-    prevAutoQueueJobsRef.current = downloadJobs;
-    for (const job of prev) {
-      if (!downloadJobs.some((j) => j.id === job.id)) {
-        const videoId = extractYouTubeVideoId(job.url);
-        if (videoId) autoQueuedVideoIdsRef.current.delete(videoId);
-      }
-    }
-  }, [downloadJobs]);
+  // Subscribed rather than selected so download progress events don't re-render the shell.
+  useEffect(
+    () =>
+      useRuforgeStore.subscribe((s, prevState) => {
+        const downloadJobs = s.downloadJobs;
+        const prev = prevState.downloadJobs;
+        if (downloadJobs === prev) return;
+        for (const job of prev) {
+          if (!downloadJobs.some((j) => j.id === job.id)) {
+            const videoId = extractYouTubeVideoId(job.url);
+            if (videoId) autoQueuedVideoIdsRef.current.delete(videoId);
+          }
+        }
+      }),
+    [],
+  );
 
   const handlePasteUrlReady = useCallback((url: string) => {
     const kind = classifyMusicExploreUrl(url);
@@ -1171,7 +1205,7 @@ export function MusicShell() {
     ?? "";
   const chapters = playingFile?.chapters ?? null;
   const hasChaptersForPanel = !!(chapters && chapters.length >= 2);
-  const hasSbSegmentsForPanel = sbPlayback.segments.some((s) => s.actionType === "skip");
+  const hasSbSegmentsForPanel = sbSegments.some((s) => s.actionType === "skip");
   const showSegmentsTab = hasChaptersForPanel || hasSbSegmentsForPanel;
   const shellBlack = playerExpanded;
 
@@ -1254,6 +1288,7 @@ export function MusicShell() {
       }}
       >
       <PendingPlaylistAddsResolver />
+      <MusicSponsorBlockSync musicOnlySkip={musicOnlySkip} onSegments={setSbSegments} />
       <MusicTopBar
         activeView={activeView}
         captureScreenLabel={`music-${activeView}`}
@@ -1297,7 +1332,6 @@ export function MusicShell() {
                 footerSlot={
                   showDownloadDockChip ? (
                     <ExploreDownloadDockChip
-                      downloadJobs={downloadJobs}
                       celebrating={downloadCelebrating}
                       navCollapsed={navCollapsed}
                       onClick={() => {
@@ -1557,7 +1591,6 @@ export function MusicShell() {
             trackTitle={trackTitle}
             trackArtist={trackArtist}
             audioEl={playback.audioEl}
-            currentTime={playback.currentTime}
             duration={playback.duration}
             effectivePlaylist={playback.effectivePlaylist}
             playlistIndex={playback.playlistIndex}
@@ -1575,7 +1608,7 @@ export function MusicShell() {
             }}
             historyEntries={historyEntries}
             chapters={chapters}
-            sbSegments={sbPlayback.segments}
+            sbSegments={sbSegments}
             musicOnlySkip={musicOnlySkip}
             onToggleMusicOnlySkip={toggleMusicOnlySkip}
             onToggleExpand={handleToggleExpand}
@@ -1607,7 +1640,6 @@ export function MusicShell() {
             >
               <NowPlayingBar
                 paused={playback.paused}
-                currentTime={playback.currentTime}
                 duration={playback.duration}
                 expanded={playerExpanded}
                 lyricsOpen={lyricsOpen}
@@ -1664,7 +1696,6 @@ export function MusicShell() {
         menu={expandedMenu}
         file={playingFile}
         paused={playback.paused}
-        currentTime={playback.currentTime}
         hasPrevInQueue={playback.hasPrevInQueue}
         hasNextInQueue={playback.hasNextInQueue}
         onClose={() => setExpandedMenu(null)}

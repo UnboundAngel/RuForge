@@ -29,22 +29,34 @@ export function useLyricsActiveLine(
       return;
     }
 
+    // The loop parks itself while paused or hidden, where the line can only move on a seek,
+    // and any event that can move it again runs one more frame to catch up and maybe resume.
     let raf = 0;
+    const running = () => !audioEl.paused && document.visibilityState === "visible";
     const tick = () => {
+      raf = 0;
       const list = linesRef.current;
-      if (!list || list.length === 0) {
-        raf = requestAnimationFrame(tick);
-        return;
+      if (list && list.length > 0) {
+        const next = activeLineIndex(list, audioEl.currentTime);
+        if (next !== indexRef.current) {
+          indexRef.current = next;
+          setIndex(next);
+        }
       }
-      const next = activeLineIndex(list, audioEl.currentTime);
-      if (next !== indexRef.current) {
-        indexRef.current = next;
-        setIndex(next);
-      }
-      raf = requestAnimationFrame(tick);
+      if (running()) raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const wake = () => {
+      if (!raf) raf = requestAnimationFrame(tick);
+    };
+    const events = ["play", "playing", "pause", "seeked", "timeupdate"] as const;
+    for (const type of events) audioEl.addEventListener(type, wake);
+    document.addEventListener("visibilitychange", wake);
+    wake();
+    return () => {
+      cancelAnimationFrame(raf);
+      for (const type of events) audioEl.removeEventListener(type, wake);
+      document.removeEventListener("visibilitychange", wake);
+    };
   }, [audioEl, enabled, lines]);
 
   return index;

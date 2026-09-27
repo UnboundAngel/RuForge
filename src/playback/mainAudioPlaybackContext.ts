@@ -2,22 +2,28 @@ import { createContext, useContext, type Context } from "react";
 
 import type { useMusicPlayback } from "@/components/music/useMusicPlayback";
 
-export type MainAudioPlaybackValue = ReturnType<typeof useMusicPlayback>;
+/**
+ * Everything but the playhead. The time lives in its own context so the ~4Hz ticks only
+ * re-render the few components that draw it, not every play button in Music mode.
+ */
+export type MainAudioPlaybackValue = Omit<ReturnType<typeof useMusicPlayback>, "currentTime">;
 
 const CONTEXT_KEY = Symbol.for("ruforge.MainAudioPlaybackContext");
+const TIME_CONTEXT_KEY = Symbol.for("ruforge.MainAudioTimeContext");
 
 /** Singleton context survives Vite Fast Refresh without splitting provider/consumer modules. */
-function getMainAudioPlaybackContext(): Context<MainAudioPlaybackValue | null> {
+function getSingletonContext<T>(key: symbol): Context<T | null> {
   const g = globalThis as typeof globalThis & {
-    [key: symbol]: Context<MainAudioPlaybackValue | null>;
+    [key: symbol]: Context<T | null>;
   };
-  if (!g[CONTEXT_KEY]) {
-    g[CONTEXT_KEY] = createContext<MainAudioPlaybackValue | null>(null);
+  if (!g[key]) {
+    g[key] = createContext<T | null>(null);
   }
-  return g[CONTEXT_KEY];
+  return g[key];
 }
 
-export const MainAudioPlaybackContext = getMainAudioPlaybackContext();
+export const MainAudioPlaybackContext = getSingletonContext<MainAudioPlaybackValue>(CONTEXT_KEY);
+export const MainAudioTimeContext = getSingletonContext<number>(TIME_CONTEXT_KEY);
 
 export function useMainAudioPlayback(): MainAudioPlaybackValue {
   const ctx = useContext(MainAudioPlaybackContext);
@@ -29,4 +35,17 @@ export function useMainAudioPlayback(): MainAudioPlaybackValue {
 
 export function useOptionalMainAudioPlayback(): MainAudioPlaybackValue | null {
   return useContext(MainAudioPlaybackContext);
+}
+
+/** Playhead of the main player in seconds; re-renders on every time tick. */
+export function useMainAudioCurrentTime(): number {
+  const t = useContext(MainAudioTimeContext);
+  if (t == null) {
+    throw new Error("useMainAudioCurrentTime must be used within MainPlaybackHost");
+  }
+  return t;
+}
+
+export function useOptionalMainAudioCurrentTime(): number | null {
+  return useContext(MainAudioTimeContext);
 }

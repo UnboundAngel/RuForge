@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
-import { ChevronRight, EyeOff, ListPlus, User, UserX } from "lucide-react";
+import { EyeOff, ListPlus, User, UserX } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { artistKeyFromFile } from "./musicArtist";
 import { shelfItemArtist } from "./musicHiddenRecommendations";
-import { MusicAddToPlaylistMenu } from "./MusicAddToPlaylistMenu";
+import { MusicAddToPlaylistFlyoutRow } from "./MusicAddToPlaylistFlyout";
 import {
   MUSIC_MENU_ICON_SIZE,
   MUSIC_MENU_TONES,
@@ -26,28 +25,9 @@ type Props = {
 /** Right-click menu for a Recommended card, in the song menu's style. */
 export function MusicRecommendationMenu({ menu, onClose, onHide, onAddOutside }: Props) {
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
-  const [picking, setPicking] = useState(false);
-
-  useEffect(() => {
-    setPicking(false);
-  }, [menu]);
 
   if (!menu) return null;
   const { item } = menu;
-
-  if (picking && item.kind === "local") {
-    return (
-      <MusicAddToPlaylistMenu
-        paths={[item.file.path]}
-        x={menu.x}
-        y={menu.y}
-        onClose={() => {
-          setPicking(false);
-          onClose();
-        }}
-      />
-    );
-  }
 
   const icon = MUSIC_MENU_ICON_SIZE;
   const title = item.kind === "local" ? item.file.name : item.track.title;
@@ -66,16 +46,11 @@ export function MusicRecommendationMenu({ menu, onClose, onHide, onAddOutside }:
       onClose={onClose}
       ariaLabel={`Actions for ${title}`}
       measureKey={shelfKey(item)}
+      placement="cursor"
     >
       <MusicMenuSection label="Playlist" tone={MUSIC_MENU_TONES.playlist}>
         {item.kind === "local" ? (
-          <MusicMenuRow
-            tone={MUSIC_MENU_TONES.playlist}
-            label="Add to playlist"
-            icon={<ListPlus size={icon} strokeWidth={2.25} />}
-            onClick={() => setPicking(true)}
-            trailing={<ChevronRight size={12} className="shrink-0 text-white/35" aria-hidden />}
-          />
+          <MusicAddToPlaylistFlyoutRow key={shelfKey(item)} paths={[item.file.path]} onClose={onClose} />
         ) : (
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.playlist}

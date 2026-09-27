@@ -10,7 +10,7 @@ import { isAudioOnlyPath } from "@/mediaKind";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 
 import { shouldHostOwnBridge } from "./bridgeArbitration";
-import { MainAudioPlaybackContext } from "./mainAudioPlaybackContext";
+import { MainAudioPlaybackContext, MainAudioTimeContext } from "./mainAudioPlaybackContext";
 
 ensureAudioOutputSinkBinding();
 
@@ -55,6 +55,62 @@ export function MainPlaybackHost({ children }: { children: React.ReactNode }) {
     useRuforgeStore.getState().setPlayingFile(file);
   }, [entries, playingFile, activityOwner]);
 
+  // Listed field by field so the time ticks don't hand every consumer a new object.
+  const playbackValue = useMemo(
+    () => ({
+      paused: playback.paused,
+      duration: playback.duration,
+      playbackSpeed: playback.playbackSpeed,
+      setPlaybackSpeed: playback.setPlaybackSpeed,
+      togglePlay: playback.togglePlay,
+      seek: playback.seek,
+      skipBySeconds: playback.skipBySeconds,
+      beginScrub: playback.beginScrub,
+      releaseScrub: playback.releaseScrub,
+      skipPrev: playback.skipPrev,
+      skipNext: playback.skipNext,
+      jumpPrevChapter: playback.jumpPrevChapter,
+      jumpNextChapter: playback.jumpNextChapter,
+      hasPrevInQueue: playback.hasPrevInQueue,
+      hasNextInQueue: playback.hasNextInQueue,
+      hasChapters: playback.hasChapters,
+      isDraggingRef: playback.isDraggingRef,
+      effectivePlaylist: playback.effectivePlaylist,
+      playlistIndex: playback.playlistIndex,
+      manualQueue: playback.manualQueue,
+      playingFromManualQueue: playback.playingFromManualQueue,
+      audioEl: playback.audioEl,
+      crossfadeSec: playback.crossfadeSec,
+      setCrossfadeSec: playback.setCrossfadeSec,
+    }),
+    [
+      playback.paused,
+      playback.duration,
+      playback.playbackSpeed,
+      playback.setPlaybackSpeed,
+      playback.togglePlay,
+      playback.seek,
+      playback.skipBySeconds,
+      playback.beginScrub,
+      playback.releaseScrub,
+      playback.skipPrev,
+      playback.skipNext,
+      playback.jumpPrevChapter,
+      playback.jumpNextChapter,
+      playback.hasPrevInQueue,
+      playback.hasNextInQueue,
+      playback.hasChapters,
+      playback.isDraggingRef,
+      playback.effectivePlaylist,
+      playback.playlistIndex,
+      playback.manualQueue,
+      playback.playingFromManualQueue,
+      playback.audioEl,
+      playback.crossfadeSec,
+      playback.setCrossfadeSec,
+    ],
+  );
+
   const bridgeValue = useMemo(
     () => ({
       paused: playback.paused,
@@ -94,22 +150,24 @@ export function MainPlaybackHost({ children }: { children: React.ReactNode }) {
   }, [bridgeActive, playback.audioEl, playingFile?.path, pairReady]);
 
   return (
-    <MainAudioPlaybackContext.Provider value={playback}>
-      <audio
-        ref={audioARef}
-        crossOrigin="anonymous"
-        className="hidden"
-        preload="auto"
-      />
-      <audio
-        ref={audioBRef}
-        crossOrigin="anonymous"
-        className="hidden"
-        preload="auto"
-      />
-      <MainPlaybackProvider bridgeOwner="host-audio" active={bridgeActive} value={bridgeValue}>
-        {children}
-      </MainPlaybackProvider>
+    <MainAudioPlaybackContext.Provider value={playbackValue}>
+      <MainAudioTimeContext.Provider value={playback.currentTime}>
+        <audio
+          ref={audioARef}
+          crossOrigin="anonymous"
+          className="hidden"
+          preload="auto"
+        />
+        <audio
+          ref={audioBRef}
+          crossOrigin="anonymous"
+          className="hidden"
+          preload="auto"
+        />
+        <MainPlaybackProvider bridgeOwner="host-audio" active={bridgeActive} value={bridgeValue}>
+          {children}
+        </MainPlaybackProvider>
+      </MainAudioTimeContext.Provider>
     </MainAudioPlaybackContext.Provider>
   );
 }
