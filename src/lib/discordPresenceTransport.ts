@@ -282,8 +282,12 @@ export function setupDiscordPresenceTransport(): () => void {
   let lastEnabled: boolean | null = null;
   let inFlight = false;
   let queued = false;
+  let forceQueued = false;
+  /** Last activity sent to Rust; most store changes leave it untouched, so they send nothing. */
+  let lastSentKey: string | null = null;
 
-  const push = async () => {
+  const push = async (force: boolean) => {
+    if (force) forceQueued = true;
     if (inFlight) {
       queued = true;
       return;
@@ -292,41 +296,49 @@ export function setupDiscordPresenceTransport(): () => void {
     try {
       do {
         queued = false;
+        const forceThis = forceQueued;
+        forceQueued = false;
         const enabled = useRuforgeStore.getState().settings.discordPresenceEnabled === true;
         if (lastEnabled !== enabled) {
           await invoke("discord_rpc_set_enabled", { enabled });
           lastEnabled = enabled;
+          lastSentKey = null;
           if (!enabled) resetPresenceSessions();
         }
         if (!enabled) continue;
 
         const snapshot = buildSnapshot();
+        const key = snapshot ? JSON.stringify(snapshot) : "clear";
+        if (!forceThis && key === lastSentKey) continue;
         if (!snapshot) {
           resetPresenceSessions();
           await invoke("discord_rpc_clear_activity");
         } else {
           await invoke("discord_rpc_set_activity", { payload: snapshot });
         }
+        lastSentKey = key;
       } while (queued);
     } catch (err) {
+      lastSentKey = null;
       console.error("[discord-presence]", err);
     } finally {
       inFlight = false;
       if (queued) {
         queued = false;
-        void push();
+        void push(false);
       }
     }
   };
 
   const refresh = () => {
-    void push();
+    void push(false);
   };
 
-  refresh();
+  void push(true);
   const unsubBridge = subscribeMainPlaybackBridge(refresh);
   const unsubStore = useRuforgeStore.subscribe(refresh);
-  const heartbeat = window.setInterval(refresh, HEARTBEAT_MS);
+  // The heartbeat always sends, even unchanged, so Rust never marks the activity stale.
+  const heartbeat = window.setInterval(() => void push(true), HEARTBEAT_MS);
 
   void invoke<DiscordRpcStatus>("discord_rpc_status")
     .then((status) => {

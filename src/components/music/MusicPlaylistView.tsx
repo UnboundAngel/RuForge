@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { useRuforgeStore } from "@/store/ruforgeStore";
-import { DEFAULT_MUSIC_PLAYLIST_TITLE, recordHasPath } from "@/virtualPlaylists";
+import { DEFAULT_MUSIC_PLAYLIST_TITLE } from "@/virtualPlaylists";
 import type { MediaFile } from "@/types";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { useQueueSourcePlayback } from "./useActiveQueueSource";
@@ -14,7 +15,7 @@ import { MusicPlaylistEditDetails } from "./MusicPlaylistEditDetails";
 import { useExportPlaylistM3u8 } from "./useMusicPlaylistM3u8";
 import { confirmDeleteMusicPlaylist } from "./musicPlaylistDelete";
 import {
-  addedAtFor,
+  addedAtLookup,
   filterPlaylistTracks,
   nextSortOnHeaderClick,
   readPlaylistViewPrefs,
@@ -34,6 +35,10 @@ type Props = {
   ) => void;
   onBack: () => void;
 };
+
+function pathKey(path: string): string {
+  return path.replace(/\//g, "\\").toLowerCase();
+}
 
 const UNTOUCHED_TITLE = new RegExp(`^${DEFAULT_MUSIC_PLAYLIST_TITLE} #\\d+$`);
 
@@ -82,6 +87,56 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
     [tracks, record, prefs.sort, prefs.desc, query],
   );
   const sourcePlayback = useQueueSourcePlayback(source, shown, onPlayFile);
+  const playback = useOptionalMainAudioPlayback();
+  const paused = playback?.paused ?? true;
+  const addedAt = useMemo(() => (record ? addedAtLookup(record) : () => 0), [record]);
+  const inPlaylist = useMemo(() => {
+    const keys = new Set(record?.items.map((i) => pathKey(i.path)));
+    return (path: string) => keys.has(pathKey(path));
+  }, [record]);
+
+  // The row handlers below never change identity, so memoized rows skip the playback
+  // ticks (several per second) and drag hovers that re-render this view. They read
+  // whatever is current through this ref instead of closing over it.
+  const live = useRef({ record, source, shown, dragPath, dropPath, playback, playingFile, onPlayFile });
+  live.current = { record, source, shown, dragPath, dropPath, playback, playingFile, onPlayFile };
+
+  const playFile = useCallback((file: MediaFile) => {
+    const { source, shown, onPlayFile } = live.current;
+    if (source) onPlayFile(file, shown, source);
+  }, []);
+  const togglePlayFile = useCallback((file: MediaFile) => {
+    const { playback, playingFile } = live.current;
+    if (playingFile?.path === file.path && playback) playback.togglePlay();
+    else playFile(file);
+  }, [playFile]);
+  const openRowMenu = useCallback((e: React.MouseEvent, file: MediaFile) => {
+    const { record } = live.current;
+    if (!record) return;
+    setMenu({
+      context: { kind: "song", file },
+      x: e.clientX,
+      y: e.clientY,
+      onPlay: () => playFile(file),
+      playlistId: record.id,
+    });
+  }, [playFile]);
+  const endDrag = useCallback(() => {
+    setDragPath(null);
+    setDropPath(null);
+  }, []);
+  const reorderOver = useCallback((e: React.DragEvent, path: string) => {
+    const { dragPath, dropPath } = live.current;
+    if (!dragPath) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dropPath !== path) setDropPath(path);
+  }, []);
+  const reorderDrop = useCallback((path: string) => {
+    const { record, dragPath } = live.current;
+    if (record && dragPath && dragPath !== path) reorderVirtualPlaylistByPath(record.id, dragPath, path);
+    endDrag();
+  }, [reorderVirtualPlaylistByPath, endDrag]);
 
   if (!record || !source) {
     return (
@@ -94,15 +149,9 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
   const untouched = record.items.length === 0 && UNTOUCHED_TITLE.test(record.title);
   const dragIndex = dragPath ? shown.findIndex((t) => t.path === dragPath) : -1;
   const reorderable = prefs.sort === "custom" && !prefs.desc && query.trim() === "";
-  const playFrom = (file: MediaFile) => onPlayFile(file, shown, source);
 
   const handleDelete = async () => {
     if (await confirmDeleteMusicPlaylist(record, tracks, coverFile)) deleteVirtualPlaylist(record.id);
-  };
-
-  const endDrag = () => {
-    setDragPath(null);
-    setDropPath(null);
   };
 
   return (
@@ -161,8 +210,9 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
                 file={file}
                 index={i}
                 view={prefs.view}
-                addedAt={addedAtFor(record, file.path)}
+                addedAt={addedAt(file.path)}
                 isPlaying={playingFile?.path === file.path}
+                showPause={playingFile?.path === file.path && !paused}
                 selected={selectedPath === file.path}
                 menuOpen={menu?.context.kind === "song" && menu.context.file.path === file.path}
                 reorderable={reorderable}
@@ -172,28 +222,13 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
                     ? dragIndex < i ? "below" : "above"
                     : null
                 }
-                onSelect={() => setSelectedPath(file.path)}
-                onPlay={() => playFrom(file)}
-                onContextMenu={(e) => setMenu({
-                  context: { kind: "song", file },
-                  x: e.clientX,
-                  y: e.clientY,
-                  onPlay: () => playFrom(file),
-                  playlistId: record.id,
-                })}
-                onReorderStart={() => setDragPath(file.path)}
-                onReorderOver={(e) => {
-                  if (!dragPath) return;
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  if (dropPath !== file.path) setDropPath(file.path);
-                }}
-                onReorderDrop={() => {
-                  if (dragPath && dragPath !== file.path) {
-                    reorderVirtualPlaylistByPath(record.id, dragPath, file.path);
-                  }
-                  endDrag();
-                }}
+                onSelect={setSelectedPath}
+                onPlay={playFile}
+                onPlayToggle={togglePlayFile}
+                onContextMenu={openRowMenu}
+                onReorderStart={setDragPath}
+                onReorderOver={reorderOver}
+                onReorderDrop={reorderDrop}
                 onReorderEnd={endDrag}
               />
             ))}
@@ -212,7 +247,7 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
         playlistTracks={tracks}
         prominent={tracks.length === 0}
         autoFocus={tracks.length === 0 && !untouched}
-        inPlaylist={(path) => recordHasPath(record, path)}
+        inPlaylist={inPlaylist}
         onAdd={(file) => addToVirtualPlaylist(record.id, [file.path])}
       />
 

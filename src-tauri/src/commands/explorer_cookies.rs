@@ -11,13 +11,21 @@ use std::sync::OnceLock;
 
 use cookie::Cookie;
 use netscape_cookies::{cookie_dedupe_key, write_netscape_cookies};
-use tauri::{AppHandle, Manager, Url};
+use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder};
 use tempfile::NamedTempFile;
 use tokio::sync::Mutex;
+
+use crate::hardware_acceleration::HardwareAccelerationDisk;
 
 const YOUTUBE_URL: &str = "https://www.youtube.com";
 const MUSIC_YOUTUBE_URL: &str = "https://music.youtube.com";
 const MUSIC_EXPLORE_LABEL: &str = "music-explore-view";
+/// Hidden boot webview from `youtubeProfileProbeRunner.ts`; already on the profile when present.
+const SESSION_PROBE_LABEL: &str = "explorer-session-probe";
+/// Temporary hidden window used only when nothing on the profile is mounted.
+const COOKIE_PROBE_LABEL: &str = "explorer-cookie-probe";
+/// Must match the other explorer-data webviews; UA is per webview, not an environment option.
+const EXPLORER_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 #[cfg(target_os = "linux")]
 const LINUX_EXPLORER_LABEL: &str = "explorer-surface";
@@ -173,11 +181,81 @@ fn collect_cookies_sync(
         missing_labels.push(MUSIC_EXPLORE_LABEL.to_string());
     }
 
+    if probes.is_empty() {
+        let (batch, probe) = read_unmounted_profile(app)?;
+        cookies.extend(batch);
+        probes.push(probe);
+    }
+
     let raw_cookie_count = cookies.len();
     let mut seen = HashSet::new();
     cookies.retain(|c| seen.insert(cookie_dedupe_key(c)));
 
     Ok((cookies, probes, missing_labels, raw_cookie_count))
+}
+
+/// Cold start: neither Explorer nor Music Explore is mounted, but the session is saved on disk
+/// in `explorer-data`. Reuse the boot probe webview if it exists, otherwise open a hidden,
+/// unfocused window on the same profile just long enough to read the cookie store.
+fn read_unmounted_profile(
+    app: &AppHandle,
+) -> Result<(Vec<Cookie<'static>>, WebviewCookieProbe), String> {
+    if let Some(webview) = app.get_webview(SESSION_PROBE_LABEL) {
+        return probe_webview(SESSION_PROBE_LABEL, || {
+            fetch_cookies_for_urls(&|url| webview.cookies_for_url(url).map_err(|e| e.to_string()))
+        });
+    }
+
+    let window = match app.get_webview_window(COOKIE_PROBE_LABEL) {
+        Some(w) => w,
+        None => build_hidden_profile_window(app)?,
+    };
+    let result = probe_webview(COOKIE_PROBE_LABEL, || {
+        fetch_cookies_for_urls(&|url| window.cookies_for_url(url).map_err(|e| e.to_string()))
+    });
+    // destroy, not close: skips close-requested handlers and never leaves a stray window.
+    let _ = window.destroy();
+    result
+}
+
+fn build_hidden_profile_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("explorer-data");
+
+    // WebView2 rejects a second webview on the same user data folder whose environment
+    // options differ, which would break Explorer or Music Explore opening later. Take the
+    // browser args from the same source they use.
+    let prefs = HardwareAccelerationDisk::load(&app.config().identifier);
+
+    // about:blank keeps the probe off the network and silent; the cookie store is per
+    // profile, so no YouTube page load is needed to read it.
+    let mut builder = WebviewWindowBuilder::new(
+        app,
+        COOKIE_PROBE_LABEL,
+        WebviewUrl::External(Url::parse("about:blank").map_err(|e| e.to_string())?),
+    )
+    .title("RuForge cookie probe")
+    .visible(false)
+    .focused(false)
+    .skip_taskbar(true)
+    .decorations(false)
+    .shadow(false)
+    .resizable(false)
+    .inner_size(1.0, 1.0)
+    .position(-4096.0, -4096.0)
+    .user_agent(EXPLORER_USER_AGENT)
+    .data_directory(data_dir);
+
+    if let Some(browser_args) = prefs.webview_additional_browser_args() {
+        builder = builder.additional_browser_args(&browser_args);
+    }
+
+    builder
+        .build()
+        .map_err(|e| format!("{COOKIE_PROBE_LABEL}: {e}"))
 }
 
 fn format_empty_export_error(probes: &[WebviewCookieProbe], missing: &[String]) -> String {
@@ -195,10 +273,18 @@ fn format_empty_export_error(probes: &[WebviewCookieProbe], missing: &[String]) 
     } else {
         missing.join(", ")
     };
+    let read_saved_profile = probes
+        .iter()
+        .any(|p| p.label == COOKIE_PROBE_LABEL || p.label == SESSION_PROBE_LABEL);
+    let hint = if read_saved_profile {
+        "The saved RuForge Internal profile has no YouTube session. \
+         Sign in to YouTube in Explorer or Music Explore, then try again."
+    } else {
+        "Sign in to YouTube in Explorer or Music Explore, then try again."
+    };
     format!(
         "No YouTube session cookies found in RuForge Internal browser (0 cookies exported). \
-         Open Explorer or Music Explore, sign in to YouTube, then try again. \
-         webviews mounted: [{mounted_text}]; not mounted: [{missing_text}]"
+         {hint} webviews mounted: [{mounted_text}]; not mounted: [{missing_text}]"
     )
 }
 

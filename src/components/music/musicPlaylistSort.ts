@@ -1,4 +1,3 @@
-import { mediaPathsMatch } from "@/lib/mediaPathMatch";
 import type { MediaFile } from "@/types";
 import type { VirtualPlaylistRecord } from "@/virtualPlaylists";
 
@@ -37,8 +36,21 @@ export function trackArtistCredit(file: MediaFile): string {
   return file.canonicalArtist ?? file.artist ?? file.albumArtist ?? "";
 }
 
-export function addedAtFor(record: VirtualPlaylistRecord, path: string): number {
-  return record.items.find((i) => mediaPathsMatch(i.path, path))?.addedAt ?? 0;
+function addedAtKey(path: string): string {
+  return path.replace(/\//g, "\\").toLowerCase();
+}
+
+/**
+ * One pass over the record, then O(1) lookups. A linear search per row (or per sort
+ * comparison) is quadratic and made large playlists stutter on every re-render.
+ */
+export function addedAtLookup(record: VirtualPlaylistRecord): (path: string) => number {
+  const byPath = new Map<string, number>();
+  for (const item of record.items) {
+    const key = addedAtKey(item.path);
+    if (!byPath.has(key)) byPath.set(key, item.addedAt);
+  }
+  return (path) => byPath.get(addedAtKey(path)) ?? 0;
 }
 
 const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
@@ -51,6 +63,7 @@ export function sortPlaylistTracks(
   desc: boolean,
 ): MediaFile[] {
   if (sort === "custom") return desc ? [...tracks].reverse() : tracks;
+  const addedAt = sort === "added" ? addedAtLookup(record) : null;
   const compare = (a: MediaFile, b: MediaFile): number => {
     switch (sort) {
       case "title":
@@ -60,7 +73,7 @@ export function sortPlaylistTracks(
       case "album":
         return collator.compare(trackAlbum(a), trackAlbum(b));
       case "added":
-        return addedAtFor(record, a.path) - addedAtFor(record, b.path);
+        return addedAt!(a.path) - addedAt!(b.path);
       case "duration":
         return (a.duration || 0) - (b.duration || 0);
     }
@@ -113,6 +126,9 @@ export function filterPlaylistTracks(tracks: MediaFile[], query: string): MediaF
 }
 
 /** Spotify's "Date added" cell: relative for the last month, then "Mar 21, 2025". */
+/** Built once: `toLocaleDateString` with options constructs a new formatter on every call. */
+const absoluteDateFormat = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
+
 export function formatDateAdded(ts: number, now = Date.now()): string {
   if (!ts) return "";
   const mins = Math.floor((now - ts) / 60_000);
@@ -124,5 +140,5 @@ export function formatDateAdded(ts: number, now = Date.now()): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return plural(days, "day");
   if (days < 28) return plural(Math.floor(days / 7), "week");
-  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return absoluteDateFormat.format(ts);
 }
