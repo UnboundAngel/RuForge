@@ -66,13 +66,16 @@ export function useOutsideRecommendations({
   round,
   count,
   active,
+  exclude,
 }: {
   playlistTracks: MediaFile[];
   library: MediaFile[];
   round: number;
   count: number;
   active: boolean;
-}): { tracks: OutsideTrack[]; loading: boolean; available: boolean } {
+  /** Songs hidden from recommendations. */
+  exclude?: (track: OutsideTrack) => boolean;
+}): { tracks: OutsideTrack[]; pool: OutsideTrack[]; loading: boolean; available: boolean } {
   const enabled = useRuforgeStore((s) => s.settings.suggestYoutubeMusicSongs !== false);
   const seeds = useMemo(() => radioSeeds(playlistTracks), [playlistTracks]);
   const { seedIndex, page } = outsideRoundSlot(round, seeds.length);
@@ -104,12 +107,14 @@ export function useOutsideRecommendations({
     };
   }, [enabled, active, seedId]);
 
-  const tracks = useMemo(() => {
+  const pool = useMemo(() => {
     if (!enabled || !radio || radio.seedId !== seedId) return [];
-    return outsidePage(mergeOutsideRecommendations(radio.items, library, radio.seedId), page, count);
-  }, [enabled, radio, seedId, library, page, count]);
+    const merged = mergeOutsideRecommendations(radio.items, library, radio.seedId);
+    return exclude ? merged.filter((t) => !exclude(t)) : merged;
+  }, [enabled, radio, seedId, library, exclude]);
+  const tracks = useMemo(() => outsidePage(pool, page, count), [pool, page, count]);
 
-  return { tracks, loading: enabled && loading, available: enabled && seeds.length > 0 };
+  return { tracks, pool, loading: enabled && loading, available: enabled && seeds.length > 0 };
 }
 
 /**
