@@ -14,7 +14,7 @@ import { type PreviewSource, toggleMusicPreview } from "./musicPreview";
 export const IMPORT_ROW_GRID = "grid grid-cols-[20px_minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-4";
 
 function sourceMeta(row: ImportRow): string {
-  const bits = [row.source.artists.join(", ")];
+  const bits = [row.source.artists.join(", ") || "Unknown artist"];
   if (row.source.durationSec != null) bits.push(formatDuration(row.source.durationSec));
   if (row.source.unclear) bits.push("hard to read");
   return bits.join(" · ");

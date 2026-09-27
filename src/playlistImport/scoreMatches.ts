@@ -51,9 +51,23 @@ function tokens(s: string): string[] {
   return normalizeText(s).split(" ").filter(Boolean);
 }
 
+const TRUNCATED_TAIL = /\s*(?:-\s*)?(\S*)(?:\.{3}|…)\s*$/;
+
+/** The partial last word of a title cut off with "...", lowercased ("R..." gives "r"). */
+function truncatedFragment(title: string): string | null {
+  const m = TRUNCATED_TAIL.exec(title);
+  return m ? normalizeText(m[1]) || null : null;
+}
+
+/** Drops a cut-off tail and any bracket it left open: "Song (with Don Toliv..." gives "Song". */
+function withoutTruncatedTail(title: string): string {
+  if (!TRUNCATED_TAIL.test(title)) return title;
+  return title.replace(TRUNCATED_TAIL, "").replace(/\s*[([][^)\]]*$/, "");
+}
+
 /** The title without "(feat. …)", "[with …]" and a trailing " - Remastered 2011" style suffix. */
 export function coreTitle(title: string): string {
-  return title
+  return withoutTruncatedTail(title)
     .replace(/[([](?:feat|ft|featuring|with)\b[^)\]]*[)\]]/gi, " ")
     .replace(/\s+(?:feat|ft)\.?\s+.*$/i, " ")
     .replace(/\s+-\s+.*\b(?:remaster(?:ed)?|version|mix|edit|mono|stereo)\b.*$/i, " ")
@@ -114,7 +128,10 @@ export function scoreCandidate(source: ImportTrack, candidate: MusicTrackInfo): 
   if (hasPhrase(cand, "official audio")) score += 3;
   if ((hasPhrase(cand, "lyrics") || hasPhrase(cand, "lyric")) && !hasPhrase(src, "lyrics")) score -= 5;
   if (hasPhrase(cand, "official video") || hasPhrase(cand, "music video")) score -= 3;
+  // A cut-off "- R..." may be the very version word, so it can't count against the candidate.
+  const fragment = truncatedFragment(source.title);
   for (const w of VERSION_WORDS) {
+    if (fragment && w.startsWith(fragment)) continue;
     if (hasPhrase(cand, w) && !hasPhrase(src, w)) score -= 35;
   }
   return { track: candidate, score: Math.round(score), titleSim, artistHit: hit };
@@ -138,7 +155,7 @@ export function bucketFor(source: ImportTrack, best: ScoredCandidate | undefined
   return confident && !source.unclear ? "matched" : "check";
 }
 
-/** Search text for one row: first artist, core title, and "audio" to favor official audio uploads. */
+/** Search text for one row: first artist (title alone when none), core title, and "audio" to favor official audio uploads. */
 export function searchQueryFor(source: ImportTrack): string {
-  return `${source.artists[0]} ${coreTitle(source.title)} audio`.replace(/\s+/g, " ").trim();
+  return `${source.artists[0] ?? ""} ${coreTitle(source.title)} audio`.replace(/\s+/g, " ").trim();
 }

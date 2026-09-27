@@ -66,6 +66,25 @@ describe("scoring", () => {
     expect(bucketFor(s, ranked[0])).toBe("matched");
     expect(searchQueryFor(s)).toBe("Daft Punk Get Lucky audio");
   });
+
+  it("treats a cut-off title tail as unknown instead of a word the match must have", () => {
+    expect(coreTitle("6locc 6a6y (feat. NLE Choppa) - R...")).toBe("6locc 6a6y");
+    expect(coreTitle("Something Wrong (with Don Toliv...")).toBe("Something Wrong");
+    const s = src("6locc 6a6y (feat. NLE Choppa) - R...", ["Lil Loaded", "NLE Choppa"], 178, true);
+    const ranked = rankCandidates(s, [
+      cand("Lil Loaded - 6locc 6a6y [Chopped & Screwed]", "RUSKI BEATZ", 161),
+      cand("6locc 6a6y (Remix) (feat. NLE Choppa)", "Lil Loaded - Topic", 178),
+    ]);
+    expect(ranked[0].track.artist).toBe("Lil Loaded - Topic");
+    expect(bucketFor(s, ranked[0])).toBe("check");
+  });
+
+  it("searches by title alone when the row has no artist, and never auto-ticks it", () => {
+    const s = src("Welcome to the Rodeo", [], 200);
+    expect(searchQueryFor(s)).toBe("Welcome to the Rodeo audio");
+    const ranked = rankCandidates(s, [cand("Welcome to the Rodeo", "Lukas Graham - Topic", 200)]);
+    expect(bucketFor(s, ranked[0])).toBe("check");
+  });
 });
 
 describe("findInLibrary", () => {

@@ -16,6 +16,8 @@ export function findInLibrary(source: ImportTrack, library: MediaFile[]): MediaF
   const title = normalizeText(coreTitle(source.title));
   if (!title) return null;
   const artists = source.artists.map(normalizeText).filter(Boolean);
+  // Title alone is too loose to claim a library file; search plus the video id check covers these rows.
+  if (!artists.length) return null;
   for (const f of library) {
     const ft = normalizeText(coreTitle(fileTitle(f)));
     const bare = ft.startsWith(`${artists[0]} `) ? ft.slice(artists[0].length + 1) : ft;

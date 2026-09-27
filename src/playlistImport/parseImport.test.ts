@@ -61,8 +61,8 @@ describe("parseImport", () => {
 
   it("drops a bad row mid-list and reports it", () => {
     const v = ok(doc([row("A"), { artists: ["X"] }, row("C"), { title: "D", artists: [] }]));
-    expect(v.tracks.map((t) => t.title)).toEqual(["A", "C"]);
-    expect(v.rowErrors).toEqual(["Row 2: no title", "Row 4: no artist"]);
+    expect(v.tracks.map((t) => t.title)).toEqual(["A", "C", "D"]);
+    expect(v.rowErrors).toEqual(["Row 2: no title"]);
   });
 
   it("keeps a row whose duration doesn't parse", () => {

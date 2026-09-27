@@ -218,12 +218,18 @@ impl LibraryState {
         std::fs::write(path, data).map_err(|e| e.to_string())
     }
 
-    async fn publish_desktop(&self, _app: &AppHandle, desktop_entries: Vec<GalleryEntry>) {
+    async fn publish_desktop(&self, app: &AppHandle, desktop_entries: Vec<GalleryEntry>) {
         let desktop_entries = gallery::retain_existing_media_entries(desktop_entries);
         let version = scanner::desktop_version_hash(&desktop_entries);
+        let changed = *self.version.read().await != version;
         *self.desktop_entries.write().await = desktop_entries;
         *self.version.write().await = version;
         *self.desktop_ready.write().await = true;
+        // A snapshot fetched between a download finishing and this walk replaces the store
+        // without the new file; the companion probe that also emits can be superseded or fail.
+        if changed {
+            let _ = app.emit(LIBRARY_CHANGED_EVENT, ());
+        }
     }
 
     async fn publish_companion(
