@@ -226,6 +226,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.file}
             label="Delete song"
+            variant="danger"
             icon={<Trash2 size={icon} strokeWidth={2.25} />}
             onClick={act(() => void deleteLibraryMedia(file, { noun: "song", preview: bestCoverPath(file) }))}
           />

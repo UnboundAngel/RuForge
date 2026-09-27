@@ -41,6 +41,7 @@ export async function deleteLibraryMedia(
     cancelLabel: "Cancel",
     itemPreview: opts.preview ?? file.thumbnailPath ?? file.ruforgePosterPath,
     itemMeta: `${formatStorageSize(file.size)} • ${file.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "")}`,
+    theme: noun === "song" ? "music" : "app",
   });
   if (!approved) return false;
 
