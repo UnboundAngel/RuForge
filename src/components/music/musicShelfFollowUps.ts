@@ -42,7 +42,8 @@ export function similarLibrarySongs(
 
 /**
  * The shelf in display order: each base card, then (depth first) whatever its add brought in.
- * Cards that are `gone` (added and landed) are skipped, but their follow-ups keep the slot.
+ * Follow-ups wait until their card is `gone` (added, downloaded, done loading) and then take its slot,
+ * so a download in progress never has songs piling up beside it.
  */
 export function layoutShelf(
   base: ShelfItem[],
@@ -55,7 +56,10 @@ export function layoutShelf(
     const key = shelfKey(item);
     if (seen.has(key)) return;
     seen.add(key);
-    if (!gone(item)) out.push(item);
+    if (!gone(item)) {
+      out.push(item);
+      return;
+    }
     for (const next of followUps.get(key) ?? []) place(next);
   };
   base.forEach(place);
