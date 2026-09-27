@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
-  ChevronRight,
   Disc3,
   FolderOpen,
   Heart,
   Image,
   ListMinus,
-  ListPlus,
   ListVideo,
   Music2,
   Play,
@@ -21,7 +19,7 @@ import type { MediaFile } from "@/types";
 import { openInFileManager } from "@/openInFileManager";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { artistKeyFromFile, fileMatchesArtistKey, primaryArtist } from "./musicArtist";
-import { MusicAddToPlaylistMenu } from "./MusicAddToPlaylistMenu";
+import { MusicAddToPlaylistFlyoutRow } from "./MusicAddToPlaylistFlyout";
 import {
   MUSIC_MENU_ICON_SIZE,
   MUSIC_MENU_TONES,
@@ -59,32 +57,13 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
   const openMusicSong = useRuforgeStore((s) => s.openMusicSong);
   const removeFromVirtualPlaylist = useRuforgeStore((s) => s.removeFromVirtualPlaylist);
   const setVirtualPlaylistThumbnail = useRuforgeStore((s) => s.setVirtualPlaylistThumbnail);
-  const [pickerPaths, setPickerPaths] = useState<string[] | null>(null);
   const entries = useRuforgeStore((s) => s.entries);
   const libraryTracks = useMemo(
     () => flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path)),
     [entries],
   );
 
-  useEffect(() => {
-    setPickerPaths(null);
-  }, [menu]);
-
   if (!menu) return null;
-
-  if (pickerPaths) {
-    return (
-      <MusicAddToPlaylistMenu
-        paths={pickerPaths}
-        x={menu.x}
-        y={menu.y}
-        onClose={() => {
-          setPickerPaths(null);
-          onClose();
-        }}
-      />
-    );
-  }
 
   const { context } = menu;
   const icon = MUSIC_MENU_ICON_SIZE;
@@ -119,13 +98,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
 
   const playlistSection = (
     <MusicMenuSection label="Playlist" tone={MUSIC_MENU_TONES.playlist}>
-      <MusicMenuRow
-        tone={MUSIC_MENU_TONES.playlist}
-        label="Add to playlist"
-        icon={<ListPlus size={icon} strokeWidth={2.25} />}
-        onClick={contextPaths.length > 0 ? () => setPickerPaths(contextPaths) : undefined}
-        trailing={<ChevronRight size={12} className="shrink-0 text-white/35" aria-hidden />}
-      />
+      <MusicAddToPlaylistFlyoutRow key={`${menu.x}:${menu.y}`} paths={contextPaths} onClose={onClose} />
       {playlistId && context.kind === "song" && (
         <>
           <MusicMenuRow
@@ -301,6 +274,7 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
       onClose={onClose}
       ariaLabel={menuAriaLabel}
       measureKey={measureKey}
+      placement="cursor"
     >
       {body}
     </MusicFloatingMenu>

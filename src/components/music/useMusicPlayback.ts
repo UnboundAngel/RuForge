@@ -40,7 +40,6 @@ import {
   pauseListenAccumulator,
   setPendingListenEndReason,
   takePendingListenEndReason,
-  tickListenAccumulator,
 } from "@/lib/musicListenSession";
 import { primaryArtist } from "./musicArtist";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
@@ -170,6 +169,9 @@ export function useMusicPlayback(
   const [crossfadeSec, setCrossfadeSecState] = useState(() => readMusicCrossfadeSec());
 
   const isDraggingRef = useRef(false);
+  // Chapter jumps read the time here so they stay stable across the ~4Hz time ticks.
+  const currentTimeRef = useRef(currentTime);
+  currentTimeRef.current = currentTime;
   const lastPlaybackPersistRef = useRef(0);
   const pendingResumeRef = useRef<PendingMusicResume | null>(null);
   const scrubGenerationRef = useRef(0);
@@ -1094,19 +1096,19 @@ export function useMusicPlayback(
 
   const jumpPrevChapter = useCallback(() => {
     if (!chapters) return;
-    const active = chapterAtTime(chapters, currentTime);
+    const active = chapterAtTime(chapters, currentTimeRef.current);
     const idx = active?.index ?? 0;
     const prev = prevChapterIndex(chapters, idx);
     if (prev !== null) seek(chapters[prev].start_time);
-  }, [chapters, currentTime, seek]);
+  }, [chapters, seek]);
 
   const jumpNextChapter = useCallback(() => {
     if (!chapters) return;
-    const active = chapterAtTime(chapters, currentTime);
+    const active = chapterAtTime(chapters, currentTimeRef.current);
     const idx = active?.index ?? 0;
     const next = nextChapterIndex(chapters, idx);
     if (next !== null) seek(chapters[next].start_time);
-  }, [chapters, currentTime, seek]);
+  }, [chapters, seek]);
 
   useEffect(() => {
     if (navMode !== "music" || !playingFile) return;
@@ -1299,7 +1301,6 @@ export function useMusicPlayback(
       if (ev.target !== el || el !== getPrimary()) return;
       if (!isDraggingRef.current) setCurrentTime(el.currentTime);
       if (!el.paused && playingFileRef.current) {
-        tickListenAccumulator();
         void onListenTimeUpdateTick();
         persistPlaybackSnapshot(el, false);
       } else {

@@ -46,7 +46,12 @@ function resolveRenderState(
 type SyncPayload = {
   likeAnimFrame?: number;
   likeAnimFrames?: number;
+  /** Send even if nothing changed (the thumbbar was just rebuilt). */
+  force?: boolean;
 };
+
+/** Last state sent to Rust; the store changes far more often than the buttons do. */
+let lastSyncKey: string | null = null;
 
 function pushTaskbarTransportSync(payload: SyncPayload = {}): void {
   if (!isWindowsTauri()) return;
@@ -79,7 +84,12 @@ function pushTaskbarTransportSync(payload: SyncPayload = {}): void {
     syncArgs.likeAnimFrames = payload.likeAnimFrames;
   }
 
-  void invoke("sync_taskbar_transport", syncArgs).catch(() => null);
+  const key = JSON.stringify(syncArgs);
+  if (!payload.force && key === lastSyncKey) return;
+  lastSyncKey = key;
+  void invoke("sync_taskbar_transport", syncArgs).catch(() => {
+    lastSyncKey = null;
+  });
 }
 
 async function runLikeThumbbarAnim(): Promise<void> {
@@ -139,13 +149,13 @@ export function setupTaskbarTransportBridge(): () => void {
     return () => undefined;
   }
 
-  pushTaskbarTransportSync();
+  pushTaskbarTransportSync({ force: true });
 
   const unsubBridge = subscribeMainPlaybackBridge(() => pushTaskbarTransportSync());
   const unsubStore = useRuforgeStore.subscribe(() => pushTaskbarTransportSync());
 
   const unlistenReadyPromise = listen("ruforge:taskbar-ready", () => {
-    pushTaskbarTransportSync();
+    pushTaskbarTransportSync({ force: true });
   });
 
   const unlistenPromise = listen<{ action: TaskbarTransportAction }>(

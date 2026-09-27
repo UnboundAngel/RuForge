@@ -781,7 +781,6 @@ export function MusicExploreDownloadCollapsed({
 }
 
 type DockChipProps = {
-  downloadJobs: DownloadJob[];
   celebrating?: CollapsedCelebrate | null;
   navCollapsed?: boolean;
   onClick: () => void;
@@ -789,11 +788,12 @@ type DockChipProps = {
 
 /** Minimized download indicator shown in nav footer above Back button. */
 export function ExploreDownloadDockChip({
-  downloadJobs,
   celebrating = null,
   navCollapsed = false,
   onClick,
 }: DockChipProps) {
+  // Read here, not passed down, so progress ticks re-render only the chip.
+  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const activeJobs = downloadJobs.filter(
     (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
   );

@@ -46,7 +46,6 @@ import {
   setPendingListenEndReason,
   stageHandoffListenEventId,
   takePendingListenEndReason,
-  tickListenAccumulator,
 } from "@/lib/musicListenSession";
 
 export type TrackDirection = "next" | "prev" | null;
@@ -399,7 +398,6 @@ export function useMusicMiniPlayback() {
     const onTime = () => {
       setCurrentTime(el.currentTime);
       if (!el.paused && playingFile) {
-        tickListenAccumulator();
         void onListenTimeUpdateTick();
       } else {
         pauseListenAccumulator();
