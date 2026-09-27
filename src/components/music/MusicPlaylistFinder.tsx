@@ -29,6 +29,7 @@ import {
 import { showMusicToast } from "./musicToast";
 import { CardShelf, SectionTitle } from "./MusicRecommendedShelf";
 import { MusicHiddenRecommendationsButton } from "./MusicHiddenRecommendationsButton";
+import { useMusicPreviewBridge } from "./MusicPreviewButton";
 import { fetchSimilarOutside, useOutsideRecommendations } from "./useMusicOutsideRecommendations";
 
 type Props = {
@@ -76,6 +77,7 @@ export function MusicPlaylistFinder({
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [round, setRound] = useState(0);
+  useMusicPreviewBridge();
 
   const hiddenState = useHiddenRecommendations();
   const isHidden = useMemo(() => makeHiddenMatcher(hiddenState), [hiddenState]);

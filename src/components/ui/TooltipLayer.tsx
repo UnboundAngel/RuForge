@@ -56,6 +56,7 @@ export function TooltipLayer({ selector, disabled = false, variant = "app" }: Pr
   disabledRef.current = disabled;
   const [label, setLabel] = useState<string | null>(null);
   const [pos, setPos] = useState<TipPos | null>(null);
+  const [shownAnchor, setShownAnchor] = useState<HTMLElement | null>(null);
 
   const updatePos = useCallback(() => {
     const anchor = anchorRef.current;
@@ -69,11 +70,13 @@ export function TooltipLayer({ selector, disabled = false, variant = "app" }: Pr
     const text = anchor.getAttribute("data-tooltip")?.trim();
     if (!text) return;
     anchorRef.current = anchor;
+    setShownAnchor(anchor);
     setLabel(text);
   }, []);
 
   const hide = useCallback(() => {
     anchorRef.current = null;
+    setShownAnchor(null);
     setLabel(null);
     setPos(null);
   }, []);
@@ -126,6 +129,22 @@ export function TooltipLayer({ selector, disabled = false, variant = "app" }: Pr
   useEffect(() => {
     if (disabled) hide();
   }, [disabled, hide]);
+
+  // Toggle buttons swap their label on click while the pointer is still on them.
+  useEffect(() => {
+    const anchor = shownAnchor;
+    if (!anchor) return;
+    const sync = () => {
+      const text = anchor.getAttribute("data-tooltip")?.trim();
+      if (text) setLabel(text);
+      else hide();
+    };
+    const observer = new MutationObserver(sync);
+    observer.observe(anchor, { attributes: true, attributeFilter: ["data-tooltip"] });
+    // The label may have changed in the same commit that showed the tip, before we were watching.
+    sync();
+    return () => observer.disconnect();
+  }, [shownAnchor, hide]);
 
   useLayoutEffect(() => {
     if (!label) return;
