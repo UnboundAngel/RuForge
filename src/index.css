@@ -674,6 +674,12 @@ html.ruforge-island-root #root {
   background: color-mix(in srgb, var(--music-accent) 45%, transparent);
 }
 
+/* The global gold selection reads as tan on music's black. */
+[data-music-mode="true"] ::selection {
+  background: color-mix(in srgb, var(--music-accent) 40%, transparent);
+  color: #ffffff;
+}
+
 [data-music-mode="true"] .rf-scrollbar-thumb:hover,
 [data-music-mode="true"] .rf-scrollbar-thumb[data-dragging="true"] {
   background: var(--music-accent);
