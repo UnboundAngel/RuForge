@@ -37,6 +37,21 @@ export function loadLikedIdentityKeys(): string[] {
   return load().map((r) => r.identityKey);
 }
 
+const likedSetCache = new WeakMap<readonly string[], Set<string>>();
+
+/**
+ * Store selectors run on every store update, once per mounted row. A Set built once per
+ * liked-keys array keeps that a lookup instead of a scan of the whole liked list.
+ */
+export function isLikedKey(likedKeys: readonly string[], identityKey: string): boolean {
+  let set = likedSetCache.get(likedKeys);
+  if (!set) {
+    set = new Set(likedKeys);
+    likedSetCache.set(likedKeys, set);
+  }
+  return set.has(identityKey);
+}
+
 export function isTrackLiked(file: MediaFile): boolean {
   const key = trackKey(file);
   return load().some((r) => r.identityKey === key);

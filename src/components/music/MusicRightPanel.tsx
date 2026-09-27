@@ -52,7 +52,6 @@ type Props = {
   trackTitle: string;
   trackArtist: string;
   audioEl: HTMLAudioElement | null;
-  currentTime: number;
   duration: number;
   effectivePlaylist: MediaFile[];
   playlistIndex: number;
@@ -282,7 +281,6 @@ export function MusicRightPanel({
   trackTitle,
   trackArtist,
   audioEl,
-  currentTime,
   duration,
   effectivePlaylist,
   playlistIndex,
@@ -438,7 +436,6 @@ export function MusicRightPanel({
                 {showSegmentsTab && (
                   <TabPanel active={activeTab === "segments"}>
                     <MusicSegmentsTab
-                      currentTime={currentTime}
                       duration={duration}
                       chapters={chapters}
                       sbSegments={sbSegments}

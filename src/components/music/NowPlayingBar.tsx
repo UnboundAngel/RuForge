@@ -7,6 +7,7 @@ import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useScrubberHover } from "@/hooks/useScrubberHover";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { useMainAudioCurrentTime } from "@/playback/mainAudioPlaybackContext";
 import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
 import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
@@ -40,7 +41,6 @@ const barBtnClass =
 
 type Props = {
   paused: boolean;
-  currentTime: number;
   duration: number;
   expanded: boolean;
   lyricsOpen: boolean;
@@ -68,7 +68,6 @@ type Props = {
 
 export function NowPlayingBar({
   paused,
-  currentTime,
   duration,
   expanded,
   lyricsOpen,
@@ -92,6 +91,7 @@ export function NowPlayingBar({
   rightPanelOpen,
   onToggleRightPanel,
 }: Props) {
+  const currentTime = useMainAudioCurrentTime();
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);

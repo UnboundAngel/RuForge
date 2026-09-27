@@ -320,6 +320,8 @@ function HeroForeground({
 
       if (!graph || mediaPaused || isPaused || sleeved) {
         const cur = parseFloat(glow.dataset.energy || "0");
+        // Once the glow has faded out it stays hidden, so skip the per-frame gradient repaint while paused.
+        if (cur <= 0.03 && glow.style.opacity === "0") return;
         const next = cur * 0.92;
         glow.dataset.energy = String(next);
         glow.style.background = `radial-gradient(circle, rgba(158,118,68,${next * 0.3}) 0%, transparent 65%)`;

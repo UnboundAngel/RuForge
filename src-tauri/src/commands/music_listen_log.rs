@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -669,9 +670,11 @@ fn prune_old_events(dir: &Path) -> Result<(), String> {
         keep.truncate(RAW_RETENTION_MAX);
     }
 
+    // Runs on every track end over up to RAW_RETENTION_MAX events, so the membership test must not scan `keep`.
+    let kept_ids: HashSet<&str> = keep.iter().map(|k| k.id.as_str()).collect();
     let to_roll: Vec<TrackPlayedEvent> = events
         .into_iter()
-        .filter(|e| !keep.iter().any(|k| k.id == e.id))
+        .filter(|e| !kept_ids.contains(e.id.as_str()))
         .collect();
 
     if !to_roll.is_empty() {
