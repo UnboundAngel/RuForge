@@ -180,14 +180,15 @@ pub fn prune_empty_dirs_after_media_delete(media_path: &Path) {
         None => return,
     };
 
-    try_remove_empty_dir(parent);
-
     for thumb_dir in thumb_dir_candidates(parent, stem) {
         try_remove_empty_dir(&thumb_dir);
     }
 
     let thumbs_root = parent.join(THUMB_DIR_NAME);
     try_remove_empty_dir(&thumbs_root);
+
+    // Last, because an empty `.ruforge_thumbs` still counts as content in the item folder.
+    try_remove_empty_dir(parent);
 }
 
 #[cfg(test)]

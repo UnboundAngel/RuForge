@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Library, Maximize2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { altKeyLabel, modKeyLabel } from "@/lib/shortcutLabels";
 import { cn } from "@/lib/utils";
 import { MusicNavCreateButton } from "./MusicNavCreateButton";
 
@@ -72,8 +73,8 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
             type="button"
             onClick={onToggleCollapse}
             className={cn(ICON_BTN, "group/toggle w-10 h-10", RED_HOVER)}
-            aria-label="Open Your Library (Ctrl+B)"
-            data-tooltip="Open Your Library (Ctrl+B)"
+            aria-label={`Open Your Library (${modKeyLabel()}+B)`}
+            data-tooltip={`Open Your Library (${modKeyLabel()}+B)`}
           >
             <PanelToggleIcon open size={24} />
           </button>
@@ -92,8 +93,8 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
           type="button"
           onClick={onToggleCollapse}
           className="group/toggle rf-music-tooltip-anchor rf-music-press-soft flex items-center gap-2.5 min-w-0 mr-auto text-base font-bold text-white/80 hover:text-white"
-          aria-label="Collapse Your Library (Ctrl+B)"
-          data-tooltip="Collapse Your Library (Ctrl+B)"
+          aria-label={`Collapse Your Library (${modKeyLabel()}+B)`}
+          data-tooltip={`Collapse Your Library (${modKeyLabel()}+B)`}
         >
           <PanelToggleIcon open={false} size={22} />
           <span className="truncate">Your Library</span>
@@ -108,8 +109,8 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
             RED_HOVER,
             libraryActive && "text-[color:var(--music-accent)] hover:text-[color:var(--music-accent)]",
           )}
-          aria-label="Show full library (Alt+3)"
-          data-tooltip="Show full library (Alt+3)"
+          aria-label={`Show full library (${altKeyLabel()}+3)`}
+          data-tooltip={`Show full library (${altKeyLabel()}+3)`}
         >
           <Maximize2 size={16} />
         </button>

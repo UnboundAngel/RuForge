@@ -219,7 +219,7 @@ fn linux_copy_file_range(
     dest: &Path,
     opts: &FastCopyOptions<'_>,
 ) -> Result<(), String> {
-    use std::os::unix::fs::copy_file_range;
+    use std::os::fd::AsRawFd;
 
     let src_f = File::open(src).map_err(|e| io_err(src, dest, e))?;
     let dest_f = File::create(dest).map_err(|e| {
@@ -228,8 +228,8 @@ fn linux_copy_file_range(
     })?;
     let len = src_f.metadata().map_err(|e| io_err(src, dest, e))?.len();
 
-    let mut src_off: i64 = 0;
-    let mut dest_off: i64 = 0;
+    let mut src_off: libc::off64_t = 0;
+    let mut dest_off: libc::off64_t = 0;
     let mut transferred: u64 = 0;
     let mut last_pct: Option<u64> = None;
 
@@ -243,13 +243,24 @@ fn linux_copy_file_range(
         let remain = (len - transferred) as usize;
         let chunk = remain.min(COPY_FILE_RANGE_CHUNK);
 
-        match copy_file_range(
-            &src_f,
-            Some(&mut src_off),
-            &dest_f,
-            Some(&mut dest_off),
-            chunk,
-        ) {
+        // SAFETY: both fds stay open for the call and the offset pointers are live locals.
+        let copied = unsafe {
+            libc::copy_file_range(
+                src_f.as_raw_fd(),
+                &mut src_off,
+                dest_f.as_raw_fd(),
+                &mut dest_off,
+                chunk,
+                0,
+            )
+        };
+        let result = if copied < 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(copied as usize)
+        };
+
+        match result {
             Ok(0) => {
                 let _ = std::fs::remove_file(dest);
                 return Err(CROSS_DEVICE_FALLBACK.into());
@@ -258,7 +269,15 @@ fn linux_copy_file_range(
                 transferred = transferred.saturating_add(n as u64);
                 emit_bytes(opts, len, transferred, &mut last_pct);
             }
-            Err(e) if e.kind() == io::ErrorKind::CrossesDevices => {
+            // Older kernels and some filesystems (FUSE, NFS, exFAT) reject the syscall outright.
+            Err(e)
+                if e.kind() == io::ErrorKind::CrossesDevices
+                    || matches!(
+                        e.raw_os_error(),
+                        Some(libc::EXDEV | libc::ENOSYS | libc::EOPNOTSUPP | libc::EINVAL)
+                    ) =>
+            {
+                drop(dest_f);
                 let _ = std::fs::remove_file(dest);
                 return Err(CROSS_DEVICE_FALLBACK.into());
             }

@@ -432,13 +432,14 @@ pub async fn download_ytdlp_update(
         },
     );
 
+    // A fresh download has no exec bit, so `--version` on the part file would fail on Unix.
+    set_exe_unix(&part_path)?;
     verify_part_binary(&app, &part_path).await?;
 
     if final_path.exists() {
         std::fs::remove_file(&final_path).map_err(|e| e.to_string())?;
     }
     std::fs::rename(&part_path, &final_path).map_err(|e| e.to_string())?;
-    set_exe_unix(&final_path)?;
 
     let active_line = yt_dlp_version_line(&app, ytdlp_shell_command).await?;
 

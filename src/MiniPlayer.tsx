@@ -35,7 +35,7 @@ import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "./types";
 import type { LibrarySnapshot } from "./lib/libraryConfig";
-import { hydratePlatformDefaultPaths } from "./platformPaths";
+import { hydratePlatformDefaultPaths, isWindowsPlatform } from "./platformPaths";
 
 import { ScrubHoverPreview } from "./components/player/ScrubHoverPreview";
 import { useScrubberThumbs } from "./useScrubberThumbs";
@@ -1521,8 +1521,7 @@ export default function MiniPlayer() {
 
   const showGallery = isMediaSelectorOpen;
 
-  const isProbablyWindows =
-    typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
+  const isProbablyWindows = isWindowsPlatform();
 
   const openWindowsSoundSettings = () => {
     invoke("open_windows_sound_settings").catch(console.error);

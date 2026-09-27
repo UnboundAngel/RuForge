@@ -112,6 +112,7 @@ import {
   onYoutubeAuthSurfaceLeave,
 } from "@/lib/youtubeAuthSurface";
 import { profileNeedsIdentityProbe } from "@/lib/youtubeProfileSession";
+import { isPrimaryModifierOnly } from "@/lib/shortcutLabels";
 import {
   profileNeedsAvatarProbe,
   runMusicExploreProfileProbe,
@@ -1203,7 +1204,7 @@ export function MusicShell() {
 
       const key = e.key.toLowerCase();
 
-      if (e.ctrlKey && !e.altKey && !e.metaKey && key === "b") {
+      if (isPrimaryModifierOnly(e) && !e.altKey && key === "b") {
         e.preventDefault();
         e.stopPropagation();
         setNavCollapsed((c) => !c);
@@ -1211,7 +1212,7 @@ export function MusicShell() {
         return;
       }
 
-      if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && key === "n") {
+      if (isPrimaryModifierOnly(e) && !e.altKey && !e.shiftKey && key === "n") {
         e.preventDefault();
         e.stopPropagation();
         openMusicPlaylist(createMusicPlaylist());
@@ -1220,19 +1221,20 @@ export function MusicShell() {
 
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
 
-      if (key === "1") {
+      // Option+digit types a symbol on macOS, so match the physical key instead of e.key.
+      if (e.code === "Digit1") {
         e.preventDefault();
         e.stopPropagation();
         setMusicView("home");
         return;
       }
-      if (key === "2") {
+      if (e.code === "Digit2") {
         e.preventDefault();
         e.stopPropagation();
         setMusicView("explore");
         return;
       }
-      if (key === "3") {
+      if (e.code === "Digit3") {
         e.preventDefault();
         e.stopPropagation();
         setMusicView("library");

@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+#[cfg(not(target_os = "linux"))]
 use drag::{DragItem, Image, Options};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
@@ -8,6 +9,7 @@ const CAPTURES_SUBDIR: &str = "dev-captures";
 
 pub struct DevCaptureMainWindow(pub tauri::WebviewWindow);
 
+#[cfg(not(target_os = "linux"))]
 fn resolve_dev_capture_main_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
     app.try_state::<DevCaptureMainWindow>()
         .map(|st| st.0.clone())
@@ -32,6 +34,7 @@ pub struct DevCaptureScreenshotResult {
     pub modified_ms: u64,
 }
 
+#[cfg(windows)]
 fn sanitize_context_label(raw: &str) -> String {
     let mut out = String::new();
     for ch in raw.chars() {
@@ -171,7 +174,7 @@ pub fn start_dev_capture_file_drag(app: AppHandle, paths: Vec<String>) -> Result
     #[cfg(target_os = "linux")]
     {
         let _ = files;
-        return Err("file drag-out is not wired on linux".to_string());
+        Err("file drag-out is not wired on linux".to_string())
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -187,9 +190,8 @@ pub fn start_dev_capture_file_drag(app: AppHandle, paths: Vec<String>) -> Result
             Options::default(),
         )
         .map_err(|e| e.to_string())?;
+        Ok(())
     }
-
-    Ok(())
 }
 
 #[cfg(windows)]

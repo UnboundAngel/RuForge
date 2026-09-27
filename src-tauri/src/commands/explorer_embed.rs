@@ -4,7 +4,10 @@
 
 use std::sync::Mutex;
 
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager};
+use tauri::{AppHandle, Manager};
+
+#[cfg(not(target_os = "linux"))]
+use tauri::{LogicalPosition, LogicalSize};
 
 #[cfg(target_os = "linux")]
 use tauri::{

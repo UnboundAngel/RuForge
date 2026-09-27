@@ -89,7 +89,7 @@ Tauri v2, Rust, React 19, TypeScript, Zustand, yt-dlp, Tailwind v4. Two webviews
 
 Versions must match: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version` (+ `Cargo.lock` when the crate version changes).
 
-Dev: `npm run dev:app`. Builds: `npm run build` (web), `npm run tauri build` (installer). Linux is local `tauri dev` only, not a shipped target.
+Dev: `npm run dev:app`. Builds: `npm run build` (web), `npm run tauri build` (installer). Windows is the only shipped target. Linux and macOS compile (Windows-only APIs sit behind `cfg(windows)`; `.github/workflows/cross-platform-check.yml` runs tsc, vitest and `cargo check` on all three) and have bundle targets in `tauri.linux.conf.json` (deb, AppImage) and `tauri.macos.conf.json` (app, dmg), but are not released or signed. `dev:app` is PowerShell, so use `npx tauri dev` there.
 
 ## Updater (do not get these wrong)
 

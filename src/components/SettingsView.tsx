@@ -42,6 +42,7 @@ import {
   requestReplayOnboardingPreview,
 } from "../lib/onboardingDebugPreview";
 import { galleryScanRootsFromStore, normalizeScanDirKey } from '../lib/libraryConfig';
+import { isWindowsPlatform } from '../platformPaths';
 import { useRuforgeStore } from '../store/ruforgeStore';
 import {
   clearLastDownloadBatchRecord,
@@ -2002,19 +2003,22 @@ export const SettingsView: React.FC<{
                   {SETTINGS_TAB_LABELS.advanced}
                 </h3>
               ) : null}
-              <SettingsSection title="Performance">
-                <SettingItem
-                  title="Hardware Acceleration"
-                  description="Lets WebView2 use GPU for page rendering and video playback. Turn off only for graphics glitches, this is not audio quality. Changing this restarts RuForge (Windows)."
-                  active={settings.hardwareAcceleration}
-                  control={
-                    <ToggleSlot
-                      active={settings.hardwareAcceleration}
-                      onClick={() => updateSetting('hardwareAcceleration', !settings.hardwareAcceleration)}
-                    />
-                  }
-                />
-              </SettingsSection>
+              {isWindowsPlatform() ? (
+                // The toggle only feeds WebView2 browser args; WebKitGTK and WKWebView have no equivalent.
+                <SettingsSection title="Performance">
+                  <SettingItem
+                    title="Hardware Acceleration"
+                    description="Lets WebView2 use GPU for page rendering and video playback. Turn off only for graphics glitches, this is not audio quality. Changing this restarts RuForge (Windows)."
+                    active={settings.hardwareAcceleration}
+                    control={
+                      <ToggleSlot
+                        active={settings.hardwareAcceleration}
+                        onClick={() => updateSetting('hardwareAcceleration', !settings.hardwareAcceleration)}
+                      />
+                    }
+                  />
+                </SettingsSection>
+              ) : null}
               <SettingsSection title="Updates">
                 <SettingItem
                   title="Check for updates"

@@ -3978,6 +3978,7 @@ dependencies = [
  "drag",
  "futures-util",
  "hmac",
+ "libc",
  "lofty",
  "log",
  "media_engine",

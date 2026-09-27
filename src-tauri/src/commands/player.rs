@@ -3,7 +3,7 @@ use tauri::{AppHandle, Manager};
 use crate::hardware_acceleration::HardwareAccelerationDisk;
 use crate::window_classname::OBS_COMPAT_WINDOW_CLASSNAME;
 
-#[cfg(windows)]
+/// GTK shows this icon in the window switcher; macOS ignores it and uses the bundle icon.
 fn apply_window_icon(app: &AppHandle, window: &tauri::WebviewWindow) {
     if let Some(icon) = app.default_window_icon().cloned() {
         let _ = window.set_icon(icon);
@@ -60,7 +60,6 @@ pub async fn open_mini_player(app: AppHandle) -> Result<(), String> {
     }
 
     let window = mini_builder.build().map_err(|e| e.to_string())?;
-    #[cfg(windows)]
     apply_window_icon(&app, &window);
     Ok(())
 }
@@ -94,7 +93,6 @@ pub async fn open_music_mini_player(app: AppHandle) -> Result<(), String> {
     }
 
     let window = builder.build().map_err(|e| e.to_string())?;
-    #[cfg(windows)]
     apply_window_icon(&app, &window);
     Ok(())
 }
@@ -177,7 +175,6 @@ pub async fn open_youtube_explorer(app: AppHandle) -> Result<(), String> {
     }
 
     let window = builder.build().map_err(|e| e.to_string())?;
-    #[cfg(windows)]
     apply_window_icon(&app, &window);
 
     Ok(())
