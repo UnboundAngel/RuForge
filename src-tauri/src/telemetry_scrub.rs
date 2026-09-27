@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::{Arc, OnceLock, RwLock};
 
 use regex::{Captures, Regex};
@@ -230,10 +229,8 @@ pub fn sanitize_frame_filename(filename: &str, in_app: bool) -> String {
         return "[redacted]".to_string();
     }
     if is_path_like(filename) {
-        let base = Path::new(filename)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        // Frames can come from a build on another OS, and `Path` only splits on the host's separator.
+        let base = filename.rsplit(['\\', '/']).next().unwrap_or("");
         if is_safe_basename(base) {
             return base.to_string();
         }

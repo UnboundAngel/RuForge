@@ -1523,13 +1523,14 @@ fn is_youtube_music_browse_id(id: &str) -> bool {
 
 fn is_music_album_browse_url(url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
-    if !lower.contains("music.youtube.com/browse/") {
+    let Some(at) = lower.find("music.youtube.com/browse/") else {
         return false;
-    }
-    lower
-        .split("/browse/")
-        .nth(1)
-        .and_then(|rest| rest.split(&['?', '#'][..]).next())
+    };
+    // Browse ids are case-sensitive (MPAD...), so only the host is matched lowercased.
+    // ASCII lowercasing keeps byte offsets, so `at` indexes the original url too.
+    url[at + "music.youtube.com/browse/".len()..]
+        .split(&['?', '#'][..])
+        .next()
         .map(is_youtube_music_browse_id)
         .unwrap_or(false)
 }
