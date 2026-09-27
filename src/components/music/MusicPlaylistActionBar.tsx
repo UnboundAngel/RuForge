@@ -12,11 +12,8 @@ import {
   ListOrdered,
   MicVocal,
   MoreHorizontal,
-  Pause,
   Pencil,
-  Play,
   Search,
-  Shuffle,
   Timer,
   Trash2,
   Type,
@@ -37,6 +34,7 @@ import {
   type PlaylistSortKey,
   type PlaylistViewPrefs,
 } from "./musicPlaylistSort";
+import { MUSIC_SOURCE_ICON_BTN, MusicSourcePlayControls } from "./MusicSourcePlayControls";
 
 type Props = {
   title: string;
@@ -75,8 +73,7 @@ function anchorBelow(el: HTMLElement, align: "left" | "right"): Anchor {
   return { x: align === "left" ? r.left : r.right - MUSIC_MENU_WIDTH, y: r.bottom + 6 };
 }
 
-const ICON_BTN =
-  "rf-music-press w-10 h-10 flex items-center justify-center rounded-full text-white/60 hover:text-white disabled:opacity-40 disabled:hover:text-white/60";
+const ICON_BTN = MUSIC_SOURCE_ICON_BTN;
 
 export function MusicPlaylistActionBar({
   title,
@@ -118,40 +115,25 @@ export function MusicPlaylistActionBar({
 
   return (
     <div className="flex items-center gap-5 px-6 py-5">
-      {!empty && (
-        <>
+      <MusicSourcePlayControls
+        title={title}
+        playing={playing}
+        shuffleOn={shuffleOn}
+        disabled={empty}
+        onPlay={onPlay}
+        onToggleShuffle={onToggleShuffle}
+        trailing={(
           <button
             type="button"
-            onClick={onPlay}
-            className="w-14 h-14 shrink-0 flex items-center justify-center rounded-full bg-[var(--music-accent)] text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-transform hover:scale-105 active:scale-95"
-            aria-label={playing ? `Pause ${title}` : `Play ${title}`}
+            onClick={(e) => setMoreAt(moreAt ? null : anchorBelow(e.currentTarget, "left"))}
+            className={cn(ICON_BTN, "rf-music-tooltip-anchor", moreAt && "text-white")}
+            aria-label={`More options for ${title}`}
+            data-tooltip={moreAt ? undefined : `More options for ${title}`}
           >
-            {playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-0.5" />}
+            <MoreHorizontal size={28} />
           </button>
-          <button
-            type="button"
-            onClick={onToggleShuffle}
-            className={cn(ICON_BTN, "rf-music-tooltip-anchor relative", shuffleOn && "text-[color:var(--music-accent)] hover:text-[color:var(--music-accent)]")}
-            aria-label={shuffleOn ? "Disable shuffle" : "Enable shuffle"}
-            aria-pressed={shuffleOn}
-            data-tooltip={shuffleOn ? "Disable shuffle" : "Enable shuffle"}
-          >
-            <Shuffle size={26} />
-            {shuffleOn && (
-              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[var(--music-accent)]" />
-            )}
-          </button>
-        </>
-      )}
-      <button
-        type="button"
-        onClick={(e) => setMoreAt(moreAt ? null : anchorBelow(e.currentTarget, "left"))}
-        className={cn(ICON_BTN, "rf-music-tooltip-anchor", moreAt && "text-white")}
-        aria-label={`More options for ${title}`}
-        data-tooltip={moreAt ? undefined : `More options for ${title}`}
-      >
-        <MoreHorizontal size={28} />
-      </button>
+        )}
+      />
 
       {!empty && (
         <div className="ml-auto flex items-center gap-2">

@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Shuffle, Play, Pause, ChevronLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath } from "@/mediaKind";
@@ -8,12 +8,12 @@ import { albumCoverPathWithFallback } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
-import { cn } from "@/lib/utils";
 import { artistKeyFromFile, primaryArtist, rawArtistFromFile } from "./musicArtist";
 import { albumKeyFromFile, resolveDisplayAlbum } from "./musicShelfDedup";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { useQueueSourcePlayback } from "./useActiveQueueSource";
+import { MusicSourcePlayControls } from "./MusicSourcePlayControls";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import { musicTrackDragProps } from "./musicDragImage";
@@ -220,40 +220,15 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3 px-5 py-3 shrink-0">
-        <button
-          type="button"
-          onClick={sourcePlayback.play}
-          className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-opacity hover:opacity-80"
-          style={{ background: "var(--music-accent)", color: "#fff" }}
+      <div className="flex items-center gap-5 px-6 py-5 shrink-0">
+        <MusicSourcePlayControls
+          title={displayAlbum}
+          playing={sourcePlayback.playing}
+          shuffleOn={sourcePlayback.shuffleOn}
           disabled={tracks.length === 0}
-        >
-          {sourcePlayback.playing ? (
-            <>
-              <Pause size={15} fill="currentColor" /> Pause
-            </>
-          ) : (
-            <>
-              <Play size={15} fill="currentColor" /> Play
-            </>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={sourcePlayback.toggleShuffle}
-          className={cn(
-            "rf-music-tooltip-anchor relative flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold border transition-colors hover:bg-white/10",
-            sourcePlayback.shuffleOn ? "text-[color:var(--music-accent)]" : "text-[color:var(--music-text-primary)]",
-          )}
-          style={{ borderColor: "var(--music-border)" }}
-          aria-pressed={sourcePlayback.shuffleOn}
-          data-tooltip={sourcePlayback.shuffleOn ? "Disable shuffle" : "Enable shuffle"}
-        >
-          <Shuffle size={15} /> Shuffle
-          {sourcePlayback.shuffleOn && (
-            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[var(--music-accent)]" />
-          )}
-        </button>
+          onPlay={sourcePlayback.play}
+          onToggleShuffle={sourcePlayback.toggleShuffle}
+        />
       </div>
 
       {/* Tracklist */}

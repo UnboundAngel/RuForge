@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Shuffle, Play, Pause, ChevronLeft, MapPin, Music2, Disc3 } from "lucide-react";
+import { ChevronLeft, MapPin, Music2, Disc3 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
@@ -14,6 +14,7 @@ import { buildMultiTrackAlbumGroups, resolveDisplayAlbum } from "./musicShelfDed
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { useQueueSourcePlayback } from "./useActiveQueueSource";
+import { MusicSourcePlayControls } from "./MusicSourcePlayControls";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import {
@@ -562,44 +563,14 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
       </header>
 
       <div className="relative z-10 shrink-0 px-8 pb-5 pt-1">
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={sourcePlayback.play}
-            className="flex items-center gap-2 px-7 py-2.5 text-sm font-semibold transition-opacity hover:opacity-88"
-            style={{
-              background: ambience.onCanvasPrimary,
-              color: ambience.canvasColor,
-              borderRadius: "999px",
-            }}
-          >
-            {sourcePlayback.playing ? (
-              <>
-                <Pause size={15} fill="currentColor" /> Pause
-              </>
-            ) : (
-              <>
-                <Play size={15} fill="currentColor" /> Play
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={sourcePlayback.toggleShuffle}
-            className="rf-music-tooltip-anchor relative flex h-11 w-11 items-center justify-center rounded-full transition-opacity hover:opacity-90"
-            style={{
-              color: sourcePlayback.shuffleOn ? "var(--music-accent)" : ambience.onCanvasPrimary,
-              background: ambience.chipBg,
-            }}
-            aria-label={sourcePlayback.shuffleOn ? "Disable shuffle" : "Enable shuffle"}
-            aria-pressed={sourcePlayback.shuffleOn}
-            data-tooltip={sourcePlayback.shuffleOn ? "Disable shuffle" : "Enable shuffle"}
-          >
-            <Shuffle size={16} />
-            {sourcePlayback.shuffleOn && (
-              <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[var(--music-accent)]" />
-            )}
-          </button>
+        <div className="flex flex-wrap items-center gap-5">
+          <MusicSourcePlayControls
+            title={displayName}
+            playing={sourcePlayback.playing}
+            shuffleOn={sourcePlayback.shuffleOn}
+            onPlay={sourcePlayback.play}
+            onToggleShuffle={sourcePlayback.toggleShuffle}
+          />
         </div>
 
         {artistInfo && (artistInfo.genres.length > 0 || artistInfo.originCity) && (
