@@ -32,6 +32,7 @@ type SettingsModalShellProps = {
   theme?: "app" | "music";
   /** Extra classes on the scrolling body, e.g. `pt-0` so a sticky header can sit flush at the top. */
   bodyClassName?: string;
+  footerClassName?: string;
 };
 
 const SHELL_THEME = {
@@ -65,6 +66,7 @@ export function SettingsModalShell({
   onExitComplete,
   theme = "app",
   bodyClassName,
+  footerClassName,
 }: SettingsModalShellProps) {
   const t = SHELL_THEME[theme];
   const reduceMotion = useReducedMotion();
@@ -162,7 +164,7 @@ export function SettingsModalShell({
             </div>
 
             {footer ? (
-              <footer className="shrink-0 flex flex-wrap items-center justify-end gap-2 px-6 pb-6 pt-2">
+              <footer className={cn("shrink-0 flex flex-wrap items-center justify-end gap-2 px-6 pb-6 pt-2", footerClassName)}>
                 {footer}
               </footer>
             ) : null}
