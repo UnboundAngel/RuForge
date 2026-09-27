@@ -135,7 +135,7 @@ struct MbResult {
     score: u32,
 }
 
-fn iso_now() -> String {
+pub(crate) fn iso_now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
 
@@ -155,12 +155,12 @@ fn write_sidecar(path: &Path, dto: &MusicMetaSidecarDto) -> bool {
     std::fs::write(path, json).is_ok()
 }
 
-fn read_json_sidecar<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
+pub(crate) fn read_json_sidecar<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     let content = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
 }
 
-fn write_json_sidecar<T: Serialize>(path: &Path, dto: &T) -> bool {
+pub(crate) fn write_json_sidecar<T: Serialize>(path: &Path, dto: &T) -> bool {
     let Ok(json) = serde_json::to_string_pretty(dto) else {
         return false;
     };
@@ -391,7 +391,7 @@ fn local_cover_exists(parent: &Path, stem: &str, has_embedded_cover: bool) -> bo
 
 // ---- Rate gate -----------------------------------------------------------
 
-async fn rate_gate_wait() {
+pub(crate) async fn rate_gate_wait() {
     let gate = mb_rate_gate();
     let mut last = gate.lock().await;
     let elapsed = last.elapsed();
@@ -985,7 +985,7 @@ pub struct ArtistMetaSidecarDto {
     pub genres: Vec<String>,
 }
 
-fn normalize_artist_sidecar_stem(artist_name: &str) -> String {
+pub(crate) fn normalize_artist_sidecar_stem(artist_name: &str) -> String {
     let mut out = String::with_capacity(artist_name.len());
     let mut prev_sep = false;
     for ch in artist_name.trim().to_lowercase().chars() {
@@ -1033,7 +1033,7 @@ async fn load_or_fetch_artist_meta_in(
     Some(dto)
 }
 
-async fn load_or_fetch_artist_meta(
+pub(crate) async fn load_or_fetch_artist_meta(
     app: &AppHandle,
     artist_name: &str,
     force: bool,

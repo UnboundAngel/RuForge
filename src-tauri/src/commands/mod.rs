@@ -11,6 +11,7 @@ pub mod gallery;
 pub mod media;
 pub mod lyrics;
 pub mod musicmeta;
+pub mod music_artist_about;
 pub mod music_listen_log;
 pub mod music_playlists;
 pub mod music_preview;
