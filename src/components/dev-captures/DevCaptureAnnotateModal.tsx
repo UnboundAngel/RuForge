@@ -70,7 +70,6 @@ export function DevCaptureAnnotateModal({
 }: DevCaptureAnnotateModalProps) {
   const lastEntryRef = useRef<DevCaptureEntry | null>(entry);
   if (entry) lastEntryRef.current = entry;
-  const shown = entry ?? lastEntryRef.current;
   const reduceMotion = useReducedMotion();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -140,10 +139,18 @@ export function DevCaptureAnnotateModal({
     drawSelectionHandles(ctx, annotation, selection, displayScale);
   }, [annotation, imageSize, segmentDraft, selection, tool]);
 
+  const openPath = entry?.path;
+
   useEffect(() => {
-    const path = shown?.path;
+    const path = openPath;
     if (!path) return;
     let cancelled = false;
+    setAnnotation(emptyDevCaptureAnnotation());
+    setSelection(null);
+    setSegmentDraft(null);
+    setTextDraft(null);
+    setSaving(false);
+    dragRef.current = null;
     void (async () => {
       try {
         const bytes = await invoke<number[]>("read_dev_capture_png", { path });
@@ -172,8 +179,9 @@ export function DevCaptureAnnotateModal({
         blobUrlRef.current = null;
       }
       imageRef.current = null;
+      setImageSize(null);
     };
-  }, [shown?.path]);
+  }, [openPath]);
 
   useEffect(() => {
     redraw();

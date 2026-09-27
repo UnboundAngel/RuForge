@@ -39,6 +39,7 @@ import {
 } from "@/lib/musicExploreTracklistHarvest";
 import type { MusicExplorePageContext } from "@/lib/musicExplorePageContext";
 import { debugLog } from "@/debug/debugLog";
+import { readSystemClipboardText } from "@/downloaderClipboardYoutube";
 
 type Props = {
   shellBlack?: boolean;
@@ -222,17 +223,13 @@ export function MusicExploreBottomBar({
     setPasteChecking(true);
     let cancelled = false;
     const run = async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (cancelled) return;
-        const resolved = resolveMusicExplorePasteUrl(text.trim());
-        if (resolved) {
-          onPasteUrlReady(resolved);
-          setPasteInputValue("");
-          return;
-        }
-      } catch {
-        /* clipboard denied */
+      const text = await readSystemClipboardText();
+      if (cancelled) return;
+      const resolved = resolveMusicExplorePasteUrl(text.trim());
+      if (resolved) {
+        onPasteUrlReady(resolved);
+        setPasteInputValue("");
+        return;
       }
       if (!cancelled) {
         setPasteChecking(false);
