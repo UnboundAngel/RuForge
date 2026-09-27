@@ -247,6 +247,8 @@ function FinderCard({
   const cover = bestCoverPath(file);
   const artist = trackArtistLabel(file);
   const [added, setAdded] = useState(false);
+  const source = { kind: "local", file } as const;
+  const preview = useSongPreview(source);
   return (
     <motion.div
       initial={cardInitial(grow)}
@@ -264,6 +266,8 @@ function FinderCard({
               <Music size={40} />
             </div>
           )}
+          {preview.status && <MusicPreviewProgress progress={preview.progress} />}
+          <MusicPreviewButton source={source} status={preview.status} />
           <button
             type="button"
             onClick={() => {
@@ -330,9 +334,10 @@ function OutsideCard({
   onContextMenu?: CardMenuHandler;
   onAdded: () => void;
 }) {
-  const { queued, percent, failed } = useOutsideDownloadPercent(track.url);
+  const { queued, percent, failed, error } = useOutsideDownloadPercent(track.url);
   const busy = queued && !failed;
-  const preview = useSongPreview(track.videoId);
+  const source = { kind: "outside", track } as const;
+  const preview = useSongPreview(source);
   const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.videoId}/hqdefault.jpg`;
   return (
     <motion.div
@@ -360,7 +365,7 @@ function OutsideCard({
             <CloudDownload size={13} strokeWidth={2.5} aria-hidden />
           </span>
           {preview.status && <MusicPreviewProgress progress={preview.progress} />}
-          <MusicPreviewButton track={track} status={preview.status} />
+          <MusicPreviewButton source={source} status={preview.status} />
           <button
             type="button"
             onClick={() => {
@@ -377,7 +382,7 @@ function OutsideCard({
                 : "opacity-0 translate-y-2 group-hover/card:opacity-100 group-hover/card:translate-y-0 focus-visible:opacity-100 focus-visible:translate-y-0",
             )}
             aria-label={busy ? `Downloading ${track.title}` : `Download ${track.title} and add it to this playlist`}
-            data-tooltip={busy ? `Downloading ${Math.round(percent)}%` : failed ? "Download failed. Try again" : "Download and add"}
+            data-tooltip={busy ? `Downloading ${Math.round(percent)}%` : failed ? (error ? `Download failed: ${error}` : "Download failed. Try again") : "Download and add"}
           >
             <AnimatePresence mode="wait" initial={false}>
               {busy ? (
