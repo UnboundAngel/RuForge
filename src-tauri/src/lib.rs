@@ -95,6 +95,7 @@ use crate::commands::music_playlists::{
     write_playlist_text_file,
 };
 use crate::commands::music_preview::{music_preview_local_hook, resolve_music_preview_stream};
+use crate::commands::disk_space::get_disk_space;
 use crate::commands::recently_deleted::{
     list_recently_deleted, remove_recently_deleted_entry, restore_recently_deleted,
 };
@@ -383,6 +384,7 @@ pub fn run() {
             delete_media,
             delete_media_batch,
             get_storage_stats,
+            get_disk_space,
             authorize_cleanup,
             clear_ruforge_cache,
             eval_in_webview,

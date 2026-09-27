@@ -1243,6 +1243,12 @@ export function useDownloaderView({
       clearDownloadStartPending();
       return;
     }
+    if (existing?.storageBlock && existing.status === "queued") {
+      // Stays queued with the storage warning; the pump starts it once space frees up.
+      if (existing.approval === "held") releaseHeldDownloadJobs();
+      clearDownloadStartPending();
+      return;
+    }
     if (existing && existing.approval === "held") {
       releaseHeldDownloadJobs();
       pumpDownloadQueue();

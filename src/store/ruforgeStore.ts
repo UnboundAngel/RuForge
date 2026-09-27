@@ -61,6 +61,7 @@ import {
 import { loadInitialDownloadQueueState } from "../downloadQueue";
 import {
   createDownloadQueueSlice,
+  expireDiskProbes,
   type DownloadQueueSlice,
 } from "./downloadQueueSlice";
 import {
@@ -1458,6 +1459,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
           const dir = saveToInternal ? internalVault : outputDir;
           const stats = await invoke<{ total_bytes: number; file_count: number }>("get_storage_stats", { dir });
           set({ storageStats: stats });
+          // New totals (after a finish or cleanup) may lift storage blocks on queued rows.
+          if (get().downloadJobs.some((j) => j.storageBlock)) {
+            expireDiskProbes();
+            get().pumpDownloadQueue();
+          }
         } catch (e) {
           console.error("Failed to get storage stats", e);
         }

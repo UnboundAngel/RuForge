@@ -1,5 +1,6 @@
 pub mod media_engine_cmd;
 pub mod dev_captures;
+pub mod disk_space;
 pub mod comments_sidecar;
 pub mod downloader;
 pub mod explorer_cookies;

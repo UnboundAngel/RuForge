@@ -68,6 +68,13 @@ import { findLibraryDuplicate } from "../duplicateDownload";
 import { updatePlaylistDownloadSidecarFromJob } from "../lib/playlistDownloadSidecar";
 import { mediaFileFromDownloadFinish } from "../galleryEntries";
 import { youtubeUrlsMatch } from "../youtubeUrl";
+import {
+  applyStorageFit,
+  NOT_ENOUGH_STORAGE_LABEL,
+  type DiskSpaceProbe,
+  type StorageFitContext,
+} from "../storageFit";
+import { mediaPathsMatch } from "../lib/mediaPathMatch";
 
 /** Coalesce `persistDownloadJobs` when many hydrates finish back-to-back (e.g. startup sweep). */
 const DOWNLOAD_JOB_HYDRATE_PERSIST_DEBOUNCE_MS = 75;
@@ -78,6 +85,112 @@ const timedOutJobRemovalTimers = new Map<string, ReturnType<typeof setTimeout>>(
 
 /** Match collapsed music explore celebration duration. */
 const TIMED_OUT_JOB_ROW_MS = 2100;
+
+/**
+ * Last `get_disk_space` answer. Promotion reads it synchronously so the hero still flips to
+ * downloading on the same tick; a refresh runs alongside and re-pumps when the numbers move.
+ */
+let diskProbes: DiskSpaceProbe[] = [];
+let diskProbesAt = 0;
+let diskProbesInflight: Promise<void> | null = null;
+/** Downloads write for minutes at a time, so a few seconds of staleness costs nothing. */
+const DISK_PROBE_TTL_MS = 4000;
+
+function storageGateDirs(jobs: DownloadJob[]): string[] {
+  const dirs: string[] = [];
+  for (const j of jobs) {
+    if (j.status !== "queued" && j.status !== "downloading" && j.status !== "paused") continue;
+    const dir = j.options.outputDir.trim();
+    if (dir && !dirs.some((d) => mediaPathsMatch(d, dir))) dirs.push(dir);
+  }
+  return dirs;
+}
+
+function storageFitContext(get: () => RuforgeStore): StorageFitContext {
+  const { saveToInternal, internalVault, storageStats, settings } = get();
+  const limitGb = Number(settings.storageLimitGB);
+  const vaultCap =
+    saveToInternal && storageStats && Number.isFinite(limitGb) && limitGb > 0
+      ? { dir: internalVault, usedBytes: storageStats.total_bytes, limitBytes: limitGb * 1024 ** 3 }
+      : null;
+  return { disks: diskProbes, vaultCap };
+}
+
+/** Library size just moved (finish, cleanup, folder switch), so free space likely did too. */
+export function expireDiskProbes(): void {
+  diskProbesAt = 0;
+}
+
+/** Resolves true when the probe answer changed, so the caller knows to re-run promotion. */
+async function refreshDiskProbes(get: () => RuforgeStore): Promise<boolean> {
+  const dirs = storageGateDirs(get().downloadJobs);
+  const covered = dirs.every((d) => diskProbes.some((p) => mediaPathsMatch(p.dir, d)));
+  if (dirs.length === 0 || (covered && Date.now() - diskProbesAt < DISK_PROBE_TTL_MS)) {
+    return false;
+  }
+  if (diskProbesInflight) {
+    await diskProbesInflight;
+    return true;
+  }
+  const before = JSON.stringify(diskProbes);
+  diskProbesInflight = (async () => {
+    try {
+      diskProbes = await invoke<DiskSpaceProbe[]>("get_disk_space", { dirs });
+    } catch {
+      // Without a reading the gate stays open; a failed probe must not strand the queue.
+      diskProbes = [];
+    }
+    diskProbesAt = Date.now();
+  })();
+  try {
+    await diskProbesInflight;
+  } finally {
+    diskProbesInflight = null;
+  }
+  return JSON.stringify(diskProbes) !== before;
+}
+
+function announceStorageBlocks(get: () => RuforgeStore, newlyBlocked: DownloadJob[]): void {
+  if (newlyBlocked.length === 0) return;
+  const capOnly = newlyBlocked.every((j) => j.storageBlock === "cap");
+  const count = newlyBlocked.length;
+  const what = count === 1 ? "A download is" : `${count} downloads are`;
+  const why = capOnly ? "no room left under your storage limit" : "not enough free disk space";
+  void deliverUserNotification(
+    {
+      dedupeKey: `download-storage-block:${newlyBlocked.map((j) => j.id).join(",")}`,
+      body: `${NOT_ENOUGH_STORAGE_LABEL}. ${what} on hold: ${why}.`,
+      kind: "warning",
+    },
+    (message, type) => get().notify(message, type),
+  );
+}
+
+/** Marks rows without promoting, so held batches show storage blocks before Download is clicked. */
+function syncStorageFlags(
+  get: () => RuforgeStore,
+  set: StoreApi<RuforgeStore>["setState"],
+): void {
+  const before = get().downloadJobs;
+  const { jobs, newlyBlocked } = applyStorageFit(before, storageFitContext(get));
+  if (jobs === before) return;
+  set({ downloadJobs: jobs });
+  announceStorageBlocks(get, newlyBlocked);
+  const lifted = before.some(
+    (j) => j.storageBlock && j.approval === "auto" && !jobs.find((n) => n.id === j.id)?.storageBlock,
+  );
+  if (lifted) get().pumpDownloadQueue();
+}
+
+function gateStorageAfterEnqueue(
+  get: () => RuforgeStore,
+  set: StoreApi<RuforgeStore>["setState"],
+): void {
+  syncStorageFlags(get, set);
+  void refreshDiskProbes(get).then((changed) => {
+    if (changed) syncStorageFlags(get, set);
+  });
+}
 
 /** Coalesce gallery scans when the downloader needs library rows (duplicate banner / auto-skip). */
 let entriesFetchForDuplicateCheckInflight: Promise<void> | null = null;
@@ -223,6 +336,8 @@ async function hydrateDownloadJobMetadata(
       };
     });
     schedulePersistAfterDownloadJobHydrate(get);
+    // Size estimates usually land here, after the row was queued.
+    syncStorageFlags(get, set);
   };
 
   const urlTrim = url.trim();
@@ -674,8 +789,10 @@ export const createDownloadQueueSlice: StateCreator<
     jobs: DownloadJob[];
     starts: { id: string; url: string; resume: boolean }[];
     skippedIds: string[];
+    newlyBlocked: DownloadJob[];
   } {
-    let jobs = collapseDownloadJobsByUrl(downloadJobs);
+    const fit = applyStorageFit(collapseDownloadJobsByUrl(downloadJobs), storageFitContext(getStore));
+    let jobs = fit.jobs;
     const starts: { id: string; url: string; resume: boolean }[] = [];
     const skippedIds: string[] = [];
     let running = jobs.filter((j) => j.status === "downloading").length;
@@ -685,6 +802,7 @@ export const createDownloadQueueSlice: StateCreator<
         (j) =>
           j.status === "queued" &&
           j.approval === "auto" &&
+          !j.storageBlock &&
           !jobs.some(
             (other) =>
               other.status === "downloading" &&
@@ -718,7 +836,7 @@ export const createDownloadQueueSlice: StateCreator<
       );
       running++;
     }
-    return { jobs, starts, skippedIds };
+    return { jobs, starts, skippedIds, newlyBlocked: fit.newlyBlocked };
   }
 
   return {
@@ -802,6 +920,8 @@ export const createDownloadQueueSlice: StateCreator<
         persistDownloadJobs(downloadJobs);
         return { downloadJobs };
       });
+      // Held rows already wear the warning; say it out loud once the user asks them to start.
+      announceStorageBlocks(get, held.filter((j) => j.storageBlock));
     },
 
     enqueueDownload: (url, options, meta) => {
@@ -865,6 +985,7 @@ export const createDownloadQueueSlice: StateCreator<
         if (merged && downloadJobMediaNeedsHydration(merged.metadata)) {
           void hydrateDownloadJobMetadata(get, set, existing.id, urlTrim);
         }
+        gateStorageAfterEnqueue(get, set);
         return existing.id;
       }
 
@@ -907,6 +1028,7 @@ export const createDownloadQueueSlice: StateCreator<
           }
         })();
       }
+      gateStorageAfterEnqueue(get, set);
       return keptId;
     },
 
@@ -1199,6 +1321,8 @@ export const createDownloadQueueSlice: StateCreator<
         return { downloadJobs };
       });
       if (!changed) return;
+      // Audio-only is far smaller, so flipping it can lift or add a storage block.
+      syncStorageFlags(get, set);
       if (settings.rememberAudioOnlyDefault && settings.downloadAudioOnly !== audioOnly) {
         void get().updateSetting("downloadAudioOnly", audioOnly);
       }
@@ -1311,6 +1435,7 @@ export const createDownloadQueueSlice: StateCreator<
       }
       const starts: { id: string; url: string; resume: boolean }[] = [];
       const skippedIds: string[] = [];
+      const storageBlocked: DownloadJob[] = [];
       let finishedUrl: string | undefined;
       const heroUrlBeforeFinish = get().url.trim();
       let playlistSidecarJob: DownloadJob | undefined;
@@ -1365,10 +1490,12 @@ export const createDownloadQueueSlice: StateCreator<
           jobs: promotedJobs,
           starts: batchStarts,
           skippedIds: batchSkipped,
+          newlyBlocked,
         } = promoteEligibleJobs(downloadJobs, s.maxConcurrentDownloads, get);
         downloadJobs = promotedJobs;
         starts.push(...batchStarts);
         skippedIds.push(...batchSkipped);
+        storageBlocked.push(...newlyBlocked);
         persistDownloadJobs(downloadJobs);
 
         const focus = resolveFocusAfterMutation(downloadJobs, s.focusedJobId);
@@ -1395,6 +1522,7 @@ export const createDownloadQueueSlice: StateCreator<
       for (const st of starts) {
         startHydratedDownloadJob(st.id, st.url, st.resume);
       }
+      announceStorageBlocks(get, storageBlocked);
 
       sweepBatchRetries(get, set);
 
@@ -1468,15 +1596,19 @@ export const createDownloadQueueSlice: StateCreator<
         // trySkipLibraryDuplicateJob — after the user already sees progress UI.
         const starts: { id: string; url: string; resume: boolean }[] = [];
         const skippedIds: string[] = [];
+        const storageBlocked: DownloadJob[] = [];
+        const probeRefresh = refreshDiskProbes(get);
 
         set((s) => {
           const {
             jobs: downloadJobs,
             starts: batchStarts,
             skippedIds: batchSkipped,
+            newlyBlocked,
           } = promoteEligibleJobs(s.downloadJobs, s.maxConcurrentDownloads, get);
           starts.push(...batchStarts);
           skippedIds.push(...batchSkipped);
+          storageBlocked.push(...newlyBlocked);
 
           if (batchStarts.length === 0 && batchSkipped.length === 0) {
             const focus = resolveFocusAfterMutation(downloadJobs, s.focusedJobId);
@@ -1506,6 +1638,8 @@ export const createDownloadQueueSlice: StateCreator<
           }
           startHydratedDownloadJob(starts[i].id, starts[i].url, starts[i].resume);
         }
+        announceStorageBlocks(get, storageBlocked);
+        if (await probeRefresh) get().pumpDownloadQueue();
       })();
     },
 

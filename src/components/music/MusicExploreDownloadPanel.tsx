@@ -29,6 +29,7 @@ import {
 } from "@/youtubeUrl";
 import { fetchVideoInfoWithTimeout } from "@/downloadVideoInfoFetch";
 import { ytdlpVideoFormatForMetadata } from "@/downloadFormat";
+import { NOT_ENOUGH_STORAGE_LABEL } from "@/storageFit";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import {
   isLikelyImageUrl,
@@ -110,6 +111,9 @@ function TrackRow({
 }) {
   const downloading = isActiveMusicExploreDownloadUi(downloadUi);
   const failed = downloadUi === "failed";
+  const noStorage = downloadUi === "no_storage";
+  const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
+  const openAuthorizeCleanupModal = useRuforgeStore((s) => s.openAuthorizeCleanupModal);
 
   return (
     <motion.div
@@ -134,7 +138,11 @@ function TrackRow({
           : downloading
             ? "rgb(255 0 51 / 0.08)"
             : "transparent",
-        boxShadow: selected ? "inset 3px 0 0 var(--music-accent)" : "none",
+        boxShadow: selected
+          ? "inset 3px 0 0 var(--music-accent)"
+          : noStorage
+            ? "inset 0 0 0 1px rgb(239 68 68 / 0.7)"
+            : "none",
       }}
       onMouseEnter={(e) => {
         if (!selected && !downloading) {
@@ -194,6 +202,24 @@ function TrackRow({
         >
           Failed
         </span>
+      )}
+      {noStorage && (
+        <button
+          type="button"
+          disabled={!saveToInternal}
+          onClick={(e) => {
+            e.stopPropagation();
+            void openAuthorizeCleanupModal();
+          }}
+          className="rf-music-tooltip-anchor text-[8px] font-semibold shrink-0 text-red-400 outline-none focus:outline-none enabled:hover:underline disabled:cursor-default"
+          data-tooltip={
+            saveToInternal
+              ? "Authorize Cleanup to make room. It starts on its own once there is space."
+              : "The download folder's disk is too full. It starts on its own once there is space."
+          }
+        >
+          {NOT_ENOUGH_STORAGE_LABEL}
+        </button>
       )}
       <button
         type="button"
