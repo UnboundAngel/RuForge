@@ -63,8 +63,13 @@ describe("layoutShelf", () => {
       [shelfKey(a), [x, c]],
       [shelfKey(x), [y]],
     ]);
-    const out = layoutShelf([a, b], followUps, () => false);
-    expect(out.map(shelfKey)).toEqual([a, x, y, c, b].map(shelfKey));
+    const out = layoutShelf([a, b], followUps, (i) => i === a || i === x);
+    expect(out.map(shelfKey)).toEqual([y, c, b].map(shelfKey));
+  });
+
+  it("keeps follow-ups hidden while their card is still on the shelf", () => {
+    const followUps = new Map([[shelfKey(a), [x, c]]]);
+    expect(layoutShelf([a, b], followUps, () => false).map(shelfKey)).toEqual([a, b].map(shelfKey));
   });
 
   it("drops gone cards but keeps their follow-ups in place", () => {
@@ -78,7 +83,7 @@ describe("layoutShelf", () => {
       [shelfKey(a), [c]],
       [shelfKey(b), [c]],
     ]);
-    expect(layoutShelf([a, b], followUps, () => false).map(shelfKey)).toEqual([a, c, b].map(shelfKey));
+    expect(layoutShelf([a, b], followUps, (i) => i !== c).map(shelfKey)).toEqual([c].map(shelfKey));
     expect([...shelfKeys([a, b], followUps)]).toEqual([a, b, c].map(shelfKey));
   });
 });
