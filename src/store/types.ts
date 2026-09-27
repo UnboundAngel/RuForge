@@ -164,6 +164,8 @@ export interface RuforgeSettings {
   stampTrackSidecarArtistTags: boolean;
   /** When true, playlist Recommended also suggests YouTube Music songs not in the library (seed ids go to YouTube). */
   suggestYoutubeMusicSongs: boolean;
+  /** When true, the Video Library shows the signed-in YouTube home feed beside downloaded videos. */
+  showYoutubeFeedInLibrary: boolean;
   /** When true, single-video downloads fetch YouTube comments into `{stem}.comments.json`. */
   downloadComments: boolean;
   /** When true, anonymous app-launch usage telemetry may be sent (off by default). */
@@ -211,6 +213,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   autoDownloadPlayingSongs: true,
   stampTrackSidecarArtistTags: true,
   suggestYoutubeMusicSongs: true,
+  showYoutubeFeedInLibrary: true,
   downloadComments: false,
   telemetryUsageEnabled: false,
   telemetryCrashEnabled: false,
@@ -248,6 +251,7 @@ export function loadMergedSettings(): RuforgeSettings {
       autoDownloadPlayingSongs: merged.autoDownloadPlayingSongs !== false,
       stampTrackSidecarArtistTags: merged.stampTrackSidecarArtistTags !== false,
       suggestYoutubeMusicSongs: merged.suggestYoutubeMusicSongs !== false,
+      showYoutubeFeedInLibrary: merged.showYoutubeFeedInLibrary !== false,
       downloadComments: merged.downloadComments === true,
       showDebuggingSettings: merged.showDebuggingSettings === true,
       debugLogEnabledCategories: Array.isArray(merged.debugLogEnabledCategories)

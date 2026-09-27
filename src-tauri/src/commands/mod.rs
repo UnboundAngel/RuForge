@@ -27,4 +27,5 @@ pub mod sponsorblock;
 pub mod system;
 pub mod telemetry;
 pub mod ytdlp_update;
+pub mod youtube_feed;
 pub mod deno_update;
