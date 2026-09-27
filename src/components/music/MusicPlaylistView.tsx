@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
-import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
-import { mediaPathsMatch } from "@/lib/mediaPathMatch";
 import { DEFAULT_MUSIC_PLAYLIST_TITLE, recordHasPath } from "@/virtualPlaylists";
 import { askConfirm } from "@/components/ConfirmDialog";
 import type { MediaFile } from "@/types";
-import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
-import { useActiveQueueSource } from "./useActiveQueueSource";
+import { useQueueSourcePlayback } from "./useActiveQueueSource";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
-import { resolveMusicPlaylistTracks } from "./musicPlaylists";
+import { playlistCoverFile, resolveMusicPlaylistTracks } from "./musicPlaylists";
 import { useMusicLibraryTracks, useMusicPlaylistRecords } from "./useMusicPlaylists";
 import { MusicPlaylistHeader } from "./MusicPlaylistHeader";
 import { MusicPlaylistColumnHeader, MusicPlaylistTrackRow } from "./MusicPlaylistTrackRow";
@@ -42,7 +39,6 @@ const UNTOUCHED_TITLE = new RegExp(`^${DEFAULT_MUSIC_PLAYLIST_TITLE} #\\d+$`);
 
 export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
   const playingFile = useRuforgeStore((s) => s.playingFile);
-  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const renameVirtualPlaylist = useRuforgeStore((s) => s.renameVirtualPlaylist);
   const updateVirtualPlaylistDetails = useRuforgeStore((s) => s.updateVirtualPlaylistDetails);
   const exportM3u8 = useExportPlaylistM3u8();
@@ -51,13 +47,11 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
   const removePathsFromVirtualPlaylist = useRuforgeStore((s) => s.removePathsFromVirtualPlaylist);
   const reorderVirtualPlaylistByPath = useRuforgeStore((s) => s.reorderVirtualPlaylistByPath);
   const enqueueManualQueue = useRuforgeStore((s) => s.enqueueManualQueue);
-  const musicShuffleOn = useRuforgeStore((s) => s.musicShuffleOn);
-  const toggleMusicShuffle = useRuforgeStore((s) => s.toggleMusicShuffle);
-  const queueSource = useActiveQueueSource();
-  const playback = useOptionalMainAudioPlayback();
   const libraryTracks = useMusicLibraryTracks();
   const playlists = useMusicPlaylistRecords();
   const record = playlists.find((p) => p.id === playlistId) ?? null;
+  const title = record?.title;
+  const source = useMemo(() => (title != null ? musicQueueSource("playlist", title) : null), [title]);
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [dropPath, setDropPath] = useState<string | null>(null);
@@ -81,17 +75,15 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
     () => (record ? resolveMusicPlaylistTracks(record, libraryTracks) : { tracks: [], missingPaths: [] }),
     [record, libraryTracks],
   );
-  const coverFile = useMemo(() => {
-    const thumb = record?.thumbnailPath;
-    return thumb ? tracks.find((t) => mediaPathsMatch(t.path, thumb)) ?? null : null;
-  }, [record?.thumbnailPath, tracks]);
+  const coverFile = useMemo(() => (record ? playlistCoverFile(record, tracks) : null), [record, tracks]);
 
   const shown = useMemo(
     () => (record ? filterPlaylistTracks(sortPlaylistTracks(tracks, record, prefs.sort, prefs.desc), query) : []),
     [tracks, record, prefs.sort, prefs.desc, query],
   );
+  const sourcePlayback = useQueueSourcePlayback(source, shown, onPlayFile);
 
-  if (!record) {
+  if (!record || !source) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[color:var(--music-text-muted)]">
         This playlist no longer exists.
@@ -99,33 +91,10 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
     );
   }
 
-  const source = musicQueueSource("playlist", record.title);
   const untouched = record.items.length === 0 && UNTOUCHED_TITLE.test(record.title);
   const dragIndex = dragPath ? shown.findIndex((t) => t.path === dragPath) : -1;
   const reorderable = prefs.sort === "custom" && !prefs.desc && query.trim() === "";
-  const thisSourceActive =
-    queueSource?.kind === "playlist" && queueSource.label === record.title;
-  const playingHere = thisSourceActive && playback != null && !playback.paused;
-
   const playFrom = (file: MediaFile) => onPlayFile(file, shown, source);
-
-  const handlePlay = () => {
-    if (thisSourceActive && playback) {
-      playback.togglePlay();
-      return;
-    }
-    if (shown.length === 0) return;
-    if (!musicShuffleOn) {
-      playFrom(shown[0]!);
-      return;
-    }
-    const shuffled = buildSmartShuffleOrder({
-      pool: shown,
-      likedKeys: musicLikedKeys,
-      seed: Date.now() & 0xffffffff,
-    });
-    onPlayFile(shuffled[0]!, shown, source, { shuffle: true });
-  };
 
   const handleDelete = async () => {
     const ok = await askConfirm({
@@ -157,12 +126,12 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
         <MusicPlaylistActionBar
           title={record.title}
           empty={tracks.length === 0}
-          playing={playingHere}
-          shuffleOn={musicShuffleOn}
+          playing={sourcePlayback.playing}
+          shuffleOn={sourcePlayback.shuffleOn}
           prefs={prefs}
           query={query}
-          onPlay={handlePlay}
-          onToggleShuffle={toggleMusicShuffle}
+          onPlay={sourcePlayback.play}
+          onToggleShuffle={sourcePlayback.toggleShuffle}
           onAddToQueue={() => shown.forEach((t) => enqueueManualQueue(t.path))}
           onEditDetails={() => setEditFocus("title")}
           onExport={() => void exportM3u8(record.title, tracks)}

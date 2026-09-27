@@ -17,6 +17,14 @@ export type MusicMenuTone = {
   icon: string;
 };
 
+export type MusicMenuRowVariant = "default" | "danger";
+
+const ROW_HOVER: Record<MusicMenuRowVariant, string> = {
+  default: "hover:text-white hover:bg-white/[0.07]",
+  danger:
+    "hover:text-[color:var(--music-accent)] hover:bg-[color-mix(in_srgb,var(--music-accent)_14%,transparent)] [&:hover_.rf-menu-row-icon]:!text-[color:var(--music-accent)]",
+};
+
 export const MUSIC_MENU_WIDTH = 208;
 export const MUSIC_MENU_ICON_SIZE = 13;
 export const MUSIC_MENU_EDGE_PAD = 10;
@@ -96,8 +104,9 @@ export function useMusicMenuOutsideDismiss(
   }, [open, onClose, containerRef, opts?.capture, opts?.preventDefault]);
 }
 
+/** Menus portal to body, outside `[data-music-mode]`, so the accent var must be redeclared here. */
 const PANEL_CLASS =
-  "bg-[#0f0f0f] border border-white/[0.1] rounded-[16px] shadow-2xl overflow-y-auto overflow-x-hidden rf-scrollbar p-1.5 flex flex-col gap-1";
+  "[--music-accent:#ff0033] bg-[#0f0f0f] border border-white/[0.1] rounded-[16px] shadow-2xl overflow-y-auto overflow-x-hidden rf-scrollbar p-1.5 flex flex-col gap-1";
 
 export function MusicMenuPanel({
   className,
@@ -144,6 +153,7 @@ export function MusicMenuRow({
   tone,
   active = false,
   trailing,
+  variant = "default",
 }: {
   icon: ReactNode;
   label: string;
@@ -152,6 +162,8 @@ export function MusicMenuRow({
   tone: MusicMenuTone;
   active?: boolean;
   trailing?: ReactNode;
+  /** `danger` turns hover red for destructive actions like delete. */
+  variant?: MusicMenuRowVariant;
 }) {
   const iconColor = active ? "var(--music-accent)" : tone.icon;
 
@@ -175,12 +187,13 @@ export function MusicMenuRow({
       type="button"
       className={cn(
         "flex items-center gap-2 w-full px-1.5 h-8 rounded-lg text-[12px] text-[#cfcfcf]",
-        "hover:text-white hover:bg-white/[0.07] border-0 outline-none text-left cursor-pointer transition-colors duration-100",
+        "border-0 outline-none text-left cursor-pointer transition-colors duration-100",
+        ROW_HOVER[variant],
         active && "text-white",
       )}
       onClick={onClick}
     >
-      <span className="shrink-0" style={{ color: iconColor }}>
+      <span className="rf-menu-row-icon shrink-0 transition-colors duration-100" style={{ color: iconColor }}>
         {icon}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>

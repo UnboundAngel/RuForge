@@ -28,7 +28,24 @@ type SettingsModalShellProps = {
   /** When true, backdrop and close button do not dismiss (e.g. while a job runs). */
   disableDismiss?: boolean;
   onExitComplete?: () => void;
+  /** `music` swaps the warm app palette for Music mode's black and white. Portaled outside `[data-music-mode]`, so colors are literal. */
+  theme?: "app" | "music";
 };
+
+const SHELL_THEME = {
+  app: {
+    panel: "bg-[#1D1613] rounded-[var(--radius-modal)]",
+    title: "text-stone-100",
+    muted: "text-stone-500",
+    close: "text-stone-500 hover:text-stone-200",
+  },
+  music: {
+    panel: "bg-[#181818] rounded-2xl",
+    title: "text-white text-lg font-bold",
+    muted: "text-white/60",
+    close: "text-white/50 hover:text-white hover:bg-white/[0.08] rounded-full",
+  },
+} as const;
 
 export function SettingsModalShell({
   open,
@@ -44,7 +61,9 @@ export function SettingsModalShell({
   maxWidthClass = "max-w-lg",
   disableDismiss = false,
   onExitComplete,
+  theme = "app",
 }: SettingsModalShellProps) {
+  const t = SHELL_THEME[theme];
   const reduceMotion = useReducedMotion();
   const fade = motionDuration(reduceMotion, overlayFadeTransition);
   const panel = motionDuration(reduceMotion, overlayPanelTransition);
@@ -85,7 +104,11 @@ export function SettingsModalShell({
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
-            className={`relative flex max-h-[min(85vh,720px)] w-full ${maxWidthClass} flex-col overflow-hidden rounded-[var(--radius-modal)] bg-[#1D1613] shadow-[0_16px_48px_rgba(0,0,0,0.45)]`}
+            className={cn(
+              "relative flex max-h-[min(85vh,720px)] w-full flex-col overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.45)]",
+              maxWidthClass,
+              t.panel,
+            )}
             onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -103,13 +126,13 @@ export function SettingsModalShell({
                     />
                   ) : null}
                   {eyebrow ? (
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    <p className={cn("text-[10px] font-semibold uppercase tracking-[0.14em]", t.muted)}>
                       {eyebrow}
                     </p>
                   ) : null}
                   <h2
                     id={titleId}
-                    className="text-base font-semibold leading-snug text-stone-100"
+                    className={cn("text-base font-semibold leading-snug", t.title)}
                   >
                     {title}
                   </h2>
@@ -118,14 +141,14 @@ export function SettingsModalShell({
                   type="button"
                   onClick={tryClose}
                   disabled={disableDismiss}
-                  className="shrink-0 rounded-lg p-1.5 text-stone-500 transition-colors hover:text-stone-200 disabled:invisible"
+                  className={cn("shrink-0 rounded-lg p-1.5 transition-colors disabled:invisible", t.close)}
                   aria-label="Close"
                 >
                   <X size={18} />
                 </button>
               </div>
               {description ? (
-                <p className="max-w-prose text-[12px] leading-relaxed text-stone-500">
+                <p className={cn("max-w-prose leading-relaxed", theme === "music" ? "text-[13px]" : "text-[12px]", t.muted)}>
                   {description}
                 </p>
               ) : null}

@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Shuffle, Play, ChevronLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath } from "@/mediaKind";
@@ -10,9 +10,10 @@ import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
 import { artistKeyFromFile, primaryArtist, rawArtistFromFile } from "./musicArtist";
 import { albumKeyFromFile, resolveDisplayAlbum } from "./musicShelfDedup";
-import { buildSmartShuffleOrder } from "./musicSmartShuffle";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
+import { useQueueSourcePlayback } from "./useActiveQueueSource";
+import { MusicSourcePlayControls } from "./MusicSourcePlayControls";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import { musicTrackDragProps } from "./musicDragImage";
@@ -145,19 +146,8 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
   };
   const totalDuration = useMemo(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
 
-  const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
-
-  const albumSource = musicQueueSource("album", displayAlbum);
-
-  const handleShuffle = () => {
-    if (tracks.length === 0) return;
-    const shuffled = buildSmartShuffleOrder({
-      pool: tracks,
-      likedKeys: musicLikedKeys,
-      seed: Date.now() & 0xffffffff,
-    });
-    onPlayFile(shuffled[0]!, tracks, albumSource, { shuffle: true });
-  };
+  const albumSource = useMemo(() => musicQueueSource("album", displayAlbum), [displayAlbum]);
+  const sourcePlayback = useQueueSourcePlayback(albumSource, tracks, onPlayFile);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto rf-scrollbar">
@@ -230,25 +220,15 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3 px-5 py-3 shrink-0">
-        <button
-          type="button"
-          onClick={() => onPlayFile(tracks[0], tracks, albumSource)}
-          className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-opacity hover:opacity-80"
-          style={{ background: "var(--music-accent)", color: "#fff" }}
+      <div className="flex items-center gap-5 px-6 py-5 shrink-0">
+        <MusicSourcePlayControls
+          title={displayAlbum}
+          playing={sourcePlayback.playing}
+          shuffleOn={sourcePlayback.shuffleOn}
           disabled={tracks.length === 0}
-        >
-          <Play size={15} fill="currentColor" /> Play
-        </button>
-        <button
-          type="button"
-          onClick={handleShuffle}
-          className="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold border transition-colors hover:bg-white/10"
-          style={{ borderColor: "var(--music-border)", color: "var(--music-text-primary)" }}
-          disabled={tracks.length === 0}
-        >
-          <Shuffle size={15} /> Shuffle
-        </button>
+          onPlay={sourcePlayback.play}
+          onToggleShuffle={sourcePlayback.toggleShuffle}
+        />
       </div>
 
       {/* Tracklist */}

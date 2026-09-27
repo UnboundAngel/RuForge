@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronDown, ChevronUp, Clock3, MoreHorizontal, Music } from "lucide-react";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
@@ -49,7 +49,32 @@ type HeaderProps = {
   onSort: (key: PlaylistSortKey) => void;
 };
 
+function scrollParentOf(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const { overflowY } = getComputedStyle(p);
+    if (overflowY === "auto" || overflowY === "scroll") return p;
+  }
+  return null;
+}
+
+/** True while the sticky header has rows scrolled under it (its sentinel has left the scroll pane). */
+function useStuck() {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting), {
+      root: scrollParentOf(el),
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return { sentinelRef, stuck };
+}
+
 export function MusicPlaylistColumnHeader({ prefs, onSort }: HeaderProps) {
+  const { sentinelRef, stuck } = useStuck();
   const cell = (key: PlaylistSortKey, label: React.ReactNode, className?: string) => {
     const active = prefs.sort === key;
     return (
@@ -69,36 +94,47 @@ export function MusicPlaylistColumnHeader({ prefs, onSort }: HeaderProps) {
   };
 
   return (
-    <div className="sticky top-0 z-20 bg-[var(--music-surface)] px-6">
+    <>
+      <div ref={sentinelRef} aria-hidden className="h-px -mb-px" />
       <div
         className={cn(
-          ROW_BASE,
-          GRID[prefs.view],
-          "h-9 border-b border-white/10 text-sm text-white/60",
+          "sticky top-0 z-20 px-6 transition-[background-color,box-shadow] duration-200",
+          stuck
+            ? "bg-[var(--music-surface-raised)] shadow-[0_3px_6px_-4px_rgb(0_0_0_/_0.35)]"
+            : "bg-[var(--music-surface)]",
         )}
       >
-        <span className="text-center">#</span>
-        {cell("title", "Title")}
-        {prefs.view === "compact" && cell("artist", "Artist", MID_COL)}
-        {cell("album", "Album", MID_COL)}
-        {cell("added", "Date added", DATE_COL)}
-        <div className="flex items-center justify-end pr-8">
-          <button
-            type="button"
-            onClick={() => onSort("duration")}
-            className={cn(
-              "rf-music-tooltip-anchor flex items-center gap-1 w-12 justify-end transition-colors hover:text-white",
-              prefs.sort === "duration" && "text-white",
-            )}
-            aria-label="Duration"
-            data-tooltip="Duration"
-          >
-            {prefs.sort === "duration" && (prefs.desc ? <ChevronDown size={14} /> : <ChevronUp size={14} />)}
-            <Clock3 size={16} />
-          </button>
+        <div
+          className={cn(
+            ROW_BASE,
+            GRID[prefs.view],
+            "h-9 text-sm text-white/60 border-b transition-colors duration-200",
+            stuck ? "border-transparent" : "border-white/10",
+          )}
+        >
+          <span className="text-center">#</span>
+          {cell("title", "Title")}
+          {prefs.view === "compact" && cell("artist", "Artist", MID_COL)}
+          {cell("album", "Album", MID_COL)}
+          {cell("added", "Date added", DATE_COL)}
+          <div className="flex items-center justify-end pr-8">
+            <button
+              type="button"
+              onClick={() => onSort("duration")}
+              className={cn(
+                "rf-music-tooltip-anchor flex items-center gap-1 w-12 justify-end transition-colors hover:text-white",
+                prefs.sort === "duration" && "text-white",
+              )}
+              aria-label="Duration"
+              data-tooltip="Duration"
+            >
+              {prefs.sort === "duration" && (prefs.desc ? <ChevronDown size={14} /> : <ChevronUp size={14} />)}
+              <Clock3 size={16} />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

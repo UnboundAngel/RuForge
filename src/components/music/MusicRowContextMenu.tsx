@@ -10,11 +10,13 @@ import {
   ListVideo,
   Music2,
   Play,
+  Trash2,
   User,
 } from "lucide-react";
 import { albumKeyFromFile, fileHasBrowsableAlbum, musicTrackIdentityKey } from "./musicShelfDedup";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
-import { isAudioOnlyPath } from "@/mediaKind";
+import { bestCoverPath, isAudioOnlyPath } from "@/mediaKind";
+import { deleteLibraryMedia } from "@/deleteLibraryMedia";
 import type { MediaFile } from "@/types";
 import { openInFileManager } from "@/openInFileManager";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -220,6 +222,13 @@ export function MusicRowContextMenu({ menu, onClose }: Props) {
             label="Show in folder"
             icon={<FolderOpen size={icon} strokeWidth={2.25} />}
             onClick={act(() => void openInFileManager(file.path))}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.file}
+            label="Delete song"
+            variant="danger"
+            icon={<Trash2 size={icon} strokeWidth={2.25} />}
+            onClick={act(() => void deleteLibraryMedia(file, { noun: "song", preview: bestCoverPath(file) }))}
           />
         </MusicMenuSection>
       </>
