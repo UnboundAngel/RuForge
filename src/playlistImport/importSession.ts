@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import type { MusicPlaylistPage } from "@/lib/musicExploreTracks";
 import { throttleMusicExplorePageFetch } from "@/lib/ytdlpPageFetchThrottle";
+import { extractYouTubeVideoId } from "@/youtubeUrl";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
 import { fileVideoId, type OutsideTrack } from "@/components/music/musicOutsideRecommend";
@@ -116,6 +117,7 @@ export function openPlaylistImport(): void {
     return;
   }
   useImportSession.setState({ open: true });
+  void refreshLibraryForImport();
   // After a refresh the list comes back from storage with its unsearched rows still waiting.
   if (activeRun !== s.runId && !s.stopped && hasPendingSearches(s.rows)) void runMatching(s.runId);
 }
@@ -168,10 +170,15 @@ function parseNotes(parsed: ParsedImport): string[] {
   return notes;
 }
 
+/** Search results carry the watch URL as `id`; library files are keyed by the bare video id. */
+export function candidateVideoId(c: ScoredCandidate): string {
+  return extractYouTubeVideoId(c.track.url) ?? extractYouTubeVideoId(c.track.id) ?? c.track.id;
+}
+
 /** Candidate row for a MusicTrackInfo, in the shape the preview and download helpers take. */
 export function outsideTrackFor(c: ScoredCandidate): OutsideTrack {
   const t = c.track;
-  return { videoId: t.id, title: t.title, artist: t.artist ?? "", thumbnail: t.thumbnail, duration: t.duration, url: t.url };
+  return { videoId: candidateVideoId(c), title: t.title, artist: t.artist ?? "", thumbnail: t.thumbnail, duration: t.duration, url: t.url };
 }
 
 async function searchRow(source: ImportTrack) {
@@ -207,10 +214,37 @@ export async function startPlaylistImport(parsed: ParsedImport, library: MediaFi
     stopped: null,
     runId,
   });
+  await refreshLibraryForImport();
+  if (useImportSession.getState().runId !== runId) return;
+  const fresh = libraryTracksFor(useRuforgeStore.getState().entries);
+  useImportSession.setState((s) => {
+    if (s.runId !== runId) return s;
+    return {
+      rows: s.rows.map((r) => {
+        if (r.state !== "waiting") return r;
+        const hit = findInLibrary(r.source, fresh);
+        return hit ? { ...r, state: "done", library: hit, bucket: "library", include: true } : r;
+      }),
+    };
+  });
   await runMatching(runId);
 }
 
-function libraryByVideoId(): Map<string, MediaFile> {
+/** The store can hold a snapshot from before the latest downloads landed; owned songs must come from disk. */
+async function refreshLibraryForImport(): Promise<void> {
+  try {
+    await useRuforgeStore.getState().fetchEntries({
+      forceReindex: true,
+      manageLoadingStart: false,
+      skipPosterBackfill: true,
+      skipScrubBackfill: true,
+    });
+  } catch {
+    /* matching still runs against whatever the store has */
+  }
+}
+
+export function libraryByVideoId(): Map<string, MediaFile> {
   const byVideoId = new Map<string, MediaFile>();
   for (const f of libraryTracksFor(useRuforgeStore.getState().entries)) {
     const id = fileVideoId(f);
@@ -240,15 +274,31 @@ async function matchWaitingRows(runId: number): Promise<void> {
     try {
       const ranked = await searchRow(source);
       failures = 0;
+      const shown = ranked.slice(0, ALTERNATIVES_SHOWN);
+      // Search order drifts between runs and the user may have picked an alternative last
+      // time, so any result that is a video already on disk means this song is owned.
+      const byId = libraryByVideoId();
+      const ownedAt = ranked.findIndex((c) => byId.has(candidateVideoId(c)));
+      if (ownedAt >= 0) {
+        const candidates = ownedAt < shown.length ? shown : [ranked[ownedAt], ...shown.slice(0, -1)];
+        patchRow(runId, i, {
+          state: "done",
+          candidates,
+          choice: ownedAt < shown.length ? ownedAt : 0,
+          library: byId.get(candidateVideoId(ranked[ownedAt])) ?? null,
+          bucket: "library",
+          include: true,
+        });
+        continue;
+      }
       const best = ranked[0];
-      const owned = best ? libraryByVideoId().get(best.track.id) : undefined;
       const bucket = bucketFor(source, best);
       patchRow(runId, i, {
         state: "done",
-        candidates: ranked.slice(0, ALTERNATIVES_SHOWN),
+        candidates: shown,
         choice: best ? 0 : -1,
-        library: owned && bucket === "matched" ? owned : null,
-        bucket: owned && bucket === "matched" ? "library" : bucket,
+        library: null,
+        bucket,
         // Only confident matches are ticked; "check" rows wait for the user.
         include: bucket === "matched",
       });
@@ -279,6 +329,13 @@ export function chooseImportCandidate(index: number, choice: number): void {
   setImportRow(index, { choice, include: true, bucket: "matched" });
 }
 
+/** The file this row saves as without downloading: a library match, or a picked result already on disk. */
+export function importRowOwnedFile(r: ImportRow, byId: Map<string, MediaFile>): MediaFile | null {
+  if (r.library) return r.library;
+  const picked = r.choice >= 0 ? r.candidates[r.choice] : undefined;
+  return picked ? (byId.get(candidateVideoId(picked)) ?? null) : null;
+}
+
 export function importRowSaveable(r: ImportRow): boolean {
   return r.include && (!!r.library || (r.choice >= 0 && !!r.candidates[r.choice]));
 }
@@ -304,7 +361,9 @@ export function savePlaylistImport(): {
   const picked = rows.filter(importRowSaveable);
   if (!picked.length) return null;
   const store = useRuforgeStore.getState();
-  const seeds = picked.flatMap((r) => (r.library ? [r.library.path] : []));
+  const byId = libraryByVideoId();
+  const owned = picked.map((r) => importRowOwnedFile(r, byId));
+  const seeds = owned.flatMap((f) => (f ? [f.path] : []));
   const target = findMusicPlaylistByTitle(loadVirtualPlaylistRecords(), name);
   let playlistId: string;
   let alreadyIn = 0;
@@ -316,8 +375,8 @@ export function savePlaylistImport(): {
     playlistId = store.createMusicPlaylist(seeds, name.trim() || DEFAULT_IMPORT_NAME);
   }
   let queued = 0;
-  for (const r of picked) {
-    if (r.library) continue;
+  for (const [i, r] of picked.entries()) {
+    if (owned[i]) continue;
     downloadOutsideTrackIntoPlaylist(outsideTrackFor(r.candidates[r.choice]), playlistId);
     queued++;
   }

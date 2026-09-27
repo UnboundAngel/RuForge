@@ -163,10 +163,6 @@ export function parseImport(reply: string): ParseImportResult {
       rowErrors.push(`Row ${n}: no title`);
       return;
     }
-    if (!artists.length) {
-      rowErrors.push(`Row ${n}: no artist`);
-      return;
-    }
     tracks.push({
       title,
       artists,

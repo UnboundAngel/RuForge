@@ -4,13 +4,16 @@ import { useShallow } from "zustand/react/shallow";
 import { OVERLAY_Z_CLASS } from "@/lib/overlayZIndex";
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import type { MediaFile } from "@/types";
 import { IMPORT_PROMPT } from "@/playlistImport/importPrompt";
 import { parseImport } from "@/playlistImport/parseImport";
 import {
   closePlaylistImport,
   DEFAULT_IMPORT_NAME,
   importMergeTarget,
+  importRowOwnedFile,
   importRowSaveable,
+  libraryByVideoId,
   resetPlaylistImport,
   retryPlaylistImport,
   savePlaylistImport,
@@ -213,16 +216,20 @@ function ReviewStep() {
 
   const hero = useMemo(() => {
     let cover: string | null = null;
+    let coverFile: MediaFile | null = null;
     let count = 0;
     let seconds = 0;
     for (const r of rows) {
       const chosen = r.choice >= 0 ? r.candidates[r.choice] : undefined;
-      if (!cover && !r.library && chosen?.track.thumbnail) cover = chosen.track.thumbnail;
+      if (!cover && !coverFile) {
+        if (r.library) coverFile = r.library;
+        else if (chosen?.track.thumbnail) cover = chosen.track.thumbnail;
+      }
       if (!importRowSaveable(r)) continue;
       count++;
       seconds += (r.library ? r.library.duration : chosen?.track.duration) || 0;
     }
-    return { cover, count, seconds };
+    return { cover, coverFile, count, seconds };
   }, [rows]);
 
   return (
@@ -231,7 +238,7 @@ function ReviewStep() {
         <MusicPlaylistHeader
           title={name.trim() || DEFAULT_IMPORT_NAME}
           tracks={[]}
-          coverFile={null}
+          coverFile={hero.coverFile}
           coverSrc={hero.cover}
           meta={
             <>
@@ -419,8 +426,10 @@ function FilterChip({
 function ReviewFooter() {
   const rows = useImportSession((s) => s.rows);
   const openMusicPlaylist = useRuforgeStore((s) => s.openMusicPlaylist);
+  const entries = useRuforgeStore((s) => s.entries);
+  const byId = useMemo(() => libraryByVideoId(), [entries]);
   const picked = rows.filter(importRowSaveable);
-  const owned = picked.filter((r) => r.library).length;
+  const owned = picked.filter((r) => importRowOwnedFile(r, byId)).length;
   const downloads = picked.length - owned;
 
   const save = () => {
