@@ -1,7 +1,6 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronDown, ChevronUp, Clock3, MoreHorizontal, Music } from "lucide-react";
-import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
@@ -115,33 +114,43 @@ export function MusicPlaylistColumnHeader({ prefs, onSort }: HeaderProps) {
   );
 }
 
+/**
+ * Every prop is a primitive, the (stable) file, or a stable callback that takes the row's
+ * file or path, so a row re-renders only when its own state changes. Playback ticks and
+ * drag hovers used to re-render the whole list, which made dragging stutter.
+ */
 type Props = {
   file: MediaFile;
   index: number;
   view: PlaylistViewMode;
   addedAt: number;
   isPlaying: boolean;
+  /** Only ever true on the playing row, so pausing re-renders just that one. */
+  showPause: boolean;
   selected: boolean;
   menuOpen: boolean;
   reorderable: boolean;
   /** This row is the one being dragged. */
   dragging: boolean;
   dropIndicator: "above" | "below" | null;
-  onSelect: () => void;
-  onPlay: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onReorderStart: () => void;
-  onReorderOver: (e: React.DragEvent) => void;
-  onReorderDrop: () => void;
+  onSelect: (path: string) => void;
+  onPlay: (file: MediaFile) => void;
+  /** Index button: pauses or resumes the playing row, starts any other. */
+  onPlayToggle: (file: MediaFile) => void;
+  onContextMenu: (e: React.MouseEvent, file: MediaFile) => void;
+  onReorderStart: (path: string) => void;
+  onReorderOver: (e: React.DragEvent, path: string) => void;
+  onReorderDrop: (path: string) => void;
   onReorderEnd: () => void;
 };
 
-export function MusicPlaylistTrackRow({
+export const MusicPlaylistTrackRow = memo(function MusicPlaylistTrackRow({
   file,
   index,
   view,
   addedAt,
   isPlaying,
+  showPause,
   selected,
   menuOpen,
   reorderable,
@@ -149,6 +158,7 @@ export function MusicPlaylistTrackRow({
   dropIndicator,
   onSelect,
   onPlay,
+  onPlayToggle,
   onContextMenu,
   onReorderStart,
   onReorderOver,
@@ -159,8 +169,6 @@ export function MusicPlaylistTrackRow({
   const title = trackTitle(file);
   const artist = trackArtistCredit(file);
   const album = trackAlbum(file);
-  const playback = useOptionalMainAudioPlayback();
-  const showPause = isPlaying && playback != null && !playback.paused;
   const identityKey = useMemo(() => musicTrackIdentityKey(file, primaryArtist), [file]);
   const liked = useRuforgeStore((s) => s.musicLikedKeys.includes(identityKey));
   const compact = view === "compact";
@@ -172,20 +180,20 @@ export function MusicPlaylistTrackRow({
       onDragStart={(e) => {
         setMusicTrackDragData(e, [file.path]);
         setMusicTrackDragImage(e, file);
-        if (reorderable) onReorderStart();
+        if (reorderable) onReorderStart(file.path);
       }}
-      onDragOver={onReorderOver}
+      onDragOver={(e) => onReorderOver(e, file.path)}
       onDrop={(e) => {
         e.preventDefault();
-        onReorderDrop();
+        onReorderDrop(file.path);
       }}
       onDragEnd={onReorderEnd}
-      onClick={onSelect}
-      onDoubleClick={onPlay}
+      onClick={() => onSelect(file.path)}
+      onDoubleClick={() => onPlay(file)}
       onContextMenu={(e) => {
         e.preventDefault();
-        onSelect();
-        onContextMenu(e);
+        onSelect(file.path);
+        onContextMenu(e, file);
       }}
       aria-selected={selected}
       className={cn(
@@ -211,8 +219,7 @@ export function MusicPlaylistTrackRow({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          if (isPlaying && playback) playback.togglePlay();
-          else onPlay();
+          onPlayToggle(file);
         }}
         onDoubleClick={(e) => e.stopPropagation()}
         className="flex justify-center"
@@ -285,7 +292,7 @@ export function MusicPlaylistTrackRow({
           // Opening the menu here doesn't select the row, so it stops glowing once the menu closes.
           onClick={(e) => {
             e.stopPropagation();
-            onContextMenu(e);
+            onContextMenu(e, file);
           }}
           onDoubleClick={(e) => e.stopPropagation()}
           aria-label={`More options for ${title}`}
@@ -295,4 +302,4 @@ export function MusicPlaylistTrackRow({
       </div>
     </div>
   );
-}
+});
