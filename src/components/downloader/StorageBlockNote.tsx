@@ -1,10 +1,8 @@
+import { HardDrive } from "lucide-react";
 import type { DownloadJob } from "../../downloadQueue";
 import { mediaPathsMatch } from "../../lib/mediaPathMatch";
 import { useRuforgeStore } from "../../store/ruforgeStore";
 import { NOT_ENOUGH_STORAGE_LABEL } from "../../storageFit";
-
-/** Red border for a queued row the storage gate is holding back. */
-export const STORAGE_BLOCK_ROW_CLASS = "ring-1 ring-inset ring-red-500/70";
 
 type Props = {
   job: DownloadJob;
@@ -26,8 +24,12 @@ export function StorageBlockNote({ job, className = "" }: Props) {
       : "The download folder's disk is too full for this file. It starts on its own once there is room.";
 
   return (
-    <span className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] ${className}`}>
-      <span className="text-red-400" data-tooltip={tooltip}>
+    <span className={`flex items-center gap-2.5 ${className}`}>
+      <span
+        className="flex items-center gap-1.5 text-[10px] font-semibold text-red-300/85"
+        data-tooltip={tooltip}
+      >
+        <HardDrive size={11} strokeWidth={2.25} aria-hidden />
         {NOT_ENOUGH_STORAGE_LABEL}
       </span>
       {canCleanup && (
@@ -37,9 +39,9 @@ export function StorageBlockNote({ job, className = "" }: Props) {
             e.stopPropagation();
             void openAuthorizeCleanupModal();
           }}
-          className="text-stone-400 underline decoration-stone-600 underline-offset-2 transition-colors hover:text-white"
+          className="text-[10px] font-semibold text-stone-400 underline-offset-2 transition-colors hover:text-white hover:underline"
         >
-          Authorize Cleanup
+          Free up space
         </button>
       )}
     </span>
