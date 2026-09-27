@@ -4,7 +4,7 @@ Goal: let a user rebuild a playlist from another service (Spotify, Apple Music, 
 
 ## Phases
 
-1. **Prompt template (this plan).** Music gets an `Import list` entry. The modal has `Copy prompt`, a paste box for the JSON, and `Continue`. RuForge parses, searches, scores, and opens the review screen.
+1. **Prompt template (this plan, built).** Code in `src/playlistImport/` and `src/components/music/MusicPlaylistImport.tsx`. Music gets an `Import from screenshots` entry in the Create menu. The modal has `Copy prompt`, a paste box for the JSON, and `Continue`. RuForge parses, searches, scores, and opens the review screen.
 2. **Terminal import (later).** `ruforge.exe --import <file.json>` forwarded to the running app through the existing `tauri-plugin-single-instance` (already in `src-tauri/Cargo.toml`). It opens the same review screen and never downloads without confirmation. Not through Companion: its scope doc forbids it becoming a downloader.
 3. **In-app chat button (maybe never).** Would reuse the same format and pipeline.
 
