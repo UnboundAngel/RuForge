@@ -65,6 +65,9 @@ export type UseSponsorBlockPlaybackArgs = {
   onDemoteUndo: (category: SponsorBlockSkipCategory) => void;
 };
 
+/** Shared so callers that depend on `segments` don't see a new array every render. */
+const NO_SEGMENTS: SponsorBlockSegment[] = [];
+
 export function useSponsorBlockPlayback({
   file,
   currentTime,
@@ -289,7 +292,7 @@ export function useSponsorBlockPlayback({
   }, [file.path, file.sourceId]);
 
   return {
-    segments: segmentsForCurrentFile ? segments : [],
+    segments: segmentsForCurrentFile ? segments : NO_SEGMENTS,
     segmentsPath,
     showSkipButton,
     skipButtonLabel,

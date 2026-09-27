@@ -32,12 +32,21 @@ export const useMusicPreview = create<PreviewState>(() => ({ id: null, status: n
 const cache = new Map<string, { stream: PreviewStream; at: number }>();
 const nowSec = () => Math.floor(Date.now() / 1000);
 const localHooks = new Map<string, number | null>();
+/** Enough for a browsing session's worth of back and forth; older entries are cheap to resolve again. */
+const CACHE_LIMIT = 32;
+
+/** Maps keep insertion order, so the first key is the oldest. */
+function remember<V>(map: Map<string, V>, key: string, value: V) {
+  map.delete(key);
+  map.set(key, value);
+  while (map.size > CACHE_LIMIT) map.delete(map.keys().next().value as string);
+}
 
 /** A missing or unreadable sidecar just means the guessed start. */
 async function localHookStart(path: string): Promise<number | null> {
   if (localHooks.has(path)) return localHooks.get(path) ?? null;
   const hook = await invoke<number | null>("music_preview_local_hook", { path }).catch(() => null);
-  localHooks.set(path, hook);
+  remember(localHooks, path, hook);
   return hook;
 }
 
@@ -59,7 +68,7 @@ async function resolveStream(track: OutsideTrack): Promise<PreviewStream> {
     cookieFile: settings.cookieFile || null,
     preferOpus: ensureAudio().canPlayType('audio/mp4; codecs="mp4a.40.2"') === "",
   });
-  cache.set(track.videoId, { stream, at: nowSec() });
+  remember(cache, track.videoId, { stream, at: nowSec() });
   return stream;
 }
 

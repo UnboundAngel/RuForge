@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use chrono::Utc;
@@ -25,6 +26,10 @@ const RAW_RETENTION_MS: i64 = 24 * 30 * 24 * 60 * 60 * 1000; // ~24 months
 const RAW_RETENTION_MAX: usize = 100_000;
 
 static LOG_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
+/// Retention is measured in months, so pruning hourly during playback loses nothing and
+/// spares a full parse of the event log on every track start and end.
+const PLAYBACK_PRUNE_INTERVAL_MS: i64 = 60 * 60 * 1000;
+static LAST_PRUNE_MS: AtomicI64 = AtomicI64::new(0);
 
 fn log_mutex() -> &'static Mutex<()> {
     LOG_MUTEX.get_or_init(|| Mutex::new(()))
@@ -670,7 +675,7 @@ fn prune_old_events(dir: &Path) -> Result<(), String> {
         keep.truncate(RAW_RETENTION_MAX);
     }
 
-    // Runs on every track end over up to RAW_RETENTION_MAX events, so the membership test must not scan `keep`.
+    // Covers up to RAW_RETENTION_MAX events, so the membership test must not scan `keep`.
     let kept_ids: HashSet<&str> = keep.iter().map(|k| k.id.as_str()).collect();
     let to_roll: Vec<TrackPlayedEvent> = events
         .into_iter()
@@ -721,8 +726,18 @@ fn prune_old_events(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn prune_if_needed(app: &AppHandle) -> Result<(), String> {
-    prune_old_events(&data_dir(app)?)
+fn prune_now(dir: &Path) -> Result<(), String> {
+    prune_old_events(dir)?;
+    LAST_PRUNE_MS.store(Utc::now().timestamp_millis(), Ordering::Relaxed);
+    Ok(())
+}
+
+fn prune_if_needed(dir: &Path) -> Result<(), String> {
+    let now = Utc::now().timestamp_millis();
+    if now - LAST_PRUNE_MS.load(Ordering::Relaxed) < PLAYBACK_PRUNE_INTERVAL_MS {
+        return Ok(());
+    }
+    prune_now(dir)
 }
 
 /// Crash recovery only: call once per process start, not during playback.
@@ -731,7 +746,7 @@ pub fn music_listen_startup_housekeeping(app: &AppHandle) -> Result<(), String> 
         let dir = data_dir(app)?;
         ensure_integrity_cutover(&dir)?;
         close_orphan_active_if_any(&dir)?;
-        prune_old_events(&dir)?;
+        prune_now(&dir)?;
         Ok(())
     })
 }
@@ -753,7 +768,7 @@ pub fn music_listen_begin(
 ) -> Result<ListenBeginResult, String> {
     with_log_lock(|| {
         let dir = data_dir(&app)?;
-        prune_if_needed(&app)?;
+        prune_if_needed(&dir)?;
 
         if meta.identity_key.trim().is_empty() {
             return Err("identityKey is required".to_string());
@@ -846,7 +861,7 @@ pub fn music_listen_end(
         }
         let ended = ended_at.unwrap_or_else(|| Utc::now().timestamp_millis());
         close_active_session(&dir, active, reason, ended)?;
-        prune_old_events(&dir)?;
+        prune_if_needed(&dir)?;
         Ok(())
     })
 }

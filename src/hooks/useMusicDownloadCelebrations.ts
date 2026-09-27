@@ -5,6 +5,7 @@ import { jobWasActive } from "@/lib/musicExploreDownloadStatus";
 import { takeMusicDownloadManualCancel } from "@/lib/musicDownloadManualCancel";
 import { extractYouTubeVideoId, youtubeUrlsMatch } from "@/youtubeUrl";
 import type { CollapsedCelebrate } from "@/components/music/MusicExploreDownloadCollapsed";
+import { useRuforgeStore } from "@/store/ruforgeStore";
 
 export const MUSIC_DOWNLOAD_CELEBRATE_HOLD_MS = 2100;
 
@@ -81,8 +82,7 @@ export function detectDownloadJobCelebrations(
   return out;
 }
 
-export function useMusicDownloadCelebrations(downloadJobs: DownloadJob[]) {
-  const prevRef = useRef(downloadJobs);
+function useCelebrationQueue() {
   const pendingRef = useRef<CollapsedCelebrate[]>([]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [celebrating, setCelebrating] = useState<CollapsedCelebrate | null>(null);
@@ -117,17 +117,43 @@ export function useMusicDownloadCelebrations(downloadJobs: DownloadJob[]) {
     [processNext],
   );
 
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  return { celebrating, enqueue };
+}
+
+export function useMusicDownloadCelebrations(downloadJobs: DownloadJob[]) {
+  const prevRef = useRef(downloadJobs);
+  const { celebrating, enqueue } = useCelebrationQueue();
+
   useLayoutEffect(() => {
     const prev = prevRef.current;
     prevRef.current = downloadJobs;
     enqueue(detectDownloadJobCelebrations(prev, downloadJobs));
   }, [downloadJobs, enqueue]);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
+  return celebrating;
+}
+
+/**
+ * Same celebrations, fed straight from the store so the caller doesn't re-render on every
+ * download progress event, only when a celebration starts or ends.
+ */
+export function useStoreDownloadCelebrations() {
+  const { celebrating, enqueue } = useCelebrationQueue();
+
+  useEffect(
+    () =>
+      useRuforgeStore.subscribe((s, prev) => {
+        if (s.downloadJobs === prev.downloadJobs) return;
+        enqueue(detectDownloadJobCelebrations(prev.downloadJobs, s.downloadJobs));
+      }),
+    [enqueue],
+  );
 
   return celebrating;
 }
