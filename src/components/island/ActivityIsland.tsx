@@ -137,10 +137,22 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   const updateMode = Boolean(updateAvailable);
   const updateExpanded = updateMode && !updateAvailable!.collapsed;
 
+  const notifications = useRuforgeStore((s) => s.notifications);
+  const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
+  const latest = navMode === "music" ? undefined : notifications[notifications.length - 1];
+  const notice = useMemo(
+    () => (latest ? { id: latest.id, message: latest.message, type: latest.type ?? "info" } : null),
+    [latest],
+  );
+  // Never collapse something the user opened on purpose.
+  const showNotice = notice != null && !isExpanded && !updateExpanded;
+
   const islandState: IslandState = devCaptureIsland
     ? savedCapture
       ? "capture"
       : "idle"
+    : showNotice
+      ? "notice"
     : updateMode
       ? updateAvailable!.collapsed
         ? "idle"
@@ -373,6 +385,10 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
 
   const handleShellClick = () => {
     if (devCaptureIsland) return;
+    if (showNotice) {
+      dismissNotification(notice.id);
+      return;
+    }
     if (updateMode && updateAvailable) {
       if (updateAvailable.collapsed) {
         updateAvailable.onExpand();
@@ -434,8 +450,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
           crashRecoveryPreview ? "z-[100001]" : "z-[110]"
         }`}
         data-rf-nav-mode={navMode === "music" ? "music" : "media"}
-        data-rf-island-empty={islandState === "idle" && !updateMode && !devCaptureIsland ? "true" : undefined}
-        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+        data-rf-island-empty={islandState === "idle" && !updateMode && !devCaptureIsland ? "true" : undefined}        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >
         <div
           ref={islandWrapRef}
@@ -453,6 +468,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
         >
           <DynamicIsland
             state={islandState}
+            notice={showNotice ? notice : null}
             content={content}
             waveformLevels={waveformLevels}
             updateAvailable={

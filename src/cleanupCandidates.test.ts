@@ -170,4 +170,24 @@ describe("buildCleanupCandidates filters", () => {
     expect(result[0]!.watchProgressPct).toBe(10);
     expect(result[1]!.watchProgressPct).toBe(80);
   });
+
+  it("lists a file once when it also sits inside a playlist", () => {
+    const clip = mediaFile({ path: `${RUFORGE_INTERNAL_DIR}/Videos/clip.mp4`, name: "Clip", created: 1 });
+    const result = buildCleanupCandidates(
+      [
+        { kind: "media", ...clip },
+        {
+          kind: "playlist",
+          title: "Mix",
+          path: `${RUFORGE_INTERNAL_DIR}/Playlists/Mix`,
+          itemCount: 1,
+          combinedDuration: 0,
+          stackThumbnailPath: null,
+          items: [{ ...clip, path: clip.path.toUpperCase() }],
+        },
+      ],
+      "least_watched",
+    );
+    expect(result).toHaveLength(1);
+  });
 });

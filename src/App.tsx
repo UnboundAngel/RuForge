@@ -113,11 +113,6 @@ import {
   Settings,
   Search,
   Trash2,
-  CheckCircle2,
-  X,
-  Loader2,
-  AlertCircle,
-  HardDrive,
 } from "lucide-react";
 import { OnboardingFlow, resolveActiveOnboardingSteps } from "./components/onboarding/OnboardingFlow";
 import { ActivityIsland } from "./components/island/ActivityIsland";
@@ -125,7 +120,7 @@ import { WindowResizeEdges } from "./components/window/WindowResizeEdges";
 import type { ActivityHandoffSyncPayload, ActivityMiniTeardownPayload } from "./lib/activityTypes";
 import { MainPlaybackHost } from "./playback/MainPlaybackHost";
 import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
-import { DevCaptureChromeProvider } from "./components/dev-captures/DevCaptureChromeProvider";
+import { StorageStrip } from "./components/navigation/StorageStrip";import { DevCaptureChromeProvider } from "./components/dev-captures/DevCaptureChromeProvider";
 import {
   CrashRecoveryScreen,
   CRASH_RECOVERY_PREVIEW_SAMPLES,
@@ -319,8 +314,6 @@ function App() {
     playingFile && !isAudioOnlyPath(playingFile.path) ? playingFile : null;
   const videoPlayerShellVisible =
     Boolean(backgroundVideoFile) && navMode !== "music" && activeTab === "player";
-  const notifications = useRuforgeStore((s) => s.notifications);
-  const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const notify = useRuforgeStore((s) => s.notify);
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
   const { removableDrives, defaultRemovableDest } = useRemovableDrivesPoll();
@@ -1848,7 +1841,7 @@ function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="absolute left-6 top-0 z-20 flex h-[var(--rf-tab-strip-h)] items-end pointer-events-none"
+              className="absolute left-12 top-0 z-20 flex h-[var(--rf-tab-strip-h)] items-end pointer-events-none"
             >
               <div className="relative flex h-[var(--rf-tab-strip-h)] items-end pointer-events-auto">
                 {galleryScrollChrome > 0 ? (
@@ -2002,7 +1995,7 @@ function App() {
         )}
 
         {/* ── Main Content ─────────────────────────────── */}
-        <div className="flex-1 relative z-0 bg-[#1D1613] rounded-tl-[32px] overflow-hidden rf-main-content-shell">
+        <div className="flex-1 relative z-0 bg-[#1D1613] rounded-tl-[32px] rounded-bl-2xl overflow-hidden rf-main-content-shell">
           <div
             ref={explorerWebviewHostRef}
             className="absolute inset-0 z-[1] pointer-events-none transition-opacity duration-200 ease-out"
@@ -2018,13 +2011,13 @@ function App() {
             aria-hidden
           />
           <div
-            className="rf-main-content-vignette pointer-events-none absolute inset-0 z-[15] rounded-tl-[32px]"
+            className="rf-main-content-vignette pointer-events-none absolute inset-0 z-[15] rounded-tl-[32px] rounded-bl-2xl"
             aria-hidden
           />
           {isMainUrlDropHover ? (
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 z-[25] rounded-tl-[32px] border-2 border-dashed border-[color:color-mix(in_srgb,var(--accent),transparent_55%)] bg-[color:color-mix(in_srgb,var(--accent),transparent_93%)]"
+              className="pointer-events-none absolute inset-0 z-[25] rounded-tl-[32px] rounded-bl-2xl border-2 border-dashed border-[color:color-mix(in_srgb,var(--accent),transparent_55%)] bg-[color:color-mix(in_srgb,var(--accent),transparent_93%)]"
             />
           ) : null}
           <main
@@ -2067,79 +2060,13 @@ function App() {
             </AnimatePresence>
           </main>
         </div>
+        <StorageStrip />
         </div>
       </motion.div>
       )}
       </AnimatePresence>
 
       {navMode === "music" && <MusicToastHost />}
-      {/* Toasts above the video shell; bottom offset clears the player control dock. Below window controls (z-100). */}
-      {navMode !== "music" && (
-        <div
-          className={`pointer-events-none fixed right-4 z-[90] flex max-w-[min(100vw-2rem,22rem)] flex-col gap-2 ${
-            videoPlayerShellVisible ? "bottom-28" : "bottom-4"
-          }`}
-        >
-          <AnimatePresence>
-            {notifications.map((n) => {
-              const t = n.type ?? "info";
-              const shell =
-                t === "error"
-                  ? "rf-notify-card text-stone-100 border border-rose-400/30"
-                  : t === "progress"
-                    ? "rf-notify-card text-stone-50 border border-white/10"
-                    : t === "warning"
-                      ? "rf-notify-card text-stone-50 border-2 border-dotted border-amber-300/70"
-                      : "rf-notify-card text-stone-50 border border-white/10";
-              const closeBtn =
-                t === "error"
-                  ? "text-red-200/70 hover:text-red-100"
-                  : t === "warning"
-                    ? "text-yellow-200/55 hover:text-yellow-100/90"
-                    : "text-stone-500 hover:text-stone-300";
-              return (
-              <motion.div
-                key={n.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                style={{ willChange: "opacity, transform" }}
-                className="rounded-xl pointer-events-auto min-w-0 w-full overflow-hidden"
-              >
-                <div className={`${shell} px-3 py-2 flex items-center gap-2.5 min-w-0 w-full rounded-xl`}>
-                  {t === "error" ? (
-                    <AlertCircle className="text-red-400 w-4 h-4 flex-shrink-0" />
-                  ) : t === "progress" ? (
-                    <Loader2 className="text-[color:var(--accent)] w-4 h-4 flex-shrink-0 animate-spin" />
-                  ) : t === "warning" ? (
-                    <HardDrive className="text-yellow-400/95 w-4 h-4 flex-shrink-0" aria-hidden />
-                  ) : (
-                    <CheckCircle2 className="text-emerald-400 w-4 h-4 flex-shrink-0" />
-                  )}
-
-                  <div className="flex-1 flex flex-col min-w-0">
-                    <span className="text-xs font-semibold leading-snug">
-                      {n.message}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => dismissNotification(n.id)}
-                    className={`${closeBtn} transition-colors flex-shrink-0 self-start p-0.5 rounded`}
-                    aria-label="Dismiss"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-      )}
-
       {backgroundVideoFile ? (
         <div
           className={

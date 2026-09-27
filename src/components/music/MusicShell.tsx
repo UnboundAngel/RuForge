@@ -1259,6 +1259,8 @@ export function MusicShell() {
         captureScreenLabel={`music-${activeView}`}
         onSelect={setMusicView}
         onSearchYoutubeMusic={handleSearchYoutubeMusic}
+        recentPlays={historyEntries}
+        onPlayFile={handlePlayFile}
       />
       <div
         className="relative z-[3] flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden"

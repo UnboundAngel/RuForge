@@ -30,6 +30,8 @@ type SettingsModalShellProps = {
   onExitComplete?: () => void;
   /** `music` swaps the warm app palette for Music mode's black and white. Portaled outside `[data-music-mode]`, so colors are literal. */
   theme?: "app" | "music";
+  /** Extra classes on the scrolling body, e.g. `pt-0` so a sticky header can sit flush at the top. */
+  bodyClassName?: string;
 };
 
 const SHELL_THEME = {
@@ -62,6 +64,7 @@ export function SettingsModalShell({
   disableDismiss = false,
   onExitComplete,
   theme = "app",
+  bodyClassName,
 }: SettingsModalShellProps) {
   const t = SHELL_THEME[theme];
   const reduceMotion = useReducedMotion();
@@ -154,7 +157,7 @@ export function SettingsModalShell({
               ) : null}
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 rf-scrollbar">
+            <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-4 rf-scrollbar", bodyClassName)}>
               {children}
             </div>
 
