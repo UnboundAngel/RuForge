@@ -150,6 +150,27 @@ export function getTopArtists(limit: number): TopArtistStat[] {
     .slice(0, limit);
 }
 
+export type ArtistListenSummary = {
+  listenTimeSec: number;
+  playCount: number;
+  topTracks: ListenStat[];
+};
+
+export function getArtistListenSummary(artistKey: string, topLimit: number): ArtistListenSummary {
+  const key = artistKey.trim().toLowerCase();
+  const rows = key
+    ? loadAll().filter((r) => primaryArtist(r.artist).toLowerCase() === key)
+    : [];
+  return {
+    listenTimeSec: rows.reduce((sum, r) => sum + r.listenTimeSec, 0),
+    playCount: rows.reduce((sum, r) => sum + r.playCount, 0),
+    topTracks: rows
+      .filter((r) => r.playCount > 0)
+      .sort((a, b) => b.playCount - a.playCount || b.listenTimeSec - a.listenTimeSec)
+      .slice(0, topLimit),
+  };
+}
+
 export function getTotalListenTimeSec(): number {
   return loadAll().reduce((sum, row) => sum + row.listenTimeSec, 0);
 }

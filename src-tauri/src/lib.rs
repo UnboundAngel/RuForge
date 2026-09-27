@@ -73,6 +73,7 @@ use crate::commands::musicmeta::{
     backfill_music_meta, ensure_artist_meta_sidecar, ensure_music_meta, get_artist_info,
     read_artist_meta_sidecar, read_music_meta,
 };
+use crate::commands::music_artist_about::music_artist_about;
 use crate::commands::island_overlay::{
     hide_island_overlay, island_overlay_ready, note_main_window_monitor, show_island_overlay,
     sync_island_overlay_bounds, MAIN_HIDDEN_EVENT,
@@ -368,6 +369,7 @@ pub fn run() {
             get_artist_info,
             read_artist_meta_sidecar,
             ensure_artist_meta_sidecar,
+            music_artist_about,
             kickoff_playlist_download_sidecar,
             read_playlist_download_sidecar,
             find_playlist_sidecar_by_list_url,

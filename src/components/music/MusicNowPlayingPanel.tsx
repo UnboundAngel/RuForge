@@ -38,6 +38,7 @@ import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowCo
 import { HoverMarqueeText } from "./HoverMarqueeText";
 import { MusicEdgeSquishScroll } from "./MusicEdgeSquishScroll";
 import { buildCombinedQueuePaths } from "./musicQueueReorder";
+import { MusicArtistAboutSheet } from "./MusicArtistAboutSheet";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 
 const HEADER_EASE = [0.4, 0, 0.2, 1] as const;
@@ -120,6 +121,7 @@ export function MusicNowPlayingPanel({
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
   const [creditPeople, setCreditPeople] = useState<CreditPerson[]>([]);
   const [artistInfo, setArtistInfo] = useState<ArtistInfo | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const entries = useRuforgeStore((s) => s.entries);
 
@@ -146,12 +148,15 @@ export function MusicNowPlayingPanel({
     [entries],
   );
 
-  const relatedSongs = useMemo(() => {
-    if (!artistKey) return [] as MediaFile[];
-    return libraryTracks
-      .filter((t) => t.path !== playingFile.path && fileMatchesArtistKey(t, artistKey))
-      .slice(0, RELATED_LIMIT);
-  }, [libraryTracks, artistKey, playingFile.path]);
+  const artistTracks = useMemo(
+    () => (artistKey ? libraryTracks.filter((t) => fileMatchesArtistKey(t, artistKey)) : []),
+    [libraryTracks, artistKey],
+  );
+
+  const relatedSongs = useMemo(
+    () => artistTracks.filter((t) => t.path !== playingFile.path).slice(0, RELATED_LIMIT),
+    [artistTracks, playingFile.path],
+  );
 
   const artistCoverCandidates = useMemo(() => {
     const list: string[] = [];
@@ -175,6 +180,22 @@ export function MusicNowPlayingPanel({
     }
     return list;
   }, [libraryTracks, artistKey, playingFile]);
+
+  const aboutCovers = useMemo(() => {
+    const seenAlbums = new Set<string>();
+    const out: string[][] = [];
+    for (const t of [playingFile, ...artistTracks.filter((f) => f.path !== playingFile.path)]) {
+      const album = (t.canonicalAlbum ?? t.album ?? "").trim().toLowerCase();
+      if (album && seenAlbums.has(album)) continue;
+      const { primary, fallback } = albumCoverPathWithFallback(t);
+      const chain = [...new Set([primary, fallback, bestCoverPath(t)].filter((p): p is string => !!p))];
+      if (chain.length === 0) continue;
+      if (album) seenAlbums.add(album);
+      out.push(chain.map((p) => convertFileSrc(p)));
+      if (out.length >= 5) break;
+    }
+    return out;
+  }, [playingFile, artistTracks]);
 
   const [artistCoverIdx, setArtistCoverIdx] = useState(0);
   useEffect(() => {
@@ -201,10 +222,10 @@ export function MusicNowPlayingPanel({
           : artistInfo.originCity,
       );
     }
-    const count = libraryTracks.filter((t) => artistKey && fileMatchesArtistKey(t, artistKey)).length;
+    const count = artistTracks.length;
     if (count > 0) bits.push(`${count} ${count === 1 ? "song" : "songs"} in library`);
     return bits.join(" · ");
-  }, [artistInfo, libraryTracks, artistKey]);
+  }, [artistInfo, artistTracks]);
 
   const nextFile = useMemo(() => {
     const nextUpPaths = effectivePlaylist
@@ -435,7 +456,7 @@ export function MusicNowPlayingPanel({
         ) : null}
 
         {artistKey ? (
-          <NpCard className="shrink-0" onClick={openArtist}>
+          <NpCard className="shrink-0" onClick={() => setAboutOpen(true)}>
             <div
               className="relative w-full overflow-hidden"
               style={{
@@ -584,6 +605,23 @@ export function MusicNowPlayingPanel({
       </div>
 
       <MusicRowContextMenu menu={menu} onClose={() => setMenu(null)} />
+      {artistKey && (
+        <MusicArtistAboutSheet
+          open={aboutOpen}
+          onClose={() => setAboutOpen(false)}
+          artistName={artist || artistDisplayName}
+          artistKey={artistKey}
+          displayName={artistDisplayName}
+          fallbackBlurb={artistInfo?.disambiguation ?? ""}
+          coverImages={aboutCovers}
+          artistTracks={artistTracks}
+          onPlayTrack={onPlay}
+          onViewSongs={() => {
+            setAboutOpen(false);
+            openArtist();
+          }}
+        />
+      )}
     </div>
   );
 }

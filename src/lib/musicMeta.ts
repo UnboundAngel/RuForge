@@ -94,6 +94,35 @@ export async function readArtistMetaSidecar(artistName: string): Promise<ArtistI
   return sidecar ? sidecarToArtistInfo(sidecar) : null;
 }
 
+export type ArtistLinkKind =
+  | "instagram"
+  | "x"
+  | "facebook"
+  | "youtube"
+  | "bandcamp"
+  | "soundcloud"
+  | "tiktok"
+  | "homepage";
+
+export interface ArtistAbout {
+  mbId: string;
+  name: string;
+  artistType?: string | null;
+  disambiguation?: string | null;
+  area?: string | null;
+  beginYear?: string | null;
+  endYear?: string | null;
+  genres: string[];
+  bio: string[];
+  imageUrl?: string | null;
+  wikipediaUrl?: string | null;
+  links: { kind: ArtistLinkKind; url: string }[];
+}
+
+export function getArtistAbout(artistName: string): Promise<ArtistAbout | null> {
+  return invoke<ArtistAbout | null>("music_artist_about", { artistName });
+}
+
 export function ensureArtistMetaSidecar(artistName: string, force?: boolean): Promise<boolean> {
   return invoke<boolean>("ensure_artist_meta_sidecar", { artistName, force });
 }
