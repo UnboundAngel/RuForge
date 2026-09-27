@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, CircleCheck, CircleX } from "lucide-react";
-import { useMusicToasts } from "./musicToast";
+import { dismissMusicToast, useMusicToasts } from "./musicToast";
 
 const ICONS = { info: CircleCheck, warning: AlertTriangle, error: CircleX } as const;
 
@@ -31,6 +31,18 @@ export function MusicToastHost() {
                 className={`shrink-0 ${t.tone === "warning" ? "text-amber-300" : "text-[color:var(--music-accent)]"}`}
               />
               <span>{t.message}</span>
+              {t.action && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    t.action?.run();
+                    dismissMusicToast(t.id);
+                  }}
+                  className="pointer-events-auto -my-1 ml-2 shrink-0 rounded-full px-2 py-1 text-sm font-bold text-white transition-colors hover:text-[color:var(--music-accent)]"
+                >
+                  {t.action.label}
+                </button>
+              )}
             </motion.div>
           );
         })}

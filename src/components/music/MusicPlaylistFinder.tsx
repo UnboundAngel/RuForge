@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, CloudDownload, Music, Plus, RefreshCw, Search, X } from "lucide-react";
+import { Check, Music, RefreshCw, Search, X } from "lucide-react";
 import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
 import type { MediaFile } from "@/types";
@@ -18,11 +18,18 @@ import {
   similarLibrarySongs,
 } from "./musicShelfFollowUps";
 import {
-  downloadOutsideTrackIntoPlaylist,
-  fetchSimilarOutside,
-  useOutsideDownloadPercent,
-  useOutsideRecommendations,
-} from "./useMusicOutsideRecommendations";
+  currentHiddenMatcher,
+  hideShelfArtist,
+  hideShelfSong,
+  makeHiddenMatcher,
+  unhideArtist,
+  unhideSong,
+  useHiddenRecommendations,
+} from "./musicHiddenRecommendations";
+import { showMusicToast } from "./musicToast";
+import { CardShelf, SectionTitle } from "./MusicRecommendedShelf";
+import { MusicHiddenRecommendationsButton } from "./MusicHiddenRecommendationsButton";
+import { fetchSimilarOutside, useOutsideRecommendations } from "./useMusicOutsideRecommendations";
 
 type Props = {
   /** Outside songs are downloaded into this playlist. */
@@ -43,6 +50,7 @@ const RECOMMEND_COUNT = 10;
 const OUTSIDE_COUNT = 6;
 const EASE = [0.22, 1, 0.36, 1] as const;
 const NO_FOLLOW_UPS: ReadonlyMap<string, ShelfItem[]> = new Map();
+const NO_KEYS: ReadonlySet<string> = new Set();
 /** Longest an added card waits on its YouTube Music radio before stepping aside. */
 const FOLLOW_UP_HOLD_MS = 6000;
 
@@ -69,17 +77,26 @@ export function MusicPlaylistFinder({
   const [query, setQuery] = useState("");
   const [round, setRound] = useState(0);
 
-  // Rank once per library change or Refresh, not per add: adding a song re-weights the ranking,
-  // and re-ranking then would reshuffle every card. Added songs just drop out and a spare slides in.
+  const hiddenState = useHiddenRecommendations();
+  const isHidden = useMemo(() => makeHiddenMatcher(hiddenState), [hiddenState]);
+  const isHiddenRef = useRef(isHidden);
+  isHiddenRef.current = isHidden;
+  const visibleLibrary = useCallback(
+    (tracks: MediaFile[]) => tracks.filter((t) => !isHiddenRef.current(localItem(t))),
+    [],
+  );
+
+  // Rank once per library change or Refresh, not per add or hide: either re-weights the ranking,
+  // and re-ranking then would reshuffle every card. Those songs just drop out and a spare slides in.
   const playlistRef = useRef(playlistTracks);
   playlistRef.current = playlistTracks;
   const pool = useMemo(
-    () => recommendForPlaylist(libraryTracks, playlistRef.current, round, RECOMMEND_COUNT * 2),
-    [libraryTracks, round],
+    () => recommendForPlaylist(visibleLibrary(libraryTracks), playlistRef.current, round, RECOMMEND_COUNT * 2),
+    [libraryTracks, round, visibleLibrary],
   );
   const recommended = useMemo(
-    () => pool.filter((t) => !inPlaylist(t.path)).slice(0, RECOMMEND_COUNT),
-    [pool, inPlaylist],
+    () => pool.filter((t) => !inPlaylist(t.path) && !isHidden(localItem(t))).slice(0, RECOMMEND_COUNT),
+    [pool, inPlaylist, isHidden],
   );
 
   // YouTube Music is asked only once the shelf scrolls into view, and seeds follow the same
@@ -99,12 +116,14 @@ export function MusicPlaylistFinder({
   const hasPlaylistTracks = playlistTracks.length > 0;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const seedTracks = useMemo(() => playlistRef.current, [libraryTracks, round, hasPlaylistTracks]);
+  const excludeOutside = useCallback((t: OutsideTrack) => isHidden(outsideItem(t)), [isHidden]);
   const outside = useOutsideRecommendations({
     playlistTracks: seedTracks,
     library: libraryTracks,
     round,
     count: OUTSIDE_COUNT,
     active: onScreen && !prominent,
+    exclude: excludeOutside,
   });
 
   // Refresh helps when the library holds more candidates than one page shows, or YouTube Music can deal more.
@@ -152,13 +171,16 @@ export function MusicPlaylistFinder({
   baseRef.current = base;
   const roundRef = useRef(round);
   roundRef.current = round;
-  const appendFollowUps = useCallback((anchor: string, items: ShelfItem[], forRound: number) => {
+  /** `extra` caps how many new cards join the anchor; by default it fills up to FOLLOW_UP_COUNT. */
+  const appendFollowUps = useCallback((anchor: string, items: ShelfItem[], forRound: number, extra?: number) => {
     if (roundRef.current !== forRound || items.length === 0) return;
+    const hidden = currentHiddenMatcher();
     setFollowState((prev) => {
       const map = new Map(prev.round === forRound ? prev.map : NO_FOLLOW_UPS);
       const taken = shelfKeys(baseRef.current, map);
       const have = map.get(anchor) ?? [];
-      const fresh = items.filter((i) => !taken.has(shelfKey(i))).slice(0, FOLLOW_UP_COUNT - have.length);
+      const room = extra ?? FOLLOW_UP_COUNT - have.length;
+      const fresh = items.filter((i) => !taken.has(shelfKey(i)) && !hidden(i)).slice(0, room);
       if (fresh.length === 0) return prev;
       map.set(anchor, [...have, ...fresh]);
       return { round: forRound, map };
@@ -172,7 +194,9 @@ export function MusicPlaylistFinder({
     // Library songs by the same artist or album first; the song's YouTube Music radio tops up the rest.
     const local =
       item.kind === "local"
-        ? similarLibrarySongs(item.file, libraryTracks, (path) => taken.has(path) || inPlaylist(path)).map(localItem)
+        ? similarLibrarySongs(item.file, visibleLibrary(libraryTracks), (path) => taken.has(path) || inPlaylist(path)).map(
+            localItem,
+          )
         : [];
     appendFollowUps(anchor, local, forRound);
     if (local.length >= FOLLOW_UP_COUNT || !playlistId) return;
@@ -210,16 +234,60 @@ export function MusicPlaylistFinder({
         base,
         followUps,
         (item) =>
-          !holding.has(`${round}:${shelfKey(item)}`) &&
-          (item.kind === "local" ? inPlaylist(item.file.path) : ownedVideoIds.has(item.track.videoId)),
+          isHidden(item) ||
+          (!holding.has(`${round}:${shelfKey(item)}`) &&
+            (item.kind === "local" ? inPlaylist(item.file.path) : ownedVideoIds.has(item.track.videoId))),
       ),
-    [base, followUps, inPlaylist, ownedVideoIds, holding, round],
+    [base, followUps, inPlaylist, ownedVideoIds, holding, round, isHidden],
   );
-  const followUpKeys = useMemo(() => {
+
+  // Hidden cards grow back in on Undo, while the spare that took their slot collapses.
+  const [hiddenNow, setHiddenNow] = useState<{ round: number; keys: ReadonlySet<string> }>({ round, keys: NO_KEYS });
+  const grownKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const items of followUps.values()) for (const i of items) keys.add(shelfKey(i));
+    if (hiddenNow.round === round) for (const k of hiddenNow.keys) keys.add(k);
     return keys;
-  }, [followUps]);
+  }, [followUps, hiddenNow, round]);
+
+  const hideCard = (item: ShelfItem, scope: "song" | "artist") => {
+    const song = scope === "song" ? hideShelfSong(item) : null;
+    const artist = scope === "artist" ? hideShelfArtist(item) : null;
+    if (!song && !artist) return;
+    const hidden = currentHiddenMatcher();
+    const victims = shelfItems.filter(hidden);
+    setHiddenNow((prev) => {
+      const keys = new Set(prev.round === round ? prev.keys : NO_KEYS);
+      for (const v of victims) keys.add(shelfKey(v));
+      return { round, keys };
+    });
+
+    // The spare takes the hidden card's slot, so nothing else on the shelf moves.
+    if (!prominent) {
+      const taken = shelfKeys(base, followUps);
+      const dealt = localDealt.round === round ? localDealt.pool : pool;
+      const moreLocal = recommendForPlaylist(visibleLibrary(libraryTracks), playlistRef.current, round, RECOMMEND_COUNT * 4);
+      const localSpares = [...dealt, ...moreLocal]
+        .map(localItem)
+        .filter((i) => i.kind === "local" && !taken.has(shelfKey(i)) && !inPlaylist(i.file.path) && !hidden(i));
+      const outsideSpares = outside.pool
+        .map(outsideItem)
+        .filter((i) => i.kind === "outside" && !taken.has(shelfKey(i)) && !ownedVideoIds.has(i.track.videoId) && !hidden(i));
+      for (const v of victims) {
+        const spares = v.kind === "local" ? [...localSpares, ...outsideSpares] : [...outsideSpares, ...localSpares];
+        appendFollowUps(shelfKey(v), spares, round, 1);
+      }
+    }
+
+    if (song) {
+      showMusicToast("Hidden from recommendations", "info", { label: "Undo", run: () => unhideSong(song.id) });
+    } else if (artist) {
+      showMusicToast(`Songs by ${artist.name} won't be recommended`, "info", {
+        label: "Undo",
+        run: () => unhideArtist(artist.key),
+      });
+    }
+  };
 
   const hasShelf = shelfItems.length > 0 || outside.loading;
   const results = useMemo(() => filterTracksByQuery(libraryTracks, query), [libraryTracks, query]);
@@ -310,6 +378,8 @@ export function MusicPlaylistFinder({
                     subtitle="Based on your library"
                     items={recommended.map(localItem)}
                     onAdd={onAdd}
+                    onHide={hideCard}
+                    actions={<MusicHiddenRecommendationsButton />}
                   />
                 </div>
               ) : null}
@@ -328,16 +398,18 @@ export function MusicPlaylistFinder({
                   title="Recommended"
                   subtitle="Based on what's in this playlist"
                   items={shelfItems}
-                  grownKeys={followUpKeys}
+                  grownKeys={grownKeys}
                   onAdd={(file) => {
                     onAdd(file);
                     bringSimilar(localItem(file));
                   }}
                   onOutsideAdd={(track) => bringSimilar(outsideItem(track))}
+                  onHide={hideCard}
                   outsideLoading={outside.loading}
                   playlistId={playlistId}
                   actions={
                     <>
+                      <MusicHiddenRecommendationsButton />
                       {canRefresh && (
                         <button
                           type="button"
@@ -366,9 +438,12 @@ export function MusicPlaylistFinder({
               ) : (
                 <div className="flex items-start justify-between gap-4">
                   <SectionTitle title="Recommended" subtitle="Every song in your library is already here." />
-                  <button type="button" onClick={() => setSearching(true)} className={cn(PILL, "mr-4 shrink-0")}>
-                    <Search size={15} aria-hidden /> Find more
-                  </button>
+                  <div className="mr-4 flex shrink-0 items-center gap-2">
+                    <MusicHiddenRecommendationsButton />
+                    <button type="button" onClick={() => setSearching(true)} className={PILL}>
+                      <Search size={15} aria-hidden /> Find more
+                    </button>
+                  </div>
                 </div>
               )}
             </motion.div>
@@ -376,364 +451,6 @@ export function MusicPlaylistFinder({
         </AnimatePresence>
       </div>
     </section>
-  );
-}
-
-function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div className="px-4 min-w-0">
-      <h2 className="text-2xl font-bold tracking-tight text-white">{title}</h2>
-      <p className="mt-1 text-sm text-white/60">{subtitle}</p>
-    </div>
-  );
-}
-
-const CARD_W = 168;
-const CARD_GAP = 12;
-const SCROLL_BTN =
-  "rf-music-press w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.07] text-white/80 hover:text-white hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)] disabled:opacity-30 disabled:pointer-events-none";
-
-/** Recommendations as a horizontal row of cover cards, paged with the arrows or a trackpad swipe. */
-function CardShelf({
-  title,
-  subtitle,
-  items,
-  grownKeys,
-  onAdd,
-  onOutsideAdd,
-  actions,
-  listKey,
-  outsideLoading = false,
-  playlistId,
-}: {
-  title: string;
-  subtitle: string;
-  /** Library and YouTube Music songs in display order. */
-  items: ShelfItem[];
-  /** Cards an add brought in; they open a slot instead of just fading in. */
-  grownKeys?: ReadonlySet<string>;
-  onAdd: (file: MediaFile) => void;
-  onOutsideAdd?: (track: OutsideTrack) => void;
-  outsideLoading?: boolean;
-  playlistId?: string;
-  actions?: React.ReactNode;
-  /** Changing it re-deals the cards (Refresh) while the header, and its buttons, stay mounted. */
-  listKey?: number;
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const sync = () =>
-      setEdges({ left: el.scrollLeft > 4, right: el.scrollLeft < el.scrollWidth - el.clientWidth - 4 });
-    sync();
-    el.addEventListener("scroll", sync, { passive: true });
-    const ro = new ResizeObserver(sync);
-    ro.observe(el);
-    // Cards collapse over 240ms when added; re-check once they settle.
-    const t = window.setTimeout(sync, 300);
-    return () => {
-      el.removeEventListener("scroll", sync);
-      ro.disconnect();
-      window.clearTimeout(t);
-    };
-  }, [items, outsideLoading]);
-
-  const page = (dir: 1 | -1) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const step = Math.max(CARD_W + CARD_GAP, Math.floor(el.clientWidth / (CARD_W + CARD_GAP)) * (CARD_W + CARD_GAP));
-    el.scrollBy({ left: dir * step, behavior: "smooth" });
-  };
-
-  // Fade whichever edge still has cards behind it.
-  const mask = `linear-gradient(to right, ${edges.left ? "transparent, black 48px" : "black"}, ${edges.right ? "black calc(100% - 48px), transparent" : "black"})`;
-
-  return (
-    <div>
-      <div className="flex items-end justify-between gap-4 pr-4">
-        <SectionTitle title={title} subtitle={subtitle} />
-        <div className="flex items-center gap-2 shrink-0">
-          {actions}
-          {(edges.left || edges.right) && (
-            <>
-              <button type="button" onClick={() => page(-1)} disabled={!edges.left} className={SCROLL_BTN} aria-label="Scroll left">
-                <ChevronLeft size={18} />
-              </button>
-              <button type="button" onClick={() => page(1)} disabled={!edges.right} className={SCROLL_BTN} aria-label="Scroll right">
-                <ChevronRight size={18} />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-      <div
-        key={listKey}
-        ref={scrollRef}
-        className="mt-4 flex overflow-x-auto scroll-smooth px-1 pb-2"
-        style={{ scrollbarWidth: "none", maskImage: mask, WebkitMaskImage: mask }}
-      >
-        <AnimatePresence initial={true}>
-          {items.map((item, i) => {
-            const key = shelfKey(item);
-            const grow = grownKeys?.has(key) ?? false;
-            if (item.kind === "local") {
-              const file = item.file;
-              return <FinderCard key={key} index={i} grow={grow} file={file} onAdd={() => onAdd(file)} />;
-            }
-            if (!playlistId) return null;
-            const track = item.track;
-            return (
-              <OutsideCard
-                key={key}
-                index={i}
-                grow={grow}
-                track={track}
-                playlistId={playlistId}
-                onAdded={() => onOutsideAdd?.(track)}
-              />
-            );
-          })}
-          {outsideLoading &&
-            !items.some((i) => i.kind === "outside") &&
-            [0, 1, 2].map((i) => <SkeletonCard key={`skeleton-${i}`} index={items.length + i} />)}
-        </AnimatePresence>
-      </div>
-    </div>
-  );
-}
-
-/**
- * An added card's exit and its follow-ups' entrance share one timing, so the slot widens by
- * exactly one card in a single slide instead of closing and then reopening.
- */
-const SWAP_TRANSITION = { duration: 0.32, ease: EASE, delay: 0.25 };
-
-/** Where a card starts: grown cards open their slot so the neighbors slide aside. */
-function cardInitial(grow: boolean) {
-  return grow ? { opacity: 0, scale: 0.85, width: 0 } : { opacity: 0, y: 12, width: CARD_W + CARD_GAP };
-}
-
-function FinderCard({ file, index, grow, onAdd }: { file: MediaFile; index: number; grow: boolean; onAdd: () => void }) {
-  const cover = bestCoverPath(file);
-  const artist = trackArtistLabel(file);
-  const [added, setAdded] = useState(false);
-  return (
-    <motion.div
-      initial={cardInitial(grow)}
-      animate={{
-        opacity: 1,
-        y: 0,
-        scale: 1,
-        width: CARD_W + CARD_GAP,
-        transition: grow ? SWAP_TRANSITION : { duration: 0.3, ease: EASE, delay: Math.min(index, 8) * 0.04 },
-      }}
-      // Shrink the slot so the cards to the right slide over and close the gap.
-      exit={{ opacity: 0, scale: 0.85, width: 0, transition: SWAP_TRANSITION }}
-      className="shrink-0 overflow-hidden"
-      style={{ paddingRight: CARD_GAP }}
-    >
-      <div
-        className="group/card w-[168px] p-2 rounded-lg transition-colors duration-200 hover:bg-white/[0.07]"
-      >
-        <div className="relative aspect-square w-full overflow-hidden rounded-md bg-white/[0.07] shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
-          {cover ? (
-            <img
-              src={convertFileSrc(cover)}
-              alt=""
-              draggable={false}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-white/30">
-              <Music size={40} />
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              if (added) return;
-              setAdded(true);
-              onAdd();
-            }}
-            className={cn(
-              "rf-music-press rf-music-tooltip-anchor absolute bottom-2 right-2 w-10 h-10 flex items-center justify-center rounded-full bg-[var(--music-accent)] text-white shadow-[0_8px_20px_rgba(0,0,0,0.5)]",
-              "transition-[opacity,translate,scale] duration-200 hover:scale-105",
-              added
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 translate-y-2 group-hover/card:opacity-100 group-hover/card:translate-y-0 focus-visible:opacity-100 focus-visible:translate-y-0",
-            )}
-            aria-label={`Add ${file.name} to this playlist`}
-            data-tooltip={added ? "Added" : "Add to playlist"}
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span
-                key={added ? "added" : "add"}
-                initial={{ scale: 0.4, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.4, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 520, damping: 30 }}
-                className="flex"
-              >
-                {added ? <Check size={20} strokeWidth={3} /> : <Plus size={22} strokeWidth={2.75} />}
-              </motion.span>
-            </AnimatePresence>
-          </button>
-        </div>
-        <div className="mt-2 min-w-0">
-          <div className="truncate text-sm font-bold text-white">{file.name}</div>
-          <div className="truncate text-xs text-white/60 transition-colors group-hover/card:text-white/80">
-            {artist || file.album?.trim() || "Unknown artist"}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-const RING_R = 15;
-const RING_C = 2 * Math.PI * RING_R;
-
-/**
- * A YouTube Music song the user doesn't own yet. Add downloads it; the card shows the progress,
- * then leaves on its own once the file lands in the library (the Music shell adds it to the playlist).
- */
-function OutsideCard({
-  track,
-  index,
-  grow,
-  playlistId,
-  onAdded,
-}: {
-  track: OutsideTrack;
-  index: number;
-  grow: boolean;
-  playlistId: string;
-  onAdded: () => void;
-}) {
-  const { queued, percent, failed } = useOutsideDownloadPercent(track.url);
-  const busy = queued && !failed;
-  const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.videoId}/hqdefault.jpg`;
-  return (
-    <motion.div
-      initial={cardInitial(grow)}
-      animate={{
-        opacity: 1,
-        y: 0,
-        scale: 1,
-        width: CARD_W + CARD_GAP,
-        transition: grow ? SWAP_TRANSITION : { duration: 0.3, ease: EASE, delay: Math.min(index, 8) * 0.04 },
-      }}
-      exit={{ opacity: 0, scale: 0.85, width: 0, transition: SWAP_TRANSITION }}
-      className="shrink-0 overflow-hidden"
-      style={{ paddingRight: CARD_GAP }}
-    >
-      <div className="group/card w-[168px] p-2 rounded-lg transition-colors duration-200 hover:bg-white/[0.07]">
-        <div className="relative aspect-square w-full overflow-hidden rounded-md bg-white/[0.07] shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
-          <img
-            src={thumb}
-            alt=""
-            draggable={false}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className="h-full w-full object-cover"
-          />
-          <span
-            className="rf-music-tooltip-anchor absolute top-2 left-2 w-6 h-6 flex items-center justify-center rounded-full bg-black/70 text-white/80"
-            data-tooltip="Not downloaded"
-            aria-label="Not downloaded"
-          >
-            <CloudDownload size={13} strokeWidth={2.5} aria-hidden />
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              if (busy) return;
-              downloadOutsideTrackIntoPlaylist(track, playlistId);
-              onAdded();
-            }}
-            className={cn(
-              "rf-music-press rf-music-tooltip-anchor absolute bottom-2 right-2 w-10 h-10 flex items-center justify-center rounded-full text-white shadow-[0_8px_20px_rgba(0,0,0,0.5)]",
-              "transition-[opacity,translate,scale,background-color] duration-200",
-              busy ? "bg-black/80" : "bg-[var(--music-accent)] hover:scale-105",
-              busy
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 translate-y-2 group-hover/card:opacity-100 group-hover/card:translate-y-0 focus-visible:opacity-100 focus-visible:translate-y-0",
-            )}
-            aria-label={busy ? `Downloading ${track.title}` : `Download ${track.title} and add it to this playlist`}
-            data-tooltip={busy ? `Downloading ${Math.round(percent)}%` : failed ? "Download failed. Try again" : "Download and add"}
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              {busy ? (
-                <motion.svg
-                  key="ring"
-                  viewBox="0 0 40 40"
-                  className="w-10 h-10 -rotate-90"
-                  initial={{ scale: 0.4, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.4, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 520, damping: 30 }}
-                  aria-hidden
-                >
-                  <circle cx="20" cy="20" r={RING_R} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="3" />
-                  <motion.circle
-                    cx="20"
-                    cy="20"
-                    r={RING_R}
-                    fill="none"
-                    stroke="var(--music-accent)"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeDasharray={RING_C}
-                    initial={false}
-                    animate={{ strokeDashoffset: RING_C * (1 - Math.max(0.04, percent / 100)) }}
-                    transition={{ duration: 0.4, ease: EASE }}
-                  />
-                </motion.svg>
-              ) : (
-                <motion.span
-                  key="add"
-                  initial={{ scale: 0.4, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.4, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 520, damping: 30 }}
-                  className="flex"
-                >
-                  <Plus size={22} strokeWidth={2.75} />
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </button>
-        </div>
-        <div className="mt-2 min-w-0">
-          <div className="truncate text-sm font-bold text-white">{track.title}</div>
-          <div className="truncate text-xs text-white/60 transition-colors group-hover/card:text-white/80">
-            {track.artist || "YouTube Music"}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function SkeletonCard({ index }: { index: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1, transition: { delay: Math.min(index, 8) * 0.04 } }}
-      exit={{ opacity: 0, width: 0, transition: { duration: 0.2 } }}
-      className="shrink-0 overflow-hidden"
-      style={{ width: CARD_W + CARD_GAP, paddingRight: CARD_GAP }}
-      aria-hidden
-    >
-      <div className="w-[168px] p-2">
-        <div className="aspect-square w-full rounded-md bg-white/[0.07] animate-pulse" />
-        <div className="mt-3 h-3 w-4/5 rounded bg-white/[0.07] animate-pulse" />
-        <div className="mt-2 h-2.5 w-1/2 rounded bg-white/[0.05] animate-pulse" />
-      </div>
-    </motion.div>
   );
 }
 

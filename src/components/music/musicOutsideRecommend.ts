@@ -76,6 +76,15 @@ function songKey(title: string, artist: string): string {
   return `${artist.toLowerCase()}|${t}`;
 }
 
+/** Title-and-artist key of a library song, comparable with `outsideSongKey`. */
+export function fileSongKey(file: MediaFile): string {
+  return songKey(file.canonicalTitle ?? file.name, cleanArtist(file.artist ?? file.albumArtist ?? null));
+}
+
+export function outsideSongKey(track: OutsideTrack): string {
+  return songKey(track.title, track.artist);
+}
+
 /**
  * Radio results the user doesn't already have: drops the seed, songs in the library
  * (by video id or by title and artist), and repeats such as a video and its audio version.
@@ -90,8 +99,7 @@ export function mergeOutsideRecommendations(
   for (const f of library) {
     const id = fileVideoId(f);
     if (id) ownedIds.add(id);
-    const artist = cleanArtist(f.artist ?? f.albumArtist ?? null);
-    ownedKeys.add(songKey(f.canonicalTitle ?? f.name, artist));
+    ownedKeys.add(fileSongKey(f));
   }
   const out: OutsideTrack[] = [];
   const seenIds = new Set<string>([seedId]);
