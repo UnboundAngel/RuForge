@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import type { GalleryEntry, MediaFile } from "./types";
 import {
+  findMusicPlaylistByTitle,
   WATCH_LATER_ID,
   addPathsToRecord,
   createVirtualPlaylistRecord,
@@ -149,5 +150,25 @@ describe("music playlists", () => {
     const moved = reorderRecordByPath(r, "C:\\b.mp3", "C:\\a.mp3", 2);
     expect(moved.items.map((i) => i.path)).toEqual(["C:\\b.mp3", "C:\\a.mp3", "C:\\gone.mp3"]);
     expect(reorderRecordByPath(r, "C:\\nope.mp3", "C:\\a.mp3")).toBe(r);
+  });
+});
+
+describe("findMusicPlaylistByTitle", () => {
+  const music = (title: string, updatedAt: number) => ({
+    ...createVirtualPlaylistRecord(title, [], updatedAt, "music"),
+    updatedAt,
+  });
+
+  it("matches music playlists ignoring case and extra spaces, newest first", () => {
+    const old = music("Late Night Drive", 1);
+    const newer = music("late  night drive ", 5);
+    const video = createVirtualPlaylistRecord("Late Night Drive", [], 9, "video");
+    expect(findMusicPlaylistByTitle([old, video, newer], "Late Night Drive")?.id).toBe(newer.id);
+  });
+
+  it("never matches a blank name or a video playlist", () => {
+    const video = createVirtualPlaylistRecord("Mix", [], 1, "video");
+    expect(findMusicPlaylistByTitle([video], "Mix")).toBeNull();
+    expect(findMusicPlaylistByTitle([music("", 1)], "  ")).toBeNull();
   });
 });

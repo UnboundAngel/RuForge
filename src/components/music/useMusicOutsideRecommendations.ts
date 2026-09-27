@@ -11,6 +11,7 @@ import { throttleMusicExplorePageFetch } from "@/lib/ytdlpPageFetchThrottle";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
 import { youtubeUrlsMatch } from "@/youtubeUrl";
+import { loadVirtualPlaylistRecords, recordHasPath } from "@/virtualPlaylists";
 import { useMusicLibraryTracks } from "./useMusicPlaylists";
 import {
   type OutsideTrack,
@@ -182,7 +183,11 @@ export function useResolvePendingPlaylistAdds(library: MediaFile[]): void {
   useEffect(() => {
     const pending = readPendingAdds();
     if (pending.length === 0) return;
-    const { ready, waiting } = resolvePendingAdds(pending, library);
+    const records = loadVirtualPlaylistRecords();
+    const { ready, waiting } = resolvePendingAdds(pending, library, Date.now(), (id, path) => {
+      const record = records.find((r) => r.id === id);
+      return !!record && recordHasPath(record, path);
+    });
     if (ready.length === 0 && waiting.length === pending.length) return;
     for (const { add, path } of ready) addToVirtualPlaylist(add.playlistId, [path]);
     writePendingAdds(waiting);

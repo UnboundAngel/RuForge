@@ -7,6 +7,7 @@ import type { MediaFile } from "@/types";
 import { fileVideoId, type OutsideTrack } from "@/components/music/musicOutsideRecommend";
 import { downloadOutsideTrackIntoPlaylist } from "@/components/music/useMusicOutsideRecommendations";
 import { libraryTracksFor } from "@/components/music/useMusicPlaylists";
+import { findMusicPlaylistByTitle, loadVirtualPlaylistRecords, recordHasPath } from "@/virtualPlaylists";
 import {
   IMPORT_SESSION_KEY,
   type SavedImportSession,
@@ -271,17 +272,38 @@ export function importRowSaveable(r: ImportRow): boolean {
   return r.include && (!!r.library || (r.choice >= 0 && !!r.candidates[r.choice]));
 }
 
+/** The existing playlist an import named `name` would add to, if any. Unnamed imports never merge. */
+export function importMergeTarget(name: string): { id: string; title: string } | null {
+  const hit = findMusicPlaylistByTitle(loadVirtualPlaylistRecords(), name);
+  return hit ? { id: hit.id, title: hit.title } : null;
+}
+
 /**
- * Creates the playlist, adds songs already in the library right away, and queues the rest to
- * join it as their downloads land. Returns the new playlist id.
+ * Creates the playlist, or adds to the one that already has this name, puts songs already in the
+ * library in right away, and queues the rest to join it as their downloads land.
  */
-export function savePlaylistImport(): { playlistId: string; added: number; queued: number } | null {
+export function savePlaylistImport(): {
+  playlistId: string;
+  merged: boolean;
+  added: number;
+  alreadyIn: number;
+  queued: number;
+} | null {
   const { rows, name } = useImportSession.getState();
   const picked = rows.filter(importRowSaveable);
   if (!picked.length) return null;
   const store = useRuforgeStore.getState();
   const seeds = picked.flatMap((r) => (r.library ? [r.library.path] : []));
-  const playlistId = store.createMusicPlaylist(seeds, name.trim() || DEFAULT_IMPORT_NAME);
+  const target = findMusicPlaylistByTitle(loadVirtualPlaylistRecords(), name);
+  let playlistId: string;
+  let alreadyIn = 0;
+  if (target) {
+    playlistId = target.id;
+    alreadyIn = seeds.filter((p) => recordHasPath(target, p)).length;
+    store.addToVirtualPlaylist(playlistId, seeds);
+  } else {
+    playlistId = store.createMusicPlaylist(seeds, name.trim() || DEFAULT_IMPORT_NAME);
+  }
   let queued = 0;
   for (const r of picked) {
     if (r.library) continue;
@@ -298,5 +320,5 @@ export function savePlaylistImport(): { playlistId: string; added: number; queue
     draft: "",
     draftError: null,
   }));
-  return { playlistId, added: seeds.length, queued };
+  return { playlistId, merged: !!target, added: seeds.length - alreadyIn, alreadyIn, queued };
 }
