@@ -287,6 +287,25 @@ export function isMusicPlaylistRecord(record: VirtualPlaylistRecord): boolean {
   return record.kind === "music";
 }
 
+/**
+ * The music playlist an import with this name should join, matched case- and space-insensitively.
+ * The newest wins if several share the name.
+ */
+export function findMusicPlaylistByTitle(
+  records: VirtualPlaylistRecord[],
+  title: string,
+): VirtualPlaylistRecord | null {
+  const key = title.trim().replace(/\s+/g, " ").toLowerCase();
+  if (!key) return null;
+  let best: VirtualPlaylistRecord | null = null;
+  for (const r of records) {
+    if (!isMusicPlaylistRecord(r)) continue;
+    if (r.title.trim().replace(/\s+/g, " ").toLowerCase() !== key) continue;
+    if (!best || r.updatedAt > best.updatedAt) best = r;
+  }
+  return best;
+}
+
 export function recordHasPath(record: VirtualPlaylistRecord, path: string): boolean {
   return record.items.some((i) => mediaPathsMatch(i.path, path));
 }

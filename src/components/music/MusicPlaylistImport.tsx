@@ -11,6 +11,7 @@ import {
   type ImportRow,
   chooseImportCandidate,
   closePlaylistImport,
+  importMergeTarget,
   importRowSaveable,
   outsideTrackFor,
   resetPlaylistImport,
@@ -185,6 +186,7 @@ function ReviewStep() {
   );
   const [filter, setFilter] = useState<Filter>("all");
   const [openAlt, setOpenAlt] = useState<number | null>(null);
+  const mergeTarget = useMemo(() => importMergeTarget(name), [name]);
 
   const counts = useMemo(() => {
     let done = 0;
@@ -214,6 +216,12 @@ function ReviewStep() {
           aria-label="Playlist name"
           className={cn(FIELD, "h-10 font-semibold")}
         />
+        {mergeTarget && (
+          <p className="-mt-1 px-1 text-[12px] text-white/50">
+            You already have a playlist called “{mergeTarget.title}”. Saving adds these songs to it and skips any it has.
+            Rename this one to keep them apart.
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label={`All ${rows.length}`} />
           <FilterChip
@@ -508,10 +516,15 @@ function ReviewFooter() {
     const res = savePlaylistImport();
     if (!res) return;
     openMusicPlaylist(res.playlistId);
+    const lead = res.merged
+      ? res.alreadyIn
+        ? `Added to your playlist, ${res.alreadyIn} already there.`
+        : "Added to your playlist."
+      : "Playlist created.";
     showMusicToast(
       res.queued
-        ? `Playlist created. ${res.queued} ${res.queued === 1 ? "song joins" : "songs join"} it as ${res.queued === 1 ? "it downloads" : "they download"}.`
-        : "Playlist created",
+        ? `${lead} ${res.queued} ${res.queued === 1 ? "song joins" : "songs join"} it as ${res.queued === 1 ? "it downloads" : "they download"}.`
+        : lead,
     );
   };
 

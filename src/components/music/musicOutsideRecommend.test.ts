@@ -175,4 +175,13 @@ describe("resolvePendingAdds", () => {
     expect(ready).toEqual([{ add: pending[0], path: landed.path }]);
     expect(waiting).toEqual([pending[1]]);
   });
+
+  it("keeps waiting when the match is a file the playlist already holds", () => {
+    const stale = track("older-song", { sourceId: A1 });
+    const pending = [{ videoId: A1, playlistId: "p1", at: 0 }];
+    const has = (id: string, path: string) => id === "p1" && path === stale.path;
+    const { ready, waiting } = resolvePendingAdds(pending, [stale], 1, has);
+    expect(ready).toEqual([]);
+    expect(waiting).toEqual(pending);
+  });
 });

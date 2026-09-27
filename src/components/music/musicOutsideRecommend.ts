@@ -238,12 +238,15 @@ export function writePendingAdds(list: PendingPlaylistAdd[]): void {
 
 /**
  * Splits pending adds into songs that have arrived in the library (with their file path)
- * and ones still waiting. Expired entries are dropped.
+ * and ones still waiting. Expired entries are dropped. A match whose file the playlist
+ * already holds keeps waiting: that is a finished download briefly pointed at an older
+ * song's file, and dropping the add there loses the new song for good.
  */
 export function resolvePendingAdds(
   pending: PendingPlaylistAdd[],
   library: MediaFile[],
   now = Date.now(),
+  playlistHasPath: (playlistId: string, path: string) => boolean = () => false,
 ): { ready: { add: PendingPlaylistAdd; path: string }[]; waiting: PendingPlaylistAdd[] } {
   const pathById = new Map<string, string>();
   for (const f of library) {
@@ -254,7 +257,7 @@ export function resolvePendingAdds(
   const waiting: PendingPlaylistAdd[] = [];
   for (const p of pending) {
     const path = pathById.get(p.videoId);
-    if (path) ready.push({ add: p, path });
+    if (path && !playlistHasPath(p.playlistId, path)) ready.push({ add: p, path });
     else if (now - p.at <= PENDING_ADD_TTL_MS) waiting.push(p);
   }
   return { ready, waiting };
