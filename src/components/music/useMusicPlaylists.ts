@@ -9,7 +9,7 @@ import { musicPlaylistRecords } from "./musicPlaylists";
 // library once per scan instead of once each.
 const libraryTracksCache = new WeakMap<object, MediaFile[]>();
 
-function libraryTracksFor(entries: object): MediaFile[] {
+export function libraryTracksFor(entries: object): MediaFile[] {
   let tracks = libraryTracksCache.get(entries);
   if (!tracks) {
     tracks = flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path));
