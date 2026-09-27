@@ -36,6 +36,7 @@ import {
   resolveMusicPlaylistTracks,
 } from "./musicPlaylists";
 import { useMusicLibraryTracks, useMusicPlaylistRecords } from "./useMusicPlaylists";
+import { MusicPlaylistNavMenu, type MusicPlaylistNavMenuState } from "./MusicPlaylistNavMenu";
 
 const SORTS: LibrarySort[] = ["recents", "alphabetical", "custom"];
 const SORT_ICONS: Record<LibrarySort, LucideIcon> = {
@@ -82,6 +83,7 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sortAt, setSortAt] = useState<{ x: number; y: number } | null>(null);
+  const [navMenu, setNavMenu] = useState<MusicPlaylistNavMenuState | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -156,10 +158,13 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
               playing={playingPlaylist === record.title}
               onOpen={() => openMusicPlaylist(record.id)}
               onDropPaths={(paths) => handleDrop(record, paths)}
+              menuOpen={navMenu?.record.id === record.id}
+              onMenu={setNavMenu}
             />
           ))}
         </>
       )}
+      <MusicPlaylistNavMenu menu={navMenu} onClose={() => setNavMenu(null)} />
       {!collapsed && listQuery.trim() && !showLiked && playlists.length === 0 && artists.length === 0 && (
         <p className="px-2 pt-3 text-sm text-white/60">Couldn't find "{listQuery.trim()}"</p>
       )}
@@ -328,6 +333,8 @@ function PlaylistItem({
   playing,
   onOpen,
   onDropPaths,
+  menuOpen,
+  onMenu,
 }: {
   collapsed: boolean;
   record: VirtualPlaylistRecord;
@@ -336,6 +343,8 @@ function PlaylistItem({
   playing: boolean;
   onOpen: () => void;
   onDropPaths: (paths: string[]) => void;
+  menuOpen: boolean;
+  onMenu: (menu: MusicPlaylistNavMenuState) => void;
 }) {
   const [dropping, setDropping] = useState(false);
   const { tracks, coverFile } = useMemo(() => {
@@ -351,8 +360,13 @@ function PlaylistItem({
       active={active}
       playing={playing}
       dropping={dropping}
+      menuOpen={menuOpen}
       cover={<MusicPlaylistCover files={tracks} coverFile={coverFile} className="w-12 h-12" iconSize={20} radius="6px" />}
       onClick={onOpen}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu({ record, tracks, coverFile, x: e.clientX, y: e.clientY });
+      }}
       onDragOver={(e) => {
         if (!hasMusicTrackDrag(e)) return;
         e.preventDefault();
@@ -414,8 +428,10 @@ function LibraryRow({
   active,
   playing,
   dropping = false,
+  menuOpen = false,
   cover,
   onClick,
+  onContextMenu,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -427,8 +443,10 @@ function LibraryRow({
   active: boolean;
   playing: boolean;
   dropping?: boolean;
+  menuOpen?: boolean;
   cover: React.ReactNode;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   onDragOver?: (e: React.DragEvent) => void;
   onDragLeave?: (e: React.DragEvent<HTMLButtonElement>) => void;
   onDrop?: (e: React.DragEvent) => void;
@@ -440,9 +458,11 @@ function LibraryRow({
       ? "bg-[color-mix(in_srgb,var(--music-accent)_22%,transparent)]"
       : active
         ? ROW_ACTIVE
-        : ROW_HOVER,
+        : menuOpen
+          ? "bg-[color-mix(in_srgb,var(--music-accent)_9%,rgba(255,255,255,0.04))]"
+          : ROW_HOVER,
   );
-  const dropProps = { onDragOver, onDragLeave, onDrop };
+  const dropProps = { onDragOver, onDragLeave, onDrop, onContextMenu };
 
   if (collapsed) {
     return (
