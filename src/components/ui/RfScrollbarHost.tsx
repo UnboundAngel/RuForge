@@ -57,6 +57,9 @@ function bindRfScrollbar(el: HTMLElement) {
   };
 
   const layout = () => {
+    // A translated thumb counts as scrollable overflow, so parked at the bottom it would keep
+    // the old scroll height alive after the content shrinks. Park it at the top to measure.
+    thumb.style.transform = "none";
     const { scrollTop, scrollHeight, clientHeight } = el;
     if (clientHeight <= 0) {
       hideThumb(thumb);

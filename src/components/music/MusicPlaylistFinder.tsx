@@ -8,6 +8,7 @@ import type { MediaFile } from "@/types";
 import { filterTracksByQuery, trackArtistLabel } from "./musicPlaylists";
 import { recommendForPlaylist } from "./musicPlaylistRecommend";
 import { type OutsideTrack, fileVideoId } from "./musicOutsideRecommend";
+import { usePinWhileListGrows } from "./usePinWhileListGrows";
 import {
   FOLLOW_UP_COUNT,
   type ShelfItem,
@@ -42,6 +43,8 @@ const RECOMMEND_COUNT = 10;
 const OUTSIDE_COUNT = 6;
 const EASE = [0.22, 1, 0.36, 1] as const;
 const NO_FOLLOW_UPS: ReadonlyMap<string, ShelfItem[]> = new Map();
+/** Longest an added card waits on its YouTube Music radio before stepping aside. */
+const FOLLOW_UP_HOLD_MS = 6000;
 
 const localItem = (file: MediaFile): ShelfItem => ({ kind: "local", file });
 const outsideItem = (track: OutsideTrack): ShelfItem => ({ kind: "outside", track });
@@ -92,6 +95,7 @@ export function MusicPlaylistFinder({
     io.observe(el);
     return () => io.disconnect();
   }, [onScreen, libraryTracks.length]);
+  usePinWhileListGrows(sectionRef, playlistTracks.length);
   const hasPlaylistTracks = playlistTracks.length > 0;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const seedTracks = useMemo(() => playlistRef.current, [libraryTracks, round, hasPlaylistTracks]);
@@ -142,6 +146,8 @@ export function MusicPlaylistFinder({
     map: NO_FOLLOW_UPS,
   });
   const followUps = followState.round === round ? followState.map : NO_FOLLOW_UPS;
+  // An added card holds its slot while its similar songs load, so the swap happens once instead of in two jumps.
+  const [holding, setHolding] = useState<ReadonlySet<string>>(() => new Set());
   const baseRef = useRef(base);
   baseRef.current = base;
   const roundRef = useRef(round);
@@ -172,9 +178,22 @@ export function MusicPlaylistFinder({
     if (local.length >= FOLLOW_UP_COUNT || !playlistId) return;
     const videoId = item.kind === "local" ? fileVideoId(item.file) : item.track.videoId;
     if (!videoId) return;
-    void fetchSimilarOutside(videoId, libraryTracks).then((tracks) => 
-      appendFollowUps(anchor, tracks.map(outsideItem), forRound),
-    );
+    const holdKey = `${forRound}:${anchor}`;
+    setHolding((prev) => new Set(prev).add(holdKey));
+    const release = () =>
+      setHolding((prev) => {
+        if (!prev.has(holdKey)) return prev;
+        const next = new Set(prev);
+        next.delete(holdKey);
+        return next;
+      });
+    // A slow radio must not pin the added card forever; late results still slide in when they come.
+    const cap = window.setTimeout(release, FOLLOW_UP_HOLD_MS);
+    void fetchSimilarOutside(videoId, libraryTracks).then((tracks) => {
+      appendFollowUps(anchor, tracks.map(outsideItem), forRound);
+      window.clearTimeout(cap);
+      release();
+    });
   };
 
   const ownedVideoIds = useMemo(() => {
@@ -187,10 +206,14 @@ export function MusicPlaylistFinder({
   }, [libraryTracks]);
   const shelfItems = useMemo(
     () =>
-      layoutShelf(base, followUps, (item) =>
-        item.kind === "local" ? inPlaylist(item.file.path) : ownedVideoIds.has(item.track.videoId),
+      layoutShelf(
+        base,
+        followUps,
+        (item) =>
+          !holding.has(`${round}:${shelfKey(item)}`) &&
+          (item.kind === "local" ? inPlaylist(item.file.path) : ownedVideoIds.has(item.track.videoId)),
       ),
-    [base, followUps, inPlaylist, ownedVideoIds],
+    [base, followUps, inPlaylist, ownedVideoIds, holding, round],
   );
   const followUpKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -482,6 +505,12 @@ function CardShelf({
   );
 }
 
+/**
+ * An added card's exit and its follow-ups' entrance share one timing, so the slot widens by
+ * exactly one card in a single slide instead of closing and then reopening.
+ */
+const SWAP_TRANSITION = { duration: 0.32, ease: EASE, delay: 0.25 };
+
 /** Where a card starts: grown cards open their slot so the neighbors slide aside. */
 function cardInitial(grow: boolean) {
   return grow ? { opacity: 0, scale: 0.85, width: 0 } : { opacity: 0, y: 12, width: CARD_W + CARD_GAP };
@@ -499,10 +528,10 @@ function FinderCard({ file, index, grow, onAdd }: { file: MediaFile; index: numb
         y: 0,
         scale: 1,
         width: CARD_W + CARD_GAP,
-        transition: { duration: 0.3, ease: EASE, delay: grow ? 0.2 : Math.min(index, 8) * 0.04 },
+        transition: grow ? SWAP_TRANSITION : { duration: 0.3, ease: EASE, delay: Math.min(index, 8) * 0.04 },
       }}
       // Shrink the slot so the cards to the right slide over and close the gap.
-      exit={{ opacity: 0, scale: 0.85, width: 0, transition: { duration: 0.24, ease: EASE, delay: 0.25 } }}
+      exit={{ opacity: 0, scale: 0.85, width: 0, transition: SWAP_TRANSITION }}
       className="shrink-0 overflow-hidden"
       style={{ paddingRight: CARD_GAP }}
     >
@@ -595,9 +624,9 @@ function OutsideCard({
         y: 0,
         scale: 1,
         width: CARD_W + CARD_GAP,
-        transition: { duration: 0.3, ease: EASE, delay: grow ? 0.2 : Math.min(index, 8) * 0.04 },
+        transition: grow ? SWAP_TRANSITION : { duration: 0.3, ease: EASE, delay: Math.min(index, 8) * 0.04 },
       }}
-      exit={{ opacity: 0, scale: 0.85, width: 0, transition: { duration: 0.24, ease: EASE, delay: 0.25 } }}
+      exit={{ opacity: 0, scale: 0.85, width: 0, transition: SWAP_TRANSITION }}
       className="shrink-0 overflow-hidden"
       style={{ paddingRight: CARD_GAP }}
     >
