@@ -4,13 +4,7 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { VirtualPlaylistRecord } from "@/virtualPlaylists";
 import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
-import {
-  MUSIC_MENU_ICON_SIZE,
-  MUSIC_MENU_TONES,
-  MusicFloatingMenu,
-  MusicMenuRow,
-  MusicMenuSection,
-} from "./musicMenuUi";
+import { MUSIC_MENU_ICON_SIZE, MUSIC_MENU_TONES, MusicMenuRow, MusicMenuSection } from "./musicMenuUi";
 import { MusicPlaylistCover } from "./MusicPlaylistCover";
 import {
   pathsMissingFromRecord,
@@ -20,20 +14,21 @@ import {
 } from "./musicPlaylists";
 import { useMusicLibraryTracks, useMusicPlaylistRecords } from "./useMusicPlaylists";
 
-type Props = {
-  paths: string[];
-  x: number;
-  y: number;
-  onClose: () => void;
-};
-
 const tone = MUSIC_MENU_TONES.playlist;
 
 /**
  * Spotify-style picker: search, New playlist, then a checkbox per playlist. Toggling keeps the
  * menu open so one song can land in several playlists in one pass.
  */
-export function MusicAddToPlaylistMenu({ paths, x, y, onClose }: Props) {
+export function MusicAddToPlaylistPicker({
+  paths,
+  onClose,
+  autoFocus = false,
+}: {
+  paths: string[];
+  onClose: () => void;
+  autoFocus?: boolean;
+}) {
   const notify = useRuforgeStore((s) => s.notify);
   const createMusicPlaylist = useRuforgeStore((s) => s.createMusicPlaylist);
   const addToVirtualPlaylist = useRuforgeStore((s) => s.addToVirtualPlaylist);
@@ -71,18 +66,11 @@ export function MusicAddToPlaylistMenu({ paths, x, y, onClose }: Props) {
   };
 
   return (
-    <MusicFloatingMenu
-      open
-      x={x}
-      y={y}
-      onClose={onClose}
-      ariaLabel="Add to playlist"
-      measureKey={`${visible.length}:${playlists.length}`}
-    >
+    <>
       <label className="flex items-center gap-2 h-8 px-2 rounded-lg bg-white/[0.06] text-[12px] text-white/60 focus-within:bg-white/[0.09]">
         <Search size={MUSIC_MENU_ICON_SIZE} className="shrink-0" aria-hidden />
         <input
-          autoFocus
+          autoFocus={autoFocus}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Find a playlist"
@@ -111,7 +99,7 @@ export function MusicAddToPlaylistMenu({ paths, x, y, onClose }: Props) {
           <p className="px-1.5 py-2 text-[11px] text-white/40">No playlist matches</p>
         )}
       </MusicMenuSection>
-    </MusicFloatingMenu>
+    </>
   );
 }
 
