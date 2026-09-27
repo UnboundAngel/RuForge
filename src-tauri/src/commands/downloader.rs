@@ -288,7 +288,7 @@ fn ytdlp_browser_cookie_arg(app: &AppHandle, browser: &str) -> Result<String, St
     }
 }
 
-fn ytdlp_push_cookie_cli_args(
+pub(crate) fn ytdlp_push_cookie_cli_args(
     app: &AppHandle,
     args: &mut Vec<String>,
     cookie_file: Option<&str>,
@@ -378,7 +378,7 @@ async fn ytdlp_download_options_with_ruforge_export(
     ))
 }
 
-async fn ytdlp_music_cookie_retry_args(
+pub(crate) async fn ytdlp_music_cookie_retry_args(
     app: &AppHandle,
     browser_cookies: Option<&str>,
     cookie_file: Option<&str>,
@@ -1510,7 +1510,7 @@ pub struct MusicPlaylistPage {
     pub release_year: Option<u32>,
 }
 
-fn best_thumbnail_url(entry: &serde_json::Value) -> Option<String> {
+pub(crate) fn best_thumbnail_url(entry: &serde_json::Value) -> Option<String> {
     if let Some(s) = entry.get("thumbnail").and_then(|v| v.as_str()) {
         if let Some(u) = normalize_thumbnail_url(s) {
             return Some(u);
@@ -1933,7 +1933,7 @@ pub async fn get_music_browse_info(
     })
 }
 
-async fn run_ytdlp_json(
+pub(crate) async fn run_ytdlp_json(
     app: &AppHandle,
     mut args: Vec<String>,
     timeout_label: &str,

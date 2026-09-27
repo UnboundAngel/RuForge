@@ -199,7 +199,9 @@ export type DownloadEnqueueSource =
   | "quickEnqueueClipboard"
   | "urlDrop"
   /** Music: a song downloading straight into a playlist (recommendations, screenshot import). */
-  | "musicPlaylistAdd";
+  | "musicPlaylistAdd"
+  /** Video Library: a video downloaded straight from the YouTube feed shelf. */
+  | "libraryFeedAdd";
 
 export type DownloadJobFinishedPayload = {
   jobId: string;

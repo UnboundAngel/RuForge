@@ -1779,6 +1779,22 @@ export const SettingsView: React.FC<{
                     />
                   }
                 />
+                <SettingItem
+                  title="YouTube feed in Video Library"
+                  description="Shows your YouTube home feed under your downloads so you can preview and grab videos without opening YouTube. Uses your signed-in cookies."
+                  active={settings.showYoutubeFeedInLibrary !== false}
+                  control={
+                    <ToggleSlot
+                      active={settings.showYoutubeFeedInLibrary !== false}
+                      onClick={() =>
+                        updateSetting(
+                          "showYoutubeFeedInLibrary",
+                          settings.showYoutubeFeedInLibrary === false,
+                        )
+                      }
+                    />
+                  }
+                />
               </SettingsSection>
               <SettingsSection title="Updates">
                 <SettingItem
