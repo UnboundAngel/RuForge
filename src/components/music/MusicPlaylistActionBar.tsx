@@ -244,6 +244,7 @@ export function MusicPlaylistActionBar({
             tone={MUSIC_MENU_TONES.playlist}
             icon={<Trash2 size={MUSIC_MENU_ICON_SIZE} />}
             label="Delete"
+            variant="danger"
             onClick={pick(onDelete)}
           />
         </MusicMenuSection>

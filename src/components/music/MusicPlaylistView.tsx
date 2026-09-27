@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { DEFAULT_MUSIC_PLAYLIST_TITLE, recordHasPath } from "@/virtualPlaylists";
-import { askConfirm } from "@/components/ConfirmDialog";
 import type { MediaFile } from "@/types";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { useQueueSourcePlayback } from "./useActiveQueueSource";
@@ -13,6 +12,7 @@ import { MusicPlaylistColumnHeader, MusicPlaylistTrackRow } from "./MusicPlaylis
 import { MusicPlaylistActionBar } from "./MusicPlaylistActionBar";
 import { MusicPlaylistEditDetails } from "./MusicPlaylistEditDetails";
 import { useExportPlaylistM3u8 } from "./useMusicPlaylistM3u8";
+import { confirmDeleteMusicPlaylist } from "./musicPlaylistDelete";
 import {
   addedAtFor,
   filterPlaylistTracks,
@@ -97,12 +97,7 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
   const playFrom = (file: MediaFile) => onPlayFile(file, shown, source);
 
   const handleDelete = async () => {
-    const ok = await askConfirm({
-      title: "Delete playlist?",
-      message: `"${record.title}" will be removed. Your song files stay in the library.`,
-      confirmLabel: "Delete",
-    });
-    if (ok) deleteVirtualPlaylist(record.id);
+    if (await confirmDeleteMusicPlaylist(record, tracks, coverFile)) deleteVirtualPlaylist(record.id);
   };
 
   const endDrag = () => {
