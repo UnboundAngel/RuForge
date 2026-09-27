@@ -3,6 +3,8 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 import { setAudioOutputDeviceId } from "@/audioOutputDevices";
 import type { DynamicIslandContent } from "@/components/island/DynamicIsland";
+import type { IslandDownload } from "@/components/island/IslandDownloadContent";
+import type { IslandNotice } from "@/components/island/IslandNoticeContent";
 import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
 import type { ActivityRenderState } from "@/lib/activityTypes";
 import { navigateToActivityOwningSurface } from "@/lib/activityIslandResolve";
@@ -18,10 +20,13 @@ export const DESKTOP_ISLAND_CONTROL_EVENT = "desktop-island-control";
 export const MAIN_HIDDEN_EVENT = "ruforge:main-hidden";
 
 export type DesktopIslandStatePayload = {
+  /** Empty `trackKey` when only a download or notice is showing. */
   content: DynamicIslandContent;
   waveformLevels: readonly number[];
   renderState: ActivityRenderState;
   filePath: string | null;
+  download: IslandDownload | null;
+  notice: IslandNotice | null;
   /** Present on track changes so the overlay webview can slide prev vs next. */
   skipDir?: IslandSkipDir;
 };

@@ -14,6 +14,12 @@ import {
 } from "./IslandCaptureSavedContent";
 import { IslandIdleDevCaptureContent } from "./IslandIdleDevCaptureContent";
 import { IslandNoticeContent, noticeIslandWidth, type IslandNotice } from "./IslandNoticeContent";
+import {
+  DOWNLOAD_ISLAND_WIDTH,
+  IslandDownloadContent,
+  IslandProgressRing,
+  type IslandDownload,
+} from "./IslandDownloadContent";
 import { IslandExpandedContent } from "./IslandExpandedContent";
 import {
   IslandUpdateCompactContent,
@@ -29,7 +35,7 @@ import {
 } from "./islandSkipMotion";
 import { consumeIslandSkipDir, noteIslandSkipDir } from "@/lib/islandSkipDirection";
 
-export type IslandState = "idle" | "compact" | "expanded" | "capture" | "notice";
+export type IslandState = "idle" | "compact" | "expanded" | "capture" | "notice" | "download";
 
 const ISLAND_SPRING = {
   type: "spring" as const,
@@ -46,6 +52,7 @@ const ISLAND_DIMENSIONS: Record<
   compact: { width: 220, height: 36, borderRadius: 18 },
   capture: { width: 160, height: 36, borderRadius: 18 },
   notice: { width: 220, height: 36, borderRadius: 18 },
+  download: { width: DOWNLOAD_ISLAND_WIDTH, height: 36, borderRadius: 18 },
   expanded: { width: 350, height: 184, borderRadius: 40 },
 };
 
@@ -108,6 +115,8 @@ type DynamicIslandProps = {
   updateAvailable?: Omit<IslandUpdateContentProps, "compact"> & { collapsed: boolean };
   /** Shown when `state` is "notice"; takes over a collapsed update pill too. */
   notice?: IslandNotice | null;
+  /** Active download: its own pill in "download", a ring around the music pill in "compact". */
+  download?: IslandDownload | null;
   /** Cross-window hint (desktop overlay). Wins over local pending when trackKey changes. */
   skipDirHint?: IslandSkipDir | null;
 };
@@ -225,6 +234,7 @@ export function DynamicIsland({
   onCaptureSavedOpen,
   updateAvailable,
   notice = null,
+  download = null,
   skipDirHint = null,
 }: DynamicIslandProps) {
   const pendingSkipDirRef = useRef<IslandSkipDir>(1);
@@ -360,6 +370,9 @@ export function DynamicIsland({
           {noticeActive ? (
             <IslandNoticeContent key={`notice-${notice!.id}`} notice={notice!} accentColor={content.accentColor} />
           ) : null}
+          {!updateMode && state === "download" && download ? (
+            <IslandDownloadContent key="download" download={download} />
+          ) : null}
           {!updateMode && state === "expanded" && (
             <IslandExpandedContent
               key="expanded"
@@ -382,6 +395,9 @@ export function DynamicIsland({
             />
           )}
         </AnimatePresence>
+        {download && !updateMode && (effectiveState === "download" || effectiveState === "compact") ? (
+          <IslandProgressRing pct={download.pct} radius={dims.borderRadius} color={content.accentColor} />
+        ) : null}
       </div>
     </motion.div>
   );
