@@ -78,7 +78,7 @@ import {
 import { shouldPlayerOwnBridge } from "../playback/bridgeArbitration";
 import { registerPlaybackMediaElement } from "@/lib/playbackMediaElement";
 import { peekAnalyserGraph } from "@/audioAnalyserGraph";
-import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
+import { useOptionalMainAudioCurrentTime, useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { copyTranscriptForFile, type TranscriptVariant } from "../copyTranscript";
 import type { SponsorBlockSkipCategory } from "../sponsorBlock";
 import {
@@ -200,6 +200,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const bumpSponsorBlockStat = useRuforgeStore((s) => s.bumpSponsorBlockStat);
   const settings = useRuforgeStore((s) => s.settings);
   const hostAudio = useOptionalMainAudioPlayback();
+  const hostTime = useOptionalMainAudioCurrentTime() ?? 0;
   const audioOnly = isAudioOnlyPath(file.path);
   const audioDelegated = audioOnly && hostAudio != null;
   const bridgeActive = shouldPlayerOwnBridge(file);
@@ -231,7 +232,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   useImperativeHandle(ref, () => ({
     getCurrentTime: () =>
       audioDelegated && hostAudio
-        ? hostAudio.currentTime
+        ? hostTime
         : mediaRef.current?.currentTime ?? 0,
     getIsPaused: () =>
       audioDelegated && hostAudio
@@ -545,17 +546,17 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   useEffect(() => {
     if (!audioDelegated || !hostAudio) return;
     setIsPaused(hostAudio.paused);
-    setCurrentTime(hostAudio.currentTime);
+    setCurrentTime(hostTime);
     setDuration(hostAudio.duration);
     if (hostAudio.duration > 0) {
-      setProgress((hostAudio.currentTime / hostAudio.duration) * 100);
+      setProgress((hostTime / hostAudio.duration) * 100);
     }
     setPlaybackSpeedState(hostAudio.playbackSpeed);
   }, [
     audioDelegated,
     hostAudio,
     hostAudio?.paused,
-    hostAudio?.currentTime,
+    hostTime,
     hostAudio?.duration,
     hostAudio?.playbackSpeed,
   ]);
@@ -595,7 +596,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       hostAudio.togglePlay();
       showCenterFeedback(wasPaused ? { kind: "play" } : { kind: "pause" });
       if (!wasPaused) {
-        writePlaybackPos(file.path, hostAudio.currentTime, hostAudio.duration);
+        writePlaybackPos(file.path, hostTime, hostAudio.duration);
       }
       return;
     }
@@ -614,7 +615,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       writePlaybackPos(file.path, media.currentTime, media.duration);
     }
     syncVideoBridgeTelemetry();
-  }, [file.path, volume, isMuted, audioDelegated, hostAudio, showCenterFeedback]);
+  }, [file.path, volume, isMuted, audioDelegated, hostAudio, hostTime, showCenterFeedback]);
 
   const handleMediaCanPlay = useCallback((el: HTMLMediaElement) => {
     applyMediaOutputState(el, volume * endFadeGainRef.current, isMuted);
@@ -847,10 +848,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
   const handlePopOut = () => {
     if (audioDelegated && hostAudio) {
-      writePlaybackPos(file.path, hostAudio.currentTime, hostAudio.duration);
+      writePlaybackPos(file.path, hostTime, hostAudio.duration);
       const wasPlaying = !hostAudio.paused;
       if (wasPlaying) hostAudio.togglePlay();
-      void handlePopOutFromStore(hostAudio.currentTime, {
+      void handlePopOutFromStore(hostTime, {
         paused: !wasPlaying,
         playbackSpeed: hostAudio.playbackSpeed,
       });

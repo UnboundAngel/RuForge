@@ -18,6 +18,7 @@ import { isAudioOnlyPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
 import { openInFileManager } from "@/openInFileManager";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { useMainAudioCurrentTime } from "@/playback/mainAudioPlaybackContext";
 import { artistKeyFromFile, primaryArtist } from "./musicArtist";
 import {
   MUSIC_MENU_ICON_SIZE,
@@ -36,7 +37,6 @@ type Props = {
   menu: MusicExpandedContextMenuState | null;
   file: MediaFile | null;
   paused: boolean;
-  currentTime: number;
   hasPrevInQueue: boolean;
   hasNextInQueue: boolean;
   onClose: () => void;
@@ -51,7 +51,6 @@ export function MusicExpandedContextMenu({
   menu,
   file,
   paused,
-  currentTime,
   hasPrevInQueue,
   hasNextInQueue,
   onClose,
@@ -61,6 +60,7 @@ export function MusicExpandedContextMenu({
   onOpenQueue,
   onCollapse,
 }: Props) {
+  const currentTime = useMainAudioCurrentTime();
   const toggleMusicLike = useRuforgeStore((s) => s.toggleMusicLike);
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);

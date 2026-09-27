@@ -6,6 +6,7 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import { cn } from "@/lib/utils";
 import { primaryArtist } from "./musicArtist";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
+import { isLikedKey } from "./musicLikedTracks";
 
 const ACCENT = "#ff0033";
 
@@ -34,7 +35,7 @@ export function MusicLikeButton({ file, className, size = 17 }: Props) {
     () => musicTrackIdentityKey(file, primaryArtist),
     [file],
   );
-  const liked = useRuforgeStore((s) => s.musicLikedKeys.includes(identityKey));
+  const liked = useRuforgeStore((s) => isLikedKey(s.musicLikedKeys, identityKey));
   const toggleMusicLike = useRuforgeStore((s) => s.toggleMusicLike);
   const [burst, setBurst] = useState(false);
 

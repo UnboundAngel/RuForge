@@ -12,6 +12,7 @@ import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import { primaryArtist } from "./musicArtist";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
+import { isLikedKey } from "./musicLikedTracks";
 import { setMusicTrackDragData } from "./musicPlaylists";
 import { setMusicTrackDragImage } from "./musicDragImage";
 import {
@@ -162,7 +163,7 @@ export function MusicPlaylistTrackRow({
   const playback = useOptionalMainAudioPlayback();
   const showPause = isPlaying && playback != null && !playback.paused;
   const identityKey = useMemo(() => musicTrackIdentityKey(file, primaryArtist), [file]);
-  const liked = useRuforgeStore((s) => s.musicLikedKeys.includes(identityKey));
+  const liked = useRuforgeStore((s) => isLikedKey(s.musicLikedKeys, identityKey));
   const compact = view === "compact";
   const lit = selected || menuOpen;
 

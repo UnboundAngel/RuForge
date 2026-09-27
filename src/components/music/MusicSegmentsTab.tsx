@@ -4,9 +4,9 @@ import type { SponsorBlockSegment } from "@/sponsorBlock";
 import type { Chapter } from "@/types";
 import { sbSegmentColor, SPONSORBLOCK_CATEGORY_COLORS } from "@/sponsorBlockColors";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
+import { useMainAudioCurrentTime } from "@/playback/mainAudioPlaybackContext";
 
 type Props = {
-  currentTime: number;
   duration: number;
   chapters: Chapter[] | null;
   sbSegments: SponsorBlockSegment[];
@@ -29,7 +29,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export function MusicSegmentsTab({
-  currentTime,
   duration,
   chapters,
   sbSegments,
@@ -37,6 +36,7 @@ export function MusicSegmentsTab({
   onToggleMusicOnlySkip,
   onSeek,
 }: Props) {
+  const currentTime = useMainAudioCurrentTime();
   const safeDuration = duration > 0 ? duration : 1;
 
   const skipSegments = useMemo(
