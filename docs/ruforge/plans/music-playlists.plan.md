@@ -36,11 +36,19 @@ So this is mostly a Music UI project on top of a working data layer. No Rust nee
 - **Identity by path.** Moving or re-tagging a file breaks the link. Acceptable for v1 since Liked uses `musicTrackIdentityKey`; consider storing that key alongside `path` so a rescan can re-resolve moved files.
 - **Two webviews.** Music runs in the main webview today, so Zustand is enough. If the mini player ever mutates playlists, sync via emit/listen like the rest.
 
-## Status (2026-09-26)
+## Status (2026-09-27)
 
-Phases 1 to 3 are built on `claude/nifty-mayer-e73q2w`, plus the pruning fix (sync no longer prunes; missing songs show a "Remove from playlist" banner on the playlist page). Library flatten now skips virtual playlists so songs in a playlist are not listed twice in Music.
+Phases 1 to 4 are built on `claude/nifty-mayer-e73q2w`, plus the pruning fix (sync no longer prunes; missing songs show a "Remove from playlist" banner on the playlist page). Library flatten now skips virtual playlists so songs in a playlist are not listed twice in Music.
 
-Not yet built: collapsed-sidebar playlist covers, multi-select (Ctrl/Shift), drag sources on Artist page rows and Home rows, and all of Phase 4. There's no duplicate prompt; the checkbox picker replaces it, and adding a song that is already there is a no-op.
+Phase 4 notes:
+
+- Playlists persist to `app_data/music-playlists.json` (atomic temp file then rename) through `read_music_playlists_file` / `write_music_playlists_file`. Only the main window runs the file sync; mini windows write localStorage and the main window mirrors to the file. On start, whichever copy was saved last wins, and localStorage is migrated into the file once.
+- Items store `identityKey` next to `path`. On rescan, items whose path is gone are re-pointed to the library file with the same key. Records without the key still load.
+- Sort (custom, title, artist, date added) already existed from Phase 2. The description is edited in a Spotify-style "Edit details" dialog, which replaces the Rename row in the `...` menu, and shows under the title.
+- `.m3u8` export sits in the `...` menu. Import sits in the sidebar `+` menu ("Import .m3u8"); it matches by path, then artist and title, then file name, then a unique title, and reports unmatched lines in a music toast (app toasts are hidden in Music mode).
+- `cargo check` could not run in the build container (system `gdk-3.0` missing); the Rust side has unit tests that need a desktop toolchain.
+
+Not yet built: collapsed-sidebar playlist covers, multi-select (Ctrl/Shift), drag sources on Artist page rows and Home rows, and the Phase 4 "later" bullet. There's no duplicate prompt; the checkbox picker replaces it, and adding a song that is already there is a no-op.
 
 ## Phases
 

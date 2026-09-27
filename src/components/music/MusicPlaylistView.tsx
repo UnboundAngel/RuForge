@@ -14,6 +14,8 @@ import { useMusicLibraryTracks, useMusicPlaylistRecords } from "./useMusicPlayli
 import { MusicPlaylistHeader } from "./MusicPlaylistHeader";
 import { MusicPlaylistColumnHeader, MusicPlaylistTrackRow } from "./MusicPlaylistTrackRow";
 import { MusicPlaylistActionBar } from "./MusicPlaylistActionBar";
+import { MusicPlaylistEditDetails } from "./MusicPlaylistEditDetails";
+import { useExportPlaylistM3u8 } from "./useMusicPlaylistM3u8";
 import {
   addedAtFor,
   filterPlaylistTracks,
@@ -42,6 +44,8 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
   const renameVirtualPlaylist = useRuforgeStore((s) => s.renameVirtualPlaylist);
+  const updateVirtualPlaylistDetails = useRuforgeStore((s) => s.updateVirtualPlaylistDetails);
+  const exportM3u8 = useExportPlaylistM3u8();
   const deleteVirtualPlaylist = useRuforgeStore((s) => s.deleteVirtualPlaylist);
   const addToVirtualPlaylist = useRuforgeStore((s) => s.addToVirtualPlaylist);
   const removePathsFromVirtualPlaylist = useRuforgeStore((s) => s.removePathsFromVirtualPlaylist);
@@ -59,7 +63,7 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
   const [dropPath, setDropPath] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [renameSignal, setRenameSignal] = useState(0);
+  const [editFocus, setEditFocus] = useState<"title" | "description" | null>(null);
   const [prefs, setPrefsState] = useState<PlaylistViewPrefs>(() => readPlaylistViewPrefs(playlistId));
 
   useEffect(() => {
@@ -142,10 +146,11 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
       <MusicPlaylistHeader
         key={record.id}
         title={record.title}
+        description={record.description}
+        onEditDescription={() => setEditFocus("description")}
         tracks={tracks}
         coverFile={coverFile}
         startEditing={untouched}
-        renameSignal={renameSignal}
         onRename={(title) => renameVirtualPlaylist(record.id, title)}
         onBack={onBack}
       >
@@ -159,7 +164,8 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
           onPlay={handlePlay}
           onToggleShuffle={toggleMusicShuffle}
           onAddToQueue={() => shown.forEach((t) => enqueueManualQueue(t.path))}
-          onRename={() => setRenameSignal((n) => n + 1)}
+          onEditDetails={() => setEditFocus("title")}
+          onExport={() => void exportM3u8(record.title, tracks)}
           onDelete={() => void handleDelete()}
           onPrefsChange={setPrefs}
           onQueryChange={setQuery}
@@ -247,6 +253,16 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
       />
 
       <MusicRowContextMenu menu={menu} onClose={() => setMenu(null)} />
+      <MusicPlaylistEditDetails
+        open={editFocus != null}
+        focus={editFocus ?? "title"}
+        title={record.title}
+        description={record.description ?? ""}
+        tracks={tracks}
+        coverFile={coverFile}
+        onSave={(details) => updateVirtualPlaylistDetails(record.id, details)}
+        onClose={() => setEditFocus(null)}
+      />
     </div>
   );
 }

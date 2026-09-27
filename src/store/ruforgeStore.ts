@@ -74,6 +74,9 @@ import {
   toggleTrackLike,
 } from "../components/music/musicLikedTracks";
 import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
+import { reconcilePlaylistIdentities } from "../components/music/musicPlaylistIdentity";
+import { musicTrackIdentityKey } from "../components/music/musicShelfDedup";
+import { primaryArtist } from "../components/music/musicArtist";
 import {
   buildShuffledQueueFromBase,
   readMusicShuffleOnFromLs,
@@ -117,6 +120,7 @@ import type { ActivityHandoffSnapshot, ActivityOwner } from "../lib/activityType
 import {
   WATCH_LATER_ID,
   addPathsToRecord,
+  collectMediaIndex,
   createVirtualPlaylistRecord,
   loadVirtualPlaylistRecords,
   mergeVirtualPlaylistsIntoEntries,
@@ -128,6 +132,8 @@ import {
   removePathFromAllRecords,
   removePathFromRecord,
   reorderRecordByPath,
+  saveVirtualPlaylistRecords,
+  setRecordDetails,
   setRecordThumbnail,
   stripVirtualPlaylists,
   virtualPlaylistPath,
@@ -421,7 +427,9 @@ export interface RuforgeStore extends DownloadQueueSlice {
   reorderVirtualPlaylist: (id: string, fromIndex: number, toIndex: number) => void;
   reorderVirtualPlaylistByPath: (id: string, fromPath: string, toPath: string) => void;
   /** Creates "My Playlist #N" in Music, seeded with `seedPaths`. Returns the new id. */
-  createMusicPlaylist: (seedPaths?: string[]) => string;
+  createMusicPlaylist: (seedPaths?: string[], title?: string) => string;
+  /** Title and Spotify-style description, from the playlist's Edit details dialog. */
+  updateVirtualPlaylistDetails: (id: string, details: { title: string; description: string }) => void;
   moveVirtualPlaylistItem: (id: string, path: string, where: "top" | "bottom") => void;
   setVirtualPlaylistThumbnail: (id: string, path: string | null) => void;
   toggleWatchLater: (path: string) => boolean;
@@ -541,6 +549,21 @@ function waitForVideoMiniReadyThen(onReady: () => void | Promise<void>): Promise
   });
 }
 
+const playlistIdentityKey = (file: MediaFile) => musicTrackIdentityKey(file, primaryArtist);
+
+/** Stamps identity keys and follows moved files, saving only when something changed. */
+function reconcileMusicItemIdentities(
+  disk: GalleryEntry[],
+  records: VirtualPlaylistRecord[],
+): VirtualPlaylistRecord[] {
+  if (!records.some((r) => r.kind === "music" && r.items.length > 0)) return records;
+  const library = [...collectMediaIndex(disk).values()].filter((f) => isAudioOnlyPath(f.path));
+  const result = reconcilePlaylistIdentities(records, library, playlistIdentityKey);
+  if (!result.changed) return records;
+  saveVirtualPlaylistRecords(result.records);
+  return loadVirtualPlaylistRecords();
+}
+
 function syncVirtualPlaylistsIntoState(
   entries: GalleryEntry[],
   selectedPlaylist: PlaylistCollection | null,
@@ -553,7 +576,7 @@ function syncVirtualPlaylistsIntoState(
   const disk = stripVirtualPlaylists(entries);
   // No stale-path pruning: an offline drive or partial scan must not empty user playlists.
   // Hydration skips missing files; deletes through the app still remove them explicitly.
-  const nextRecords = records ?? loadVirtualPlaylistRecords();
+  const nextRecords = reconcileMusicItemIdentities(disk, records ?? loadVirtualPlaylistRecords());
   const merged = mergeVirtualPlaylistsIntoEntries(disk, nextRecords);
   let nextSelected = selectedPlaylist;
   if (selectedPlaylist && parseVirtualPlaylistId(selectedPlaylist.path)) {
@@ -1525,8 +1548,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
         return record.id;
       },
 
-      createMusicPlaylist: (seedPaths = []) => {
-        const title = nextDefaultPlaylistTitle(loadVirtualPlaylistRecords());
+      createMusicPlaylist: (seedPaths = [], explicitTitle) => {
+        const title =
+          explicitTitle?.trim() || nextDefaultPlaylistTitle(loadVirtualPlaylistRecords());
         const record = createVirtualPlaylistRecord(title, seedPaths, Date.now(), "music");
         mutateVirtualRecords((recs) => [...recs, record]);
         get().refreshVirtualPlaylists();
@@ -1560,6 +1584,14 @@ export const useRuforgeStore = create<RuforgeStore>()(
           recs.map((r) =>
             r.id === id ? { ...r, title: trimmed, updatedAt: Date.now() } : r,
           ),
+        );
+        get().refreshVirtualPlaylists();
+      },
+
+      updateVirtualPlaylistDetails: (id, details) => {
+        if (id === WATCH_LATER_ID) return;
+        mutateVirtualRecords((recs) =>
+          recs.map((r) => (r.id === id ? setRecordDetails(r, details) : r)),
         );
         get().refreshVirtualPlaylists();
       },

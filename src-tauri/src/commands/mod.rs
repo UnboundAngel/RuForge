@@ -12,6 +12,7 @@ pub mod media;
 pub mod lyrics;
 pub mod musicmeta;
 pub mod music_listen_log;
+pub mod music_playlists;
 pub mod recently_deleted;
 pub mod migrate;
 pub mod island_overlay;

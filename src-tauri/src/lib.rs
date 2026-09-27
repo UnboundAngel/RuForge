@@ -90,6 +90,10 @@ use crate::commands::playlist_sidecar::{
     read_playlist_download_sidecar, update_playlist_download_sidecar_metadata,
     update_playlist_download_sidecar_track,
 };
+use crate::commands::music_playlists::{
+    read_music_playlists_file, read_playlist_text_file, write_music_playlists_file,
+    write_playlist_text_file,
+};
 use crate::commands::recently_deleted::{
     list_recently_deleted, remove_recently_deleted_entry, restore_recently_deleted,
 };
@@ -413,6 +417,10 @@ pub fn run() {
             list_recently_deleted,
             restore_recently_deleted,
             remove_recently_deleted_entry,
+            read_music_playlists_file,
+            write_music_playlists_file,
+            read_playlist_text_file,
+            write_playlist_text_file,
             music_listen_begin,
             music_listen_transfer,
             music_listen_accumulate,
