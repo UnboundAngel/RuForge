@@ -18,11 +18,22 @@ const CARD_GAP = 12;
 const SCROLL_BTN =
   "rf-music-press w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.07] text-white/80 hover:text-white hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)] disabled:opacity-30 disabled:pointer-events-none";
 
-export function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
+export function SectionTitle({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="px-4 min-w-0">
       <h2 className="text-2xl font-bold tracking-tight text-white">{title}</h2>
-      <p className="mt-1 text-sm text-white/60">{subtitle}</p>
+      <div className="mt-1 flex items-center gap-2 text-sm text-white/60">
+        <span className="truncate">{subtitle}</span>
+        {action}
+      </div>
     </div>
   );
 }
@@ -39,6 +50,7 @@ export function CardShelf({
   onOutsideAdd,
   onHide,
   actions,
+  footer,
   listKey,
   outsideLoading = false,
   playlistId,
@@ -56,6 +68,8 @@ export function CardShelf({
   outsideLoading?: boolean;
   playlistId?: string;
   actions?: React.ReactNode;
+  /** Inline after the subtitle. */
+  footer?: React.ReactNode;
   /** Changing it re-deals the cards (Refresh) while the header, and its buttons, stay mounted. */
   listKey?: number;
 }) {
@@ -102,29 +116,33 @@ export function CardShelf({
 
   return (
     <div>
-      <div className="flex items-end justify-between gap-4 pr-4">
-        <SectionTitle title={title} subtitle={subtitle} />
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-start justify-between gap-4 pr-4">
+        <SectionTitle title={title} subtitle={subtitle} action={footer} />
+        <div className="flex items-center gap-3 shrink-0">
           {actions}
           {(edges.left || edges.right) && (
-            <>
+            <div className="flex items-center gap-2">
               <button type="button" onClick={() => page(-1)} disabled={!edges.left} className={SCROLL_BTN} aria-label="Scroll left">
                 <ChevronLeft size={18} />
               </button>
               <button type="button" onClick={() => page(1)} disabled={!edges.right} className={SCROLL_BTN} aria-label="Scroll right">
                 <ChevronRight size={18} />
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>
-      <div
+      <motion.div
         key={listKey}
         ref={scrollRef}
+        initial={listKey ? { opacity: 0 } : false}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
         className="mt-4 flex overflow-x-auto scroll-smooth px-1 pb-2"
         style={{ scrollbarWidth: "none", maskImage: mask, WebkitMaskImage: mask }}
       >
-        <AnimatePresence initial={true}>
+        {/* A refresh fades the whole row in once; per-card staggers only on first mount. */}
+        <AnimatePresence initial={!listKey}>
           {items.map((item, i) => {
             const key = shelfKey(item);
             const grow = grownKeys?.has(key) ?? false;
@@ -163,7 +181,7 @@ export function CardShelf({
             !items.some((i) => i.kind === "outside") &&
             [0, 1, 2].map((i) => <SkeletonCard key={`skeleton-${i}`} index={items.length + i} />)}
         </AnimatePresence>
-      </div>
+      </motion.div>
       {onHide && (
         <MusicRecommendationMenu
           menu={menu}

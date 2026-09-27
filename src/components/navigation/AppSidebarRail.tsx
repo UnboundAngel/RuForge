@@ -3,7 +3,6 @@ import { VideoDownloadRailButton } from "@/components/downloader/VideoDownloadDo
 import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
-import { StorageGlyph } from "@/components/navigation/StorageGlyph";
 import { RailTooltipLayer } from "@/components/navigation/RailTooltipLayer";
 import { railTooltipAnchorClass } from "@/components/navigation/RailNavTooltip";
 import type { ActiveTab } from "@/store/types";
@@ -98,10 +97,6 @@ export function AppSidebarRail({
           );
         })}
       </nav>
-
-      <div className="flex shrink-0 flex-col items-center gap-3 pb-4">
-        <StorageGlyph />
-      </div>
       <RailTooltipLayer disabled={disabled} />
     </div>
   );

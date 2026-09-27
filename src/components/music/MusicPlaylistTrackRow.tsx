@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronDown, ChevronUp, Clock3, MoreHorizontal, Music } from "lucide-react";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
@@ -7,6 +7,7 @@ import { bestCoverPath } from "@/mediaKind";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
+import { useStuckHeader } from "@/hooks/useStuckHeader";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
 import { primaryArtist } from "./musicArtist";
@@ -49,32 +50,8 @@ type HeaderProps = {
   onSort: (key: PlaylistSortKey) => void;
 };
 
-function scrollParentOf(el: HTMLElement): HTMLElement | null {
-  for (let p = el.parentElement; p; p = p.parentElement) {
-    const { overflowY } = getComputedStyle(p);
-    if (overflowY === "auto" || overflowY === "scroll") return p;
-  }
-  return null;
-}
-
-/** True while the sticky header has rows scrolled under it (its sentinel has left the scroll pane). */
-function useStuck() {
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const [stuck, setStuck] = useState(false);
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting), {
-      root: scrollParentOf(el),
-    });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-  return { sentinelRef, stuck };
-}
-
 export function MusicPlaylistColumnHeader({ prefs, onSort }: HeaderProps) {
-  const { sentinelRef, stuck } = useStuck();
+  const { sentinelRef, stuck } = useStuckHeader();
   const cell = (key: PlaylistSortKey, label: React.ReactNode, className?: string) => {
     const active = prefs.sort === key;
     return (

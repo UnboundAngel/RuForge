@@ -763,6 +763,17 @@ html.ruforge-island-root #root {
 .rf-music-press:active:not(:disabled) {
   scale: 0.96;
 }
+/* Rounded shelf panel that darkens from the top and fades out (Home "Recently added", playlist Recommended). */
+.rf-music-shelf-shade {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.78) 0%,
+    rgba(0, 0, 0, 0.52) 28%,
+    rgba(0, 0, 0, 0.22) 52%,
+    rgba(0, 0, 0, 0.06) 78%,
+    transparent 100%
+  );
+}
 /* Playlist reorder: the drop line fades in where the song will land. */
 .rf-music-drop-line {
   animation: rf-music-fade-in 100ms ease-out;

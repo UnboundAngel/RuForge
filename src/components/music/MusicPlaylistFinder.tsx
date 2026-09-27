@@ -58,8 +58,9 @@ const FOLLOW_UP_HOLD_MS = 6000;
 const localItem = (file: MediaFile): ShelfItem => ({ kind: "local", file });
 const outsideItem = (track: OutsideTrack): ShelfItem => ({ kind: "outside", track });
 
-const PILL =
-  "rf-music-press flex items-center gap-2 h-8 px-4 rounded-full text-sm font-bold text-white/70 hover:text-white bg-white/[0.07] hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)]";
+const TEXT_ACTION =
+  "rf-music-press-soft flex items-center gap-1.5 h-8 px-1 text-sm font-bold text-white/60 transition-colors hover:text-white";
+const VIEW_FADE = { duration: 0.15, ease: "easeOut" } as const;
 
 /**
  * Spotify's block under a playlist: "Recommended" songs with Add and Refresh,
@@ -303,16 +304,16 @@ export function MusicPlaylistFinder({
   if (libraryTracks.length === 0) return null;
 
   return (
-    <section ref={sectionRef} className={cn("@container px-6 pb-10", prominent ? "mt-2" : "mt-14")}>
-      <div>
+    <section ref={sectionRef} className={cn("@container px-4", prominent ? "mt-2 pb-10" : "mt-14 pb-3")}>
+      <div className={cn(!prominent && "rf-music-shelf-shade rounded-[1.75rem] pt-7 px-2 pb-1")}>
         <AnimatePresence mode="wait" initial={false}>
           {searchOpen ? (
             <motion.div
               key="search"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: EASE }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={VIEW_FADE}
             >
               <div className="flex items-start justify-between gap-4 px-4">
                 <h2 className="text-2xl font-bold tracking-tight text-white">Let's find something for your playlist</h2>
@@ -389,10 +390,10 @@ export function MusicPlaylistFinder({
           ) : (
             <motion.div
               key="recommended"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: EASE }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={VIEW_FADE}
             >
               {hasShelf ? (
                 <CardShelf
@@ -412,38 +413,40 @@ export function MusicPlaylistFinder({
                   actions={
                     <>
                       <MusicHiddenRecommendationsButton />
-                      {canRefresh && (
-                        <button
-                          type="button"
-                          onClick={() => setRound((r) => r + 1)}
-                          className="rf-music-press rf-music-tooltip-anchor w-8 h-8 flex items-center justify-center rounded-full text-white/70 hover:text-white hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)]"
-                          aria-label="Refresh recommendations"
-                          data-tooltip="Refresh"
-                        >
-                          {/* One turn per click: the motion confirms the list changed. */}
-                          <motion.span
-                            className="flex"
-                            initial={false}
-                            animate={{ rotate: round * 360 }}
-                            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                          >
-                            <RefreshCw size={16} aria-hidden />
-                          </motion.span>
-                        </button>
-                      )}
-                      <button type="button" onClick={() => setSearching(true)} className={PILL}>
-                        <Search size={15} aria-hidden /> Find more
+                      <button type="button" onClick={() => setSearching(true)} className={TEXT_ACTION}>
+                        Find more
                       </button>
                     </>
+                  }
+                  footer={
+                    canRefresh && (
+                      <button
+                        type="button"
+                        onClick={() => setRound((r) => r + 1)}
+                        className="rf-music-press-soft flex shrink-0 items-center gap-1 font-semibold text-white/60 transition-colors hover:text-white before:mr-1 before:content-['·'] before:text-white/40"
+                        aria-label="Refresh recommendations"
+                      >
+                        {/* RefreshCw is symmetric at 180 degrees, so a half turn reads as a full refresh. */}
+                        <motion.span
+                          className="flex"
+                          initial={false}
+                          animate={{ rotate: round * 180 }}
+                          transition={{ duration: 0.3, ease: "easeOut" }}
+                        >
+                          <RefreshCw size={13} aria-hidden />
+                        </motion.span>
+                        Refresh
+                      </button>
+                    )
                   }
                 />
               ) : (
                 <div className="flex items-start justify-between gap-4">
                   <SectionTitle title="Recommended" subtitle="Every song in your library is already here." />
-                  <div className="mr-4 flex shrink-0 items-center gap-2">
+                  <div className="mr-4 flex shrink-0 items-center gap-3">
                     <MusicHiddenRecommendationsButton />
-                    <button type="button" onClick={() => setSearching(true)} className={PILL}>
-                      <Search size={15} aria-hidden /> Find more
+                    <button type="button" onClick={() => setSearching(true)} className={TEXT_ACTION}>
+                      Find more
                     </button>
                   </div>
                 </div>
