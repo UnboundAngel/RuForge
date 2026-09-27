@@ -832,6 +832,10 @@ function App() {
       } catch (e) {
         console.error("[RuForge] stop_all_active_download_jobs failed", e);
       }
+      if (disposed) return;
+      // Only music playlist songs come back as auto; everything else waits for the user.
+      const s = useRuforgeStore.getState();
+      if (s.downloadJobs.some((j) => j.status === "queued" && j.approval === "auto")) s.pumpDownloadQueue();
     })();
     return () => {
       disposed = true;

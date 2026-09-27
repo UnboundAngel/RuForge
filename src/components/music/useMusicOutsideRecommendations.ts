@@ -145,6 +145,7 @@ export function downloadOutsideTrackIntoPlaylist(track: OutsideTrack, playlistId
       duration: track.duration ?? 0,
       isPlaylist: false,
     },
+    enqueueSource: "musicPlaylistAdd",
   });
   s.pumpDownloadQueue();
   const pending = readPendingAdds().filter((p) => !(p.videoId === track.videoId && p.playlistId === playlistId));
