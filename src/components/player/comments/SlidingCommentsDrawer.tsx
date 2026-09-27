@@ -125,6 +125,8 @@ export function SlidingCommentsDrawer({
       } else if (isDragging) {
         setIsDragging(false);
         const shouldOpen = targetX.get() < COMMENTS_PANEL_WIDTH * 0.55;
+        // Snap here too: releasing on the side it started leaves `isOpen` unchanged, so the effect never re-fires.
+        targetX.set(shouldOpen ? 0 : COMMENTS_PANEL_WIDTH);
         onOpenChange(shouldOpen);
       }
     };

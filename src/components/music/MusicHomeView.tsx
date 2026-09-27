@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Play, Search, X, ChevronLeft, ChevronRight, Waves, Brain } from "lucide-react";
+import { Play, ChevronLeft, ChevronRight, Waves, Brain } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
 import { albumCoverPathWithFallback } from "@/albumCoverPath";
@@ -351,18 +351,11 @@ export function MusicHomeView({
   const sessionSeedRef = useRef(Math.floor(Math.random() * 0xffffffff));
 
   const [activeFilter, setActiveFilter] = useState<HomeFilter>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
   const [headerCompact, setHeaderCompact] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const compactSentinelRef = useRef<HTMLDivElement>(null);
-  const searching = searchQuery.trim().length > 0;
-  const searchExpanded = searchFocused || searching;
-  const searchSource = musicQueueSource("search", "Search");
-  const quickPicksSource = searching
-    ? searchSource
-    : musicQueueSource("quick_picks", "Quick picks");
+  const quickPicksSource = musicQueueSource("quick_picks", "Quick picks");
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
 
   const syncHeaderCompact = useCallback(() => {
@@ -431,19 +424,8 @@ export function MusicHomeView({
       });
     }
 
-    // 2. Filter by search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter((t) => {
-        const name = t.name.toLowerCase();
-        const artist = (t.artist ?? t.albumArtist ?? "").toLowerCase();
-        const album = (t.album ?? "").toLowerCase();
-        return name.includes(q) || artist.includes(q) || album.includes(q);
-      });
-    }
-
     return result;
-  }, [tracks, activeFilter, searchQuery]);
+  }, [tracks, activeFilter]);
 
   const likedTracks = useMemo(
     () => resolveLikedFiles(filteredTracks),
@@ -567,57 +549,14 @@ export function MusicHomeView({
             />
           ))}
         </div>
-
-        <div className="ml-auto shrink-0">
-          <div
-            className={cn(
-              "relative rounded-full overflow-hidden transition-[width] duration-250 ease-out",
-              searchExpanded ? "w-[11rem]" : "w-[6.75rem]",
-            )}
-            style={{
-              background: "var(--music-surface-raised)",
-            }}
-          >
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              placeholder="Search"
-              className={cn(
-                "w-full py-2 text-xs md:text-sm rounded-full outline-none border-0 bg-transparent placeholder:text-white/45",
-                searchExpanded ? "pl-9 pr-8" : "pl-9 pr-3.5",
-              )}
-              style={{ color: "var(--music-text-primary)" }}
-            />
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-              size={15}
-              style={{ color: "var(--music-text-secondary)" }}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--music-text-secondary)] hover:text-white transition-colors flex items-center justify-center"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-        </div>
       </header>
       <div ref={compactSentinelRef} className="h-0 w-full overflow-hidden pointer-events-none" aria-hidden />
 
       {filteredTracks.length === 0 ? (
           <MusicHomeSearchEmpty
-            searchQuery={searchQuery}
+            searchQuery=""
             activeFilter={activeFilter}
-            onClear={() => {
-              setActiveFilter("all");
-              setSearchQuery("");
-            }}
+            onClear={() => setActiveFilter("all")}
             onSearchYoutubeMusic={onSearchYoutubeMusic}
           />
         ) : (
@@ -640,7 +579,7 @@ export function MusicHomeView({
             )}
 
             <AnimatePresence initial={false}>
-              {likedTracks.length > 0 && activeFilter === "all" && !searchQuery && (
+              {likedTracks.length > 0 && activeFilter === "all" && (
                 <motion.section
                   key="home-liked-songs"
                   className="w-full min-w-0"
@@ -689,7 +628,7 @@ export function MusicHomeView({
                           ? () => onPlayFile(
                               artistTracks[0],
                               artistTracks,
-                              searching ? searchSource : musicQueueSource("artist", a.display),
+                              musicQueueSource("artist", a.display),
                             )
                           : undefined,
                       });
@@ -721,7 +660,7 @@ export function MusicHomeView({
                         ? () => onPlayFile(
                             a.tracks[0],
                             a.tracks,
-                            searching ? searchSource : musicQueueSource("album", a.album),
+                            musicQueueSource("album", a.album),
                           )
                         : undefined,
                     })}
@@ -730,7 +669,7 @@ export function MusicHomeView({
               />
             )}
 
-            {activeFilter === "all" && !searchQuery && (
+            {activeFilter === "all" && (
               <MusicHomeRecentSection
                 tracks={filteredTracks}
                 historyEntries={historyEntries}

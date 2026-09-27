@@ -13,6 +13,7 @@ import {
   captureIslandWidthForCaption,
 } from "./IslandCaptureSavedContent";
 import { IslandIdleDevCaptureContent } from "./IslandIdleDevCaptureContent";
+import { IslandNoticeContent, noticeIslandWidth, type IslandNotice } from "./IslandNoticeContent";
 import { IslandExpandedContent } from "./IslandExpandedContent";
 import {
   IslandUpdateCompactContent,
@@ -28,7 +29,7 @@ import {
 } from "./islandSkipMotion";
 import { consumeIslandSkipDir, noteIslandSkipDir } from "@/lib/islandSkipDirection";
 
-export type IslandState = "idle" | "compact" | "expanded" | "capture";
+export type IslandState = "idle" | "compact" | "expanded" | "capture" | "notice";
 
 const ISLAND_SPRING = {
   type: "spring" as const,
@@ -44,6 +45,7 @@ const ISLAND_DIMENSIONS: Record<
   idle: { width: 120, height: 36, borderRadius: 18 },
   compact: { width: 220, height: 36, borderRadius: 18 },
   capture: { width: 160, height: 36, borderRadius: 18 },
+  notice: { width: 220, height: 36, borderRadius: 18 },
   expanded: { width: 350, height: 184, borderRadius: 40 },
 };
 
@@ -104,6 +106,8 @@ type DynamicIslandProps = {
   captureSavedPreviewSrc?: string;
   onCaptureSavedOpen?: (e: MouseEvent) => void;
   updateAvailable?: Omit<IslandUpdateContentProps, "compact"> & { collapsed: boolean };
+  /** Shown when `state` is "notice"; takes over a collapsed update pill too. */
+  notice?: IslandNotice | null;
   /** Cross-window hint (desktop overlay). Wins over local pending when trackKey changes. */
   skipDirHint?: IslandSkipDir | null;
 };
@@ -220,6 +224,7 @@ export function DynamicIsland({
   captureSavedPreviewSrc,
   onCaptureSavedOpen,
   updateAvailable,
+  notice = null,
   skipDirHint = null,
 }: DynamicIslandProps) {
   const pendingSkipDirRef = useRef<IslandSkipDir>(1);
@@ -262,8 +267,11 @@ export function DynamicIsland({
     [onSkipNext],
   );
 
-  const updateMode = Boolean(updateAvailable);
-  const effectiveState: IslandState = updateMode
+  const noticeActive = state === "notice" && notice != null;
+  const updateMode = Boolean(updateAvailable) && !noticeActive;
+  const effectiveState: IslandState = noticeActive
+    ? "notice"
+    : updateMode
     ? updateAvailable!.collapsed
       ? "idle"
       : "expanded"
@@ -280,7 +288,9 @@ export function DynamicIsland({
         ? { ...ISLAND_UPDATE_EXPANDED_DIMENSIONS }
       : effectiveState === "capture" && captureSavedCaption
         ? { ...baseDims, width: captureIslandWidthForCaption(captureSavedCaption) }
-        : baseDims;
+        : noticeActive
+          ? { ...baseDims, width: noticeIslandWidth(notice!.message) }
+          : baseDims;
   const interactive = effectiveState !== "idle" || Boolean(devCaptureIdle) || updateMode;
 
   return (
@@ -346,6 +356,9 @@ export function DynamicIsland({
               previewSrc={captureSavedPreviewSrc}
               onOpen={onCaptureSavedOpen}
             />
+          ) : null}
+          {noticeActive ? (
+            <IslandNoticeContent key={`notice-${notice!.id}`} notice={notice!} accentColor={content.accentColor} />
           ) : null}
           {!updateMode && state === "expanded" && (
             <IslandExpandedContent

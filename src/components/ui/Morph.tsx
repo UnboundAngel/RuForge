@@ -310,9 +310,10 @@ export function MorphMenu({
       style={{ width: triggerSize, height: triggerSize }}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* Zero-size clip: an invisible full-height copy still counts toward the scroller's overflow. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-0 top-0 -z-10 opacity-0"
+        className="pointer-events-none absolute left-0 top-0 -z-10 h-0 w-0 overflow-hidden opacity-0"
       >
         <div ref={menuMeasureRef} className="w-fit">
           <div className="flex w-44 flex-col p-1">{menuBody}</div>

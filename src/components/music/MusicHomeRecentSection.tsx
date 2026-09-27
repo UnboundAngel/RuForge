@@ -96,11 +96,7 @@ export function MusicHomeRecentSection({
   return (
     <section className="@container mt-2">
       <div
-        className="relative overflow-hidden rounded-[1.75rem] px-3 py-7 @lg:px-5 @2xl:px-7 @2xl:py-10 pt-8"
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.52) 28%, rgba(0, 0, 0, 0.22) 52%, rgba(0, 0, 0, 0.06) 78%, transparent 100%)",
-        }}
+        className="rf-music-shelf-shade relative overflow-hidden rounded-[1.75rem] px-3 py-7 @lg:px-5 @2xl:px-7 @2xl:py-10 pt-8"
       >
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 @2xl:gap-x-8 mb-8 px-2">
           <button
