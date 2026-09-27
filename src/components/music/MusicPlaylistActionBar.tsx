@@ -6,6 +6,7 @@ import {
   CalendarPlus,
   Check,
   Disc3,
+  FileDown,
   ListEnd,
   List,
   ListOrdered,
@@ -47,7 +48,8 @@ type Props = {
   onPlay: () => void;
   onToggleShuffle: () => void;
   onAddToQueue: () => void;
-  onRename: () => void;
+  onEditDetails: () => void;
+  onExport: () => void;
   onDelete: () => void;
   onPrefsChange: (prefs: PlaylistViewPrefs) => void;
   onQueryChange: (query: string) => void;
@@ -86,7 +88,8 @@ export function MusicPlaylistActionBar({
   onPlay,
   onToggleShuffle,
   onAddToQueue,
-  onRename,
+  onEditDetails,
+  onExport,
   onDelete,
   onPrefsChange,
   onQueryChange,
@@ -246,8 +249,14 @@ export function MusicPlaylistActionBar({
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.playlist}
             icon={<Pencil size={MUSIC_MENU_ICON_SIZE} />}
-            label="Rename"
-            onClick={pick(onRename)}
+            label="Edit details"
+            onClick={pick(onEditDetails)}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.file}
+            icon={<FileDown size={MUSIC_MENU_ICON_SIZE} />}
+            label="Export as .m3u8"
+            onClick={empty ? undefined : pick(onExport)}
           />
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.playlist}

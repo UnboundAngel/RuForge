@@ -91,6 +91,8 @@ function initialMiniKind(): "video" | "music" | null {
 }
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
+import { MusicToastHost } from "./components/music/MusicToastHost";
+import { startMusicPlaylistsFileSync } from "./musicPlaylistsFileSync";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
 import { MUSIC_TOP_BAR_HALF_WIDTH_PX } from "./components/music/MusicTopBar";
 import {
@@ -429,6 +431,18 @@ function App() {
   useEffect(() => {
     const enabled = useRuforgeStore.getState().settings.debugLogEnabledCategories;
     void invoke("sync_debug_log_categories", { enabled }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // One writer: mini windows share localStorage but never touch the app-data file.
+    let label = "";
+    try {
+      label = getCurrentWindow().label;
+    } catch {
+      return;
+    }
+    if (label !== "main") return;
+    void startMusicPlaylistsFileSync(() => useRuforgeStore.getState().refreshVirtualPlaylists());
   }, []);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
@@ -2058,6 +2072,7 @@ function App() {
       )}
       </AnimatePresence>
 
+      {navMode === "music" && <MusicToastHost />}
       {/* Toasts above the video shell; bottom offset clears the player control dock. Below window controls (z-100). */}
       {navMode !== "music" && (
         <div

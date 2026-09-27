@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Library, Maximize2, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
-import { useRuforgeStore } from "@/store/ruforgeStore";
+import { Library, Maximize2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MusicNavCreateButton } from "./MusicNavCreateButton";
 
 import type { MusicView } from "@/store/types";
 
@@ -62,9 +62,6 @@ function PanelToggleIcon({ open, size }: { open: boolean; size: number }) {
  * (MusicTopBar), so the sidebar is only the library: header, filters, and playlists.
  */
 export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, panelSlot, footerSlot }: Props) {
-  const createMusicPlaylist = useRuforgeStore((s) => s.createMusicPlaylist);
-  const openMusicPlaylist = useRuforgeStore((s) => s.openMusicPlaylist);
-  const create = () => openMusicPlaylist(createMusicPlaylist());
   const libraryActive = activeView === "library";
 
   if (collapsed) {
@@ -80,15 +77,7 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
           >
             <PanelToggleIcon open size={24} />
           </button>
-          <button
-            type="button"
-            onClick={create}
-            className={cn(ICON_BTN, "w-10 h-10 bg-white/[0.07]", RED_HOVER)}
-            aria-label="Create playlist (Ctrl+N)"
-            data-tooltip="Create playlist (Ctrl+N)"
-          >
-            <Plus size={20} />
-          </button>
+          <MusicNavCreateButton className={cn(ICON_BTN, "w-10 h-10 bg-white/[0.07]", RED_HOVER)} iconSize={20} />
         </div>
         <div className="flex-1 min-h-0 flex flex-col">{panelSlot}</div>
         {footerSlot ? <div className="shrink-0 pb-2 px-1.5 flex justify-center">{footerSlot}</div> : null}
@@ -109,15 +98,7 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
           <PanelToggleIcon open={false} size={22} />
           <span className="truncate">Your Library</span>
         </button>
-        <button
-          type="button"
-          onClick={create}
-          className={cn(ICON_BTN, "w-8 h-8 bg-white/[0.07]", RED_HOVER)}
-          aria-label="Create playlist (Ctrl+N)"
-          data-tooltip="Create playlist (Ctrl+N)"
-        >
-          <Plus size={18} />
-        </button>
+        <MusicNavCreateButton className={cn(ICON_BTN, "w-8 h-8 bg-white/[0.07]", RED_HOVER)} iconSize={18} />
         <button
           type="button"
           onClick={() => onSelect("library")}

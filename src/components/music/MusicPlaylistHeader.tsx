@@ -5,11 +5,12 @@ import { MusicPlaylistCover } from "./MusicPlaylistCover";
 
 type Props = {
   title: string;
+  /** Shown under the title in muted text, like Spotify; clicking it opens Edit details. */
+  description?: string;
+  onEditDescription?: () => void;
   tracks: MediaFile[];
   coverFile: MediaFile | null;
   startEditing: boolean;
-  /** Bumped by the "..." menu's Rename item to open the title editor. */
-  renameSignal: number;
   onRename: (title: string) => void;
   onBack: () => void;
   /** Action bar; sits on the same tinted backdrop so the color fades out beneath it. */
@@ -29,10 +30,11 @@ export function formatPlaylistLength(seconds: number): string {
 
 export function MusicPlaylistHeader({
   title,
+  description,
+  onEditDescription,
   tracks,
   coverFile,
   startEditing,
-  renameSignal,
   onRename,
   onBack,
   children,
@@ -49,10 +51,6 @@ export function MusicPlaylistHeader({
   useEffect(() => {
     if (editing) inputRef.current?.select();
   }, [editing]);
-
-  useEffect(() => {
-    if (renameSignal > 0) setEditing(true);
-  }, [renameSignal]);
 
   const commit = () => {
     const next = draft.trim();
@@ -113,6 +111,15 @@ export function MusicPlaylistHeader({
               className="block max-w-full text-left my-2"
             >
               <h1 className={`font-black tracking-tight leading-tight truncate text-white ${titleSize}`}>{title}</h1>
+            </button>
+          )}
+          {description && (
+            <button
+              type="button"
+              onClick={onEditDescription}
+              className="mb-2 block max-w-full text-left text-sm text-white/70 hover:text-white/90 line-clamp-2 whitespace-pre-line break-words"
+            >
+              {description}
             </button>
           )}
           <p className="text-sm text-white/70">

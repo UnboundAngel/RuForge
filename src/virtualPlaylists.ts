@@ -8,6 +8,8 @@ export const VIRTUAL_PLAYLISTS_LS_KEY = "ruforge-virtual-playlists";
 export type VirtualPlaylistItem = {
   path: string;
   addedAt: number;
+  /** `musicTrackIdentityKey` of the file when it was last seen, so a rescan can find it after a move. */
+  identityKey?: string;
 };
 
 /** Music playlists live in the Music sidebar; video (default) stays in the main library. */
@@ -21,7 +23,10 @@ export type VirtualPlaylistRecord = {
   updatedAt: number;
   system?: boolean;
   kind?: VirtualPlaylistKind;
+  description?: string;
 };
+
+export const PLAYLIST_DESCRIPTION_MAX = 300;
 
 export const DEFAULT_MUSIC_PLAYLIST_TITLE = "My Playlist";
 
@@ -57,19 +62,22 @@ function watchLaterRecord(): VirtualPlaylistRecord {
   };
 }
 
+/** Last saved records, so edits keep working when localStorage is blocked or reset mid-session. */
+let memoryRecords: VirtualPlaylistRecord[] | null = null;
+
 export function loadVirtualPlaylistRecords(): VirtualPlaylistRecord[] {
   try {
     const raw = localStorage.getItem(VIRTUAL_PLAYLISTS_LS_KEY);
-    if (!raw) return [watchLaterRecord()];
+    if (!raw) return memoryRecords ?? [watchLaterRecord()];
     const parsed = JSON.parse(raw) as VirtualPlaylistRecord[];
-    if (!Array.isArray(parsed)) return [watchLaterRecord()];
+    if (!Array.isArray(parsed)) return memoryRecords ?? [watchLaterRecord()];
     return ensureWatchLaterInRecords(parsed.map(normalizeRecord).filter(Boolean) as VirtualPlaylistRecord[]);
   } catch {
-    return [watchLaterRecord()];
+    return memoryRecords ?? [watchLaterRecord()];
   }
 }
 
-function normalizeRecord(raw: VirtualPlaylistRecord): VirtualPlaylistRecord | null {
+export function normalizeRecord(raw: VirtualPlaylistRecord): VirtualPlaylistRecord | null {
   if (!raw || typeof raw !== "object") return null;
   const id = typeof raw.id === "string" ? raw.id.trim() : "";
   if (!id) return null;
@@ -89,13 +97,18 @@ function normalizeRecord(raw: VirtualPlaylistRecord): VirtualPlaylistRecord | nu
             typeof item.addedAt === "number" && Number.isFinite(item.addedAt)
               ? item.addedAt
               : Date.now();
-          return { path, addedAt };
+          const identityKey =
+            typeof item.identityKey === "string" && item.identityKey ? item.identityKey : undefined;
+          return identityKey ? { path, addedAt, identityKey } : { path, addedAt };
         })
         .filter(Boolean) as VirtualPlaylistItem[]
     : [];
+  const description =
+    typeof raw.description === "string" ? raw.description.trim().slice(0, PLAYLIST_DESCRIPTION_MAX) : "";
   return {
     id,
     title,
+    ...(description ? { description } : {}),
     items,
     thumbnailPath:
       typeof raw.thumbnailPath === "string" && raw.thumbnailPath
@@ -110,15 +123,29 @@ function normalizeRecord(raw: VirtualPlaylistRecord): VirtualPlaylistRecord | nu
   };
 }
 
-export function saveVirtualPlaylistRecords(records: VirtualPlaylistRecord[]): void {
+type PersistHook = (records: VirtualPlaylistRecord[]) => void;
+let persistHook: PersistHook | null = null;
+
+/** Main window registers the app-data file writer here; localStorage stays the synchronous cache. */
+export function setVirtualPlaylistsPersistHook(hook: PersistHook | null): void {
+  persistHook = hook;
+}
+
+/** localStorage only; the app-data file is written through the persist hook. */
+export function writeVirtualPlaylistsLocal(records: VirtualPlaylistRecord[]): VirtualPlaylistRecord[] {
+  const next = ensureWatchLaterInRecords(records);
+  memoryRecords = next;
   try {
-    localStorage.setItem(
-      VIRTUAL_PLAYLISTS_LS_KEY,
-      JSON.stringify(ensureWatchLaterInRecords(records)),
-    );
+    localStorage.setItem(VIRTUAL_PLAYLISTS_LS_KEY, JSON.stringify(next));
   } catch {
-    // storage unavailable
+    // storage unavailable; memory and the file copy still hold it
   }
+  return next;
+}
+
+export function saveVirtualPlaylistRecords(records: VirtualPlaylistRecord[]): void {
+  const next = writeVirtualPlaylistsLocal(records);
+  persistHook?.(next);
 }
 
 export function ensureWatchLaterInRecords(
@@ -374,6 +401,20 @@ export function pathInWatchLater(
 ): boolean {
   const wl = records.find((r) => r.id === WATCH_LATER_ID);
   return Boolean(wl?.items.some((i) => mediaPathsMatch(i.path, path)));
+}
+
+export function setRecordDetails(
+  record: VirtualPlaylistRecord,
+  details: { title: string; description: string },
+  now = Date.now(),
+): VirtualPlaylistRecord {
+  const title = details.title.trim() || record.title;
+  const description = details.description.trim().slice(0, PLAYLIST_DESCRIPTION_MAX);
+  if (title === record.title && description === (record.description ?? "")) return record;
+  const next: VirtualPlaylistRecord = { ...record, title, updatedAt: now };
+  if (description) next.description = description;
+  else delete next.description;
+  return next;
 }
 
 export { updateRecord };
