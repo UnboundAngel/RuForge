@@ -1,0 +1,75 @@
+name: Cross-platform check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: cross-platform-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libdbus-1-dev \
+            libxdo-dev \
+            patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit -p .
+
+      - name: Unit tests
+        run: npx vitest run
+
+      # tauri-build copies every externalBin for the host triple and fails when one is missing.
+      # Only some sidecars are committed, so stub the rest; cargo check never runs them.
+      - name: Stub missing sidecar binaries
+        shell: bash
+        run: |
+          triple="$(rustc -vV | sed -n 's/^host: //p')"
+          ext=""
+          if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
+          for bin in yt-dlp ffmpeg ffprobe; do
+            f="src-tauri/binaries/${bin}-${triple}${ext}"
+            if [ ! -e "$f" ]; then
+              echo "stub $f"
+              touch "$f"
+            fi
+          done
+
+      - name: cargo check
+        working-directory: src-tauri
+        run: cargo check --workspace --all-targets

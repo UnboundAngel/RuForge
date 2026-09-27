@@ -28,6 +28,7 @@ import {
 } from "../virtualPlaylists";
 import { PlaylistEmptyThumb } from "./PlaylistEmptyThumb";
 import { cn } from "../lib/utils";
+import { systemTrashName } from "../platformPaths";
 
 type ThumbnailBar = { show: boolean; widthPct: number; completed: boolean };
 
@@ -733,7 +734,7 @@ export const MediaView = ({
       setGalleryActiveMenu(null);
       const approved = await askConfirm({
         title: "Delete video",
-        message: `Move this item to the system Recycle Bin? You can restore it from Recently Deleted while it stays in the bin.`,
+        message: `Move this item to the system ${systemTrashName()}? You can restore it from Recently Deleted while it stays there.`,
         confirmLabel: "Delete",
         cancelLabel: "Cancel",
         itemPreview: file.thumbnailPath ?? file.ruforgePosterPath,
@@ -757,7 +758,7 @@ export const MediaView = ({
         if (result.alreadyMissing && !result.removed) {
           notify("Removed from library (file was already gone).");
         } else if (result.removed) {
-          notify("Moved to Recycle Bin. Restore from Recently Deleted if needed.");
+          notify(`Moved to ${systemTrashName()}. Restore from Recently Deleted if needed.`);
         } else {
           notify("Removed from library.");
         }

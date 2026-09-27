@@ -40,3 +40,8 @@ export async function hydratePlatformDefaultPaths(): Promise<{
 export function windowsFactoryOutputDir(): string {
   return WINDOWS_DEFAULT_OUTPUT;
 }
+
+/** What the OS calls the place deleted files go, for user-facing copy. */
+export function systemTrashName(): string {
+  return isWindowsPlatform() ? "Recycle Bin" : "Trash";
+}

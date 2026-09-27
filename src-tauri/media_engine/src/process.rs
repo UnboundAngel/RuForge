@@ -182,6 +182,10 @@ impl ProcessLauncher for StdProcessLauncher {
         }
         #[cfg(not(windows))]
         {
+            // yt-dlp's ffmpeg child would otherwise keep writing after the parent exits.
+            let _ = std::process::Command::new("pkill")
+                .args(["-TERM", "-P", &pid.to_string()])
+                .output();
             let _ = std::process::Command::new("kill")
                 .args(["-TERM", &pid.to_string()])
                 .output();

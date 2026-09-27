@@ -108,7 +108,73 @@ fn enumerate_removable_roots() -> Vec<String> {
     roots
 }
 
-#[cfg(not(windows))]
+/// udisks mounts user media under `/media/<user>` (Debian/Ubuntu) or `/run/media/<user>`
+/// (Fedora/Arch); `/proc/mounts` is used instead of listing those dirs because stale
+/// mount-point folders can outlive an unplugged drive.
+#[cfg(target_os = "linux")]
+fn enumerate_removable_roots() -> Vec<String> {
+    let Ok(mounts) = std::fs::read_to_string("/proc/mounts") else {
+        return Vec::new();
+    };
+    linux_removable_mount_points(&mounts)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_removable_mount_points(mounts: &str) -> Vec<String> {
+    let mut roots: Vec<String> = mounts
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .map(unescape_proc_mounts_field)
+        .filter(|mp| mp.starts_with("/media/") || mp.starts_with("/run/media/"))
+        .collect();
+    roots.sort();
+    roots.dedup();
+    roots
+}
+
+/// `/proc/mounts` writes space, tab, newline and backslash as three-digit octal escapes.
+#[cfg(target_os = "linux")]
+fn unescape_proc_mounts_field(field: &str) -> String {
+    let bytes = field.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' && i + 3 < bytes.len() {
+            let digits = &bytes[i + 1..i + 4];
+            let parsed = std::str::from_utf8(digits)
+                .ok()
+                .and_then(|d| u8::from_str_radix(d, 8).ok());
+            if let Some(v) = parsed {
+                out.push(v);
+                i += 4;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Every mounted volume shows up in `/Volumes`; the boot volume is a symlink to `/`.
+#[cfg(target_os = "macos")]
+fn enumerate_removable_roots() -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir("/Volumes") else {
+        return Vec::new();
+    };
+    let mut roots: Vec<String> = entries
+        .flatten()
+        .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+        .filter(|e| {
+            e.file_type().map(|t| !t.is_symlink()).unwrap_or(false) && e.path().is_dir()
+        })
+        .map(|e| e.path().to_string_lossy().into_owned())
+        .collect();
+    roots.sort();
+    roots
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn enumerate_removable_roots() -> Vec<String> {
     Vec::new()
 }
@@ -122,5 +188,23 @@ mod tests {
         assert!(!export_dest_dir_available_path(Path::new(
             "Z:\\ruforge-nonexistent-export-dest-test"
         )));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_mounts_keep_only_user_media() {
+        let mounts = "\
+/dev/nvme0n1p2 / ext4 rw 0 0
+/dev/sdb1 /media/angel/USB\\040STICK vfat rw 0 0
+/dev/sdc1 /run/media/angel/Backup exfat rw 0 0
+tmpfs /run/user/1000 tmpfs rw 0 0
+";
+        assert_eq!(
+            linux_removable_mount_points(mounts),
+            vec![
+                "/media/angel/USB STICK".to_string(),
+                "/run/media/angel/Backup".to_string(),
+            ]
+        );
     }
 }

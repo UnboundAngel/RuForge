@@ -257,6 +257,15 @@ pub async fn download_deno(app: AppHandle) -> Result<DenoDownloadResult, String>
         },
     );
 
+    // Zip extraction drops the mode bits, so the part file cannot run `--version` until marked executable.
+    #[cfg(unix)]
+    {
+        use std::fs::Permissions;
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&exe_part, Permissions::from_mode(0o755))
+            .map_err(|e| e.to_string())?;
+    }
+
     let version = read_deno_version(&exe_part)
         .await
         .ok_or_else(|| "Downloaded Deno binary failed `deno --version`; discarding.".to_string())?;
@@ -266,14 +275,6 @@ pub async fn download_deno(app: AppHandle) -> Result<DenoDownloadResult, String>
         std::fs::remove_file(&final_path).map_err(|e| e.to_string())?;
     }
     std::fs::rename(&exe_part, &final_path).map_err(|e| e.to_string())?;
-
-    #[cfg(unix)]
-    {
-        use std::fs::Permissions;
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&final_path, Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
 
     let _ = app.emit(
         "deno-download-progress",

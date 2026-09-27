@@ -15,9 +15,15 @@ pub fn upstream_asset_basename() -> &'static str {
     {
         "yt-dlp_macos"
     }
-    #[cfg(all(unix, not(target_os = "macos")))]
+    // The plain `yt-dlp` asset is a Python zipapp that needs a system python3; the
+    // `_linux` builds are standalone.
+    #[cfg(all(unix, not(target_os = "macos"), target_arch = "aarch64"))]
     {
-        "yt-dlp"
+        "yt-dlp_linux_aarch64"
+    }
+    #[cfg(all(unix, not(target_os = "macos"), not(target_arch = "aarch64")))]
+    {
+        "yt-dlp_linux"
     }
 }
 

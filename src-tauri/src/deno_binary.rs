@@ -1,4 +1,4 @@
-//! Resolved Deno executable path: userdata `bin/deno.exe` when present.
+//! Resolved Deno executable path: userdata `bin/deno[.exe]` when present.
 //!
 //! Deno is used indirectly by yt-dlp via `--js-runtimes deno:<path>` to solve
 //! YouTube's n-challenge. RuForge never spawns Deno directly.
@@ -13,12 +13,22 @@ pub fn upstream_asset_zip_name() -> &'static str {
     "deno-x86_64-pc-windows-msvc.zip"
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 pub fn upstream_asset_zip_name() -> &'static str {
     "deno-aarch64-apple-darwin.zip"
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(all(target_os = "macos", not(target_arch = "aarch64")))]
+pub fn upstream_asset_zip_name() -> &'static str {
+    "deno-x86_64-apple-darwin.zip"
+}
+
+#[cfg(all(unix, not(target_os = "macos"), target_arch = "aarch64"))]
+pub fn upstream_asset_zip_name() -> &'static str {
+    "deno-aarch64-unknown-linux-gnu.zip"
+}
+
+#[cfg(all(unix, not(target_os = "macos"), not(target_arch = "aarch64")))]
 pub fn upstream_asset_zip_name() -> &'static str {
     "deno-x86_64-unknown-linux-gnu.zip"
 }

@@ -100,9 +100,10 @@ fn entry_recoverable(media_path: &str, files: &[String], index: &TrashIndex) -> 
     files.iter().any(|f| index.contains(Path::new(f)))
 }
 
+/// Maps an original path key to the trashed content and, where the platform keeps one, its info file.
 #[derive(Default)]
 struct TrashIndex {
-    pairs: HashMap<String, (PathBuf, PathBuf)>,
+    pairs: HashMap<String, (PathBuf, Option<PathBuf>)>,
 }
 
 impl TrashIndex {
@@ -114,7 +115,7 @@ impl TrashIndex {
         self.pairs.contains_key(&Self::path_key(path))
     }
 
-    fn pair(&self, path: &Path) -> Option<(PathBuf, PathBuf)> {
+    fn pair(&self, path: &Path) -> Option<(PathBuf, Option<PathBuf>)> {
         self.pairs.get(&Self::path_key(path)).cloned()
     }
 
@@ -132,10 +133,18 @@ impl TrashIndex {
                 index.scan_windows_drive(&drive);
             }
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        for p in paths {
+            index.scan_macos_trash_for(Path::new(p));
+        }
+        #[cfg(all(unix, not(target_os = "macos")))]
         {
             let _ = paths;
             index.scan_freedesktop();
+        }
+        #[cfg(not(any(windows, unix)))]
+        {
+            let _ = paths;
         }
         index
     }
@@ -172,13 +181,29 @@ impl TrashIndex {
                 let r_path = sid_path.join(r_name);
                 if r_path.is_file() {
                     let key = parsed.replace('/', "\\").to_ascii_lowercase();
-                    self.pairs.insert(key, (r_path, i_path));
+                    self.pairs.insert(key, (r_path, Some(i_path)));
                 }
             }
         }
     }
 
-    #[cfg(not(windows))]
+    /// Finder's Trash keeps no record of the original path, so the best match is a same-named
+    /// item in `~/.Trash`. Finder renames on collisions, which this misses.
+    #[cfg(target_os = "macos")]
+    fn scan_macos_trash_for(&mut self, original: &Path) {
+        let Some(name) = original.file_name() else {
+            return;
+        };
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        let content = home.join(".Trash").join(name);
+        if content.exists() {
+            self.pairs.insert(Self::path_key(original), (content, None));
+        }
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
     fn scan_freedesktop(&mut self) {
         let Some(trash) = trash_home() else {
             return;
@@ -199,14 +224,14 @@ impl TrashIndex {
             let Some(path_line) = raw.lines().find(|l| l.starts_with("Path=")) else {
                 continue;
             };
-            let stored = path_line.trim_start_matches("Path=").trim();
+            let stored = percent_decode_trash_path(path_line.trim_start_matches("Path=").trim());
             let Some(base) = info_path.file_stem().and_then(|s| s.to_str()) else {
                 continue;
             };
             let content = files_dir.join(base);
             if content.exists() {
                 self.pairs
-                    .insert(Self::path_key(Path::new(stored)), (content, info_path));
+                    .insert(Self::path_key(Path::new(&stored)), (content, Some(info_path)));
             }
         }
     }
@@ -226,7 +251,9 @@ fn restore_path_from_trash(original: &Path, index: &TrashIndex) -> Result<(), St
         std::fs::copy(&r_path, original).map_err(|e| e.to_string())?;
         std::fs::remove_file(&r_path).map_err(|e| e.to_string())
     })?;
-    let _ = std::fs::remove_file(&i_path);
+    if let Some(i_path) = i_path {
+        let _ = std::fs::remove_file(&i_path);
+    }
     Ok(())
 }
 
@@ -255,7 +282,31 @@ fn parse_recycle_info_path(i_path: &Path) -> Option<String> {
     }
 }
 
-#[cfg(not(windows))]
+/// The freedesktop spec stores `Path=` URL-escaped, so a file named `My Song.mp3` reads back as
+/// `My%20Song.mp3`.
+#[cfg(all(unix, not(target_os = "macos")))]
+fn percent_decode_trash_path(raw: &str) -> String {
+    let bytes = raw.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3])
+                .ok()
+                .and_then(|h| u8::from_str_radix(h, 16).ok());
+            if let Some(v) = hex {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
 fn trash_home() -> Option<PathBuf> {
     std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
@@ -380,4 +431,18 @@ pub fn remove_recently_deleted_entry(app: AppHandle, entry_id: String) -> Result
         return Err("Recently deleted entry not found".into());
     }
     write_manifest(&app, &manifest)
+}
+
+#[cfg(all(test, unix, not(target_os = "macos")))]
+mod tests {
+    use super::percent_decode_trash_path;
+
+    #[test]
+    fn trashinfo_path_decodes_escapes() {
+        assert_eq!(
+            percent_decode_trash_path("/home/angel/Music/My%20Song%20%C3%A9.mp3"),
+            "/home/angel/Music/My Song \u{e9}.mp3"
+        );
+        assert_eq!(percent_decode_trash_path("/tmp/100%"), "/tmp/100%");
+    }
 }

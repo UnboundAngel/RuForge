@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FileUp, ListMusic, Plus } from "lucide-react";
+import { modKeyLabel } from "@/lib/shortcutLabels";
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import {
@@ -49,7 +50,7 @@ export function MusicNavCreateButton({ className, iconSize }: Props) {
             tone={MUSIC_MENU_TONES.playback}
             icon={<ListMusic size={MUSIC_MENU_ICON_SIZE} />}
             label="Playlist"
-            trailing={<span className="text-[11px] text-white/40">Ctrl+N</span>}
+            trailing={<span className="text-[11px] text-white/40">{modKeyLabel()}+N</span>}
             onClick={pick(() => openMusicPlaylist(createMusicPlaylist()))}
           />
           <MusicMenuRow

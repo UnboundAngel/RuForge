@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { Home, Search, X } from "lucide-react";
 import { RuForgeCaptureTrigger } from "@/components/dev-captures/RuForgeCaptureTrigger";
+import { altKeyLabel, modKeyLabel } from "@/lib/shortcutLabels";
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MusicView } from "@/store/types";
@@ -74,9 +75,9 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
               ? "text-[color:var(--music-accent)]"
               : cn("text-white/60 hover:text-white", RED_HOVER),
           )}
-          aria-label="Home (Alt+1)"
+          aria-label={`Home (${altKeyLabel()}+1)`}
           aria-current={homeActive ? "page" : undefined}
-          data-tooltip="Home (Alt+1)"
+          data-tooltip={`Home (${altKeyLabel()}+1)`}
         >
           <Home size={20} strokeWidth={homeActive ? 2.5 : 2} />
         </button>
@@ -107,7 +108,7 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
               }
             }}
             placeholder="What do you want to play?"
-            aria-label="Search YouTube Music (Ctrl+K)"
+            aria-label={`Search YouTube Music (${modKeyLabel()}+K)`}
             className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/50 outline-none caret-[color:var(--music-accent)]"
           />
           {query && (
@@ -131,9 +132,9 @@ export function MusicTopBar({ activeView, captureScreenLabel, onSelect, onSearch
               "rf-music-tooltip-anchor rf-music-press w-11 h-10 shrink-0 flex items-center justify-center rounded-r-full",
               exploreActive ? "text-[color:var(--music-accent)]" : "hover:text-[color:var(--music-accent)]",
             )}
-            aria-label="Explore YouTube Music (Alt+2)"
+            aria-label={`Explore YouTube Music (${altKeyLabel()}+2)`}
             aria-current={exploreActive ? "page" : undefined}
-            data-tooltip="Explore YouTube Music (Alt+2)"
+            data-tooltip={`Explore YouTube Music (${altKeyLabel()}+2)`}
           >
             <Icon icon={YOUTUBE_MUSIC_ICON} width={22} height={22} aria-hidden />
           </button>

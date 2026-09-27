@@ -8,6 +8,7 @@ import {
   type RecentlyDeletedEntry,
 } from "../lib/recentlyDeleted";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import { systemTrashName } from "../platformPaths";
 import { SettingsModalShell } from "./settings/SettingsModalShell";
 
 type Props = {
@@ -97,7 +98,7 @@ export function RecentlyDeletedModal({ open, onClose }: Props) {
           skipScrubBackfill: true,
         });
       } else if (!result.recoverable) {
-        notify("Files are no longer in the system Recycle Bin.", "warning");
+        notify(`Files are no longer in the system ${systemTrashName()}.`, "warning");
         await refresh();
       } else {
         notify("Restore could not complete.", "error");
