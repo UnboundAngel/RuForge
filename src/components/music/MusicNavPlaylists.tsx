@@ -31,6 +31,7 @@ import {
 import {
   hasMusicTrackDrag,
   pathsMissingFromRecord,
+  playlistCoverFile,
   readMusicTrackDragData,
   resolveMusicPlaylistTracks,
 } from "./musicPlaylists";
@@ -337,10 +338,10 @@ function PlaylistItem({
   onDropPaths: (paths: string[]) => void;
 }) {
   const [dropping, setDropping] = useState(false);
-  const { tracks } = useMemo(
-    () => resolveMusicPlaylistTracks(record, libraryTracks),
-    [record, libraryTracks],
-  );
+  const { tracks, coverFile } = useMemo(() => {
+    const resolved = resolveMusicPlaylistTracks(record, libraryTracks);
+    return { tracks: resolved.tracks, coverFile: playlistCoverFile(record, resolved.tracks) };
+  }, [record, libraryTracks]);
 
   return (
     <LibraryRow
@@ -350,7 +351,7 @@ function PlaylistItem({
       active={active}
       playing={playing}
       dropping={dropping}
-      cover={<MusicPlaylistCover files={tracks} className="w-12 h-12" iconSize={20} radius="6px" />}
+      cover={<MusicPlaylistCover files={tracks} coverFile={coverFile} className="w-12 h-12" iconSize={20} radius="6px" />}
       onClick={onOpen}
       onDragOver={(e) => {
         if (!hasMusicTrackDrag(e)) return;

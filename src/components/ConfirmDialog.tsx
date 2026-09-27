@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { Music } from "lucide-react";
 import { OVERLAY_Z_CLASS } from "../lib/overlayZIndex";
 import {
   SettingsModalBtnPrimary,
@@ -16,6 +17,8 @@ export type ConfirmDialogOptions = {
   cancelLabel?: string;
   itemPreview?: string | null;
   itemMeta?: string;
+  /** Music mode: black and white panel, pill buttons, square cover row. */
+  theme?: "app" | "music";
 };
 
 type PendingConfirm = ConfirmDialogOptions & {
@@ -73,6 +76,7 @@ export function ConfirmDialogHost() {
 
   const onConfirm = useCallback(() => settle(true), [settle]);
   const onCancel = useCallback(() => settle(false), [settle]);
+  const music = pending?.theme === "music";
 
   return createPortal(
     <SettingsModalShell
@@ -89,8 +93,26 @@ export function ConfirmDialogHost() {
       eyebrow={null}
       zIndexClass={OVERLAY_Z_CLASS.confirm}
       maxWidthClass="max-w-md"
+      theme={music ? "music" : "app"}
       footer={
-        pending ? (
+        pending && music ? (
+          <>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="h-10 rounded-full px-5 text-sm font-bold text-white/70 transition-colors hover:text-white hover:bg-white/[0.06]"
+            >
+              {pending.cancelLabel ?? "Cancel"}
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="h-10 rounded-full bg-[#ff0033] px-6 text-sm font-bold text-white transition-[filter,transform] hover:brightness-110 active:scale-[0.97]"
+            >
+              {pending.confirmLabel ?? "Confirm"}
+            </button>
+          </>
+        ) : pending ? (
           <>
             <SettingsModalBtnSecondary onClick={onCancel}>
               {pending.cancelLabel ?? "Cancel"}
@@ -105,7 +127,9 @@ export function ConfirmDialogHost() {
         ) : null
       }
     >
-      {pending?.itemPreview ? (
+      {music && pending ? (
+        <MusicConfirmItem preview={pending.itemPreview ?? null} meta={pending.itemMeta} />
+      ) : pending?.itemPreview ? (
         <div className="space-y-3">
           <div className="relative aspect-video w-full overflow-hidden rounded-[var(--radius-input)] bg-[#110D0B]">
             <img
@@ -134,4 +158,29 @@ export function ConfirmDialogHost() {
     </SettingsModalShell>,
     document.body,
   );
+}
+
+function MusicConfirmItem({ preview, meta }: { preview: string | null; meta?: string }) {
+  const [size, name] = meta ? splitMeta(meta) : [null, null];
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-white/[0.06] p-2">
+      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-white/[0.08]">
+        {preview ? (
+          <img src={convertFileSrc(preview)} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <Music className="m-auto h-full w-6 text-white/40" aria-hidden />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        {name ? <p className="truncate text-sm font-semibold text-white">{name}</p> : null}
+        {size ? <p className="mt-0.5 text-xs text-white/60">{size}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+/** `itemMeta` is "size • name" from `deleteLibraryMedia`; split it so the name can lead. */
+function splitMeta(meta: string): [string | null, string | null] {
+  const i = meta.indexOf(" • ");
+  return i < 0 ? [null, meta] : [meta.slice(0, i), meta.slice(i + 3)];
 }

@@ -233,8 +233,8 @@ export function MusicPlaylistFinder({
   if (libraryTracks.length === 0) return null;
 
   return (
-    <section ref={sectionRef} className={cn("@container px-6 pb-10", prominent ? "mt-2" : "mt-10")}>
-      <div className={cn(!prominent && "border-t border-white/10 pt-8")}>
+    <section ref={sectionRef} className={cn("@container px-6 pb-10", prominent ? "mt-2" : "mt-14")}>
+      <div>
         <AnimatePresence mode="wait" initial={false}>
           {searchOpen ? (
             <motion.div
