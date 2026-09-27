@@ -126,7 +126,10 @@ function cmdAdd(arg) {
     files: parsed.files,
     at: today(),
   };
-  appendFileSync(logPath, JSON.stringify(row) + '\n', 'utf8');
+  // Editors that save without a final newline would glue this row onto the last one.
+  const existing = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '';
+  const lead = existing && !existing.endsWith('\n') ? '\n' : '';
+  appendFileSync(logPath, lead + JSON.stringify(row) + '\n', 'utf8');
   bumpStateStamp();
   consumeEntry(path);
   console.log(JSON.stringify(row));

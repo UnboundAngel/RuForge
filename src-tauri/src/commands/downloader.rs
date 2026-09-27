@@ -1908,7 +1908,7 @@ async fn run_ytdlp_json(
         .map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))
 }
 
-async fn run_ytdlp_json_with_cookie_fallback(
+pub(crate) async fn run_ytdlp_json_with_cookie_fallback(
     app: &AppHandle,
     prefix_args: Vec<String>,
     url: String,

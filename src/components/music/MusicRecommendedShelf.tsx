@@ -9,6 +9,7 @@ import { trackArtistLabel } from "./musicPlaylists";
 import type { OutsideTrack } from "./musicOutsideRecommend";
 import { type ShelfItem, shelfKey } from "./musicShelfFollowUps";
 import { MusicRecommendationMenu, type RecommendationMenuState } from "./MusicRecommendationMenu";
+import { MusicPreviewButton, MusicPreviewProgress, useSongPreview } from "./MusicPreviewButton";
 import { downloadOutsideTrackIntoPlaylist, useOutsideDownloadPercent } from "./useMusicOutsideRecommendations";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -313,6 +314,7 @@ function OutsideCard({
 }) {
   const { queued, percent, failed } = useOutsideDownloadPercent(track.url);
   const busy = queued && !failed;
+  const preview = useSongPreview(track.videoId);
   const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.videoId}/hqdefault.jpg`;
   return (
     <motion.div
@@ -339,6 +341,8 @@ function OutsideCard({
           >
             <CloudDownload size={13} strokeWidth={2.5} aria-hidden />
           </span>
+          {preview.status && <MusicPreviewProgress progress={preview.progress} />}
+          <MusicPreviewButton track={track} status={preview.status} />
           <button
             type="button"
             onClick={() => {
@@ -400,7 +404,14 @@ function OutsideCard({
           </button>
         </div>
         <div className="mt-2 min-w-0">
-          <div className="truncate text-sm font-bold text-white">{track.title}</div>
+          <div
+            className={cn(
+              "truncate text-sm font-bold transition-colors",
+              preview.status ? "text-[var(--music-accent)]" : "text-white",
+            )}
+          >
+            {track.title}
+          </div>
           <div className="truncate text-xs text-white/60 transition-colors group-hover/card:text-white/80">
             {track.artist || "YouTube Music"}
           </div>
