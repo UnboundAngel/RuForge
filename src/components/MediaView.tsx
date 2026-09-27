@@ -425,10 +425,7 @@ const VideoCard = memo(function VideoCard({
       />
 
       <div className="relative z-10 flex flex-col gap-3">
-        <div
-          className="relative aspect-video overflow-hidden rounded-2xl bg-[#1D1613]"
-          style={{ contentVisibility: "auto", containIntrinsicSize: "auto 180px" }}
-        >
+        <div className="relative aspect-video overflow-hidden rounded-2xl bg-[#1D1613]">
           {stillPoster ? (
             <img
               src={convertFileSrc(stillPoster)}

@@ -25,14 +25,17 @@ export type CleanupCandidate = {
 function iterInternalMedia(entries: GalleryEntry[]): MediaFile[] {
   const prefix = RUFORGE_INTERNAL_DIR.toLowerCase();
   const out: MediaFile[] = [];
+  // A file can sit in the library and in one or more playlists; list it once.
+  const seen = new Set<string>();
+  const take = (file: MediaFile) => {
+    const key = file.path.toLowerCase();
+    if (!key.startsWith(prefix) || seen.has(key)) return;
+    seen.add(key);
+    out.push(file);
+  };
   for (const entry of entries) {
-    if (entry.kind === "media") {
-      if (entry.path.toLowerCase().startsWith(prefix)) out.push(entry);
-    } else {
-      for (const item of entry.items) {
-        if (item.path.toLowerCase().startsWith(prefix)) out.push(item);
-      }
-    }
+    if (entry.kind === "media") take(entry);
+    else entry.items.forEach(take);
   }
   return out;
 }
@@ -88,6 +91,33 @@ export function buildCleanupCandidates(
     const diff = a.watchProgressPct - b.watchProgressPct;
     if (diff !== 0) return diff;
     return a.created - b.created;
+  });
+}
+
+export type CleanupSortKey = "title" | "added" | "watched" | "size";
+export type CleanupSort = { key: CleanupSortKey; desc: boolean };
+
+/** Column sort on top of the filter's own order; `null` keeps the filter's order. */
+export function sortCleanupCandidates(list: CleanupCandidate[], sort: CleanupSort | null): CleanupCandidate[] {
+  if (!sort) return list;
+  const value = (c: CleanupCandidate): number | string => {
+    switch (sort.key) {
+      case "title":
+        return c.file.name.toLowerCase();
+      case "added":
+        return c.created;
+      case "watched":
+        return c.watchProgressPct;
+      case "size":
+        return c.sizeBytes;
+    }
+  };
+  const dir = sort.desc ? -1 : 1;
+  return [...list].sort((a, b) => {
+    const va = value(a);
+    const vb = value(b);
+    const cmp = typeof va === "string" ? va.localeCompare(vb as string) : va - (vb as number);
+    return cmp * dir;
   });
 }
 
