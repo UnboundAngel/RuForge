@@ -32,6 +32,7 @@ import {
   resolveImmersiveDownloadPhase,
 } from "./downloader/ImmersiveDownloadHero";
 import { MultiDownloadSlotCarousel } from "./downloader/MultiDownloadSlotCarousel";
+import { STORAGE_BLOCK_ROW_CLASS, StorageBlockNote } from "./downloader/StorageBlockNote";
 import {
   downloadJobMediaNeedsHydration,
   jobHasDownloadTransferStarted,
@@ -1135,6 +1136,9 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               )}
                             </div>
                           )}
+                          {d.focusedJob?.status === "queued" && d.focusedJob.storageBlock && (
+                            <StorageBlockNote job={d.focusedJob} className="justify-center" />
+                          )}
                         </motion.div>
                         {displayHero.isPlaylist && displayHero.playlistItems && (
                           <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto space-y-1.5 hidden min-[750px]:block rf-scrollbar">
@@ -1163,7 +1167,9 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                   key={`playlist-row-${idx}-${item.webpageUrl ?? item.title}`}
                                   className={`flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group ${
                                     dup ? "opacity-55" : ""
-                                  } ${batchJob?.status === "downloading" ? "bg-white/[0.04]" : ""}`}
+                                  } ${batchJob?.status === "downloading" ? "bg-white/[0.04]" : ""} ${
+                                    batchJob?.storageBlock ? STORAGE_BLOCK_ROW_CLASS : ""
+                                  }`}
                                 >
                                   <div className="w-24 aspect-video rounded-lg overflow-hidden bg-stone-900 flex-shrink-0 relative">
                                     {item.thumbnail ? (
@@ -1191,6 +1197,9 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                         ? ` · ~${formatApproxFileSize(rowBytes)}`
                                         : ""}
                                     </span>
+                                    {batchJob?.storageBlock && (
+                                      <StorageBlockNote job={batchJob} className="mt-1" />
+                                    )}
                                   </div>
                                   <DownloadJobAudioToggle
                                     audioOnly={rowAudio}

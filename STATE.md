@@ -29,7 +29,7 @@ Rules: root `AGENTS.md` → **How to log Unreleased**.
 
 ## Now
 
-0.4.0 is out. App work pause-friendly. Website hero / marketing pass done for the 3-slide set. Next focus: storage cap before enqueue, main-app nav restructure.
+0.4.0 is out. App work pause-friendly. Website hero / marketing pass done for the 3-slide set. Storage cap before enqueue shipped (#10). Next focus: main-app nav restructure.
 
 Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shipped target. Windows dev: `npm run dev:app` (Vite on 1430). Website: `npm run dev` in `website/` (Astro on 4321).
 
@@ -39,9 +39,8 @@ Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shi
 
 ## Next 3 (priority order)
 
-1. Storage cap before enqueue (#10). Block when estimate exceeds free disk.
-2. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell.
-3. Re-test mid-download 403 at 720p with cookies (see Notes).
+1. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell.
+2. Re-test mid-download 403 at 720p with cookies (see Notes).
 
 ## Notes (not P0)
 

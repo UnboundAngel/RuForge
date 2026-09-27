@@ -9,6 +9,7 @@ import {
 import { normalizeDurationSeconds } from "./components/downloader/downloaderFormat";
 import type { PlaylistItem, ProgressPayload, VideoInfo } from "./types";
 import type { RuforgeSettings } from "./store/types";
+import type { StorageBlockReason } from "./storageFit";
 import {
   effectiveDownloadSubLangs,
   normalizeBrowserContext,
@@ -185,6 +186,8 @@ export interface DownloadJob {
    * this before re-queuing so the sweep can enforce the per-item attempt cap.
    */
   attemptCount?: number;
+  /** Set while the estimate does not fit free disk or the vault cap; the pump skips the job. */
+  storageBlock?: StorageBlockReason | null;
 }
 
 export type DownloadEnqueueSource =
