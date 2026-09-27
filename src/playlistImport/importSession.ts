@@ -6,6 +6,14 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
 import { fileVideoId, type OutsideTrack } from "@/components/music/musicOutsideRecommend";
 import { downloadOutsideTrackIntoPlaylist } from "@/components/music/useMusicOutsideRecommendations";
+import { libraryTracksFor } from "@/components/music/useMusicPlaylists";
+import {
+  IMPORT_SESSION_KEY,
+  type SavedImportSession,
+  hasPendingSearches,
+  restoreImportSession,
+  serializeImportSession,
+} from "./importPersist";
 import { findInLibrary } from "./libraryMatch";
 import type { ImportTrack, ParsedImport } from "./parseImport";
 import { type MatchBucket, type ScoredCandidate, bucketFor, rankCandidates, searchQueryFor } from "./scoreMatches";
@@ -47,6 +55,16 @@ type ImportSession = {
   draftError: string | null;
 };
 
+function readSaved(): SavedImportSession | null {
+  try {
+    return restoreImportSession(localStorage.getItem(IMPORT_SESSION_KEY));
+  } catch {
+    return null;
+  }
+}
+
+const saved = readSaved();
+
 export const useImportSession = create<ImportSession>(() => ({
   open: false,
   phase: "paste",
@@ -57,12 +75,53 @@ export const useImportSession = create<ImportSession>(() => ({
   runId: 0,
   draft: "",
   draftError: null,
+  ...saved,
 }));
+
+/** Row results land every few seconds; a short debounce keeps a 1000-row list from rewriting per row. */
+const PERSIST_DEBOUNCE_MS = 500;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+function persistNow(): void {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = null;
+  try {
+    const raw = serializeImportSession(useImportSession.getState());
+    if (raw) localStorage.setItem(IMPORT_SESSION_KEY, raw);
+    else localStorage.removeItem(IMPORT_SESSION_KEY);
+  } catch {
+    /* quota or no storage: the session still works, it just won't survive a refresh */
+  }
+}
+
+useImportSession.subscribe((s, prev) => {
+  if (s.rows === prev.rows && s.draft === prev.draft && s.name === prev.name && s.phase === prev.phase && s.stopped === prev.stopped) {
+    return;
+  }
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(persistNow, PERSIST_DEBOUNCE_MS);
+});
+
+if (typeof window !== "undefined") window.addEventListener("pagehide", persistNow);
+
+/** runId of the matching loop currently running, so reopening doesn't start a second one. */
+let activeRun: number | null = null;
 
 export function openPlaylistImport(): void {
   const s = useImportSession.getState();
   // Reopening mid-review keeps the list; a finished or empty session starts over.
-  useImportSession.setState(s.phase === "review" && s.rows.length ? { open: true } : { open: true, phase: "paste" });
+  if (s.phase !== "review" || !s.rows.length) {
+    useImportSession.setState({ open: true, phase: "paste" });
+    return;
+  }
+  useImportSession.setState({ open: true });
+  // After a refresh the list comes back from storage with its unsearched rows still waiting.
+  if (activeRun !== s.runId && !s.stopped && hasPendingSearches(s.rows)) void runMatching(s.runId);
+}
+
+/** A saved review the Create menu offers to resume. */
+export function useHasImportInProgress(): boolean {
+  return useImportSession((s) => s.phase === "review" && s.rows.length > 0);
 }
 
 export function closePlaylistImport(): void {
@@ -122,11 +181,6 @@ async function searchRow(source: ImportTrack) {
  */
 export async function startPlaylistImport(parsed: ParsedImport, library: MediaFile[]): Promise<void> {
   const runId = useImportSession.getState().runId + 1;
-  const byVideoId = new Map<string, MediaFile>();
-  for (const f of library) {
-    const id = fileVideoId(f);
-    if (id) byVideoId.set(id, f);
-  }
   const rows: ImportRow[] = parsed.tracks.map((source) => {
     const hit = findInLibrary(source, library);
     return hit
@@ -141,18 +195,42 @@ export async function startPlaylistImport(parsed: ParsedImport, library: MediaFi
     stopped: null,
     runId,
   });
+  await runMatching(runId);
+}
 
+function libraryByVideoId(): Map<string, MediaFile> {
+  const byVideoId = new Map<string, MediaFile>();
+  for (const f of libraryTracksFor(useRuforgeStore.getState().entries)) {
+    const id = fileVideoId(f);
+    if (id) byVideoId.set(id, f);
+  }
+  return byVideoId;
+}
+
+/** Searches every waiting row in order. Also resumes a list restored after a refresh. */
+async function runMatching(runId: number): Promise<void> {
+  activeRun = runId;
+  try {
+    await matchWaitingRows(runId);
+  } finally {
+    if (activeRun === runId) activeRun = null;
+  }
+}
+
+async function matchWaitingRows(runId: number): Promise<void> {
   let failures = 0;
-  for (let i = 0; i < rows.length; i++) {
-    if (useImportSession.getState().runId !== runId) return;
-    if (rows[i].state === "done") continue;
+  for (let i = 0; ; i++) {
+    const s = useImportSession.getState();
+    if (s.runId !== runId || i >= s.rows.length) return;
+    const source = s.rows[i].source;
+    if (s.rows[i].state !== "waiting") continue;
     patchRow(runId, i, { state: "searching" });
     try {
-      const ranked = await searchRow(rows[i].source);
+      const ranked = await searchRow(source);
       failures = 0;
       const best = ranked[0];
-      const owned = best ? byVideoId.get(best.track.id) : undefined;
-      const bucket = bucketFor(rows[i].source, best);
+      const owned = best ? libraryByVideoId().get(best.track.id) : undefined;
+      const bucket = bucketFor(source, best);
       patchRow(runId, i, {
         state: "done",
         candidates: ranked.slice(0, ALTERNATIVES_SHOWN),

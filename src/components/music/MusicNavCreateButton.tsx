@@ -10,7 +10,7 @@ import {
   MusicMenuRow,
   MusicMenuSection,
 } from "./musicMenuUi";
-import { openPlaylistImport } from "@/playlistImport/importSession";
+import { openPlaylistImport, useHasImportInProgress } from "@/playlistImport/importSession";
 import { useImportPlaylistM3u8 } from "./useMusicPlaylistM3u8";
 
 type Props = {
@@ -23,6 +23,7 @@ export function MusicNavCreateButton({ className, iconSize }: Props) {
   const createMusicPlaylist = useRuforgeStore((s) => s.createMusicPlaylist);
   const openMusicPlaylist = useRuforgeStore((s) => s.openMusicPlaylist);
   const importM3u8 = useImportPlaylistM3u8();
+  const importInProgress = useHasImportInProgress();
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
 
   const pick = (fn: () => void) => () => {
@@ -63,7 +64,7 @@ export function MusicNavCreateButton({ className, iconSize }: Props) {
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.playback}
             icon={<ScanText size={MUSIC_MENU_ICON_SIZE} />}
-            label="Import from screenshots"
+            label={importInProgress ? "Resume import" : "Import from screenshots"}
             onClick={pick(openPlaylistImport)}
           />
         </MusicMenuSection>
