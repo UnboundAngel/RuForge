@@ -24,7 +24,10 @@ use super::types::{CompanionItemProjection, CompanionLibraryItem, MediaType};
 const PLAYABLE_CONTAINERS: [&str; 2] = ["mp4", "webm"];
 const PLAYABLE_VIDEO_CODECS: [&str; 4] = ["h264", "vp8", "vp9", "av1"];
 const PLAYABLE_AUDIO_CODECS: [&str; 5] = ["aac", "opus", "vorbis", "mp3", "flac"];
-const PLAYABLE_AUDIO_CONTAINERS: [&str; 7] = ["mp3", "m4a", "ogg", "opus", "wav", "flac", "mp4"];
+// `aac` (raw ADTS) and `oga` come from the file extension; ffprobe names neither mp4 nor matroska.
+const PLAYABLE_AUDIO_CONTAINERS: [&str; 9] = [
+    "mp3", "m4a", "ogg", "oga", "opus", "wav", "flac", "mp4", "aac",
+];
 
 /// Cached ffprobe + remux result for one path, keyed by (path, mtime, size) so a
 /// reindex only re-probes files that actually changed. This is what makes
@@ -93,10 +96,8 @@ fn is_audio_playable(container: &str, audio_codec: &str) -> bool {
             || PLAYABLE_AUDIO_CODECS.contains(&audio_codec)
             || audio_codec.starts_with("pcm");
     }
-    if container == "webm" && (audio_codec == "opus" || audio_codec.is_empty()) {
-        return true;
-    }
-    !audio_codec.is_empty() && PLAYABLE_AUDIO_CODECS.contains(&audio_codec)
+    // Audio has no remux path, and Safari cannot open Matroska, so other containers stay unplayable.
+    container == "webm" && (audio_codec == "opus" || audio_codec.is_empty())
 }
 
 pub(crate) fn native_playable(

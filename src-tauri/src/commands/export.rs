@@ -1364,7 +1364,9 @@ mod tests {
             last_emitted_detail: None,
             completed_jobs: vec![],
         };
-        let dest_media = bundle.join("Ep1.mp4");
+        // The export above already wrote bundle/Ep1.mp4, so the first copy needs a fresh destination.
+        let skip_check = tempfile::tempdir().unwrap();
+        let dest_media = skip_check.path().join("Ep1.mp4");
         copy_file_skip_if_exists(&media, &dest_media, &mut ctx).expect("copy");
         assert_eq!(ctx.files_copied, 1);
         copy_file_skip_if_exists(&media, &dest_media, &mut ctx).expect("skip");
