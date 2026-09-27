@@ -146,7 +146,7 @@ Structured to match the maintainer audit depth. Public docs only where noted.
 - **Storage widget:** Sidebar footer shows used GB vs `storageLimitGB` when internal target; **Authorize Cleanup** when at cap (`StorageWidget`, `AuthorizeCleanupModal.tsx`).
 - **Second window:** Mini player webview label `mini` (`MiniPlayer.tsx` routed from `App.tsx` / `main.tsx`).
 - **System tray:** Show, Reload Interface, Toggle GPU & Restart (exit only, does not toggle pref), Reset App Data (`localStorage` only), Quit (`tray.rs`).
-- **Notify overlay:** Separate `notify` webview for unfocused download toasts (`NotifyOverlayApp.tsx`).
+- **Desktop island:** Unfocused downloads and notices show in the top-center `island` webview (`IslandOverlayApp.tsx`).
 
 ### URL intake and parsing flow
 

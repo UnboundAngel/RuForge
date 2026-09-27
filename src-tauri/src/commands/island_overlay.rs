@@ -1,4 +1,5 @@
-//! Top-center overlay window for the desktop Dynamic Island (minimized / tray-hidden main).
+//! Top-center overlay window for the desktop Dynamic Island: music while main is minimized or
+//! tray-hidden, downloads and background notices while main is unfocused.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -86,6 +87,13 @@ pub fn note_main_window_monitor(app: &AppHandle) {
 }
 
 fn resolve_island_monitor(app: &AppHandle) -> Result<Monitor, String> {
+    // The display the user is working on, not wherever main was left.
+    if let Ok(cursor) = app.cursor_position() {
+        if let Ok(Some(m)) = app.monitor_from_point(cursor.x, cursor.y) {
+            return Ok(m);
+        }
+    }
+
     if let Some(main) = app.get_webview_window("main") {
         let pos_ok = main
             .outer_position()

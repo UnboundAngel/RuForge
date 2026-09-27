@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { isRuforgeAppInForeground } from "./appWindowFocus";
@@ -26,20 +26,13 @@ export function claimUserNotification(dedupeKey: string): boolean {
   return true;
 }
 
-/**
- * Shows a RuForge-styled overlay notification (dedicated `notify` window).
- * Prefer {@link deliverUserNotification} so in-app vs overlay stays mutually exclusive.
- */
-export async function pushBackgroundNotification(options: {
-  title: string;
-  body: string;
-  kind?: BackgroundNotifyKind;
-}): Promise<void> {
-  await invoke("push_background_notify", {
-    title: options.title,
-    body: options.body,
-    kind: options.kind ?? "info",
-  });
+export const DESKTOP_ISLAND_NOTICE_EVENT = "desktop-island-notice";
+
+export type DesktopIslandNoticePayload = { message: string; kind: BackgroundNotifyKind };
+
+/** Main owns the desktop island, so every window routes background notices through it. */
+async function pushDesktopIslandNotice(payload: DesktopIslandNoticePayload): Promise<void> {
+  await emitTo("main", DESKTOP_ISLAND_NOTICE_EVENT, payload);
 }
 
 async function isAnyRuforgeWindowFocused(): Promise<boolean> {
@@ -95,13 +88,9 @@ export async function deliverUserNotification(
   }
 
   try {
-    await pushBackgroundNotification({
-      title: options.title ?? "RuForge",
-      body: options.body,
-      kind,
-    });
+    await pushDesktopIslandNotice({ message: options.body, kind });
   } catch (e) {
-    console.error("deliverUserNotification overlay:", e);
+    console.error("deliverUserNotification island:", e);
     inAppNotify(inAppBody, inAppType);
   }
 }

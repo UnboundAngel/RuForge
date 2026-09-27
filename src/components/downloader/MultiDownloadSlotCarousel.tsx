@@ -141,6 +141,8 @@ export function MultiDownloadSlotCarousel({
   const promotingRef = useRef(false);
   const safeIndexRef = useRef(currentIndex);
 
+  const fitRef = useRef<HTMLDivElement>(null);
+  const [available, setAvailable] = useState(Number.POSITIVE_INFINITY);
   const [cardWidth, setCardWidth] = useState(320);
   const [displayIndex, setDisplayIndex] = useState(currentIndex);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(
@@ -206,6 +208,16 @@ export function MultiDownloadSlotCarousel({
   useLayoutEffect(() => {
     measureCardWidth();
   });
+
+  useLayoutEffect(() => {
+    const el = fitRef.current;
+    if (!el) return;
+    const read = () => setAvailable(el.clientWidth);
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useLayoutEffect(() => {
     if (items.length <= 1) {
@@ -297,13 +309,18 @@ export function MultiDownloadSlotCarousel({
     needsHydration: item.needsHydration,
   });
 
+  // The pair is wider than the hero at large breakpoints; scale the whole row (not the layout) to fit.
+  const scale = Math.min(1, available / rowWidth);
+  const rowHeight = (cardWidth * 9) / 16;
+
   return (
     <div className="flex w-full flex-col items-center">
-      <div className="flex w-full justify-center px-4 sm:px-6">
+      <div className="w-full px-4 sm:px-6">
+        <div ref={fitRef} className="flex w-full justify-center" style={{ height: rowHeight * scale }}>
         <div
           ref={rowRef}
-          className="relative"
-          style={{ width: rowWidth }}
+          className="relative shrink-0 origin-top"
+          style={{ width: rowWidth, transform: scale < 1 ? `scale(${scale})` : undefined }}
         >
           <div className={`${DOWNLOAD_CARD_SIZE_CLASS} pointer-events-none opacity-0`} aria-hidden />
 
@@ -364,6 +381,7 @@ export function MultiDownloadSlotCarousel({
               />
             </motion.div>
           ) : null}
+        </div>
         </div>
       </div>
 

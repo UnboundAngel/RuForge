@@ -379,9 +379,8 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 
 ### Background notifications
 
-- **Notify overlay window** — Separate label `notify`; runtime-created (not in `tauri.conf.json`). `NotifyOverlayApp.tsx`, `notify_overlay.rs` · **Headline**
-- **`notifyWhenUnfocused`** — Pushes to overlay when main not focused. `systemNotify.ts` · **Headline**
-- **Overlay dismiss** — Enter/Space on card. `NotifyOverlayApp.tsx` · **Minor**
+- **Desktop island notices** — When RuForge is not focused, notices show in the desktop island (`desktop-island-notice`). `systemNotify.ts`, `useDesktopIslandOverlay.ts` · **Headline**
+- **Desktop island downloads** — Active download pill with edge progress ring on the monitor under the cursor; ring only when music is showing. `IslandDownloadContent.tsx` · **Headline**
 
 ### Auto-updater
 

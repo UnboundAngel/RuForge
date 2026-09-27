@@ -12,6 +12,9 @@ import {
 } from "@/audioOutputDevices";
 import type { LoopMode } from "@/playbackLoopStorage";
 import { primaryArtist, rawArtistFromFile } from "@/components/music/musicArtist";
+import type { DynamicIslandContent } from "@/components/island/DynamicIsland";
+import type { IslandDownload } from "@/components/island/IslandDownloadContent";
+import type { IslandNotice } from "@/components/island/IslandNoticeContent";
 import { useCurrentActivity } from "@/hooks/useCurrentActivity";
 import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
 import {
@@ -31,14 +34,20 @@ import {
   getMainPlaybackBridge,
   subscribeMainPlaybackBridge,
 } from "@/lib/mainPlaybackBridge";
+import { jobHasDownloadTransferStarted, type DownloadJob } from "@/downloadQueue";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { DESKTOP_ISLAND_NOTICE_EVENT, type DesktopIslandNoticePayload } from "@/systemNotify";
 
 const TELEMETRY_MIN_MS = 100;
+const NOTICE_MS = 4500;
 
-async function isMainAway(): Promise<boolean> {
+type MainWindowState = { away: boolean; focused: boolean };
+
+async function readMainWindowState(): Promise<MainWindowState> {
   const win = getCurrentWindow();
   let minimized = false;
   let visible = true;
+  let focused = true;
   try {
     minimized = await win.isMinimized();
   } catch {
@@ -49,10 +58,18 @@ async function isMainAway(): Promise<boolean> {
   } catch {
     /* ignore */
   }
-  return minimized || !visible;
+  try {
+    focused = await win.isFocused();
+  } catch {
+    /* ignore */
+  }
+  const away = minimized || !visible;
+  return { away, focused: focused && !away };
 }
 
-function buildDesktopIslandPayload(
+type MusicSnapshot = Pick<DesktopIslandStatePayload, "content" | "renderState" | "filePath">;
+
+function buildMusicSnapshot(
   activity: ReturnType<typeof useCurrentActivity>,
   settingsAccent: string,
   volume: number,
@@ -60,7 +77,7 @@ function buildDesktopIslandPayload(
   loopMode: LoopMode,
   audioOutputDeviceId: string,
   audioOutputDevices: ReturnType<typeof getCachedAudioOutputDevices>,
-): DesktopIslandStatePayload | null {
+): MusicSnapshot | null {
   if (
     !activity.hasSession ||
     activity.isStub ||
@@ -80,21 +97,18 @@ function buildDesktopIslandPayload(
       : null;
   const progress =
     liveDuration > 0 ? Math.min(100, (liveCurrentTime / liveDuration) * 100) : 0;
-  const waveformPaused = livePaused;
-  const trackKey = activity.file?.path ?? "";
 
   return {
     renderState: activity.renderState,
     filePath: activity.file?.path ?? null,
-    waveformLevels: getIslandWaveformLevels(),
     content: {
       coverSrc: activity.coverSrc,
-      trackKey,
+      trackKey: activity.file?.path ?? "",
       title,
       subtitle,
       stubLabel: null,
       paused: livePaused,
-      waveformPaused,
+      waveformPaused: livePaused,
       accentColor: settingsAccent,
       currentTime: liveCurrentTime,
       duration: liveDuration,
@@ -114,6 +128,52 @@ function buildDesktopIslandPayload(
   };
 }
 
+function emptyContent(accentColor: string): DynamicIslandContent {
+  return {
+    coverSrc: null,
+    trackKey: "",
+    title: "",
+    subtitle: null,
+    stubLabel: null,
+    paused: true,
+    waveformPaused: true,
+    accentColor,
+    currentTime: 0,
+    duration: 0,
+    progress: 0,
+    showTrackSkip: false,
+    showExpandedControls: false,
+    hasPrev: false,
+    hasNext: false,
+    isStub: false,
+    canSeek: false,
+    isMuted: false,
+    volume: 1,
+    loopMode: "off",
+    audioOutputDeviceId: "",
+    audioOutputDevices: [],
+  };
+}
+
+function buildIslandDownload(jobs: readonly DownloadJob[]): IslandDownload | null {
+  const active = jobs.filter(
+    (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+  );
+  const job =
+    active.find((j) => j.status === "downloading") ??
+    active.find((j) => j.status === "queued") ??
+    active[0];
+  if (!job) return null;
+  const flowing = job.status === "downloading" && jobHasDownloadTransferStarted(job);
+  return {
+    key: job.id,
+    title: job.metadata?.title || "Downloading",
+    thumbnail: job.metadata?.thumbnail ?? null,
+    pct: flowing ? Math.min(100, Math.max(0, job.progress?.percentage ?? 0)) : null,
+    remaining: active.length - 1,
+  };
+}
+
 function attachSkipDirForTrackChange(
   payload: DesktopIslandStatePayload,
   lastPushedTrackKeyRef: { current: string | null },
@@ -129,14 +189,16 @@ function attachSkipDirForTrackChange(
 }
 
 /**
- * Shows the top-of-screen island overlay while main is minimized or tray-hidden
- * and main-owned playback is active. Suppresses when mini owns playback.
+ * Drives the top-of-screen desktop island. Music shows while main is minimized or
+ * tray-hidden (mini ownership suppresses it). Downloads and background notices show
+ * whenever main is not focused, and ride along as a ring when music is up.
  */
 export function useDesktopIslandOverlay(enabled: boolean) {
   const activity = useCurrentActivity();
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const loopMode = useRuforgeStore((s) => s.loopMode);
+  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const audioOutputDeviceId = useSyncExternalStore(
     subscribeAudioOutputDeviceId,
     getAudioOutputDeviceId,
@@ -151,26 +213,30 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     typeof s.settings.accentColor === "string" ? s.settings.accentColor : "#EDCF9B",
   );
 
-  const awayRef = useRef(false);
-  const shownRef = useRef(false);
-  const lastPushAtRef = useRef(0);
-  const lastPushedTrackKeyRef = useRef<string | null>(null);
-  const pendingPushRef = useRef<DesktopIslandStatePayload | null>(null);
-  const activityRef = useRef(activity);
-  activityRef.current = activity;
+  const windowRef = useRef<MainWindowState>({ away: false, focused: true });
+  const noticeRef = useRef<IslandNotice | null>(null);
+  const syncRef = useRef<() => void>(() => {});
 
-  const volumeRef = useRef(volume);
-  const mutedRef = useRef(isMuted);
-  const loopModeRef = useRef(loopMode);
-  const audioOutputRef = useRef(audioOutputDeviceId);
-  const audioOutputDevicesRef = useRef(audioOutputDevices);
-  const accentRef = useRef(settingsAccent);
-  volumeRef.current = volume;
-  mutedRef.current = isMuted;
-  loopModeRef.current = loopMode;
-  audioOutputRef.current = audioOutputDeviceId;
-  audioOutputDevicesRef.current = audioOutputDevices;
-  accentRef.current = settingsAccent;
+  const inputsRef = useRef({
+    activity,
+    volume,
+    isMuted,
+    loopMode,
+    downloadJobs,
+    audioOutputDeviceId,
+    audioOutputDevices,
+    settingsAccent,
+  });
+  inputsRef.current = {
+    activity,
+    volume,
+    isMuted,
+    loopMode,
+    downloadJobs,
+    audioOutputDeviceId,
+    audioOutputDevices,
+    settingsAccent,
+  };
 
   useEffect(() => {
     if (!enabled) return;
@@ -183,130 +249,152 @@ export function useDesktopIslandOverlay(enabled: boolean) {
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled) {
-      if (shownRef.current) {
-        shownRef.current = false;
-        setIslandWaveformBackgroundPump(false);
-        void invoke("hide_island_overlay").catch(() => {});
-      }
-      return;
-    }
+    if (!enabled) return;
 
     let cancelled = false;
+    let shown = false;
+    let musicShown = false;
     let pushTimer: ReturnType<typeof setTimeout> | null = null;
+    let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastPushAt = 0;
+    let pending: DesktopIslandStatePayload | null = null;
+    const lastPushedTrackKeyRef = { current: null as string | null };
 
     const pushNow = (payload: DesktopIslandStatePayload) => {
-      lastPushAtRef.current = Date.now();
-      pendingPushRef.current = null;
+      lastPushAt = Date.now();
+      pending = null;
       void pushDesktopIslandState(payload).catch(() => {});
     };
 
     const queuePush = (payload: DesktopIslandStatePayload) => {
-      // Keep the newest payload; preserve skipDir from an earlier track-change
-      // packet if this telemetry tick is same-track.
-      const prev = pendingPushRef.current;
+      // Keep the newest payload; preserve skipDir from an earlier track-change packet.
       if (
-        prev?.skipDir != null &&
-        prev.content.trackKey === payload.content.trackKey &&
+        pending?.skipDir != null &&
+        pending.content.trackKey === payload.content.trackKey &&
         payload.skipDir == null
       ) {
-        pendingPushRef.current = { ...payload, skipDir: prev.skipDir };
+        pending = { ...payload, skipDir: pending.skipDir };
       } else {
-        pendingPushRef.current = payload;
+        pending = payload;
       }
-
       const now = Date.now();
-      if (now - lastPushAtRef.current >= TELEMETRY_MIN_MS) {
-        const next = pendingPushRef.current;
-        if (next) pushNow(next);
+      if (now - lastPushAt >= TELEMETRY_MIN_MS) {
+        pushNow(pending);
         return;
       }
       if (pushTimer != null) return;
       pushTimer = setTimeout(() => {
         pushTimer = null;
-        if (cancelled) return;
-        const next = pendingPushRef.current;
-        if (next) pushNow(next);
-      }, TELEMETRY_MIN_MS - (now - lastPushAtRef.current));
+        if (!cancelled && pending) pushNow(pending);
+      }, TELEMETRY_MIN_MS - (now - lastPushAt));
     };
 
-    const syncOverlay = async (forceAway?: boolean) => {
+    const hide = () => {
+      if (!shown) return;
+      shown = false;
+      musicShown = false;
+      pending = null;
+      setIslandWaveformBackgroundPump(false);
+      void invoke("hide_island_overlay").catch(() => {});
+    };
+
+    const sync = () => {
       if (cancelled) return;
-      if (typeof forceAway === "boolean") {
-        awayRef.current = forceAway;
+      const i = inputsRef.current;
+      const { away, focused } = windowRef.current;
+      const music = away
+        ? buildMusicSnapshot(
+            i.activity,
+            i.settingsAccent,
+            i.volume,
+            i.isMuted,
+            i.loopMode,
+            i.audioOutputDeviceId,
+            i.audioOutputDevices,
+          )
+        : null;
+      const download = focused ? null : buildIslandDownload(i.downloadJobs);
+      const notice = focused ? null : noticeRef.current;
+
+      if (!music && !download && !notice) {
+        hide();
+        return;
       }
-      const mainAway = awayRef.current;
-      const raw = buildDesktopIslandPayload(
-        activityRef.current,
-        accentRef.current,
-        volumeRef.current,
-        mutedRef.current,
-        loopModeRef.current,
-        audioOutputRef.current,
-        audioOutputDevicesRef.current,
+
+      const payload = attachSkipDirForTrackChange(
+        {
+          content: music?.content ?? emptyContent(i.settingsAccent),
+          renderState: music?.renderState ?? "idle",
+          filePath: music?.filePath ?? null,
+          waveformLevels: music ? getIslandWaveformLevels() : [],
+          download,
+          notice,
+        },
+        lastPushedTrackKeyRef,
       );
-      const want = mainAway && raw != null;
 
-      if (want && raw) {
-        const payload = attachSkipDirForTrackChange(raw, lastPushedTrackKeyRef);
-        if (!shownRef.current) {
-          shownRef.current = true;
-          setIslandWaveformBackgroundPump(true);
-          await invoke("show_island_overlay").catch(() => {});
-        }
-        queuePush(payload);
-      } else if (shownRef.current) {
-        shownRef.current = false;
-        pendingPushRef.current = null;
-        setIslandWaveformBackgroundPump(false);
-        await invoke("hide_island_overlay").catch(() => {});
+      if (Boolean(music) !== musicShown) {
+        musicShown = Boolean(music);
+        setIslandWaveformBackgroundPump(musicShown);
+        if (musicShown) void listAudioOutputDevices({ unlock: true });
       }
+      if (!shown) {
+        shown = true;
+        void invoke("show_island_overlay")
+          .then(() => pushNow(payload))
+          .catch(() => {});
+        return;
+      }
+      queuePush(payload);
+    };
+    syncRef.current = sync;
+
+    const refreshWindow = async () => {
+      windowRef.current = await readMainWindowState();
+      sync();
     };
 
-    const refreshAway = async () => {
-      const away = await isMainAway();
-      await syncOverlay(away);
-    };
-
-    void refreshAway();
+    void refreshWindow();
 
     const win = getCurrentWindow();
-    const unlistenResize = win.onResized(() => {
-      void refreshAway();
-    });
-    const unlistenFocus = win.onFocusChanged(() => {
-      void refreshAway();
-    });
-
+    const unlistenResize = win.onResized(() => void refreshWindow());
+    const unlistenFocus = win.onFocusChanged(() => void refreshWindow());
     const unlistenHidden = listen(MAIN_HIDDEN_EVENT, () => {
-      void syncOverlay(true);
-      window.setTimeout(() => {
-        void refreshAway();
-      }, 50);
+      windowRef.current = { away: true, focused: false };
+      sync();
+      window.setTimeout(() => void refreshWindow(), 50);
     });
     const unlistenTrayShow = listen("ruforge:tray-show-main", () => {
-      void syncOverlay(false);
-      window.setTimeout(() => {
-        void refreshAway();
-      }, 50);
+      windowRef.current = { away: false, focused: true };
+      sync();
+      window.setTimeout(() => void refreshWindow(), 50);
+    });
+    const unlistenNotice = listen<DesktopIslandNoticePayload>(DESKTOP_ISLAND_NOTICE_EVENT, (e) => {
+      const p = e.payload;
+      if (!p?.message) return;
+      noticeRef.current = { id: Date.now(), message: p.message, type: p.kind };
+      if (noticeTimer != null) clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => {
+        noticeTimer = null;
+        noticeRef.current = null;
+        sync();
+      }, NOTICE_MS);
+      void refreshWindow();
     });
 
-    const unsubBridge = subscribeMainPlaybackBridge(() => {
-      void syncOverlay();
-    });
+    const unsubBridge = subscribeMainPlaybackBridge(sync);
     const unsubWave = subscribeIslandWaveformLevels(() => {
-      if (!shownRef.current) return;
-      void syncOverlay();
+      if (musicShown) sync();
     });
-
-    const onVis = () => {
-      void refreshAway();
-    };
+    const onVis = () => void refreshWindow();
     document.addEventListener("visibilitychange", onVis);
 
     return () => {
       cancelled = true;
+      syncRef.current = () => {};
       if (pushTimer != null) clearTimeout(pushTimer);
+      if (noticeTimer != null) clearTimeout(noticeTimer);
+      noticeRef.current = null;
       document.removeEventListener("visibilitychange", onVis);
       unsubBridge();
       unsubWave();
@@ -314,55 +402,20 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       void unlistenFocus.then((fn) => fn());
       void unlistenHidden.then((fn) => fn());
       void unlistenTrayShow.then((fn) => fn());
-      if (shownRef.current) {
-        shownRef.current = false;
-        setIslandWaveformBackgroundPump(false);
-        void invoke("hide_island_overlay").catch(() => {});
-      }
+      void unlistenNotice.then((fn) => fn());
+      hide();
     };
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled) return;
-    if (!awayRef.current) return;
-
-    const raw = buildDesktopIslandPayload(
-      activity,
-      settingsAccent,
-      volume,
-      isMuted,
-      loopMode,
-      audioOutputDeviceId,
-      audioOutputDevices,
-    );
-    if (raw == null) {
-      if (shownRef.current) {
-        shownRef.current = false;
-        setIslandWaveformBackgroundPump(false);
-        void invoke("hide_island_overlay").catch(() => {});
-      }
-      return;
-    }
-
-    const payload = attachSkipDirForTrackChange(raw, lastPushedTrackKeyRef);
-
-    if (!shownRef.current) {
-      shownRef.current = true;
-      setIslandWaveformBackgroundPump(true);
-      void listAudioOutputDevices({ unlock: true });
-      void invoke("show_island_overlay")
-        .then(() => pushDesktopIslandState(payload))
-        .catch(() => {});
-      return;
-    }
-    void pushDesktopIslandState(payload).catch(() => {});
+    syncRef.current();
   }, [
-    enabled,
     activity,
     settingsAccent,
     volume,
     isMuted,
     loopMode,
+    downloadJobs,
     audioOutputDeviceId,
     audioOutputDevices,
   ]);

@@ -75,8 +75,19 @@ export default function IslandOverlayApp() {
   }, []);
 
   const hasSession = Boolean(payload?.content.trackKey);
+  const download = payload?.download ?? null;
+  const notice = payload?.notice ?? null;
+  const visible = hasSession || download != null || notice != null;
   const isExpanded = userExpanded && hasSession;
-  const islandState: IslandState = !hasSession ? "idle" : isExpanded ? "expanded" : "compact";
+  const islandState: IslandState = isExpanded
+    ? "expanded"
+    : notice
+      ? "notice"
+      : hasSession
+        ? "compact"
+        : download
+          ? "download"
+          : "idle";
 
   useEffect(() => {
     if (!hasSession) setUserExpanded(false);
@@ -118,7 +129,10 @@ export default function IslandOverlayApp() {
   );
 
   const handleShellClick = useCallback(() => {
-    if (!hasSession) return;
+    if (!hasSession) {
+      void restoreMainFromDesktopIsland();
+      return;
+    }
     setUserExpanded((prev) => !prev);
   }, [hasSession]);
 
@@ -163,7 +177,7 @@ export default function IslandOverlayApp() {
     void emitDesktopIslandControl({ type: "popOut" });
   }, []);
 
-  if (!hasSession) {
+  if (!visible) {
     return <div className="h-full w-full bg-transparent" />;
   }
 
@@ -175,6 +189,8 @@ export default function IslandOverlayApp() {
           content={content}
           waveformLevels={waveformLevels}
           skipDirHint={payload?.skipDir ?? null}
+          download={download}
+          notice={notice}
           onClick={handleShellClick}
           onPlayPause={handlePlayPause}
           onSeek={handleSeek}

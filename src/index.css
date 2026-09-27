@@ -391,17 +391,6 @@ html[data-rf-window-rounded="1"] #rf-boot {
   display: none;
 }
 
-/* Notify overlay window (label `notify`): transparent frameless shell */
-html.ruforge-notify-root,
-html.ruforge-notify-root body,
-html.ruforge-notify-root #root {
-  background-color: transparent !important;
-}
-
-html.ruforge-notify-root body {
-  overflow: hidden;
-}
-
 /* Desktop island overlay window (label `island`): transparent frameless shell */
 html.ruforge-island-root,
 html.ruforge-island-root body,
@@ -415,6 +404,23 @@ html.ruforge-island-root body {
 
 html.ruforge-island-root #root {
   height: 100%;
+}
+
+.rf-island-ring-indeterminate {
+  stroke-dasharray: 0.16 0.84;
+  animation: rf-island-ring-sweep 1.6s linear infinite;
+}
+
+@keyframes rf-island-ring-sweep {
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-island-ring-indeterminate {
+    animation: none;
+  }
 }
 
 .rf-notify-card {

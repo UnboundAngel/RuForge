@@ -78,10 +78,6 @@ use crate::commands::island_overlay::{
     hide_island_overlay, island_overlay_ready, note_main_window_monitor, show_island_overlay,
     sync_island_overlay_bounds, MAIN_HIDDEN_EVENT,
 };
-use crate::commands::notify_overlay::{
-    hide_notify_overlay_window, notify_overlay_ready, push_background_notify,
-    sync_notify_overlay_bounds,
-};
 use crate::commands::player::{
     eval_in_webview, get_embedded_explorer_webview_url, open_mini_player, open_music_mini_player,
     open_youtube_explorer,
@@ -411,10 +407,6 @@ pub fn run() {
             download_ytdlp_update,
             get_deno_status,
             download_deno,
-            push_background_notify,
-            sync_notify_overlay_bounds,
-            hide_notify_overlay_window,
-            notify_overlay_ready,
             show_island_overlay,
             hide_island_overlay,
             sync_island_overlay_bounds,

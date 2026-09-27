@@ -1241,7 +1241,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             ? "Finishing up"
                             : "Downloading"}
                       </p>
-                      <div data-downloader-hero-thumb className="w-full max-w-lg">
+                      <div data-downloader-hero-thumb className="w-full max-w-4xl">
                         <MultiDownloadSlotCarousel
                           items={downloadCarouselItems}
                           currentIndex={downloadCarouselCurrentIndex}

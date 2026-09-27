@@ -301,7 +301,15 @@ When the **main** window is OS-minimized or hidden to tray, and playback is **ma
 - Events: `desktop-island-state` (main → island), `desktop-island-control` (island → main). Control types include play/seek/skip/volume/mute/loop/`audioOutput`/open/popOut.
 - Window bounds hug compact (~380×56) or expanded (~380×220); `sync_island_overlay_bounds` on expand/collapse. Expanded collapses on Escape or when the overlay window blurs (click outside).
 - Placement uses the main window's monitor (`note_main_window_monitor` on move/resize and before tray hide); minimized outer coords are ignored so the island does not jump to the primary display.
-- Reuses `DynamicIsland` presentation; does not mount idle empty pill on the desktop (window hidden when no session).
+- Reuses `DynamicIsland` presentation; does not mount idle empty pill on the desktop (window hidden when nothing to show).
+- Monitor: the one under the cursor first, then the cached main-window monitor, then primary.
+
+**Downloads and background notices (replaces the old bottom-right `notify` window)**
+
+- While main is **unfocused** (not just minimized), the island shows active downloads: `download` state (280×36 pill: cover, title, % or spinner, `+N` queued) with `IslandProgressRing` traced around the edge.
+- If music is also showing, the music `compact` pill stays and only the ring is added. Ring is CSS-geometry SVG so it follows the spring width.
+- `deliverUserNotification` emits `desktop-island-notice` to main when RuForge is not focused; main shows it as a `notice` for ~4.5s. Foreground still uses the in-app toast.
+- Clicking a download or notice pill restores main.
 
 **Do not** drive desktop overlay from Zustand inside `DynamicIsland.tsx`. Keep bridge apply logic in `desktopIslandBridge.ts` / `useDesktopIslandOverlay.ts`.
 

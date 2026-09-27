@@ -19,7 +19,6 @@ pub mod music_preview;
 pub mod recently_deleted;
 pub mod migrate;
 pub mod island_overlay;
-pub mod notify_overlay;
 pub mod player;
 pub mod playlist_sidecar;
 pub mod removable_drives;
