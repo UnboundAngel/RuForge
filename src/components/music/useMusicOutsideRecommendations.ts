@@ -15,10 +15,12 @@ import { loadVirtualPlaylistRecords, recordHasPath } from "@/virtualPlaylists";
 import { useMusicLibraryTracks } from "./useMusicPlaylists";
 import {
   type OutsideTrack,
+  SEEDS_PER_ROUND,
+  blendRadios,
   mergeOutsideRecommendations,
   musicRadioUrl,
-  outsidePage,
-  outsideRoundSlot,
+  outsidePageSpread,
+  outsideRoundSeeds,
   radioBackoffActive,
   radioSeeds,
   readCachedRadio,
@@ -58,7 +60,7 @@ function fetchRadio(seedId: string): Promise<MusicTrackInfo[]> {
 
 /**
  * YouTube Music songs for a playlist's Recommended shelf. Nothing is fetched until `active`
- * (the shelf is on screen), one radio per Refresh round, cached for a day. Any failure starts
+ * (the shelf is on screen), a few radios blended per Refresh round, each cached for a day. Any failure starts
  * a backoff and the shelf quietly shows library songs only.
  */
 export function useOutsideRecommendations({
@@ -78,42 +80,54 @@ export function useOutsideRecommendations({
   exclude?: (track: OutsideTrack) => boolean;
 }): { tracks: OutsideTrack[]; pool: OutsideTrack[]; loading: boolean; available: boolean } {
   const enabled = useRuforgeStore((s) => s.settings.suggestYoutubeMusicSongs !== false);
-  const seeds = useMemo(() => radioSeeds(playlistTracks), [playlistTracks]);
-  const { seedIndex, page } = outsideRoundSlot(round, seeds.length);
-  const seedId = seeds[seedIndex] ?? null;
+  const seeds = useMemo(() => radioSeeds(playlistTracks, SEEDS_PER_ROUND * 3), [playlistTracks]);
+  const { seedIds, page } = outsideRoundSeeds(seeds, round);
+  const seedKey = seedIds.join(",");
 
-  const [radio, setRadio] = useState<{ seedId: string; items: MusicTrackInfo[] } | null>(null);
+  const [radios, setRadios] = useState<Record<string, MusicTrackInfo[]>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!enabled || !active || !seedId) return;
-    const cached = readCachedRadio(seedId);
-    if (cached) {
-      setRadio({ seedId, items: cached });
-      return;
+    if (!enabled || !active || !seedKey) return;
+    const ids = seedKey.split(",");
+    const cached: Record<string, MusicTrackInfo[]> = {};
+    const missing: string[] = [];
+    for (const id of ids) {
+      const hit = readCachedRadio(id);
+      if (hit) cached[id] = hit;
+      else missing.push(id);
     }
-    if (radioBackoffActive()) return;
+    if (Object.keys(cached).length) setRadios((prev) => ({ ...prev, ...cached }));
+    if (missing.length === 0 || radioBackoffActive()) return;
     let cancelled = false;
     setLoading(true);
-    fetchRadio(seedId)
-      .then((items) => {
-        if (!cancelled) setRadio({ seedId, items });
-      })
-      .catch(() => startRadioBackoff())
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    // Sequential: the throttle serializes yt-dlp anyway, and a failure stops the rest.
+    void (async () => {
+      for (const id of missing) {
+        try {
+          const items = await fetchRadio(id);
+          if (!cancelled) setRadios((prev) => ({ ...prev, [id]: items }));
+        } catch {
+          startRadioBackoff();
+          break;
+        }
+      }
+      if (!cancelled) setLoading(false);
+    })();
     return () => {
       cancelled = true;
     };
-  }, [enabled, active, seedId]);
+  }, [enabled, active, seedKey]);
 
   const pool = useMemo(() => {
-    if (!enabled || !radio || radio.seedId !== seedId) return [];
-    const merged = mergeOutsideRecommendations(radio.items, library, radio.seedId);
-    return exclude ? merged.filter((t) => !exclude(t)) : merged;
-  }, [enabled, radio, seedId, library, exclude]);
-  const tracks = useMemo(() => outsidePage(pool, page, count), [pool, page, count]);
+    if (!enabled || !seedKey) return [];
+    const pools = seedKey
+      .split(",")
+      .flatMap((id) => (radios[id] ? [mergeOutsideRecommendations(radios[id], library, id)] : []));
+    const blended = blendRadios(pools);
+    return exclude ? blended.filter((t) => !exclude(t)) : blended;
+  }, [enabled, radios, seedKey, library, exclude]);
+  const tracks = useMemo(() => outsidePageSpread(pool, page, count), [pool, page, count]);
 
   return { tracks, pool, loading: enabled && loading, available: enabled && seeds.length > 0 };
 }

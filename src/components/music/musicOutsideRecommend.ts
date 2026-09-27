@@ -126,24 +126,82 @@ export function mergeOutsideRecommendations(
   return out;
 }
 
+/** Radios blended per Refresh round; one song's radio leans hard on that song's artist. */
+export const SEEDS_PER_ROUND = 3;
+
 /**
- * Which seed and which slice of its radio a Refresh round shows. Rounds walk the seeds
- * first, then come back for the next page of each radio.
+ * Which seeds a Refresh round blends and which page of the blend it shows. Rounds walk the
+ * seeds a window at a time, then come back for the next page of each window.
  */
-export function outsideRoundSlot(round: number, seedCount: number): { seedIndex: number; page: number } {
-  if (seedCount <= 0) return { seedIndex: 0, page: 0 };
-  return { seedIndex: round % seedCount, page: Math.floor(round / seedCount) };
+export function outsideRoundSeeds(
+  seeds: string[],
+  round: number,
+  perRound = SEEDS_PER_ROUND,
+): { seedIds: string[]; page: number } {
+  if (seeds.length === 0) return { seedIds: [], page: 0 };
+  if (seeds.length <= perRound) return { seedIds: seeds, page: round };
+  const windows = Math.ceil(seeds.length / perRound);
+  const start = (round % windows) * perRound;
+  const seedIds = Array.from({ length: perRound }, (_, i) => seeds[(start + i) % seeds.length]);
+  return { seedIds: [...new Set(seedIds)], page: Math.floor(round / windows) };
 }
 
-/** One page of a radio pool, wrapping when the pool runs out. */
-export function outsidePage<T>(pool: T[], page: number, count: number): T[] {
-  if (pool.length <= count) return pool;
-  const start = (page * count) % pool.length;
-  const out: T[] = [];
-  for (let i = 0; i < count; i++) out.push(pool[(start + i) % pool.length]);
+/** Round-robin across several radios, dropping repeats by video id and by title and artist. */
+export function blendRadios(pools: OutsideTrack[][]): OutsideTrack[] {
+  const out: OutsideTrack[] = [];
+  const ids = new Set<string>();
+  const keys = new Set<string>();
+  const longest = Math.max(0, ...pools.map((p) => p.length));
+  for (let i = 0; i < longest; i++) {
+    for (const pool of pools) {
+      const t = pool[i];
+      if (!t || ids.has(t.videoId)) continue;
+      const key = outsideSongKey(t);
+      if (keys.has(key)) continue;
+      ids.add(t.videoId);
+      keys.add(key);
+      out.push(t);
+    }
+  }
   return out;
 }
 
+/** Cards one artist may take on a page before others get a turn. */
+export const OUTSIDE_PER_ARTIST = 2;
+
+/**
+ * One page of the pool, wrapping, with at most `perArtist` songs per artist. Falls back to
+ * repeats of an artist only when the pool has nobody else left.
+ */
+export function outsidePageSpread(
+  pool: OutsideTrack[],
+  page: number,
+  count: number,
+  perArtist = OUTSIDE_PER_ARTIST,
+): OutsideTrack[] {
+  if (pool.length === 0) return [];
+  const start = pool.length <= count ? 0 : (page * count) % pool.length;
+  const rotated = [...pool.slice(start), ...pool.slice(0, start)];
+  const picked: OutsideTrack[] = [];
+  const skipped: OutsideTrack[] = [];
+  const perKey = new Map<string, number>();
+  for (const t of rotated) {
+    if (picked.length >= count) break;
+    const key = t.artist.trim().toLowerCase();
+    const n = perKey.get(key) ?? 0;
+    if (key && n >= perArtist) {
+      skipped.push(t);
+      continue;
+    }
+    perKey.set(key, n + 1);
+    picked.push(t);
+  }
+  for (const t of skipped) {
+    if (picked.length >= count) break;
+    picked.push(t);
+  }
+  return picked;
+}
 // ---------------------------------------------------------------------------
 // Radio cache and backoff (localStorage, best effort)
 // ---------------------------------------------------------------------------
