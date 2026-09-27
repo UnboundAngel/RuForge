@@ -108,9 +108,24 @@ pub fn line_is_post_process(line: &str) -> bool {
     MARKERS.iter().any(|m| line.contains(m))
 }
 
+/// Captions, thumbnails and metadata yt-dlp downloads before the media. Their "100%" lines
+/// would pin the job's progress at the top, since the UI never lets progress go backwards.
+const SIDE_FILE_EXTS: &[&str] = &[
+    "vtt", "srt", "ass", "ssa", "lrc", "ttml", "srv1", "srv2", "srv3", "json3", "json", "jpg", "jpeg",
+    "png", "webp",
+];
+
+/// True for a `[download] Destination: …` line naming a side file rather than the media.
+fn destination_is_side_file(line: &str) -> Option<bool> {
+    let path = line.split_once("[download] Destination:")?.1.trim();
+    let ext = path.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase())?;
+    Some(SIDE_FILE_EXTS.contains(&ext.as_str()))
+}
+
 #[derive(Debug, Default)]
 pub struct ProgressTracker {
     pub download_reached_full: bool,
+    pub in_side_file: bool,
     pub last_percentage: f32,
     pub last_speed: String,
     pub last_eta: String,
@@ -135,7 +150,15 @@ impl ProgressTracker {
             }
         }
 
+        if let Some(side) = destination_is_side_file(line) {
+            self.in_side_file = side;
+            return None;
+        }
+
         if line.contains("[download]") && line.contains('%') {
+            if self.in_side_file {
+                return None;
+            }
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
                 let percent_str = parts[1].trim_end_matches('%');
@@ -229,6 +252,21 @@ mod tests {
         assert!(line_is_post_process(
             "[ExtractAudio] Destination: foo.m4a"
         ));
+    }
+
+    #[test]
+    fn caption_progress_does_not_count_as_media_progress() {
+        let mut t = ProgressTracker::default();
+        assert!(t.handle_stdout_line("[download] Destination: Vid.en.vtt").is_none());
+        assert!(t
+            .handle_stdout_line("[download] 100% of  354.57KiB in 00:00:00 at 22.00MiB/s")
+            .is_none());
+        assert!(!t.download_reached_full);
+        t.handle_stdout_line("[download] Destination: Vid.f303.webm");
+        let p = t
+            .handle_stdout_line("[download]   3.1% of  700.00MiB at 20.00MiB/s ETA 00:34")
+            .expect("media progress is reported");
+        assert!((p.percentage - 3.1).abs() < 0.01);
     }
 
     #[test]
