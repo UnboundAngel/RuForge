@@ -7,6 +7,7 @@ import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useScrubberHover } from "@/hooks/useScrubberHover";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import type { DownloadJob } from "@/downloadQueue";
 import { useMainAudioCurrentTime } from "@/playback/mainAudioPlaybackContext";
 import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,10 @@ type Props = {
   onToggleRightPanel?: () => void;
 };
 
+function isActiveDownloadJob(j: DownloadJob): boolean {
+  return j.status === "queued" || j.status === "downloading" || j.status === "paused";
+}
+
 export function NowPlayingBar({
   paused,
   duration,
@@ -103,19 +108,16 @@ export function NowPlayingBar({
   const toggleMusicShuffle = useRuforgeStore((s) => s.toggleMusicShuffle);
   const handlePopOut = useRuforgeStore((s) => s.handlePopOut);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
-  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);
 
-  const activeJobs = downloadJobs.filter(
-    (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
-  );
-  const hasActiveDownloads = activeJobs.length > 0;
+  // Only the yes/no is selected, so download progress events don't re-render the bar.
+  const hasActiveDownloads = useRuforgeStore((s) => s.downloadJobs.some(isActiveDownloadJob));
 
   const handleCancelAllDownloads = useCallback(() => {
-    for (const job of activeJobs) {
+    for (const job of useRuforgeStore.getState().downloadJobs.filter(isActiveDownloadJob)) {
       void removeDownloadJob(job.id, { manual: true });
     }
-  }, [activeJobs, removeDownloadJob]);
+  }, [removeDownloadJob]);
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [morePanel, setMorePanel] = useState<"main" | "speed" | "crossfade">("main");

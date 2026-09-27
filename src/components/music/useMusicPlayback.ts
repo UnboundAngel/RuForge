@@ -40,7 +40,6 @@ import {
   pauseListenAccumulator,
   setPendingListenEndReason,
   takePendingListenEndReason,
-  tickListenAccumulator,
 } from "@/lib/musicListenSession";
 import { primaryArtist } from "./musicArtist";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
@@ -1302,7 +1301,6 @@ export function useMusicPlayback(
       if (ev.target !== el || el !== getPrimary()) return;
       if (!isDraggingRef.current) setCurrentTime(el.currentTime);
       if (!el.paused && playingFileRef.current) {
-        tickListenAccumulator();
         void onListenTimeUpdateTick();
         persistPlaybackSnapshot(el, false);
       } else {

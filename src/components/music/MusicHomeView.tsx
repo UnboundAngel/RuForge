@@ -3,12 +3,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Play, ChevronLeft, ChevronRight, Waves, Brain } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
-import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
+import { bestCoverPath, hasSquareCover } from "@/mediaKind";
 import { albumCoverPathWithFallback } from "@/albumCoverPath";
-import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { readFurthestPlaybackSec } from "@/playbackStorage";
 import type { MediaFile } from "@/types";
 import { MusicHomeSkeleton } from "./MusicHomeSkeleton";
+import { useMusicLibraryTracks } from "./useMusicPlaylists";
 import {
   buildMultiTrackAlbumGroups,
   dedupeMusicTracks,
@@ -344,7 +344,6 @@ export function MusicHomeView({
   historyEntries = [],
   reserveRightMiniPanel = true,
 }: MusicHomeViewProps) {
-  const entries = useRuforgeStore((s) => s.entries);
   const galleryLoading = useRuforgeStore((s) => s.galleryLoading);
   const openMusicLiked = useRuforgeStore((s) => s.openMusicLiked);
   const musicLikedKeys = useRuforgeStore((s) => s.musicLikedKeys);
@@ -383,10 +382,7 @@ export function MusicHomeView({
     [syncHeaderCompact],
   );
 
-  const tracks = useMemo(
-    () => flattenGalleryScanToMediaFiles(entries).filter((f) => isAudioOnlyPath(f.path)),
-    [entries],
-  );
+  const tracks = useMusicLibraryTracks();
   const homeScrollReady = tracks.length > 0;
 
   useEffect(() => {

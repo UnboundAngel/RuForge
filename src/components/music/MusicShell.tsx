@@ -23,7 +23,7 @@ import { MusicExploreBottomBar } from "./MusicExploreBottomBar";
 import { MusicNavBackCell } from "./MusicNavBackCell";
 import { MusicExploreDownloadPanel } from "./MusicExploreDownloadPanel";
 import { ExploreDownloadDockChip } from "./MusicExploreDownloadCollapsed";
-import { useMusicDownloadCelebrations } from "@/hooks/useMusicDownloadCelebrations";
+import { useStoreDownloadCelebrations } from "@/hooks/useMusicDownloadCelebrations";
 import { NowPlayingBar } from "./NowPlayingBar";
 import { MusicLyricsView } from "./MusicLyricsView";
 import { MusicStorageStrip } from "./MusicStorageStrip";
@@ -288,8 +288,7 @@ function MusicSponsorBlockSync({
     onAppearance: (cat) => bumpSponsorBlockStat(cat, "appearances"),
     onDemoteUndo: (cat) => bumpSponsorBlockStat(cat, "undoSignals"),
   });
-  // The hook hands back a fresh empty array each render; a shared one keeps the shell from re-rendering per tick.
-  const segments = sbPlayback.segments.length > 0 ? sbPlayback.segments : NO_SB_SEGMENTS;
+  const segments = sbPlayback.segments;
 
   useEffect(() => {
     onSegments(segments);
@@ -417,9 +416,7 @@ export function MusicShell() {
     }
   }, []);
 
-  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
-  const downloadCelebrating = useMusicDownloadCelebrations(downloadJobs);
-  const prevAutoQueueJobsRef = useRef(downloadJobs);
+  const downloadCelebrating = useStoreDownloadCelebrations();
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
   const musicDetail = useRuforgeStore((s) => s.musicDetail);
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
@@ -529,8 +526,10 @@ export function MusicShell() {
     currentMusicExploreUrl,
     musicExplorePageContext,
   ]);
-  const hasActiveDownloadJobs = downloadJobs.some(
-    (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+  const hasActiveDownloadJobs = useRuforgeStore((s) =>
+    s.downloadJobs.some(
+      (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
+    ),
   );
   const explorePanelDockMode = dockMinimized || !showExplorePanel;
 
@@ -810,16 +809,22 @@ export function MusicShell() {
   }, []);
 
   // Prune autoQueuedVideoIdsRef when a job is removed so the same song can be re-downloaded.
-  useEffect(() => {
-    const prev = prevAutoQueueJobsRef.current;
-    prevAutoQueueJobsRef.current = downloadJobs;
-    for (const job of prev) {
-      if (!downloadJobs.some((j) => j.id === job.id)) {
-        const videoId = extractYouTubeVideoId(job.url);
-        if (videoId) autoQueuedVideoIdsRef.current.delete(videoId);
-      }
-    }
-  }, [downloadJobs]);
+  // Subscribed rather than selected so download progress events don't re-render the shell.
+  useEffect(
+    () =>
+      useRuforgeStore.subscribe((s, prevState) => {
+        const downloadJobs = s.downloadJobs;
+        const prev = prevState.downloadJobs;
+        if (downloadJobs === prev) return;
+        for (const job of prev) {
+          if (!downloadJobs.some((j) => j.id === job.id)) {
+            const videoId = extractYouTubeVideoId(job.url);
+            if (videoId) autoQueuedVideoIdsRef.current.delete(videoId);
+          }
+        }
+      }),
+    [],
+  );
 
   const handlePasteUrlReady = useCallback((url: string) => {
     const kind = classifyMusicExploreUrl(url);
@@ -1327,7 +1332,6 @@ export function MusicShell() {
                 footerSlot={
                   showDownloadDockChip ? (
                     <ExploreDownloadDockChip
-                      downloadJobs={downloadJobs}
                       celebrating={downloadCelebrating}
                       navCollapsed={navCollapsed}
                       onClick={() => {
