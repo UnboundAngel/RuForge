@@ -952,6 +952,40 @@ fn pick_best_recent_audio_output(paths: Vec<PathBuf>) -> Option<PathBuf> {
     paths.into_iter().max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
 }
 
+/// Per-job file yt-dlp appends each final path to (`--print-to-file after_move:filepath`).
+fn printed_paths_file(job_id: &str) -> PathBuf {
+    let safe: String = job_id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    std::env::temp_dir().join(format!("ruforge-dl-{safe}.txt"))
+}
+
+/// The FILE argument of `--print-to-file` is an output template, so a literal `%` must be doubled.
+fn escape_output_template(path: &Path) -> String {
+    path.to_string_lossy().replace('%', "%%")
+}
+
+/// Final paths yt-dlp reported, oldest first, keeping only files that still exist.
+fn read_printed_paths(contents: &str) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for line in contents.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        let p = PathBuf::from(line);
+        if p.is_file() && !out.contains(&p) {
+            out.push(p);
+        }
+    }
+    out
+}
+
+fn take_printed_paths(file: &Path) -> Vec<PathBuf> {
+    let paths = std::fs::read_to_string(file)
+        .map(|c| read_printed_paths(&c))
+        .unwrap_or_default();
+    let _ = std::fs::remove_file(file);
+    paths
+}
+
 fn resolve_finished_download_output_path(
     listing_root: &Path,
     since: SystemTime,
@@ -1125,6 +1159,15 @@ pub async fn start_download_job(
         }
     };
 
+    // Ask yt-dlp for the exact final path. Guessing by mtime misattributes files when several
+    // music downloads run back to back, since tagging keeps touching the earlier ones.
+    let printed_paths = printed_paths_file(&job_id);
+    let _ = std::fs::remove_file(&printed_paths);
+    let mut args = args;
+    args.push("--print-to-file".into());
+    args.push("after_move:filepath".into());
+    args.push(escape_output_template(&printed_paths));
+
     let (mut rx, child) = match shell.args(args).spawn() {
         Ok(pair) => pair,
         Err(e) => {
@@ -1217,6 +1260,7 @@ pub async fn start_download_job(
                             false
                         }
                     };
+                    let reported_paths = take_printed_paths(&printed_paths);
                     if paused {
                         let _ = app.emit("download-job-paused", job_id.clone());
                         return;
@@ -1242,11 +1286,17 @@ pub async fn start_download_job(
                             let enrich_since = download_started_at;
                             let stamp_artist_tags = options.stamp_artist_tags;
                             let enrich_app = app.clone();
+                            let enrich_paths = reported_paths.clone();
                             tauri::async_runtime::spawn(async move {
                                 let opts = crate::commands::musicmeta::EnrichOpts {
                                     artist_tags: stamp_artist_tags,
                                 };
-                                for audio_path in find_recent_audio_files(&enrich_root, enrich_since) {
+                                let targets = if enrich_paths.is_empty() {
+                                    find_recent_audio_files(&enrich_root, enrich_since)
+                                } else {
+                                    enrich_paths
+                                };
+                                for audio_path in targets {
                                     let _ = crate::commands::musicmeta::enrich_music_meta_path(
                                         &enrich_app,
                                         &audio_path,
@@ -1273,12 +1323,17 @@ pub async fn start_download_job(
                                 download_started_at,
                             );
                         }
-                        let output_path = resolve_finished_download_output_path(
-                            &diag_root,
-                            download_started_at,
-                            options.audio_only,
-                        )
-                        .map(|p| p.to_string_lossy().into_owned());
+                        let output_path = reported_paths
+                            .last()
+                            .cloned()
+                            .or_else(|| {
+                                resolve_finished_download_output_path(
+                                    &diag_root,
+                                    download_started_at,
+                                    options.audio_only,
+                                )
+                            })
+                            .map(|p| p.to_string_lossy().into_owned());
                         if let Some(ref path) = output_path {
                             crate::rf_log!(
                                 "download.jobs",
@@ -2461,5 +2516,40 @@ mod finish_output_path_tests {
         let picked = resolve_finished_download_output_path(root, since, true)
             .expect("expected audio path");
         assert_eq!(picked, newer);
+    }
+}
+
+#[cfg(test)]
+mod printed_paths_tests {
+    use super::*;
+
+    #[test]
+    fn escapes_percent_for_the_output_template() {
+        assert_eq!(escape_output_template(Path::new("/tmp/100%/a.txt")), "/tmp/100%%/a.txt");
+    }
+
+    #[test]
+    fn keeps_existing_paths_in_order_without_duplicates() {
+        let dir = std::env::temp_dir().join(format!("ruforge-printed-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("a.m4a");
+        let b = dir.join("b.m4a");
+        std::fs::write(&a, b"x").unwrap();
+        std::fs::write(&b, b"x").unwrap();
+        let contents = format!(
+            "{}\n\n{}\n{}\n{}\n",
+            a.display(),
+            dir.join("gone.m4a").display(),
+            b.display(),
+            a.display()
+        );
+        assert_eq!(read_printed_paths(&contents), vec![a.clone(), b.clone()]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn job_ids_become_safe_file_names() {
+        let name = printed_paths_file("job/../1:2").file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(name, "ruforge-dl-job____1_2.txt");
     }
 }

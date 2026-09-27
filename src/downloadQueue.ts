@@ -197,7 +197,9 @@ export type DownloadEnqueueSource =
   | "heroPlaylistDownload"
   | "heroUrlStaging"
   | "quickEnqueueClipboard"
-  | "urlDrop";
+  | "urlDrop"
+  /** Music: a song downloading straight into a playlist (recommendations, screenshot import). */
+  | "musicPlaylistAdd";
 
 export type DownloadJobFinishedPayload = {
   jobId: string;
@@ -354,8 +356,27 @@ function normalizePersistedDownloadJob(j: DownloadJob): DownloadJob | null {
     return null;
   }
 
-  /** yt-dlp does not survive a full app reload — show the row as paused until the user resumes. */
   const wasActive = j.status === "downloading";
+
+  /**
+   * Music mode has no queue UI to resume from, so songs headed for a playlist go straight back
+   * into the auto pump. A fresh id keeps the killed yt-dlp's late "paused" event off the new row.
+   */
+  if (j.enqueueSource === "musicPlaylistAdd") {
+    return {
+      ...j,
+      id: createDownloadJobId(),
+      status: "queued",
+      approval: "auto",
+      options: normalizePersistedOptions(j.options),
+      resumeOnStart: wasActive || j.status === "paused" || j.resumeOnStart === true,
+      error: null,
+      progress: null,
+      downloadingSince: undefined,
+    };
+  }
+
+  /** yt-dlp does not survive a full app reload — show the row as paused until the user resumes. */
   const status: DownloadJob["status"] = wasActive ? "paused" : j.status;
 
   let approval = j.approval;
@@ -372,7 +393,17 @@ function normalizePersistedDownloadJob(j: DownloadJob): DownloadJob | null {
   const resumeOnStart =
     wasActive || j.resumeOnStart === true ? true : Boolean(j.resumeOnStart);
 
-  const opts = j.options;
+  return {
+    ...j,
+    status,
+    approval,
+    options: normalizePersistedOptions(j.options),
+    resumeOnStart,
+    error: wasActive ? null : j.error,
+  };
+}
+
+function normalizePersistedOptions(opts: DownloadJobOptions): DownloadJobOptions {
   let options: DownloadJobOptions = {
     ...opts,
     audioOnly: opts?.audioOnly === true,
@@ -388,14 +419,7 @@ function normalizePersistedDownloadJob(j: DownloadJob): DownloadJob | null {
       subLangs: "",
     };
   }
-  return {
-    ...j,
-    status,
-    approval,
-    options,
-    resumeOnStart,
-    error: wasActive ? null : j.error,
-  };
+  return options;
 }
 
 function downloadJobUrlRank(j: DownloadJob): number {
