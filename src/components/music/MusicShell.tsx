@@ -108,6 +108,7 @@ import { setPendingListenEndReason } from "@/lib/musicListenSession";
 import { readMusicOnlySkip, writeMusicOnlySkip } from "./musicOnlySkipStorage";
 import { debugLog } from "@/debug/debugLog";
 import { PendingPlaylistAddsResolver } from "./useMusicOutsideRecommendations";
+import { MusicPlaylistImport } from "./MusicPlaylistImport";
 import {
   onYoutubeAuthSurfaceEnter,
   onYoutubeAuthSurfaceLeave,
@@ -1288,6 +1289,7 @@ export function MusicShell() {
       }}
       >
       <PendingPlaylistAddsResolver />
+      <MusicPlaylistImport />
       <MusicSponsorBlockSync musicOnlySkip={musicOnlySkip} onSegments={setSbSegments} />
       <MusicTopBar
         activeView={activeView}

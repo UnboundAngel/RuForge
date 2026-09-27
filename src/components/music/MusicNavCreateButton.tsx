@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileUp, ListMusic, Plus } from "lucide-react";
+import { FileUp, ListMusic, Plus, ScanText } from "lucide-react";
 import { modKeyLabel } from "@/lib/shortcutLabels";
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -10,6 +10,7 @@ import {
   MusicMenuRow,
   MusicMenuSection,
 } from "./musicMenuUi";
+import { openPlaylistImport } from "@/playlistImport/importSession";
 import { useImportPlaylistM3u8 } from "./useMusicPlaylistM3u8";
 
 type Props = {
@@ -17,7 +18,7 @@ type Props = {
   iconSize: number;
 };
 
-/** Spotify's "Create" button: a small menu with a new playlist and, here, an .m3u8 import. */
+/** Spotify's "Create" button: a small menu with a new playlist and, here, .m3u8 and screenshot imports. */
 export function MusicNavCreateButton({ className, iconSize }: Props) {
   const createMusicPlaylist = useRuforgeStore((s) => s.createMusicPlaylist);
   const openMusicPlaylist = useRuforgeStore((s) => s.openMusicPlaylist);
@@ -58,6 +59,12 @@ export function MusicNavCreateButton({ className, iconSize }: Props) {
             icon={<FileUp size={MUSIC_MENU_ICON_SIZE} />}
             label="Import .m3u8"
             onClick={pick(() => void importM3u8())}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playback}
+            icon={<ScanText size={MUSIC_MENU_ICON_SIZE} />}
+            label="Import from screenshots"
+            onClick={pick(openPlaylistImport)}
           />
         </MusicMenuSection>
       </MusicFloatingMenu>
