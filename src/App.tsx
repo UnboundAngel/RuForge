@@ -120,7 +120,8 @@ import { WindowResizeEdges } from "./components/window/WindowResizeEdges";
 import type { ActivityHandoffSyncPayload, ActivityMiniTeardownPayload } from "./lib/activityTypes";
 import { MainPlaybackHost } from "./playback/MainPlaybackHost";
 import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
-import { StorageStrip } from "./components/navigation/StorageStrip";import { DevCaptureChromeProvider } from "./components/dev-captures/DevCaptureChromeProvider";
+import { StorageStrip } from "./components/navigation/StorageStrip";
+import { ExplorerBottomBar } from "./components/navigation/ExplorerBottomBar";import { DevCaptureChromeProvider } from "./components/dev-captures/DevCaptureChromeProvider";
 import {
   CrashRecoveryScreen,
   CRASH_RECOVERY_PREVIEW_SAMPLES,
@@ -1662,6 +1663,21 @@ function App() {
     }
   }, []);
 
+  const onExplorerNavigate = useCallback(
+    async (url: string) => {
+      setLastExplorerUrl(url);
+      try {
+        await invoke("eval_in_webview", {
+          label: explorerWebviewLabelRef.current,
+          script: explorerNavigateOrReloadScript(url),
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    },
+    [setLastExplorerUrl],
+  );
+
   const { open: radialNavOpen, anchor: radialNavAnchor } =
     useAltRadialNav(shellBlocked);
 
@@ -2064,7 +2080,15 @@ function App() {
             </AnimatePresence>
           </main>
         </div>
-        <StorageStrip />
+        {activeTab === "explorer" ? (
+          <ExplorerBottomBar
+            url={lastExplorerUrl}
+            onNavigate={(url) => void onExplorerNavigate(url)}
+            onReload={() => void onExplorerReload()}
+          />
+        ) : (
+          <StorageStrip />
+        )}
         </div>
       </motion.div>
       )}
