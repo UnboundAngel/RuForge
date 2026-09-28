@@ -37,6 +37,18 @@ export type ResolvedChannel = { channelId: string; title: string; handle: string
 
 export type UploadsPayload = { uploads: WatchlistUpload[] };
 
+export type ChannelFollowMessage = { tone: "error" | "info"; text: string };
+
+/** Channels tab state owned by main and handed to both popover hosts as props. */
+export type ChannelsUiState = {
+  followPending: boolean;
+  followMessage: ChannelFollowMessage | null;
+  /** Bumps on every successful follow so the field knows to clear its text. */
+  followSeq: number;
+  /** Wall clock ms; main and the overlay webview share the clock. */
+  checkNowUntil: number;
+};
+
 export const WATCHLIST_UPDATED_EVENT = "watchlist-updated";
 export const WATCHLIST_NEW_UPLOADS_EVENT = "watchlist-new-uploads";
 export const WATCHLIST_AUTO_READY_EVENT = "watchlist-auto-ready";

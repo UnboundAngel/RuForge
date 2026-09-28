@@ -22,14 +22,30 @@ import {
 import { useNotificationItems } from "@/notifications/selectors";
 import type { NotificationActionId, NotificationItem } from "@/notifications/types";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import {
+  checkChannelsNow,
+  clearChannelFollowMessage,
+  followFromPanel,
+  setChannelAutoDownload,
+  unfollowFromPanel,
+  useChannelsUiStore,
+} from "@/watchlist/channelManage";
 import { useWatchlistStore } from "@/watchlist/watchlistStore";
 import type { WatchedChannel } from "@/watchlist/types";
 import { bellAnchorRect, isInsideBell } from "./bellAnchor";
+import type { ChannelHandlers } from "./channels/ChannelsPanel";
 import { NotificationCenterPanel } from "./NotificationCenterPanel";
 import { useNotifyOverlayHost } from "./useNotifyOverlayHost";
 
 const PANEL_GAP_PX = 6;
 const NO_CHANNELS: WatchedChannel[] = [];
+
+const channelHandlers: ChannelHandlers = {
+  onFollowInput: (input) => void followFromPanel(input),
+  onAutoDownload: setChannelAutoDownload,
+  onUnfollow: unfollowFromPanel,
+  onCheckNow: () => void checkChannelsNow(),
+};
 
 type Anchor = { top: number; right: number };
 
@@ -49,6 +65,7 @@ export function NotificationCenterPopover() {
   const filter = useNotificationCenterStore((s) => s.filter);
   const items = useNotificationItems();
   const channels = useWatchlistStore((s) => s.snapshot?.channels ?? NO_CHANNELS);
+  const channelsUi = useChannelsUiStore();
   const navMode = useRuforgeStore((s) => s.navMode);
   const activeTab = useRuforgeStore((s) => s.activeTab);
   const settingsOpen = useRuforgeStore((s) => s.settingsOpen);
@@ -65,11 +82,16 @@ export function NotificationCenterPopover() {
     closeNotificationPopover();
   }, [surfaceKey]);
 
+  useEffect(() => {
+    if (!open) clearChannelFollowMessage();
+  }, [open]);
+
   const youtubeSurface = open ? activeRadialNavSurface() : null;
   const overlayFallback = useNotifyOverlayHost(youtubeSurface != null, readAnchor, {
     navMode,
     items,
     channels,
+    channelsUi,
     tab,
     filter,
   });
@@ -137,6 +159,8 @@ export function NotificationCenterPopover() {
           <NotificationCenterPanel
             items={items}
             channels={channels}
+            channelsUi={channelsUi}
+            channelHandlers={channelHandlers}
             tab={tab}
             filter={filter}
             onAction={onAction}
