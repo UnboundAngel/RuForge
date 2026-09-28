@@ -30,7 +30,7 @@ Each phase is self-contained. A builder reads: Build protocol, Context for the b
 - [x] Phase 6: Title bar bell + notification popover (in-page)
 - [x] Phase 7: Popover overlay above YouTube webviews
 - [x] Phase 8: Channels tab (manage follows)
-- [ ] Phase 9: Explorer Follow toggle
+- [x] Phase 9: Explorer Follow toggle
 - [ ] Phase 10: Library entry points, shelf, rail badge
 - [ ] Phase 11: Watchlist alerts + auto-download
 - [ ] Phase 12: Desktop island watchlist variant
