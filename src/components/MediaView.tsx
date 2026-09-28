@@ -25,6 +25,7 @@ import { feedWithoutLibrary, interleaveFeed, type MixedGridItem } from "./librar
 import { composeHomeSections, pickChannelSpotlight } from "./library/homeSections";
 import { LibraryHome } from "./library/LibraryHome";
 import { useGridColumns } from "./library/useGridColumns";
+import { useWatchlistShelf } from "./watchlist/useWatchlistShelf";
 import { fileVideoId } from "./music/musicOutsideRecommend";
 
 function isInProgressFile(file: MediaFile): boolean {
@@ -359,6 +360,8 @@ export const MediaView = ({
     return ids;
   }, [entries]);
 
+  const watchlistShelf = useWatchlistShelf(homeMode, libraryVideoIds, columns);
+
   const gridItems = useMemo(() => interleaveFeed(mediaOnlyEntries, []), [mediaOnlyEntries]);
 
   const homePlaylists = useMemo(
@@ -379,7 +382,10 @@ export const MediaView = ({
       columns,
     );
     for (const f of spotlight?.files ?? []) shelved.add(f);
-    const feedVideos = showFeed ? feedWithoutLibrary(feed.items, libraryVideoIds) : [];
+    const shelvedIds = new Set(watchlistShelf.map((v) => v.videoId));
+    const feedVideos = showFeed
+      ? feedWithoutLibrary(feed.items, libraryVideoIds).filter((v) => !shelvedIds.has(v.videoId))
+      : [];
     return composeHomeSections<MediaFile>({
       mixed: interleaveFeed(
         mediaOnlyEntries.filter((f) => !shelved.has(f)),
@@ -388,10 +394,11 @@ export const MediaView = ({
       columns,
       continueFiles,
       shorts: feedVideos.filter((v) => v.short),
+      watchlist: watchlistShelf,
       hasPlaylists: homePlaylists.length > 0,
       spotlight,
     });
-  }, [homeMode, mediaOnlyEntries, columns, showFeed, feed.items, libraryVideoIds, homePlaylists.length]);
+  }, [homeMode, mediaOnlyEntries, columns, showFeed, feed.items, libraryVideoIds, homePlaylists.length, watchlistShelf]);
 
   const watchLaterPaths = useMemo(() => {
     const wl = playlistStacks.find((p) => p.path === virtualPlaylistPath(WATCH_LATER_ID));
