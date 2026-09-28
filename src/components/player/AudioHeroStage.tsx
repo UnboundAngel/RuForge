@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   AnimatePresence,
   motion,
@@ -14,6 +14,16 @@ import {
   type AnalyserGraph,
 } from "../../audioAnalyserGraph";
 import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
+import { useHeroSkin, type HeroSkin } from "./heroSkins/heroSkin";
+import { HeroSkinGalleryHost } from "./heroSkins/HeroSkinGalleryHost";
+import { ClassicVinylDisc } from "./heroSkins/classic/ClassicVinylDisc";
+import {
+  COVER_FACE_FRAME,
+  SKIN_BACKDROP,
+  SKIN_DISC,
+  SkinOrnaments,
+  SkinScene,
+} from "./heroSkins/skinParts";
 
 /** Seconds per full revolution. */
 const SPIN_DURATION = 3;
@@ -41,77 +51,8 @@ type Props = {
   onTogglePlay?: () => void;
 };
 
-function VinylDisc({ coverSrc }: { coverSrc: string | null }) {
-  const uid = useId().replace(/:/g, "");
-  const labelClipId = `rf-vinyl-label-${uid}`;
-  const sheenId = `rf-vinyl-sheen-${uid}`;
-
-  const grooves: React.ReactElement[] = [];
-  for (let i = 0; i < 28; i++) {
-    const r = 76 + i * 4.2;
-    if (r >= 194) break;
-    grooves.push(
-      <circle
-        key={i}
-        cx="200"
-        cy="200"
-        r={r}
-        fill="none"
-        stroke={i % 3 === 0 ? "rgba(55,55,55,0.35)" : "rgba(30,30,30,0.25)"}
-        strokeWidth="0.5"
-      />,
-    );
-  }
-
-  return (
-    <svg
-      viewBox="0 0 400 400"
-      className="h-full w-full"
-      aria-hidden
-    >
-      <defs>
-        {coverSrc && (
-          <clipPath id={labelClipId}>
-            <circle cx="200" cy="200" r="50" />
-          </clipPath>
-        )}
-        <radialGradient id={sheenId} cx="30%" cy="30%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.05)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-        </radialGradient>
-      </defs>
-
-      <circle cx="200" cy="200" r="198" fill="#0d0d0d" />
-      <circle cx="200" cy="200" r="196" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" />
-
-      {grooves}
-
-      <circle cx="200" cy="200" r="195" fill={`url(#${sheenId})`} />
-
-      <circle cx="200" cy="200" r="54" fill="#1a1510" />
-      <circle cx="200" cy="200" r="53" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
-
-      {coverSrc ? (
-        <image
-          href={coverSrc}
-          x="150"
-          y="150"
-          width="100"
-          height="100"
-          clipPath={`url(#${labelClipId})`}
-          preserveAspectRatio="xMidYMid slice"
-        />
-      ) : (
-        <circle cx="200" cy="200" r="50" fill="#221a12" />
-      )}
-
-      <circle cx="200" cy="200" r="7" fill="#000" />
-      <circle cx="200" cy="200" r="8.5" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" />
-    </svg>
-  );
-}
-
 function HeroBackground({ coverSrc }: { coverSrc: string | null }) {
+  const skin = useHeroSkin(false);
   if (coverSrc) {
     return (
       <>
@@ -125,6 +66,10 @@ function HeroBackground({ coverSrc }: { coverSrc: string | null }) {
           className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/55"
           aria-hidden
         />
+        {SKIN_BACKDROP[skin] && (
+          <div className={`absolute inset-0 ${SKIN_BACKDROP[skin]}`} aria-hidden />
+        )}
+        <SkinScene skin={skin} coverSrc={coverSrc} />
       </>
     );
   }
@@ -136,13 +81,31 @@ function HeroBackground({ coverSrc }: { coverSrc: string | null }) {
   );
 }
 
+const GLOW_RGB: Record<HeroSkin, string> = {
+  classic: "158,118,68",
+  cartoon: "158,118,68",
+  gothic: "170,16,28",
+  country: "214,150,70",
+  electro: "255,105,45",
+  street: "242,193,78",
+  museum: "235,200,130",
+  aero: "110,205,255",
+  punk: "255,46,136",
+  lofi: "160,150,255",
+};
+
+/** Skins whose CSS reads the per-frame --hero-energy var. */
+const ENERGY_VAR_SKINS: ReadonlySet<HeroSkin> = new Set(["electro"]);
+
 function CoverFace({
   coverSrc,
   isPaused,
+  skin,
   onTogglePlay,
 }: {
   coverSrc: string | null;
   isPaused: boolean;
+  skin: HeroSkin;
   onTogglePlay?: () => void;
 }) {
   const inner = coverSrc ? (
@@ -167,7 +130,7 @@ function CoverFace({
         type="button"
         onClick={onTogglePlay}
         data-audio-hero-art
-        className="relative z-10 block h-full w-full cursor-pointer rounded-2xl overflow-hidden border border-white/15 bg-black p-0 text-left shadow-2xl ring-1 ring-white/10 pointer-events-auto"
+        className={`${COVER_FACE_FRAME[skin]} cursor-pointer p-0 text-left pointer-events-auto`}
         aria-label={isPaused ? "Play" : "Pause"}
       >
         {inner}
@@ -178,7 +141,7 @@ function CoverFace({
   return (
     <div
       data-audio-hero-art
-      className="relative z-10 h-full w-full overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl ring-1 ring-white/10"
+      className={COVER_FACE_FRAME[skin]}
     >
       {inner}
     </div>
@@ -209,10 +172,37 @@ function HeroForeground({
   graphRef: React.RefObject<AnalyserGraph | null>;
   onTogglePlay?: () => void;
 }) {
-  const vinylRef = useRef<HTMLDivElement>(null);
+  const skin = useHeroSkin(true);
+  const SkinDisc = SKIN_DISC[skin];
+  const spinRef = useRef<Animation | null>(null);
+  const isPausedRef = useRef(isPaused);
+  isPausedRef.current = isPaused;
+  // Browser-driven so the spin keeps turning while the main thread is busy. A callback
+  // ref so the animation follows the element if it ever remounts.
+  const vinylRef = useCallback((el: HTMLDivElement | null) => {
+    spinRef.current?.cancel();
+    spinRef.current = null;
+    if (!el) return;
+    const anim = el.animate(
+      [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }],
+      { duration: SPIN_DURATION * 1000, iterations: Infinity },
+    );
+    if (isPausedRef.current) anim.pause();
+    spinRef.current = anim;
+  }, []);
   const glowRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
-  const rotationRef = useRef(0);
+  const glowRgbRef = useRef(GLOW_RGB.classic);
+  glowRgbRef.current = GLOW_RGB[skin];
+  const energyVarRef = useRef(false);
+  energyVarRef.current = ENERGY_VAR_SKINS.has(skin);
+
+  useEffect(() => {
+    if (!ENERGY_VAR_SKINS.has(skin)) return;
+    return () => {
+      document.documentElement.style.removeProperty("--hero-energy");
+    };
+  }, [skin]);
   const prevKeyRef = useRef(connectKey);
   const sleeveBusyRef = useRef(false);
   const discControls = useAnimationControls();
@@ -250,8 +240,7 @@ function HeroForeground({
       setVisualKey(connectKey);
       setSleeved(false);
       sleeveBusyRef.current = false;
-      rotationRef.current = 0;
-      if (vinylRef.current) vinylRef.current.style.transform = "rotate(0deg)";
+      if (spinRef.current) spinRef.current.currentTime = 0;
       void discControls.set({
         x: restXRef.current,
         opacity: restOpacityRef.current,
@@ -273,8 +262,7 @@ function HeroForeground({
 
       setVisualCover(coverSrc);
       setVisualKey(connectKey);
-      rotationRef.current = 0;
-      if (vinylRef.current) vinylRef.current.style.transform = "rotate(0deg)";
+      if (spinRef.current) spinRef.current.currentTime = 0;
 
       await discControls.start({
         x: restXRef.current,
@@ -295,22 +283,23 @@ function HeroForeground({
   }, [connectKey, coverSrc, reduceMotion, discControls]);
 
   useEffect(() => {
-    let alive = true;
-    let lastTime = performance.now();
+    const anim = spinRef.current;
+    if (!anim) return;
+    if (isPaused) anim.pause();
+    else anim.play();
+  }, [isPaused]);
 
-    const tick = (now: number) => {
+  useEffect(() => {
+    let alive = true;
+
+    // On :root because Music mode renders the background layer as a separate hero instance.
+    const writeEnergyVar = (v: number) => {
+      if (energyVarRef.current) document.documentElement.style.setProperty("--hero-energy", v.toFixed(3));
+    };
+
+    const tick = () => {
       if (!alive) return;
       rafRef.current = requestAnimationFrame(tick);
-
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
-
-      const vinyl = vinylRef.current;
-      if (!isPaused && vinyl) {
-        rotationRef.current =
-          (rotationRef.current + dt * (360 / SPIN_DURATION)) % 360;
-        vinyl.style.transform = `rotate(${rotationRef.current}deg)`;
-      }
 
       const glow = glowRef.current;
       if (!glow || !audioEl) return;
@@ -323,8 +312,9 @@ function HeroForeground({
         // Once the glow has faded out it stays hidden, so skip the per-frame gradient repaint while paused.
         if (cur <= 0.03 && glow.style.opacity === "0") return;
         const next = cur * 0.92;
+        writeEnergyVar(next > 0.03 ? next : 0);
         glow.dataset.energy = String(next);
-        glow.style.background = `radial-gradient(circle, rgba(158,118,68,${next * 0.3}) 0%, transparent 65%)`;
+        glow.style.background = `radial-gradient(circle, rgba(${glowRgbRef.current},${next * 0.3}) 0%, transparent 65%)`;
         glow.style.opacity = next > 0.03 ? "1" : "0";
         return;
       }
@@ -332,8 +322,9 @@ function HeroForeground({
       const volGain = !isMuted ? audioEl.volume : 0;
       const gain = (isMuted ? 0.35 : 1) * (0.8 + volGain * 0.35);
       const energy = readSmoothedLoudness(graph, gain);
+      writeEnergyVar(energy);
       glow.dataset.energy = String(energy);
-      glow.style.background = `radial-gradient(circle, rgba(158,118,68,${energy * 0.3}) 0%, transparent 65%)`;
+      glow.style.background = `radial-gradient(circle, rgba(${glowRgbRef.current},${energy * 0.45}) 0%, transparent 65%)`;
       glow.style.opacity = energy > 0.03 ? "1" : "0";
     };
 
@@ -346,63 +337,71 @@ function HeroForeground({
 
   return (
     <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-      {/*
-        Clip to the cover box on the right/top/bottom so a tucked disc cannot
-        poke out past the jacket. Negative left inset keeps the resting peek visible.
-      */}
-      <div
-        className="relative"
-        style={{
-          width: artSize,
-          height: artSize,
-          clipPath: "inset(0 0 0 -62%)",
-        }}
-      >
+      <HeroSkinGalleryHost coverSrc={visualCover} />
+      <div className="relative" style={{ width: artSize, height: artSize }}>
+        <SkinOrnaments
+          skin={skin}
+          coverSrc={visualCover}
+          animate={!reduceMotion}
+          bobbing={!isPaused && !reduceMotion}
+        />
+        {/*
+          Clip to the cover box on the right/top/bottom so a tucked disc cannot
+          poke out past the jacket. Negative left inset keeps the resting peek visible.
+        */}
         <div
-          className="absolute z-0 pointer-events-none"
-          style={{
-            width: "100%",
-            height: "100%",
-            top: "50%",
-            left: "-48%",
-            transform: "translateY(-50%)",
-          }}
-          aria-hidden
+          className="relative h-full w-full"
+          style={{ clipPath: "inset(0 0 0 -62%)" }}
         >
-          <motion.div
-            className="h-full w-full"
-            initial={false}
-            animate={discControls}
+          <div
+            className="absolute z-0 pointer-events-none"
+            style={{
+              width: "100%",
+              height: "100%",
+              top: "50%",
+              left: "-48%",
+              transform: "translateY(-50%)",
+            }}
+            aria-hidden
           >
-            <div
-              ref={glowRef}
-              className="absolute inset-[-12%] rounded-full pointer-events-none"
-              data-energy="0"
-              style={{ transition: "opacity 0.3s" }}
-            />
-            <div ref={vinylRef} className="h-full w-full rounded-full overflow-hidden">
-              <VinylDisc coverSrc={visualCover} />
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="relative z-10 h-full w-full">
-          <AnimatePresence initial={false} mode="sync">
             <motion.div
-              key={visualKey || "empty-cover"}
-              className="absolute inset-0"
-              initial={reduceMotion ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={reduceMotion ? undefined : { opacity: 0 }}
-              transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
+              className="h-full w-full"
+              initial={false}
+              animate={discControls}
             >
-              <CoverFace
-                coverSrc={visualCover}
-                isPaused={isPaused}
-                onTogglePlay={onTogglePlay}
+              <div
+                ref={glowRef}
+                className="absolute inset-[-12%] rounded-full pointer-events-none"
+                data-energy="0"
+                style={{ transition: "opacity 0.3s" }}
               />
+              <div ref={vinylRef} className="h-full w-full rounded-full overflow-hidden">
+                <Suspense fallback={<ClassicVinylDisc coverSrc={visualCover} />}>
+                  <SkinDisc coverSrc={visualCover} />
+                </Suspense>
+              </div>
             </motion.div>
-          </AnimatePresence>
+          </div>
+
+          <div className="relative z-10 h-full w-full">
+            <AnimatePresence initial={false} mode="sync">
+              <motion.div
+                key={visualKey || "empty-cover"}
+                className="absolute inset-0"
+                initial={reduceMotion ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={reduceMotion ? undefined : { opacity: 0 }}
+                transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
+              >
+                <CoverFace
+                  coverSrc={visualCover}
+                  isPaused={isPaused}
+                  skin={skin}
+                  onTogglePlay={onTogglePlay}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </div>

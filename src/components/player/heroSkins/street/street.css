@@ -1,0 +1,78 @@
+/* Street: brick wall under a sodium streetlight, wheat-pasted cover. */
+
+.st-wall {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: #120a08;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='384' height='64'%3E%3Crect width='384' height='64' fill='%23120a08'/%3E%3Cg%3E%3Crect x='1.5' y='1.5' width='93' height='29' rx='1.5' fill='%234a241a'/%3E%3Crect x='97.5' y='1.5' width='93' height='29' rx='1.5' fill='%233f1f17'/%3E%3Crect x='193.5' y='1.5' width='93' height='29' rx='1.5' fill='%23532a1e'/%3E%3Crect x='289.5' y='1.5' width='93' height='29' rx='1.5' fill='%2343221a'/%3E%3Crect x='-46.5' y='33.5' width='93' height='29' rx='1.5' fill='%233d1d15'/%3E%3Crect x='49.5' y='33.5' width='93' height='29' rx='1.5' fill='%234d271c'/%3E%3Crect x='145.5' y='33.5' width='93' height='29' rx='1.5' fill='%2345231a'/%3E%3Crect x='241.5' y='33.5' width='93' height='29' rx='1.5' fill='%23512a1f'/%3E%3Crect x='337.5' y='33.5' width='93' height='29' rx='1.5' fill='%233d1d15'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 200px 200px, 384px 64px;
+  background-position: center;
+}
+
+.st-wall-tint {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.2);
+  filter: blur(40px) saturate(1.2);
+  mix-blend-mode: soft-light;
+  opacity: 0.45;
+}
+
+.st-wall-light {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 42% 60% at 50% -8%, rgb(255 168 70 / 0.42), transparent 70%),
+    radial-gradient(ellipse 80% 70% at 50% 45%, transparent 30%, rgb(0 0 0 / 0.88) 100%);
+}
+
+/* Paper wrinkles and glue sheen laid over the art. */
+.st-wrinkle {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: soft-light;
+  background:
+    linear-gradient(97deg, transparent 30%, rgb(255 255 255 / 0.45) 31%, transparent 33%),
+    linear-gradient(8deg, transparent 57%, rgb(0 0 0 / 0.5) 58.5%, transparent 60%),
+    linear-gradient(172deg, transparent 20%, rgb(255 255 255 / 0.35) 21.5%, transparent 23%),
+    linear-gradient(83deg, transparent 69%, rgb(0 0 0 / 0.45) 70.5%, transparent 72%),
+    linear-gradient(135deg, transparent 44%, rgb(255 255 255 / 0.25) 45%, transparent 47%),
+    radial-gradient(ellipse at 28% 22%, rgb(255 255 255 / 0.22), transparent 50%),
+    radial-gradient(ellipse at 80% 85%, rgb(0 0 0 / 0.35), transparent 55%);
+}
+
+.st-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .35 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.st-sticker {
+  position: absolute;
+  right: -4%;
+  bottom: 7%;
+  width: 26%;
+  padding: 1.4cqw;
+  background: #f4f1ea;
+  transform: rotate(-7deg);
+  box-shadow: 0 0.6cqw 1.4cqw rgb(0 0 0 / 0.55);
+}
+
+.st-sticker-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #0a0a0a;
+  padding: 1.2cqw 0 1cqw;
+  font-family: Impact, "Arial Black", "Helvetica Neue", sans-serif;
+  color: #f4f1ea;
+  line-height: 1;
+}

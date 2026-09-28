@@ -1,0 +1,88 @@
+/* Museum: gilded frame on an oxblood damask wall under a picture light. */
+
+.mu-wall {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: #2b1014;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='130'%3E%3Cg fill='%23ffd9b0' fill-opacity='.045'%3E%3Cpath d='M45 12 C61 34 61 50 45 65 C29 50 29 34 45 12Z'/%3E%3Cpath d='M45 65 C61 80 61 96 45 118 C29 96 29 80 45 65Z'/%3E%3Ccircle cx='0' cy='65' r='11'/%3E%3Ccircle cx='90' cy='65' r='11'/%3E%3Ccircle cx='45' cy='0' r='6'/%3E%3Ccircle cx='45' cy='130' r='6'/%3E%3C/g%3E%3C/svg%3E");
+  background-position: center;
+}
+
+/* Unseen ceiling spot: a soft beam falling from above into a pool around the painting. */
+.mu-wall-light {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 26% 36% at 50% 46%, rgb(255 220 160 / 0.26), transparent 78%),
+    conic-gradient(from 180deg at 50% -30%, transparent 168deg, rgb(255 214 150 / 0.07) 176deg, rgb(255 214 150 / 0.07) 184deg, transparent 192deg),
+    radial-gradient(ellipse 85% 75% at 50% 46%, transparent 25%, rgb(0 0 0 / 0.86) 100%);
+}
+
+/* Four mitered sides, each lit from the top-left. */
+.mu-side {
+  position: absolute;
+  --mu-profile:
+    #4a3210 0%, #5a3d12 7%, #edc96e 9%, #f6df98 11%, #8a6420 15%,
+    #b98a32 22%, #f3d98a 32%, #c39237 42%, #6b4a17 48%,
+    #d8ad4f 55%, #f7e3a0 62%, #b88a36 69%, #7a5519 74%,
+    #e8c46a 80%, #fbe7a8 84%, #9c7426 90%, #2a1c06 100%;
+}
+.mu-top {
+  background: linear-gradient(to bottom, var(--mu-profile));
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--mu-f)) 100%, var(--mu-f) 100%);
+  filter: brightness(1.12);
+}
+.mu-bottom {
+  background: linear-gradient(to top, var(--mu-profile));
+  clip-path: polygon(var(--mu-f) 0, calc(100% - var(--mu-f)) 0, 100% 100%, 0 100%);
+  filter: brightness(0.7);
+}
+.mu-left {
+  background: linear-gradient(to right, var(--mu-profile));
+  clip-path: polygon(0 0, 100% var(--mu-f), 100% calc(100% - var(--mu-f)), 0 100%);
+  filter: brightness(1);
+}
+.mu-right {
+  background: linear-gradient(to left, var(--mu-profile));
+  clip-path: polygon(0 var(--mu-f), 100% 0, 100% 100%, 0 calc(100% - var(--mu-f)));
+  filter: brightness(0.8);
+}
+
+/* Pearl bead ring along the sight edge. */
+.mu-beads {
+  position: absolute;
+  inset: calc(var(--mu-f) * -0.2);
+  border: 3px dotted #fbe7a8;
+  filter: drop-shadow(0 1px 0 rgb(60 35 5 / 0.8));
+}
+
+.mu-canvas {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: overlay;
+  opacity: 0.5;
+  background:
+    repeating-linear-gradient(0deg, rgb(0 0 0 / 0.1) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.07) 0 1px, transparent 1px 4px);
+}
+
+.mu-varnish {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: soft-light;
+  background:
+    radial-gradient(ellipse 85% 55% at 50% 0%, rgb(255 236 190 / 0.55), transparent 70%),
+    linear-gradient(180deg, rgb(255 214 140 / 0.2), rgb(70 35 0 / 0.45));
+}
+
+.mu-brass {
+  background: linear-gradient(180deg, #f1dc9c 0%, #c9a255 45%, #8f6c2b 100%);
+}
+
+.mu-engrave {
+  font-family: "Trajan Pro", Cinzel, "Times New Roman", Georgia, serif;
+  color: #3b2a0e;
+  text-shadow: 0 1px 0 rgb(255 240 200 / 0.55);
+  line-height: 1;
+}
