@@ -61,6 +61,12 @@ export const DEBUG_CATEGORY_TREE: DebugCategoryNode[] = [
     ],
   },
   {
+    id: "youtube",
+    label: "YouTube",
+    side: "rust",
+    children: [{ id: "youtube.watchlist", label: "Channel watchlist poller", side: "rust" }],
+  },
+  {
     id: "explorer",
     label: "Explorer",
     side: "typescript",

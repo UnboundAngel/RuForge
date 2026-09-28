@@ -208,6 +208,109 @@ fn remember_ids<'a>(ch: &mut WatchedChannel, ids: impl Iterator<Item = &'a str>)
     ch.known_ids = fresh;
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Probe {
+    pub live_status: LiveStatus,
+    pub scheduled_at: Option<i64>,
+    pub duration_sec: Option<u32>,
+}
+
+pub fn probe_from_player(player: &serde_json::Value) -> Probe {
+    let details = &player["videoDetails"];
+    let flag = |key: &str| details[key].as_bool() == Some(true);
+    let length = details["lengthSeconds"]
+        .as_str()
+        .and_then(|s| s.parse::<u32>().ok())
+        .or_else(|| details["lengthSeconds"].as_u64().map(|n| n as u32));
+    // A stream that just ended reports isLiveContent with length 0 until processing finishes.
+    let live_status = if flag("isUpcoming") {
+        LiveStatus::Upcoming
+    } else if flag("isLive") || (flag("isLiveContent") && length == Some(0)) {
+        LiveStatus::Live
+    } else {
+        LiveStatus::None
+    };
+    let scheduled_at = player["microformat"]["playerMicroformatRenderer"]["liveBroadcastDetails"]
+        ["startTimestamp"]
+        .as_str()
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|d| d.timestamp());
+    Probe {
+        live_status,
+        scheduled_at,
+        duration_sec: length.filter(|n| *n > 0),
+    }
+}
+
+/// A failed probe still surfaces the upload as a plain video so it is never silently lost.
+pub fn upload_from_entry(
+    entry: &FeedEntry,
+    fallback_channel_title: &str,
+    probe: Option<Probe>,
+    now: i64,
+) -> WatchlistUpload {
+    let probe = probe.unwrap_or_default();
+    let channel_title = if entry.channel_title.is_empty() {
+        fallback_channel_title.to_string()
+    } else {
+        entry.channel_title.clone()
+    };
+    WatchlistUpload {
+        video_id: entry.video_id.clone(),
+        channel_id: entry.channel_id.clone(),
+        channel_title,
+        title: entry.title.clone(),
+        url: watch_url(&entry.video_id),
+        thumbnail: thumbnail_for(&entry.video_id),
+        published_at: entry.published_at,
+        discovered_at: now,
+        duration_sec: probe.duration_sec,
+        live_status: probe.live_status,
+        scheduled_at: probe.scheduled_at,
+        seen: false,
+        auto_queued: false,
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ReprobeOutcome {
+    pub changed: bool,
+    pub released: Option<WatchlistUpload>,
+}
+
+/// Releases a held upload to auto-download only on the transition to a normal video, so each
+/// premiere is handed to main once.
+pub fn apply_reprobe(file: &mut WatchlistFile, video_id: &str, probe: Probe) -> ReprobeOutcome {
+    let Some(idx) = file.uploads.iter().position(|u| u.video_id == video_id) else {
+        return ReprobeOutcome::default();
+    };
+    let auto = file
+        .channels
+        .iter()
+        .any(|c| c.channel_id == file.uploads[idx].channel_id && c.auto_download);
+    let upload = &mut file.uploads[idx];
+    let was_held = upload.live_status != LiveStatus::None;
+    let mut changed = false;
+    if upload.live_status != probe.live_status {
+        upload.live_status = probe.live_status;
+        changed = true;
+    }
+    if probe.scheduled_at.is_some() && upload.scheduled_at != probe.scheduled_at {
+        upload.scheduled_at = probe.scheduled_at;
+        changed = true;
+    }
+    if probe.duration_sec.is_some() && upload.duration_sec != probe.duration_sec {
+        upload.duration_sec = probe.duration_sec;
+        changed = true;
+    }
+    let released = (was_held
+        && upload.live_status == LiveStatus::None
+        && auto
+        && !upload.auto_queued)
+        .then(|| upload.clone());
+    ReprobeOutcome { changed, released }
+}
+
 pub fn seed_channel(ch: &mut WatchedChannel, entries: &[FeedEntry]) {
     remember_ids(ch, entries.iter().map(|e| e.video_id.as_str()));
     ch.seeded = true;
@@ -347,6 +450,113 @@ mod tests {
         file.trim_uploads(now);
         let ids: Vec<&str> = file.uploads.iter().map(|u| u.video_id.as_str()).collect();
         assert_eq!(ids, vec!["fresh", "unseen"]);
+    }
+
+    #[test]
+    fn watchlist_probe_vod() {
+        let p = probe_from_player(&serde_json::json!({
+            "videoDetails": { "lengthSeconds": "754", "isLiveContent": false }
+        }));
+        assert_eq!(p, Probe { live_status: LiveStatus::None, scheduled_at: None, duration_sec: Some(754) });
+    }
+
+    #[test]
+    fn watchlist_probe_upcoming_premiere() {
+        let p = probe_from_player(&serde_json::json!({
+            "videoDetails": { "lengthSeconds": "0", "isUpcoming": true, "isLiveContent": false },
+            "microformat": { "playerMicroformatRenderer": { "liveBroadcastDetails": {
+                "isLiveNow": false, "startTimestamp": "2026-10-01T18:00:00+00:00"
+            } } }
+        }));
+        assert_eq!(p.live_status, LiveStatus::Upcoming);
+        assert_eq!(p.scheduled_at, Some(1_790_877_600));
+        assert_eq!(p.duration_sec, None);
+    }
+
+    #[test]
+    fn watchlist_probe_live_now() {
+        let p = probe_from_player(&serde_json::json!({
+            "videoDetails": { "lengthSeconds": "0", "isLive": true, "isLiveContent": true }
+        }));
+        assert_eq!(p.live_status, LiveStatus::Live);
+        let processing = probe_from_player(&serde_json::json!({
+            "videoDetails": { "lengthSeconds": "0", "isLiveContent": true }
+        }));
+        assert_eq!(processing.live_status, LiveStatus::Live);
+    }
+
+    #[test]
+    fn watchlist_probe_ended_stream() {
+        let p = probe_from_player(&serde_json::json!({
+            "videoDetails": { "lengthSeconds": "7201", "isLiveContent": true },
+            "microformat": { "playerMicroformatRenderer": { "liveBroadcastDetails": {
+                "startTimestamp": "2026-09-01T18:00:00Z", "endTimestamp": "2026-09-01T20:00:00Z"
+            } } }
+        }));
+        assert_eq!(p.live_status, LiveStatus::None);
+        assert_eq!(p.duration_sec, Some(7201));
+        assert!(p.scheduled_at.is_some());
+    }
+
+    #[test]
+    fn watchlist_probe_empty_json() {
+        assert_eq!(probe_from_player(&serde_json::json!({})), Probe::default());
+        assert_eq!(probe_from_player(&serde_json::Value::Null), Probe::default());
+    }
+
+    #[test]
+    fn watchlist_upload_from_entry_failed_probe() {
+        let entries = parse_channel_feed(FIXTURE).unwrap();
+        let u = upload_from_entry(&entries[0], "Fallback", None, 42);
+        assert_eq!(u.live_status, LiveStatus::None);
+        assert_eq!(u.duration_sec, None);
+        assert_eq!(u.discovered_at, 42);
+        assert_eq!(u.channel_title, "Tom & Friends");
+        assert!(!u.seen && !u.auto_queued);
+        assert_eq!(u.thumbnail, thumbnail_for("aaaaaaaaaaa"));
+    }
+
+    #[test]
+    fn watchlist_reprobe_releases_once_on_auto_channel() {
+        let mut file = WatchlistFile::default();
+        let mut ch = channel(0);
+        ch.auto_download = true;
+        file.channels.push(ch);
+        let mut held = upload("prem", 10, false);
+        held.live_status = LiveStatus::Upcoming;
+        file.uploads.push(held);
+
+        let still = Probe { live_status: LiveStatus::Upcoming, scheduled_at: Some(99), duration_sec: None };
+        let out = apply_reprobe(&mut file, "prem", still);
+        assert!(out.changed);
+        assert!(out.released.is_none());
+        assert!(!apply_reprobe(&mut file, "prem", still).changed);
+
+        let done = Probe { live_status: LiveStatus::None, scheduled_at: None, duration_sec: Some(300) };
+        let out = apply_reprobe(&mut file, "prem", done);
+        assert!(out.changed);
+        let released = out.released.unwrap();
+        assert_eq!(released.duration_sec, Some(300));
+        assert_eq!(released.scheduled_at, Some(99));
+        assert!(apply_reprobe(&mut file, "prem", done).released.is_none());
+    }
+
+    #[test]
+    fn watchlist_reprobe_skips_manual_and_queued() {
+        let mut file = WatchlistFile::default();
+        file.channels.push(channel(0));
+        let mut held = upload("prem", 10, false);
+        held.live_status = LiveStatus::Live;
+        file.uploads.push(held.clone());
+        let done = Probe { live_status: LiveStatus::None, scheduled_at: None, duration_sec: Some(5) };
+        assert!(apply_reprobe(&mut file, "prem", done).released.is_none());
+
+        file.channels[0].auto_download = true;
+        held.auto_queued = true;
+        file.uploads = vec![held];
+        assert!(apply_reprobe(&mut file, "prem", done).released.is_none());
+        let missing = apply_reprobe(&mut file, "missing", done);
+        assert!(!missing.changed && missing.released.is_none());
     }
 
     #[test]

@@ -247,6 +247,7 @@ pub fn run() {
 
             spawn_removable_drives_watcher(app.handle());
             app.manage(crate::commands::watchlist::WatchlistState::load(app.handle()));
+            crate::commands::watchlist::poller::spawn_watchlist_poller(app.handle());
 
             setup_tray(app)?;
 
@@ -357,6 +358,8 @@ pub fn run() {
             crate::commands::watchlist::mark_all_watchlist_seen,
             crate::commands::watchlist::mark_watchlist_auto_queued,
             crate::commands::watchlist::resolve_watchlist_channel,
+            crate::commands::watchlist::set_watchlist_check_interval,
+            crate::commands::watchlist::refresh_watchlist_now,
             start_download_job,
             pause_download_job,
             stop_all_active_download_jobs,

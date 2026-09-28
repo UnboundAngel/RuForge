@@ -24,7 +24,7 @@ Each phase is self-contained. A builder reads: Build protocol, Context for the b
 
 - [x] Phase 1: Branch, roadmap flag, Rust watchlist core
 - [x] Phase 2: Rust channel resolver
-- [ ] Phase 3: Rust poller, premieres, auto-download hold
+- [x] Phase 3: Rust poller, premieres, auto-download hold
 - [ ] Phase 4: Frontend watchlist data layer
 - [ ] Phase 5: Notification center core (model, store, sources)
 - [ ] Phase 6: Title bar bell + notification popover (in-page)
