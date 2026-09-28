@@ -5,6 +5,7 @@ import { setAudioOutputDeviceId } from "@/audioOutputDevices";
 import type { DynamicIslandContent } from "@/components/island/DynamicIsland";
 import type { IslandDownload } from "@/components/island/IslandDownloadContent";
 import type { IslandNotice } from "@/components/island/IslandNoticeContent";
+import type { IslandWatchlist } from "@/components/island/IslandWatchlistContent";
 import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
 import type { ActivityRenderState } from "@/lib/activityTypes";
 import { navigateToActivityOwningSurface } from "@/lib/activityIslandResolve";
@@ -13,6 +14,12 @@ import { getMainPlaybackBridge } from "@/lib/mainPlaybackBridge";
 import { isAudioOnlyPath } from "@/mediaKind";
 import { readPlaybackSpeed } from "@/playbackSpeedStorage";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import {
+  markAllSeenFromIsland,
+  openFromIsland,
+  queueFromIsland,
+  showAllFromIsland,
+} from "@/watchlist/islandWatchlistControls";
 
 export const DESKTOP_ISLAND_LABEL = "island";
 export const DESKTOP_ISLAND_STATE_EVENT = "desktop-island-state";
@@ -27,6 +34,8 @@ export type DesktopIslandStatePayload = {
   filePath: string | null;
   download: IslandDownload | null;
   notice: IslandNotice | null;
+  /** New uploads that arrived while main was unfocused; null when none are left unseen. */
+  watchlist: IslandWatchlist | null;
   /** Present on track changes so the overlay webview can slide prev vs next. */
   skipDir?: IslandSkipDir;
 };
@@ -44,7 +53,11 @@ export type DesktopIslandControl =
   | { type: "loop" }
   | { type: "audioOutput"; deviceId: string }
   | { type: "openPlayer" }
-  | { type: "popOut" };
+  | { type: "popOut" }
+  | { type: "watchlistQueue"; videoId: string }
+  | { type: "watchlistOpen"; videoId: string }
+  | { type: "watchlistMarkAllSeen" }
+  | { type: "watchlistShowAll" };
 
 export async function pushDesktopIslandState(payload: DesktopIslandStatePayload): Promise<void> {
   await emitTo(DESKTOP_ISLAND_LABEL, DESKTOP_ISLAND_STATE_EVENT, payload);
@@ -151,6 +164,18 @@ export function applyDesktopIslandControl(control: DesktopIslandControl): void {
       });
       return;
     }
+    case "watchlistQueue":
+      queueFromIsland(control.videoId);
+      return;
+    case "watchlistOpen":
+      openFromIsland(control.videoId);
+      return;
+    case "watchlistMarkAllSeen":
+      markAllSeenFromIsland();
+      return;
+    case "watchlistShowAll":
+      showAllFromIsland();
+      return;
     default:
       return;
   }

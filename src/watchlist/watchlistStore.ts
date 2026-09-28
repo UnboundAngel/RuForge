@@ -18,3 +18,8 @@ export const useWatchlistStore = create<WatchlistState>(() => ({
 export function setWatchlistSnapshot(snapshot: WatchlistSnapshot): void {
   useWatchlistStore.setState({ snapshot });
 }
+
+export function clearIslandBatch(): void {
+  if (useWatchlistStore.getState().islandBatchIds.length === 0) return;
+  useWatchlistStore.setState({ islandBatchIds: [], islandBatchAt: 0 });
+}

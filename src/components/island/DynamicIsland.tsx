@@ -29,13 +29,28 @@ import {
   type IslandUpdateContentProps,
 } from "./IslandUpdateContent";
 import {
+  IslandWatchlistCompactContent,
+  IslandWatchlistExpandedContent,
+  ISLAND_WATCHLIST_EXPANDED_DIMENSIONS,
+  islandWatchlistCollapsedWidth,
+  type IslandWatchlist,
+} from "./IslandWatchlistContent";
+import {
   ISLAND_SKIP_TRANSITION,
   islandSkipCompactVariants,
   type IslandSkipDir,
 } from "./islandSkipMotion";
 import { consumeIslandSkipDir, noteIslandSkipDir } from "@/lib/islandSkipDirection";
 
-export type IslandState = "idle" | "compact" | "expanded" | "capture" | "notice" | "download";
+export type IslandState =
+  | "idle"
+  | "compact"
+  | "expanded"
+  | "capture"
+  | "notice"
+  | "download"
+  | "watchlist"
+  | "watchlist-expanded";
 
 const ISLAND_SPRING = {
   type: "spring" as const,
@@ -54,6 +69,8 @@ const ISLAND_DIMENSIONS: Record<
   notice: { width: 220, height: 36, borderRadius: 18 },
   download: { width: DOWNLOAD_ISLAND_WIDTH, height: 36, borderRadius: 18 },
   expanded: { width: 350, height: 184, borderRadius: 40 },
+  watchlist: { width: 240, height: 36, borderRadius: 18 },
+  "watchlist-expanded": { ...ISLAND_WATCHLIST_EXPANDED_DIMENSIONS },
 };
 
 import type { AudioOutputDevice } from "@/audioOutputDevices";
@@ -119,6 +136,12 @@ type DynamicIslandProps = {
   download?: IslandDownload | null;
   /** Cross-window hint (desktop overlay). Wins over local pending when trackKey changes. */
   skipDirHint?: IslandSkipDir | null;
+  /** Desktop overlay only: new uploads from followed channels for "watchlist" states. */
+  watchlist?: IslandWatchlist | null;
+  onWatchlistQueue?: (videoId: string) => void;
+  onWatchlistOpen?: (videoId: string) => void;
+  onWatchlistMarkAllSeen?: () => void;
+  onWatchlistShowMore?: () => void;
 };
 
 function ContentShell({
@@ -236,6 +259,11 @@ export function DynamicIsland({
   notice = null,
   download = null,
   skipDirHint = null,
+  watchlist = null,
+  onWatchlistQueue,
+  onWatchlistOpen,
+  onWatchlistMarkAllSeen,
+  onWatchlistShowMore,
 }: DynamicIslandProps) {
   const pendingSkipDirRef = useRef<IslandSkipDir>(1);
   const skipDirRef = useRef<IslandSkipDir>(1);
@@ -300,8 +328,11 @@ export function DynamicIsland({
         ? { ...baseDims, width: captureIslandWidthForCaption(captureSavedCaption) }
         : noticeActive
           ? { ...baseDims, width: noticeIslandWidth(notice!.message) }
-          : baseDims;
+          : effectiveState === "watchlist" && watchlist
+            ? { ...baseDims, width: islandWatchlistCollapsedWidth(watchlist.count) }
+            : baseDims;
   const interactive = effectiveState !== "idle" || Boolean(devCaptureIdle) || updateMode;
+  const watchlistFloating = !updateMode && effectiveState === "watchlist-expanded";
 
   return (
     <motion.div
@@ -319,7 +350,7 @@ export function DynamicIsland({
           updateMode || effectiveState !== "expanded"
             ? "overflow-hidden"
             : "overflow-visible shadow-2xl"
-        } ${updateMode && !updateAvailable?.collapsed ? "shadow-2xl" : ""} ${
+        } ${(updateMode && !updateAvailable?.collapsed) || watchlistFloating ? "shadow-2xl" : ""} ${
           interactive ? "cursor-pointer" : "cursor-default"
         }`}
         style={{ borderRadius: dims.borderRadius }}
@@ -372,6 +403,20 @@ export function DynamicIsland({
           ) : null}
           {!updateMode && state === "download" && download ? (
             <IslandDownloadContent key="download" download={download} />
+          ) : null}
+          {!updateMode && state === "watchlist" && watchlist ? (
+            <IslandWatchlistCompactContent key="watchlist-compact" watchlist={watchlist} />
+          ) : null}
+          {watchlistFloating && watchlist ? (
+            <IslandWatchlistExpandedContent
+              key="watchlist-expanded"
+              watchlist={watchlist}
+              accentColor={content.accentColor}
+              onQueue={(id) => onWatchlistQueue?.(id)}
+              onOpen={(id) => onWatchlistOpen?.(id)}
+              onMarkAllSeen={() => onWatchlistMarkAllSeen?.()}
+              onShowMore={() => onWatchlistShowMore?.()}
+            />
           ) : null}
           {!updateMode && state === "expanded" && (
             <IslandExpandedContent

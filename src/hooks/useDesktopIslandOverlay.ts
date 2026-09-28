@@ -37,6 +37,9 @@ import {
 import { jobHasDownloadTransferStarted, type DownloadJob } from "@/downloadQueue";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { DESKTOP_ISLAND_NOTICE_EVENT, type DesktopIslandNoticePayload } from "@/systemNotify";
+import { islandAvatarSrc, subscribeIslandAvatars } from "@/watchlist/islandAvatars";
+import { buildIslandWatchlist, ISLAND_WATCHLIST_TAKEOVER_MS } from "@/watchlist/islandWatchlist";
+import { clearIslandBatch, useWatchlistStore } from "@/watchlist/watchlistStore";
 
 const TELEMETRY_MIN_MS = 100;
 const NOTICE_MS = 4500;
@@ -256,6 +259,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     let musicShown = false;
     let pushTimer: ReturnType<typeof setTimeout> | null = null;
     let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+    let takeoverTimer: ReturnType<typeof setTimeout> | null = null;
     let lastPushAt = 0;
     let pending: DesktopIslandStatePayload | null = null;
     const lastPushedTrackKeyRef = { current: null as string | null };
@@ -315,8 +319,17 @@ export function useDesktopIslandOverlay(enabled: boolean) {
         : null;
       const download = focused ? null : buildIslandDownload(i.downloadJobs);
       const notice = focused ? null : noticeRef.current;
+      const batch = useWatchlistStore.getState();
+      const watchlist = focused ? null : buildIslandWatchlist(batch, islandAvatarSrc, Date.now());
+      if (watchlist?.takeover && takeoverTimer == null) {
+        // Nothing else re-syncs when the takeover window lapses, so music would never get the pill back.
+        takeoverTimer = setTimeout(() => {
+          takeoverTimer = null;
+          sync();
+        }, ISLAND_WATCHLIST_TAKEOVER_MS - (Date.now() - batch.islandBatchAt) + 50);
+      }
 
-      if (!music && !download && !notice) {
+      if (!music && !download && !notice && !watchlist) {
         hide();
         return;
       }
@@ -329,6 +342,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
           waveformLevels: music ? getIslandWaveformLevels() : [],
           download,
           notice,
+          watchlist,
         },
         lastPushedTrackKeyRef,
       );
@@ -351,6 +365,8 @@ export function useDesktopIslandOverlay(enabled: boolean) {
 
     const refreshWindow = async () => {
       windowRef.current = await readMainWindowState();
+      // Back in the app the bell and shelf carry these; a stale batch would replay on the next minimize.
+      if (windowRef.current.focused) clearIslandBatch();
       sync();
     };
 
@@ -383,6 +399,8 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     });
 
     const unsubBridge = subscribeMainPlaybackBridge(sync);
+    const unsubWatchlist = useWatchlistStore.subscribe(sync);
+    const unsubAvatars = subscribeIslandAvatars(sync);
     const unsubWave = subscribeIslandWaveformLevels(() => {
       if (musicShown) sync();
     });
@@ -394,9 +412,12 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       syncRef.current = () => {};
       if (pushTimer != null) clearTimeout(pushTimer);
       if (noticeTimer != null) clearTimeout(noticeTimer);
+      if (takeoverTimer != null) clearTimeout(takeoverTimer);
       noticeRef.current = null;
       document.removeEventListener("visibilitychange", onVis);
       unsubBridge();
+      unsubWatchlist();
+      unsubAvatars();
       unsubWave();
       void unlistenResize.then((fn) => fn());
       void unlistenFocus.then((fn) => fn());
