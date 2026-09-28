@@ -33,7 +33,7 @@ Each phase is self-contained. A builder reads: Build protocol, Context for the b
 - [x] Phase 9: Explorer Follow toggle
 - [x] Phase 10: Library entry points, shelf, rail badge
 - [x] Phase 11: Watchlist alerts + auto-download
-- [ ] Phase 12: Desktop island watchlist variant
+- [x] Phase 12: Desktop island watchlist variant
 - [ ] Phase 13: Settings, polish, Unreleased log
 
 ---

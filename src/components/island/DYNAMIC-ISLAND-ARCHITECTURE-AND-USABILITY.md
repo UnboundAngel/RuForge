@@ -311,6 +311,14 @@ When the **main** window is OS-minimized or hidden to tray, and playback is **ma
 - `deliverUserNotification` emits `desktop-island-notice` to main when RuForge is not focused; main shows it as a `notice` for ~4.5s. Foreground still uses the in-app toast.
 - Clicking a download or notice pill restores main.
 
+**Watchlist variant (new uploads from followed channels)**
+
+- Source: `useWatchlistStore` `islandBatchIds` / `islandBatchAt`, filled by `handleNewUploads` only while RuForge is unfocused and `watchlistAlerts` is on. Main builds `IslandWatchlist` with `buildIslandWatchlist` (batch ids still unseen, faces up to 3, rows up to 6) and pushes it as `payload.watchlist`. Avatars resolve in main (`islandAvatars.ts`); the island never fetches.
+- States: `watchlist` (collapsed pill, ~240×36: stacked channel avatars + "N new uploads") and `watchlist-expanded` (350×248, radius 24: header with faces, count and "Mark all seen"; up to 3 rows with 16:9 thumb, title, channel, Queue and Open; "+N more in RuForge"). Overlay bounds go to 380×272 while expanded (Rust caps at 420×280).
+- Priority (`resolveOverlayIslandState`): watchlist expanded, music expanded, notice, `watchlist` while `takeover` (first 8 s of a batch) or when no music session, music compact, download, idle. After the takeover a single re-sync hands the slot back to music.
+- Controls: `watchlistQueue`, `watchlistOpen`, `watchlistMarkAllSeen`, `watchlistShowAll`. Main resolves every id against its own snapshot (`islandWatchlistControls.ts`) and ignores unknown ids, seen rows and upcoming rows for Queue. Open and "+N more" restore main first.
+- Collapse on Escape, blur, focus loss, and when `watchlist` becomes null. Main clears the batch when it regains focus.
+
 **Do not** drive desktop overlay from Zustand inside `DynamicIsland.tsx`. Keep bridge apply logic in `desktopIslandBridge.ts` / `useDesktopIslandOverlay.ts`.
 
 ---

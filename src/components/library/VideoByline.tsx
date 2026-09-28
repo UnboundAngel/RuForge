@@ -17,7 +17,7 @@ async function withFetchSlot<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-function channelAvatarPath(channelId: string): Promise<string | null> {
+export function channelAvatarPath(channelId: string): Promise<string | null> {
   let request = avatarRequests.get(channelId);
   if (!request) {
     request = withFetchSlot(() => invoke<string | null>("get_channel_avatar", { channelId })).catch(() => null);
