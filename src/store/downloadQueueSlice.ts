@@ -64,6 +64,10 @@ import {
   progressAdvancesDownloadWatchdog,
 } from "../downloadJobWatchdog";
 import { deliverUserNotification } from "../systemNotify";
+import {
+  finishedJobNotificationInfo,
+  recordDownloadNotification,
+} from "../notifications/sources/downloadItems";
 import { findLibraryDuplicate } from "../duplicateDownload";
 import { updatePlaylistDownloadSidecarFromJob } from "../lib/playlistDownloadSidecar";
 import { mediaFileFromDownloadFinish } from "../galleryEntries";
@@ -164,6 +168,11 @@ function announceStorageBlocks(get: () => RuforgeStore, newlyBlocked: DownloadJo
     },
     (message, type) => get().notify(message, type),
   );
+  recordDownloadNotification("download-blocked", {
+    jobIds: newlyBlocked.map((j) => j.id),
+    title: NOT_ENOUGH_STORAGE_LABEL,
+    error: `${what} on hold: ${why}.`,
+  });
 }
 
 /** Marks rows without promoting, so held batches show storage blocks before Download is clicked. */
@@ -1566,6 +1575,10 @@ export const createDownloadQueueSlice: StateCreator<
           },
           (message, type) => get().notify(message, type),
         );
+        recordDownloadNotification("download-finished", {
+          ...finishedJobNotificationInfo(finishedJobBefore, finishedUrl),
+          outputPath: payload.outputPath,
+        });
         void get().refreshStorageStats();
       } else if (payload.timedOut) {
         void deliverUserNotification(
@@ -1576,6 +1589,10 @@ export const createDownloadQueueSlice: StateCreator<
           },
           (message, type) => get().notify(message, type),
         );
+        recordDownloadNotification("download-timed-out", {
+          ...finishedJobNotificationInfo(finishedJobBefore, finishedUrl),
+          error: DOWNLOAD_TIMED_OUT_MESSAGE,
+        });
       } else {
         const line = (payload.error ?? "Download failed").split("\n")[0];
         void deliverUserNotification(
@@ -1586,6 +1603,10 @@ export const createDownloadQueueSlice: StateCreator<
           },
           (message, type) => get().notify(message, type),
         );
+        recordDownloadNotification("download-failed", {
+          ...finishedJobNotificationInfo(finishedJobBefore, finishedUrl),
+          error: line,
+        });
       }
     },
 

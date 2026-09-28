@@ -94,6 +94,7 @@ import { MusicShell } from "./components/music/MusicShell";
 import { MusicToastHost } from "./components/music/MusicToastHost";
 import { startMusicPlaylistsFileSync } from "./musicPlaylistsFileSync";
 import { startWatchlistSync } from "./watchlist/watchlistSync";
+import { startNotificationCenter } from "./notifications/recordNotification";
 import { storageBlocksNewDownloads as storageBlocksNewDownloadsFor } from "./lib/storageBlocks";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
 import { MUSIC_TOP_BAR_HALF_WIDTH_PX } from "./components/music/MusicTopBar";
@@ -457,6 +458,27 @@ function App() {
     let stop: (() => void) | null = null;
     let cancelled = false;
     void startWatchlistSync({ onNewUploads: () => {}, onAutoReady: () => {} }).then((un) => {
+      if (cancelled) un();
+      else stop = un;
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    // Mini shares localStorage; only main may load or write the notification feed.
+    let label = "";
+    try {
+      label = getCurrentWindow().label;
+    } catch {
+      return;
+    }
+    if (label !== "main") return;
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void startNotificationCenter().then((un) => {
       if (cancelled) un();
       else stop = un;
     });
