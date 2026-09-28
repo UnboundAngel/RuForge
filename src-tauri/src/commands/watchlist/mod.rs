@@ -1,20 +1,26 @@
 pub mod feed;
 pub mod model;
+pub mod poller;
 pub mod resolve;
+pub mod schedule;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State};
 
 use model::{
-    is_channel_id, seed_channel, ResolvedChannel, WatchedChannel, WatchlistFile,
-    WatchlistSnapshot, MAX_CHANNELS, MAX_INTERVAL_MIN, MIN_INTERVAL_MIN,
+    is_channel_id, seed_channel, ResolvedChannel, UploadsPayload, WatchedChannel, WatchlistFile,
+    WatchlistSnapshot, WatchlistUpload, MAX_CHANNELS, MAX_INTERVAL_MIN, MIN_INTERVAL_MIN,
 };
 
 const WATCHLIST_FILENAME: &str = "watchlist.json";
 pub const WATCHLIST_UPDATED_EVENT: &str = "watchlist-updated";
+pub const WATCHLIST_NEW_UPLOADS_EVENT: &str = "watchlist-new-uploads";
+pub const WATCHLIST_AUTO_READY_EVENT: &str = "watchlist-auto-ready";
+const MANUAL_REFRESH_COOLDOWN_SECS: i64 = 120;
 const BROWSER_UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -22,6 +28,8 @@ pub struct WatchlistState {
     file: Mutex<WatchlistFile>,
     path: PathBuf,
     client: reqwest::Client,
+    poke: tokio::sync::Notify,
+    last_manual_refresh: AtomicI64,
 }
 
 fn now_secs() -> i64 {
@@ -70,6 +78,8 @@ impl WatchlistState {
             file: Mutex::new(read_file(&path)),
             path,
             client,
+            poke: tokio::sync::Notify::new(),
+            last_manual_refresh: AtomicI64::new(0),
         }
     }
 
@@ -105,6 +115,17 @@ fn emit_updated(app: &AppHandle, snapshot: &WatchlistSnapshot) {
         EventTarget::webview_window("main"),
         WATCHLIST_UPDATED_EVENT,
         snapshot,
+    );
+}
+
+fn emit_uploads(app: &AppHandle, event: &str, uploads: Vec<WatchlistUpload>) {
+    if uploads.is_empty() {
+        return;
+    }
+    let _ = app.emit_to(
+        EventTarget::webview_window("main"),
+        event,
+        UploadsPayload { uploads },
     );
 }
 
@@ -172,7 +193,45 @@ pub async fn follow_channel(
     if over_cap {
         return Err("You can follow up to 300 channels.".into());
     }
+    if fetched.is_none() {
+        if let Some(ch) = state.file.lock().map_err(|e| e.to_string())?.channel_mut(&channel_id) {
+            ch.next_check_at = now_secs();
+        }
+        state.poke.notify_one();
+    }
     Ok(snapshot)
+}
+
+#[tauri::command]
+pub fn set_watchlist_check_interval(
+    app: AppHandle,
+    state: State<'_, WatchlistState>,
+    minutes: u32,
+) -> Result<WatchlistSnapshot, String> {
+    let minutes = minutes.clamp(MIN_INTERVAL_MIN, MAX_INTERVAL_MIN);
+    state.commit(&app, |file| {
+        file.prefs.check_interval_min = minutes;
+        schedule::apply_interval_change(&mut file.channels, now_secs(), minutes);
+    })
+}
+
+/// Silently ignored inside the cooldown; the UI disables its button for the same window.
+#[tauri::command]
+pub fn refresh_watchlist_now(state: State<'_, WatchlistState>) -> Result<(), String> {
+    let now = now_secs();
+    let last = state.last_manual_refresh.load(Ordering::Relaxed);
+    if now - last < MANUAL_REFRESH_COOLDOWN_SECS {
+        return Ok(());
+    }
+    state.last_manual_refresh.store(now, Ordering::Relaxed);
+    {
+        let mut file = state.file.lock().map_err(|e| e.to_string())?;
+        for ch in file.channels.iter_mut() {
+            ch.next_check_at = now;
+        }
+    }
+    state.poke.notify_one();
+    Ok(())
 }
 
 #[tauri::command]
