@@ -22,7 +22,7 @@ Each phase is self-contained. A builder reads: Build protocol, Context for the b
 
 ### Phase checklist
 
-- [ ] Phase 1: Branch, roadmap flag, Rust watchlist core
+- [x] Phase 1: Branch, roadmap flag, Rust watchlist core
 - [ ] Phase 2: Rust channel resolver
 - [ ] Phase 3: Rust poller, premieres, auto-download hold
 - [ ] Phase 4: Frontend watchlist data layer

@@ -309,7 +309,8 @@
     "difficulty": "Medium",
     "featureName": "Channel watchlist and new-upload notifications",
     "priority": "Medium",
-    "status": "To-Do"
+    "status": "To-Do",
+    "roadmapStatus": "progress"
   },
   {
     "appArea": "Infra",
