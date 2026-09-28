@@ -49,7 +49,8 @@ export type NotificationSource = {
   items: () => NotificationItem[];
   markRead: (ids: string[]) => void | Promise<void>;
   markAllRead: () => void | Promise<void>;
-  runAction: (item: NotificationItem, action: NotificationActionId) => void | Promise<void>;
+  /** Resolve `false` when the action was refused (storage full, gone) so the row stays unread. */
+  runAction: (item: NotificationItem, action: NotificationActionId) => boolean | void | Promise<boolean | void>;
   subscribe: (onChange: () => void) => () => void;
 };
 

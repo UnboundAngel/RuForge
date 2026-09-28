@@ -1,9 +1,11 @@
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isNotifyOverlayDocument } from "@/lib/notifyOverlayEvents";
 import { loadLocal, pruneLocal, startLocalPersistence, upsertLocal } from "./notificationCenterStore";
 import { NOTIFICATION_CENTER_RECORD_EVENT, type NotificationItem } from "./types";
 
 function isMainWindow(): boolean {
+  if (isNotifyOverlayDocument()) return false;
   try {
     return getCurrentWindow().label === "main";
   } catch {

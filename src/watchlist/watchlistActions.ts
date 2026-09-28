@@ -71,7 +71,8 @@ export function enqueueWatchlistUploads(
   return { queued: uploads.map((u) => u.videoId), blocked: false };
 }
 
-export async function queueUpload(upload: WatchlistUpload): Promise<void> {
+/** False when storage refused the add; the upload stays unseen. */
+export async function queueUpload(upload: WatchlistUpload): Promise<boolean> {
   const { blocked } = enqueueWatchlistUploads([upload], "watchlistAdd");
   if (blocked) {
     await deliverUserNotification(
@@ -79,9 +80,10 @@ export async function queueUpload(upload: WatchlistUpload): Promise<void> {
       useRuforgeStore.getState().notify,
     );
     recordStorageFullRefusal();
-    return;
+    return false;
   }
   await markSeen([upload.videoId]);
+  return true;
 }
 
 export async function openUploadInExplorer(upload: WatchlistUpload): Promise<void> {

@@ -97,6 +97,8 @@ import { MusicToastHost } from "./components/music/MusicToastHost";
 import { startMusicPlaylistsFileSync } from "./musicPlaylistsFileSync";
 import { startWatchlistSync } from "./watchlist/watchlistSync";
 import { startNotificationCenter } from "./notifications/recordNotification";
+import { useNotificationCenterStore } from "./notifications/notificationCenterStore";
+import { isNotifyOverlayDocument } from "./lib/notifyOverlayEvents";
 import { storageBlocksNewDownloads as storageBlocksNewDownloadsFor } from "./lib/storageBlocks";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
 import { MUSIC_TOP_BAR_HALF_WIDTH_PX } from "./components/music/MusicTopBar";
@@ -396,6 +398,8 @@ function App() {
   const explorerWebviewLabelRef = useRef(EMBEDDED_EXPLORER_WEBVIEW_LABEL);
   const prevActiveTabRef = useRef<ActiveTab>(activeTab);
   const prevExplorerSurfaceRef = useRef(false);
+  const explorerCoveredByPopover = useNotificationCenterStore((s) => s.explorerCoveredByPopover);
+  const prevExplorerCoveredRef = useRef(false);
   /** One reload when entering Explorer; layout sync must not re-arm this. */
   const explorerReloadPendingRef = useRef(false);
   const explorerLastSyncedBoundsRef = useRef<ExplorerBounds | null>(null);
@@ -458,7 +462,7 @@ function App() {
     } catch {
       return;
     }
-    if (label !== "main") return;
+    if (label !== "main" || isNotifyOverlayDocument()) return;
     let stop: (() => void) | null = null;
     let cancelled = false;
     void startWatchlistSync({ onNewUploads: () => {}, onAutoReady: () => {} }).then((un) => {
@@ -479,7 +483,7 @@ function App() {
     } catch {
       return;
     }
-    if (label !== "main") return;
+    if (label !== "main" || isNotifyOverlayDocument()) return;
     let stop: (() => void) | null = null;
     let cancelled = false;
     void startNotificationCenter().then((un) => {
@@ -903,9 +907,14 @@ function App() {
       navMode !== "music" &&
       !downloaderOpen &&
       !settingsOpen &&
-      !shellBlocked;
+      !shellBlocked &&
+      !explorerCoveredByPopover;
     const wasOnExplorer = prevExplorerSurfaceRef.current;
+    const wasCovered = prevExplorerCoveredRef.current;
     const onExplorer = explorerSurfaceActive;
+    // The popover fallback hides the page the user is watching; only a real leave may pause it.
+    const leavingExplorer = !onExplorer && !explorerCoveredByPopover && (wasOnExplorer || wasCovered);
+    prevExplorerCoveredRef.current = explorerCoveredByPopover;
     const tabEnteringExplorer =
       prevActiveTabRef.current !== "explorer" && activeTab === "explorer";
     const tabLeavingExplorer =
@@ -1057,7 +1066,7 @@ function App() {
         return;
       }
 
-      if (wasOnExplorer) {
+      if (leavingExplorer) {
         await pauseExplorerMedia();
       }
       if (explorerLinuxEmbedRef.current) {
@@ -1117,7 +1126,7 @@ function App() {
       resizeObserver?.disconnect();
       unlistenWindowResize?.();
     };
-  }, [activeTab, navMode, downloaderOpen, settingsOpen, shellBlocked, isMainMaximized]);
+  }, [activeTab, navMode, downloaderOpen, settingsOpen, shellBlocked, isMainMaximized, explorerCoveredByPopover]);
 
   useEffect(() => {
     if (activeTab !== "explorer") return;

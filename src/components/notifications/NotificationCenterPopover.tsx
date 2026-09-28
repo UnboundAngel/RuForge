@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { debugLog } from "@/debug/debugLog";
+import { MUSIC_EXPLORE_WEBVIEW_LABEL } from "@/explorerProfileScript";
+import { EMBEDDED_EXPLORER_WEBVIEW_LABEL } from "@/explorerWebviewLifecycle";
 import { activeRadialNavSurface } from "@/lib/radialNavOverlayHost";
 import { OVERLAY_EASE } from "@/lib/overlayMotion";
 import { OVERLAY_Z_CLASS } from "@/lib/overlayZIndex";
 import {
+  setExplorerCoveredByPopover,
   setNotificationFilter,
-  setNotificationPopoverOpen,
   setNotificationTab,
   useNotificationCenterStore,
 } from "@/notifications/notificationCenterStore";
-import { actionClosesPopover } from "@/notifications/panelModel";
-import { markAllNotificationsRead, markNotificationsRead, notificationSource } from "@/notifications/registry";
+import {
+  closeNotificationPopover,
+  markEveryNotificationRead,
+  markOneNotificationRead,
+  runNotificationAction,
+} from "@/notifications/popoverActions";
 import { useNotificationItems } from "@/notifications/selectors";
 import type { NotificationActionId, NotificationItem } from "@/notifications/types";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -19,6 +26,7 @@ import { useWatchlistStore } from "@/watchlist/watchlistStore";
 import type { WatchedChannel } from "@/watchlist/types";
 import { bellAnchorRect, isInsideBell } from "./bellAnchor";
 import { NotificationCenterPanel } from "./NotificationCenterPanel";
+import { useNotifyOverlayHost } from "./useNotifyOverlayHost";
 
 const PANEL_GAP_PX = 6;
 const NO_CHANNELS: WatchedChannel[] = [];
@@ -31,31 +39,10 @@ function readAnchor(): Anchor | null {
   return { top: rect.bottom + PANEL_GAP_PX, right: Math.max(8, window.innerWidth - rect.right) };
 }
 
-async function runNotificationAction(item: NotificationItem, action: NotificationActionId): Promise<void> {
-  const source = notificationSource(item.source);
-  if (!source) return;
-  if (actionClosesPopover(action)) setNotificationPopoverOpen(false);
-  try {
-    await source.runAction(item, action);
-    await markNotificationsRead([item]);
-  } catch (e) {
-    console.error(e);
-  }
-}
-
-function markOneRead(item: NotificationItem): void {
-  void markNotificationsRead([item]).catch(console.error);
-}
-
-function markAllRead(): void {
-  void markAllNotificationsRead().catch(console.error);
-}
-
-function closePopover(): void {
-  setNotificationPopoverOpen(false);
-}
-
-/** Host A: the panel portaled under the bell. YouTube child webviews paint over DOM, so it stands down there. */
+/**
+ * Host A portals the panel under the bell. YouTube child webviews paint over DOM, so on those
+ * surfaces Host B (overlay webview) takes over and Host A only returns as the fallback.
+ */
 export function NotificationCenterPopover() {
   const open = useNotificationCenterStore((s) => s.popoverOpen);
   const tab = useNotificationCenterStore((s) => s.tab);
@@ -75,25 +62,45 @@ export function NotificationCenterPopover() {
   useEffect(() => {
     if (prevSurfaceKey.current === surfaceKey) return;
     prevSurfaceKey.current = surfaceKey;
-    closePopover();
+    closeNotificationPopover();
   }, [surfaceKey]);
 
+  const youtubeSurface = open ? activeRadialNavSurface() : null;
+  const overlayFallback = useNotifyOverlayHost(youtubeSurface != null, readAnchor, {
+    navMode,
+    items,
+    channels,
+    tab,
+    filter,
+  });
+  const fallbackSurface = overlayFallback ? youtubeSurface : null;
+
+  useEffect(() => {
+    setExplorerCoveredByPopover(fallbackSurface === EMBEDDED_EXPLORER_WEBVIEW_LABEL);
+    if (fallbackSurface === MUSIC_EXPLORE_WEBVIEW_LABEL) {
+      debugLog("music.webview", "warn", "notify overlay unavailable; popover renders under Music Explore");
+    }
+  }, [fallbackSurface]);
+  useEffect(() => () => setExplorerCoveredByPopover(false), []);
+
+  const hostAOpen = open && (youtubeSurface == null || overlayFallback);
+
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!hostAOpen) return;
     const update = () => setAnchor(readAnchor());
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, [open]);
+  }, [hostAOpen]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!hostAOpen) return;
     const onPointerDown = (e: PointerEvent) => {
       if (panelRef.current?.contains(e.target as Node) || isInsideBell(e.target)) return;
-      closePopover();
+      closeNotificationPopover();
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePopover();
+      if (e.key === "Escape") closeNotificationPopover();
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown);
@@ -101,15 +108,13 @@ export function NotificationCenterPopover() {
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [hostAOpen]);
 
   const onAction = useCallback((item: NotificationItem, action: NotificationActionId) => {
     void runNotificationAction(item, action);
   }, []);
 
-  // Phase 7 renders the panel in an overlay webview for these surfaces; until then the bell only toggles state.
-  const youtubeSurfaceActive = open && activeRadialNavSurface() != null;
-  const shownAnchor = open && !youtubeSurfaceActive ? anchor : null;
+  const shownAnchor = hostAOpen ? anchor : null;
   const transition = reduceMotion ? { duration: 0 } : { duration: 0.18, ease: OVERLAY_EASE };
 
   if (typeof document === "undefined") return null;
@@ -135,11 +140,11 @@ export function NotificationCenterPopover() {
             tab={tab}
             filter={filter}
             onAction={onAction}
-            onMarkRead={markOneRead}
-            onMarkAllRead={markAllRead}
+            onMarkRead={markOneNotificationRead}
+            onMarkAllRead={markEveryNotificationRead}
             onTab={setNotificationTab}
             onFilter={setNotificationFilter}
-            onClose={closePopover}
+            onClose={closeNotificationPopover}
           />
         </motion.div>
       ) : null}

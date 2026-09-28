@@ -3,8 +3,10 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
 import IslandOverlayApp from "./IslandOverlayApp";
+import NotifyOverlayApp from "./NotifyOverlayApp";
 import RadialNavOverlayApp from "./RadialNavOverlayApp";
 import RootErrorBoundary from "./components/RootErrorBoundary";
+import { isNotifyOverlayDocument, NOTIFY_OVERLAY_QUERY } from "./lib/notifyOverlayEvents";
 import {
   isRadialNavOverlayDocument,
   RADIAL_NAV_OVERLAY_QUERY,
@@ -29,7 +31,9 @@ if (import.meta.hot) {
 const rootEl = document.getElementById("root") as HTMLElement;
 const label = isRadialNavOverlayDocument()
   ? RADIAL_NAV_OVERLAY_QUERY
-  : getCurrentWindow().label;
+  : isNotifyOverlayDocument()
+    ? NOTIFY_OVERLAY_QUERY
+    : getCurrentWindow().label;
 
 syncBootNavMode();
 
@@ -55,6 +59,8 @@ const tree =
     <IslandOverlayApp />
   ) : label === RADIAL_NAV_OVERLAY_QUERY ? (
     <RadialNavOverlayApp />
+  ) : label === NOTIFY_OVERLAY_QUERY ? (
+    <NotifyOverlayApp />
   ) : (
     <App />
   );

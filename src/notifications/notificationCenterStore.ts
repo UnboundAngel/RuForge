@@ -12,6 +12,8 @@ type NotificationCenterState = {
   popoverOpen: boolean;
   tab: NotificationCenterTab;
   filter: NotificationCenterFilter;
+  /** Overlay webview unavailable: the in-page popover needs the Explorer hidden, without the leave pause. */
+  explorerCoveredByPopover: boolean;
 };
 
 export const useNotificationCenterStore = create<NotificationCenterState>(() => ({
@@ -19,6 +21,7 @@ export const useNotificationCenterStore = create<NotificationCenterState>(() => 
   popoverOpen: false,
   tab: "feed",
   filter: "all",
+  explorerCoveredByPopover: false,
 }));
 
 export function upsertItem(list: NotificationItem[], item: NotificationItem): NotificationItem[] {
@@ -84,6 +87,11 @@ export function pruneLocal(now: number): void {
 
 export function setNotificationPopoverOpen(open: boolean): void {
   useNotificationCenterStore.setState({ popoverOpen: open });
+}
+
+export function setExplorerCoveredByPopover(covered: boolean): void {
+  if (useNotificationCenterStore.getState().explorerCoveredByPopover === covered) return;
+  useNotificationCenterStore.setState({ explorerCoveredByPopover: covered });
 }
 
 export function setNotificationTab(tab: NotificationCenterTab): void {

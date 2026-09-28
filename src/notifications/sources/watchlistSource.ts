@@ -27,9 +27,9 @@ export const watchlistSource: NotificationSource = {
     const upload = useWatchlistStore
       .getState()
       .snapshot?.uploads.find((u) => u.videoId === item.ref.videoId);
-    if (!upload) return;
-    if (action === "queue") await queueUpload(upload);
-    else if (action === "open-explorer") await openUploadInExplorer(upload);
+    if (!upload) return false;
+    if (action === "queue") return queueUpload(upload);
+    if (action === "open-explorer") await openUploadInExplorer(upload);
   },
   subscribe: (onChange) =>
     useWatchlistStore.subscribe((s, prev) => {
