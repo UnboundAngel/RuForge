@@ -201,7 +201,11 @@ export type DownloadEnqueueSource =
   /** Music: a song downloading straight into a playlist (recommendations, screenshot import). */
   | "musicPlaylistAdd"
   /** Video Library: a video downloaded straight from a YouTube feed card. */
-  | "libraryFeedAdd";
+  | "libraryFeedAdd"
+  /** Watchlist: the user queued a new upload from a followed channel. */
+  | "watchlistAdd"
+  /** Watchlist: a new upload queued on its own because its channel has auto-download on. */
+  | "watchlistAuto";
 
 export type DownloadJobFinishedPayload = {
   jobId: string;

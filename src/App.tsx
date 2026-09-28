@@ -93,6 +93,8 @@ import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { MusicToastHost } from "./components/music/MusicToastHost";
 import { startMusicPlaylistsFileSync } from "./musicPlaylistsFileSync";
+import { startWatchlistSync } from "./watchlist/watchlistSync";
+import { storageBlocksNewDownloads as storageBlocksNewDownloadsFor } from "./lib/storageBlocks";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
 import { MUSIC_TOP_BAR_HALF_WIDTH_PX } from "./components/music/MusicTopBar";
 import {
@@ -442,16 +444,33 @@ function App() {
     if (label !== "main") return;
     void startMusicPlaylistsFileSync(() => useRuforgeStore.getState().refreshVirtualPlaylists());
   }, []);
+
+  useEffect(() => {
+    // Mini windows run these hooks too; a second listener there would double-enqueue auto-downloads.
+    let label = "";
+    try {
+      label = getCurrentWindow().label;
+    } catch {
+      return;
+    }
+    if (label !== "main") return;
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void startWatchlistSync({ onNewUploads: () => {}, onAutoReady: () => {} }).then((un) => {
+      if (cancelled) un();
+      else stop = un;
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
   const setYoutubeProfileSession = useRuforgeStore((s) => s.setYoutubeProfileSession);
   const lastExplorerUrlRef = useRef(lastExplorerUrl);
   lastExplorerUrlRef.current = lastExplorerUrl;
-  const storageBlocksNewDownloads =
-    saveToInternal &&
-    (storageStats
-      ? storageStats.total_bytes / (1024 * 1024 * 1024) >= settings.storageLimitGB
-      : false);
+  const storageBlocksNewDownloads = storageBlocksNewDownloadsFor({ saveToInternal, storageStats, settings });
 
   const updateRef = useRef<Update | null>(null);
   const handleInstallRestartRef = useRef<() => Promise<void>>(async () => {});
