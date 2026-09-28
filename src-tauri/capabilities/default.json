@@ -10,7 +10,8 @@
     "island"
   ],
   "webviews": [
-    "main"
+    "main",
+    "radial-nav-overlay"
   ],
   "permissions": [
     "core:default",
@@ -88,6 +89,7 @@
     "core:webview:allow-webview-hide",
     "core:webview:allow-set-webview-position",
     "core:webview:allow-set-webview-size",
+    "core:webview:allow-set-webview-focus",
     "aptabase:allow-track-event"
   ]
 }

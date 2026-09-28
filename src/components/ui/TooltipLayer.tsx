@@ -18,9 +18,27 @@ function splitShortcut(text: string): { label: string; shortcut: string | null }
   return m ? { label: m[1], shortcut: m[2] } : { label: text, shortcut: null };
 }
 
-function clampTip(anchor: DOMRect, tip: DOMRect): TipPos {
+type TipSide = "auto" | "right";
+
+function readSide(anchor: HTMLElement): TipSide {
+  return anchor.getAttribute("data-tooltip-side") === "right" ? "right" : "auto";
+}
+
+function clampTip(anchor: DOMRect, tip: DOMRect, side: TipSide): TipPos {
   const pad = 8;
-  const gap = 8;
+  const gap = side === "right" ? 10 : 8;
+  if (side === "right") {
+    let left = anchor.right + gap;
+    if (left + tip.width > window.innerWidth - pad) {
+      left = Math.max(pad, anchor.left - gap - tip.width);
+    }
+    const top = anchor.top + anchor.height / 2 - tip.height / 2;
+    return {
+      top: Math.max(pad, Math.min(top, window.innerHeight - tip.height - pad)),
+      left,
+    };
+  }
+
   let top = anchor.top - tip.height - gap;
   if (top < pad) {
     top = anchor.bottom + gap;
@@ -37,7 +55,10 @@ const WRAP_AFTER_CHARS = 36;
 
 /** Music chrome anchors; the Music shell mounts its own layer so it can hide tips under Explore. */
 export const MUSIC_TOOLTIP_SELECTOR = ".rf-music-tooltip-anchor[data-tooltip]";
-/** Every other `data-tooltip` in the app. Use it instead of the native `title` attribute. */
+/**
+ * Every other `data-tooltip` in the app. Use it instead of the native `title` attribute.
+ * Optional: `data-tooltip-side="right"` (sidebar rail), `data-tooltip-shortcut` (key chip).
+ */
 export const APP_TOOLTIP_SELECTOR = "[data-tooltip]:not(.rf-music-tooltip-anchor)";
 
 type Props = {
@@ -61,7 +82,7 @@ export function TooltipLayer({ selector, disabled = false }: Props) {
     const anchor = anchorRef.current;
     const tip = tipRef.current;
     if (!anchor || !tip) return;
-    setPos(clampTip(anchor.getBoundingClientRect(), tip.getBoundingClientRect()));
+    setPos(clampTip(anchor.getBoundingClientRect(), tip.getBoundingClientRect(), readSide(anchor)));
   }, []);
 
   const show = useCallback((anchor: HTMLElement) => {
@@ -85,7 +106,11 @@ export function TooltipLayer({ selector, disabled = false }: Props) {
       const target = e.target;
       if (!(target instanceof Element)) return;
       const anchor = target.closest(selector);
-      if (!(anchor instanceof HTMLElement)) return;
+      if (!(anchor instanceof HTMLElement)) {
+        // An anchor that unmounted or collapsed under the pointer never fires pointerout.
+        if (anchorRef.current && !anchorRef.current.contains(target)) hide();
+        return;
+      }
       if (anchorRef.current === anchor) return;
       show(anchor);
     };
@@ -161,7 +186,9 @@ export function TooltipLayer({ selector, disabled = false }: Props) {
   const wrap = label.length > WRAP_AFTER_CHARS;
   const style = pos ? { top: pos.top, left: pos.left } : { top: -9999, left: -9999 };
 
-  const { label: text, shortcut } = splitShortcut(label);
+  const split = splitShortcut(label);
+  const text = split.label;
+  const shortcut = shownAnchor?.getAttribute("data-tooltip-shortcut")?.trim() || split.shortcut;
   return createPortal(
     <span
       key={label}

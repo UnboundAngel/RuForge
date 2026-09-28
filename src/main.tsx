@@ -3,7 +3,12 @@ import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
 import IslandOverlayApp from "./IslandOverlayApp";
+import RadialNavOverlayApp from "./RadialNavOverlayApp";
 import RootErrorBoundary from "./components/RootErrorBoundary";
+import {
+  isRadialNavOverlayDocument,
+  RADIAL_NAV_OVERLAY_QUERY,
+} from "./lib/radialNavOverlayEvents";
 import { clearRuforgeNotificationDismissTimers } from "./store/ruforgeStore";
 import {
   dismissBootSplash,
@@ -22,7 +27,9 @@ if (import.meta.hot) {
 }
 
 const rootEl = document.getElementById("root") as HTMLElement;
-const label = getCurrentWindow().label;
+const label = isRadialNavOverlayDocument()
+  ? RADIAL_NAV_OVERLAY_QUERY
+  : getCurrentWindow().label;
 
 syncBootNavMode();
 
@@ -43,7 +50,14 @@ if (import.meta.env.DEV && label === "main") {
   });
 }
 
-const tree = label === "island" ? <IslandOverlayApp /> : <App />;
+const tree =
+  label === "island" ? (
+    <IslandOverlayApp />
+  ) : label === RADIAL_NAV_OVERLAY_QUERY ? (
+    <RadialNavOverlayApp />
+  ) : (
+    <App />
+  );
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>

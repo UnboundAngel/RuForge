@@ -13,6 +13,7 @@ mod window_classname;
 pub mod library;
 mod media_bundle;
 mod process_tree;
+mod radial_nav_bridge;
 mod telemetry_prefs;
 mod tray;
 mod utils;
@@ -185,6 +186,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(webview_permissions::init())
+        .plugin(radial_nav_bridge::init())
         .plugin(
             tauri_plugin_snap_layout::init()
                 .button_id("ruforge-tb-maximize")

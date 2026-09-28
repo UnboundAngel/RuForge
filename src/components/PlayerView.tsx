@@ -119,27 +119,11 @@ const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: strin
   );
 };
 
-const Tooltip = ({ text, children, side = "bottom", className = "" }: { text: string; children: React.ReactNode; side?: "bottom" | "top"; className?: string }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  return (
-    <div className={`relative inline-flex items-center justify-center ${className}`} onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
-      {children}
-      <AnimatePresence>
-        {isHovered && (
-          <motion.div
-            initial={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: side === "bottom" ? 10 : -10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className={`absolute ${side === "bottom" ? "bottom-full mb-3" : "top-full mt-3"} px-3 py-1.5 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-xl text-[10px] font-black tracking-widest text-white uppercase whitespace-nowrap z-[200] shadow-2xl shadow-black pointer-events-none left-1/2 -translate-x-1/2`}
-          >
-            {text}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
+const Tooltip = ({ text, children, className = "" }: { text: string; children: React.ReactNode; className?: string }) => (
+  <div className={`relative inline-flex items-center justify-center ${className}`} data-tooltip={text}>
+    {children}
+  </div>
+);
 
 interface PlayerViewProps {
   onSubtitleToggle?: (enabled: boolean) => void;

@@ -534,7 +534,7 @@ export function MusicExploreBottomBar({
                 <RippleBtn
                   type="button"
                   onClick={handleDownloadPlaylist}
-                  disabled={downloadingPlaylist}
+                  disabled={isPlaylistDownloading}
                   className={cn(btn, "rf-music-tooltip-anchor")}
                   data-tooltip={
                     isPlaylistDownloading

@@ -129,6 +129,10 @@ import {
 } from "./components/crash-recovery/CrashRecoveryScreen";
 import { CrashRecoveryPreviewContext } from "./lib/crashRecoveryPreview";
 import { RadialNavOverlay } from "./components/navigation/RadialNavOverlay";
+import {
+  ensureRadialNavOverlay,
+  setRadialNavSurfaceActive,
+} from "./lib/radialNavOverlayHost";
 import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { useDesktopIslandOverlay } from "./hooks/useDesktopIslandOverlay";
@@ -851,6 +855,7 @@ function App() {
     let active = true;
     const explorerSurfaceActive =
       activeTab === "explorer" &&
+      navMode !== "music" &&
       !downloaderOpen &&
       !settingsOpen &&
       !shellBlocked;
@@ -950,6 +955,7 @@ function App() {
           explorerWebviewCreatingRef.current = false;
           if (!active) return;
           explorerWebviewRef.current = webview;
+          void ensureRadialNavOverlay();
           if (onExplorer) {
             void maybeReloadExplorerOnEnter();
             scheduleExplorerProfileProbeAfterShow("explorer-open");
@@ -1066,7 +1072,7 @@ function App() {
       resizeObserver?.disconnect();
       unlistenWindowResize?.();
     };
-  }, [activeTab, downloaderOpen, settingsOpen, shellBlocked, isMainMaximized]);
+  }, [activeTab, navMode, downloaderOpen, settingsOpen, shellBlocked, isMainMaximized]);
 
   useEffect(() => {
     if (activeTab !== "explorer") return;
@@ -1079,7 +1085,7 @@ function App() {
 
   // Explorer host lives outside AnimatePresence; re-sync once the cutout node commits.
   useEffect(() => {
-    if (activeTab !== "explorer" || shellBlocked) return;
+    if (activeTab !== "explorer" || navMode === "music" || shellBlocked) return;
     let cancelled = false;
     let frames = 0;
     const tick = () => {
@@ -1096,7 +1102,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, shellBlocked]);
+  }, [activeTab, navMode, shellBlocked]);
 
   const performUpdateCheckRef = useRef(performUpdateCheck);
   performUpdateCheckRef.current = performUpdateCheck;
@@ -1625,9 +1631,16 @@ function App() {
 
   const showExplorerToolbar =
     activeTab === "explorer" &&
+    navMode !== "music" &&
     !shellBlocked &&
     !downloaderOpen &&
     !settingsOpen;
+
+  useEffect(() => {
+    const label = explorerWebviewLabelRef.current;
+    setRadialNavSurfaceActive(label, showExplorerToolbar);
+    return () => setRadialNavSurfaceActive(label, false);
+  }, [showExplorerToolbar]);
 
   const onExplorerBack = useCallback(async () => {
     try {
@@ -1678,8 +1691,11 @@ function App() {
     [setLastExplorerUrl],
   );
 
-  const { open: radialNavOpen, anchor: radialNavAnchor } =
-    useAltRadialNav(shellBlocked);
+  const {
+    open: radialNavOpen,
+    anchor: radialNavAnchor,
+    presentation: radialNavPresentation,
+  } = useAltRadialNav(shellBlocked);
 
   useDesktopIslandOverlay(!shellBlocked && miniKind == null);
 
@@ -1719,6 +1735,7 @@ function App() {
       <RadialNavOverlay
         open={radialNavOpen}
         anchor={radialNavAnchor}
+        presentation={radialNavPresentation}
         onNavigate={(tab) => setActiveTab(tab)}
         onCenterClick={handleRadialCenterClick}
       />
