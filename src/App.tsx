@@ -96,6 +96,7 @@ import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { MusicToastHost } from "./components/music/MusicToastHost";
 import { startMusicPlaylistsFileSync } from "./musicPlaylistsFileSync";
+import { handleAutoReady, handleNewUploads } from "./watchlist/watchlistAlerts";
 import { startWatchlistSync } from "./watchlist/watchlistSync";
 import { startNotificationCenter } from "./notifications/recordNotification";
 import { useNotificationCenterStore } from "./notifications/notificationCenterStore";
@@ -468,7 +469,10 @@ function App() {
     if (label !== "main" || isNotifyOverlayDocument()) return;
     let stop: (() => void) | null = null;
     let cancelled = false;
-    void startWatchlistSync({ onNewUploads: () => {}, onAutoReady: () => {} }).then((un) => {
+    void startWatchlistSync({
+      onNewUploads: (u) => void handleNewUploads(u).catch((e) => console.error("watchlist alerts failed", e)),
+      onAutoReady: (u) => void handleAutoReady(u).catch((e) => console.error("watchlist auto-ready failed", e)),
+    }).then((un) => {
       if (cancelled) un();
       else stop = un;
     });
