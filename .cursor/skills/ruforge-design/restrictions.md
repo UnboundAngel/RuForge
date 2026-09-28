@@ -186,6 +186,32 @@ Code: `src/components/ConfirmDialog.tsx`, `src/components/MediaView.tsx` (`handl
 
 ---
 
+## Tooltips (locked)
+
+Where: every hover label in every mode and window: players, mini player, title bar, sidebar rail, downloader, Settings, Music. One look everywhere, including Default mode (the Music gray is the house tooltip, not a Music accent).
+
+Do:
+
+- Put `data-tooltip="Label"` on the hit target. `TooltipLayer` portals one gray pill to `document.body`, above the anchor, flips below when there is no room, and clamps 8px inside the window.
+- Sidebar rail: add `data-tooltip-side="right"`. Shortcut chip: `data-tooltip-shortcut="Ctrl+D"` or a `(Ctrl+D)` suffix on the label.
+- Toggles swap the label by changing the attribute; the layer follows it live.
+- Remove the attribute (`undefined`) to suppress a tip on a disabled control.
+- Any new window that renders `data-tooltip` mounts `AppTooltipLayer`.
+
+Don't:
+
+- The native `title` attribute.
+- Per-component hover state + absolutely positioned pills (`role="tooltip"` spans, `isHovered &&` popovers). Those clip at the window edge and drift from the house style.
+- Brown / black uppercase micro-label tooltips or a mode-tinted variant.
+
+Tokens / classes:
+
+- `.rf-music-tooltip` (`#282828`, 0.5rem radius, 13px / 600, white 95%), `.rf-music-tooltip-kbd`, `--wrap` past 36 chars. Radial wedge hint `.rf-radial-hint` uses the same surface.
+
+Code: `src/components/ui/TooltipLayer.tsx` (`AppTooltipLayer`, `MusicTooltipLayer` for `.rf-music-tooltip-anchor` so Music can hide tips under Explore). Mounted in `src/App.tsx`.
+
+---
+
 ## Errors (draft)
 
 Where:

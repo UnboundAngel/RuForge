@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
-import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Icon } from "@iconify/react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -213,57 +212,6 @@ const getTrackTitle = (file: MediaFile | null) => {
 const VIDEO_LIBRARY_MAX_WIDTH = 430;
 const VIDEO_LIBRARY_MAX_HEIGHT = 275;
 
-function computeMiniTooltipPlacement(
-  anchor: DOMRect,
-  tooltipWidth: number,
-  tooltipHeight: number,
-  side: "bottom" | "top",
-): { top: number; left: number; transform: string } {
-  const pad = 8;
-  const gap = 8;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const tw = Math.max(tooltipWidth, 1);
-  const th = Math.max(tooltipHeight, 1);
-
-  const preferBelow = side === "top";
-  const belowTop = anchor.bottom + gap;
-  const aboveTop = anchor.top - gap;
-  const fitsBelow = belowTop + th <= vh - pad;
-  const fitsAbove = aboveTop - th >= pad;
-
-  let top: number;
-  let translateY: string;
-  if (preferBelow && fitsBelow) {
-    top = belowTop;
-    translateY = "0";
-  } else if (!preferBelow && fitsAbove) {
-    top = aboveTop;
-    translateY = "-100%";
-  } else if (fitsBelow) {
-    top = belowTop;
-    translateY = "0";
-  } else {
-    top = aboveTop;
-    translateY = "-100%";
-  }
-
-  const centerX = anchor.left + anchor.width / 2;
-  const half = tw / 2;
-  let left = centerX;
-  let translateX = "-50%";
-
-  if (centerX - half < pad) {
-    left = anchor.left;
-    translateX = "0";
-  } else if (centerX + half > vw - pad) {
-    left = anchor.right;
-    translateX = "-100%";
-  }
-
-  return { top, left, transform: `translate(${translateX}, ${translateY})` };
-}
-
 function MiniVolumeIcon({
   size,
   muted,
@@ -284,82 +232,11 @@ function MiniVolumeIcon({
   return <Volume2 size={size} className={className} />;
 }
 
-const Tooltip = ({ text, children, side = "bottom", disabled = false }: { text: string; children: React.ReactNode; side?: "bottom" | "top"; disabled?: boolean }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const anchorRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [placement, setPlacement] = useState<{ top: number; left: number; transform: string } | null>(null);
-
-  useLayoutEffect(() => {
-    if (!isHovered || disabled || !anchorRef.current) {
-      setPlacement(null);
-      return;
-    }
-    const update = () => {
-      const anchor = anchorRef.current;
-      const tip = measureRef.current;
-      if (!anchor) return;
-      const r = anchor.getBoundingClientRect();
-      const tw = tip?.offsetWidth ?? 0;
-      const th = tip?.offsetHeight ?? 0;
-      if (tw === 0 || th === 0) return;
-      setPlacement(computeMiniTooltipPlacement(r, tw, th, side));
-    };
-    update();
-    const raf = requestAnimationFrame(() => requestAnimationFrame(update));
-    window.addEventListener("resize", update);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", update);
-    };
-  }, [isHovered, disabled, side, text]);
-
+const Tooltip = ({ text, children, disabled = false }: { text: string; children: React.ReactNode; disabled?: boolean }) => {
   if (disabled) return <>{children}</>;
-
-  const tipClassName =
-    "px-2 py-1 bg-stone-950/95 backdrop-blur-xl border border-white/10 rounded-lg text-[8px] font-black tracking-[0.2em] text-white uppercase whitespace-nowrap shadow-2xl shadow-black pointer-events-none";
-
   return (
-    <div
-      ref={anchorRef}
-      className="relative flex flex-col items-center"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div className="relative flex flex-col items-center" data-tooltip={text}>
       {children}
-      {typeof document !== "undefined" &&
-        createPortal(
-          <>
-            <div
-              ref={measureRef}
-              aria-hidden
-              className={`fixed left-0 top-0 opacity-0 ${tipClassName}`}
-            >
-              {text}
-            </div>
-            <AnimatePresence>
-              {isHovered && placement && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                  style={{
-                    position: "fixed",
-                    top: placement.top,
-                    left: placement.left,
-                    transform: placement.transform,
-                    zIndex: 10000,
-                  }}
-                  className={tipClassName}
-                >
-                  {text}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </>,
-          document.body,
-        )}
     </div>
   );
 };
@@ -1941,7 +1818,7 @@ export default function MiniPlayer() {
       {/* Top Controls Strip */}
       <div className={`absolute top-0 left-0 right-0 h-12 z-[100] flex items-center justify-between px-3 pointer-events-none group-hover/mini:opacity-100 opacity-0 transition-opacity duration-300 ${(isMicroMode || isTinyMode) ? 'hidden' : ''}`}>
         {!isCompactMode && playingFile ? (
-          <Tooltip text="Toggle Media Selector" side="top" disabled={isSmallMode}>
+          <Tooltip text="Toggle Media Selector" disabled={isSmallMode}>
             <button 
               onClick={() => setIsMediaSelectorOpen(!isMediaSelectorOpen)}
               className={`p-1.5 pointer-events-auto transition-colors ${isMediaSelectorOpen ? 'text-[color:var(--accent)]' : 'text-stone-400 hover:text-white'}`}
@@ -1967,7 +1844,7 @@ export default function MiniPlayer() {
 
         <div className="flex items-center space-x-1 pointer-events-auto">
           {!isCompactMode && playingFile && (
-            <Tooltip text="Back to App" side="top" disabled={isSmallMode}>
+            <Tooltip text="Back to App" disabled={isSmallMode}>
               <button
                 type="button"
                 onClick={async (e) => {
@@ -1997,7 +1874,7 @@ export default function MiniPlayer() {
             </Tooltip>
           )}
           {!isCompactMode && playingFile && playingAudioOnly && isProbablyWindows && (
-            <Tooltip text="Windows Sound Settings" side="top" disabled={isSmallMode}>
+            <Tooltip text="Windows Sound Settings" disabled={isSmallMode}>
               <button
                 type="button"
                 onClick={(e) => {
@@ -2010,7 +1887,7 @@ export default function MiniPlayer() {
               </button>
             </Tooltip>
           )}
-          <Tooltip text={isPinned ? "Unpin Window" : "Pin Window"} side="top" disabled={isSmallMode || isCompactMode}>
+          <Tooltip text={isPinned ? "Unpin Window" : "Pin Window"} disabled={isSmallMode || isCompactMode}>
             <button 
               onClick={async () => {
                 const newPinned = !isPinned;
@@ -2024,7 +1901,7 @@ export default function MiniPlayer() {
             </button>
           </Tooltip>
 
-          <Tooltip text="Close Player" side="top" disabled={isSmallMode || isCompactMode}>
+          <Tooltip text="Close Player" disabled={isSmallMode || isCompactMode}>
             <button 
               onPointerDown={(e) => {
                 e.stopPropagation();

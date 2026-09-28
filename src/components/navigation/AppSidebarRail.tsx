@@ -3,8 +3,6 @@ import { VideoDownloadRailButton } from "@/components/downloader/VideoDownloadDo
 import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
-import { RailTooltipLayer } from "@/components/navigation/RailTooltipLayer";
-import { railTooltipAnchorClass } from "@/components/navigation/RailNavTooltip";
 import type { ActiveTab } from "@/store/types";
 import type { NavMode } from "@/store/types";
 
@@ -74,12 +72,12 @@ export function AppSidebarRail({
               key={item.id}
               type="button"
               data-rail-tab={item.id}
-              data-rail-tooltip={item.label}
+              data-tooltip={item.label}
+              data-tooltip-side="right"
               onClick={() => onSelectTab(item.id)}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                railTooltipAnchorClass,
                 "group/rail relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-150",
                 isActive
                   ? "text-[color:var(--accent)]"
@@ -97,7 +95,6 @@ export function AppSidebarRail({
           );
         })}
       </nav>
-      <RailTooltipLayer disabled={disabled} />
     </div>
   );
 }

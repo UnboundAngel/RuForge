@@ -1,39 +1,6 @@
-import { useState, useRef, useEffect, useLayoutEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Music, Video } from "lucide-react";
-
-function computeTooltipPlacement(
-  anchor: DOMRect,
-  tooltipWidth: number,
-  tooltipHeight: number,
-): { top: number; left: number; transform: string } {
-  const pad = 10;
-  const gap = 8;
-  const vw = window.innerWidth;
-  const tw = Math.max(tooltipWidth, 1);
-  const th = Math.max(tooltipHeight, 1);
-
-  const preferAbove = anchor.top - gap - th >= pad;
-  const top = preferAbove ? anchor.top - gap : anchor.bottom + gap;
-  const translateY = preferAbove ? "-100%" : "0";
-
-  const centerX = anchor.left + anchor.width / 2;
-  const half = tw / 2;
-
-  let left = centerX;
-  let translateX = "-50%";
-
-  if (centerX - half < pad) {
-    left = anchor.left;
-    translateX = "0";
-  } else if (centerX + half > vw - pad) {
-    left = anchor.right;
-    translateX = "-100%";
-  }
-
-  return { top, left, transform: `translate(${translateX}, ${translateY})` };
-}
 
 /** Marquee text that animates when title overflows its container boundaries. */
 export const MarqueeText = ({
@@ -245,77 +212,6 @@ export function UrlInputPacer({
   );
 }
 
-const QueueTooltip = ({
-  text,
-  visible,
-  anchorRef,
-}: {
-  text: string;
-  visible: boolean;
-  anchorRef: React.RefObject<HTMLElement | null>;
-}) => {
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [placement, setPlacement] = useState<{
-    top: number;
-    left: number;
-    transform: string;
-  } | null>(null);
-
-  useLayoutEffect(() => {
-    if (!visible || !anchorRef.current) {
-      setPlacement(null);
-      return;
-    }
-    const update = () => {
-      const anchor = anchorRef.current;
-      const tip = measureRef.current;
-      if (!anchor) return;
-      const r = anchor.getBoundingClientRect();
-      const tw = tip?.offsetWidth ?? 0;
-      const th = tip?.offsetHeight ?? 0;
-      if (tw === 0 || th === 0) return;
-      setPlacement(computeTooltipPlacement(r, tw, th));
-    };
-    update();
-    const raf = requestAnimationFrame(() => requestAnimationFrame(update));
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [visible, anchorRef, text]);
-
-  if (!visible || typeof document === "undefined") return null;
-
-  return createPortal(
-    <>
-      <div
-        ref={measureRef}
-        className="pointer-events-none fixed left-0 top-0 z-[9999] whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 opacity-0 shadow-md ring-1 ring-white/10"
-        aria-hidden
-      >
-        {text}
-      </div>
-      {placement ? (
-        <div
-          role="tooltip"
-          className="pointer-events-none fixed z-[9999] whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10"
-          style={{
-            top: placement.top,
-            left: placement.left,
-            transform: placement.transform,
-          }}
-        >
-          {text}
-        </div>
-      ) : null}
-    </>,
-    document.body,
-  );
-};
-
 /** Shared per-job audio toggle (playlist rows + downloader hero). */
 export function DownloadJobAudioToggle({
   audioOnly,
@@ -328,22 +224,13 @@ export function DownloadJobAudioToggle({
   disabled?: boolean;
   className?: string;
 }) {
-  const [audioHovered, setAudioHovered] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
   const IconComponent = audioOnly ? Music : Video;
   return (
     <motion.div className={`relative ${className}`}>
-      <QueueTooltip
-        text={audioOnly ? "Switch to audio + video" : "Switch to audio only"}
-        visible={audioHovered && !disabled}
-        anchorRef={buttonRef}
-      />
       <button
-        ref={buttonRef}
         type="button"
         disabled={disabled}
-        onMouseEnter={() => setAudioHovered(true)}
-        onMouseLeave={() => setAudioHovered(false)}
+        data-tooltip={disabled ? undefined : audioOnly ? "Switch to audio + video" : "Switch to audio only"}
         onClick={onToggle}
         aria-label={audioOnly ? "Switch to video download" : "Switch to audio-only download"}
         className="flex h-7 w-7 items-center justify-center rounded-md p-1.5 text-[#EDD79C]/40 transition-colors hover:bg-white/5 hover:text-[#EDD79C]/75 active:scale-95 disabled:pointer-events-none disabled:opacity-25"

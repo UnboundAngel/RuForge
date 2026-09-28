@@ -5,7 +5,6 @@ import { useMusicDownloadCelebrations } from "@/hooks/useMusicDownloadCelebratio
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { RadialNavIcon } from "@/components/navigation/RadialNavIcon";
-import { railTooltipAnchorClass } from "@/components/navigation/RailNavTooltip";
 import { downloadShortcutLabel } from "@/lib/shortcutLabels";
 import { extractYouTubeVideoId } from "@/youtubeUrl";
 
@@ -85,12 +84,13 @@ export function VideoDownloadRailButton({
       <button
         type="button"
         data-rail-tab="downloader"
-        data-rail-tooltip="Expand downloads"
-        data-rail-shortcut={downloadShortcutLabel()}
+        data-tooltip="Expand downloads"
+        data-tooltip-side="right"
+        data-tooltip-shortcut={downloadShortcutLabel()}
         onClick={onToggle}
         disabled={disabled}
         aria-label={`${title}. Expand preview.`}
-        className={cn(railTooltipAnchorClass, "group/rail relative flex h-11 w-11 items-center justify-center rounded-xl text-[color:var(--accent)]")}
+        className="group/rail relative flex h-11 w-11 items-center justify-center rounded-xl text-[color:var(--accent)]"
       >
         <span
           className="relative flex items-center justify-center overflow-hidden rounded-full bg-[#1D1613]"
@@ -141,14 +141,14 @@ export function VideoDownloadRailButton({
     <button
       type="button"
       data-rail-tab="downloader"
-      data-rail-tooltip="Download"
-      data-rail-shortcut={downloadShortcutLabel()}
+      data-tooltip="Download"
+      data-tooltip-side="right"
+      data-tooltip-shortcut={downloadShortcutLabel()}
       onClick={onToggle}
       disabled={disabled}
       aria-label="Download"
       aria-current={overlayOpen ? "page" : undefined}
       className={cn(
-        railTooltipAnchorClass,
         "group/rail relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-150",
         overlayOpen
           ? "text-[color:var(--accent)]"

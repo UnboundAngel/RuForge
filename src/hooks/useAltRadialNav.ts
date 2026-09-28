@@ -1,5 +1,18 @@
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clampRadialMenuCenter } from "@/lib/radialMenuAnchor";
+import {
+  RADIAL_NAV_ALT_EVENT,
+  type RadialNavAltPayload,
+} from "@/lib/radialNavOverlayEvents";
+import {
+  activeRadialNavSurface,
+  radialNavCursorClientPoint,
+} from "@/lib/radialNavOverlayHost";
+
+/** `overlay` paints in its own child webview because the YouTube webviews cover main-window DOM. */
+export type RadialNavPresentation = "dom" | "overlay";
 
 function isTypingTarget(): boolean {
   const el = document.activeElement;
@@ -15,6 +28,7 @@ function isTypingTarget(): boolean {
 
 export function useAltRadialNav(disabled: boolean) {
   const [open, setOpen] = useState(false);
+  const [presentation, setPresentation] = useState<RadialNavPresentation>("dom");
   const lastPointer = useRef(
     clampRadialMenuCenter(
       typeof window !== "undefined" ? window.innerWidth / 2 : 0,
@@ -22,8 +36,31 @@ export function useAltRadialNav(disabled: boolean) {
     ),
   );
   const [anchor, setAnchor] = useState(lastPointer.current);
+  const openSeq = useRef(0);
+  const openRef = useRef(false);
+  const presentationRef = useRef<RadialNavPresentation>("dom");
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    openSeq.current += 1;
+    openRef.current = false;
+    setOpen(false);
+  }, []);
+
+  const beginOpen = useCallback(async () => {
+    if (openRef.current) return;
+    openRef.current = true;
+    const seq = ++openSeq.current;
+    const overlay = activeRadialNavSurface() !== null;
+    let point = lastPointer.current;
+    if (overlay) {
+      point = (await radialNavCursorClientPoint()) ?? point;
+      if (seq !== openSeq.current) return;
+    }
+    presentationRef.current = overlay ? "overlay" : "dom";
+    setPresentation(presentationRef.current);
+    setAnchor(clampRadialMenuCenter(point.x, point.y));
+    setOpen(true);
+  }, []);
 
   useEffect(() => {
     const onPointerMove = (e: PointerEvent) => {
@@ -53,7 +90,7 @@ export function useAltRadialNav(disabled: boolean) {
 
   useEffect(() => {
     if (disabled) {
-      setOpen(false);
+      close();
       return;
     }
 
@@ -61,30 +98,46 @@ export function useAltRadialNav(disabled: boolean) {
       if (e.key !== "Alt" || e.repeat) return;
       if (isTypingTarget()) return;
       e.preventDefault();
-      setAnchor(
-        clampRadialMenuCenter(
-          lastPointer.current.x,
-          lastPointer.current.y,
-        ),
-      );
-      setOpen(true);
+      void beginOpen();
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "Alt") setOpen(false);
+      if (e.key === "Alt") close();
     };
 
-    const onWindowBlur = () => setOpen(false);
+    // Focus moving into the overlay or a YouTube webview blurs this document without leaving the app.
+    const onDocumentBlur = () => {
+      if (presentationRef.current === "dom") close();
+    };
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("blur", onWindowBlur);
+    window.addEventListener("blur", onDocumentBlur);
+
+    let disposed = false;
+    const unlisteners: Array<() => void> = [];
+    const keep = (off: () => void) => {
+      if (disposed) off();
+      else unlisteners.push(off);
+    };
+    void listen<RadialNavAltPayload>(RADIAL_NAV_ALT_EVENT, (event) => {
+      if (event.payload.down) void beginOpen();
+      else close();
+    }).then(keep);
+    void getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (!focused) close();
+      })
+      .then(keep);
+
     return () => {
+      disposed = true;
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("blur", onWindowBlur);
+      window.removeEventListener("blur", onDocumentBlur);
+      for (const off of unlisteners) off();
     };
-  }, [disabled]);
+  }, [disabled, beginOpen, close]);
 
-  return { open, close, anchor };
+  return { open, close, anchor, presentation };
 }

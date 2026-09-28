@@ -29,8 +29,7 @@ Rules: root `AGENTS.md` → **How to log Unreleased**.
 
 ## Now
 
-0.4.0 is out. App work pause-friendly. Website hero / marketing pass done for the 3-slide set. Storage cap before enqueue shipped (#10). Playlist import Phase 1 (prompt + paste JSON, review, save) built on `claude/nifty-mayer-e73q2w`, awaiting Angel's review; CLI entry is Phase 2. Next focus: main-app nav restructure.
-
+0.4.0 is out. App work pause-friendly. Website hero / marketing pass done for the 3-slide set. Storage cap before enqueue shipped (#10). Playlist import Phase 1 (prompt + paste JSON, review, save) merged to main; CLI entry is Phase 2. Library home rework landed (YouTube-style sections, Shorts shelves, channel avatars, feed mixed into the grid).
 Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shipped target. Windows dev: `npm run dev:app` (Vite on 1430). Website: `npm run dev` in `website/` (Astro on 4321).
 
 ## Open P0 (blocks release)
@@ -39,14 +38,11 @@ Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shi
 
 ## Next 3 (priority order)
 
-1. Main-app nav restructure: RuForge | Movies & Shows | Music mode switcher + MoviesShowsShell.
-2. Re-test mid-download 403 at 720p with cookies (see Notes).
+1. Playlist import Phase 2: CLI entry.
 
 ## Notes (not P0)
 
 - Codex stays out of app implementation by default. Use it for CI, GitHub, Cursor prompts, and review summaries. Codex chats: `docs/agents/codex/AGENTS.md`.
-- P2 mid-download 403 was not reproduced on CLI without cookies. Fix adds yt-dlp retries, resume-on-retry, and clearer 403 copy. Re-test in-app at 720p with cookie mode on https://www.youtube.com/watch?v=rkdzxRaI68g.
-- Music Explore: Download Playlist disables only on local `downloadingPlaylist`, not when the queue already has jobs for that playlist. Cosmetic, not a blocker.
 - SponsorBlock is integrated; master toggle on by default.
 - Authorize Cleanup is shipped (`AuthorizeCleanupModal` + `delete_media_batch`). Legacy `authorize_cleanup` is unused. Do not list this as broken.
 - `docs/changes.html` is not in the repo. Version graph: `docs/agents/release/versioner.html` + `docs/agents/release/versions/`.

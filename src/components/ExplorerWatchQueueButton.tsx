@@ -14,10 +14,7 @@ import {
   youtubeUrlsMatch,
 } from "../youtubeUrl";
 import { WarningPlaylistIcon } from "./icons/WarningPlaylistIcon";
-import {
-  titlebarIconButtonClass,
-  titlebarTooltipClassName,
-} from "./TitlebarHoverButton";
+import { titlebarIconButtonClass } from "./TitlebarHoverButton";
 import { deliverUserNotification } from "../systemNotify";
 
 const STORAGE_FULL_NOTIFY =
@@ -223,7 +220,7 @@ export function ExplorerWatchQueueButton({
         ) : null}
       </AnimatePresence>
 
-      <div className="group/tbar-tt relative flex h-10 w-10 flex-shrink-0 items-center justify-center">
+      <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center">
         <button
           type="button"
           onClick={() => void handleClick()}
@@ -231,6 +228,7 @@ export function ExplorerWatchQueueButton({
           onMouseLeave={() => setHovering(false)}
           className={titlebarIconButtonClass}
           aria-label={tooltip}
+          data-tooltip={tooltip}
         >
           <span className={ICON_SLOT}>
             {storagePulse ? (
@@ -278,10 +276,6 @@ export function ExplorerWatchQueueButton({
             )}
           </span>
         </button>
-
-        <div role="tooltip" className={titlebarTooltipClassName}>
-          {tooltip}
-        </div>
       </div>
     </div>
   );

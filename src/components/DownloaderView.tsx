@@ -61,20 +61,12 @@ function MainDownloaderUrlChip({
   audioWarning?: boolean;
 }) {
   const [chipHovered, setChipHovered] = useState(false);
-  const [copyHovered, setCopyHovered] = useState(false);
-  const [pasteHovered, setPasteHovered] = useState(false);
-  const [clearHovered, setClearHovered] = useState(false);
 
   return (
     <div
       className="pointer-events-auto w-full max-w-[min(380px,calc(100vw-2rem))]"
       onMouseEnter={() => setChipHovered(true)}
-      onMouseLeave={() => {
-        setChipHovered(false);
-        setCopyHovered(false);
-        setPasteHovered(false);
-        setClearHovered(false);
-      }}
+      onMouseLeave={() => setChipHovered(false)}
     >
       <div
         className={`flex overflow-hidden rounded-lg transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
@@ -112,19 +104,10 @@ function MainDownloaderUrlChip({
               <button
                 type="button"
                 onClick={() => void onPasteFromClipboard()}
-                onMouseEnter={() => setPasteHovered(true)}
-                onMouseLeave={() => setPasteHovered(false)}
                 className="relative flex h-9 w-9 shrink-0 items-center justify-center"
                 aria-label="Paste link from clipboard"
+                data-tooltip="Paste link"
               >
-                <span
-                  className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-                    pasteHovered ? "opacity-100" : "opacity-0"
-                  }`}
-                  role="tooltip"
-                >
-                  Paste link
-                </span>
                 <AnimatePresence mode="wait" initial={false}>
                   {pasted ? (
                     <motion.span
@@ -154,19 +137,10 @@ function MainDownloaderUrlChip({
               <button
                 type="button"
                 onClick={() => void onCopy()}
-                onMouseEnter={() => setCopyHovered(true)}
-                onMouseLeave={() => setCopyHovered(false)}
                 className="relative min-w-0 flex-1 truncate whitespace-nowrap py-2 text-left text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-white"
                 aria-label="Copy link"
+                data-tooltip="Copy link"
               >
-                <span
-                  className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-                    copyHovered ? "opacity-100" : "opacity-0"
-                  }`}
-                  role="tooltip"
-                >
-                  Copy link
-                </span>
                 <span
                   className={`block truncate transition-opacity duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
                     chipHovered ? "px-2 opacity-100" : "opacity-0"
@@ -181,21 +155,12 @@ function MainDownloaderUrlChip({
                   e.stopPropagation();
                   onClear();
                 }}
-                onMouseEnter={() => setClearHovered(true)}
-                onMouseLeave={() => setClearHovered(false)}
                 className={`relative flex h-9 shrink-0 items-center justify-center overflow-hidden text-[#EDD79C]/40 transition-[opacity,width,padding,color] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#EDD79C] ${
                   chipHovered ? "pointer-events-auto w-8 opacity-100" : "pointer-events-none w-0 min-w-0 opacity-0"
                 }`}
                 aria-label="Clear link"
+                data-tooltip="Clear link"
               >
-                <span
-                  className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-                    clearHovered && chipHovered ? "opacity-100" : "opacity-0"
-                  }`}
-                  role="tooltip"
-                >
-                  Clear link
-                </span>
                 <X size={12} strokeWidth={2.5} />
               </button>
             </motion.div>
@@ -217,8 +182,6 @@ function QuickEnqueuePinnedChip({
 }) {
   const [chipHovered, setChipHovered] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [copyHovered, setCopyHovered] = useState(false);
-  const [clearHovered, setClearHovered] = useState(false);
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -242,11 +205,7 @@ function QuickEnqueuePinnedChip({
     <div
       className="pointer-events-auto w-full max-w-[min(380px,calc(100vw-2rem))] self-start"
       onMouseEnter={() => setChipHovered(true)}
-      onMouseLeave={() => {
-        setChipHovered(false);
-        setCopyHovered(false);
-        setClearHovered(false);
-      }}
+      onMouseLeave={() => setChipHovered(false)}
     >
       <div
         className={`flex shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,width] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
@@ -256,20 +215,11 @@ function QuickEnqueuePinnedChip({
         <button
           type="button"
           onClick={() => void handleCopy()}
-          onMouseEnter={() => setCopyHovered(true)}
-          onMouseLeave={() => setCopyHovered(false)}
           className="relative flex min-w-0 flex-1 items-center overflow-hidden text-left"
           aria-label="Copy link"
+          data-tooltip="Click to copy"
         >
           <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
-            <span
-              className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-                copyHovered ? "opacity-100" : "opacity-0"
-              }`}
-              role="tooltip"
-            >
-              Click to copy
-            </span>
             <AnimatePresence mode="wait" initial={false}>
               {copied ? (
                 <motion.span
@@ -310,21 +260,12 @@ function QuickEnqueuePinnedChip({
             e.stopPropagation();
             onRemove();
           }}
-          onMouseEnter={() => setClearHovered(true)}
-          onMouseLeave={() => setClearHovered(false)}
           className={`relative flex h-9 shrink-0 items-center justify-center overflow-hidden text-[#EDD79C]/40 transition-[opacity,width,padding,color] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#EDD79C] ${
             chipHovered ? "pointer-events-auto w-8 opacity-100" : "pointer-events-none w-0 min-w-0 opacity-0"
           }`}
           aria-label="Remove from list"
+          data-tooltip="Remove"
         >
-          <span
-            className={`pointer-events-none absolute bottom-full left-1/2 z-[4] mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/75 px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.22em] text-[#EDD79C]/90 shadow-md ring-1 ring-white/10 transition-opacity duration-300 ${
-              clearHovered && chipHovered ? "opacity-100" : "opacity-0"
-            }`}
-            role="tooltip"
-          >
-            Remove
-          </span>
           <X size={12} strokeWidth={2.5} />
         </button>
       </div>

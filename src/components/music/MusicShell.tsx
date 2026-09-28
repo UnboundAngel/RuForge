@@ -117,6 +117,10 @@ import {
 import { profileNeedsIdentityProbe } from "@/lib/youtubeProfileSession";
 import { isPrimaryModifierOnly } from "@/lib/shortcutLabels";
 import {
+  ensureRadialNavOverlay,
+  setRadialNavSurfaceActive,
+} from "@/lib/radialNavOverlayHost";
+import {
   profileNeedsAvatarProbe,
   runMusicExploreProfileProbe,
 } from "@/lib/youtubeProfileProbeRunner";
@@ -944,6 +948,11 @@ export function MusicShell() {
   }, [exploreWebviewActive]);
 
   useEffect(() => {
+    setRadialNavSurfaceActive(MUSIC_EXPLORE_WEBVIEW_LABEL, exploreWebviewActive);
+    return () => setRadialNavSurfaceActive(MUSIC_EXPLORE_WEBVIEW_LABEL, false);
+  }, [exploreWebviewActive]);
+
+  useEffect(() => {
     if (!exploreWebviewActive) return;
     resyncExploreWebview();
   }, [musicDetail, playerExpanded, panelOpen, panelMode, navCollapsed, exploreWebviewActive, resyncExploreWebview]);
@@ -1020,6 +1029,7 @@ export function MusicShell() {
           });
           if (!active) return;
           musicExploreWebviewRef.current = webview;
+          void ensureRadialNavOverlay();
           if (pendingStartUrl) {
             musicExploreNavigatePendingRef.current = null;
           }
