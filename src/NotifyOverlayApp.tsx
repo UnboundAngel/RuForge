@@ -2,6 +2,7 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
+import type { ChannelHandlers } from "@/components/notifications/channels/ChannelsPanel";
 import { NotificationCenterPanel } from "@/components/notifications/NotificationCenterPanel";
 import { RfScrollbarHost } from "@/components/ui/RfScrollbarHost";
 import { AppTooltipLayer } from "@/components/ui/TooltipLayer";
@@ -29,6 +30,13 @@ function send(action: NotifyOverlayAction): void {
 function close(reason: NotifyOverlayClose["reason"]): void {
   void emitTo(MAIN, NOTIFY_OVERLAY_CLOSE_EVENT, { reason } satisfies NotifyOverlayClose);
 }
+
+const channelHandlers: ChannelHandlers = {
+  onFollowInput: (input) => send({ type: "followInput", input }),
+  onAutoDownload: (channelId, enabled) => send({ type: "autoDownload", channelId, enabled }),
+  onUnfollow: (channelId) => send({ type: "unfollow", channelId }),
+  onCheckNow: () => send({ type: "checkNow" }),
+};
 
 /** Host B: the notification panel in a transparent child webview stacked above the YouTube webviews. */
 export default function NotifyOverlayApp() {
@@ -110,6 +118,8 @@ export default function NotifyOverlayApp() {
             <NotificationCenterPanel
               items={state.items}
               channels={state.channels}
+              channelsUi={state.channelsUi}
+              channelHandlers={channelHandlers}
               tab={state.tab}
               filter={state.filter}
               onAction={onAction}

@@ -18,7 +18,13 @@ import {
 import { allItems } from "@/notifications/selectors";
 import type { NotificationCenterFilter, NotificationCenterTab, NotificationItem } from "@/notifications/types";
 import type { NavMode } from "@/store/types";
-import type { WatchedChannel } from "@/watchlist/types";
+import {
+  checkChannelsNow,
+  followFromPanel,
+  setChannelAutoDownload,
+  unfollowFromPanel,
+} from "@/watchlist/channelManage";
+import type { ChannelsUiState, WatchedChannel } from "@/watchlist/types";
 
 const PANEL_MAX_HEIGHT = 560;
 const PANEL_BOTTOM_CLEARANCE = 72;
@@ -27,6 +33,7 @@ export type NotifyOverlayView = {
   navMode: NavMode;
   items: NotificationItem[];
   channels: WatchedChannel[];
+  channelsUi: ChannelsUiState;
   tab: NotificationCenterTab;
   filter: NotificationCenterFilter;
 };
@@ -62,6 +69,18 @@ function applyOverlayAction(action: NotifyOverlayAction): void {
     case "filter":
       setNotificationFilter(action.filter);
       return;
+    case "followInput":
+      if (typeof action.input === "string") void followFromPanel(action.input);
+      return;
+    case "autoDownload":
+      setChannelAutoDownload(action.channelId, action.enabled === true);
+      return;
+    case "unfollow":
+      unfollowFromPanel(action.channelId);
+      return;
+    case "checkNow":
+      void checkChannelsNow();
+      return;
   }
 }
 
@@ -81,7 +100,7 @@ export function useNotifyOverlayHost(
     return () => setNotifyOverlayHandlers(null);
   }, []);
 
-  const { navMode, items, channels, tab, filter } = view;
+  const { navMode, items, channels, channelsUi, tab, filter } = view;
   useEffect(() => {
     if (!wanted) return;
     pushNotifyOverlayState({
@@ -91,10 +110,11 @@ export function useNotifyOverlayHost(
       maxHeight: panelMaxHeight(),
       items,
       channels,
+      channelsUi,
       tab,
       filter,
     });
-  }, [wanted, navMode, items, channels, tab, filter]);
+  }, [wanted, navMode, items, channels, channelsUi, tab, filter]);
 
   useEffect(() => {
     if (!wanted) {

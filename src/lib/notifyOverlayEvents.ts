@@ -1,6 +1,6 @@
 import type { NotificationCenterFilter, NotificationCenterTab, NotificationItem } from "@/notifications/types";
 import type { NavMode } from "@/store/types";
-import type { WatchedChannel } from "@/watchlist/types";
+import type { ChannelsUiState, WatchedChannel } from "@/watchlist/types";
 
 /** Child webview in `main` that paints the notification popover above the YouTube webviews. */
 export const NOTIFY_OVERLAY_LABEL = "notify-overlay";
@@ -24,6 +24,7 @@ export type NotifyOverlayState = {
   maxHeight: number;
   items: NotificationItem[];
   channels: WatchedChannel[];
+  channelsUi: ChannelsUiState;
   tab: NotificationCenterTab;
   filter: NotificationCenterFilter;
 };
@@ -33,7 +34,11 @@ export type NotifyOverlayAction =
   | { type: "markRead"; itemId: string }
   | { type: "markAllRead" }
   | { type: "tab"; tab: NotificationCenterTab }
-  | { type: "filter"; filter: NotificationCenterFilter };
+  | { type: "filter"; filter: NotificationCenterFilter }
+  | { type: "followInput"; input: string }
+  | { type: "autoDownload"; channelId: string; enabled: boolean }
+  | { type: "unfollow"; channelId: string }
+  | { type: "checkNow" };
 
 export type NotifyOverlaySize = { height: number };
 

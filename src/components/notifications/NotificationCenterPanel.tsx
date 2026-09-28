@@ -6,7 +6,8 @@ import type {
   NotificationCenterTab,
   NotificationItem,
 } from "@/notifications/types";
-import type { WatchedChannel } from "@/watchlist/types";
+import type { ChannelsUiState, WatchedChannel } from "@/watchlist/types";
+import { ChannelsPanel, type ChannelHandlers } from "./channels/ChannelsPanel";
 import { NotificationCenterHeader } from "./NotificationCenterHeader";
 import { NotificationEmpty } from "./NotificationEmpty";
 import { NotificationRow } from "./NotificationRow";
@@ -14,6 +15,8 @@ import { NotificationRow } from "./NotificationRow";
 export type NotificationCenterPanelProps = {
   items: NotificationItem[];
   channels: WatchedChannel[];
+  channelsUi: ChannelsUiState;
+  channelHandlers: ChannelHandlers;
   tab: NotificationCenterTab;
   filter: NotificationCenterFilter;
   onAction: (item: NotificationItem, action: NotificationActionId) => void;
@@ -28,6 +31,8 @@ export type NotificationCenterPanelProps = {
 export function NotificationCenterPanel({
   items,
   channels,
+  channelsUi,
+  channelHandlers,
   tab,
   filter,
   onAction,
@@ -53,11 +58,7 @@ export function NotificationCenterPanel({
       />
       <div className="rf-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {tab === "channels" ? (
-          <p className="px-4 py-10 text-center text-[12px] text-stone-500">
-            {channels.length === 0
-              ? "Not following anyone yet."
-              : `Following ${channels.length} ${channels.length === 1 ? "channel" : "channels"}.`}
-          </p>
+          <ChannelsPanel channels={channels} ui={channelsUi} handlers={channelHandlers} />
         ) : shown.length === 0 ? (
           <NotificationEmpty onFollowChannel={() => onTab("channels")} />
         ) : (
