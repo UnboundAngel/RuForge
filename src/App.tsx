@@ -51,6 +51,8 @@ import MusicMiniPlayer from "./components/music-mini/MusicMiniPlayer";
 import { isAudioOnlyPath } from "./mediaKind";
 import { flattenGalleryScanToMediaFiles } from "./galleryScan";
 import { ExplorerWatchQueueButton } from "./components/ExplorerWatchQueueButton";
+import { NotificationBellButton } from "./components/notifications/NotificationBellButton";
+import { NotificationCenterPopover } from "./components/notifications/NotificationCenterPopover";
 import { ExplorerTitlebarNav } from "./components/ExplorerTitlebarNav";
 import { TitlebarHoverButton } from "./components/TitlebarHoverButton";
 import { DownloaderOverlay } from "./components/downloader/DownloaderOverlay";
@@ -219,6 +221,8 @@ const WindowControls = ({
           storageBlocksNewDownloads={storageBlocksNewDownloads}
         />
       )}
+
+      <NotificationBellButton />
 
       {navMode !== "music" && (
         <TitlebarHoverButton
@@ -1814,6 +1818,7 @@ function App() {
         storageBlocksNewDownloads={storageBlocksNewDownloads}
         onUpdaterStatusClick={undefined}
       />
+      <NotificationCenterPopover />
 
       {!shellBlocked && (
         <ActivityIsland
@@ -1850,14 +1855,14 @@ function App() {
             data-tauri-drag-region
           />
           <div
-            className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
+            className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[360px]" : "right-[280px]"}`}
             style={{ left: `calc(50% + ${MUSIC_TOP_BAR_HALF_WIDTH_PX}px)` }}
             data-tauri-drag-region
           />
         </>
       ) : (
         <div
-          className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
+          className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[360px]" : "right-[280px]"}`}
           style={{ left: SIDEBAR_RAIL_PX }}
           data-tauri-drag-region
         />

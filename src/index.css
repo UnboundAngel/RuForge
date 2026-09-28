@@ -129,6 +129,8 @@
   /* Near-neutral so thumbnails carry the color; the bezel stays brand brown. */
   --rf-well: #151211;
   --rf-well-raised: #201c1a;
+  --rf-popover-bg: #1D1613;
+  --rf-popover-raised: rgb(255 255 255 / 0.04);
   --surface: rgba(43, 30, 25, 0.7);
   --surface-elevated: rgba(56, 39, 32, 0.85);
   --border: rgba(212, 163, 115, 0.1);
@@ -648,6 +650,8 @@ html.ruforge-island-root #root {
   --bg: #0a0a0a;
   /* Pull the global accent token to music red so all existing hover:text-[var(--accent)] surfaces get it for free. */
   --accent: #ff0033;
+  --rf-popover-bg: #0f0f0f;
+  --rf-popover-raised: rgb(255 255 255 / 0.05);
 }
 
 /* Immersive player (vinyl + full cover): pure black frame matches expanded hero. */
