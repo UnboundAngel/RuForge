@@ -16,6 +16,8 @@ const short = (id: string): FeedVideo => ({
   short: true,
 });
 
+const video = (id: string): FeedVideo => ({ ...short(id), short: false });
+
 const files = (n: number): MixedGridItem<string>[] =>
   Array.from({ length: n }, (_, i) => ({ kind: "file", file: `v${i}` }));
 
@@ -26,6 +28,7 @@ describe("composeHomeSections", () => {
       columns: 4,
       continueFiles: ["c1"],
       shorts: Array.from({ length: 12 }, (_, i) => short(`s${i}`)),
+      watchlist: [],
       hasPlaylists: true,
       spotlight: { channel: "CaseOh", channelId: null, files: ["a", "b", "c"] },
     });
@@ -43,10 +46,27 @@ describe("composeHomeSections", () => {
       columns: 4,
       continueFiles: [],
       shorts: [short("s1")],
+      watchlist: [],
       hasPlaylists: false,
       spotlight: null,
     });
     expect(sections.map((s) => s.kind)).toEqual(["grid"]);
+  });
+
+  it("puts the followed-channels shelf right after the first video row", () => {
+    const uploads = [video("w1"), video("w2")];
+    const sections = composeHomeSections({
+      mixed: files(12),
+      columns: 4,
+      continueFiles: ["c1"],
+      shorts: [],
+      watchlist: uploads,
+      hasPlaylists: false,
+      spotlight: null,
+    });
+    expect(sections.map((s) => s.kind)).toEqual(["grid", "watchlist", "continue", "grid", "grid"]);
+    const shelf = sections[1];
+    expect(shelf?.kind === "watchlist" ? shelf.videos : null).toBe(uploads);
   });
 });
 

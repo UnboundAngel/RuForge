@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FollowChannelButton } from "@/components/watchlist/FollowChannelButton";
 import type { MediaFile } from "@/types";
 import { FeedVideoCard } from "./FeedVideoCard";
 import { type HomeSection, shortsPerShelf } from "./homeSections";
@@ -55,6 +56,16 @@ export function LibraryHome({
                 </div>
               </section>
             );
+          case "watchlist":
+            return (
+              <section key={section.key}>
+                <SectionTitle>
+                  New from channels you follow
+                  <span className="text-sm font-medium tabular-nums text-stone-500">{section.videos.length} new</span>
+                </SectionTitle>
+                {renderGrid(section.videos.map((video) => ({ kind: "feed", video })), columns)}
+              </section>
+            );
           case "playlists":
             return (
               <section key={section.key}>
@@ -68,6 +79,9 @@ export function LibraryHome({
                 <SectionTitle>
                   <ChannelAvatar channelId={section.channelId} channel={section.channel} className="h-8 w-8" />
                   More from {section.channel}
+                  {section.channelId ? (
+                    <FollowChannelButton channelId={section.channelId} channel={section.channel} className="ml-auto" />
+                  ) : null}
                 </SectionTitle>
                 {renderGrid(asItems(section.files), columns)}
               </section>
