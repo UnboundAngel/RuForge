@@ -1,0 +1,142 @@
+/* Lo-fi: painted night desk plate. All overlay positions are percentages of the 1376x768 plate. */
+
+.lf-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  container-type: size;
+  background: #1b1b3a;
+}
+
+/* object-fit: cover done by hand so overlays share the image's box. */
+.lf-plate {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100cqw, calc(100cqh * 1376 / 768));
+  aspect-ratio: 1376 / 768;
+  translate: -50% -50%;
+  animation: lf-drift 60s ease-in-out infinite alternate;
+}
+
+.lf-plate-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+@keyframes lf-drift {
+  from { scale: 1.02; }
+  to { scale: 1.07; }
+}
+
+.lf-rain {
+  position: absolute;
+  top: 6.4%;
+  bottom: 16.2%;
+  overflow: hidden;
+  container-type: size;
+  opacity: 0.5;
+}
+
+.lf-drop {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  border-radius: 1px;
+  background: linear-gradient(180deg, transparent, rgb(220 215 255 / 0.9));
+  transform: translate(0, -20cqh) rotate(9deg);
+  animation: lf-drop var(--dur) linear var(--delay) infinite;
+}
+
+@keyframes lf-drop {
+  to {
+    transform: translate(-19cqh, 110cqh) rotate(9deg);
+  }
+}
+
+/* Starts right of the plant and lamp, stops at the mullion. */
+.lf-rain-main {
+  left: 20%;
+  right: 30.3%;
+}
+
+/* Right pane, fading out behind the sheer curtain. */
+.lf-rain-side {
+  left: 72.5%;
+  right: 9%;
+  mask: linear-gradient(90deg, #000 20%, rgb(0 0 0 / 0.25) 45%);
+}
+
+.lf-lamp-glow {
+  position: absolute;
+  left: 15.1%;
+  top: 64.2%;
+  width: 30%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  background: radial-gradient(circle closest-side, rgb(255 196 120 / 0.35), rgb(255 160 90 / 0.12) 40%, transparent 100%);
+  animation: lf-lamp 6s ease-in-out infinite alternate;
+}
+
+@keyframes lf-lamp {
+  from { opacity: 0.7; }
+  to { opacity: 1; }
+}
+
+.lf-steam-origin {
+  position: absolute;
+  left: 22.3%;
+  top: 83%;
+  width: 3%;
+  height: 12%;
+  translate: -50% -100%;
+}
+
+.lf-steam {
+  position: absolute;
+  left: 25%;
+  bottom: 0;
+  width: 50%;
+  height: 45%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(235 230 255 / 0.5), transparent);
+  filter: blur(4px);
+  opacity: 0;
+  animation: lf-steam var(--dur) ease-out var(--delay) infinite;
+}
+
+@keyframes lf-steam {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.6);
+  }
+  25% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x), -130%) scale(1.5, 1.2);
+  }
+}
+
+.lf-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 90% 85% at 50% 45%, transparent 50%, rgb(10 8 30 / 0.55) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lf-plate,
+  .lf-lamp-glow,
+  .lf-steam {
+    animation: none;
+  }
+
+  .lf-rain {
+    display: none;
+  }
+}

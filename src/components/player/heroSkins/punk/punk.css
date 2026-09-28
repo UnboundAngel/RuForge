@@ -1,0 +1,70 @@
+/* Punk zine: xerox black, halftone blasts, duct tape, cut paper. */
+
+.pk-wall {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #0d0d0d;
+}
+
+.pk-dots {
+  position: absolute;
+  inset: 0;
+  opacity: 0.6;
+  background: radial-gradient(circle, #ff2e88 0 34%, transparent 36%) 0 0 / 14px 14px;
+  mask: radial-gradient(ellipse 55% 70% at 88% 10%, #000 10%, transparent 72%);
+}
+
+.pk-dots-alt {
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  background: radial-gradient(circle, #f5e400 0 32%, transparent 34%) 0 0 / 10px 10px;
+  mask: radial-gradient(ellipse 45% 55% at 8% 92%, #000 5%, transparent 70%);
+}
+
+.pk-grime {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.8 -.95'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.18;
+}
+
+.pk-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 75% at 50% 45%, transparent 35%, rgb(0 0 0 / 0.8) 100%);
+}
+
+.pk-strip {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  top: 14%;
+  height: 10%;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  background: #f5e400;
+  transform: rotate(6deg);
+  font-family: Impact, "Arial Black", sans-serif;
+  color: #0d0d0d;
+  opacity: 0.85;
+}
+
+.pk-halftone {
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+  background: radial-gradient(circle, #000 0 30%, transparent 34%) 0 0 / 5px 5px;
+}
+
+.pk-letter {
+  display: inline-block;
+  line-height: 1;
+  padding: 0.35cqw 0.7cqw;
+  margin-right: 0.35cqw;
+  box-shadow: 0 0.35cqw 0.8cqw rgb(0 0 0 / 0.55);
+}

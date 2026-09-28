@@ -1,0 +1,33 @@
+/* Hollow beveled molding around the cover, colors from --goth-* vars. Inset must match RAIL in GothicOrnaments. */
+.goth-frame {
+  position: absolute;
+  inset: -22px;
+  padding: 22px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.16) 0%, transparent 28%, transparent 70%, rgb(0 0 0 / 0.55) 100%),
+    repeating-linear-gradient(90deg, rgb(0 0 0 / 0.18) 0 2px, transparent 2px 7px),
+    var(--goth-frame);
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+.goth-frame-rim {
+  position: absolute;
+  inset: -22px;
+  box-shadow:
+    0 0 0 1px #000,
+    0 0 0 3px color-mix(in srgb, var(--goth-metal) 70%, transparent),
+    0 0 0 5px #000,
+    0 18px 50px 10px rgb(0 0 0 / 0.85),
+    0 0 90px 24px var(--goth-glow);
+}
+
+.goth-frame-lip {
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    0 0 0 1px var(--goth-metal),
+    0 0 0 4px #050303,
+    0 0 0 5px color-mix(in srgb, var(--goth-metal) 55%, transparent);
+}

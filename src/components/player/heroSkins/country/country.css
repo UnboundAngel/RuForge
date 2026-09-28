@@ -1,0 +1,109 @@
+/* Barnwood frame + parchment mat. Offsets must match MAT / PLANK in CountryOrnaments. */
+.cw-mat {
+  position: absolute;
+  inset: -12px;
+  padding: 12px;
+  background:
+    radial-gradient(ellipse 40% 30% at 18% 22%, rgb(120 70 20 / 0.25), transparent 70%),
+    radial-gradient(ellipse 35% 25% at 82% 78%, rgb(110 60 15 / 0.3), transparent 70%),
+    radial-gradient(ellipse at center, transparent 50%, rgb(70 38 10 / 0.55) 100%),
+    #dcc38d;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+.cw-lip {
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    0 0 0 1px rgb(50 28 8 / 0.8),
+    0 0 8px 2px rgb(50 28 8 / 0.5);
+}
+
+/*
+ * Weathered board: gray-brown base, grain at three uneven periods so it never tiles
+ * visibly, a knot, and a short split near one end.
+ */
+.cw-plank {
+  position: absolute;
+  --grain: 0deg;
+  --knot: 30% 50%;
+  --split-pos: right center;
+  --split-size: 38% 100%;
+  --split-at: 42%;
+  --tone: #66513c;
+  background:
+    linear-gradient(var(--grain), transparent calc(var(--split-at) - 1px), #140c05 var(--split-at), rgb(20 12 5 / 0.4) calc(var(--split-at) + 1.5px), transparent calc(var(--split-at) + 2.5px)) var(--split-pos) / var(--split-size) no-repeat,
+    radial-gradient(ellipse 16px 6px at var(--knot), #24160a 0 30%, rgb(36 22 10 / 0.55) 55%, transparent 78%),
+    repeating-linear-gradient(var(--grain), rgb(0 0 0 / 0.22) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(var(--grain), rgb(210 200 180 / 0.07) 0 2px, transparent 2px 13px),
+    repeating-linear-gradient(var(--grain), rgb(0 0 0 / 0.12) 0 3px, transparent 3px 23px),
+    linear-gradient(calc(var(--grain) + 90deg), rgb(255 255 255 / 0.04), rgb(0 0 0 / 0.18) 60%, rgb(255 255 255 / 0.03)),
+    linear-gradient(var(--grain), color-mix(in srgb, var(--tone) 80%, #9a8c78), var(--tone) 45%, color-mix(in srgb, var(--tone) 75%, #1c120a));
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 0.6),
+    inset 0 1px 0 rgb(240 225 200 / 0.14),
+    inset 0 -2px 3px rgb(0 0 0 / 0.35);
+}
+
+.cw-plank-v {
+  --grain: 90deg;
+  --split-pos: center bottom;
+  --split-size: 100% 34%;
+}
+
+/* Rough only the outer edge and the ends; the edge facing the mat stays straight. */
+.cw-plank-top {
+  --tone: #3f3024;
+  --knot: 74% 55%;
+  clip-path: polygon(0% 6%, 1.2% 0%, 99% 3%, 100% 14%, 100% 100%, 0% 100%);
+}
+
+.cw-plank-bottom {
+  --tone: #372a1f;
+  --knot: 20% 45%;
+  --split-pos: left center;
+  --split-at: 58%;
+  clip-path: polygon(0% 0%, 100% 0%, 100% 90%, 98.8% 100%, 0% 97%, 0.8% 40%);
+}
+
+.cw-plank-left {
+  --tone: #3a2d21;
+  --knot: 50% 38%;
+  clip-path: polygon(4% 0%, 100% 0%, 100% 100%, 0% 99%);
+}
+
+.cw-plank-right {
+  --tone: #43342a;
+  --knot: 45% 70%;
+  --split-pos: center top;
+  --split-at: 36%;
+  clip-path: polygon(0% 0%, 97% 0%, 100% 99.5%, 0% 100%);
+}
+
+.cw-nail {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 35%, #d9cdb8 0 12%, #7d6f5f 40%, #3b2a1c 75%, #2a1a0e 100%);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.85),
+    0 0 0 1px rgb(0 0 0 / 0.4),
+    0 2px 7px 3px rgb(110 50 12 / 0.4);
+}
+
+.cw-type {
+  font-family: Rockwell, "Rockwell Extra Bold", "Courier New", serif;
+}
+
+.cw-sign {
+  background:
+    radial-gradient(ellipse at 30% 40%, rgb(120 70 20 / 0.2), transparent 60%),
+    radial-gradient(ellipse at center, transparent 45%, rgb(80 44 12 / 0.5) 100%),
+    #e2cc98;
+  /* Torn edge; the drop shadow lives on the wrapper because clip-path would cut it off. */
+  clip-path: polygon(0% 8%, 4% 0%, 12% 5%, 22% 1%, 31% 6%, 43% 0%, 55% 4%, 66% 0%, 77% 5%, 88% 1%, 96% 4%, 100% 12%, 98% 30%, 100% 52%, 97% 74%, 100% 92%, 94% 100%, 83% 96%, 71% 100%, 58% 95%, 46% 100%, 34% 96%, 22% 100%, 11% 95%, 3% 100%, 0% 88%, 2% 66%, 0% 44%, 3% 24%);
+}

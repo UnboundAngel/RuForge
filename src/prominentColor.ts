@@ -16,7 +16,7 @@ function mimeFromPath(filePath: string): string {
   }
 }
 
-function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+export function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   const rn = r / 255;
   const gn = g / 255;
   const bn = b / 255;

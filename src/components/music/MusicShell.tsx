@@ -106,6 +106,7 @@ import { primaryArtist } from "./musicArtist";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
 import { setPendingListenEndReason } from "@/lib/musicListenSession";
 import { readMusicOnlySkip, writeMusicOnlySkip } from "./musicOnlySkipStorage";
+import { readNavCollapsed, readRightPanelPref, writeNavCollapsed, writeRightPanelPref } from "./musicPanelStorage";
 import { debugLog } from "@/debug/debugLog";
 import { PendingPlaylistAddsResolver } from "./useMusicOutsideRecommendations";
 import { MusicPlaylistImport } from "./MusicPlaylistImport";
@@ -336,7 +337,7 @@ export function MusicShell() {
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [lyricsAvailable, setLyricsAvailable] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState<MusicExpandedContextMenuState | null>(null);
-  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(readNavCollapsed);
   const [currentMusicExploreUrl, setCurrentMusicExploreUrl] = useState("");
   const [musicExplorePageContext, setMusicExplorePageContext] = useState<MusicExplorePageContext>(
     () => classifyMusicExplorePageFromUrl(""),
@@ -348,8 +349,11 @@ export function MusicShell() {
   const [dockPanelSession, setDockPanelSession] = useState(false);
 
   // Right panel state
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>("queue");
+  const [rightPanelOpen, setRightPanelOpen] = useState(() => readRightPanelPref()?.open ?? false);
+  const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>(() => {
+    const tab = readRightPanelPref()?.tab ?? "queue";
+    return tab === "segments" ? "queue" : tab;
+  });
   const [rightPanelMiniHintKey, setRightPanelMiniHintKey] = useState(0);
   const prevRightPanelOpenRef = useRef(rightPanelOpen);
   const prevPlayingPathForNpRef = useRef<string | null>(null);
@@ -599,6 +603,7 @@ export function MusicShell() {
 
     if (!prev && path) {
       npUserMinimizedRef.current = false;
+      if (readRightPanelPref()?.open === false) return;
       setRightPanelTab("nowPlaying");
       setRightPanelOpen(true);
     }
@@ -607,6 +612,24 @@ export function MusicShell() {
   useEffect(() => {
     if (!playerExpanded) setExpandedMenu(null);
   }, [playerExpanded]);
+
+  useEffect(() => {
+    writeNavCollapsed(navCollapsed);
+  }, [navCollapsed]);
+
+  /** Only user actions persist; auto open and close around playback must not overwrite the choice. */
+  const openRightPanel = useCallback((tab: RightPanelTab) => {
+    if (tab === "nowPlaying") npUserMinimizedRef.current = false;
+    setRightPanelTab(tab);
+    setRightPanelOpen(true);
+    writeRightPanelPref({ open: true, tab });
+  }, []);
+
+  const closeRightPanel = useCallback(() => {
+    if (rightPanelTabRef.current === "nowPlaying") npUserMinimizedRef.current = true;
+    setRightPanelOpen(false);
+    writeRightPanelPref({ open: false, tab: rightPanelTabRef.current });
+  }, []);
 
   useEffect(() => {
     setExpandedMenu(null);
@@ -1561,11 +1584,7 @@ export function MusicShell() {
             {!rightPanelOpen && (
               <MusicRightPanelMini
                 activeTab={rightPanelTab}
-                onTabChange={(t) => {
-                  if (t === "nowPlaying") npUserMinimizedRef.current = false;
-                  setRightPanelTab(t);
-                  setRightPanelOpen(true);
-                }}
+                onTabChange={openRightPanel}
                 showSegmentsTab={showSegmentsTab}
                 showNowPlaying={!!playingFile}
                 hintKey={rightPanelMiniHintKey}
@@ -1576,16 +1595,9 @@ export function MusicShell() {
 
           <MusicRightPanel
             open={rightPanelOpen}
-            onClose={() => {
-              if (rightPanelTab === "nowPlaying") npUserMinimizedRef.current = true;
-              setRightPanelOpen(false);
-            }}
+            onClose={closeRightPanel}
             activeTab={rightPanelTab}
-            onTabChange={(t) => {
-              if (t === "nowPlaying") npUserMinimizedRef.current = false;
-              setRightPanelTab(t);
-              if (!rightPanelOpen) setRightPanelOpen(true);
-            }}
+            onTabChange={openRightPanel}
             shellFrame={shellBlack}
             cancelFlexGap
             playingFile={playingFile}
@@ -1670,11 +1682,10 @@ export function MusicShell() {
                       || rightPanelTab === "history"
                       || rightPanelTab === "segments")
                   ) {
-                    setRightPanelOpen(false);
+                    closeRightPanel();
                     return;
                   }
-                  setRightPanelTab("queue");
-                  setRightPanelOpen(true);
+                  openRightPanel("queue");
                 }}
               />
             </motion.div>
@@ -1704,10 +1715,7 @@ export function MusicShell() {
         onTogglePlay={playback.togglePlay}
         onSkipPrev={playback.skipPrev}
         onSkipNext={playback.skipNext}
-        onOpenQueue={() => {
-          setRightPanelTab("queue");
-          setRightPanelOpen(true);
-        }}
+        onOpenQueue={() => openRightPanel("queue")}
         onCollapse={() => {
           setLyricsOpen(false);
           setPlayerExpanded(false);
