@@ -39,7 +39,7 @@ pub struct YoutubeFeedPage {
     pub has_more: bool,
 }
 
-fn is_video_id(id: &str) -> bool {
+pub(crate) fn is_video_id(id: &str) -> bool {
     id.len() == 11 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
@@ -180,6 +180,23 @@ fn video_stats_from_player(video_id: &str, player: &Value) -> Option<VideoStats>
 
 const STATS_CONCURRENCY: usize = 4;
 
+/// The cookie-free player endpoint: channel, views, duration and live state in about 10 KB.
+pub(crate) async fn fetch_player_response(client: &reqwest::Client, video_id: &str) -> Option<Value> {
+    let body = serde_json::json!({
+        "videoId": video_id,
+        "context": { "client": { "clientName": "WEB", "clientVersion": "2.20250101.00.00", "hl": "en" } },
+    });
+    client
+        .post("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+        .json(&body)
+        .send()
+        .await
+        .ok()?
+        .json()
+        .await
+        .ok()
+}
+
 /// Flat feed entries carry no channel id or view count. The player endpoint returns both in
 /// about 10 KB without cookies, far cheaper than a full yt-dlp extraction per card.
 #[tauri::command]
@@ -198,19 +215,7 @@ pub async fn get_video_stats(video_ids: Vec<String>) -> Result<Vec<VideoStats>, 
         .map(|id| {
             let client = client.clone();
             async move {
-                let body = serde_json::json!({
-                    "videoId": id,
-                    "context": { "client": { "clientName": "WEB", "clientVersion": "2.20250101.00.00", "hl": "en" } },
-                });
-                let player: Value = client
-                    .post("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
-                    .json(&body)
-                    .send()
-                    .await
-                    .ok()?
-                    .json()
-                    .await
-                    .ok()?;
+                let player = fetch_player_response(&client, &id).await?;
                 video_stats_from_player(&id, &player)
             }
         })
