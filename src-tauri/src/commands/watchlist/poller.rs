@@ -11,7 +11,6 @@ use super::schedule::{
     reprobe_gap_secs, CHANNELS_PER_TICK, REPROBES_PER_TICK,
 };
 use super::{emit_updated, emit_uploads, now_secs, WatchlistState};
-use super::{WATCHLIST_AUTO_READY_EVENT, WATCHLIST_NEW_UPLOADS_EVENT};
 use crate::commands::youtube_feed::fetch_player_response;
 
 const FIRST_TICK_DELAY: Duration = Duration::from_secs(20);
@@ -75,18 +74,16 @@ async fn tick(app: &AppHandle, state: &WatchlistState, next_probe: &mut HashMap<
     if !result.changed {
         return;
     }
-    let snapshot = with_file(state, |file| {
+    let saved = with_file(state, |file| {
         file.trim_uploads(now_secs());
         if let Err(e) = state.save(file) {
             crate::rf_log!("youtube.watchlist", log::Level::Warn, "save failed: {e}");
         }
-        file.snapshot()
     });
-    if let Some(snapshot) = snapshot {
-        emit_updated(app, &snapshot);
+    if saved.is_some() {
+        emit_updated(app);
     }
-    emit_uploads(app, WATCHLIST_NEW_UPLOADS_EVENT, result.surfaced);
-    emit_uploads(app, WATCHLIST_AUTO_READY_EVENT, result.released);
+    emit_uploads(app, result.surfaced, result.released);
 }
 
 async fn check_channel(

@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import type { CSSProperties, MouseEvent } from "react";
 
 import {
@@ -36,12 +36,27 @@ export function islandWatchlistCountLabel(count: number): string {
   return count === 1 ? "1 new upload" : `${count} new uploads`;
 }
 
+/** Reduced motion: no scale, no delay, instant opacity. */
+function contentMotion(reduceMotion: boolean | null, restScale: number) {
+  if (reduceMotion) {
+    return {
+      initial: { opacity: 0 },
+      animate: { opacity: 1, transition: { duration: 0 } },
+      exit: { opacity: 0, transition: { duration: 0 } },
+    };
+  }
+  return {
+    initial: { opacity: 0, scale: restScale },
+    animate: { opacity: 1, scale: 1, transition: { duration: 0.2, delay: 0.1 } },
+    exit: { opacity: 0, scale: restScale, transition: { duration: 0.15 } },
+  };
+}
+
 export function IslandWatchlistCompactContent({ watchlist }: { watchlist: IslandWatchlist }) {
+  const reduceMotion = useReducedMotion();
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1, transition: { duration: 0.2, delay: 0.1 } }}
-      exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
+      {...contentMotion(reduceMotion, 0.8)}
       className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2.5 px-3.5"
       role="status"
     >
@@ -68,6 +83,7 @@ export function IslandWatchlistExpandedContent({
   onMarkAllSeen: () => void;
   onShowMore: () => void;
 }) {
+  const reduceMotion = useReducedMotion();
   const more = watchlist.count - Math.min(VISIBLE_ROWS, watchlist.rows.length);
   const stop = (fn: () => void) => (e: MouseEvent) => {
     e.stopPropagation();
@@ -76,9 +92,7 @@ export function IslandWatchlistExpandedContent({
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1, transition: { duration: 0.2, delay: 0.1 } }}
-      exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
+      {...contentMotion(reduceMotion, 0.95)}
       className="pointer-events-auto absolute inset-0 flex min-h-0 flex-col p-3.5"
       style={{ "--accent": accentColor } as CSSProperties}
       onClick={(e) => e.stopPropagation()}
@@ -91,7 +105,7 @@ export function IslandWatchlistExpandedContent({
         <button
           type="button"
           onClick={stop(onMarkAllSeen)}
-          className="shrink-0 text-[11px] font-semibold text-stone-400 transition-colors duration-150 hover:text-[color:var(--accent)]"
+          className="shrink-0 text-[11px] font-semibold text-stone-400 transition-colors duration-150 hover:text-[color:var(--accent)] motion-reduce:transition-none"
         >
           Mark all seen
         </button>
@@ -105,7 +119,7 @@ export function IslandWatchlistExpandedContent({
         <button
           type="button"
           onClick={stop(onShowMore)}
-          className="mt-1.5 shrink-0 self-start text-[11px] font-medium text-stone-500 transition-colors duration-150 hover:text-stone-200"
+          className="mt-1.5 shrink-0 self-start text-[11px] font-medium text-stone-500 transition-colors duration-150 hover:text-stone-200 motion-reduce:transition-none"
         >
           +{more} more in RuForge
         </button>

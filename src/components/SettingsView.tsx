@@ -44,6 +44,15 @@ import {
 import { galleryScanRootsFromStore, normalizeScanDirKey } from '../lib/libraryConfig';
 import { isWindowsPlatform } from '../platformPaths';
 import { useRuforgeStore } from '../store/ruforgeStore';
+import { useWatchlistStore } from '../watchlist/watchlistStore';
+import { setCheckInterval } from '../watchlist/watchlistActions';
+import {
+  CHECK_INTERVAL_OPTIONS,
+  DEFAULT_CHECK_INTERVAL_MIN,
+  checkIntervalFromLabel,
+  checkIntervalLabel,
+  openChannelsManager,
+} from '../watchlist/watchlistSettings';
 import {
   clearLastDownloadBatchRecord,
   formatLastBatchSummary,
@@ -553,6 +562,10 @@ export const SettingsView: React.FC<{
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const entries = useRuforgeStore((s) => s.entries);
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
+  const watchlistIntervalMin = useWatchlistStore(
+    (s) => s.snapshot?.checkIntervalMin ?? DEFAULT_CHECK_INTERVAL_MIN,
+  );
+  const watchlistChannelCount = useWatchlistStore((s) => s.snapshot?.channels.length ?? 0);
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [updateCheckBusy, setUpdateCheckBusy] = useState(false);
   const [devReplayMode, setDevReplayModeState] = useState<DevReplayMode>(() =>
@@ -1787,6 +1800,54 @@ export const SettingsView: React.FC<{
                         )
                       }
                     />
+                  }
+                />
+              </SettingsSection>
+              <SettingsSection
+                title="Notifications"
+                keywords="follow subscribe channel watchlist new uploads bell"
+              >
+                <SettingItem
+                  title="New upload alerts"
+                  description="Shows a notice when a channel you follow posts. In the background it appears on the desktop island."
+                  active={settings.watchlistAlerts !== false}
+                  control={
+                    <ToggleSlot
+                      active={settings.watchlistAlerts !== false}
+                      onClick={() =>
+                        updateSetting("watchlistAlerts", settings.watchlistAlerts === false)
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Check followed channels"
+                  description="How often RuForge looks for new uploads from channels you follow."
+                  control={
+                    <CustomSelect
+                      value={checkIntervalLabel(watchlistIntervalMin)}
+                      options={CHECK_INTERVAL_OPTIONS.map((o) => o.label)}
+                      onChange={(label) => {
+                        const minutes = checkIntervalFromLabel(label);
+                        if (minutes == null) return;
+                        setCheckInterval(minutes).catch(() =>
+                          notify("Could not change the check interval."),
+                        );
+                      }}
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Followed channels"
+                  description={`Following ${watchlistChannelCount} ${watchlistChannelCount === 1 ? "channel" : "channels"}. Add, remove and set auto-download in the bell's Channels tab.`}
+                  control={
+                    <button
+                      type="button"
+                      onClick={openChannelsManager}
+                      className="px-5 py-2.5 bg-[#261d18] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-colors border border-white/5 active:scale-95"
+                    >
+                      MANAGE
+                    </button>
                   }
                 />
               </SettingsSection>

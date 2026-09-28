@@ -176,6 +176,7 @@ pub fn run() {
         .manage(RemovableDrivesState::default())
         .manage(crate::companion::CompanionState::new())
         .manage(crate::discord_rpc::DiscordRpcState::new())
+        .manage(crate::commands::private_mailbox::PrivateMailbox::default())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -360,6 +361,11 @@ pub fn run() {
             crate::commands::watchlist::resolve_watchlist_channel,
             crate::commands::watchlist::set_watchlist_check_interval,
             crate::commands::watchlist::refresh_watchlist_now,
+            crate::commands::watchlist::take_watchlist_events,
+            crate::commands::private_mailbox::private_mailbox_put,
+            crate::commands::private_mailbox::private_mailbox_get,
+            crate::commands::private_mailbox::private_mailbox_push,
+            crate::commands::private_mailbox::private_mailbox_take,
             start_download_job,
             pause_download_job,
             stop_all_active_download_jobs,

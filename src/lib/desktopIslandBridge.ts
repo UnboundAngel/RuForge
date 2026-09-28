@@ -1,4 +1,4 @@
-import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 import { setAudioOutputDeviceId } from "@/audioOutputDevices";
@@ -10,6 +10,12 @@ import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
 import type { ActivityRenderState } from "@/lib/activityTypes";
 import { navigateToActivityOwningSurface } from "@/lib/activityIslandResolve";
 import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
+import {
+  listenPrivateQueue,
+  listenPrivateState,
+  postPrivateState,
+  pushPrivateRecord,
+} from "@/lib/privateMailbox";
 import { getMainPlaybackBridge } from "@/lib/mainPlaybackBridge";
 import { isAudioOnlyPath } from "@/mediaKind";
 import { readPlaybackSpeed } from "@/playbackSpeedStorage";
@@ -60,11 +66,11 @@ export type DesktopIslandControl =
   | { type: "watchlistShowAll" };
 
 export async function pushDesktopIslandState(payload: DesktopIslandStatePayload): Promise<void> {
-  await emitTo(DESKTOP_ISLAND_LABEL, DESKTOP_ISLAND_STATE_EVENT, payload);
+  await postPrivateState("desktop-island-state", DESKTOP_ISLAND_LABEL, DESKTOP_ISLAND_STATE_EVENT, payload);
 }
 
 export async function emitDesktopIslandControl(control: DesktopIslandControl): Promise<void> {
-  await emitTo("main", DESKTOP_ISLAND_CONTROL_EVENT, control);
+  await pushPrivateRecord("desktop-island-control", "main", DESKTOP_ISLAND_CONTROL_EVENT, control);
 }
 
 export async function restoreMainFromDesktopIsland(): Promise<void> {
@@ -184,17 +190,25 @@ export function applyDesktopIslandControl(control: DesktopIslandControl): void {
 export function listenDesktopIslandControl(
   onControl: (control: DesktopIslandControl) => void,
 ): Promise<UnlistenFn> {
-  return listen<DesktopIslandControl>(DESKTOP_ISLAND_CONTROL_EVENT, (event) => {
-    if (!event.payload || typeof event.payload !== "object") return;
-    onControl(event.payload);
-  });
+  return listenPrivateQueue<DesktopIslandControl>(
+    "desktop-island-control",
+    DESKTOP_ISLAND_CONTROL_EVENT,
+    (control) => {
+      if (!control || typeof control !== "object") return;
+      onControl(control);
+    },
+  );
 }
 
 export function listenDesktopIslandState(
   onState: (payload: DesktopIslandStatePayload) => void,
 ): Promise<UnlistenFn> {
-  return listen<DesktopIslandStatePayload>(DESKTOP_ISLAND_STATE_EVENT, (event) => {
-    if (!event.payload || typeof event.payload !== "object") return;
-    onState(event.payload);
-  });
+  return listenPrivateState<DesktopIslandStatePayload>(
+    "desktop-island-state",
+    DESKTOP_ISLAND_STATE_EVENT,
+    (payload) => {
+      if (!payload || typeof payload !== "object") return;
+      onState(payload);
+    },
+  );
 }

@@ -299,6 +299,7 @@ When the **main** window is OS-minimized or hidden to tray, and playback is **ma
 
 - Media stays in `main`. Overlay is remote control only (no media element).
 - Events: `desktop-island-state` (main → island), `desktop-island-control` (island → main). Control types include play/seek/skip/volume/mute/loop/`audioOutput`/open/popOut.
+- Both events are payload-free pings. The state (latest slot) and controls (queue) go through `src/lib/privateMailbox.ts` and the `private_mailbox_*` commands, because a targeted `emitTo` still reaches any webview listening with the `Any` target, including the youtube.com Explorer.
 - Window bounds hug compact (~380×56) or expanded (~380×220); `sync_island_overlay_bounds` on expand/collapse. Expanded collapses on Escape or when the overlay window blurs (click outside).
 - Placement uses the main window's monitor (`note_main_window_monitor` on move/resize and before tray hide); minimized outer coords are ignored so the island does not jump to the primary display.
 - Reuses `DynamicIsland` presentation; does not mount idle empty pill on the desktop (window hidden when nothing to show).

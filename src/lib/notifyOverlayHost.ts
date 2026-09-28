@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { emitTo, listen } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { Webview } from "@tauri-apps/api/webview";
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 
@@ -21,6 +21,7 @@ import {
   type NotifyOverlaySize,
   type NotifyOverlayState,
 } from "@/lib/notifyOverlayEvents";
+import { listenPrivateQueue, postPrivateState } from "@/lib/privateMailbox";
 import { activeRadialNavSurface } from "@/lib/radialNavOverlayHost";
 
 /** Panel placement in main-window client coordinates (CSS px equal logical px). */
@@ -67,7 +68,7 @@ function installListeners(): void {
   listenersInstalled = true;
   void listen(NOTIFY_OVERLAY_READY_EVENT, () => {
     overlayReady = true;
-    if (lastState) void emitTo(OVERLAY_TARGET, NOTIFY_OVERLAY_STATE_EVENT, lastState);
+    if (lastState) sendState(lastState);
   });
   void listen<NotifyOverlaySize>(NOTIFY_OVERLAY_SIZE_EVENT, (e) => {
     panelHeight = e.payload.height;
@@ -78,8 +79,8 @@ function installListeners(): void {
     if (e.payload.reason === "blur") closedAt = Date.now();
     handlers?.onClose();
   });
-  void listen<NotifyOverlayAction>(NOTIFY_OVERLAY_ACTION_EVENT, (e) => {
-    if (visible) handlers?.onAction(e.payload);
+  void listenPrivateQueue<NotifyOverlayAction>("notify-overlay-action", NOTIFY_OVERLAY_ACTION_EVENT, (action) => {
+    if (visible && action && typeof action === "object") handlers?.onAction(action);
   });
 }
 
@@ -149,9 +150,15 @@ export function ensureNotifyOverlay(): Promise<Webview | null> {
   return pendingEnsure;
 }
 
+function sendState(state: NotifyOverlayState): void {
+  void postPrivateState("notify-overlay-state", OVERLAY_TARGET, NOTIFY_OVERLAY_STATE_EVENT, state).catch(
+    () => {},
+  );
+}
+
 export function pushNotifyOverlayState(state: NotifyOverlayState): void {
   lastState = state;
-  if (overlayReady) void emitTo(OVERLAY_TARGET, NOTIFY_OVERLAY_STATE_EVENT, state);
+  if (overlayReady) sendState(state);
 }
 
 function positionFor(anchor: NotifyOverlayAnchor): LogicalPosition {

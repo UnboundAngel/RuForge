@@ -12,14 +12,13 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State};
 
 use model::{
-    is_channel_id, seed_channel, ResolvedChannel, UploadsPayload, WatchedChannel, WatchlistFile,
+    is_channel_id, seed_channel, ResolvedChannel, WatchedChannel, WatchlistEvents, WatchlistFile,
     WatchlistSnapshot, WatchlistUpload, MAX_CHANNELS, MAX_INTERVAL_MIN, MIN_INTERVAL_MIN,
 };
 
 const WATCHLIST_FILENAME: &str = "watchlist.json";
 pub const WATCHLIST_UPDATED_EVENT: &str = "watchlist-updated";
-pub const WATCHLIST_NEW_UPLOADS_EVENT: &str = "watchlist-new-uploads";
-pub const WATCHLIST_AUTO_READY_EVENT: &str = "watchlist-auto-ready";
+pub const WATCHLIST_EVENTS_EVENT: &str = "watchlist-events";
 const MANUAL_REFRESH_COOLDOWN_SECS: i64 = 120;
 const BROWSER_UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -30,6 +29,7 @@ pub struct WatchlistState {
     client: reqwest::Client,
     poke: tokio::sync::Notify,
     last_manual_refresh: AtomicI64,
+    pending: Mutex<WatchlistEvents>,
 }
 
 fn now_secs() -> i64 {
@@ -80,6 +80,7 @@ impl WatchlistState {
             client,
             poke: tokio::sync::Notify::new(),
             last_manual_refresh: AtomicI64::new(0),
+            pending: Mutex::new(WatchlistEvents::default()),
         }
     }
 
@@ -100,7 +101,7 @@ impl WatchlistState {
             self.save(&file)?;
             file.snapshot()
         };
-        emit_updated(app, &snapshot);
+        emit_updated(app);
         Ok(snapshot)
     }
 
@@ -109,29 +110,32 @@ impl WatchlistState {
     }
 }
 
-/// Main only: the Explorer child webview has event permission and must not see follows.
-fn emit_updated(app: &AppHandle, snapshot: &WatchlistSnapshot) {
-    let _ = app.emit_to(
-        EventTarget::webview_window("main"),
-        WATCHLIST_UPDATED_EVENT,
-        snapshot,
-    );
+/// Payload-free pings. Any webview listening with the `Any` target hears an `emit_to`, including the
+/// youtube.com Explorer, so follows and uploads only travel through commands, which remote pages cannot call.
+fn emit_updated(app: &AppHandle) {
+    let _ = app.emit_to(EventTarget::webview_window("main"), WATCHLIST_UPDATED_EVENT, ());
 }
 
-fn emit_uploads(app: &AppHandle, event: &str, uploads: Vec<WatchlistUpload>) {
-    if uploads.is_empty() {
+fn emit_uploads(app: &AppHandle, surfaced: Vec<WatchlistUpload>, released: Vec<WatchlistUpload>) {
+    if surfaced.is_empty() && released.is_empty() {
         return;
     }
-    let _ = app.emit_to(
-        EventTarget::webview_window("main"),
-        event,
-        UploadsPayload { uploads },
-    );
+    let state = app.state::<WatchlistState>();
+    if let Ok(mut pending) = state.pending.lock() {
+        pending.push(surfaced, released);
+    }
+    let _ = app.emit_to(EventTarget::webview_window("main"), WATCHLIST_EVENTS_EVENT, ());
 }
 
 #[tauri::command]
 pub fn get_watchlist(state: State<'_, WatchlistState>) -> Result<WatchlistSnapshot, String> {
     state.snapshot()
+}
+
+#[tauri::command]
+pub fn take_watchlist_events(state: State<'_, WatchlistState>) -> Result<WatchlistEvents, String> {
+    let mut pending = state.pending.lock().map_err(|e| e.to_string())?;
+    Ok(std::mem::take(&mut *pending))
 }
 
 #[tauri::command]

@@ -1,4 +1,4 @@
-import { emitTo, listen } from "@tauri-apps/api/event";
+import { emitTo } from "@tauri-apps/api/event";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
@@ -19,12 +19,13 @@ import {
   type NotifyOverlayState,
 } from "@/lib/notifyOverlayEvents";
 import { OVERLAY_EASE } from "@/lib/overlayMotion";
+import { listenPrivateState, pushPrivateRecord } from "@/lib/privateMailbox";
 import type { NotificationActionId, NotificationItem } from "@/notifications/types";
 
 const MAIN = "main";
 
 function send(action: NotifyOverlayAction): void {
-  void emitTo(MAIN, NOTIFY_OVERLAY_ACTION_EVENT, action);
+  void pushPrivateRecord("notify-overlay-action", MAIN, NOTIFY_OVERLAY_ACTION_EVENT, action).catch(() => {});
 }
 
 function close(reason: NotifyOverlayClose["reason"]): void {
@@ -50,7 +51,11 @@ export default function NotifyOverlayApp() {
   }, []);
 
   useEffect(() => {
-    const unlisten = listen<NotifyOverlayState>(NOTIFY_OVERLAY_STATE_EVENT, (e) => setState(e.payload));
+    const unlisten = listenPrivateState<NotifyOverlayState>(
+      "notify-overlay-state",
+      NOTIFY_OVERLAY_STATE_EVENT,
+      setState,
+    );
     void unlisten.then(() => emitTo(MAIN, NOTIFY_OVERLAY_READY_EVENT));
     return () => void unlisten.then((off) => off());
   }, []);

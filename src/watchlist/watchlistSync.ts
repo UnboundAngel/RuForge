@@ -1,10 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
-  WATCHLIST_AUTO_READY_EVENT,
-  WATCHLIST_NEW_UPLOADS_EVENT,
+  WATCHLIST_EVENTS_EVENT,
   WATCHLIST_UPDATED_EVENT,
-  type UploadsPayload,
+  type WatchlistEvents,
   type WatchlistSnapshot,
   type WatchlistUpload,
 } from "./types";
@@ -15,24 +14,39 @@ export type WatchlistSyncHandlers = {
   onAutoReady: (uploads: WatchlistUpload[]) => void;
 };
 
-/** Main window only. Listeners go up before the first fetch so a poll landing in between is not lost. */
+/**
+ * Main window only. Rust events are payload-free pings (the Explorer webview can hear events), so the
+ * snapshot and upload batches are pulled by command. Listeners go up before the first pull so nothing
+ * landing in between is lost.
+ */
 export async function startWatchlistSync(handlers: WatchlistSyncHandlers): Promise<() => void> {
-  let updatedByEvent = false;
+  let requestSeq = 0;
+  const refresh = async () => {
+    const seq = ++requestSeq;
+    try {
+      const snapshot = await invoke<WatchlistSnapshot>("get_watchlist");
+      // A newer request may already have answered; never step back to an older snapshot.
+      if (seq === requestSeq) setWatchlistSnapshot(snapshot);
+    } catch (e) {
+      console.error("get_watchlist failed", e);
+    }
+  };
+  // Alert and auto-download rules read channel settings from the snapshot, so refresh it first.
+  const drain = async () => {
+    await refresh();
+    try {
+      const events = await invoke<WatchlistEvents>("take_watchlist_events");
+      if (events.newUploads.length > 0) handlers.onNewUploads(events.newUploads);
+      if (events.autoReady.length > 0) handlers.onAutoReady(events.autoReady);
+    } catch (e) {
+      console.error("take_watchlist_events failed", e);
+    }
+  };
   const unlisteners: UnlistenFn[] = await Promise.all([
-    listen<WatchlistSnapshot>(WATCHLIST_UPDATED_EVENT, (e) => {
-      updatedByEvent = true;
-      setWatchlistSnapshot(e.payload);
-    }),
-    listen<UploadsPayload>(WATCHLIST_NEW_UPLOADS_EVENT, (e) => handlers.onNewUploads(e.payload.uploads)),
-    listen<UploadsPayload>(WATCHLIST_AUTO_READY_EVENT, (e) => handlers.onAutoReady(e.payload.uploads)),
+    listen(WATCHLIST_UPDATED_EVENT, () => void refresh()),
+    listen(WATCHLIST_EVENTS_EVENT, () => void drain()),
   ]);
-  try {
-    const initial = await invoke<WatchlistSnapshot>("get_watchlist");
-    // An update event that beat this reply is at least as fresh.
-    if (!updatedByEvent) setWatchlistSnapshot(initial);
-  } catch (e) {
-    console.error("get_watchlist failed", e);
-  }
+  await drain();
   return () => {
     for (const un of unlisteners) un();
   };

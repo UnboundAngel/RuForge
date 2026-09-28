@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { followTooltip } from "@/watchlist/explorerFollow";
 import { titlebarIconButtonClass } from "../TitlebarHoverButton";
@@ -8,13 +8,15 @@ import { type FollowHint, useExplorerFollow } from "./useExplorerFollow";
 const LEFT_HINT_MS = 1700;
 const ICON_SLOT = "relative flex h-[18px] w-[18px] shrink-0 items-center justify-center";
 const T_ICON = { duration: 0.22, ease: [0.22, 1, 0.36, 1] as const };
+const T_INSTANT = { duration: 0 };
 
 function FollowIconLayer({ icon, shown }: { icon: string; shown: boolean }) {
+  const reduceMotion = useReducedMotion();
   return (
     <motion.span
       className="absolute inset-0 flex items-center justify-center"
-      animate={{ opacity: shown ? 1 : 0, scale: shown ? 1 : 0.88 }}
-      transition={T_ICON}
+      animate={{ opacity: shown ? 1 : 0, scale: shown || reduceMotion ? 1 : 0.88 }}
+      transition={reduceMotion ? T_INSTANT : T_ICON}
     >
       <Icon icon={icon} width={18} height={18} />
     </motion.span>
@@ -42,6 +44,7 @@ export function ExplorerFollowButton() {
     [],
   );
 
+  const reduceMotion = useReducedMotion();
   const { visible, following, channelName, pending, toggle } = useExplorerFollow(flashHint);
 
   if (!visible) return null;
@@ -54,10 +57,10 @@ export function ExplorerFollowButton() {
         {hint ? (
           <motion.span
             key={hint.text}
-            initial={{ opacity: 0, x: 6 }}
+            initial={{ opacity: 0, x: reduceMotion ? 0 : 6 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 4 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, x: reduceMotion ? 0 : 4 }}
+            transition={reduceMotion ? T_INSTANT : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className={
               hint.kind === "error"
                 ? "pointer-events-none max-w-[9.5rem] text-right text-[9px] font-semibold uppercase leading-tight tracking-[0.12em] text-amber-400/95"

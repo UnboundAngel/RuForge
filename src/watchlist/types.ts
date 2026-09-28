@@ -35,7 +35,8 @@ export type WatchlistSnapshot = {
 
 export type ResolvedChannel = { channelId: string; title: string; handle: string | null };
 
-export type UploadsPayload = { uploads: WatchlistUpload[] };
+/** Drained from Rust with `take_watchlist_events`; the events themselves carry no payload. */
+export type WatchlistEvents = { newUploads: WatchlistUpload[]; autoReady: WatchlistUpload[] };
 
 export type ChannelFollowMessage = { tone: "error" | "info"; text: string };
 
@@ -50,5 +51,4 @@ export type ChannelsUiState = {
 };
 
 export const WATCHLIST_UPDATED_EVENT = "watchlist-updated";
-export const WATCHLIST_NEW_UPLOADS_EVENT = "watchlist-new-uploads";
-export const WATCHLIST_AUTO_READY_EVENT = "watchlist-auto-ready";
+export const WATCHLIST_EVENTS_EVENT = "watchlist-events";
