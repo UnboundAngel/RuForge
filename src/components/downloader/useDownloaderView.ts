@@ -72,9 +72,8 @@ import {
 } from "../../lib/devLastDownloadBatch";
 import { deliverUserNotification } from "../../systemNotify";
 import { ytdlpVideoFormatForMetadata } from "../../downloadFormat";
-
-const STORAGE_FULL_NOTIFY =
-  "Library storage limit reached. Free space in Settings or switch to an external download folder.";
+import { STORAGE_FULL_NOTIFY } from "../../lib/storageBlocks";
+import { recordStorageFullRefusal } from "../../notifications/sources/downloadItems";
 
 function heroReuseEligibleJob(j: DownloadJob): boolean {
   return (
@@ -1114,6 +1113,7 @@ export function useDownloaderView({
         { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
         notify,
       );
+      recordStorageFullRefusal();
       return;
     }
 
@@ -1336,6 +1336,7 @@ export function useDownloaderView({
           { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
           notify,
         );
+        recordStorageFullRefusal();
         return;
       }
 
@@ -1736,6 +1737,7 @@ export function useDownloaderView({
               { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
               notify,
             );
+            recordStorageFullRefusal();
           } else {
             enqueueDownloadOnly(prev, "replace", {
               approval: "held",

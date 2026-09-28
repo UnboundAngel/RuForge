@@ -26,7 +26,7 @@ Each phase is self-contained. A builder reads: Build protocol, Context for the b
 - [x] Phase 2: Rust channel resolver
 - [x] Phase 3: Rust poller, premieres, auto-download hold
 - [x] Phase 4: Frontend watchlist data layer
-- [ ] Phase 5: Notification center core (model, store, sources)
+- [x] Phase 5: Notification center core (model, store, sources)
 - [ ] Phase 6: Title bar bell + notification popover (in-page)
 - [ ] Phase 7: Popover overlay above YouTube webviews
 - [ ] Phase 8: Channels tab (manage follows)

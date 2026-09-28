@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { buildDownloadJobOptions, patchDownloadJobOptionsForAudio, resolveDownloadOutputDir } from "@/downloadQueue";
 import { explorerNavigateOrReloadScript } from "@/explorerWebviewLifecycle";
 import { STORAGE_FULL_NOTIFY, storageBlocksNewDownloads } from "@/lib/storageBlocks";
+import { recordStorageFullRefusal } from "@/notifications/sources/downloadItems";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { deliverUserNotification } from "@/systemNotify";
 import type { ResolvedChannel, WatchlistSnapshot, WatchlistUpload } from "./types";
@@ -77,6 +78,7 @@ export async function queueUpload(upload: WatchlistUpload): Promise<void> {
       { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
       useRuforgeStore.getState().notify,
     );
+    recordStorageFullRefusal();
     return;
   }
   await markSeen([upload.videoId]);
