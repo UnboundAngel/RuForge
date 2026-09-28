@@ -356,6 +356,7 @@ pub fn run() {
             crate::commands::watchlist::mark_watchlist_seen,
             crate::commands::watchlist::mark_all_watchlist_seen,
             crate::commands::watchlist::mark_watchlist_auto_queued,
+            crate::commands::watchlist::resolve_watchlist_channel,
             start_download_job,
             pause_download_job,
             stop_all_active_download_jobs,

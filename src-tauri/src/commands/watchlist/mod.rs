@@ -1,5 +1,6 @@
 pub mod feed;
 pub mod model;
+pub mod resolve;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -8,8 +9,8 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, EventTarget, Manager, State};
 
 use model::{
-    is_channel_id, seed_channel, WatchedChannel, WatchlistFile, WatchlistSnapshot, MAX_CHANNELS,
-    MAX_INTERVAL_MIN, MIN_INTERVAL_MIN,
+    is_channel_id, seed_channel, ResolvedChannel, WatchedChannel, WatchlistFile,
+    WatchlistSnapshot, MAX_CHANNELS, MAX_INTERVAL_MIN, MIN_INTERVAL_MIN,
 };
 
 const WATCHLIST_FILENAME: &str = "watchlist.json";
@@ -172,6 +173,15 @@ pub async fn follow_channel(
         return Err("You can follow up to 300 channels.".into());
     }
     Ok(snapshot)
+}
+
+#[tauri::command]
+pub async fn resolve_watchlist_channel(
+    app: AppHandle,
+    state: State<'_, WatchlistState>,
+    input: String,
+) -> Result<ResolvedChannel, String> {
+    resolve::resolve(&app, &state.client, &input).await
 }
 
 #[tauri::command]
