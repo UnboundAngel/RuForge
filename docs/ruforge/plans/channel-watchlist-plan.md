@@ -1,6 +1,6 @@
 # Channel watchlist + notification center: build plan
 
-Status: planned. Roadmap row: `website/src/content/roadmap.json` "Channel watchlist and new-upload notifications" (Explorer, Medium). Future consumer of the notification center: roadmap row "Download history log" (out of scope here).
+Status: built on `feature/channel-watchlist` (PR #4), awaiting Angel's live QA (`docs/agents/handoffs/channel-watchlist-handoff.md`). Roadmap row: `website/src/content/roadmap.json` "Channel watchlist and new-upload notifications" (Explorer, Medium). Future consumer of the notification center: roadmap row "Download history log" (out of scope here).
 
 Each phase is self-contained. A builder reads: Build protocol, Context for the builder, the architecture sections the phase links to, then only its own phase.
 
@@ -34,7 +34,7 @@ Each phase is self-contained. A builder reads: Build protocol, Context for the b
 - [x] Phase 10: Library entry points, shelf, rail badge
 - [x] Phase 11: Watchlist alerts + auto-download
 - [x] Phase 12: Desktop island watchlist variant
-- [ ] Phase 13: Settings, polish, Unreleased log
+- [x] Phase 13: Settings, polish, Unreleased log
 
 ---
 
@@ -317,6 +317,7 @@ Angel is away; these were resolved with the most sensible default. Change them h
 - **Stacking order.** Child webviews stack in creation order. The overlay must be (re)created after any YouTube webview it needs to cover; copy the `stackedAbove` logic from `radialNavOverlayHost.ts`.
 - **Transparent webviews still eat clicks.** Size the overlay to the panel's measured height, not a fixed max.
 - **Emit to main only** from Rust (Explorer has event permission).
+- **`emitTo` is not private.** Tauri delivers a targeted event to every webview listening with the `Any` target, and the youtube.com Explorer can listen. Since phase 13, private payloads never ride events: Rust watchlist events are payload-free pings (main pulls with `get_watchlist` / `take_watchlist_events`), and webview-to-webview state goes through `src/lib/privateMailbox.ts` + `commands/private_mailbox.rs`. Remote origins cannot invoke app commands. Residual risks are listed in the handoff.
 - **Never hold a `std::sync::Mutex` guard across `.await`** in Rust.
 - **Hidden main still runs JS.** Minimize-to-tray hides `main` (`lib.rs` `CloseRequested`), events still arrive, timers are throttled. Polling belongs to Rust, not a main `setInterval`.
 - **Portals escape the Music palette.** Set `data-music-mode="true"` on portaled roots in Music mode.

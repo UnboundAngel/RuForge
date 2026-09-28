@@ -60,6 +60,8 @@ export const downloadSource: NotificationSource = {
         if (item.ref.jobId) s.retryDownloadJob(item.ref.jobId);
         return;
       case "open-storage-settings":
+        // Storage is the first section of General, and Settings opens scrolled to the top.
+        s.setSettingsTab("general");
         s.openSettings();
         return;
       default:

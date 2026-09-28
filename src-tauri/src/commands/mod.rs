@@ -31,3 +31,4 @@ pub mod youtube_feed;
 pub mod channel_avatar;
 pub mod deno_update;
 pub mod watchlist;
+pub mod private_mailbox;

@@ -116,10 +116,32 @@ pub struct WatchedChannelView {
     pub last_error: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+/// Held in Rust until main pulls it with `take_watchlist_events`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct UploadsPayload {
-    pub uploads: Vec<WatchlistUpload>,
+pub struct WatchlistEvents {
+    pub new_uploads: Vec<WatchlistUpload>,
+    pub auto_ready: Vec<WatchlistUpload>,
+}
+
+pub const PENDING_EVENTS_CAP: usize = 200;
+
+impl WatchlistEvents {
+    /// Oldest go first past the cap so a main webview that never drains cannot grow this forever.
+    pub fn push(&mut self, new_uploads: Vec<WatchlistUpload>, auto_ready: Vec<WatchlistUpload>) {
+        fn append(list: &mut Vec<WatchlistUpload>, more: Vec<WatchlistUpload>) {
+            list.extend(more);
+            if list.len() > PENDING_EVENTS_CAP {
+                list.drain(..list.len() - PENDING_EVENTS_CAP);
+            }
+        }
+        append(&mut self.new_uploads, new_uploads);
+        append(&mut self.auto_ready, auto_ready);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.new_uploads.is_empty() && self.auto_ready.is_empty()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -372,6 +394,18 @@ mod tests {
             seen,
             auto_queued: false,
         }
+    }
+
+    #[test]
+    fn watchlist_pending_events_cap_drops_oldest() {
+        let mut ev = WatchlistEvents::default();
+        assert!(ev.is_empty());
+        let batch: Vec<_> = (0..PENDING_EVENTS_CAP + 5).map(|i| upload(&format!("v{i}"), 0, false)).collect();
+        ev.push(batch, vec![upload("held", 0, false)]);
+        assert_eq!(ev.new_uploads.len(), PENDING_EVENTS_CAP);
+        assert_eq!(ev.new_uploads[0].video_id, "v5");
+        assert_eq!(ev.auto_ready.len(), 1);
+        assert!(!ev.is_empty());
     }
 
     #[test]

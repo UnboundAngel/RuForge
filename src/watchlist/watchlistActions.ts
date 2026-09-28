@@ -34,6 +34,10 @@ export function markAllSeen(): Promise<WatchlistSnapshot> {
   return commit("mark_all_watchlist_seen");
 }
 
+export function setCheckInterval(minutes: number): Promise<WatchlistSnapshot> {
+  return commit("set_watchlist_check_interval", { minutes });
+}
+
 /** Rejects with Rust's user-facing message ("Could not find that channel." and friends). */
 export function resolveChannel(input: string): Promise<ResolvedChannel> {
   return invoke<ResolvedChannel>("resolve_watchlist_channel", { input });

@@ -36,7 +36,7 @@ export function IslandWatchlistFaces({ faces }: { faces: readonly IslandWatchlis
 }
 
 const actionClass =
-  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-stone-400 transition-[color,background-color,transform] duration-150 hover:bg-white/[0.08] hover:text-[color:var(--accent)] active:scale-[0.94]";
+  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-stone-400 transition-[color,background-color,transform] duration-150 hover:bg-white/[0.08] hover:text-[color:var(--accent)] active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100";
 
 export function IslandWatchlistRow({
   row,
@@ -53,7 +53,7 @@ export function IslandWatchlistRow({
   };
 
   return (
-    <li className="group flex min-w-0 items-center gap-2.5 rounded-xl p-1 transition-colors duration-150 hover:bg-white/[0.05]">
+    <li className="group flex min-w-0 items-center gap-2.5 rounded-xl p-1 transition-colors duration-150 hover:bg-white/[0.05] motion-reduce:transition-none">
       <img
         src={row.thumbnail}
         alt=""
