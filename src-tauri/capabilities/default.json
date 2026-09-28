@@ -11,7 +11,8 @@
   ],
   "webviews": [
     "main",
-    "radial-nav-overlay"
+    "radial-nav-overlay",
+    "notify-overlay"
   ],
   "permissions": [
     "core:default",

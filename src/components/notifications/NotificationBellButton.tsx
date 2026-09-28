@@ -1,4 +1,5 @@
 import { Icon } from "@iconify/react";
+import { notifyOverlayJustClosed } from "@/lib/notifyOverlayHost";
 import { setNotificationPopoverOpen, useNotificationCenterStore } from "@/notifications/notificationCenterStore";
 import { useUnreadCount } from "@/notifications/selectors";
 import { titlebarIconButtonClass } from "../TitlebarHoverButton";
@@ -17,7 +18,10 @@ export function NotificationBellButton() {
         data-tooltip={tooltip}
         aria-label={tooltip}
         aria-expanded={open}
-        onClick={() => setNotificationPopoverOpen(!open)}
+        onClick={() => {
+          if (!open && notifyOverlayJustClosed()) return;
+          setNotificationPopoverOpen(!open);
+        }}
         className={titlebarIconButtonClass}
       >
         <Icon
