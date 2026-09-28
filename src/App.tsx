@@ -51,6 +51,7 @@ import MusicMiniPlayer from "./components/music-mini/MusicMiniPlayer";
 import { isAudioOnlyPath } from "./mediaKind";
 import { flattenGalleryScanToMediaFiles } from "./galleryScan";
 import { ExplorerWatchQueueButton } from "./components/ExplorerWatchQueueButton";
+import { ExplorerFollowButton } from "./components/watchlist/ExplorerFollowButton";
 import { NotificationBellButton } from "./components/notifications/NotificationBellButton";
 import { NotificationCenterPopover } from "./components/notifications/NotificationCenterPopover";
 import { ExplorerTitlebarNav } from "./components/ExplorerTitlebarNav";
@@ -217,6 +218,8 @@ const WindowControls = ({
           onClick={onUpdaterStatusClick}
         />
       </div>
+
+      {showExplorerQueueToolbar && <ExplorerFollowButton />}
 
       {showExplorerQueueToolbar && (
         <ExplorerWatchQueueButton
@@ -1864,14 +1867,14 @@ function App() {
             data-tauri-drag-region
           />
           <div
-            className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[360px]" : "right-[280px]"}`}
+            className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[400px]" : "right-[280px]"}`}
             style={{ left: `calc(50% + ${MUSIC_TOP_BAR_HALF_WIDTH_PX}px)` }}
             data-tauri-drag-region
           />
         </>
       ) : (
         <div
-          className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[360px]" : "right-[280px]"}`}
+          className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[400px]" : "right-[280px]"}`}
           style={{ left: SIDEBAR_RAIL_PX }}
           data-tauri-drag-region
         />
