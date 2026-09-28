@@ -16,9 +16,7 @@ import {
 import { WarningPlaylistIcon } from "./icons/WarningPlaylistIcon";
 import { titlebarIconButtonClass } from "./TitlebarHoverButton";
 import { deliverUserNotification } from "../systemNotify";
-
-const STORAGE_FULL_NOTIFY =
-  "Library storage limit reached. Free space in Settings or switch to an external download folder.";
+import { STORAGE_FULL_NOTIFY } from "../lib/storageBlocks";
 
 const STORAGE_FULL_REASON = "Your storage is full";
 
