@@ -92,20 +92,33 @@ export async function queueUpload(upload: WatchlistUpload): Promise<boolean> {
 
 export async function openUploadInExplorer(upload: WatchlistUpload): Promise<void> {
   void markSeen([upload.videoId]).catch((e) => console.error("mark_watchlist_seen failed", e));
+  await openUrlInExplorer(upload.url);
+}
+
+/** Long enough for a cold webview to be created and shown. */
+const EXPLORER_NAV_TARGET_MS = 8000;
+
+export async function openUrlInExplorer(url: string): Promise<void> {
   const s = useRuforgeStore.getState();
-  s.setLastExplorerUrl(upload.url);
+  s.setLastExplorerUrl(url);
+  // The URL poller would otherwise copy the old page back before the enter transition navigates.
+  s.setExplorerNavTarget(url);
+  window.setTimeout(() => {
+    const now = useRuforgeStore.getState();
+    if (now.explorerNavTarget === url) now.setExplorerNavTarget(null);
+  }, EXPLORER_NAV_TARGET_MS);
   if (s.navMode === "music") s.setNavMode("default");
   if (s.activeTab !== "explorer") {
-    // Entering the tab navigates the webview to lastExplorerUrl.
     s.setActiveTab("explorer");
     return;
   }
   // Already on the tab (maybe under Music mode or an overlay): no enter transition, so drive it here.
-  s.setActiveTab("explorer");
   try {
     const label = await invoke<string>("embedded_explorer_webview_label");
-    await invoke("eval_in_webview", { label, script: explorerNavigateOrReloadScript(upload.url) });
+    await invoke("eval_in_webview", { label, script: explorerNavigateOrReloadScript(url) });
   } catch (e) {
     console.error(e);
+  } finally {
+    useRuforgeStore.getState().setExplorerNavTarget(null);
   }
 }

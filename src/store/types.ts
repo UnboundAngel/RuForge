@@ -182,6 +182,8 @@ export interface RuforgeSettings {
   discordPresenceShowBrowsing: boolean;
   /** When false, new uploads from followed channels stay silent (badges and auto-download still run). */
   watchlistAlerts: boolean;
+  /** When true, the title bar shows the export-to-drive button (Settings > Export always has it). */
+  showExportInTitlebar: boolean;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -224,6 +226,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   discordPresenceShowTitles: true,
   discordPresenceShowBrowsing: true,
   watchlistAlerts: true,
+  showExportInTitlebar: false,
 };
 
 /** Hidden legacy default was `"chrome"` (not in downloader UI). Treat as no cookie source. */
@@ -272,6 +275,7 @@ export function loadMergedSettings(): RuforgeSettings {
       discordPresenceShowTitles: merged.discordPresenceShowTitles !== false,
       discordPresenceShowBrowsing: merged.discordPresenceShowBrowsing !== false,
       watchlistAlerts: merged.watchlistAlerts !== false,
+      showExportInTitlebar: merged.showExportInTitlebar === true,
     };
   } catch {
     return DEFAULT_SETTINGS;

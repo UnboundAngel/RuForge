@@ -21,6 +21,7 @@ import {
   type NotifyOverlaySize,
   type NotifyOverlayState,
 } from "@/lib/notifyOverlayEvents";
+import { NOTIFY_PANEL_EXIT_MS } from "@/lib/overlayMotion";
 import { listenPrivateQueue, postPrivateState } from "@/lib/privateMailbox";
 import { activeRadialNavSurface } from "@/lib/radialNavOverlayHost";
 
@@ -197,12 +198,14 @@ export async function moveNotifyOverlay(anchor: NotifyOverlayAnchor): Promise<vo
 
 /** `restoreFocus` hands keyboard focus back to the YouTube page unless the user already clicked elsewhere. */
 export async function hideNotifyOverlay(restoreFocus: boolean): Promise<void> {
-  visibilitySeq += 1;
+  const seq = ++visibilitySeq;
   const wasVisible = visible;
   visible = false;
   if (lastState?.open) pushNotifyOverlayState({ ...lastState, open: false });
   const webview = overlay;
   if (!webview || !wasVisible) return;
+  await new Promise((resolve) => window.setTimeout(resolve, NOTIFY_PANEL_EXIT_MS));
+  if (seq !== visibilitySeq) return;
   await webview.hide().catch(() => {});
   if (!restoreFocus || notifyOverlayJustClosed()) return;
   const surface = activeRadialNavSurface();

@@ -5,11 +5,10 @@ import { debugLog } from "@/debug/debugLog";
 import { MUSIC_EXPLORE_WEBVIEW_LABEL } from "@/explorerProfileScript";
 import { EMBEDDED_EXPLORER_WEBVIEW_LABEL } from "@/explorerWebviewLifecycle";
 import { activeRadialNavSurface } from "@/lib/radialNavOverlayHost";
-import { OVERLAY_EASE } from "@/lib/overlayMotion";
+import { REDUCED_PANEL_MOTION, notifyPanelMotion } from "@/lib/overlayMotion";
 import { OVERLAY_Z_CLASS } from "@/lib/overlayZIndex";
 import {
   setExplorerCoveredByPopover,
-  setNotificationFilter,
   setNotificationTab,
   useNotificationCenterStore,
 } from "@/notifications/notificationCenterStore";
@@ -30,11 +29,14 @@ import {
   unfollowFromPanel,
   useChannelsUiStore,
 } from "@/watchlist/channelManage";
+import { changeCheckInterval, openNotificationSettings, setWatchlistAlerts } from "@/watchlist/watchlistSettings";
 import { useWatchlistStore } from "@/watchlist/watchlistStore";
 import type { WatchedChannel } from "@/watchlist/types";
 import { bellAnchorRect, isInsideBell } from "./bellAnchor";
 import type { ChannelHandlers } from "./channels/ChannelsPanel";
 import { NotificationCenterPanel } from "./NotificationCenterPanel";
+import type { PrefsHandlers } from "./NotificationPrefsView";
+import { useNotificationPrefs } from "./useNotificationPrefs";
 import { useNotifyOverlayHost } from "./useNotifyOverlayHost";
 
 const PANEL_GAP_PX = 6;
@@ -45,6 +47,11 @@ const channelHandlers: ChannelHandlers = {
   onAutoDownload: setChannelAutoDownload,
   onUnfollow: unfollowFromPanel,
   onCheckNow: () => void checkChannelsNow(),
+};
+
+const prefsHandlers: PrefsHandlers = {
+  onAlerts: setWatchlistAlerts,
+  onCheckInterval: changeCheckInterval,
 };
 
 type Anchor = { top: number; right: number };
@@ -83,9 +90,12 @@ export function NotificationCenterPopover() {
   }, [surfaceKey]);
 
   useEffect(() => {
-    if (!open) clearChannelFollowMessage();
+    if (open) return;
+    clearChannelFollowMessage();
+    if (useNotificationCenterStore.getState().tab === "settings") setNotificationTab("feed");
   }, [open]);
 
+  const prefs = useNotificationPrefs();
   const youtubeSurface = open ? activeRadialNavSurface() : null;
   const overlayFallback = useNotifyOverlayHost(youtubeSurface != null, readAnchor, {
     navMode,
@@ -94,6 +104,7 @@ export function NotificationCenterPopover() {
     channelsUi,
     tab,
     filter,
+    prefs,
   });
   const fallbackSurface = overlayFallback ? youtubeSurface : null;
 
@@ -137,7 +148,7 @@ export function NotificationCenterPopover() {
   }, []);
 
   const shownAnchor = hostAOpen ? anchor : null;
-  const transition = reduceMotion ? { duration: 0 } : { duration: 0.18, ease: OVERLAY_EASE };
+  const panelMotion = reduceMotion ? REDUCED_PANEL_MOTION : notifyPanelMotion;
 
   if (typeof document === "undefined") return null;
   return createPortal(
@@ -149,25 +160,23 @@ export function NotificationCenterPopover() {
           role="dialog"
           aria-label="Notifications"
           data-music-mode={navMode === "music" ? "true" : undefined}
-          className={`fixed ${OVERLAY_Z_CLASS.menus} flex max-h-[min(560px,calc(100vh-72px))] w-[392px] origin-top-right flex-col overflow-hidden rounded-[20px] bg-[color:var(--rf-popover-bg)] shadow-[0_18px_48px_rgba(0,0,0,0.5)]`}
+          className={`fixed ${OVERLAY_Z_CLASS.menus} flex max-h-[min(640px,calc(100vh-72px))] w-[480px] origin-top-right flex-col overflow-hidden rounded-[20px] bg-[color:var(--rf-popover-bg)] shadow-[0_18px_48px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.06]`}
           style={{ top: shownAnchor.top, right: shownAnchor.right }}
-          initial={{ opacity: 0, y: -6, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -6, scale: 0.98 }}
-          transition={transition}
+          {...panelMotion}
         >
           <NotificationCenterPanel
             items={items}
             channels={channels}
             channelsUi={channelsUi}
             channelHandlers={channelHandlers}
+            prefs={prefs}
+            prefsHandlers={prefsHandlers}
             tab={tab}
-            filter={filter}
             onAction={onAction}
             onMarkRead={markOneNotificationRead}
             onMarkAllRead={markEveryNotificationRead}
             onTab={setNotificationTab}
-            onFilter={setNotificationFilter}
+            onOpenSettings={openNotificationSettings}
             onClose={closeNotificationPopover}
           />
         </motion.div>

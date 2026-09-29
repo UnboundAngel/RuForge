@@ -4,7 +4,10 @@ import { Check, Download, Loader2, Pause, Play, RotateCcw, Volume2, VolumeX } fr
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useOutsideDownloadPercent } from "@/components/music/useMusicOutsideRecommendations";
+import { useRuforgeStore } from "@/store/ruforgeStore";
+import { openUrlInExplorer } from "@/watchlist/watchlistActions";
 import { downloadFeedVideo } from "./downloadFeedVideo";
+import { FeedVideoMenu, feedMenuKey } from "./FeedVideoMenu";
 import { MetaParts, VideoByline } from "./VideoByline";
 import {
   type FeedPreviewStatus,
@@ -101,6 +104,27 @@ function PreviewButton({ video, status }: { video: FeedVideo; status: FeedPrevie
   );
 }
 
+function WatchButton({ video }: { video: FeedVideo }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        void openUrlInExplorer(video.url);
+      }}
+      className={cn(
+        "absolute bottom-2.5 left-2.5 z-20 flex h-10 items-center gap-1.5 rounded-full bg-black/70 pl-3 pr-3.5 text-white",
+        "transition-[opacity,transform,background-color] duration-200 hover:scale-105 hover:bg-black/85",
+        "opacity-0 translate-y-2 group-hover/card:opacity-100 group-hover/card:translate-y-0 focus-visible:opacity-100 focus-visible:translate-y-0",
+      )}
+      aria-label={`Watch ${video.title} on YouTube`}
+    >
+      <Play size={16} fill="currentColor" strokeWidth={0} className="translate-x-px" />
+      <span className="text-[12px] font-bold">Watch on YouTube</span>
+    </button>
+  );
+}
+
 const RING_R = 13;
 const RING_C = 2 * Math.PI * RING_R;
 
@@ -162,15 +186,41 @@ function DownloadButton({ video }: { video: FeedVideo }) {
 export const FeedVideoCard = memo(function FeedVideoCard({
   video,
   shape = "video",
+  opensInExplorer = false,
 }: {
   video: FeedVideo;
   /** `short` is the tall Shorts shelf: 9:16 frame and a lighter text block with no avatar. */
   shape?: "video" | "short";
+  /** Click starts the video on YouTube in Explorer instead of previewing it in place. */
+  opensInExplorer?: boolean;
 }) {
   const status = useFeedPreview((s) => (s.id === video.videoId ? s.status : null));
   const progress = useFeedPreview((s) => (s.id === video.videoId ? s.progress : 0));
   const muted = useFeedPreview((s) => s.muted);
   const meta = [formatViewCount(video.viewCount), video.timestamp ? formatAge(video.timestamp) : null].filter(Boolean);
+  const menuKey = feedMenuKey(video);
+  const menuOpen = useRuforgeStore((s) => s.activeMenu?.path === menuKey && !s.activeMenu?.floating);
+  const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
+  const download = useOutsideDownloadPercent(video.url);
+  const [hovered, setHovered] = useState(false);
+
+  const setMenuOpen = (next: boolean) => {
+    if (next) setGalleryActiveMenu({ path: menuKey });
+    else if (useRuforgeStore.getState().activeMenu?.path === menuKey) setGalleryActiveMenu(null);
+  };
+
+  const actions = (
+    <div className="flex shrink-0 items-start gap-0.5">
+      <DownloadButton video={video} />
+      <FeedVideoMenu
+        video={video}
+        open={menuOpen}
+        mounted={hovered || menuOpen}
+        canDownload={!download.queued || download.failed}
+        onOpenChange={setMenuOpen}
+      />
+    </div>
+  );
 
   useEffect(
     () => () => {
@@ -180,7 +230,22 @@ export const FeedVideoCard = memo(function FeedVideoCard({
   );
 
   return (
-    <div className="group/card flex flex-col gap-3 cursor-pointer" onClick={() => void toggleFeedPreview(video)}>
+    <div
+      className={cn("group/card relative flex flex-col gap-3 cursor-pointer", menuOpen ? "z-30" : "hover:z-20")}
+      onClick={() => {
+        if (menuOpen) return;
+        if (opensInExplorer) void openUrlInExplorer(video.url);
+        else void toggleFeedPreview(video);
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setHovered(true);
+        setMenuOpen(true);
+      }}
+    >
       <div
         className={cn(
           "relative overflow-hidden rounded-[var(--r-media,16px)] bg-[color:var(--rf-well-raised)]",
@@ -219,7 +284,7 @@ export const FeedVideoCard = memo(function FeedVideoCard({
           </div>
         ) : null}
 
-        <PreviewButton video={video} status={status} />
+        {opensInExplorer ? <WatchButton video={video} /> : <PreviewButton video={video} status={status} />}
 
         {status ? (
           <div className="absolute inset-x-0 bottom-0 z-20 h-1 bg-white/15" aria-hidden>
@@ -241,7 +306,7 @@ export const FeedVideoCard = memo(function FeedVideoCard({
               <p className="mt-1 truncate text-[13px] text-stone-400">{formatViewCount(video.viewCount)}</p>
             ) : null}
           </div>
-          <DownloadButton video={video} />
+          {actions}
         </div>
       ) : (
         <VideoByline
@@ -254,7 +319,7 @@ export const FeedVideoCard = memo(function FeedVideoCard({
             </h3>
           }
           meta={meta.length > 0 ? <MetaParts parts={meta} /> : null}
-          action={<DownloadButton video={video} />}
+          action={actions}
         />
       )}
     </div>

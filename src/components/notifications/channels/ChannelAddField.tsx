@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { ChannelsUiState } from "@/watchlist/types";
+import { controlLabelClass, raisedClass } from "../panelStyles";
 
 type Props = {
   ui: ChannelsUiState;
@@ -22,13 +23,13 @@ export function ChannelAddField({ ui, onFollowInput }: Props) {
 
   return (
     <form
-      className="px-2 pb-2"
+      className="px-2 pt-1"
       onSubmit={(e) => {
         e.preventDefault();
         if (canSubmit) onFollowInput(value);
       }}
     >
-      <div className="flex items-center gap-1.5 rounded-[var(--radius-input)] bg-[color:var(--rf-popover-raised)] py-1 pl-3 pr-1">
+      <div className={`flex h-11 items-center gap-2 pl-4 pr-1.5 focus-within:ring-1 focus-within:ring-white/15 ${raisedClass}`}>
         <input
           type="text"
           value={value}
@@ -37,20 +38,24 @@ export function ChannelAddField({ ui, onFollowInput }: Props) {
           aria-label="Channel or video link"
           spellCheck={false}
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent py-1 text-[12px] text-stone-100 outline-none placeholder:text-stone-500"
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-stone-100 outline-none placeholder:text-stone-500"
         />
         <button
           type="submit"
           disabled={!canSubmit}
-          className="flex h-7 min-w-[64px] items-center justify-center rounded-[10px] bg-[color:var(--accent)] px-3 text-[12px] font-bold text-stone-950 transition-[filter,opacity,transform] duration-150 hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
+          className={`flex h-8 min-w-[72px] items-center justify-center rounded-lg px-3 transition-colors duration-150 ${controlLabelClass} ${
+            canSubmit || ui.followPending
+              ? "bg-[color:var(--accent)] text-[color:var(--rf-popover-cta-fg,#1d1613)]"
+              : "text-stone-600"
+          }`}
         >
-          {ui.followPending ? <Loader2 size={14} className="animate-spin" aria-label="Following" /> : "Follow"}
+          {ui.followPending ? <Loader2 size={16} className="animate-spin" aria-label="Following" /> : "Follow"}
         </button>
       </div>
       {message ? (
         <p
           role={message.tone === "error" ? "alert" : "status"}
-          className={`mt-1.5 px-1 text-[11px] ${message.tone === "error" ? "text-amber-300/90" : "text-stone-500"}`}
+          className={`mt-2 px-2 text-[12px] ${message.tone === "error" ? "text-amber-300/90" : "text-stone-400"}`}
         >
           {message.text}
         </p>

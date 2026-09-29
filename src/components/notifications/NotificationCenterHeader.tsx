@@ -1,79 +1,90 @@
-import { X } from "lucide-react";
-import { NOTIFICATION_FILTERS } from "@/notifications/panelModel";
-import {
-  NOTIFICATION_CENTER_TABS,
-  type NotificationCenterFilter,
-  type NotificationCenterTab,
-} from "@/notifications/types";
+import { Icon } from "@iconify/react";
+import { ChevronLeft, X } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { OVERLAY_EASE } from "@/lib/overlayMotion";
+import type { NotificationCenterTab } from "@/notifications/types";
 
-const ENABLED_TABS = NOTIFICATION_CENTER_TABS.filter((t) => t.enabled);
+const iconButtonClass =
+  "flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition-colors duration-150 hover:bg-white/[0.05] hover:text-stone-200";
 
 type Props = {
   tab: NotificationCenterTab;
-  filter: NotificationCenterFilter;
   unread: number;
+  channelCount: number;
   onTab: (tab: NotificationCenterTab) => void;
-  onFilter: (filter: NotificationCenterFilter) => void;
-  onMarkAllRead: () => void;
   onClose: () => void;
 };
 
-export function NotificationCenterHeader({ tab, filter, unread, onTab, onFilter, onMarkAllRead, onClose }: Props) {
+function copyFor(tab: NotificationCenterTab, unread: number, channelCount: number) {
+  if (tab === "settings") return { title: "Notification settings", subtitle: "Alerts and how often to check." };
+  if (tab === "channels") {
+    const subtitle =
+      channelCount === 0
+        ? "Follow a channel to hear about new uploads."
+        : `Following ${channelCount} ${channelCount === 1 ? "channel" : "channels"}`;
+    return { title: "Channels", subtitle };
+  }
+  return { title: "Notifications", subtitle: unread > 0 ? `${unread} new` : "You're all caught up." };
+}
+
+export function NotificationCenterHeader({ tab, unread, channelCount, onTab, onClose }: Props) {
+  const reduceMotion = useReducedMotion();
+  const nested = tab !== "feed";
+  const { title, subtitle } = copyFor(tab, unread, channelCount);
+
   return (
-    <header className="shrink-0 space-y-2 px-3 pb-2 pt-3">
-      <div className="flex items-center gap-1">
-        {ENABLED_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onTab(t.id)}
-            className={`rounded-lg px-2.5 py-1.5 text-[13px] font-semibold transition-colors duration-150 ${
-              tab === t.id
-                ? "bg-[color:var(--rf-popover-raised)] text-stone-100"
-                : "text-stone-500 hover:text-stone-300"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-1">
-          {tab === "feed" && unread > 0 ? (
-            <button
-              type="button"
-              onClick={onMarkAllRead}
-              className="px-1.5 text-[11px] font-semibold text-stone-500 transition-colors duration-150 hover:text-[color:var(--accent)]"
-            >
-              Mark all read
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg p-1 text-stone-500 transition-colors duration-150 hover:text-stone-200"
-          >
-            <X size={16} />
-          </button>
-        </div>
-      </div>
-      {tab === "feed" ? (
-        <div className="flex items-center gap-1 px-1">
-          {NOTIFICATION_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => onFilter(f.id)}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors duration-150 ${
-                filter === f.id
-                  ? "bg-[color:var(--rf-popover-raised)] text-stone-100"
-                  : "text-stone-500 hover:text-stone-300"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+    <header className="flex shrink-0 items-start gap-2 px-4 pb-3 pt-4">
+      {nested ? (
+        <button
+          type="button"
+          onClick={() => onTab("feed")}
+          aria-label="Back to notifications"
+          data-tooltip="Back"
+          className={`-ml-2 mt-0.5 ${iconButtonClass}`}
+        >
+          <ChevronLeft size={20} />
+        </button>
       ) : null}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 0.16, ease: OVERLAY_EASE }}
+          className="min-w-0 flex-1"
+        >
+          <h2 className="rf-settings-page-title truncate text-[1.375rem] leading-tight">{title}</h2>
+          <p className="mt-0.5 truncate text-[13px] font-medium text-stone-500">{subtitle}</p>
+        </motion.div>
+      </AnimatePresence>
+      <div className="-mr-2 flex shrink-0 items-center">
+        {tab === "feed" ? (
+          <>
+            <button
+              type="button"
+              onClick={() => onTab("channels")}
+              aria-label="Channels"
+              data-tooltip="Channels"
+              className={iconButtonClass}
+            >
+              <Icon icon="tabler:users" width={19} height={19} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => onTab("settings")}
+              aria-label="Notification settings"
+              data-tooltip="Notification settings"
+              className={iconButtonClass}
+            >
+              <Icon icon="tabler:settings" width={19} height={19} aria-hidden />
+            </button>
+          </>
+        ) : null}
+        <button type="button" onClick={onClose} aria-label="Close" data-tooltip="Close" className={iconButtonClass}>
+          <X size={19} />
+        </button>
+      </div>
     </header>
   );
 }

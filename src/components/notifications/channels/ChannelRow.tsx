@@ -1,7 +1,8 @@
+import { Icon } from "@iconify/react";
 import { ChannelAvatar } from "@/components/library/VideoByline";
 import { formatAge } from "@/components/library/youtubeFeed";
-import { HoverMarqueeText } from "@/components/music/HoverMarqueeText";
 import type { WatchedChannel } from "@/watchlist/types";
+import { panelRowDetailClass, panelRowTitleClass } from "../panelStyles";
 import { MiniToggle } from "./MiniToggle";
 
 type Props = {
@@ -26,31 +27,25 @@ export function ChannelRow({ channel, onAutoDownload, onUnfollow }: Props) {
   const status = statusLine(channel);
 
   return (
-    <li className="group flex items-center gap-3 rounded-xl p-2 transition-colors duration-150 hover:bg-[color:var(--rf-popover-raised)]">
-      <ChannelAvatar channelId={channel.channelId} channel={channel.title} className="h-9 w-9" />
+    <li className="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors duration-150 hover:bg-white/[0.04]">
+      <ChannelAvatar channelId={channel.channelId} channel={channel.title} className="h-10 w-10" />
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <HoverMarqueeText text={channel.title} slow className="text-[13px] font-semibold text-stone-100" />
-          </div>
-          <button
-            type="button"
-            onClick={() => onUnfollow(channel.channelId)}
-            className="shrink-0 text-[11px] font-semibold text-stone-500 opacity-0 transition-[color,opacity] duration-150 hover:text-[color:var(--accent)] focus-visible:opacity-100 group-hover:opacity-100"
-          >
-            Unfollow
-          </button>
-        </div>
-        <div className="flex min-w-0 items-center text-[11px]">
-          {handle ? <span className="max-w-[45%] shrink-0 truncate text-stone-500">{handle}</span> : null}
-          {handle ? <span className="mx-1.5 shrink-0 text-stone-600">·</span> : null}
-          <HoverMarqueeText
-            text={status}
-            slow
-            className={channel.lastError ? "text-amber-300/90" : "text-stone-500"}
-          />
-        </div>
+        <p className={`truncate ${panelRowTitleClass}`}>{channel.title}</p>
+        <p className={`mt-0.5 flex min-w-0 ${panelRowDetailClass}`}>
+          {handle ? <span className="max-w-[45%] shrink-0 truncate">{handle}</span> : null}
+          {handle ? <span className="mx-1.5 shrink-0">·</span> : null}
+          <span className={`truncate ${channel.lastError ? "text-amber-300/90" : ""}`}>{status}</span>
+        </p>
       </div>
+      <button
+        type="button"
+        onClick={() => onUnfollow(channel.channelId)}
+        aria-label={`Unfollow ${channel.title}`}
+        data-tooltip="Unfollow"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-stone-500 opacity-0 transition-[color,opacity] duration-150 hover:text-stone-100 focus-visible:opacity-100 group-hover:opacity-100"
+      >
+        <Icon icon="tabler:user-minus" width={18} height={18} aria-hidden />
+      </button>
       <MiniToggle
         active={channel.autoDownload}
         label={channel.autoDownload ? "Auto-download on" : "Auto-download new uploads"}

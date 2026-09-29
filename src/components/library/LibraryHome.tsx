@@ -3,14 +3,37 @@ import { FollowChannelButton } from "@/components/watchlist/FollowChannelButton"
 import type { MediaFile } from "@/types";
 import { FeedVideoCard } from "./FeedVideoCard";
 import { type HomeSection, shortsPerShelf } from "./homeSections";
+import { openCreatorPage } from "./creatorPageStore";
 import { ChannelAvatar } from "./VideoByline";
 import type { MixedGridItem } from "./youtubeFeed";
 
-function SectionTitle({ children }: { children: ReactNode }) {
+export function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="mb-5 flex items-center gap-3 text-xl font-bold tracking-tight text-stone-50">{children}</h2>;
 }
 
 const asItems = (files: MediaFile[]): MixedGridItem<MediaFile>[] => files.map((file) => ({ kind: "file", file }));
+
+function ChannelHeading({ channel, channelId }: { channel: string; channelId: string | null }) {
+  const body = (
+    <>
+      <ChannelAvatar channelId={channelId} channel={channel} className="h-8 w-8" />
+      <span>
+        More from <span className={channelId ? "transition-colors duration-150 group-hover/heading:text-[color:var(--accent)]" : ""}>{channel}</span>
+      </span>
+    </>
+  );
+  if (!channelId) return body;
+  return (
+    <button
+      type="button"
+      onClick={() => openCreatorPage(channelId, channel)}
+      aria-label={`Open ${channel}'s page`}
+      className="group/heading flex items-center gap-3 text-left"
+    >
+      {body}
+    </button>
+  );
+}
 
 /** The All tab as a YouTube-style home: video rows broken up by shelves of other shapes. */
 export function LibraryHome({
@@ -77,13 +100,12 @@ export function LibraryHome({
             return (
               <section key={section.key}>
                 <SectionTitle>
-                  <ChannelAvatar channelId={section.channelId} channel={section.channel} className="h-8 w-8" />
-                  More from {section.channel}
+                  <ChannelHeading channel={section.channel} channelId={section.channelId} />
                   {section.channelId ? (
                     <FollowChannelButton channelId={section.channelId} channel={section.channel} className="ml-auto" />
                   ) : null}
                 </SectionTitle>
-                {renderGrid(asItems(section.files), columns)}
+                {renderGrid(section.items, columns)}
               </section>
             );
         }

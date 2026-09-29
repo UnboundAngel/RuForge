@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { actionClosesPopover, filterNotificationItems, unreadBadgeLabel } from "./panelModel";
+import {
+  actionClosesPopover,
+  filterNotificationItems,
+  notificationHeadline,
+  notificationMeta,
+  splitByRead,
+  unreadBadgeLabel,
+} from "./panelModel";
 import type { NotificationItem } from "./types";
 
 function item(id: string, source: NotificationItem["source"]): NotificationItem {
@@ -40,5 +47,31 @@ describe("panelModel", () => {
     expect(unreadBadgeLabel(1)).toBe("1");
     expect(unreadBadgeLabel(9)).toBe("9");
     expect(unreadBadgeLabel(10)).toBe("9+");
+  });
+
+  it("splits unread from read and keeps order", () => {
+    const list = [item("a", "watchlist"), { ...item("b", "download"), read: true }, item("c", "watchlist")];
+    const { fresh, earlier } = splitByRead(list);
+    expect(fresh.map((i) => i.id)).toEqual(["a", "c"]);
+    expect(earlier.map((i) => i.id)).toEqual(["b"]);
+  });
+
+  it("builds the upload headline from the channel name", () => {
+    const upload = { ...item("Video", "watchlist"), subtitle: "Chan" };
+    expect(notificationHeadline(upload, null)).toEqual({ channel: "Chan", verb: "uploaded", title: "Video" });
+    expect(notificationMeta(upload, "1 hour ago", true)).toBe("1 hour ago");
+  });
+
+  it("needs the followed channel name for premieres", () => {
+    const premiere = { ...item("Show", "watchlist"), kind: "premiere" as const, subtitle: "Premieres soon" };
+    expect(notificationHeadline(premiere, null)).toEqual({ channel: null, verb: null, title: "Show" });
+    expect(notificationHeadline(premiere, "Chan").verb).toBe("scheduled a premiere");
+    expect(notificationMeta(premiere, "just now", true)).toBe("Premieres soon · just now");
+  });
+
+  it("leaves download rows as title plus detail", () => {
+    const failed = { ...item("File", "download"), kind: "download-failed" as const, subtitle: "HTTP 403" };
+    expect(notificationHeadline(failed, "Chan")).toEqual({ channel: null, verb: null, title: "File" });
+    expect(notificationMeta(failed, "just now", false)).toBe("HTTP 403 · just now");
   });
 });
