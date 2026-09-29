@@ -93,6 +93,18 @@ Versions must match: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Car
 
 Dev: `npm run dev:app`. Builds: `npm run build` (web), `npm run tauri build` (installer). Windows is the only shipped target. Linux and macOS compile (Windows-only APIs sit behind `cfg(windows)`; `.github/workflows/cross-platform-check.yml` runs tsc, vitest and `cargo check` on all three) and have bundle targets in `tauri.linux.conf.json` (deb, AppImage) and `tauri.macos.conf.json` (app, dmg), but are not released or signed. `dev:app` is PowerShell, so use `npx tauri dev` there.
 
+## Gotchas (learned the hard way)
+
+- `cargo test` in `src-tauri` compiles but the test binary crashes on Windows (`STATUS_ENTRYPOINT_NOT_FOUND`). Run pure-logic modules unchanged in a throwaway crate under `%TEMP%` with stubs. Never commit the harness.
+- The Explorer webview (youtube.com) can hear any `emit` / `emitTo` a listener with the default target could hear. Never put private data (follows, notifications, file paths) in event payloads. Send an empty ping and have the receiver pull through a command (`private_mailbox.rs` / `privateMailbox.ts`). Remote pages cannot call app commands.
+- Validate every action that arrives from the overlay, island, or Explorer against main's own state before running it.
+- The mini window runs `App.tsx` hooks too. Guard main-only effects (sync, stores, pollers) on the window label.
+- Title bar drag regions ignore z-order. New title bar buttons need the drag strip offset moved or clicks get eaten.
+- The island is its own `island` webview capped at 420x280. Size new variants inside that.
+- Hiding the Explorer does not pause it; `EXPLORER_PAUSE_MEDIA_SCRIPT` does. Popovers over web content use the see-through overlay webview pattern (`radialNavOverlayHost.ts`).
+- Background Rust work: `tauri::async_runtime::spawn` for async HTTP, emit only on change, never hold a mutex across an await, and stay off the yt-dlp rate gate when a plain HTTP request works (for example, channel RSS).
+- Big features: plan doc in `docs/ruforge/plans/`, one phase per session, each phase verified, committed and pushed on a feature branch with a PR comment. Handoff in `docs/agents/handoffs/`.
+
 ## Updater (do not get these wrong)
 
 - Users update when live `updater.json` on `main` has a **higher** version.
