@@ -65,6 +65,13 @@ Explorer webview is for yt-dlp cookie/session flows, not a casual browser. Child
 
 Priorities: `STATE.md` Next 3 and Open P0, plus `website/src/content/roadmap.json`.
 
+Standing product calls from Angel:
+
+- RuForge does not support YouTube Shorts. Filter them out; no Shorts toggles or UI.
+- The title bar bell is the global notification center for every mode: downloads, channel uploads, and the future download history log. New notification producers plug into it; do not build a second inbox.
+- Never pause the user's Explorer video as a side effect of opening app UI over it.
+- Give features more than one easy entry point.
+
 ## UI
 
 Follow `.cursor/rules/design-style*.mdc` for visual work. Read `.cursor/rules/design-style-anti-patterns.mdc` before new section headers or list layouts. No accent-bar section labels (vertical red slit beside titles). For window chrome, bezel/well, and shared widgets (scrollbars, popups, warnings, errors, toasts), follow [`.cursor/skills/ruforge-design/SKILL.md`](.cursor/skills/ruforge-design/SKILL.md) and lock new patterns in `restrictions.md` from the live app. Do not invent a second language.
