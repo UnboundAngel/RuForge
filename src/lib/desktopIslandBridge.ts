@@ -63,7 +63,8 @@ export type DesktopIslandControl =
   | { type: "watchlistQueue"; videoId: string }
   | { type: "watchlistOpen"; videoId: string }
   | { type: "watchlistMarkAllSeen" }
-  | { type: "watchlistShowAll" };
+  | { type: "watchlistShowAll" }
+  | { type: "openDownloads" };
 
 export async function pushDesktopIslandState(payload: DesktopIslandStatePayload): Promise<void> {
   await postPrivateState("desktop-island-state", DESKTOP_ISLAND_LABEL, DESKTOP_ISLAND_STATE_EVENT, payload);
@@ -181,6 +182,9 @@ export function applyDesktopIslandControl(control: DesktopIslandControl): void {
       return;
     case "watchlistShowAll":
       showAllFromIsland();
+      return;
+    case "openDownloads":
+      st.openDownloader();
       return;
     default:
       return;

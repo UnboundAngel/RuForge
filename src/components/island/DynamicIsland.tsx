@@ -20,6 +20,7 @@ import {
   IslandProgressRing,
   type IslandDownload,
 } from "./IslandDownloadContent";
+import { IslandDownloadExpandedContent, islandDownloadExpandedDims } from "./IslandDownloadExpandedContent";
 import { IslandExpandedContent } from "./IslandExpandedContent";
 import {
   IslandUpdateCompactContent,
@@ -49,6 +50,7 @@ export type IslandState =
   | "capture"
   | "notice"
   | "download"
+  | "download-expanded"
   | "watchlist"
   | "watchlist-expanded";
 
@@ -68,6 +70,7 @@ const ISLAND_DIMENSIONS: Record<
   capture: { width: 160, height: 36, borderRadius: 18 },
   notice: { width: 220, height: 36, borderRadius: 18 },
   download: { width: DOWNLOAD_ISLAND_WIDTH, height: 36, borderRadius: 18 },
+  "download-expanded": islandDownloadExpandedDims(1),
   expanded: { width: 350, height: 184, borderRadius: 40 },
   watchlist: { width: 240, height: 36, borderRadius: 18 },
   "watchlist-expanded": { ...ISLAND_WATCHLIST_EXPANDED_DIMENSIONS },
@@ -134,6 +137,7 @@ type DynamicIslandProps = {
   notice?: IslandNotice | null;
   /** Active download: its own pill in "download", a ring around the music pill in "compact". */
   download?: IslandDownload | null;
+  onOpenDownloads?: () => void;
   /** Cross-window hint (desktop overlay). Wins over local pending when trackKey changes. */
   skipDirHint?: IslandSkipDir | null;
   /** Desktop overlay only: new uploads from followed channels for "watchlist" states. */
@@ -258,6 +262,7 @@ export function DynamicIsland({
   updateAvailable,
   notice = null,
   download = null,
+  onOpenDownloads,
   skipDirHint = null,
   watchlist = null,
   onWatchlistQueue,
@@ -330,9 +335,12 @@ export function DynamicIsland({
           ? { ...baseDims, width: noticeIslandWidth(notice!.message) }
           : effectiveState === "watchlist" && watchlist
             ? { ...baseDims, width: islandWatchlistCollapsedWidth(watchlist.count) }
-            : baseDims;
+            : effectiveState === "download-expanded" && download
+              ? islandDownloadExpandedDims(download.jobs.length)
+              : baseDims;
   const interactive = effectiveState !== "idle" || Boolean(devCaptureIdle) || updateMode;
   const watchlistFloating = !updateMode && effectiveState === "watchlist-expanded";
+  const downloadFloating = !updateMode && effectiveState === "download-expanded" && download != null;
 
   return (
     <motion.div
@@ -350,7 +358,7 @@ export function DynamicIsland({
           updateMode || effectiveState !== "expanded"
             ? "overflow-hidden"
             : "overflow-visible shadow-2xl"
-        } ${(updateMode && !updateAvailable?.collapsed) || watchlistFloating ? "shadow-2xl" : ""} ${
+        } ${(updateMode && !updateAvailable?.collapsed) || watchlistFloating || downloadFloating ? "shadow-2xl" : ""} ${
           interactive ? "cursor-pointer" : "cursor-default"
         }`}
         style={{ borderRadius: dims.borderRadius }}
@@ -403,6 +411,14 @@ export function DynamicIsland({
           ) : null}
           {!updateMode && state === "download" && download ? (
             <IslandDownloadContent key="download" download={download} />
+          ) : null}
+          {downloadFloating ? (
+            <IslandDownloadExpandedContent
+              key="download-expanded"
+              download={download!}
+              accentColor={content.accentColor}
+              onOpenDownloads={() => onOpenDownloads?.()}
+            />
           ) : null}
           {!updateMode && state === "watchlist" && watchlist ? (
             <IslandWatchlistCompactContent key="watchlist-compact" watchlist={watchlist} />

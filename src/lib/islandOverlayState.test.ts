@@ -37,5 +37,12 @@ describe("resolveOverlayIslandState", () => {
   it("falls back when the expanded target is gone", () => {
     expect(resolveOverlayIslandState({ ...base, expandedTarget: "watchlist", hasSession: true })).toBe("compact");
     expect(resolveOverlayIslandState({ ...base, expandedTarget: "music", hasDownload: true })).toBe("download");
+    expect(resolveOverlayIslandState({ ...base, expandedTarget: "download", hasSession: true })).toBe("compact");
+  });
+
+  it("opens the download list over a notice", () => {
+    expect(
+      resolveOverlayIslandState({ ...base, expandedTarget: "download", hasDownload: true, hasNotice: true }),
+    ).toBe("download-expanded");
   });
 });

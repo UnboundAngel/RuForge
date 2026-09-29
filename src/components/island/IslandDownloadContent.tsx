@@ -1,6 +1,15 @@
 import { motion } from "motion/react";
 import { ArrowDown, Loader2 } from "lucide-react";
 
+export type IslandDownloadJob = {
+  key: string;
+  title: string;
+  thumbnail: string | null;
+  /** 0-100 once bytes flow; null while connecting, queued, or paused. */
+  pct: number | null;
+  status: "downloading" | "queued" | "paused";
+};
+
 export type IslandDownload = {
   /** Active job id; keys the thumbnail swap between queued songs. */
   key: string;
@@ -10,6 +19,8 @@ export type IslandDownload = {
   pct: number | null;
   /** Songs still queued behind the active one. */
   remaining: number;
+  /** Active job first, for the expanded list. */
+  jobs: IslandDownloadJob[];
 };
 
 export const DOWNLOAD_ISLAND_WIDTH = 280;
