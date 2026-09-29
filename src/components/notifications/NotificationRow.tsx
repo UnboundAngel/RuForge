@@ -1,8 +1,8 @@
 import { formatAge } from "@/components/library/youtubeFeed";
-import { notificationDetail, notificationHeadline, notificationKicker, type NotificationKicker } from "@/notifications/panelModel";
+import { notificationBody, notificationHeadline, notificationKicker, type NotificationKicker } from "@/notifications/panelModel";
 import type { NotificationActionId, NotificationItem } from "@/notifications/types";
 import { NotificationLeading } from "./NotificationLeading";
-import { NotificationRowActions } from "./NotificationRowActions";
+import { NotificationPrimaryAction, NotificationSideActions } from "./NotificationRowActions";
 import { NotificationThumb } from "./NotificationThumb";
 
 type Props = {
@@ -22,35 +22,33 @@ const TONE: Record<NotificationKicker["tone"], string> = {
 export function NotificationRow({ item, channelName, onAction, onMarkRead }: Props) {
   const channel = notificationHeadline(item, channelName).channel ?? channelName;
   const kicker = notificationKicker(item, channelName);
-  const detail = notificationDetail(item);
+  const { title, detail } = notificationBody(item, kicker);
   const age = formatAge(item.createdAt / 1000);
 
   return (
     <li
-      className={`group flex items-center gap-3.5 rounded-2xl p-2 transition-colors duration-150 focus-within:bg-white/[0.06] hover:bg-white/[0.06] ${
+      className={`group flex items-center gap-3.5 rounded-2xl py-2 pl-2 pr-1.5 transition-colors duration-150 focus-within:bg-white/[0.06] hover:bg-white/[0.06] ${
         item.read ? "" : "bg-white/[0.035]"
       }`}
     >
       <NotificationThumb item={item} badge={<NotificationLeading item={item} channelName={channel} />}>
-        <NotificationRowActions item={item} onAction={onAction} onMarkRead={onMarkRead} />
+        <NotificationPrimaryAction item={item} onAction={onAction} />
       </NotificationThumb>
       <div className="min-w-0 flex-1">
-        <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold">
+        <p className="flex min-w-0 items-baseline gap-1.5 text-[11px] font-semibold">
           <span className={`truncate ${item.read ? "text-stone-500" : TONE[kicker.tone]}`}>{kicker.text}</span>
           <span className="shrink-0 font-medium text-stone-600">{age}</span>
-          {item.read ? null : (
-            <span aria-label="Unread" className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--accent)]" />
-          )}
         </p>
         <p
           className={`mt-1 line-clamp-2 text-[13px] font-semibold leading-snug ${
             item.read ? "text-stone-400" : "text-stone-50"
           }`}
         >
-          {item.title}
+          {title}
         </p>
         {detail ? <p className="mt-0.5 truncate text-[11px] text-stone-500">{detail}</p> : null}
       </div>
+      <NotificationSideActions item={item} onAction={onAction} onMarkRead={onMarkRead} />
     </li>
   );
 }

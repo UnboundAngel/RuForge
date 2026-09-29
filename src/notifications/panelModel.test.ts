@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   actionClosesPopover,
   filterNotificationItems,
+  notificationBody,
   notificationDetail,
   notificationHeadline,
   notificationKicker,
@@ -78,5 +79,19 @@ describe("panelModel", () => {
     expect(notificationKicker(failed, "Chan")).toEqual({ text: "Download failed", tone: "danger" });
     expect(notificationDetail(failed)).toBe("HTTP 403");
     expect(notificationDetail({ ...item("Same", "download"), subtitle: "Same" })).toBeNull();
+  });
+
+  it("hides a finished download's file name and near-copies of the title", () => {
+    const done = { ...item("Clip: Part 1", "download"), subtitle: "Clip Part 1.mp4" };
+    expect(notificationDetail(done)).toBeNull();
+    const failed = { ...item("Clip: Part 1", "download"), kind: "download-failed" as const, subtitle: "Clip - Part 1" };
+    expect(notificationDetail(failed)).toBeNull();
+  });
+
+  it("promotes the error line when the title only repeats the kicker", () => {
+    const failed = { ...item("Download failed", "download"), kind: "download-failed" as const, subtitle: "HTTP 403" };
+    expect(notificationBody(failed, notificationKicker(failed, null))).toEqual({ title: "HTTP 403", detail: null });
+    const named = { ...failed, title: "My video" };
+    expect(notificationBody(named, notificationKicker(named, null))).toEqual({ title: "My video", detail: "HTTP 403" });
   });
 });
