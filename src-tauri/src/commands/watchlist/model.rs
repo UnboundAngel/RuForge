@@ -14,6 +14,7 @@ pub const MIN_INTERVAL_MIN: u32 = 15;
 pub const MAX_INTERVAL_MIN: u32 = 360;
 /// Grace before `followed_at` so a video posted just before the follow still counts as new.
 const NEW_UPLOAD_GRACE_SECS: i64 = 3600;
+const RECOVER_WINDOW_SECS: i64 = 86_400;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -338,23 +339,43 @@ pub fn seed_channel(ch: &mut WatchedChannel, entries: &[FeedEntry]) {
     ch.seeded = true;
 }
 
-/// Shorts are recorded as known so they never resurface, but never returned.
-pub fn merge_entries(ch: &mut WatchedChannel, entries: &[FeedEntry]) -> Vec<FeedEntry> {
+pub fn remember_known(ch: &mut WatchedChannel, ids: &[String]) {
+    remember_ids(ch, ids.iter().map(String::as_str));
+}
+
+#[derive(Debug, Default)]
+pub struct FeedMerge {
+    pub candidates: Vec<FeedEntry>,
+    pub unknown_ids: Vec<String>,
+}
+
+/// Pure on purpose: the caller remembers `unknown_ids` and stores the probed uploads in one lock, so an id
+/// never becomes known while its upload is still unsaved. Shorts land in `unknown_ids` but never in `candidates`.
+///
+/// A known, non-Short id with no stored upload, posted after the follow and near the previous check, was lost
+/// before it could be saved (older builds remembered ids before probing), so it surfaces again.
+pub fn merge_entries(ch: &WatchedChannel, entries: &[FeedEntry], stored: &[WatchlistUpload]) -> FeedMerge {
+    let mut out = FeedMerge::default();
     if !ch.seeded {
-        return Vec::new();
+        return out;
     }
     let cutoff = ch.followed_at - NEW_UPLOAD_GRACE_SECS;
-    let unknown: Vec<&FeedEntry> = entries
-        .iter()
-        .filter(|e| !ch.known_ids.iter().any(|k| *k == e.video_id))
-        .collect();
-    let candidates = unknown
-        .iter()
-        .filter(|e| !e.short && e.published_at >= cutoff)
-        .map(|e| (*e).clone())
-        .collect();
-    remember_ids(ch, unknown.iter().map(|e| e.video_id.as_str()));
-    candidates
+    let previous_check = ch.last_checked_at.unwrap_or(ch.followed_at);
+    let recover_from = ch.followed_at.max(previous_check - RECOVER_WINDOW_SECS);
+    for e in entries {
+        let known = ch.known_ids.iter().any(|k| *k == e.video_id);
+        if !known {
+            out.unknown_ids.push(e.video_id.clone());
+        }
+        if e.short || stored.iter().any(|u| u.video_id == e.video_id) {
+            continue;
+        }
+        let floor = if known { recover_from } else { cutoff };
+        if e.published_at >= floor {
+            out.candidates.push(e.clone());
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -411,19 +432,23 @@ mod tests {
     #[test]
     fn watchlist_merge_needs_seed() {
         let entries = parse_channel_feed(FIXTURE).unwrap();
-        let mut ch = channel(0);
-        assert!(merge_entries(&mut ch, &entries).is_empty());
-        assert!(ch.known_ids.is_empty());
+        let ch = channel(0);
+        let merged = merge_entries(&ch, &entries, &[]);
+        assert!(merged.candidates.is_empty());
+        assert!(merged.unknown_ids.is_empty());
     }
 
     #[test]
     fn watchlist_seed_records_every_id() {
         let entries = parse_channel_feed(FIXTURE).unwrap();
-        let mut ch = channel(0);
+        let mut ch = channel(1_790_000_000);
         seed_channel(&mut ch, &entries);
+        ch.last_checked_at = Some(1_790_000_000);
         assert!(ch.seeded);
         assert_eq!(ch.known_ids, vec!["aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"]);
-        assert!(merge_entries(&mut ch, &entries).is_empty());
+        let merged = merge_entries(&ch, &entries, &[]);
+        assert!(merged.candidates.is_empty());
+        assert!(merged.unknown_ids.is_empty());
     }
 
     #[test]
@@ -431,9 +456,12 @@ mod tests {
         let entries = parse_channel_feed(FIXTURE).unwrap();
         let mut ch = channel(1_789_000_000);
         ch.seeded = true;
-        let found = merge_entries(&mut ch, &entries);
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].video_id, "aaaaaaaaaaa");
+        let merged = merge_entries(&ch, &entries, &[]);
+        assert_eq!(merged.candidates.len(), 1);
+        assert_eq!(merged.candidates[0].video_id, "aaaaaaaaaaa");
+        assert_eq!(merged.unknown_ids, vec!["aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"]);
+        assert!(ch.known_ids.is_empty());
+        remember_known(&mut ch, &merged.unknown_ids);
         assert_eq!(ch.known_ids, vec!["aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"]);
     }
 
@@ -442,11 +470,44 @@ mod tests {
         let entries = parse_channel_feed(FIXTURE).unwrap();
         let mut ch = channel(1_789_905_600 + 3600);
         ch.seeded = true;
-        let found = merge_entries(&mut ch, &entries);
-        assert_eq!(found.len(), 1);
+        assert_eq!(merge_entries(&ch, &entries, &[]).candidates.len(), 1);
         let mut late = channel(1_789_905_600 + 3601);
         late.seeded = true;
-        assert!(merge_entries(&mut late, &entries).is_empty());
+        assert!(merge_entries(&late, &entries, &[]).candidates.is_empty());
+    }
+
+    #[test]
+    fn watchlist_merge_skips_stored_uploads() {
+        let entries = parse_channel_feed(FIXTURE).unwrap();
+        let mut ch = channel(1_789_000_000);
+        ch.seeded = true;
+        let stored = vec![upload("aaaaaaaaaaa", 1_789_905_600, true)];
+        let merged = merge_entries(&ch, &entries, &stored);
+        assert!(merged.candidates.is_empty());
+        assert_eq!(merged.unknown_ids.len(), 3);
+    }
+
+    #[test]
+    fn watchlist_merge_recovers_known_id_without_upload() {
+        let entries = parse_channel_feed(FIXTURE).unwrap();
+        let mut ch = channel(1_789_000_000);
+        seed_channel(&mut ch, &entries);
+        ch.last_checked_at = Some(1_789_905_600 + 3600);
+        let merged = merge_entries(&ch, &entries, &[]);
+        assert_eq!(merged.candidates.len(), 1);
+        assert_eq!(merged.candidates[0].video_id, "aaaaaaaaaaa");
+        assert!(merged.unknown_ids.is_empty());
+
+        let stored = vec![upload("aaaaaaaaaaa", 1_789_905_600, false)];
+        assert!(merge_entries(&ch, &entries, &stored).candidates.is_empty());
+
+        ch.last_checked_at = Some(1_789_905_600 + RECOVER_WINDOW_SECS + 1);
+        assert!(merge_entries(&ch, &entries, &[]).candidates.is_empty());
+
+        let mut before_follow = channel(1_789_905_601);
+        seed_channel(&mut before_follow, &entries);
+        before_follow.last_checked_at = Some(1_789_905_601);
+        assert!(merge_entries(&before_follow, &entries, &[]).candidates.is_empty());
     }
 
     #[test]

@@ -1008,6 +1008,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     [bumpSponsorBlockStat],
   );
 
+  // Delegated audio plays in the host, so speeding up the local element would desync picture and sound.
+  const getSbMediaElement = useCallback(
+    () => (audioDelegated ? null : mediaRef.current),
+    [audioDelegated],
+  );
+
   const sponsorBlock = useSponsorBlockPlayback({
     file,
     currentTime,
@@ -1017,6 +1023,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     onManualSkip: onSbManualSkip,
     onAppearance: onSbAppearance,
     onDemoteUndo: onSbDemoteUndo,
+    getMediaElement: getSbMediaElement,
   });
 
   const scrubDuration =
@@ -1840,12 +1847,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
 
       {/* SponsorBlock skip */}
       <AnimatePresence>
-        {sponsorBlock.showSkipButton && (
+        {sponsorBlock.skipPrompt && (
           <SponsorBlockSkipButton
-            showControls={showControls}
-            onClick={sponsorBlock.handleSkipClick}
-            label={sponsorBlock.skipButtonLabel}
-            activeCategory={sponsorBlock.activeSkipCategory}
+            key={`${sponsorBlock.skipPrompt.kind}:${sponsorBlock.skipPrompt.category}`}
+            prompt={sponsorBlock.skipPrompt}
+            onClick={sponsorBlock.handleSkipPromptClick}
           />
         )}
       </AnimatePresence>

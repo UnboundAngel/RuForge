@@ -5,7 +5,9 @@ use rand::Rng;
 use tauri::{AppHandle, Manager};
 
 use super::feed::{fetch_channel_feed, FeedEntry};
-use super::model::{apply_reprobe, probe_from_player, upload_from_entry, WatchlistFile, WatchlistUpload};
+use super::model::{
+    apply_reprobe, probe_from_player, remember_known, upload_from_entry, FeedMerge, WatchlistFile, WatchlistUpload,
+};
 use super::schedule::{
     apply_feed_failure, apply_feed_success, due_channels, is_held, jitter_max, reprobe_candidates,
     reprobe_gap_secs, CHANNELS_PER_TICK, REPROBES_PER_TICK,
@@ -96,37 +98,39 @@ async fn check_channel(
     let now = now_secs();
     let jitter = rand::thread_rng().gen_range(0..=jitter_max(interval_min));
     let applied = with_file(state, |file| {
-        let ch = file.channel_mut(channel_id)?;
-        let candidates = match &fetched {
-            Ok((entries, _)) => apply_feed_success(ch, entries, now, interval_min, jitter),
+        let WatchlistFile { channels, uploads, .. } = file;
+        let ch = channels.iter_mut().find(|c| c.channel_id == channel_id)?;
+        let merged = match &fetched {
+            Ok((entries, _)) => apply_feed_success(ch, entries, uploads, now, interval_min, jitter),
             Err(e) => {
                 crate::rf_log!("youtube.watchlist", log::Level::Info, "{channel_id}: feed failed: {e:?}");
                 apply_feed_failure(ch, e, now, interval_min);
-                Vec::new()
+                FeedMerge::default()
             }
         };
-        Some((candidates, ch.title.clone()))
+        Some((merged, ch.title.clone()))
     })
     .flatten();
-    let Some((candidates, channel_title)) = applied else {
+    let Some((merged, channel_title)) = applied else {
         return;
     };
     result.changed = true;
-    if candidates.is_empty() {
+    if merged.candidates.is_empty() {
         return;
     }
     crate::rf_log!(
         "youtube.watchlist",
         log::Level::Info,
         "{channel_id}: {} new upload(s)",
-        candidates.len()
+        merged.candidates.len()
     );
-    let uploads = probe_candidates(state, &candidates, &channel_title, now).await;
+    let uploads = probe_candidates(state, &merged.candidates, &channel_title, now).await;
     with_file(state, |file| {
         // Unfollowed while probing: drop the uploads instead of orphaning them.
-        if !file.channels.iter().any(|c| c.channel_id == channel_id) {
+        let Some(ch) = file.channel_mut(channel_id) else {
             return;
-        }
+        };
+        remember_known(ch, &merged.unknown_ids);
         for upload in uploads {
             if file.uploads.iter().any(|u| u.video_id == upload.video_id) {
                 continue;

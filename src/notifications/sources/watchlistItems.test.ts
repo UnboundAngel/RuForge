@@ -50,6 +50,13 @@ describe("watchlistItems", () => {
     expect(watchlistItems(null)).toEqual([]);
   });
 
+  it("drops queue for uploads already downloaded or queued", () => {
+    const snapshot = { uploads: [upload("a"), upload("b")] } as unknown as Parameters<typeof watchlistItems>[0];
+    const [a, b] = watchlistItems(snapshot, new Set(["a"]));
+    expect(a.actions).toEqual(["open-explorer"]);
+    expect(b.actions).toEqual(["queue", "open-explorer"]);
+  });
+
   it("maps item ids back to video ids", () => {
     expect(videoIdsFromItemIds(["watchlist:a", "download:j1", "watchlist:b"])).toEqual(["a", "b"]);
   });

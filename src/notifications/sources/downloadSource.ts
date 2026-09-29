@@ -9,7 +9,7 @@ import {
   useNotificationCenterStore,
 } from "../notificationCenterStore";
 import type { NotificationItem, NotificationSource } from "../types";
-import { withLiveDownloadActions } from "./downloadItems";
+import { collapseDownloadAttempts, withLiveDownloadActions } from "./downloadItems";
 
 function findLibraryFile(entries: GalleryEntry[], path: string): MediaFile | null {
   for (const entry of entries) {
@@ -30,7 +30,7 @@ function items(): NotificationItem[] {
   const jobs = useRuforgeStore.getState().downloadJobs;
   if (memo && memo.local === local && memo.jobs === jobs) return memo.items;
   const projected = withLiveDownloadActions(
-    local.filter((i) => i.source === "download"),
+    collapseDownloadAttempts(local.filter((i) => i.source === "download")),
     jobs,
   );
   memo = { local, jobs, items: projected };

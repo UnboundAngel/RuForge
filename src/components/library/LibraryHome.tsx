@@ -83,8 +83,10 @@ export function LibraryHome({
             return (
               <section key={section.key}>
                 <SectionTitle>
-                  New from channels you follow
-                  <span className="text-sm font-medium tabular-nums text-stone-500">{section.videos.length} new</span>
+                  <span className="flex items-baseline gap-3">
+                    New from channels you follow
+                    <span className="text-sm font-medium tabular-nums text-stone-500">{section.videos.length} new</span>
+                  </span>
                 </SectionTitle>
                 {renderGrid(section.videos.map((video) => ({ kind: "feed", video })), columns)}
               </section>

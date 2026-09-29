@@ -10,6 +10,10 @@ vi.mock("@/watchlist/watchlistActions", () => ({
   markAllSeen: vi.fn(async () => {}),
 }));
 
+vi.mock("@/store/ruforgeStore", () => ({
+  useRuforgeStore: { getState: () => ({ entries: [], downloadJobs: [] }), subscribe: () => () => {} },
+}));
+
 const { useWatchlistStore } = await import("@/watchlist/watchlistStore");
 const { watchlistSource } = await import("./watchlistSource");
 

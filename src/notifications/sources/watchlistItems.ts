@@ -23,7 +23,8 @@ function subtitleFor(u: WatchlistUpload, kind: NotificationKind): string {
   return u.channelTitle;
 }
 
-export function watchlistUploadToItem(u: WatchlistUpload): NotificationItem {
+/** `held`: already in the library or the download queue, so offering another download is wrong. */
+export function watchlistUploadToItem(u: WatchlistUpload, held = false): NotificationItem {
   const kind = kindFor(u);
   return {
     id: `${WATCHLIST_ID_PREFIX}${u.videoId}`,
@@ -36,13 +37,16 @@ export function watchlistUploadToItem(u: WatchlistUpload): NotificationItem {
     createdAt: u.discoveredAt * 1000,
     read: u.seen,
     // Nothing to download until a premiere or stream becomes a normal video.
-    actions: kind === "upload" ? ["queue", "open-explorer"] : ["open-explorer"],
+    actions: kind === "upload" && !held ? ["queue", "open-explorer"] : ["open-explorer"],
     ref: { videoId: u.videoId, url: u.url, scheduledAt: u.scheduledAt },
   };
 }
 
-export function watchlistItems(snapshot: WatchlistSnapshot | null): NotificationItem[] {
-  return snapshot ? snapshot.uploads.map(watchlistUploadToItem) : [];
+export function watchlistItems(
+  snapshot: WatchlistSnapshot | null,
+  heldVideoIds: ReadonlySet<string> = new Set(),
+): NotificationItem[] {
+  return snapshot ? snapshot.uploads.map((u) => watchlistUploadToItem(u, heldVideoIds.has(u.videoId))) : [];
 }
 
 export function videoIdsFromItemIds(ids: string[]): string[] {

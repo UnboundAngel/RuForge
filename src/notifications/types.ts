@@ -40,6 +40,10 @@ export type NotificationItem = {
     jobId?: string;
     outputPath?: string;
     scheduledAt?: number | null;
+    /** Earlier failed tries of this video, folded into its newest row. */
+    failedAttempts?: number;
+    /** Full failure text for Copy error: the row's own, or the newest folded failed try's. */
+    error?: string;
   };
 };
 

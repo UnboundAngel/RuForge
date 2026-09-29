@@ -1,7 +1,5 @@
 import { RuForgeCaptureTrigger } from "@/components/dev-captures/RuForgeCaptureTrigger";
 import { VideoDownloadRailButton } from "@/components/downloader/VideoDownloadDockChip";
-import { NotificationBadge } from "@/components/notifications/NotificationBadge";
-import { useWatchlistStore } from "@/watchlist/watchlistStore";
 import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
@@ -40,7 +38,6 @@ export function AppSidebarRail({
   disabled,
   onSelectTab,
 }: AppSidebarRailProps) {
-  const unseenCount = useWatchlistStore((s) => s.snapshot?.unseenCount ?? 0);
   return (
     <div
       className={cn(
@@ -94,7 +91,6 @@ export function AppSidebarRail({
                 />
               ) : null}
               <RadialNavIcon id={item.iconId} size={20} />
-              {item.id === "media" ? <NotificationBadge className="right-1 top-1" count={unseenCount} /> : null}
             </button>
           );
         })}
