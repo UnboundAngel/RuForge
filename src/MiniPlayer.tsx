@@ -1291,6 +1291,8 @@ export default function MiniPlayer() {
     [bumpSbStat],
   );
 
+  const getSbMediaElement = useCallback(() => mediaRef.current, []);
+
   const sponsorBlock = useSponsorBlockPlayback({
     file: playingFile ?? SPONSORBLOCK_STUB_FILE,
     currentTime,
@@ -1303,6 +1305,7 @@ export default function MiniPlayer() {
     onManualSkip: onSbManualSkip,
     onAppearance: onSbAppearance,
     onDemoteUndo: onSbDemoteUndo,
+    getMediaElement: getSbMediaElement,
   });
 
   const scrubDuration =
@@ -1767,8 +1770,6 @@ export default function MiniPlayer() {
   };
 
   const controlsVisible = !isSmallMode && ((isCursorVisible && isHovering) || isPaused || isGalleryHovered);
-  const sbSkipShowControls = isSmallMode ? true : controlsVisible;
-
   return (
     <div 
       className={`h-screen w-screen bg-[#121212] overflow-hidden rounded-3xl select-none relative group/mini shadow-2xl outline-none ring-0 [clip-path:inset(0_round_1.5rem)] ${!isCursorVisible && !isPaused ? 'cursor-none' : ''} ${!controlsVisible ? 'controls-hidden' : ''}`}
@@ -1779,12 +1780,11 @@ export default function MiniPlayer() {
     >
 
       <AnimatePresence>
-        {miniSbScrubBar && sponsorBlock.showSkipButton && (
+        {miniSbScrubBar && sponsorBlock.skipPrompt && (
           <SponsorBlockSkipButton
-            showControls={sbSkipShowControls}
-            onClick={sponsorBlock.handleSkipClick}
-            label={sponsorBlock.skipButtonLabel}
-            activeCategory={sponsorBlock.activeSkipCategory}
+            key={`${sponsorBlock.skipPrompt.kind}:${sponsorBlock.skipPrompt.category}`}
+            prompt={sponsorBlock.skipPrompt}
+            onClick={sponsorBlock.handleSkipPromptClick}
           />
         )}
       </AnimatePresence>

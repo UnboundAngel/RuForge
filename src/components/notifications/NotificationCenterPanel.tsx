@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { filterNotificationItems } from "@/notifications/panelModel";
 import type {
   NotificationActionId,
@@ -9,6 +9,7 @@ import type {
 import type { ChannelsUiState, WatchedChannel } from "@/watchlist/types";
 import { ChannelsPanel, type ChannelHandlers } from "./channels/ChannelsPanel";
 import { NotificationCenterHeader } from "./NotificationCenterHeader";
+import { NotificationContextMenu, type NotificationMenuState } from "./NotificationContextMenu";
 import { NotificationEmpty } from "./NotificationEmpty";
 import { NotificationFeed } from "./NotificationFeed";
 import { NotificationPrefsView, type PrefsHandlers } from "./NotificationPrefsView";
@@ -52,9 +53,31 @@ export function NotificationCenterPanel({
   const unread = useMemo(() => shown.reduce((n, i) => (i.read ? n : n + 1), 0), [shown]);
   const channelNames = useMemo(() => new Map(channels.map((c) => [c.channelId, c.title])), [channels]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [menu, setMenu] = useState<NotificationMenuState | null>(null);
+  const [bounds, setBounds] = useState({ width: 0, height: 0 });
+  const closeMenu = useCallback(() => setMenu(null), []);
+
+  const openMenu = useCallback((item: NotificationItem, e: React.MouseEvent) => {
+    e.preventDefault();
+    const root = rootRef.current;
+    if (!root) return;
+    if (item.actions.length === 0 && item.read && !item.ref.url && !item.ref.error && !item.subtitle) return;
+    const rect = root.getBoundingClientRect();
+    setBounds({ width: rect.width, height: rect.height });
+    setMenu({ item, x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, []);
+
+  useEffect(() => {
+    if (tab !== "feed") setMenu(null);
+  }, [tab]);
 
   return (
-    <div className="flex max-h-full min-h-0 flex-col">
+    <div
+      ref={rootRef}
+      className="relative flex max-h-full min-h-0 flex-col"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <NotificationCenterHeader
         tab={tab}
         unread={unread}
@@ -62,7 +85,11 @@ export function NotificationCenterPanel({
         onTab={onTab}
         onClose={onClose}
       />
-      <div ref={scrollRef} className="rf-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2">
+      <div
+        ref={scrollRef}
+        onScroll={menu ? closeMenu : undefined}
+        className="rf-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2"
+      >
         <PanelScreenTransition
           screenKey={tab === "feed" ? `feed:${shown.length === 0}` : tab}
           order={SCREEN_ORDER[tab]}
@@ -88,10 +115,21 @@ export function NotificationCenterPanel({
               onAction={onAction}
               onMarkRead={onMarkRead}
               onMarkAllRead={onMarkAllRead}
+              onContextMenu={openMenu}
             />
           )}
         </PanelScreenTransition>
       </div>
+      {menu ? (
+        <NotificationContextMenu
+          key={menu.item.id + menu.x + menu.y}
+          menu={menu}
+          bounds={bounds}
+          onAction={onAction}
+          onMarkRead={onMarkRead}
+          onClose={closeMenu}
+        />
+      ) : null}
     </div>
   );
 }

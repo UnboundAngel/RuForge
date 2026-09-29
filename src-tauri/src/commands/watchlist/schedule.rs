@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use super::feed::{FeedEntry, FeedError};
 use super::model::{
-    merge_entries, seed_channel, LiveStatus, WatchedChannel, WatchlistUpload, LIVE_RECHECK_SECS,
+    merge_entries, remember_known, seed_channel, FeedMerge, LiveStatus, WatchedChannel, WatchlistUpload,
+    LIVE_RECHECK_SECS,
 };
 
 /// After sleep or a manual refresh every channel is due at once; the cap spreads them over ticks.
@@ -35,24 +36,30 @@ pub fn due_channels(channels: &[WatchedChannel], now: i64, limit: usize) -> Vec<
 }
 
 /// `jitter` must come from `0..=jitter_max(interval_min)`; it is a parameter to keep this pure.
+/// With no candidates the unknown ids are remembered here; otherwise the caller remembers them together
+/// with the probed uploads.
 pub fn apply_feed_success(
     ch: &mut WatchedChannel,
     entries: &[FeedEntry],
+    stored: &[WatchlistUpload],
     now: i64,
     interval_min: u32,
     jitter: i64,
-) -> Vec<FeedEntry> {
-    let candidates = if ch.seeded {
-        merge_entries(ch, entries)
+) -> FeedMerge {
+    let mut merged = if ch.seeded {
+        merge_entries(ch, entries, stored)
     } else {
         seed_channel(ch, entries);
-        Vec::new()
+        FeedMerge::default()
     };
+    if merged.candidates.is_empty() {
+        remember_known(ch, &std::mem::take(&mut merged.unknown_ids));
+    }
     ch.last_checked_at = Some(now);
     ch.last_error = None;
     ch.fail_count = 0;
     ch.next_check_at = now + interval_secs(interval_min) + jitter.clamp(0, jitter_max(interval_min));
-    candidates
+    merged
 }
 
 pub fn apply_feed_failure(ch: &mut WatchedChannel, err: &FeedError, now: i64, interval_min: u32) {
@@ -174,18 +181,18 @@ mod tests {
         let mut ch = channel("a", false, 0);
         ch.fail_count = 3;
         ch.last_error = Some("x".into());
-        assert!(apply_feed_success(&mut ch, &entries, 1000, 30, 0).is_empty());
+        assert!(apply_feed_success(&mut ch, &entries, &[], 1000, 30, 0).candidates.is_empty());
         assert!(ch.seeded);
         assert_eq!(ch.fail_count, 0);
         assert_eq!(ch.last_error, None);
         assert_eq!(ch.last_checked_at, Some(1000));
         assert_eq!(ch.next_check_at, 1000 + 1800);
         assert_eq!(jitter_max(30), 360);
-        apply_feed_success(&mut ch, &entries, 1000, 30, 360);
+        apply_feed_success(&mut ch, &entries, &[], 1000, 30, 360);
         assert_eq!(ch.next_check_at, 1000 + 1800 + 360);
-        apply_feed_success(&mut ch, &entries, 1000, 30, 99_999);
+        apply_feed_success(&mut ch, &entries, &[], 1000, 30, 99_999);
         assert_eq!(ch.next_check_at, 1000 + 1800 + 360);
-        apply_feed_success(&mut ch, &entries, 1000, 30, -5);
+        apply_feed_success(&mut ch, &entries, &[], 1000, 30, -5);
         assert_eq!(ch.next_check_at, 1000 + 1800);
     }
 
@@ -194,9 +201,22 @@ mod tests {
         let entries = parse_channel_feed(FIXTURE).unwrap();
         let mut ch = channel("a", true, 0);
         ch.followed_at = 1_789_000_000;
-        let found = apply_feed_success(&mut ch, &entries, 1_789_999_999, 30, 0);
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].video_id, "aaaaaaaaaaa");
+        let merged = apply_feed_success(&mut ch, &entries, &[], 1_789_999_999, 30, 0);
+        assert_eq!(merged.candidates.len(), 1);
+        assert_eq!(merged.candidates[0].video_id, "aaaaaaaaaaa");
+        assert_eq!(merged.unknown_ids.len(), 3);
+        assert!(ch.known_ids.is_empty());
+    }
+
+    #[test]
+    fn watchlist_success_without_candidates_remembers_ids() {
+        let entries = parse_channel_feed(FIXTURE).unwrap();
+        let mut ch = channel("a", true, 0);
+        ch.followed_at = 1_789_999_000;
+        let merged = apply_feed_success(&mut ch, &entries, &[], 1_789_999_999, 30, 0);
+        assert!(merged.candidates.is_empty());
+        assert!(merged.unknown_ids.is_empty());
+        assert_eq!(ch.known_ids, vec!["aaaaaaaaaaa", "bbbbbbbbbbb", "ccccccccccc"]);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 import type { DownloadJob } from "@/downloadQueue";
 import { STORAGE_FULL_NOTIFY } from "@/lib/storageBlocks";
+import { normalizeYouTubeUrlForCompare } from "@/youtubeUrl";
 import { recordNotification } from "../recordNotification";
 import type { NotificationActionId, NotificationItem, NotificationKind } from "../types";
 
@@ -67,6 +68,15 @@ function subtitleFor(kind: DownloadNotificationKind, info: DownloadNotificationI
   return line || null;
 }
 
+/** yt-dlp logs can run long; the feed is persisted to localStorage. */
+const ERROR_COPY_MAX = 8000;
+
+function errorForCopy(error: string | null | undefined): string | undefined {
+  const text = error?.trim();
+  if (!text) return undefined;
+  return text.length > ERROR_COPY_MAX ? `${text.slice(0, ERROR_COPY_MAX)}\n…` : text;
+}
+
 export function buildDownloadNotification(
   kind: DownloadNotificationKind,
   info: DownloadNotificationInfo,
@@ -88,6 +98,7 @@ export function buildDownloadNotification(
       jobId: info.jobId,
       url: info.url,
       outputPath: info.outputPath ?? undefined,
+      error: kind === "download-finished" ? undefined : errorForCopy(info.error),
     },
   };
 }
@@ -100,6 +111,41 @@ export function withLiveDownloadActions(items: NotificationItem[], jobs: Downloa
     const retryable = job?.status === "failed" || job?.status === "timed_out";
     return retryable ? item : { ...item, actions: item.actions.filter((a) => a !== "retry") };
   });
+}
+
+const OUTCOME_KINDS: ReadonlySet<NotificationKind> = new Set([
+  "download-finished",
+  "download-failed",
+  "download-timed-out",
+]);
+
+/**
+ * A retry gets a new job id, so its rows are matched by video: only the newest outcome per video stays,
+ * carrying a count of the failed tries it replaced.
+ */
+export function collapseDownloadAttempts(items: NotificationItem[]): NotificationItem[] {
+  const keptAt = new Map<string, number>();
+  const out: NotificationItem[] = [];
+  for (const item of [...items].sort((a, b) => b.createdAt - a.createdAt)) {
+    if (!OUTCOME_KINDS.has(item.kind) || !item.ref.url) {
+      out.push(item);
+      continue;
+    }
+    const key = normalizeYouTubeUrlForCompare(item.ref.url);
+    const at = keptAt.get(key);
+    if (at === undefined) {
+      keptAt.set(key, out.length);
+      out.push(item);
+      continue;
+    }
+    if (item.kind !== "download-finished") {
+      const kept = out[at];
+      const failedAttempts = (kept.ref.failedAttempts ?? 0) + 1;
+      const error = kept.ref.error ?? item.ref.error ?? item.subtitle ?? undefined;
+      out[at] = { ...kept, ref: { ...kept.ref, failedAttempts, error } };
+    }
+  }
+  return out.length === items.length ? items : out;
 }
 
 export function finishedJobNotificationInfo(job: DownloadJob, url: string | undefined): DownloadNotificationInfo {

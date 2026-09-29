@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { MediaFile } from "../types";
 import type { RuforgeSettings } from "../store/types";
-import { SB_DEMOTE_UNDO_WINDOW_SEC } from "../sponsorBlockConstants";
+import { SB_DEMOTE_UNDO_WINDOW_SEC, SB_UNSKIP_PROMPT_MS } from "../sponsorBlockConstants";
+import { startFastForward } from "./sponsorBlockFastForward";
 import {
   activeSkipSegments,
+  categoryLabel,
   effectiveCategoryMode,
   isSkipCategory,
   segmentDedupeKey,
@@ -63,10 +65,23 @@ export type UseSponsorBlockPlaybackArgs = {
   onManualSkip: (category: SponsorBlockSkipCategory) => void;
   onAppearance: (category: SponsorBlockSkipCategory) => void;
   onDemoteUndo: (category: SponsorBlockSkipCategory) => void;
+  /** Element to sprint through skips on; omit (or return null) to jump instead, e.g. audio-only or delegated audio. */
+  getMediaElement?: () => HTMLMediaElement | null;
 };
 
 /** Shared so callers that depend on `segments` don't see a new array every render. */
 const NO_SEGMENTS: SponsorBlockSegment[] = [];
+
+export type SponsorBlockSkipPrompt = {
+  kind: "skip" | "unskip";
+  category: SponsorBlockSkipCategory;
+  label: string;
+};
+
+type UnskipTarget = { start: number; end: number; category: SponsorBlockSkipCategory };
+
+/** How far past the skipped segment the unskip prompt survives before a seek elsewhere drops it. */
+const UNSKIP_TRAIL_SEC = 15;
 
 export function useSponsorBlockPlayback({
   file,
@@ -77,7 +92,37 @@ export function useSponsorBlockPlayback({
   onManualSkip,
   onAppearance,
   onDemoteUndo,
+  getMediaElement,
 }: UseSponsorBlockPlaybackArgs) {
+  const getMediaElementRef = useRef(getMediaElement);
+  getMediaElementRef.current = getMediaElement;
+  const sprintCancelRef = useRef<(() => void) | null>(null);
+  /** True while a skip plays through, so the skip button does not linger over its own animation. */
+  const [sprinting, setSprinting] = useState(false);
+  const cancelSprint = useCallback(() => {
+    sprintCancelRef.current?.();
+    sprintCancelRef.current = null;
+    setSprinting(false);
+  }, []);
+  useEffect(() => cancelSprint, [cancelSprint]);
+  const sprintTo = useCallback(
+    (from: number, to: number, onLand?: () => void) => {
+      cancelSprint();
+      setSprinting(true);
+      sprintCancelRef.current = startFastForward({
+        el: getMediaElementRef.current?.() ?? null,
+        from,
+        to,
+        seekTo,
+        onLand: () => {
+          sprintCancelRef.current = null;
+          setSprinting(false);
+          onLand?.();
+        },
+      });
+    },
+    [cancelSprint, seekTo],
+  );
   const [segments, setSegments] = useState<SponsorBlockSegment[]>([]);
   /** Path segments were loaded for; null while loading / cleared on track change. */
   const segmentsPathRef = useRef<string | null>(null);
@@ -87,11 +132,16 @@ export function useSponsorBlockPlayback({
   const lastAutoSkipRef = useRef<{ end: number; at: number; category: SponsorBlockSkipCategory } | null>(
     null,
   );
+  /** Bumped whenever `autoSkippedRef` grows so memos reading it recompute. */
+  const [autoSkipTick, setAutoSkipTick] = useState(0);
+  const [unskip, setUnskip] = useState<UnskipTarget | null>(null);
 
   useEffect(() => {
+    cancelSprint();
     seenAppearanceRef.current.clear();
     autoSkippedRef.current.clear();
     lastAutoSkipRef.current = null;
+    setUnskip(null);
     // Drop prior-track segments immediately so skip effects cannot seek using them.
     segmentsPathRef.current = null;
     setSegmentsPath(null);
@@ -121,7 +171,7 @@ export function useSponsorBlockPlayback({
     return () => {
       cancelled = true;
     };
-  }, [file.path, file.sourceId, enabled]);
+  }, [file.path, file.sourceId, enabled, cancelSprint]);
 
   const segmentsForCurrentFile =
     enabled && segmentsPath === file.path && segmentsPathRef.current === file.path;
@@ -163,28 +213,52 @@ export function useSponsorBlockPlayback({
       if (!key || autoSkippedRef.current.has(key)) continue;
       const end = s.segment[1];
       if (currentTime >= end - 0.25) continue;
+      const category = s.category;
       autoSkippedRef.current.add(key);
-      lastAutoSkipRef.current = {
-        end,
-        at: performance.now(),
-        category: s.category,
+      setAutoSkipTick((n) => n + 1);
+      setUnskip({ start: s.segment[0], end, category });
+      // Armed only once playback lands, or the ramp's own in-between positions would read as a rewind.
+      const land = () => {
+        lastAutoSkipRef.current = { end, at: performance.now(), category };
       };
-      seekTo(end);
+      sprintTo(currentTime, end, land);
       return;
     }
-  }, [currentTime, activeSkip, segmentsForCurrentFile, settings, seekTo]);
+  }, [currentTime, activeSkip, segmentsForCurrentFile, settings, sprintTo]);
 
-  const activeButtonSkipSegment = useMemo(() => {
-    if (!segmentsForCurrentFile || activeSkip.length === 0) return null;
-    return activeSkip.find((s) => {
-      const action = s.actionType.trim().toLowerCase();
-      return (
-        isSkipCategory(s.category) &&
-        action === "skip" &&
-        effectiveCategoryMode(settings, s.category) === "button"
-      );
-    }) ?? null;
-  }, [segmentsForCurrentFile, activeSkip, settings]);
+  useEffect(() => {
+    if (!unskip) return;
+    const t = window.setTimeout(() => setUnskip(null), SB_UNSKIP_PROMPT_MS);
+    return () => window.clearTimeout(t);
+  }, [unskip]);
+
+  const skipPrompt = useMemo((): SponsorBlockSkipPrompt | null => {
+    if (!segmentsForCurrentFile) return null;
+    // The seek to the segment end lands a tick later, so the segment itself still counts as "after the skip".
+    if (unskip && currentTime >= unskip.start - 0.5 && currentTime <= unskip.end + UNSKIP_TRAIL_SEC) {
+      return {
+        kind: "unskip",
+        category: unskip.category,
+        label: `Unskip ${categoryLabel(unskip.category).toLowerCase()}`,
+      };
+    }
+    if (sprinting) return null;
+    // Auto categories fall back to a button once skipped, so rewinding into one never re-skips silently.
+    const seg = activeSkip.find((s) => {
+      if (!isSkipCategory(s.category)) return false;
+      const mode = effectiveCategoryMode(settings, s.category);
+      if (mode === "button") return true;
+      return mode === "auto" && autoSkippedRef.current.has(segmentDedupeKey(s));
+    });
+    if (!seg || !isSkipCategory(seg.category)) return null;
+    return {
+      kind: "skip",
+      category: seg.category,
+      label: `Skip ${categoryLabel(seg.category).toLowerCase()}`,
+    };
+    // autoSkipTick stands in for the ref it guards.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segmentsForCurrentFile, unskip, currentTime, activeSkip, settings, autoSkipTick, sprinting]);
 
   const handleSkipClick = useCallback(() => {
     if (!segmentsForCurrentFile) return;
@@ -193,8 +267,21 @@ export function useSponsorBlockPlayback({
     const active = activeSkipSegments(segments, currentTime);
     const cat = active[0]?.category;
     if (cat && isSkipCategory(cat)) onManualSkip(cat);
-    seekTo(target);
-  }, [segmentsForCurrentFile, segments, currentTime, seekTo, onManualSkip]);
+    sprintTo(currentTime, target);
+  }, [segmentsForCurrentFile, segments, currentTime, sprintTo, onManualSkip]);
+
+  const handleSkipPromptClick = useCallback(() => {
+    if (skipPrompt?.kind !== "unskip" || !unskip) {
+      handleSkipClick();
+      return;
+    }
+    // Explicit undo; drop the rewind heuristic so the same act is not counted twice.
+    cancelSprint();
+    lastAutoSkipRef.current = null;
+    setUnskip(null);
+    onDemoteUndo(unskip.category);
+    seekTo(unskip.start);
+  }, [skipPrompt, unskip, handleSkipClick, onDemoteUndo, seekTo, cancelSprint]);
 
   const sbChapterLabel = useMemo(() => {
     if (!segmentsForCurrentFile) return null;
@@ -221,30 +308,6 @@ export function useSponsorBlockPlayback({
       .map((s) => ({ start: s.segment[0], end: s.segment[1] }))
       .filter((r) => Number.isFinite(r.start) && Number.isFinite(r.end) && r.end > r.start);
   }, [segments, segmentsForCurrentFile]);
-
-  const showSkipButton = useMemo(() => {
-    if (!segmentsForCurrentFile) return false;
-    return activeButtonSkipSegment !== null;
-  }, [segmentsForCurrentFile, activeButtonSkipSegment]);
-
-  const activeSkipCategory = useMemo(() => {
-    return activeButtonSkipSegment?.category as SponsorBlockSkipCategory | null;
-  }, [activeButtonSkipSegment]);
-
-  const skipButtonLabel = useMemo(() => {
-    const cat = activeSkipCategory;
-    if (!cat || !isSkipCategory(cat)) return "Skip";
-    const labels: Record<SponsorBlockSkipCategory, string> = {
-      sponsor: "Sponsor",
-      selfpromo: "Self-promo",
-      interaction: "Interaction",
-      intro: "Intro",
-      outro: "Outro",
-      preview: "Preview",
-      filler: "Filler",
-    };
-    return `Skip ${labels[cat]}`;
-  }, [activeSkipCategory]);
 
   const scrubOverlay = useMemo(() => {
     if (!segmentsForCurrentFile) {
@@ -294,14 +357,12 @@ export function useSponsorBlockPlayback({
   return {
     segments: segmentsForCurrentFile ? segments : NO_SEGMENTS,
     segmentsPath,
-    showSkipButton,
-    skipButtonLabel,
-    handleSkipClick,
+    skipPrompt,
+    handleSkipPromptClick,
     sbChapterLabel,
     poiMarkers,
     chapterRanges,
     refreshSegments,
-    activeSkipCategory,
     scrubOverlay,
   };
 }

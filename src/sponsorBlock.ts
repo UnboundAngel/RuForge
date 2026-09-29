@@ -187,13 +187,22 @@ export function activeScrubSegmentAtTime(
   return null;
 }
 
+/** Preview and filler overlap real content often enough that skipping them should stay a choice. */
+const DEFAULT_CATEGORY_MODES: Record<SponsorBlockSkipCategory, SponsorBlockCategoryMode> = {
+  sponsor: "auto",
+  selfpromo: "auto",
+  interaction: "auto",
+  intro: "auto",
+  outro: "auto",
+  preview: "button",
+  filler: "button",
+};
+
 export function defaultCategoryModes(): Record<
   SponsorBlockSkipCategory,
   SponsorBlockCategoryMode
 > {
-  return Object.fromEntries(
-    SPONSORBLOCK_SKIP_CATEGORIES.map((c) => [c, "button"]),
-  ) as Record<SponsorBlockSkipCategory, SponsorBlockCategoryMode>;
+  return { ...DEFAULT_CATEGORY_MODES };
 }
 
 export function defaultCategoryStats(): Record<
@@ -262,7 +271,7 @@ export function effectiveCategoryMode(
   settings: RuforgeSettings,
   cat: SponsorBlockSkipCategory,
 ): SponsorBlockCategoryMode {
-  const user = settings.sponsorBlockCategoryModes?.[cat] ?? "button";
+  const user = settings.sponsorBlockCategoryModes?.[cat] ?? DEFAULT_CATEGORY_MODES[cat];
   if (user === "auto" || user === "off") return user;
   const stats = settings.sponsorBlockCategoryStats?.[cat] ?? {
     appearances: 0,
@@ -276,7 +285,7 @@ export function effectiveModeBadge(
   settings: RuforgeSettings,
   cat: SponsorBlockSkipCategory,
 ): string {
-  const user = settings.sponsorBlockCategoryModes?.[cat] ?? "button";
+  const user = settings.sponsorBlockCategoryModes?.[cat] ?? DEFAULT_CATEGORY_MODES[cat];
   const effective = effectiveCategoryMode(settings, cat);
   if (user === "auto") return "Auto-skip";
   if (user === "off") return "Off";

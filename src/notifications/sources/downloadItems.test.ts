@@ -4,8 +4,31 @@ import { upsertItem } from "../notificationCenterStore";
 import {
   STORAGE_FULL_NOTIFICATION_ID,
   buildDownloadNotification,
+  collapseDownloadAttempts,
   withLiveDownloadActions,
 } from "./downloadItems";
+
+describe("collapseDownloadAttempts", () => {
+  it("keeps only the newest outcome per video across job ids and URL forms", () => {
+    const failed = buildDownloadNotification(
+      "download-failed",
+      { jobId: "a", url: "https://www.youtube.com/watch?v=Y4gQFJ_EeWA", error: "x" },
+      1,
+    );
+    const done = buildDownloadNotification("download-finished", { jobId: "b", url: "https://youtu.be/Y4gQFJ_EeWA" }, 2);
+    const other = buildDownloadNotification("download-failed", { jobId: "c", url: "https://youtu.be/dQw4w9WgXcQ" }, 3);
+    const blocked = buildDownloadNotification("download-blocked", { error: "full" }, 0);
+    const collapsed = collapseDownloadAttempts([failed, done, other, blocked]);
+    expect(collapsed.map((i) => i.id)).toEqual(["download:c", "download:b", STORAGE_FULL_NOTIFICATION_ID]);
+    expect(collapsed[1].ref.failedAttempts).toBe(1);
+    expect(collapsed[0].ref.failedAttempts).toBeUndefined();
+  });
+
+  it("returns the same array when nothing collapses", () => {
+    const list = [buildDownloadNotification("download-finished", { jobId: "a", url: "https://youtu.be/dQw4w9WgXcQ" })];
+    expect(collapseDownloadAttempts(list)).toBe(list);
+  });
+});
 
 describe("buildDownloadNotification", () => {
   it("builds a finished item with play and show in folder", () => {

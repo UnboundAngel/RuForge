@@ -1605,7 +1605,7 @@ export const createDownloadQueueSlice: StateCreator<
         );
         recordDownloadNotification("download-failed", {
           ...finishedJobNotificationInfo(finishedJobBefore, finishedUrl),
-          error: line,
+          error: payload.error ?? line,
         });
       }
     },

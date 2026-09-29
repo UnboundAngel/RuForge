@@ -491,7 +491,7 @@ html.ruforge-island-root #root {
   margin: 0 0 1rem;
 }
 
-.rf-settings-row--block {
+.rf-settings-row.rf-settings-row--block {
   display: block;
   padding: 0;
 }

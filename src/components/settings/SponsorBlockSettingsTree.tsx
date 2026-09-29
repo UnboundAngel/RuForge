@@ -16,6 +16,7 @@ import {
   SB_GRADUATE_MIN_APPEARANCES,
   SB_GRADUATE_MIN_MANUAL_SKIPS,
 } from "../../sponsorBlockConstants";
+import { SponsorBlockMiniScrubber } from "../player/SponsorBlockMiniScrubber";
 import { SettingsDescription } from "./settingsDescription";
 import { SponsorBlockCategoryModeSelect } from "./SponsorBlockCategoryModeSelect";
 
@@ -62,7 +63,7 @@ function learningHint(
   if (learnedCategoryMode(stats) === "auto") return "Learned: auto-skip";
   const skips = Math.min(stats.manualSkips, SB_GRADUATE_MIN_MANUAL_SKIPS);
   const seen = Math.min(stats.appearances, SB_GRADUATE_MIN_APPEARANCES);
-  return `Learning ${skips}/${SB_GRADUATE_MIN_MANUAL_SKIPS} skips · ${seen}/${SB_GRADUATE_MIN_APPEARANCES} seen`;
+  return `Learning: ${skips}/${SB_GRADUATE_MIN_MANUAL_SKIPS} skips, ${seen}/${SB_GRADUATE_MIN_APPEARANCES} seen`;
 }
 
 type CategoryRowProps = {
@@ -76,38 +77,39 @@ function SponsorBlockCategoryRow({ cat, settings, onModeChange, onResetLearning 
   const hint = learningHint(settings, cat);
   const off = settings.sponsorBlockCategoryModes[cat] === "off";
   const learned = hint?.startsWith("Learned") ?? false;
+  const stats = settings.sponsorBlockCategoryStats[cat];
+  const hasLearning = Boolean(stats && (stats.appearances || stats.manualSkips || stats.undoSignals));
 
   return (
     <div className="group rf-settings-row">
-      <div className="rf-settings-row-label space-y-0.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h4 className={off ? "text-stone-400" : "text-stone-100"}>{categoryLabel(cat)}</h4>
+      <div className="rf-settings-row-label">
+        <div className="min-w-0 space-y-0.5">
+          <div className="flex items-center gap-2.5">
+            <h4 className={off ? "text-stone-400" : "text-stone-100"}>{categoryLabel(cat)}</h4>
+            <SponsorBlockMiniScrubber category={cat} dim={off} />
+          </div>
+          <p className="text-[11px] text-stone-500 leading-relaxed">{CATEGORY_HINTS[cat]}</p>
           {hint ? (
-            <span
-              className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ${
-                learned
-                  ? "text-[color:var(--accent)] border-[color-mix(in_srgb,var(--accent),transparent_70%)]"
-                  : "text-stone-400 border-white/10"
-              }`}
-            >
+            <p className={`text-[11px] leading-relaxed ${learned ? "text-[color:var(--accent)]" : "text-stone-600"}`}>
               {hint}
-            </span>
+            </p>
           ) : null}
         </div>
-        <p className="text-[11px] text-stone-500 leading-relaxed max-w-md">{CATEGORY_HINTS[cat]}</p>
       </div>
-      <div className="rf-settings-row-control flex flex-wrap items-center justify-end gap-2">
+      <div className="rf-settings-row-control flex items-center gap-3">
+        {hasLearning ? (
+          <button
+            type="button"
+            onClick={onResetLearning}
+            className="text-[11px] font-medium text-stone-500 transition-colors hover:text-stone-200"
+          >
+            Reset learning
+          </button>
+        ) : null}
         <SponsorBlockCategoryModeSelect
           value={settings.sponsorBlockCategoryModes[cat]}
           onChange={onModeChange}
         />
-        <button
-          type="button"
-          onClick={onResetLearning}
-          className="px-3 py-2 rounded-xl text-[9px] font-black tracking-widest text-stone-500 border border-white/10 hover:text-stone-300 transition-colors"
-        >
-          Reset learning
-        </button>
       </div>
     </div>
   );
@@ -117,6 +119,8 @@ export const SponsorBlockSettingsTree: React.FC = () => {
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  /** Clip only while the height animates, so the last row's mode dropdown can overflow once open. */
+  const [categoriesSettled, setCategoriesSettled] = useState(false);
 
   const showCategories = settings.sponsorBlockEnabled && categoriesOpen;
   const forceCloseDesc = !showCategories;
@@ -196,10 +200,15 @@ export const SponsorBlockSettingsTree: React.FC = () => {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
+            onAnimationStart={() => setCategoriesSettled(false)}
+            onAnimationComplete={(def) => {
+              if (typeof def === "object" && def !== null && "height" in def && def.height === "auto") {
+                setCategoriesSettled(true);
+              }
+            }}
+            className={categoriesSettled ? "" : "overflow-hidden"}
           >
-            <div className="rf-settings-tree-children">
-              <div className="rf-settings-tree-line" aria-hidden />
+            <div className="mb-2 mt-1 rounded-2xl bg-black/20 px-4 py-1.5 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]">
               {SPONSORBLOCK_SKIP_CATEGORIES.map((cat) => (
                 <SponsorBlockCategoryRow
                   key={cat}

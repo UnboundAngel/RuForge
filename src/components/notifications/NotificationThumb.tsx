@@ -10,16 +10,18 @@ export function NotificationThumb({
   item,
   badge,
   children,
+  compact = false,
 }: {
   item: NotificationItem;
   badge: ReactNode;
   children: ReactNode;
+  compact?: boolean;
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = item.thumbnail && item.thumbnail !== failedSrc ? item.thumbnail : null;
 
   return (
-    <div className="relative h-[63px] w-[112px] shrink-0">
+    <div className={`relative shrink-0 ${compact ? "h-[45px] w-[80px]" : "h-[63px] w-[112px]"}`}>
       <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-[10px] bg-[color:var(--rf-popover-raised)]">
         {src ? (
           <img

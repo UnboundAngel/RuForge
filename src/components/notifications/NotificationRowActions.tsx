@@ -3,7 +3,7 @@ import { Icon as Iconify } from "@iconify/react";
 import { Check, Download, FolderOpen, HardDrive, Play, RotateCcw } from "lucide-react";
 import type { NotificationActionId, NotificationItem } from "@/notifications/types";
 
-const ACTION_META: Record<NotificationActionId, { tooltip: string; icon: (size: number) => ReactNode }> = {
+export const ACTION_META: Record<NotificationActionId, { tooltip: string; icon: (size: number) => ReactNode }> = {
   queue: { tooltip: "Add to download queue", icon: (s) => <Download size={s} strokeWidth={2.25} /> },
   "open-explorer": {
     tooltip: "Open in Explorer",
