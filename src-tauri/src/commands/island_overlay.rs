@@ -213,6 +213,37 @@ pub async fn show_island_overlay(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Whether the user is in RuForge: the OS foreground window is ours and is not the island.
+/// Main's own focus flag drops when the Explorer child webview or an overlay window takes
+/// focus, which would pop the desktop island while the user is still in the app.
+#[tauri::command]
+pub fn app_is_foreground(app: AppHandle) -> bool {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+        let fg = unsafe { GetForegroundWindow() };
+        if fg.0.is_null() {
+            return false;
+        }
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(fg, Some(&mut pid)) };
+        if pid != std::process::id() {
+            return false;
+        }
+        let island = app
+            .get_webview_window(ISLAND_LABEL)
+            .and_then(|w| w.hwnd().ok())
+            .map(|h| h.0 as usize);
+        island != Some(fg.0 as usize)
+    }
+    #[cfg(not(windows))]
+    {
+        app.get_webview_window("main")
+            .and_then(|w| w.is_focused().ok())
+            .unwrap_or(true)
+    }
+}
+
 #[tauri::command]
 pub async fn hide_island_overlay(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(ISLAND_LABEL) {

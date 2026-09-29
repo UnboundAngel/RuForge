@@ -87,7 +87,8 @@ export default function IslandOverlayApp() {
     watchlist,
   });
   const isExpanded = islandState === "expanded";
-  const anyExpanded = isExpanded || islandState === "watchlist-expanded";
+  const anyExpanded =
+    isExpanded || islandState === "watchlist-expanded" || islandState === "download-expanded";
 
   useEffect(() => {
     if (!hasSession) setExpandedTarget((t) => (t === "music" ? null : t));
@@ -97,11 +98,16 @@ export default function IslandOverlayApp() {
     if (!watchlist) setExpandedTarget((t) => (t === "watchlist" ? null : t));
   }, [watchlist]);
 
+  const hasDownload = download != null;
+  useEffect(() => {
+    if (!hasDownload) setExpandedTarget((t) => (t === "download" ? null : t));
+  }, [hasDownload]);
+
   useEffect(() => {
     const bounds =
       islandState === "watchlist-expanded"
         ? WATCHLIST_EXPANDED_BOUNDS
-        : isExpanded
+        : isExpanded || islandState === "download-expanded"
           ? EXPANDED_BOUNDS
           : COMPACT_BOUNDS;
     void invoke("sync_island_overlay_bounds", bounds).catch(() => {});
@@ -142,8 +148,12 @@ export default function IslandOverlayApp() {
       setExpandedTarget("watchlist");
       return;
     }
-    if (islandState === "watchlist-expanded") {
+    if (islandState === "watchlist-expanded" || islandState === "download-expanded") {
       setExpandedTarget(null);
+      return;
+    }
+    if (islandState === "download") {
+      setExpandedTarget("download");
       return;
     }
     if (!hasSession) {
@@ -160,6 +170,12 @@ export default function IslandOverlayApp() {
   const handleWatchlistOpen = useCallback(async (videoId: string) => {
     await restoreMainFromDesktopIsland();
     void emitDesktopIslandControl({ type: "watchlistOpen", videoId });
+  }, []);
+
+  const handleOpenDownloads = useCallback(async () => {
+    setExpandedTarget(null);
+    await restoreMainFromDesktopIsland();
+    void emitDesktopIslandControl({ type: "openDownloads" });
   }, []);
 
   const handleWatchlistMarkAllSeen = useCallback(() => {
@@ -225,6 +241,7 @@ export default function IslandOverlayApp() {
           waveformLevels={waveformLevels}
           skipDirHint={payload?.skipDir ?? null}
           download={download}
+          onOpenDownloads={() => void handleOpenDownloads()}
           notice={notice}
           watchlist={watchlist}
           onWatchlistQueue={handleWatchlistQueue}

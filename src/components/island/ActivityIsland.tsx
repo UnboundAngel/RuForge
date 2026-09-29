@@ -37,6 +37,7 @@ import { mainWindowPortalRoot } from "@/lib/mainWindowFrame";
 import { readPlaybackSpeed } from "@/playbackSpeedStorage";
 import { useCurrentActivity } from "@/hooks/useCurrentActivity";
 import { primaryArtist, rawArtistFromFile } from "@/components/music/musicArtist";
+import { buildIslandDownload } from "@/lib/islandDownload";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { DynamicIsland, type IslandState } from "./DynamicIsland";
 
@@ -144,8 +145,18 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
     () => (latest ? { id: latest.id, message: latest.message, type: latest.type ?? "info" } : null),
     [latest],
   );
+  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
+  const downloaderOpen = useRuforgeStore((s) => s.downloaderOpen);
+  const openDownloader = useRuforgeStore((s) => s.openDownloader);
+  const download = useMemo(
+    () => (downloaderOpen ? null : buildIslandDownload(downloadJobs)),
+    [downloaderOpen, downloadJobs],
+  );
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const downloadExpanded = downloadOpen && download != null && !isExpanded;
+
   // Never collapse something the user opened on purpose.
-  const showNotice = notice != null && !isExpanded && !updateExpanded;
+  const showNotice = notice != null && !isExpanded && !updateExpanded && !downloadExpanded;
 
   const islandState: IslandState = devCaptureIsland
     ? savedCapture
@@ -157,11 +168,19 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       ? updateAvailable!.collapsed
         ? "idle"
         : "expanded"
+    : downloadExpanded
+      ? "download-expanded"
     : !hasSession || !showIslandChrome
-      ? "idle"
+      ? download
+        ? "download"
+        : "idle"
       : isExpanded
         ? "expanded"
         : "compact";
+
+  useEffect(() => {
+    if (!download) setDownloadOpen(false);
+  }, [download]);
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -209,7 +228,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   }, [hasSession]);
 
   useEffect(() => {
-    if (!isExpanded && !savedCapture) return;
+    if (!isExpanded && !savedCapture && !downloadExpanded) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (savedCapture) {
@@ -217,10 +236,11 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
         return;
       }
       if (isExpanded) setUserExpanded(false);
+      setDownloadOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isExpanded, savedCapture, dismissSavedCapture]);
+  }, [isExpanded, savedCapture, downloadExpanded, dismissSavedCapture]);
   const handlePlayPause = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -397,11 +417,24 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       }
       return;
     }
+    if (downloadExpanded) {
+      setDownloadOpen(false);
+      return;
+    }
+    if (islandState === "download") {
+      setDownloadOpen(true);
+      return;
+    }
     if (isExpanded) {
       setUserExpanded(false);
       return;
     }
     if (canExpand) setUserExpanded(true);
+  };
+
+  const handleOpenDownloads = () => {
+    setDownloadOpen(false);
+    openDownloader();
   };
 
   const handleIslandCapture = useCallback(
@@ -430,17 +463,18 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
 
   return createPortal(
     <>
-      {isExpanded || updateExpanded ? (
+      {isExpanded || updateExpanded || downloadExpanded ? (
         <button
           type="button"
           className="pointer-events-auto fixed inset-0 z-[109] bg-transparent"
-          aria-label={updateExpanded ? "Collapse update details" : "Dismiss now playing"}
+          aria-label={updateExpanded ? "Collapse update details" : downloadExpanded ? "Close downloads" : "Dismiss now playing"}
           onClick={() => {
             if (updateExpanded && updateAvailable) {
               updateAvailable.onCollapse();
               return;
             }
             setUserExpanded(false);
+            setDownloadOpen(false);
           }}
         />
       ) : null}
@@ -471,6 +505,8 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
           <DynamicIsland
             state={islandState}
             notice={showNotice ? notice : null}
+            download={download}
+            onOpenDownloads={handleOpenDownloads}
             content={content}
             waveformLevels={waveformLevels}
             updateAvailable={

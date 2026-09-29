@@ -77,7 +77,7 @@ use crate::commands::musicmeta::{
 };
 use crate::commands::music_artist_about::music_artist_about;
 use crate::commands::island_overlay::{
-    hide_island_overlay, island_overlay_ready, note_main_window_monitor, show_island_overlay,
+    app_is_foreground, hide_island_overlay, island_overlay_ready, note_main_window_monitor, show_island_overlay,
     sync_island_overlay_bounds, MAIN_HIDDEN_EVENT,
 };
 use crate::commands::player::{
@@ -441,6 +441,7 @@ pub fn run() {
             download_deno,
             show_island_overlay,
             hide_island_overlay,
+            app_is_foreground,
             sync_island_overlay_bounds,
             island_overlay_ready,
             export_media_bundle,
