@@ -10,6 +10,7 @@ import { youtubeUrlsMatch } from "../youtubeUrl";
 import { askConfirm } from "./ConfirmDialog";
 import { CLEANUP_HEADER_H, CleanupListHeader } from "./CleanupListRow";
 import { CleanupSection } from "./CleanupSection";
+import { cleanupGroupMeta } from "./cleanupCategoryStyle";
 import {
   SettingsModalBtnPrimary,
   SettingsModalBtnSecondary,
@@ -87,9 +88,9 @@ export function AuthorizeCleanupModal() {
       return next;
     });
   }, []);
-  const pinnedCategory = useMemo(() => {
+  const currentGroup = useMemo(() => {
     for (let i = groups.length - 1; i >= 0; i--) {
-      if (stuckCategories.has(groups[i].category)) return groups[i].category;
+      if (stuckCategories.has(groups[i].category)) return groups[i];
     }
     return null;
   }, [groups, stuckCategories]);
@@ -301,7 +302,15 @@ export function AuthorizeCleanupModal() {
       }
     >
       {candidates.length > 0 && (
-        <CleanupListHeader sort={sort} onSort={onSort} tone={pinnedCategory} />
+        <CleanupListHeader
+          sort={sort}
+          onSort={onSort}
+          current={
+            currentGroup
+              ? { category: currentGroup.category, meta: cleanupGroupMeta(currentGroup, selected) }
+              : null
+          }
+        />
       )}
 
       {libraryLoading && candidates.length === 0 ? (

@@ -3,9 +3,10 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Check, ChevronDown, ChevronUp, Video } from "lucide-react";
 import { HoverMarqueeText } from "./music/HoverMarqueeText";
 import { cn } from "../lib/utils";
+import { useStuckHeader } from "../hooks/useStuckHeader";
 import { CLEANUP_CATEGORY_STYLE } from "./cleanupCategoryStyle";
 import {
-  CLEANUP_CATEGORY_ORDER,
+  CLEANUP_CATEGORY_LABEL,
   formatBytes,
   type CleanupCandidate,
   type CleanupCategory,
@@ -34,18 +35,22 @@ type Props = {
 
 export const CLEANUP_HEADER_H = 32;
 
-/** Sticky, sortable column header: a line at rest, the pinned category's fill once its tab hangs below. */
+/**
+ * Sticky, sortable column header: a line at rest, a raised fill once rows scroll under it.
+ * Its empty checkbox and thumbnail corner names the category currently under it.
+ */
 export function CleanupListHeader({
   sort,
   onSort,
-  tone,
+  current,
 }: {
   sort: CleanupSort | null;
   onSort: (key: CleanupSortKey) => void;
-  /** Category whose tab is pinned under the header; the header takes its fill. */
-  tone: CleanupCategory | null;
+  current: { category: CleanupCategory; meta: string } | null;
 }) {
-  const toneStyle = tone ? CLEANUP_CATEGORY_STYLE[tone] : null;
+  const { sentinelRef, stuck } = useStuckHeader();
+  const currentStyle = current ? CLEANUP_CATEGORY_STYLE[current.category] : null;
+  const CurrentIcon = currentStyle?.icon;
   const cell = (key: CleanupSortKey, label: string, align: "left" | "center" | "right" = "left") => {
     const active = sort?.key === key;
     return (
@@ -53,11 +58,8 @@ export function CleanupListHeader({
         type="button"
         onClick={() => onSort(key)}
         className={cn(
-          // Color set here, not inherited: an inherited color that is itself transitioning lags and jitters.
-          "flex w-full min-w-0 items-center gap-1 transition-colors duration-150",
-          toneStyle
-            ? cn(active ? toneStyle.text : toneStyle.muted, toneStyle.hover)
-            : cn(active ? "text-stone-100" : "text-stone-500", "hover:text-stone-100"),
+          "flex w-full min-w-0 items-center gap-1 transition-colors hover:text-stone-100",
+          active ? "text-stone-100" : "text-stone-500",
           align === "right"
             ? "justify-end text-right"
             : align === "center"
@@ -73,32 +75,38 @@ export function CleanupListHeader({
 
   return (
     <>
+      <div ref={sentinelRef} aria-hidden className="h-px -mb-px" />
       <div className="sticky top-0 z-10 -mx-6 bg-[#1D1613] px-6">
-        {/* One layer per category, crossfaded on opacity so the fill stays in step with the tab seams. */}
-        {CLEANUP_CATEGORY_ORDER.map((category) => (
-          <span
-            key={category}
-            aria-hidden
-            className={cn(
-              "pointer-events-none absolute inset-0 transition-opacity duration-150 ease-out motion-reduce:transition-none",
-              CLEANUP_CATEGORY_STYLE[category].bg,
-              tone === category ? "opacity-100" : "opacity-0",
-            )}
-          />
-        ))}
+        {/* Raised fill crossfades on opacity, not background-color, so it stays in step with the scroll. */}
         <span
           aria-hidden
           className={cn(
-            "pointer-events-none absolute inset-x-6 bottom-0 h-px bg-white/10 transition-opacity duration-150 motion-reduce:transition-none",
-            tone ? "opacity-0" : "opacity-100",
+            "pointer-events-none absolute inset-0 bg-[#271C18] transition-opacity duration-200 motion-reduce:transition-none",
+            stuck ? "opacity-100" : "opacity-0",
+          )}
+        />
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-x-6 bottom-0 h-px bg-white/10 transition-opacity duration-200 motion-reduce:transition-none",
+            stuck ? "opacity-0" : "opacity-100",
           )}
         />
         <div
           className={cn(CLEANUP_COLS, "relative px-2 text-[12px] xl:text-[13px]")}
           style={{ height: CLEANUP_HEADER_H }}
         >
-          <span />
-          <span />
+          <span className="col-span-2 flex min-w-0">
+            {current && currentStyle && CurrentIcon ? (
+              <span
+                data-tooltip={current.meta}
+                className={cn("flex min-w-0 items-center gap-1.5 font-semibold", currentStyle.fg)}
+              >
+                <CurrentIcon size={14} strokeWidth={2.5} className="shrink-0" aria-hidden />
+                <span className="truncate">{CLEANUP_CATEGORY_LABEL[current.category]}</span>
+              </span>
+            ) : null}
+          </span>
           {cell("title", "Title")}
           {cell("added", "Added")}
           {cell("watched", "Watched", "center")}
