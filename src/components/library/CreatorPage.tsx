@@ -1,5 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { MediaFile, PlaylistCollection } from "@/types";
 import { watchedFromChannel } from "./channelShelf";
@@ -71,6 +70,16 @@ export function CreatorPage({
   const [picked, setPicked] = useState<CreatorTab>("home");
   const tab = tabs.includes(picked) ? picked : "home";
 
+  useEffect(() => {
+    const onMouseBack = (e: MouseEvent) => {
+      if (e.button !== 3) return;
+      e.preventDefault();
+      closeCreatorPage();
+    };
+    window.addEventListener("mouseup", onMouseBack);
+    return () => window.removeEventListener("mouseup", onMouseBack);
+  }, []);
+
   const panel =
     tab === "videos" ? (
       <CreatorUploadsState channelId={channelId} status={state} count={sections.uploads.length} columns={columns} gridClass={gridClass}>
@@ -96,19 +105,15 @@ export function CreatorPage({
 
   return (
     <div className="pt-12 pb-8">
-      <button
-        type="button"
-        onClick={closeCreatorPage}
-        className="mb-6 flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-stone-500 transition-colors duration-150 hover:text-stone-200"
-      >
-        <ChevronLeft size={14} strokeWidth={2.5} />
-        Library
-      </button>
-
       <CreatorHeader channelId={channelId} channel={channel} profile={profile} downloaded={own.length} />
 
-      <div className="mb-10">
-        <CreatorTabs tabs={tabs} active={tab} onChange={setPicked} />
+      <div className="mb-10 px-2">
+        <CreatorTabs
+          tabs={tabs}
+          active={tab}
+          counts={{ videos: sections.uploads.length, downloaded: own.length, playlists: theirPlaylists.length }}
+          onChange={setPicked}
+        />
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
