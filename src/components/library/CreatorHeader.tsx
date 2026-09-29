@@ -63,8 +63,8 @@ export function CreatorHeader({
         <div className="absolute inset-x-0 bottom-0 flex items-end gap-5 p-6 pr-60">
           <HeroAvatar url={profile?.avatarUrl} channelId={channelId} channel={channel} />
           <div className="min-w-0 flex-1 pb-1">
-            <h1 className="flex min-w-0 items-center gap-2.5 text-4xl font-black tracking-tight text-stone-50">
-              <span className="truncate">{name}</span>
+            <h1 className="flex min-w-0 items-baseline gap-2.5 font-display text-[44px] leading-none font-extrabold tracking-[-0.02em] text-stone-50">
+              <span className="truncate pb-1">{name}</span>
               {profile?.verified ? <VerifiedMark className="h-5 w-5 shrink-0 text-stone-300" /> : null}
             </h1>
             {meta.length > 0 ? (

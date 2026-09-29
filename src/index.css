@@ -8,8 +8,20 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/fonts/cabinet-grotesk-variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 .font-hand {
   font-family: var(--font-hand);
+}
+
+.font-display {
+  font-family: var(--font-display);
 }
 
 @custom-variant snap-hover (&.is-hovered);
@@ -142,6 +154,7 @@
   --text-muted: #a8a29e;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --font-hand: "Patrick Hand", cursive;
+  --font-display: "Cabinet Grotesk", Inter, system-ui, sans-serif;
   
   --radius-input: 12px;
   --radius-card: 20px;
