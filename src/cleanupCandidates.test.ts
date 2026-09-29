@@ -3,6 +3,7 @@ import type { MediaFile } from "./types";
 import {
   buildCleanupCandidates,
   cleanupWatchProgressPct,
+  groupCleanupCandidates,
 } from "./cleanupCandidates";
 import { writePlaybackPos } from "./playbackStorage";
 import {
@@ -189,5 +190,21 @@ describe("buildCleanupCandidates filters", () => {
       "least_watched",
     );
     expect(result).toHaveLength(1);
+  });
+});
+
+describe("groupCleanupCandidates", () => {
+  const candidate = (file: MediaFile) => ({ file, watchProgressPct: 0, sizeBytes: 1, created: 1 });
+
+  it("orders music, videos, livestreams, keeps order inside, drops empty groups", () => {
+    const vodA = candidate(mediaFile({ path: "a.mp4", name: "a.mp4", youtube: { channelVerified: false, wasLive: true } }));
+    const song = candidate(mediaFile({ path: "s.m4a", name: "s.m4a" }));
+    const clipB = candidate(mediaFile({ path: "b.mp4", name: "b.mp4" }));
+    const clipC = candidate(mediaFile({ path: "c.webm", name: "c.webm" }));
+
+    const groups = groupCleanupCandidates([vodA, clipB, song, clipC]);
+    expect(groups.map((g) => g.category)).toEqual(["music", "videos", "livestreams"]);
+    expect(groups[1].items).toEqual([clipB, clipC]);
+    expect(groupCleanupCandidates([clipB]).map((g) => g.category)).toEqual(["videos"]);
   });
 });

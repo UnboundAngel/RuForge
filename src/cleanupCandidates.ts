@@ -94,6 +94,39 @@ export function buildCleanupCandidates(
   });
 }
 
+export type CleanupCategory = "music" | "videos" | "livestreams";
+
+export const CLEANUP_CATEGORY_ORDER: readonly CleanupCategory[] = ["music", "videos", "livestreams"];
+
+export const CLEANUP_CATEGORY_LABEL: Record<CleanupCategory, string> = {
+  music: "Music",
+  videos: "Videos",
+  livestreams: "Livestreams",
+};
+
+export function cleanupCategory(file: MediaFile): CleanupCategory {
+  if (isAudioOnlyPath(file.path)) return "music";
+  if (file.youtube?.wasLive) return "livestreams";
+  return "videos";
+}
+
+export type CleanupGroup = { category: CleanupCategory; items: CleanupCandidate[] };
+
+/** Splits an already sorted list into categories, keeping order inside each and dropping empty ones. */
+export function groupCleanupCandidates(list: CleanupCandidate[]): CleanupGroup[] {
+  const buckets = new Map<CleanupCategory, CleanupCandidate[]>();
+  for (const c of list) {
+    const category = cleanupCategory(c.file);
+    const bucket = buckets.get(category);
+    if (bucket) bucket.push(c);
+    else buckets.set(category, [c]);
+  }
+  return CLEANUP_CATEGORY_ORDER.flatMap((category) => {
+    const items = buckets.get(category);
+    return items ? [{ category, items }] : [];
+  });
+}
+
 export type CleanupSortKey = "title" | "added" | "watched" | "size";
 export type CleanupSort = { key: CleanupSortKey; desc: boolean };
 

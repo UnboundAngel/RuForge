@@ -51,6 +51,8 @@ export interface YoutubeSourceMeta {
   /** Unix seconds the video went public, not when it was downloaded. */
   publishedAt?: number;
   viewCount?: number;
+  /** Recorded from a livestream (yt-dlp `was_live` / `live_status`). */
+  wasLive?: boolean;
 }
 
 export interface PlaylistCollection {

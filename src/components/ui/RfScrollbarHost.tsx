@@ -51,9 +51,16 @@ function bindRfScrollbar(el: HTMLElement) {
   let dragStartY = 0;
   let dragStartTop = 0;
 
+  // A sticky header inside the scroller sets this so the track starts below it.
+  const insetTop = () => {
+    const n = Number(el.dataset.rfScrollbarInsetTop);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  const trackHeight = () => Math.max(0, el.clientHeight - insetTop());
+
   const paint = () => {
     thumb.style.height = `${thumbH}px`;
-    thumb.style.transform = `translateY(${el.scrollTop + thumbTop}px)`;
+    thumb.style.transform = `translateY(${el.scrollTop + insetTop() + thumbTop}px)`;
   };
 
   const layout = () => {
@@ -70,13 +77,14 @@ function bindRfScrollbar(el: HTMLElement) {
       hideThumb(thumb);
       return;
     }
-    thumbH = Math.max(MIN_THUMB, (clientHeight / scrollHeight) * clientHeight);
-    if (thumbH / clientHeight >= MAX_THUMB_RATIO) {
+    const track = trackHeight();
+    thumbH = Math.max(MIN_THUMB, (clientHeight / scrollHeight) * track);
+    if (track <= 0 || thumbH / track >= MAX_THUMB_RATIO) {
       hideThumb(thumb);
       return;
     }
     showThumb(thumb);
-    const maxThumb = Math.max(0, clientHeight - thumbH);
+    const maxThumb = Math.max(0, track - thumbH);
     thumbTop = maxThumb <= 0 ? 0 : (scrollTop / maxScroll) * maxThumb;
     paint();
   };
@@ -88,7 +96,7 @@ function bindRfScrollbar(el: HTMLElement) {
   const onPointerMove = (e: PointerEvent) => {
     if (!dragging) return;
     const maxScroll = el.scrollHeight - el.clientHeight;
-    const maxThumb = Math.max(0, el.clientHeight - thumbH);
+    const maxThumb = Math.max(0, trackHeight() - thumbH);
     const nextTop = clamp(dragStartTop + (e.clientY - dragStartY), 0, maxThumb);
     el.scrollTop = maxThumb <= 0 ? 0 : (nextTop / maxThumb) * maxScroll;
     thumbTop = nextTop;

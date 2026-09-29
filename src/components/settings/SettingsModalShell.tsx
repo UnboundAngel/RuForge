@@ -25,6 +25,7 @@ type SettingsModalShellProps = {
   /** z-index tier; default matches legacy settings modals in `OVERLAY_Z_CLASS`. */
   zIndexClass?: string;
   maxWidthClass?: string;
+  maxHeightClass?: string;
   /** When true, backdrop and close button do not dismiss (e.g. while a job runs). */
   disableDismiss?: boolean;
   onExitComplete?: () => void;
@@ -33,6 +34,10 @@ type SettingsModalShellProps = {
   /** Extra classes on the scrolling body, e.g. `pt-0` so a sticky header can sit flush at the top. */
   bodyClassName?: string;
   footerClassName?: string;
+  /** Page-sized surfaces: bezel rim around a well, like Settings and the downloader. App theme only. */
+  bezel?: boolean;
+  /** Height of a sticky header at the top of the body, so the scrollbar track starts below it. */
+  bodyScrollInsetTop?: number;
 };
 
 const SHELL_THEME = {
@@ -62,13 +67,17 @@ export function SettingsModalShell({
   footer,
   zIndexClass = OVERLAY_Z_CLASS.settings,
   maxWidthClass = "max-w-lg",
+  maxHeightClass = "max-h-[min(85vh,720px)]",
   disableDismiss = false,
   onExitComplete,
   theme = "app",
   bodyClassName,
   footerClassName,
+  bezel = false,
+  bodyScrollInsetTop,
 }: SettingsModalShellProps) {
   const t = SHELL_THEME[theme];
+  const rim = bezel && theme === "app";
   const reduceMotion = useReducedMotion();
   const fade = motionDuration(reduceMotion, overlayFadeTransition);
   const panel = motionDuration(reduceMotion, overlayPanelTransition);
@@ -87,7 +96,9 @@ export function SettingsModalShell({
       {open ? (
         <motion.div
           key={titleId}
-          className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-black/80 p-4`}
+          className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4 ${
+            rim ? "bg-black/65 sm:p-6" : "bg-black/80"
+          }`}
           role="presentation"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -111,9 +122,10 @@ export function SettingsModalShell({
             aria-labelledby={titleId}
             data-music-mode={theme === "music" ? "true" : undefined}
             className={cn(
-              "relative flex max-h-[min(85vh,720px)] w-full flex-col overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.45)]",
+              "relative flex w-full flex-col overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.45)]",
               maxWidthClass,
-              t.panel,
+              maxHeightClass,
+              rim ? "rounded-[24px] bg-[#271C18] p-[7px]" : t.panel,
             )}
             onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -121,54 +133,64 @@ export function SettingsModalShell({
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={panel}
           >
-            <header className="shrink-0 space-y-2 px-6 pb-1 pt-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1 space-y-2">
-                  {Icon ? (
-                    <Icon
-                      size={16}
-                      className="text-[color:var(--accent)]"
-                      aria-hidden
-                    />
-                  ) : null}
-                  {eyebrow ? (
-                    <p className={cn("text-[10px] font-semibold uppercase tracking-[0.14em]", t.muted)}>
-                      {eyebrow}
-                    </p>
-                  ) : null}
-                  <h2
-                    id={titleId}
-                    className={cn("text-base font-semibold leading-snug", t.title)}
+            <div
+              className={cn(
+                "flex min-h-0 flex-1 flex-col",
+                rim && "overflow-hidden rounded-[18px] bg-[#1D1613]",
+              )}
+            >
+              <header className="shrink-0 space-y-2 px-6 pb-1 pt-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    {Icon ? (
+                      <Icon
+                        size={16}
+                        className="text-[color:var(--accent)]"
+                        aria-hidden
+                      />
+                    ) : null}
+                    {eyebrow ? (
+                      <p className={cn("text-[10px] font-semibold uppercase tracking-[0.14em]", t.muted)}>
+                        {eyebrow}
+                      </p>
+                    ) : null}
+                    <h2
+                      id={titleId}
+                      className={cn("text-base font-semibold leading-snug", t.title)}
+                    >
+                      {title}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={tryClose}
+                    disabled={disableDismiss}
+                    className={cn("shrink-0 rounded-lg p-1.5 transition-colors disabled:invisible", t.close)}
+                    aria-label="Close"
                   >
-                    {title}
-                  </h2>
+                    <X size={18} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={tryClose}
-                  disabled={disableDismiss}
-                  className={cn("shrink-0 rounded-lg p-1.5 transition-colors disabled:invisible", t.close)}
-                  aria-label="Close"
-                >
-                  <X size={18} />
-                </button>
+                {description ? (
+                  <p className={cn("max-w-prose leading-relaxed", theme === "music" ? "text-[13px]" : "text-[12px]", t.muted)}>
+                    {description}
+                  </p>
+                ) : null}
+              </header>
+
+              <div
+                className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-4 rf-scrollbar", bodyClassName)}
+                data-rf-scrollbar-inset-top={bodyScrollInsetTop}
+              >
+                {children}
               </div>
-              {description ? (
-                <p className={cn("max-w-prose leading-relaxed", theme === "music" ? "text-[13px]" : "text-[12px]", t.muted)}>
-                  {description}
-                </p>
+
+              {footer ? (
+                <footer className={cn("shrink-0 flex flex-wrap items-center justify-end gap-2 px-6 pb-6 pt-2", footerClassName)}>
+                  {footer}
+                </footer>
               ) : null}
-            </header>
-
-            <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-4 rf-scrollbar", bodyClassName)}>
-              {children}
             </div>
-
-            {footer ? (
-              <footer className={cn("shrink-0 flex flex-wrap items-center justify-end gap-2 px-6 pb-6 pt-2", footerClassName)}>
-                {footer}
-              </footer>
-            ) : null}
           </motion.div>
         </motion.div>
       ) : null}
