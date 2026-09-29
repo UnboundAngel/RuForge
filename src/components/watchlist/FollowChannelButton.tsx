@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Check, X } from "lucide-react";
 import { useChannelFollow } from "./useChannelFollow";
 
 const PILL = {
@@ -8,9 +9,11 @@ const PILL = {
 };
 /** The creator page's primary action: a soft rect, per the CTA rule, so it outranks the chrome around it. */
 const CTA = {
-  base: "h-10 min-w-[7.5rem] rounded-[12px] px-5 text-[13px]",
-  following: "bg-white/[0.07] text-stone-200 hover:bg-white/[0.11]",
-  idle: "bg-[color:var(--accent)] text-stone-900 hover:brightness-110 active:scale-[0.97]",
+  base: "inline-flex h-10 min-w-[7.5rem] items-center justify-center gap-1.5 rounded-[12px] px-5 text-[13px] active:scale-[0.97]",
+  following:
+    "bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))] bg-[color:var(--rf-well-raised)] text-stone-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:text-stone-50",
+  idle:
+    "bg-[linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0)_55%)] bg-[color:var(--accent)] text-stone-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_4px_12px_-4px_rgba(0,0,0,0.5)] hover:brightness-110",
 };
 
 export function FollowChannelButton({
@@ -43,6 +46,13 @@ export function FollowChannelButton({
         following ? look.following : look.idle
       } ${pending ? "opacity-50" : ""} ${className}`}
     >
+      {variant === "cta" && following ? (
+        hovering ? (
+          <X size={14} strokeWidth={2.75} className="text-stone-400" />
+        ) : (
+          <Check size={14} strokeWidth={3} className="text-[color:var(--accent)]" />
+        )
+      ) : null}
       {label}
     </button>
   );
