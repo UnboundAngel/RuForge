@@ -9,8 +9,6 @@ import type { FeedVideo, MixedGridItem } from "./youtubeFeed";
 export const asFeed = (videos: FeedVideo[]): MixedGridItem<MediaFile>[] => videos.map((video) => ({ kind: "feed", video }));
 export const asFiles = (files: MediaFile[]): MixedGridItem<MediaFile>[] => files.map((file) => ({ kind: "file", file }));
 
-const count = (n: number) => <span className="text-sm font-medium tabular-nums text-stone-500">{n}</span>;
-
 /**
  * Shelves sized by what they're worth: your downloads play here, so they get the biggest cards;
  * YouTube history is a reminder, so it gets the smallest.
@@ -40,7 +38,7 @@ export function CreatorHome({
   return (
     <div className="flex flex-col gap-14">
       {own.length > 0 ? (
-        <CreatorShelf title="Your downloads" aside={count(own.length)}>
+        <CreatorShelf title="Your downloads">
           {renderGrid(asFiles(own), Math.max(2, columns - 1), { shelf: true })}
         </CreatorShelf>
       ) : null}
@@ -62,7 +60,7 @@ export function CreatorHome({
       ) : null}
 
       {playlists.length > 0 ? (
-        <CreatorShelf title="Playlists" aside={count(playlists.length)}>
+        <CreatorShelf title="Playlists">
           {renderPlaylists(playlists, { shelf: true })}
         </CreatorShelf>
       ) : null}
