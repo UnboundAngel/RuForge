@@ -62,7 +62,7 @@ export function CreatorHeader({
         <BannerArt url={profile?.bannerUrl} />
         <div
           aria-hidden
-          className="absolute inset-0 bg-[linear-gradient(to_top,rgba(14,10,8,0.94)_0%,rgba(14,10,8,0.7)_38%,rgba(14,10,8,0)_78%)]"
+          className="absolute inset-0 bg-[linear-gradient(to_top,rgba(32,28,26,0.97)_0%,rgba(32,28,26,0.78)_38%,rgba(32,28,26,0)_78%)]"
         />
         <div className="absolute inset-x-0 bottom-0 flex items-end gap-5 p-6 pr-60">
           <HeroAvatar url={profile?.avatarUrl} channelId={channelId} channel={channel} />
