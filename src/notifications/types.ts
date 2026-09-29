@@ -54,7 +54,11 @@ export type NotificationSource = {
   subscribe: (onChange: () => void) => () => void;
 };
 
-export type NotificationCenterTab = "feed" | "channels" | "history";
+/** `settings` is the gear view, not a tab strip entry. */
+export type NotificationCenterTab = "feed" | "channels" | "history" | "settings";
+
+/** Notification settings the panel shows; alerts live in app settings, the interval in Rust's watchlist. */
+export type NotificationPrefs = { alerts: boolean; checkIntervalMin: number };
 
 export type NotificationCenterFilter = "all" | NotificationSourceId;
 

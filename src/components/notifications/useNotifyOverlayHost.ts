@@ -16,7 +16,12 @@ import {
   runNotificationAction,
 } from "@/notifications/popoverActions";
 import { allItems } from "@/notifications/selectors";
-import type { NotificationCenterFilter, NotificationCenterTab, NotificationItem } from "@/notifications/types";
+import type {
+  NotificationCenterFilter,
+  NotificationCenterTab,
+  NotificationItem,
+  NotificationPrefs,
+} from "@/notifications/types";
 import type { NavMode } from "@/store/types";
 import {
   checkChannelsNow,
@@ -25,8 +30,9 @@ import {
   unfollowFromPanel,
 } from "@/watchlist/channelManage";
 import type { ChannelsUiState, WatchedChannel } from "@/watchlist/types";
+import { changeCheckInterval, openNotificationSettings, setWatchlistAlerts } from "@/watchlist/watchlistSettings";
 
-const PANEL_MAX_HEIGHT = 560;
+const PANEL_MAX_HEIGHT = 640;
 const PANEL_BOTTOM_CLEARANCE = 72;
 
 export type NotifyOverlayView = {
@@ -36,6 +42,7 @@ export type NotifyOverlayView = {
   channelsUi: ChannelsUiState;
   tab: NotificationCenterTab;
   filter: NotificationCenterFilter;
+  prefs: NotificationPrefs;
 };
 
 function panelMaxHeight(): number {
@@ -81,6 +88,15 @@ function applyOverlayAction(action: NotifyOverlayAction): void {
     case "checkNow":
       void checkChannelsNow();
       return;
+    case "openSettings":
+      openNotificationSettings();
+      return;
+    case "setAlerts":
+      setWatchlistAlerts(action.enabled === true);
+      return;
+    case "setCheckInterval":
+      if (typeof action.minutes === "number") changeCheckInterval(action.minutes);
+      return;
   }
 }
 
@@ -100,7 +116,7 @@ export function useNotifyOverlayHost(
     return () => setNotifyOverlayHandlers(null);
   }, []);
 
-  const { navMode, items, channels, channelsUi, tab, filter } = view;
+  const { navMode, items, channels, channelsUi, tab, filter, prefs } = view;
   useEffect(() => {
     if (!wanted) return;
     pushNotifyOverlayState({
@@ -113,8 +129,9 @@ export function useNotifyOverlayHost(
       channelsUi,
       tab,
       filter,
+      prefs,
     });
-  }, [wanted, navMode, items, channels, channelsUi, tab, filter]);
+  }, [wanted, navMode, items, channels, channelsUi, tab, filter, prefs]);
 
   useEffect(() => {
     if (!wanted) {

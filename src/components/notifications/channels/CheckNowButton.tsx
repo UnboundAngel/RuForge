@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { panelTextActionClass } from "../panelStyles";
 
 type Props = {
   until: number;
@@ -33,7 +34,7 @@ export function CheckNowButton({ until, onCheckNow }: Props) {
       disabled={cooling}
       onClick={onCheckNow}
       data-tooltip={cooling ? undefined : "Check every followed channel for new uploads"}
-      className="text-[11px] font-semibold text-stone-400 tabular-nums transition-colors duration-150 hover:text-[color:var(--accent)] disabled:pointer-events-none disabled:text-stone-600"
+      className={`tabular-nums disabled:pointer-events-none disabled:text-stone-600 ${panelTextActionClass}`}
     >
       {cooling ? `Check again in ${formatWait(until - now)}` : "Check now"}
     </button>

@@ -22,11 +22,20 @@ import { FeedVideoCard } from "./library/FeedVideoCard";
 import { FeedLoadMore } from "./library/FeedLoadMore";
 import { useYoutubeFeed, useYoutubeFeedAvailability } from "./library/useYoutubeFeed";
 import { feedWithoutLibrary, interleaveFeed, type MixedGridItem } from "./library/youtubeFeed";
-import { composeHomeSections, pickChannelSpotlight } from "./library/homeSections";
+import { composeHomeSections } from "./library/homeSections";
+import { useHomeChannelShelves } from "./library/useHomeChannelShelves";
+import { CreatorPage } from "./library/CreatorPage";
+import { closeCreatorPage, useCreatorPage } from "./library/creatorPageStore";
+import { OVERLAY_EASE } from "@/lib/overlayMotion";
 import { LibraryHome } from "./library/LibraryHome";
 import { useGridColumns } from "./library/useGridColumns";
 import { useWatchlistShelf } from "./watchlist/useWatchlistShelf";
 import { fileVideoId } from "./music/musicOutsideRecommend";
+
+const CREATOR_SLIDE = { duration: 0.24, ease: OVERLAY_EASE };
+const CREATOR_FORWARD_IN = { opacity: 0, x: 28 };
+const CREATOR_BACK_IN = { opacity: 0, x: -28 };
+const CREATOR_SETTLED = { opacity: 1, x: 0 };
 
 function isInProgressFile(file: MediaFile): boolean {
   const progress = getWatchProgress(file.path, file.duration);
@@ -174,9 +183,32 @@ export const MediaView = ({
     [setGalleryScrollChrome],
   );
 
+  const creator = useCreatorPage((s) => s.creator);
+  const creatorId = creator?.channelId ?? null;
+  const prevCreatorIdRef = useRef<string | null>(null);
+  const homeScrollTopRef = useRef(0);
+  const returningFromCreator = creatorId === null && prevCreatorIdRef.current !== null;
+
+  useLayoutEffect(() => {
+    const prev = prevCreatorIdRef.current;
+    prevCreatorIdRef.current = creatorId;
+    const el = libraryScrollRef.current;
+    if (!el || prev === creatorId) return;
+    el.scrollTop = creatorId ? 0 : homeScrollTopRef.current;
+  }, [creatorId]);
+
+  const prevViewRef = useRef({ filter, searchQuery });
+  useEffect(() => {
+    const prev = prevViewRef.current;
+    prevViewRef.current = { filter, searchQuery };
+    if (prev.filter !== filter || prev.searchQuery !== searchQuery) closeCreatorPage();
+  }, [filter, searchQuery]);
+
   const handleLibraryScroll = useCallback(() => {
     const el = libraryScrollRef.current;
     if (!el) return;
+    // Read live: the scroll that clamps on entering a creator page must not overwrite the saved spot.
+    if (!useCreatorPage.getState().creator) homeScrollTopRef.current = el.scrollTop;
     if (scrollRafRef.current) return;
     scrollRafRef.current = requestAnimationFrame(() => {
       scrollRafRef.current = 0;
@@ -215,6 +247,10 @@ export const MediaView = ({
   const libraryEntries = useMemo(
     () => filterMainLibraryEntries(entries, hideAudioFromMainLibrary),
     [entries, hideAudioFromMainLibrary],
+  );
+  const allMediaFiles = useMemo(
+    () => libraryEntries.filter((e): e is GalleryEntry & { kind: "media" } => e.kind === "media"),
+    [libraryEntries],
   );
 
   const floatingMenu =
@@ -372,17 +408,35 @@ export const MediaView = ({
     [libraryEntries, columns],
   );
 
+  const continueFiles = useMemo(
+    () => (homeMode ? mediaOnlyEntries.filter(isInProgressFile).slice(0, Math.max(2, columns - 1)) : []),
+    [homeMode, mediaOnlyEntries, columns],
+  );
+  const channelShelfFiles = useMemo(() => {
+    const onContinue = new Set(continueFiles);
+    return mediaOnlyEntries.filter((f) => !onContinue.has(f));
+  }, [mediaOnlyEntries, continueFiles]);
+  const channelShelfExclude = useMemo(
+    () => new Set([...libraryVideoIds, ...watchlistShelf.map((v) => v.videoId)]),
+    [libraryVideoIds, watchlistShelf],
+  );
+  const channelShelves = useHomeChannelShelves({
+    active: homeMode,
+    files: channelShelfFiles,
+    columns,
+    exclude: channelShelfExclude,
+  });
+
   const homeSections = useMemo(() => {
     if (!homeMode) return [];
-    const continueFiles = mediaOnlyEntries.filter(isInProgressFile).slice(0, Math.max(2, columns - 1));
     const shelved = new Set<MediaFile>(continueFiles);
-    const spotlight = pickChannelSpotlight(
-      mediaOnlyEntries.filter((f) => !shelved.has(f)),
-      (f) => f.youtube,
-      columns,
-    );
-    for (const f of spotlight?.files ?? []) shelved.add(f);
     const shelvedIds = new Set(watchlistShelf.map((v) => v.videoId));
+    for (const shelf of channelShelves) {
+      for (const item of shelf.items) {
+        if (item.kind === "file") shelved.add(item.file);
+        else shelvedIds.add(item.video.videoId);
+      }
+    }
     const feedVideos = showFeed
       ? feedWithoutLibrary(feed.items, libraryVideoIds).filter((v) => !shelvedIds.has(v.videoId))
       : [];
@@ -396,9 +450,20 @@ export const MediaView = ({
       shorts: feedVideos.filter((v) => v.short),
       watchlist: watchlistShelf,
       hasPlaylists: homePlaylists.length > 0,
-      spotlight,
+      channels: channelShelves,
     });
-  }, [homeMode, mediaOnlyEntries, columns, showFeed, feed.items, libraryVideoIds, homePlaylists.length, watchlistShelf]);
+  }, [
+    homeMode,
+    mediaOnlyEntries,
+    columns,
+    continueFiles,
+    channelShelves,
+    showFeed,
+    feed.items,
+    libraryVideoIds,
+    homePlaylists.length,
+    watchlistShelf,
+  ]);
 
   const watchLaterPaths = useMemo(() => {
     const wl = playlistStacks.find((p) => p.path === virtualPlaylistPath(WATCH_LATER_ID));
@@ -453,14 +518,22 @@ export const MediaView = ({
       : homeMode
         ? homeSections.length === 0
         : gridItems.length === 0;
-  const renderVideoGrid = (items: MixedGridItem<MediaFile>[], cols = columns) => (
+  const renderVideoGrid = (
+    items: MixedGridItem<MediaFile>[],
+    cols = columns,
+    opts?: { feedOpensInExplorer?: boolean },
+  ) => (
     <div
       className={gridLayoutClass}
       style={cols === columns ? gridStyle : { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
     >
       {items.map((item) =>
         item.kind === "feed" ? (
-          <FeedVideoCard key={`feed-${item.video.videoId}`} video={item.video} />
+          <FeedVideoCard
+            key={`feed-${item.video.videoId}`}
+            video={item.video}
+            opensInExplorer={opts?.feedOpensInExplorer}
+          />
         ) : (
           <VideoCard
             key={item.file.path}
@@ -517,14 +590,31 @@ export const MediaView = ({
         onScroll={handleLibraryScroll}
         className="flex-1 overflow-y-auto px-6 xl:px-10 pb-32 rf-scrollbar"
       >
-        <div ref={libraryHeaderRef} className="pt-16 pb-8">
-          <h1 className="text-3xl font-black tracking-tight text-stone-50">Video Library</h1>
-          <p className="text-stone-400 font-medium text-sm mt-1.5">
-            Browse and manage your downloaded videos.
-          </p>
-        </div>
+        {creator ? null : (
+          <motion.div key="home-header" initial={returningFromCreator ? CREATOR_BACK_IN : false} animate={CREATOR_SETTLED} transition={CREATOR_SLIDE}>
+            <div ref={libraryHeaderRef} className="pt-16 pb-8">
+              <h1 className="text-3xl font-black tracking-tight text-stone-50">Video Library</h1>
+              <p className="text-stone-400 font-medium text-sm mt-1.5">
+                Browse and manage your downloaded videos.
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         <div ref={gridMeasureRef}>
+        {creator ? (
+          <motion.div key={`creator-${creator.channelId}`} initial={CREATOR_FORWARD_IN} animate={CREATOR_SETTLED} transition={CREATOR_SLIDE}>
+            <CreatorPage
+              creator={creator}
+              files={allMediaFiles}
+              libraryIds={libraryVideoIds}
+              columns={columns}
+              gridClass={gridLayoutClass}
+              renderGrid={renderVideoGrid}
+            />
+          </motion.div>
+        ) : (
+        <motion.div key="home" initial={returningFromCreator ? CREATOR_BACK_IN : false} animate={CREATOR_SETTLED} transition={CREATOR_SLIDE}>
         {galleryLoading && !galleryDesktopReady ? (
           <div className="flex justify-center py-40">
             <Loader2 className="animate-spin text-[color:var(--accent)] opacity-20" size={60} />
@@ -586,6 +676,8 @@ export const MediaView = ({
               renderVideoGrid(gridItems)
             ) : null}
           </div>
+        )}
+        </motion.div>
         )}
         </div>
       </div>

@@ -196,6 +196,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   isSearchExpanded: boolean;
   searchValue: string;
   lastExplorerUrl: string;
+  /** A page the app asked Explorer to open; wins over the webview's own URL until it has loaded. */
+  explorerNavTarget: string | null;
   youtubeSessionStatus: YoutubeSessionStatus;
   /** Display profile (live probe or cache); null when signed-out. */
   youtubeExplorerProfile: YouTubeExplorerProfile | null;
@@ -439,6 +441,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setIsSearchExpanded: (v: boolean | ((p: boolean) => boolean)) => void;
   setSearchValue: (v: string) => void;
   setLastExplorerUrl: (url: string) => void;
+  setExplorerNavTarget: (url: string | null) => void;
   setYoutubeProfileSession: (session: {
     status: YoutubeSessionStatus;
     profile: YouTubeExplorerProfile | null;
@@ -674,6 +677,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       isSearchExpanded: false,
       searchValue: "",
       lastExplorerUrl: "https://www.youtube.com",
+      explorerNavTarget: null,
       ...(() => {
         const hydrated = hydrateYoutubeProfileSession();
         return {
@@ -1687,6 +1691,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
         })),
       setSearchValue: (v) => set({ searchValue: v }),
       setLastExplorerUrl: (url) => set({ lastExplorerUrl: url }),
+      setExplorerNavTarget: (url) => set({ explorerNavTarget: url }),
       setYoutubeProfileSession: (session) =>
         set({
           youtubeSessionStatus: session.status,

@@ -42,7 +42,7 @@ type Props = {
 
 /**
  * Spotify's top bar: Home button and a "What do you want to play?" pill in the titlebar band.
- * Centered like Spotify's. The Dynamic Island sits idle (hidden) on the music surface, so they don't collide.
+ * Centered like Spotify's. The Dynamic Island moves into the gap between the logo and Home on the music surface.
  * Enter searches YouTube Music; the browse icon opens Explore.
  * App.tsx leaves a matching gap in the window drag strip.
  */
@@ -172,7 +172,7 @@ export function MusicTopBar({
           <Home size={18} strokeWidth={homeActive ? 2.5 : 2} />
         </button>
 
-        <div className="relative h-9 w-[min(420px,32vw)]">
+        <div className="relative h-9 w-[var(--rf-music-search-w)]">
           <AnimatePresence>
             {open && (
               <MusicSearchSuggestions

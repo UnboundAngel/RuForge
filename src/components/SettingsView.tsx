@@ -1923,7 +1923,7 @@ export const SettingsView: React.FC<{
                   }
                 />
               </SettingsSection>
-              <SettingsSection title="Export">
+              <SettingsSection title="Export" keywords="usb drive removable title bar titlebar">
                 <SettingItem
                   title="Export media bundle"
                   description="Copy library media and sidecars to a folder or removable drive."
@@ -1935,6 +1935,22 @@ export const SettingsView: React.FC<{
                     >
                       EXPORT
                     </button>
+                  }
+                />
+                <SettingItem
+                  title="Export button in title bar"
+                  description="Shows a drive button next to the notifications bell that opens the export for your whole library, pointed at a plugged-in removable drive when there is one."
+                  active={settings.showExportInTitlebar === true}
+                  control={
+                    <ToggleSlot
+                      active={settings.showExportInTitlebar === true}
+                      onClick={() =>
+                        updateSetting(
+                          "showExportInTitlebar",
+                          settings.showExportInTitlebar !== true,
+                        )
+                      }
+                    />
                   }
                 />
               </SettingsSection>

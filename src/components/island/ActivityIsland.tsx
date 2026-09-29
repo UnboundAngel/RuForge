@@ -446,9 +446,11 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       ) : null}
 
       <div
-        className={`rf-activity-island-portal pointer-events-none fixed top-0 left-1/2 flex w-full max-w-lg -translate-x-1/2 justify-center overflow-visible pt-[6px] ${
-          crashRecoveryPreview ? "z-[100001]" : "z-[110]"
-        }`}
+        className={`rf-activity-island-portal pointer-events-none fixed top-0 flex overflow-visible pt-[6px] ${
+          navMode === "music"
+            ? "rf-activity-island-portal--music"
+            : "left-1/2 w-full max-w-lg -translate-x-1/2 justify-center"
+        } ${crashRecoveryPreview ? "z-[100001]" : "z-[110]"}`}
         data-rf-nav-mode={navMode === "music" ? "music" : "media"}
         data-rf-island-empty={islandState === "idle" && !updateMode && !devCaptureIsland ? "true" : undefined}        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       >

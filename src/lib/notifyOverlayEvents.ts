@@ -1,4 +1,9 @@
-import type { NotificationCenterFilter, NotificationCenterTab, NotificationItem } from "@/notifications/types";
+import type {
+  NotificationCenterFilter,
+  NotificationCenterTab,
+  NotificationItem,
+  NotificationPrefs,
+} from "@/notifications/types";
 import type { NavMode } from "@/store/types";
 import type { ChannelsUiState, WatchedChannel } from "@/watchlist/types";
 
@@ -13,7 +18,7 @@ export const NOTIFY_OVERLAY_READY_EVENT = "notify-overlay-ready";
 export const NOTIFY_OVERLAY_SIZE_EVENT = "notify-overlay-size";
 export const NOTIFY_OVERLAY_CLOSE_EVENT = "notify-overlay-close";
 
-export const NOTIFY_OVERLAY_PANEL_WIDTH = 392;
+export const NOTIFY_OVERLAY_PANEL_WIDTH = 480;
 /** Transparent gutter so the panel's float shadow is not clipped at the webview edge. */
 export const NOTIFY_OVERLAY_SHADOW_PAD = 16;
 
@@ -27,6 +32,7 @@ export type NotifyOverlayState = {
   channelsUi: ChannelsUiState;
   tab: NotificationCenterTab;
   filter: NotificationCenterFilter;
+  prefs: NotificationPrefs;
 };
 
 export type NotifyOverlayAction =
@@ -38,7 +44,10 @@ export type NotifyOverlayAction =
   | { type: "followInput"; input: string }
   | { type: "autoDownload"; channelId: string; enabled: boolean }
   | { type: "unfollow"; channelId: string }
-  | { type: "checkNow" };
+  | { type: "checkNow" }
+  | { type: "openSettings" }
+  | { type: "setAlerts"; enabled: boolean }
+  | { type: "setCheckInterval"; minutes: number };
 
 export type NotifyOverlaySize = { height: number };
 

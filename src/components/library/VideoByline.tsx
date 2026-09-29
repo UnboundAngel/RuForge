@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { openCreatorPage } from "./creatorPageStore";
+
 /** A cold library can name dozens of channels at once; YouTube throttles a burst of page loads. */
 const MAX_AVATAR_FETCHES = 4;
 const avatarRequests = new Map<string, Promise<string | null>>();
@@ -85,6 +87,33 @@ export function MetaParts({ parts }: { parts: ReactNode[] }) {
   );
 }
 
+/** Opens the creator's page; stops the click so the card under it doesn't play. */
+function ChannelLink({
+  channelId,
+  channel,
+  className,
+  children,
+}: {
+  channelId: string;
+  channel: string;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`Open ${channel}'s page`}
+      onClick={(e) => {
+        e.stopPropagation();
+        openCreatorPage(channelId, channel);
+      }}
+      className={className}
+    >
+      {children}
+    </button>
+  );
+}
+
 /** YouTube-style text block under a thumbnail: avatar, title, then channel and `meta` on one line. */
 export function VideoByline({
   channel,
@@ -101,17 +130,38 @@ export function VideoByline({
   meta: ReactNode;
   action?: ReactNode;
 }) {
+  const name = (
+    <>
+      <span className="truncate">{channel}</span>
+      {verified ? <VerifiedMark /> : null}
+    </>
+  );
   return (
     <div className="flex gap-3 px-0.5">
-      {channel ? <ChannelAvatar channelId={channelId} channel={channel} /> : null}
+      {channel && channelId ? (
+        <ChannelLink
+          channelId={channelId}
+          channel={channel}
+          className="self-start rounded-full transition-[filter] duration-150 hover:brightness-125"
+        >
+          <ChannelAvatar channelId={channelId} channel={channel} />
+        </ChannelLink>
+      ) : channel ? (
+        <ChannelAvatar channelId={channelId} channel={channel} />
+      ) : null}
       <div className="min-w-0 flex-1">
         {title}
         <p className="mt-1 flex min-w-0 items-center text-[13px] text-stone-400">
-          {channel ? (
-            <span className="flex min-w-0 max-w-[60%] shrink-0 items-center gap-1">
-              <span className="truncate">{channel}</span>
-              {verified ? <VerifiedMark /> : null}
-            </span>
+          {channel && channelId ? (
+            <ChannelLink
+              channelId={channelId}
+              channel={channel}
+              className="flex min-w-0 max-w-[60%] shrink-0 items-center gap-1 transition-colors duration-150 hover:text-stone-100"
+            >
+              {name}
+            </ChannelLink>
+          ) : channel ? (
+            <span className="flex min-w-0 max-w-[60%] shrink-0 items-center gap-1">{name}</span>
           ) : null}
           {channel && meta ? <span className="mx-1.5 shrink-0 text-stone-600">·</span> : null}
           <span className="min-w-0 truncate">{meta}</span>

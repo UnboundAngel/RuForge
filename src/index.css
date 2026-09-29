@@ -129,8 +129,9 @@
   /* Near-neutral so thumbnails carry the color; the bezel stays brand brown. */
   --rf-well: #151211;
   --rf-well-raised: #201c1a;
-  --rf-popover-bg: #1D1613;
-  --rf-popover-raised: rgb(255 255 255 / 0.04);
+  /* Lighter than both bezel and well so a floating panel separates from the page behind it. */
+  --rf-popover-bg: #322620;
+  --rf-popover-raised: rgb(255 255 255 / 0.06);
   --surface: rgba(43, 30, 25, 0.7);
   --surface-elevated: rgba(56, 39, 32, 0.85);
   --border: rgba(212, 163, 115, 0.1);
@@ -151,6 +152,8 @@
   --rf-tab-chrome-h: 40px;
   --rf-tab-strip-h: calc(var(--rf-titlebar-h) + var(--rf-tab-chrome-h));
   --rf-window-outer-radius: 12px;
+  /* MusicTopBar search pill; the Music island slot is laid out against it. */
+  --rf-music-search-w: min(420px, 32vw);
   /* Activity island shell: darker espresso pocket on #271C18 chrome (portal sets data-rf-nav-mode). */
   --rf-island-shell-media: #181210;
   --rf-island-shell-music: #000000;
@@ -650,8 +653,12 @@ html.ruforge-island-root #root {
   --bg: #0a0a0a;
   /* Pull the global accent token to music red so all existing hover:text-[var(--accent)] surfaces get it for free. */
   --accent: #ff0033;
-  --rf-popover-bg: #0f0f0f;
-  --rf-popover-raised: rgb(255 255 255 / 0.05);
+  --rf-popover-bg: #282828;
+  --rf-popover-raised: rgb(255 255 255 / 0.08);
+  /* Music chips go white when active, like the Home mood chips. */
+  --rf-popover-chip-on: #ffffff;
+  --rf-popover-chip-on-fg: #0a0a0a;
+  --rf-popover-cta-fg: #ffffff;
 }
 
 /* Immersive player (vinyl + full cover): pure black frame matches expanded hero. */
@@ -1523,7 +1530,14 @@ button.rf-yt-profile-pill {
   background-color: var(--rf-island-shell-music);
 }
 
-/* Music centers its search bar in the titlebar; an empty island would sit on top of it. */
+/* Music centers Home + search in the titlebar, so the island takes the gap between the logo and Home.
+   Safe centering keeps the expanded panel on screen when the gap is narrower than the pill. */
+.rf-activity-island-portal--music {
+  left: 56px;
+  right: calc(50% + (44px + var(--rf-music-search-w)) / 2 + 12px);
+  justify-content: safe center;
+}
+
 .rf-activity-island-portal[data-rf-nav-mode="music"][data-rf-island-empty="true"] {
   opacity: 0;
 }

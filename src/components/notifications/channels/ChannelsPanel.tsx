@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { sortChannelsByTitle } from "@/watchlist/channelSort";
 import type { ChannelsUiState, WatchedChannel } from "@/watchlist/types";
+import { PanelEmptyState } from "../PanelEmptyState";
+import { controlLabelClass, panelLabelClass } from "../panelStyles";
 import { ChannelAddField } from "./ChannelAddField";
 import { ChannelRow } from "./ChannelRow";
 import { CheckNowButton } from "./CheckNowButton";
@@ -18,27 +20,26 @@ type Props = {
   handlers: ChannelHandlers;
 };
 
-const labelClass = "text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500";
-
 export function ChannelsPanel({ channels, ui, handlers }: Props) {
   const sorted = useMemo(() => sortChannelsByTitle(channels), [channels]);
 
   return (
-    <div className="pt-1">
+    <div className="pb-2">
       <ChannelAddField ui={ui} onFollowInput={handlers.onFollowInput} />
       {sorted.length === 0 ? (
-        <p className="px-4 py-8 text-center text-[12px] text-stone-500">
-          Not following anyone yet. Paste a link above and new uploads show up here.
-        </p>
+        <PanelEmptyState
+          icon="tabler:user-plus"
+          title="Not following anyone yet"
+          body="Paste a channel or video link above. New uploads from that channel show up under Notifications."
+        />
       ) : (
-        <>
-          <div className="flex items-center justify-between px-4 pb-1 pt-2">
-            <span className={labelClass}>
-              {sorted.length} {sorted.length === 1 ? "channel" : "channels"}
-            </span>
-            <span className={labelClass}>Auto-download</span>
+        <section className="pt-5">
+          <div className="flex items-center gap-4 px-2 pb-1.5">
+            <h3 className={panelLabelClass}>Following</h3>
+            <CheckNowButton until={ui.checkNowUntil} onCheckNow={handlers.onCheckNow} />
+            <span className={`ml-auto text-stone-500 ${controlLabelClass}`}>Auto-download</span>
           </div>
-          <ul className="space-y-0.5">
+          <ul>
             {sorted.map((ch) => (
               <ChannelRow
                 key={ch.channelId}
@@ -48,10 +49,7 @@ export function ChannelsPanel({ channels, ui, handlers }: Props) {
               />
             ))}
           </ul>
-          <div className="flex justify-end px-3 pb-1 pt-2">
-            <CheckNowButton until={ui.checkNowUntil} onCheckNow={handlers.onCheckNow} />
-          </div>
-        </>
+        </section>
       )}
     </div>
   );

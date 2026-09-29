@@ -191,6 +191,7 @@ const WindowControls = ({
   isMaximized,
   onExportUsbClick,
   hasRemovableDrive,
+  showExportButton,
   navMode,
   updaterPhase,
   updaterVersion,
@@ -201,6 +202,7 @@ const WindowControls = ({
   isMaximized: boolean;
   onExportUsbClick: () => void;
   hasRemovableDrive: boolean;
+  showExportButton: boolean;
   navMode: string;
   updaterPhase: UpdaterPhase;
   updaterVersion: string | null;
@@ -230,7 +232,7 @@ const WindowControls = ({
 
       <NotificationBellButton />
 
-      {navMode !== "music" && (
+      {showExportButton && navMode !== "music" && (
         <TitlebarHoverButton
           tooltip={
             hasRemovableDrive
@@ -956,7 +958,8 @@ function App() {
     };
 
     const reloadExplorerPage = async () => {
-      const url = lastExplorerUrlRef.current.trim();
+      const { explorerNavTarget, setExplorerNavTarget } = useRuforgeStore.getState();
+      const url = (explorerNavTarget ?? lastExplorerUrlRef.current).trim();
       const target = url.startsWith("http") ? url : "https://www.youtube.com";
       try {
         await invoke("eval_in_webview", {
@@ -964,7 +967,9 @@ function App() {
           script: explorerNavigateOrReloadScript(target),
         });
       } catch {
-        /* webview still creating */
+        /* webview still creating; it opens at lastExplorerUrl anyway */
+      } finally {
+        if (explorerNavTarget) setExplorerNavTarget(null);
       }
     };
 
@@ -1676,8 +1681,9 @@ function App() {
     let alive = true;
     const tick = async () => {
       try {
+        if (useRuforgeStore.getState().explorerNavTarget) return;
         const u = await invoke<string>("get_embedded_explorer_webview_url");
-        if (alive) setLastExplorerUrl(u);
+        if (alive && !useRuforgeStore.getState().explorerNavTarget) setLastExplorerUrl(u);
       } catch {
         /* Embedded explorer webview not mounted yet */
       }
@@ -1827,6 +1833,7 @@ function App() {
         isMaximized={isMainMaximized}
         onExportUsbClick={() => void handleExportUsbTitlebar()}
         hasRemovableDrive={hasRemovableDrive}
+        showExportButton={settings.showExportInTitlebar === true}
         navMode={navMode}
         updaterPhase={updaterPhase}
         updaterVersion={updaterVersion}

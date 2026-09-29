@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, memo, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Play, Music, FileText, FolderOutput, FolderOpen, Clock, ListPlus, UserCheck, UserPlus } from "lucide-react";
+import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Play, Music, FileText, FolderOutput, FolderOpen, Clock, ListPlus, UserCheck, UserPlus, CircleUserRound } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { copyTranscriptForFile, type TranscriptVariant } from "@/copyTranscript";
 import { isAudioOnlyPath } from "@/mediaKind";
@@ -15,6 +15,7 @@ import { useChannelFollow } from "@/components/watchlist/useChannelFollow";
 import { cn } from "@/lib/utils";
 import { formatAge, formatViewCount } from "./youtubeFeed";
 import { MetaParts, VideoByline } from "./VideoByline";
+import { openCreatorPage } from "./creatorPageStore";
 
 export type ThumbnailBar = { show: boolean; widthPct: number; completed: boolean };
 
@@ -220,6 +221,16 @@ export const VideoCard = memo(function VideoCard({
           <UserPlus size={14} className="shrink-0 ml-1.5" />
         ),
         onSelect: () => void channelFollow.toggle(),
+      });
+    }
+    const channelId = file.youtube?.channelId;
+    const channelName = file.youtube?.channel?.trim();
+    if (channelId && channelName) {
+      rows.push({
+        id: "channel",
+        label: "Go to channel",
+        icon: <CircleUserRound size={14} className="shrink-0 ml-1.5" />,
+        onSelect: () => openCreatorPage(channelId, channelName),
       });
     }
     rows.push(

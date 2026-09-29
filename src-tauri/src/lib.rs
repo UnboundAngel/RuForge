@@ -351,6 +351,8 @@ pub fn run() {
             resolve_video_preview_stream,
             get_channel_avatar,
             get_video_stats,
+            crate::commands::channel_videos::get_channel_videos,
+            crate::commands::channel_videos::get_youtube_history,
             crate::commands::watchlist::get_watchlist,
             crate::commands::watchlist::follow_channel,
             crate::commands::watchlist::unfollow_channel,

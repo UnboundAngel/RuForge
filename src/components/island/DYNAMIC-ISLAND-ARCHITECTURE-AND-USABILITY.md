@@ -194,6 +194,10 @@ pt-[6px]                    // centers 36px pill in 48px titlebar
 overflow-visible            // expanded card extends below titlebar
 max-w-lg
 
+// Music mode swaps the centered classes for .rf-activity-island-portal--music (index.css):
+// the slot spans the gap between the Music logo and MusicTopBar's Home + search group
+// (sized from --rf-music-search-w) and uses justify-content: safe center.
+
 // DynamicIsland (pointer-events-auto)
 WebkitAppRegion: "no-drag"  // Tauri: clicks hit island, not drag strip
 ```
@@ -446,7 +450,7 @@ if (onboardingOccupied) return null;
 - [ ] With post-install open: island hidden entirely.
 - [ ] Onboarding island step plays through to completion: hint → celebrate ("nice!") → idle pill, with **no flash/disappear/pop** at any transition, including the final handoff to `ActivityIsland`.
 - [ ] Start real playback mid-onboarding: activity pill stays hidden until the onboarding hint reaches idle/dismisses (precedence rule).
-- [ ] Resize window: pill stays centered horizontally, aligned to titlebar.
+- [ ] Resize window: pill stays centered horizontally, aligned to titlebar (Music: centered in the logo-to-Home gap, never over the search pill, down to the 900px min width).
 - [ ] Play content, minimize main: desktop island appears top-center; expand + transport work; Open restores main.
 - [ ] Play content, close-to-tray: desktop island appears; restore via tray Show hides it.
 - [ ] Mini owns playback + minimize main: no desktop island.

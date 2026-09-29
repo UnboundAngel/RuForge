@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
 import type { ChannelHandlers } from "@/components/notifications/channels/ChannelsPanel";
 import { NotificationCenterPanel } from "@/components/notifications/NotificationCenterPanel";
+import type { PrefsHandlers } from "@/components/notifications/NotificationPrefsView";
 import { RfScrollbarHost } from "@/components/ui/RfScrollbarHost";
 import { AppTooltipLayer } from "@/components/ui/TooltipLayer";
 import {
@@ -18,7 +19,7 @@ import {
   type NotifyOverlaySize,
   type NotifyOverlayState,
 } from "@/lib/notifyOverlayEvents";
-import { OVERLAY_EASE } from "@/lib/overlayMotion";
+import { REDUCED_PANEL_MOTION, notifyPanelMotion } from "@/lib/overlayMotion";
 import { listenPrivateState, pushPrivateRecord } from "@/lib/privateMailbox";
 import type { NotificationActionId, NotificationItem } from "@/notifications/types";
 
@@ -37,6 +38,11 @@ const channelHandlers: ChannelHandlers = {
   onAutoDownload: (channelId, enabled) => send({ type: "autoDownload", channelId, enabled }),
   onUnfollow: (channelId) => send({ type: "unfollow", channelId }),
   onCheckNow: () => send({ type: "checkNow" }),
+};
+
+const prefsHandlers: PrefsHandlers = {
+  onAlerts: (enabled) => send({ type: "setAlerts", enabled }),
+  onCheckInterval: (minutes) => send({ type: "setCheckInterval", minutes }),
 };
 
 /** Host B: the notification panel in a transparent child webview stacked above the YouTube webviews. */
@@ -90,7 +96,6 @@ export default function NotifyOverlayApp() {
   );
   const onMarkRead = useCallback((item: NotificationItem) => send({ type: "markRead", itemId: item.id }), []);
 
-  const transition = reduceMotion ? { duration: 0 } : { duration: 0.18, ease: OVERLAY_EASE };
   const panelStyle = state
     ? ({ "--accent": state.accent, maxHeight: state.maxHeight } as CSSProperties)
     : undefined;
@@ -113,25 +118,23 @@ export default function NotifyOverlayApp() {
             role="dialog"
             aria-label="Notifications"
             data-music-mode={state.navMode === "music" ? "true" : undefined}
-            className="flex w-full origin-top-right flex-col overflow-hidden rounded-[20px] bg-[color:var(--rf-popover-bg)] shadow-[0_4px_12px_rgba(0,0,0,0.45)]"
+            className="flex w-full origin-top-right flex-col overflow-hidden rounded-[20px] bg-[color:var(--rf-popover-bg)] shadow-[0_4px_12px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.06]"
             style={panelStyle}
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={transition}
+            {...(reduceMotion ? REDUCED_PANEL_MOTION : notifyPanelMotion)}
           >
             <NotificationCenterPanel
               items={state.items}
               channels={state.channels}
               channelsUi={state.channelsUi}
               channelHandlers={channelHandlers}
+              prefs={state.prefs}
+              prefsHandlers={prefsHandlers}
               tab={state.tab}
-              filter={state.filter}
               onAction={onAction}
               onMarkRead={onMarkRead}
               onMarkAllRead={() => send({ type: "markAllRead" })}
               onTab={(tab) => send({ type: "tab", tab })}
-              onFilter={(filter) => send({ type: "filter", filter })}
+              onOpenSettings={() => send({ type: "openSettings" })}
               onClose={() => close("escape")}
             />
           </motion.div>

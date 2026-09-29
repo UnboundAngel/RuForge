@@ -1,38 +1,33 @@
-import { useState } from "react";
-import { CircleCheck, CircleX, TriangleAlert, Radio, Film } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import type { NotificationItem } from "@/notifications/types";
 
-const KIND_ICON: Record<NotificationItem["kind"], { Icon: typeof CircleX; className: string }> = {
-  "download-finished": { Icon: CircleCheck, className: "text-[color:var(--accent)]" },
-  "download-failed": { Icon: CircleX, className: "text-rose-400" },
-  "download-timed-out": { Icon: CircleX, className: "text-rose-400" },
-  "download-blocked": { Icon: TriangleAlert, className: "text-amber-400" },
-  upload: { Icon: Film, className: "text-stone-400" },
-  premiere: { Icon: Film, className: "text-[color:var(--accent)]" },
-  live: { Icon: Radio, className: "text-[color:var(--accent)]" },
-};
-
-export function NotificationThumb({ item }: { item: NotificationItem }) {
+/**
+ * 16:9 frame on the right of the row. Row actions sit on it behind a scrim on hover or focus;
+ * rows without art show the actions at rest so they are never hidden behind an empty slot.
+ */
+export function NotificationThumb({ item, children }: { item: NotificationItem; children: ReactNode }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = item.thumbnail && item.thumbnail !== failedSrc ? item.thumbnail : null;
 
-  if (src) {
-    return (
-      <img
-        src={src}
-        alt=""
-        referrerPolicy="no-referrer"
-        draggable={false}
-        onError={() => setFailedSrc(src)}
-        className="h-[54px] w-24 shrink-0 rounded-[10px] bg-[color:var(--rf-popover-raised)] object-cover"
-      />
-    );
-  }
-
-  const { Icon, className } = KIND_ICON[item.kind];
   return (
-    <div className="flex h-[54px] w-24 shrink-0 items-center justify-center rounded-[10px] bg-[color:var(--rf-popover-raised)]">
-      <Icon size={20} className={className} aria-hidden />
+    <div className="relative h-[50px] w-[88px] shrink-0">
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          referrerPolicy="no-referrer"
+          draggable={false}
+          onError={() => setFailedSrc(src)}
+          className="h-full w-full rounded-lg bg-[color:var(--rf-popover-raised)] object-cover"
+        />
+      ) : null}
+      <div
+        className={`absolute inset-0 flex items-center gap-0.5 rounded-lg transition-opacity duration-150 ${
+          src ? "justify-center bg-black/50 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100" : "justify-end"
+        }`}
+      >
+        {children}
+      </div>
     </div>
   );
 }
