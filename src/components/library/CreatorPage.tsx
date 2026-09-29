@@ -1,67 +1,98 @@
-import { useMemo, type ReactNode } from "react";
-import { ChevronLeft, ExternalLink, RotateCcw } from "lucide-react";
-import { FollowChannelButton } from "@/components/watchlist/FollowChannelButton";
-import type { MediaFile } from "@/types";
+import { useMemo, useState, type ReactNode } from "react";
+import { ChevronLeft } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import type { MediaFile, PlaylistCollection } from "@/types";
 import { watchedFromChannel } from "./channelShelf";
+import { CreatorHeader } from "./CreatorHeader";
+import { asFeed, asFiles, CreatorHome } from "./CreatorHome";
 import { type CreatorRef, closeCreatorPage } from "./creatorPageStore";
-import { creatorFiles, creatorSections } from "./creatorSections";
-import { SectionTitle } from "./LibraryHome";
-import { openChannelInExplorer } from "./openChannel";
-import { loadChannelVideos, useChannelVideos } from "./useChannelVideos";
-import { ChannelAvatar } from "./VideoByline";
-import type { FeedVideo, MixedGridItem } from "./youtubeFeed";
+import { type CreatorTab, creatorFiles, creatorPlaylists, creatorSections, creatorTabs } from "./creatorSections";
+import { CreatorTabs } from "./CreatorTabs";
+import { CreatorUploadsState } from "./CreatorUploadsState";
+import { useChannelProfile } from "./useChannelProfile";
+import { useChannelVideos } from "./useChannelVideos";
+import type { MixedGridItem } from "./youtubeFeed";
 
 export type CreatorGridRenderer = (
   items: MixedGridItem<MediaFile>[],
   cols?: number,
-  opts?: { feedOpensInExplorer?: boolean },
+  opts?: { feedOpensInExplorer?: boolean; shelf?: boolean },
 ) => ReactNode;
 
-const asFeed = (videos: FeedVideo[]): MixedGridItem<MediaFile>[] => videos.map((video) => ({ kind: "feed", video }));
+export type CreatorPlaylistRenderer = (playlists: PlaylistCollection[], opts?: { shelf?: boolean }) => ReactNode;
 
-function LoadingRow({ columns, gridClass }: { columns: number; gridClass: string }) {
-  return (
-    <div className={gridClass} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }} aria-busy>
-      {Array.from({ length: columns }, (_, i) => (
-        <div key={i} className="flex flex-col gap-3">
-          <div className="aspect-video animate-pulse rounded-[var(--r-media,16px)] bg-[color:var(--rf-well-raised)]" />
-          <div className="h-4 w-3/4 animate-pulse rounded bg-[color:var(--rf-well-raised)]" />
-        </div>
-      ))}
-    </div>
-  );
+/** Loose downloads plus playlist items, once each: the creator page counts everything you own. */
+function ownedFiles(files: MediaFile[], playlists: PlaylistCollection[]): MediaFile[] {
+  const seen = new Set<string>();
+  const out: MediaFile[] = [];
+  for (const file of [...files, ...playlists.flatMap((p) => p.items)]) {
+    if (seen.has(file.path)) continue;
+    seen.add(file.path);
+    out.push(file);
+  }
+  return out;
 }
 
 /** A creator inside RuForge: their uploads play in Explorer, their downloads play here. */
 export function CreatorPage({
   creator,
   files,
+  playlists,
   libraryIds,
   columns,
   gridClass,
   renderGrid,
+  renderPlaylists,
 }: {
   creator: CreatorRef;
   files: MediaFile[];
+  playlists: PlaylistCollection[];
   libraryIds: ReadonlySet<string>;
   columns: number;
   gridClass: string;
   renderGrid: CreatorGridRenderer;
+  renderPlaylists: CreatorPlaylistRenderer;
 }) {
   const { channelId, channel } = creator;
+  const profile = useChannelProfile(channelId);
   const { byChannel, status, history } = useChannelVideos([channelId], true);
   const state = status[channelId] ?? "loading";
   const recent = byChannel[channelId] ?? [];
-  const own = useMemo(() => creatorFiles(files, channelId, channel), [files, channelId, channel]);
-  const sections = useMemo(
-    () => creatorSections(recent, watchedFromChannel(history, channelId, channel), libraryIds, columns),
-    [recent, history, channelId, channel, libraryIds, columns],
+  const own = useMemo(
+    () => creatorFiles(ownedFiles(files, playlists), channelId, channel),
+    [files, playlists, channelId, channel],
   );
+  const theirPlaylists = useMemo(() => creatorPlaylists(playlists, channelId, channel), [playlists, channelId, channel]);
+  const sections = useMemo(
+    () => creatorSections(recent, watchedFromChannel(history, channelId, channel), libraryIds),
+    [recent, history, channelId, channel, libraryIds],
+  );
+  const tabs = creatorTabs({ downloaded: own.length, playlists: theirPlaylists.length });
+  const [picked, setPicked] = useState<CreatorTab>("home");
+  const tab = tabs.includes(picked) ? picked : "home";
 
-  const stats = [
-    own.length > 0 ? `${own.length} downloaded` : null,
-    recent.length > 0 ? `${recent.length} recent uploads` : null,
-  ].filter(Boolean);
+  const panel =
+    tab === "videos" ? (
+      <CreatorUploadsState channelId={channelId} status={state} count={sections.uploads.length} columns={columns} gridClass={gridClass}>
+        {renderGrid(asFeed(sections.uploads), columns, { feedOpensInExplorer: true })}
+      </CreatorUploadsState>
+    ) : tab === "downloaded" ? (
+      renderGrid(asFiles(own), columns)
+    ) : tab === "playlists" ? (
+      renderPlaylists(theirPlaylists)
+    ) : (
+      <CreatorHome
+        channelId={channelId}
+        own={own}
+        playlists={theirPlaylists}
+        sections={sections}
+        status={state}
+        columns={columns}
+        gridClass={gridClass}
+        renderGrid={renderGrid}
+        renderPlaylists={renderPlaylists}
+      />
+    );
 
   return (
     <div className="pt-12 pb-8">
@@ -74,70 +105,23 @@ export function CreatorPage({
         Library
       </button>
 
-      <header className="mb-12 flex items-center gap-6">
-        <ChannelAvatar channelId={channelId} channel={channel} className="h-24 w-24 text-3xl!" />
-        <div className="min-w-0">
-          <h1 className="truncate text-3xl font-black tracking-tight text-stone-50">{channel}</h1>
-          {stats.length > 0 ? <p className="mt-1.5 text-sm font-medium text-stone-400">{stats.join(" · ")}</p> : null}
-          <div className="mt-4 flex items-center gap-2">
-            <FollowChannelButton channelId={channelId} channel={channel} />
-            <button
-              type="button"
-              onClick={() => openChannelInExplorer(channelId)}
-              className="flex h-8 items-center gap-1.5 rounded-full bg-white/[0.07] px-3 text-[12px] font-semibold text-stone-200 transition-colors duration-150 hover:bg-white/[0.12]"
-            >
-              Open in YouTube
-              <ExternalLink size={12} strokeWidth={2.5} />
-            </button>
-          </div>
-        </div>
-      </header>
+      <CreatorHeader channelId={channelId} channel={channel} profile={profile} downloaded={own.length} />
 
-      <div className="flex flex-col gap-14">
-        <section>
-          <SectionTitle>Latest uploads</SectionTitle>
-          {state === "loading" && recent.length === 0 ? (
-            <LoadingRow columns={columns} gridClass={gridClass} />
-          ) : state === "error" && recent.length === 0 ? (
-            <div className="flex items-center gap-3 text-sm text-stone-400">
-              Couldn't load uploads from YouTube.
-              <button
-                type="button"
-                onClick={() => void loadChannelVideos(channelId, { force: true })}
-                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-stone-500 transition-colors duration-150 hover:text-stone-200"
-              >
-                <RotateCcw size={12} strokeWidth={2.5} />
-                Retry
-              </button>
-            </div>
-          ) : sections.latest.length > 0 ? (
-            renderGrid(asFeed(sections.latest), columns, { feedOpensInExplorer: true })
-          ) : (
-            <p className="text-sm text-stone-400">You already have everything they uploaded recently.</p>
-          )}
-        </section>
-
-        {sections.popular.length > 0 ? (
-          <section>
-            <SectionTitle>Popular</SectionTitle>
-            {renderGrid(asFeed(sections.popular), columns, { feedOpensInExplorer: true })}
-          </section>
-        ) : null}
-
-        {sections.watched.length > 0 ? (
-          <section>
-            <SectionTitle>Watched on YouTube</SectionTitle>
-            {renderGrid(asFeed(sections.watched), columns, { feedOpensInExplorer: true })}
-          </section>
-        ) : null}
-
-        {own.length > 0 ? (
-          <section>
-            <SectionTitle>In your library</SectionTitle>
-            {renderGrid(own.map((file) => ({ kind: "file", file })), columns)}
-          </section>
-        ) : null}
+      <div className="mb-10">
+        <CreatorTabs tabs={tabs} active={tab} onChange={setPicked} />
       </div>
+
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut" }}
+        >
+          {panel}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }

@@ -63,9 +63,9 @@ export function ChannelAvatar({
   );
 }
 
-function VerifiedMark() {
+export function VerifiedMark({ className = "h-3 w-3" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 16 16" className="h-3 w-3 shrink-0" aria-label="Verified" role="img">
+    <svg viewBox="0 0 16 16" className={`${className} shrink-0`} aria-label="Verified" role="img">
       <circle cx="8" cy="8" r="8" fill="currentColor" />
       <path d="M4.75 8.25 7 10.5l4.25-4.75" fill="none" stroke="#1c1917" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
     </svg>

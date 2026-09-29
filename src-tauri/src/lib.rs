@@ -96,6 +96,7 @@ use crate::commands::music_playlists::{
 use crate::commands::music_preview::{music_preview_local_hook, resolve_music_preview_stream};
 use crate::commands::youtube_feed::{get_video_stats, get_youtube_feed_page, resolve_video_preview_stream};
 use crate::commands::channel_avatar::get_channel_avatar;
+use crate::commands::channel_profile::get_channel_profile;
 use crate::commands::disk_space::get_disk_space;
 use crate::commands::recently_deleted::{
     list_recently_deleted, remove_recently_deleted_entry, restore_recently_deleted,
@@ -350,6 +351,7 @@ pub fn run() {
             get_youtube_feed_page,
             resolve_video_preview_stream,
             get_channel_avatar,
+            get_channel_profile,
             get_video_stats,
             crate::commands::channel_videos::get_channel_videos,
             crate::commands::channel_videos::get_youtube_history,
