@@ -16,7 +16,7 @@ function BannerArt({ url }: { url: string | null | undefined }) {
       draggable={false}
       referrerPolicy="no-referrer"
       onLoad={() => setLoaded(true)}
-      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+      className={`absolute inset-0 h-full w-full object-cover [mask-image:linear-gradient(to_top,rgba(0,0,0,0.03)_0%,rgba(0,0,0,0.22)_38%,black_78%)] transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
     />
   );
 }
@@ -57,13 +57,9 @@ export function CreatorHeader({
   const meta = creatorMeta(profile, downloaded);
   return (
     <header className="relative mb-12">
-      {/* clip-path, not overflow + radius: WebView2 drops the rounded clip once a child composites. */}
-      <div className="relative aspect-[4/1] min-h-56 max-h-80 w-full [clip-path:inset(0_round_24px)] bg-[radial-gradient(80%_140%_at_15%_0%,color-mix(in_srgb,var(--accent),transparent_78%),transparent_70%),linear-gradient(160deg,var(--rf-well-raised),#1a1310)]">
+      {/* The art fades through its own mask, not a scrim div: WebView2 clips stacked layers separately and a bright banner fringes at the curve. */}
+      <div className="relative aspect-[4/1] min-h-56 max-h-80 w-full [clip-path:inset(0_round_24px)] bg-[color:var(--rf-well-raised)] bg-[radial-gradient(80%_140%_at_15%_0%,color-mix(in_srgb,var(--accent),transparent_82%),transparent_70%)]">
         <BannerArt url={profile?.bannerUrl} />
-        <div
-          aria-hidden
-          className="absolute inset-0 bg-[linear-gradient(to_top,rgba(32,28,26,0.97)_0%,rgba(32,28,26,0.78)_38%,rgba(32,28,26,0)_78%)]"
-        />
         <div className="absolute inset-x-0 bottom-0 flex items-end gap-5 p-6 pr-60">
           <HeroAvatar url={profile?.avatarUrl} channelId={channelId} channel={channel} />
           <div className="min-w-0 flex-1 pb-1">
