@@ -71,10 +71,32 @@ export function notificationKicker(item: NotificationItem, channelName: string |
   return { text: "New upload", tone: "muted" };
 }
 
-/** Subtitle under the title, unless it only repeats the title, the channel, or the kicker. */
+/** Letters and digits only: file names drop or swap the punctuation a title carries. */
+function looseText(s: string): string {
+  return s.toLowerCase().replace(/\.[a-z0-9]{2,4}$/, "").replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+/**
+ * Subtitle under the title, unless it only repeats the title, the channel, or the kicker.
+ * A finished download's subtitle is its file name; Show in folder already covers that.
+ */
 export function notificationDetail(item: NotificationItem): string | null {
   const detail = item.subtitle?.trim();
-  if (!detail || detail === item.title.trim()) return null;
-  if (item.kind === "upload" || item.kind === "live") return null;
+  if (!detail) return null;
+  if (item.kind === "upload" || item.kind === "live" || item.kind === "download-finished") return null;
+  const loose = looseText(detail);
+  const title = looseText(item.title);
+  if (loose === title || title.startsWith(loose) || loose.startsWith(title)) return null;
   return detail;
 }
+
+/** Title and detail lines. A job that never learned its name falls back to "Download failed", which the kicker already says. */
+export function notificationBody(item: NotificationItem, kicker: NotificationKicker): { title: string; detail: string | null } {
+  const detail = notificationDetail(item);
+  const t = looseText(item.title);
+  if (t !== looseText(kicker.text) && !FALLBACK_TITLES.has(t)) return { title: item.title, detail };
+  return { title: detail ?? "Untitled video", detail: null };
+}
+
+/** `downloadItems` titles for jobs that never got a name. */
+const FALLBACK_TITLES = new Set(["downloadfinished", "downloadfailed", "downloadtimedout"]);
