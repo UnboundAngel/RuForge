@@ -119,10 +119,24 @@ import {
 } from "./lib/youtubeProfileProbeRunner";
 import { MediaFile, type GalleryEntry } from "./types";
 import {
+  ChevronLeft,
   Settings,
   Search,
   Trash2,
 } from "lucide-react";
+import {
+  CREATOR_TAB_LABELS,
+  closeCreatorPage,
+  setCreatorTab,
+  useCreatorPage,
+} from "./components/library/creatorPageStore";
+
+const GALLERY_FILTER_TABS = [
+  { id: "all", label: "All" },
+  { id: "playlists", label: "Playlists" },
+  { id: "in-progress", label: "In Progress" },
+  { id: "watched", label: "Watched" },
+] as const;
 import { OnboardingFlow, resolveActiveOnboardingSteps } from "./components/onboarding/OnboardingFlow";
 import { ActivityIsland } from "./components/island/ActivityIsland";
 import { WindowResizeEdges } from "./components/window/WindowResizeEdges";
@@ -315,6 +329,25 @@ function App() {
       ? Math.min(1, Math.max(0, galleryScrollChromeRaw))
       : 0;
   const galleryScrollBulge = galleryScrollChrome > 0.08;
+  const creatorOpen = useCreatorPage((s) => s.creator !== null);
+  const creatorTab = useCreatorPage((s) => s.tab);
+  const creatorTabList = useCreatorPage((s) => s.tabs);
+  const creatorTabCounts = useCreatorPage((s) => s.counts);
+  const stripTabs = creatorOpen
+    ? creatorTabList.map((t) => ({
+        id: t,
+        label: CREATOR_TAB_LABELS[t],
+        count: creatorTabCounts[t],
+        active: (creatorTabList.includes(creatorTab) ? creatorTab : "home") === t,
+        pick: () => setCreatorTab(t),
+      }))
+    : GALLERY_FILTER_TABS.map(({ id, label }) => ({
+        id,
+        label,
+        count: undefined,
+        active: galleryFilter === id,
+        pick: () => setGalleryFilter(id),
+      }));
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
   const selectedPlaylist = useRuforgeStore((s) => s.selectedPlaylist);
@@ -1978,21 +2011,23 @@ function App() {
                 ) : null}
 
                 <div className="relative flex items-end pb-1 px-6">
+                  {creatorOpen ? (
+                    <button
+                      type="button"
+                      onClick={closeCreatorPage}
+                      aria-label="Back to Library"
+                      data-tooltip="Back to Library"
+                      className="relative z-10 flex h-[var(--rf-tab-strip-h)] items-end pb-[7px] pl-1 pr-2 text-stone-500 hover:text-stone-200 transition-colors pointer-events-auto"
+                    >
+                      <ChevronLeft size={16} strokeWidth={2.75} />
+                    </button>
+                  ) : null}
                   <div className="flex items-end">
-                    {(['all', 'playlists', 'in-progress', 'watched'] as const).map((t) => {
-                      const isActive = galleryFilter === t;
-                      const label =
-                        t === 'all'
-                          ? 'All'
-                          : t === 'playlists'
-                            ? 'Playlists'
-                            : t === 'in-progress'
-                              ? 'In Progress'
-                              : 'Watched';
+                    {stripTabs.map(({ id: t, label, count, active: isActive, pick }) => {
                       return (
                         <button
                           key={t}
-                          onClick={() => setGalleryFilter(t)}
+                          onClick={pick}
                           className="relative flex h-[var(--rf-tab-strip-h)] px-6 items-end pb-2 justify-center cursor-pointer pointer-events-auto group/tab"
                         >
                           {isActive && !galleryScrollBulge && (
@@ -2015,6 +2050,7 @@ function App() {
                           )}
                           <span className={`font-black text-[10px] uppercase tracking-[0.2em] transition-colors relative z-10 ${isActive ? "text-[color:var(--accent)]" : "text-stone-500 group-hover/tab:text-stone-300"}`}>
                             {label}
+                            {count ? <span className="ml-1.5 tabular-nums tracking-normal text-stone-600">{count}</span> : null}
                           </span>
                         </button>
                       );

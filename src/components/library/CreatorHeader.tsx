@@ -1,38 +1,30 @@
 import { useState } from "react";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { FollowChannelButton } from "@/components/watchlist/FollowChannelButton";
-import { closeCreatorPage } from "./creatorPageStore";
 import { creatorMeta } from "./creatorSections";
 import { openChannelInExplorer } from "./openChannel";
 import type { ChannelProfile } from "./useChannelProfile";
 import { ChannelAvatar, MetaParts, VerifiedMark } from "./VideoByline";
 
-/**
- * Channel art as a backdrop that dissolves into the page, so the name can sit on its lower edge.
- * YouTube crops art to about 6.2:1 on desktop; matching it keeps the creator's framing.
- */
-function Backdrop({ url }: { url: string | null | undefined }) {
+function BannerArt({ url }: { url: string | null | undefined }) {
   const [loaded, setLoaded] = useState(false);
+  if (!url) return null;
   return (
-    <div className="relative aspect-[6.2/1] max-h-60 min-h-36 w-full overflow-hidden rounded-t-[24px] bg-[radial-gradient(90%_120%_at_20%_0%,color-mix(in_srgb,var(--accent),transparent_80%),transparent_65%),linear-gradient(160deg,var(--rf-well-raised),transparent)] [mask-image:linear-gradient(to_bottom,black_40%,transparent)]">
-      {url ? (
-        <img
-          src={url}
-          alt=""
-          draggable={false}
-          referrerPolicy="no-referrer"
-          onLoad={() => setLoaded(true)}
-          className={`h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
-        />
-      ) : null}
-    </div>
+    <img
+      src={url}
+      alt=""
+      draggable={false}
+      referrerPolicy="no-referrer"
+      onLoad={() => setLoaded(true)}
+      className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+    />
   );
 }
 
 function HeroAvatar({ url, channelId, channel }: { url: string | null | undefined; channelId: string; channel: string }) {
   const [failed, setFailed] = useState(false);
-  const frame = "h-32 w-32 shrink-0 rounded-full shadow-[0_12px_32px_rgba(0,0,0,0.45)]";
-  if (!url || failed) return <ChannelAvatar channelId={channelId} channel={channel} className={`${frame} text-5xl!`} />;
+  const frame = "h-24 w-24 shrink-0 rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.5)]";
+  if (!url || failed) return <ChannelAvatar channelId={channelId} channel={channel} className={`${frame} text-4xl!`} />;
   return (
     <img
       src={url}
@@ -45,6 +37,10 @@ function HeroAvatar({ url, channelId, channel }: { url: string | null | undefine
   );
 }
 
+/**
+ * One poster card: channel art on top, identity and actions laid over its lower third.
+ * The scrim is heavy on purpose; channel art is often bright yellow or white text.
+ */
 export function CreatorHeader({
   channelId,
   channel,
@@ -60,45 +56,39 @@ export function CreatorHeader({
   const name = profile?.title?.trim() || channel;
   const meta = creatorMeta(profile, downloaded);
   return (
-    <header className="mb-10">
-      <div className="relative">
-        <Backdrop url={profile?.bannerUrl} />
-        <button
-          type="button"
-          onClick={closeCreatorPage}
-          aria-label="Back to Library"
-          data-tooltip="Back to Library"
-          className="absolute left-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/30 text-stone-100 backdrop-blur-md transition-[background-color,transform] duration-150 hover:bg-black/50 active:scale-95"
-        >
-          <ArrowLeft size={18} strokeWidth={2.5} />
-        </button>
-      </div>
-
-      <div className="relative -mt-16 flex items-end gap-6 px-2">
-        <HeroAvatar url={profile?.avatarUrl} channelId={channelId} channel={channel} />
-        <div className="min-w-0 flex-1 pb-1">
-          <h1 className="flex min-w-0 items-center gap-3 text-5xl font-black tracking-tight text-stone-50">
-            <span className="truncate">{name}</span>
-            {profile?.verified ? <VerifiedMark className="h-6 w-6 text-stone-400" /> : null}
-          </h1>
-          {meta.length > 0 ? (
-            <p className="mt-2 truncate text-sm font-medium text-stone-400">
-              <MetaParts parts={meta} />
-            </p>
-          ) : null}
+    <header className="mb-12">
+      <div className="relative aspect-[4/1] min-h-56 max-h-80 w-full overflow-hidden rounded-[24px] bg-[radial-gradient(80%_140%_at_15%_0%,color-mix(in_srgb,var(--accent),transparent_78%),transparent_70%),linear-gradient(160deg,var(--rf-well-raised),#1a1310)]">
+        <BannerArt url={profile?.bannerUrl} />
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-[linear-gradient(to_top,rgba(14,10,8,0.94)_0%,rgba(14,10,8,0.7)_38%,rgba(14,10,8,0)_78%)]"
+        />
+        <div className="absolute inset-x-0 bottom-0 flex items-end gap-5 p-6">
+          <HeroAvatar url={profile?.avatarUrl} channelId={channelId} channel={channel} />
+          <div className="min-w-0 flex-1 pb-1">
+            <h1 className="flex min-w-0 items-center gap-2.5 text-4xl font-black tracking-tight text-stone-50">
+              <span className="truncate">{name}</span>
+              {profile?.verified ? <VerifiedMark className="h-5 w-5 shrink-0 text-stone-300" /> : null}
+            </h1>
+            {meta.length > 0 ? (
+              <p className="mt-1.5 truncate text-sm font-medium text-stone-300/80">
+                <MetaParts parts={meta} />
+              </p>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-2 pb-1">
+            <button
+              type="button"
+              onClick={() => openChannelInExplorer(channelId)}
+              aria-label="Open in YouTube"
+              data-tooltip="Open in YouTube"
+              className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white/[0.08] text-stone-200 backdrop-blur-md transition-[background-color,transform] duration-150 hover:bg-white/[0.14] active:scale-95"
+            >
+              <ExternalLink size={16} strokeWidth={2.25} />
+            </button>
+            <FollowChannelButton channelId={channelId} channel={name} variant="cta" />
+          </div>
         </div>
-      </div>
-
-      <div className="mt-6 flex items-center gap-6 px-2">
-        <FollowChannelButton channelId={channelId} channel={name} variant="cta" />
-        <button
-          type="button"
-          onClick={() => openChannelInExplorer(channelId)}
-          className="flex items-center gap-1.5 text-[13px] font-semibold text-stone-400 transition-colors duration-150 hover:text-stone-100"
-        >
-          Open in YouTube
-          <ExternalLink size={13} strokeWidth={2.5} />
-        </button>
       </div>
     </header>
   );

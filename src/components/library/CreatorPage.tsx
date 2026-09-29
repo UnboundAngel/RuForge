@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { MediaFile, PlaylistCollection } from "@/types";
 import { watchedFromChannel } from "./channelShelf";
 import { CreatorHeader } from "./CreatorHeader";
 import { asFeed, asFiles, CreatorHome } from "./CreatorHome";
-import { type CreatorRef, closeCreatorPage } from "./creatorPageStore";
+import { type CreatorRef, closeCreatorPage, publishCreatorTabs, useCreatorPage } from "./creatorPageStore";
 import { type CreatorTab, creatorFiles, creatorPlaylists, creatorSections, creatorTabs } from "./creatorSections";
-import { CreatorTabs } from "./CreatorTabs";
 import { CreatorUploadsState } from "./CreatorUploadsState";
 import { useChannelProfile } from "./useChannelProfile";
 import { useChannelVideos } from "./useChannelVideos";
@@ -67,8 +66,18 @@ export function CreatorPage({
     [recent, history, channelId, channel, libraryIds],
   );
   const tabs = creatorTabs({ downloaded: own.length, playlists: theirPlaylists.length });
-  const [picked, setPicked] = useState<CreatorTab>("home");
+  const picked = useCreatorPage((s) => s.tab);
   const tab = tabs.includes(picked) ? picked : "home";
+  const tabKey = tabs.join(",");
+  const videoCount = sections.uploads.length;
+
+  useEffect(() => {
+    publishCreatorTabs(tabKey.split(",") as CreatorTab[], {
+      videos: videoCount,
+      downloaded: own.length,
+      playlists: theirPlaylists.length,
+    });
+  }, [tabKey, videoCount, own.length, theirPlaylists.length]);
 
   useEffect(() => {
     const onMouseBack = (e: MouseEvent) => {
@@ -104,17 +113,8 @@ export function CreatorPage({
     );
 
   return (
-    <div className="pt-12 pb-8">
+    <div className="pt-16 pb-8">
       <CreatorHeader channelId={channelId} channel={channel} profile={profile} downloaded={own.length} />
-
-      <div className="mb-10 px-2">
-        <CreatorTabs
-          tabs={tabs}
-          active={tab}
-          counts={{ videos: sections.uploads.length, downloaded: own.length, playlists: theirPlaylists.length }}
-          onChange={setPicked}
-        />
-      </div>
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
