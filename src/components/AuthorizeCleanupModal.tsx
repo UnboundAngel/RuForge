@@ -8,7 +8,8 @@ import { cn } from "../lib/utils";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 import { askConfirm } from "./ConfirmDialog";
-import { CleanupListHeader, CleanupListRow } from "./CleanupListRow";
+import { CLEANUP_HEADER_H, CleanupListHeader } from "./CleanupListRow";
+import { CleanupSection } from "./CleanupSection";
 import {
   SettingsModalBtnPrimary,
   SettingsModalBtnSecondary,
@@ -21,7 +22,9 @@ import {
   defaultSelectedPaths,
   formatBytes,
   formatCleanupBytes,
+  groupCleanupCandidates,
   sortCleanupCandidates,
+  type CleanupCategory,
   type CleanupFilterMode,
   type CleanupSort,
   type CleanupSortKey,
@@ -70,7 +73,26 @@ export function AuthorizeCleanupModal() {
 
   const candidates = useMemo(() => buildCleanupCandidates(entries, LIST_MODE), [entries]);
   const [sort, setSort] = useState<CleanupSort | null>(null);
-  const sorted = useMemo(() => sortCleanupCandidates(candidates, sort), [candidates, sort]);
+  const groups = useMemo(
+    () => groupCleanupCandidates(sortCleanupCandidates(candidates, sort)),
+    [candidates, sort],
+  );
+  const [stuckCategories, setStuckCategories] = useState<ReadonlySet<CleanupCategory>>(() => new Set());
+  const onSectionStuck = useCallback((category: CleanupCategory, stuck: boolean) => {
+    setStuckCategories((prev) => {
+      if (prev.has(category) === stuck) return prev;
+      const next = new Set(prev);
+      if (stuck) next.add(category);
+      else next.delete(category);
+      return next;
+    });
+  }, []);
+  const pinnedCategory = useMemo(() => {
+    for (let i = groups.length - 1; i >= 0; i--) {
+      if (stuckCategories.has(groups[i].category)) return groups[i].category;
+    }
+    return null;
+  }, [groups, stuckCategories]);
   // First click sorts, the second flips it, the third goes back to least watched first.
   const onSort = (key: CleanupSortKey) =>
     setSort((cur) => {
@@ -198,24 +220,28 @@ export function AuthorizeCleanupModal() {
       : 0;
 
   const description = hasByteGoal
-    ? `Delete about ${formatCleanupBytes(bytesNeeded)} to get back under your ${limitGB} GB limit. The least watched videos are already selected.`
-    : "Pick videos to delete from internal storage.";
+    ? `Free about ${formatCleanupBytes(bytesNeeded)} to get back under your ${limitGB} GB limit.`
+    : undefined;
 
   return (
     <SettingsModalShell
       open={open}
       onClose={close}
       titleId="rf-cleanup-title"
-      eyebrow="Storage"
+      eyebrow={null}
       title="Free internal space"
       description={description}
       zIndexClass={OVERLAY_Z_CLASS.fullscreen}
-      maxWidthClass="max-w-3xl"
-      bodyClassName="pt-0"
+      maxWidthClass="max-w-[min(90vw,72rem)]"
+      maxHeightClass="max-h-[min(88vh,52rem)]"
+      bezel
+      bodyScrollInsetTop={candidates.length > 0 ? CLEANUP_HEADER_H : undefined}
+      bodyClassName="pt-0 pb-1"
+      footerClassName="pb-4 pt-3"
       disableDismiss={busy}
       footer={
         <>
-          <p className="mr-auto text-[12px] tabular-nums text-stone-500">
+          <p className="shrink-0 whitespace-nowrap text-[12px] tabular-nums text-stone-500">
             {shortfall > 0 && selected.size > 0 ? (
               <span className="text-amber-400/90">Need {formatBytes(shortfall)} more to reach the goal</span>
             ) : (
@@ -240,6 +266,22 @@ export function AuthorizeCleanupModal() {
               </button>
             )}
           </p>
+          <div className="mx-3 flex min-w-0 flex-1 items-center gap-3">
+            <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-[#261d18]">
+              <div
+                className={cn(
+                  "h-full origin-left rounded-full transition-[transform,background-color] duration-200 ease-out",
+                  goalMet || !hasByteGoal ? "bg-[color:var(--accent)]" : "bg-stone-500",
+                )}
+                style={{ transform: `scaleX(${progressPct / 100})` }}
+              />
+            </div>
+            {hasByteGoal && (
+              <span className="shrink-0 text-[11px] tabular-nums text-stone-500">
+                {formatCleanupBytes(selectedBytes)} of {formatCleanupBytes(bytesNeeded)}
+              </span>
+            )}
+          </div>
           <SettingsModalBtnSecondary onClick={close} disabled={busy}>
             Cancel
           </SettingsModalBtnSecondary>
@@ -255,27 +297,11 @@ export function AuthorizeCleanupModal() {
                 ? "Deleting…"
                 : "Delete selected"}
           </SettingsModalBtnPrimary>
-          <div className="mt-3 flex basis-full items-center gap-3">
-            <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#261d18]">
-              <div
-                className={cn(
-                  "h-full origin-left rounded-full transition-[transform,background-color] duration-200 ease-out",
-                  goalMet || !hasByteGoal ? "bg-[color:var(--accent)]" : "bg-stone-500",
-                )}
-                style={{ transform: `scaleX(${progressPct / 100})` }}
-              />
-            </div>
-            {hasByteGoal && (
-              <span className="shrink-0 text-[11px] tabular-nums text-stone-500">
-                {formatCleanupBytes(selectedBytes)} of {formatCleanupBytes(bytesNeeded)}
-              </span>
-            )}
-          </div>
         </>
       }
     >
       {candidates.length > 0 && (
-        <CleanupListHeader sort={sort} onSort={onSort} />
+        <CleanupListHeader sort={sort} onSort={onSort} tone={pinnedCategory} />
       )}
 
       {libraryLoading && candidates.length === 0 ? (
@@ -289,15 +315,14 @@ export function AuthorizeCleanupModal() {
         </p>
       ) : (
         <div className="flex flex-col">
-          {sorted.map((c, i) => (
-            <CleanupListRow
-              key={c.file.path}
-              candidate={c}
-              checked={selected.has(c.file.path)}
-              joinTop={i > 0 && selected.has(sorted[i - 1].file.path)}
-              joinBottom={i < sorted.length - 1 && selected.has(sorted[i + 1].file.path)}
+          {groups.map((group) => (
+            <CleanupSection
+              key={group.category}
+              group={group}
+              selected={selected}
               busy={busy}
               onToggle={togglePath}
+              onStuckChange={onSectionStuck}
             />
           ))}
         </div>

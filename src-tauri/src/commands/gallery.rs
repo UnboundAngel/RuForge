@@ -95,6 +95,17 @@ pub struct YoutubeSourceMeta {
     pub published_at: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_count: Option<u64>,
+    /// Recorded from a livestream (yt-dlp `was_live` / `live_status`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub was_live: bool,
+}
+
+fn was_livestream(json: &serde_json::Value) -> bool {
+    json["was_live"].as_bool().unwrap_or(false)
+        || matches!(
+            json["live_status"].as_str(),
+            Some("was_live" | "post_live" | "is_live")
+        )
 }
 
 fn non_empty_str(v: &serde_json::Value) -> Option<String> {
@@ -117,6 +128,7 @@ pub(crate) fn youtube_source_meta(json: &serde_json::Value) -> Option<YoutubeSou
             .or_else(|| json["timestamp"].as_i64())
             .or_else(|| json["upload_date"].as_str().and_then(upload_date_to_unix)),
         view_count: json["view_count"].as_u64(),
+        was_live: was_livestream(json),
     };
     (meta != YoutubeSourceMeta::default()).then_some(meta)
 }
@@ -1860,7 +1872,21 @@ mod tests {
         assert!(meta.channel_verified);
         assert_eq!(meta.published_at, Some(1_776_859_200));
         assert_eq!(meta.view_count, Some(130_265));
+        assert!(!meta.was_live);
         assert_eq!(youtube_source_meta(&serde_json::json!({ "title": "local clip" })), None);
+    }
+
+    #[test]
+    fn youtube_meta_flags_recorded_livestreams() {
+        let live = |extra: serde_json::Value| {
+            let mut json = serde_json::json!({ "channel": "Streamer" });
+            json.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            youtube_source_meta(&json).expect("meta").was_live
+        };
+        assert!(live(serde_json::json!({ "was_live": true })));
+        assert!(live(serde_json::json!({ "live_status": "was_live" })));
+        assert!(live(serde_json::json!({ "live_status": "post_live" })));
+        assert!(!live(serde_json::json!({ "live_status": "not_live", "was_live": false })));
     }
 
     #[test]
