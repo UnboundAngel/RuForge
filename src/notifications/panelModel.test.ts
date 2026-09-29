@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   actionClosesPopover,
   filterNotificationItems,
+  notificationDetail,
   notificationHeadline,
-  notificationMeta,
+  notificationKicker,
   splitByRead,
   unreadBadgeLabel,
 } from "./panelModel";
@@ -59,19 +60,23 @@ describe("panelModel", () => {
   it("builds the upload headline from the channel name", () => {
     const upload = { ...item("Video", "watchlist"), subtitle: "Chan" };
     expect(notificationHeadline(upload, null)).toEqual({ channel: "Chan", verb: "uploaded", title: "Video" });
-    expect(notificationMeta(upload, "1 hour ago", true)).toBe("1 hour ago");
+    expect(notificationKicker(upload, null)).toEqual({ text: "Chan uploaded", tone: "muted" });
+    expect(notificationDetail(upload)).toBeNull();
   });
 
   it("needs the followed channel name for premieres", () => {
     const premiere = { ...item("Show", "watchlist"), kind: "premiere" as const, subtitle: "Premieres soon" };
     expect(notificationHeadline(premiere, null)).toEqual({ channel: null, verb: null, title: "Show" });
     expect(notificationHeadline(premiere, "Chan").verb).toBe("scheduled a premiere");
-    expect(notificationMeta(premiere, "just now", true)).toBe("Premieres soon · just now");
+    expect(notificationKicker(premiere, null).text).toBe("Premiere");
+    expect(notificationDetail(premiere)).toBe("Premieres soon");
   });
 
-  it("leaves download rows as title plus detail", () => {
+  it("labels download rows by outcome and drops a subtitle that repeats the title", () => {
     const failed = { ...item("File", "download"), kind: "download-failed" as const, subtitle: "HTTP 403" };
     expect(notificationHeadline(failed, "Chan")).toEqual({ channel: null, verb: null, title: "File" });
-    expect(notificationMeta(failed, "just now", false)).toBe("HTTP 403 · just now");
+    expect(notificationKicker(failed, "Chan")).toEqual({ text: "Download failed", tone: "danger" });
+    expect(notificationDetail(failed)).toBe("HTTP 403");
+    expect(notificationDetail({ ...item("Same", "download"), subtitle: "Same" })).toBeNull();
   });
 });
