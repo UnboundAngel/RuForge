@@ -51,7 +51,30 @@ export function notificationHeadline(item: NotificationItem, channelName: string
   return { channel, verb, title: item.title };
 }
 
-export function notificationMeta(item: NotificationItem, age: string, headlineHasChannel: boolean): string {
-  const redundant = item.kind === "live" || (item.kind === "upload" && headlineHasChannel);
-  return item.subtitle && !redundant ? `${item.subtitle} · ${age}` : age;
+export type NotificationKicker = { text: string; tone: "accent" | "danger" | "warn" | "muted" };
+
+const DOWNLOAD_KICKER: Partial<Record<NotificationKind, NotificationKicker>> = {
+  "download-finished": { text: "Downloaded", tone: "accent" },
+  "download-failed": { text: "Download failed", tone: "danger" },
+  "download-timed-out": { text: "Timed out", tone: "danger" },
+  "download-blocked": { text: "Held", tone: "warn" },
+};
+
+/** The short line above the title: what happened and who did it, so the title only names the video. */
+export function notificationKicker(item: NotificationItem, channelName: string | null): NotificationKicker {
+  const download = DOWNLOAD_KICKER[item.kind];
+  if (download) return download;
+  const { channel, verb } = notificationHeadline(item, channelName);
+  if (channel && verb) return { text: `${channel} ${verb}`, tone: item.kind === "upload" ? "muted" : "accent" };
+  if (item.kind === "live") return { text: "Live now", tone: "accent" };
+  if (item.kind === "premiere") return { text: "Premiere", tone: "accent" };
+  return { text: "New upload", tone: "muted" };
+}
+
+/** Subtitle under the title, unless it only repeats the title, the channel, or the kicker. */
+export function notificationDetail(item: NotificationItem): string | null {
+  const detail = item.subtitle?.trim();
+  if (!detail || detail === item.title.trim()) return null;
+  if (item.kind === "upload" || item.kind === "live") return null;
+  return detail;
 }
