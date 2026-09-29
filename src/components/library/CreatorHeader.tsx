@@ -66,7 +66,7 @@ export function CreatorHeader({
             <h1 className="flex min-w-0 items-baseline gap-2.5 font-display text-[44px] leading-none font-extrabold tracking-[-0.02em] text-stone-50">
               <span className="truncate pb-1">{name}</span>
               {/* Baseline-aligned, then lifted so its center lands at half cap height, the way YouTube seats it. */}
-              {profile?.verified ? <VerifiedMark className="mb-[0.08em] h-[0.52em] w-[0.52em] shrink-0 text-stone-200" /> : null}
+              {profile?.verified ? <VerifiedMark className="-translate-y-[0.08em] h-[0.52em] w-[0.52em] shrink-0 text-stone-200" /> : null}
             </h1>
             {meta.length > 0 ? (
               <p className="mt-1.5 truncate text-sm font-medium text-stone-300/80">
