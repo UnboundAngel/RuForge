@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2, Trash2, Layers, Play, FolderOutput, Shuffle, FolderOpen, Plus, ListVideo } from "lucide-react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -340,6 +340,14 @@ export const MediaView = ({
     () => ({ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }),
     [columns, density],
   );
+  const gridGapPx = density === "Cozy" ? 20 : density === "Compact" ? 12 : 16;
+  /** A shelf is the same grid laid out sideways, so its cards match the grid below it. */
+  const layoutStyle = (cols: number, shelf?: boolean): CSSProperties =>
+    shelf
+      ? { gridAutoFlow: "column", gridAutoColumns: `calc((100% - ${(cols - 1) * gridGapPx}px) / ${cols})` }
+      : cols === columns
+        ? gridStyle
+        : { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` };
   const { enabled: feedEnabled } = useYoutubeFeedAvailability();
 
   const filteredEntries = useMemo(() => {
@@ -400,12 +408,13 @@ export const MediaView = ({
 
   const gridItems = useMemo(() => interleaveFeed(mediaOnlyEntries, []), [mediaOnlyEntries]);
 
+  const libraryPlaylists = useMemo(
+    () => libraryEntries.filter((e): e is PlaylistCollection => e.kind === "playlist" && e.items.length > 0),
+    [libraryEntries],
+  );
   const homePlaylists = useMemo(
-    () =>
-      libraryEntries
-        .filter((e): e is PlaylistCollection => e.kind === "playlist" && e.items.length > 0)
-        .slice(0, columns),
-    [libraryEntries, columns],
+    () => libraryPlaylists.slice(0, columns),
+    [libraryPlaylists, columns],
   );
 
   const continueFiles = useMemo(
@@ -521,12 +530,9 @@ export const MediaView = ({
   const renderVideoGrid = (
     items: MixedGridItem<MediaFile>[],
     cols = columns,
-    opts?: { feedOpensInExplorer?: boolean },
+    opts?: { feedOpensInExplorer?: boolean; shelf?: boolean },
   ) => (
-    <div
-      className={gridLayoutClass}
-      style={cols === columns ? gridStyle : { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-    >
+    <div className={gridLayoutClass} style={layoutStyle(cols, opts?.shelf)}>
       {items.map((item) =>
         item.kind === "feed" ? (
           <FeedVideoCard
@@ -550,8 +556,8 @@ export const MediaView = ({
     </div>
   );
 
-  const renderPlaylistGrid = (playlists: PlaylistCollection[]) => (
-    <div className={gridLayoutClass} style={gridStyle}>
+  const renderPlaylistGrid = (playlists: PlaylistCollection[], opts?: { shelf?: boolean }) => (
+    <div className={gridLayoutClass} style={layoutStyle(columns, opts?.shelf)}>
       {playlists.map((entry) => (
         <PlaylistStackCard
           key={entry.path}
@@ -607,10 +613,12 @@ export const MediaView = ({
             <CreatorPage
               creator={creator}
               files={allMediaFiles}
+              playlists={libraryPlaylists}
               libraryIds={libraryVideoIds}
               columns={columns}
               gridClass={gridLayoutClass}
               renderGrid={renderVideoGrid}
+              renderPlaylists={renderPlaylistGrid}
             />
           </motion.div>
         ) : (
