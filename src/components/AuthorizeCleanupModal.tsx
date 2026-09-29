@@ -11,11 +11,8 @@ import { askConfirm } from "./ConfirmDialog";
 import { CLEANUP_HEADER_H, CleanupListHeader } from "./CleanupListRow";
 import { CleanupSection } from "./CleanupSection";
 import { cleanupGroupMeta } from "./cleanupCategoryStyle";
-import {
-  SettingsModalBtnPrimary,
-  SettingsModalBtnSecondary,
-  SettingsModalShell,
-} from "./settings/SettingsModalShell";
+import { CleanupUsageBar } from "./CleanupUsageBar";
+import { SettingsModalBtnPrimary, SettingsModalShell } from "./settings/SettingsModalShell";
 import {
   buildCleanupCandidates,
   bytesToFreeForHeadroom,
@@ -131,6 +128,18 @@ export function AuthorizeCleanupModal() {
   const toggleSelectAll = () => {
     setSelected(allSelected ? new Set() : new Set(candidates.map((c) => c.file.path)));
   };
+  const selectAllState = allSelected ? "all" : selected.size > 0 ? "some" : "none";
+
+  // No Cancel button: Esc, the X and the scrim close it. Not while the delete confirm is up.
+  const confirmingRef = useRef(false);
+  useEffect(() => {
+    if (!open || busy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !confirmingRef.current) close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, busy, close]);
 
   const handleConfirm = async () => {
     const selectedCandidates = candidates.filter((c) => selected.has(c.file.path));
@@ -140,6 +149,7 @@ export function AuthorizeCleanupModal() {
       return;
     }
 
+    confirmingRef.current = true;
     const approved = await askConfirm({
       title: "Delete videos",
       message: `Remove ${paths.length} selected item${paths.length === 1 ? "" : "s"} from your library?`,
@@ -147,6 +157,10 @@ export function AuthorizeCleanupModal() {
       cancelLabel: "Cancel",
       itemMeta: `${formatBytes(selectedBytes)} • ${paths.length} items`,
     });
+    // The confirm's own Esc keydown is still in flight; release on the next tick.
+    setTimeout(() => {
+      confirmingRef.current = false;
+    }, 0);
     if (!approved) return;
 
     setBusy(true);
@@ -214,12 +228,6 @@ export function AuthorizeCleanupModal() {
   const hasByteGoal = bytesNeeded !== null && bytesNeeded > 0;
   const goalMet = hasByteGoal && selectedBytes >= bytesNeeded;
   const shortfall = hasByteGoal && !goalMet ? bytesNeeded - selectedBytes : 0;
-  const progressPct = hasByteGoal
-    ? Math.min(100, (selectedBytes / bytesNeeded) * 100)
-    : candidates.length > 0
-      ? (selected.size / candidates.length) * 100
-      : 0;
-
   const description = hasByteGoal
     ? `Free about ${formatCleanupBytes(bytesNeeded)} to get back under your ${limitGB} GB limit.`
     : undefined;
@@ -256,36 +264,18 @@ export function AuthorizeCleanupModal() {
                 )}
               </>
             )}
-            {candidates.length > 0 && (
-              <button
-                type="button"
-                onClick={toggleSelectAll}
-                disabled={busy}
-                className="ml-3 font-semibold text-stone-400 transition-colors hover:text-stone-100 disabled:opacity-40"
-              >
-                {allSelected ? "Deselect all" : "Select all"}
-              </button>
-            )}
           </p>
           <div className="mx-3 flex min-w-0 flex-1 items-center gap-3">
-            <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-[#261d18]">
-              <div
-                className={cn(
-                  "h-full origin-left rounded-full transition-[transform,background-color] duration-200 ease-out",
-                  goalMet || !hasByteGoal ? "bg-[color:var(--accent)]" : "bg-stone-500",
-                )}
-                style={{ transform: `scaleX(${progressPct / 100})` }}
-              />
-            </div>
+            <CleanupUsageBar groups={groups} selected={selected} />
             {hasByteGoal && (
               <span className="shrink-0 text-[11px] tabular-nums text-stone-500">
-                {formatCleanupBytes(selectedBytes)} of {formatCleanupBytes(bytesNeeded)}
+                <span className={cn(goalMet && "font-semibold text-[color:var(--accent)]")}>
+                  {formatCleanupBytes(selectedBytes)}
+                </span>{" "}
+                of {formatCleanupBytes(bytesNeeded)}
               </span>
             )}
           </div>
-          <SettingsModalBtnSecondary onClick={close} disabled={busy}>
-            Cancel
-          </SettingsModalBtnSecondary>
           <SettingsModalBtnPrimary
             onClick={() => void handleConfirm()}
             disabled={busy || selected.size === 0}
@@ -305,6 +295,9 @@ export function AuthorizeCleanupModal() {
         <CleanupListHeader
           sort={sort}
           onSort={onSort}
+          selectAll={selectAllState}
+          busy={busy}
+          onToggleAll={toggleSelectAll}
           current={
             currentGroup
               ? { category: currentGroup.category, meta: cleanupGroupMeta(currentGroup, selected) }

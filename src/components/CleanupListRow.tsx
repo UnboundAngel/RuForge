@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { Check, ChevronDown, ChevronUp, Video } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Minus, Video } from "lucide-react";
 import { HoverMarqueeText } from "./music/HoverMarqueeText";
 import { cn } from "../lib/utils";
 import { useStuckHeader } from "../hooks/useStuckHeader";
@@ -37,16 +37,22 @@ export const CLEANUP_HEADER_H = 32;
 
 /**
  * Sticky, sortable column header: a line at rest, a raised fill once rows scroll under it.
- * Its empty checkbox and thumbnail corner names the category currently under it.
+ * The checkbox column holds select all; the thumbnail column names the category currently under it.
  */
 export function CleanupListHeader({
   sort,
   onSort,
   current,
+  selectAll,
+  busy,
+  onToggleAll,
 }: {
   sort: CleanupSort | null;
   onSort: (key: CleanupSortKey) => void;
   current: { category: CleanupCategory; meta: string } | null;
+  selectAll: "none" | "some" | "all";
+  busy: boolean;
+  onToggleAll: () => void;
 }) {
   const { sentinelRef, stuck } = useStuckHeader();
   const currentStyle = current ? CLEANUP_CATEGORY_STYLE[current.category] : null;
@@ -96,7 +102,22 @@ export function CleanupListHeader({
           className={cn(CLEANUP_COLS, "relative px-2 text-[12px] xl:text-[13px]")}
           style={{ height: CLEANUP_HEADER_H }}
         >
-          <span className="col-span-2 flex min-w-0">
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selectAll === "all" ? true : selectAll === "some" ? "mixed" : false}
+            aria-label={selectAll === "all" ? "Deselect all" : "Select all"}
+            data-tooltip={selectAll === "all" ? "Deselect all" : "Select all"}
+            disabled={busy}
+            onClick={onToggleAll}
+            className={cn(
+              "flex h-[18px] w-[18px] items-center justify-center rounded-md transition-colors duration-150 disabled:cursor-wait xl:h-5 xl:w-5 2xl:h-[22px] 2xl:w-[22px]",
+              selectAll === "none" ? "bg-[#322620] text-transparent hover:bg-[#3e2f27]" : "bg-red-500/90 text-stone-100",
+            )}
+          >
+            {selectAll === "some" ? <Minus size={12} strokeWidth={3} /> : <Check size={12} strokeWidth={3} />}
+          </button>
+          <span className="flex min-w-0">
             {current && currentStyle && CurrentIcon ? (
               <span
                 data-tooltip={current.meta}

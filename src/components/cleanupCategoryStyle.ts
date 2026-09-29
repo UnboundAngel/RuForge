@@ -4,11 +4,16 @@ import { CLEANUP_CATEGORY_LABEL, formatBytes, type CleanupGroup, type CleanupCat
 /** Only the icon and label carry the category color: Music is RuForge Music red, Videos the library sand gold. */
 export const CLEANUP_CATEGORY_STYLE: Record<
   CleanupCategory,
-  { icon: LucideIcon; noun: [string, string]; fg: string }
+  { icon: LucideIcon; noun: [string, string]; fg: string; bar: string }
 > = {
-  music: { icon: AudioLines, noun: ["track", "tracks"], fg: "text-[#ff0033]" },
-  videos: { icon: Film, noun: ["video", "videos"], fg: "text-[color:var(--accent)]" },
-  livestreams: { icon: Radio, noun: ["stream", "streams"], fg: "text-violet-300" },
+  music: { icon: AudioLines, noun: ["track", "tracks"], fg: "text-[#ff0033]", bar: "bg-[#ff0033]" },
+  videos: {
+    icon: Film,
+    noun: ["video", "videos"],
+    fg: "text-[color:var(--accent)]",
+    bar: "bg-[color:var(--accent)]",
+  },
+  livestreams: { icon: Radio, noun: ["stream", "streams"], fg: "text-violet-300", bar: "bg-violet-300" },
 };
 
 /** Name, count, size and selection for a category's hover tooltip. */
