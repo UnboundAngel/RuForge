@@ -700,11 +700,18 @@
     @apply text-rf-text-muted leading-relaxed;
 
     & h1 {
-      @apply mb-6 text-2xl font-semibold text-rf-text;
+      font-family: var(--font-display);
+      @apply mb-2 text-4xl font-bold tracking-tight text-rf-text;
+    }
+
+    /* "Last updated" line under the title (first paragraph on mobile, where the page renders the title). */
+    & h1 + p,
+    & > p:first-child {
+      @apply mb-10 text-sm text-rf-text-muted/60;
     }
 
     & h2 {
-      @apply mb-5 mt-14 flex items-center gap-2 border-l-4 border-rf-accent/50 pl-4 text-lg font-semibold text-rf-text;
+      @apply mb-3 mt-10 text-xl font-semibold tracking-tight text-rf-text;
     }
 
     & [id] {
@@ -722,12 +729,12 @@
     }
 
     & p {
-      @apply mb-6 leading-7;
+      @apply mb-4 leading-7;
     }
 
     & ul,
     & ol {
-      @apply mb-8 space-y-4 pl-1;
+      @apply mb-6 space-y-2 pl-1;
     }
 
     & ul {
@@ -752,7 +759,7 @@
     }
 
     & li > p {
-      @apply mb-3;
+      @apply mb-0;
     }
 
     & strong {
@@ -764,9 +771,6 @@
       @apply rounded-md bg-rf-surface px-1.5 py-0.5 text-sm text-rf-text;
     }
 
-    & a {
-      @apply text-rf-accent;
-    }
   }
 }
 

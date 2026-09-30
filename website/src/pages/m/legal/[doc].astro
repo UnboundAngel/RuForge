@@ -16,7 +16,7 @@ export function getStaticPaths() {
 }
 
 const { title, file } = Astro.props;
-const html = renderLegalHtml(file);
+const html = renderLegalHtml(file, { mobile: true });
 const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
 ---
 
@@ -24,7 +24,7 @@ const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
   <MobileHeader client:load logoSrc={logoImage.src} />
 
   <main class="pt-20 pb-12 px-5 min-h-screen">
-    <div class="mb-6">
+    <div class="mb-1.5">
       <a href="/m/legal" class="rf-m-btn inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text mb-4">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 18l-6-6 6-6" />

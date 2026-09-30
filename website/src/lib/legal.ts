@@ -132,7 +132,18 @@ function addItemAnchors(filename: string, html: string): string {
   return out;
 }
 
-export function renderLegalHtml(filename: string): string {
+function styleLinks(html: string, mobile: boolean): string {
+  const linkClass = mobile ? 'rf-inline-link rf-m-link' : 'rf-inline-link';
+  return html.replace(/<a href="([^"]*)"/g, (_, href: string) => {
+    const target = mobile && href.startsWith('/legal') ? `/m${href}` : href;
+    return `<a class="${linkClass}" href="${target}"`;
+  });
+}
+
+export function renderLegalHtml(filename: string, { mobile = false } = {}): string {
   const markdown = loadLegalMarkdown(filename);
-  return addItemAnchors(filename, marked.parse(markdown) as string);
+  let html = addItemAnchors(filename, marked.parse(markdown) as string);
+  // The mobile page renders its own title above the article.
+  if (mobile) html = html.replace(/^<h1[^>]*>[\s\S]*?<\/h1>\s*/, '');
+  return styleLinks(html, mobile);
 }
