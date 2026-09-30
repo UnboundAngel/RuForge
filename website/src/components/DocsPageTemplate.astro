@@ -44,7 +44,6 @@ function sectionId(heading: string): string {
   <DocsSidebar activeSlug={page.slug} />
 
   <article class="docs-content">
-    <div class="rf-read-progress" data-read-progress aria-hidden="true"></div>
     <h1 class="docs-content__title">{page.title}</h1>
     <p class="docs-content__desc">{page.description}</p>
     {readingMinutes && (
@@ -53,7 +52,7 @@ function sectionId(heading: string): string {
       </p>
     )}
 
-    <div class="docs-content__body" data-read-scope>
+    <div class="docs-content__body">
       {page.outline.length > 0 ? (
         page.outline.map((heading) => {
           const sc = sectionContent(heading);
@@ -281,7 +280,7 @@ function sectionId(heading: string): string {
 <div id="glossary-terms" hidden set:html={JSON.stringify(GLOSSARY_TERMS)} />
 
 <script>
-  import { initDocsToc, initReadingProgress } from '../lib/docsToc';
+  import { initDocsToc } from '../lib/docsToc';
 
   function initGlossaryTooltips() {
     const dataEl = document.getElementById('glossary-terms');
@@ -375,15 +374,12 @@ function sectionId(heading: string): string {
   }
 
   let teardownToc: (() => void) | null = null;
-  let teardownProgress: (() => void) | null = null;
 
   document.addEventListener('astro:page-load', initGlossaryTooltips);
   document.addEventListener('astro:page-load', highlightSearchQuery);
   document.addEventListener('astro:page-load', () => {
     teardownToc?.();
-    teardownProgress?.();
     teardownToc = initDocsToc(96);
-    teardownProgress = initReadingProgress();
   });
 </script>
 

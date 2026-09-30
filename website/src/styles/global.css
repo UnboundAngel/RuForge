@@ -534,6 +534,31 @@
     margin: 0;
   }
 
+  /* Tip docked to the bottom of a card: the area above curves down into the tint instead of a floating box. */
+  .rf-card-tip {
+    position: relative;
+    display: flex;
+    gap: 0.75rem;
+    padding: calc(1rem + 0.875rem) 1rem 1.125rem;
+    background: color-mix(in srgb, var(--rf-callout-tint) 15%, var(--color-rf-surface));
+    font-size: 0.875rem;
+    line-height: 1.65;
+    color: var(--color-rf-text);
+  }
+
+  .rf-card-tip::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1rem;
+    border-radius: 0 0 1rem 1rem;
+    background: var(--rf-tip-above);
+  }
+
+  .rf-card-tip p {
+    margin: 0;
+  }
+
   .rf-callout__icon {
     flex-shrink: 0;
     width: 1rem;

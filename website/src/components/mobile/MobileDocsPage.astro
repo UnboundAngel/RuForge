@@ -3,6 +3,7 @@ import { Image } from 'astro:assets';
 import { SpiralLoader } from '../SpiralLoader';
 import MobilePageHeader from './MobilePageHeader.astro';
 import MobileDocsSectionBody from './MobileDocsSectionBody.astro';
+import MobileDocsCardTips from './MobileDocsCardTips.astro';
 import Disclosure from '../Disclosure.astro';
 import type { DocsPage } from '../../lib/docsTree';
 import { docsNavNeighbors } from '../../lib/docsTree';
@@ -78,7 +79,7 @@ function hasMoreThanLead(sc: DocsSectionContent): boolean {
   </nav>
 )}
 
-<div class="space-y-4" data-read-scope>
+<div class="space-y-4">
   {page.outline.length > 0 ? (
     page.outline.map((heading) => {
       const sc = sectionContent(heading);
@@ -87,7 +88,7 @@ function hasMoreThanLead(sc: DocsSectionContent): boolean {
       const lead = sc?.paragraphs?.[0];
       const collapse = Boolean(sc && lead && hasMoreThanLead(sc));
       return (
-        <section id={id} class="rf-doc-card scroll-mt-24 overflow-hidden rounded-2xl bg-rf-surface">
+        <section id={id} class:list={['rf-doc-card scroll-mt-24 overflow-hidden rounded-2xl bg-rf-surface', collapse && 'cursor-pointer']} data-doc-card={collapse ? '' : undefined}>
           {image && (
             <Image
               src={image}
@@ -121,11 +122,14 @@ function hasMoreThanLead(sc: DocsSectionContent): boolean {
             )}
           </div>
 
+          {sc && !collapse && <MobileDocsCardTips sc={sc} />}
+
           {sc && collapse && (
-            <Disclosure id={`m-docs-more-${id}`} triggerAfter buttonClass="rf-section-more">
-              <div class="px-4 pb-5">
+            <Disclosure id={`m-docs-more-${id}`} buttonClass="rf-section-more">
+              <div class="px-4 pt-4 pb-5">
                 <MobileDocsSectionBody sc={sc} id={id} skipLead />
               </div>
+              <MobileDocsCardTips sc={sc} />
               <span slot="trigger" data-when-closed>Read more</span>
               <span slot="trigger" data-when-open hidden>Show less</span>
               <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -165,4 +169,13 @@ function hasMoreThanLead(sc: DocsSectionContent): boolean {
 
   initDocsToc(96);
   initReadingProgress();
+
+  document.querySelectorAll<HTMLElement>('[data-doc-card]').forEach((card) => {
+    card.addEventListener('click', (event) => {
+      const target = event.target as Element | null;
+      if (target?.closest('a, button, .rf-doc-disclosure')) return;
+      if (window.getSelection()?.toString()) return;
+      card.querySelector<HTMLButtonElement>(':scope > [data-disclosure]')?.click();
+    });
+  });
 </script>

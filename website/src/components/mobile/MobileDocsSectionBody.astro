@@ -35,27 +35,6 @@ const paragraphs = skipLead ? (sc.paragraphs ?? []).slice(1) : (sc.paragraphs ??
   {sc.paragraphs2?.map((p) => <p set:html={p} />)}
   {sc.paragraphs3?.map((p) => <p set:html={p} />)}
 
-  {sc.note && (
-    <aside class="rf-callout rf-callout--note">
-      <span class="rf-callout__icon" aria-hidden="true" />
-      <p set:html={sc.note} />
-    </aside>
-  )}
-
-  {sc.tip && (
-    <aside class="rf-callout rf-callout--tip">
-      <span class="rf-callout__icon" aria-hidden="true" />
-      <p set:html={sc.tip} />
-    </aside>
-  )}
-
-  {sc.warning && (
-    <aside class="rf-callout rf-callout--warning">
-      <span class="rf-callout__icon" aria-hidden="true" />
-      <p set:html={sc.warning} />
-    </aside>
-  )}
-
   {sc.table && (
     <div class="rf-doc-table-wrap">
       <table class="rf-doc-table">

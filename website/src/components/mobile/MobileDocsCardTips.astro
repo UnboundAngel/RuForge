@@ -1,0 +1,32 @@
+---
+import type { DocsSectionContent } from '../../lib/docsContent';
+
+interface Props {
+  sc: DocsSectionContent;
+}
+
+const { sc } = Astro.props;
+
+const TINTS = { note: '#d4a574', tip: '#9cb86a', warning: '#dc783c' } as const;
+type Kind = keyof typeof TINTS;
+
+const tips = (['note', 'tip', 'warning'] as Kind[])
+  .filter((kind) => sc[kind])
+  .map((kind) => ({ kind, html: sc[kind]! }));
+
+function aboveFill(index: number): string {
+  if (index === 0) return 'var(--color-rf-surface)';
+  return `color-mix(in srgb, ${TINTS[tips[index - 1].kind]} 15%, var(--color-rf-surface))`;
+}
+---
+
+{tips.length > 0 && (
+  <div class="rf-doc-prose">
+    {tips.map((tip, i) => (
+      <aside class={`rf-card-tip rf-callout--${tip.kind}`} style={`--rf-tip-above: ${aboveFill(i)}`}>
+        <span class="rf-callout__icon" aria-hidden="true" />
+        <p set:html={tip.html} />
+      </aside>
+    ))}
+  </div>
+)}

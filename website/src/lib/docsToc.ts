@@ -73,30 +73,32 @@ export function initDocsToc(headerOffset: number): () => void {
   };
 }
 
-/** Fill `[data-read-progress]` as the reader moves through `[data-read-scope]`. */
+/** Fill `[data-read-progress]` with how far down the page the reader is. */
 export function initReadingProgress(): () => void {
   const bar = document.querySelector<HTMLElement>('[data-read-progress]');
-  const scope = document.querySelector<HTMLElement>('[data-read-scope]');
-  if (!bar || !scope) return () => {};
+  if (!bar) return () => {};
 
   let frame = 0;
   const update = () => {
     frame = 0;
-    const rect = scope.getBoundingClientRect();
-    const travel = rect.height - window.innerHeight;
-    const progress = travel <= 0 ? 1 : Math.min(1, Math.max(0, -rect.top / travel));
+    const travel = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = travel <= 0 ? 0 : Math.min(1, Math.max(0, window.scrollY / travel));
     bar.style.transform = `scaleX(${progress})`;
   };
-  const onScroll = () => {
+  const schedule = () => {
     if (!frame) frame = requestAnimationFrame(update);
   };
 
-  window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', onScroll);
+  // Expanding or collapsing a card changes the page height without a scroll event.
+  const resizeObserver = new ResizeObserver(schedule);
+  resizeObserver.observe(document.body);
+  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', schedule);
   update();
 
   return () => {
-    window.removeEventListener('scroll', onScroll);
-    window.removeEventListener('resize', onScroll);
+    resizeObserver.disconnect();
+    window.removeEventListener('scroll', schedule);
+    window.removeEventListener('resize', schedule);
   };
 }
