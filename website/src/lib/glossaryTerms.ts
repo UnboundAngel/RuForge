@@ -6,38 +6,40 @@
  */
 
 export const GLOSSARY_TERMS: Record<string, string> = {
-  job: 'A single download task. Paste a URL and click download to create one.',
-  queue: 'The list of all active and pending download jobs, visible in the floating drawer.',
-  hero: 'The large progress area at the top of the downloader showing the focused job.',
+  job: 'One download. Paste a link and click Download to start one.',
+  queue: 'All the jobs that are waiting or running. The sidebar Download button shows a progress ring while any are.',
+  hero: 'The big area in the downloader with the video\'s title, thumbnail, and progress.',
   'stall watchdog':
-    'Background timer that kills stuck downloads when no data arrives for too long.',
+    'Notices a download that stopped making progress and steps in, so it doesn\'t hang forever.',
   processing:
-    'Post-download phase where ffmpeg merges video and audio streams or extracts audio.',
-  entry: 'A single item in your media library (standalone file or playlist collection).',
+    'The last step of a download, when the video and audio get joined into one file.',
+  entry: 'One item in your library: a single file or a whole playlist.',
   'playlist collection':
-    'A group of files downloaded together as a playlist, shown as a stack card.',
-  gallery: 'Another name for the media library grid.',
+    'Videos downloaded together as a playlist. They show up as one stack you can open.',
+  gallery: 'Another name for the library grid.',
+  'scan folder':
+    'A folder you added so its files show up in your library. The internal vault is always one of them.',
   'scan root':
-    'A folder the library watches for media files. Always two: internal vault and download path.',
-  card: 'The visual tile in the library grid showing thumbnail, title, duration, and progress.',
-  sidecar: 'A companion file that stores metadata about a downloaded video.',
+    'A folder you added so its files show up in your library. The internal vault is always one of them.',
+  card: 'The tile you click in the library, with a thumbnail and title.',
+  sidecar: 'A small file saved next to a video that describes it. Keep it with the video when you move it.',
   '.info.json':
-    'Created by yt-dlp during download. Contains title, uploader, chapters, and source URL.',
+    'The video\'s details from YouTube: title, channel, chapters, and the original link.',
   '.sponsorblock.json':
-    'Stores SponsorBlock segments and chapters so they are not re-fetched every play.',
+    'Saved sponsor segments, so RuForge doesn\'t look them up every time you play the video.',
   'sprite sheet':
-    'Grid of thumbnail frames from ffmpeg, used for hover previews on the scrub bar.',
-  poster: 'Single-frame thumbnail from ffmpeg, used as cover art when no yt-dlp thumbnail exists.',
-  player: 'The built-in video/audio player with chapters, subtitles, and SponsorBlock overlays.',
+    'A grid of small frames from the video. It powers the preview when you hover the seek bar.',
+  poster: 'A cover image RuForge makes from a frame of the video.',
+  player: 'Plays video and audio, with chapters, subtitles, keyboard shortcuts, and SponsorBlock.',
   'mini player':
-    'Separate borderless window that floats on top of other apps, resizable from large to tiny.',
-  'control dock': 'Frosted bar at the bottom of the player with play/pause, volume, and loop.',
+    'A small separate window, so you can keep watching while you use other apps.',
+  'control dock': 'The bar at the bottom of the player with play/pause, volume, and loop.',
   'chapter scrubber':
-    'Segmented progress bar dividing the video into chapters from yt-dlp metadata.',
+    'The seek bar split into the video\'s chapters. Hover a part to see its name, click to jump there.',
   'auto-advance':
-    'When a video ends, automatically plays the next file in the folder or library.',
-  'scrub preview': 'Thumbnail images that appear on hover over the progress bar (from sprite sheets).',
+    'When a video ends, the next file in the same folder starts.',
+  'scrub preview': 'The small picture that shows up when you hover the seek bar.',
   'internal vault':
-    'Folder RuForge manages inside its app data directory for storing downloads.',
-  'download path': 'The custom folder you pick for new downloads (alternative to internal vault).',
+    'RuForge\'s own download folder, C:\\RuForge\\Media by default. It\'s always in your library.',
+  'download path': 'A custom folder you pick for new downloads instead of the internal vault.',
 };

@@ -120,7 +120,7 @@ pub fn duration_from_ytdlp_info_json(video_path: &Path) -> f64 {
 
 #[inline]
 pub fn is_media_ext(ext: &str) -> bool {
-    MEDIA_EXTS.contains(&ext)
+    MEDIA_EXTS.iter().any(|m| m.eq_ignore_ascii_case(ext))
 }
 
 #[inline]

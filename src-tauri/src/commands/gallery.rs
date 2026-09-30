@@ -8,7 +8,7 @@ use crate::commands::media::list_scrub_sprite_paths_for_video;
 use crate::utils::{is_audio_only_ext, is_item_bucket, is_media_ext, is_playlist_bucket, primary_vtt_sidecar, thumb_dir_for_stem, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
 
 fn is_scrub_sprite_video_ext(ext: &str) -> bool {
-    matches!(ext, "mp4" | "mkv" | "webm")
+    matches!(ext.to_ascii_lowercase().as_str(), "mp4" | "mkv" | "webm")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

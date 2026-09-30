@@ -211,7 +211,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
       layout: 'split',
       paragraphs: [
         'The library picks up <strong>MP4, MKV and WebM</strong> videos and <strong>MP3, M4A, FLAC, Opus, OGG and WAV</strong> audio.',
-        'The file extension has to be <strong>lowercase</strong>. <code>video.mp4</code> shows up, <code>video.MP4</code> doesn\'t. Rename the extension if a file is missing.',
+        'Upper or lowercase extensions both work from <strong>RuForge 0.4.1</strong>. On 0.4.0, rename <code>video.MP4</code> to <code>video.mp4</code> if it doesn\'t show up.',
       ],
       table: {
         headers: ['Type', 'Shows up', 'Doesn\'t show up'],
@@ -237,7 +237,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
       ],
       bullets: [
         '<span class="docs-term" data-term="job"><strong>Job</strong></span>: one download. Paste a link and click <strong>Download</strong> to start one.',
-        '<strong>Queue</strong>: all the jobs that are waiting or running. While any are, the <strong>Download</strong> button in the sidebar shows a progress ring.',
+        '<span class="docs-term" data-term="queue"><strong>Queue</strong></span>: all the jobs that are waiting or running. While any are, the <strong>Download</strong> button in the sidebar shows a progress ring.',
         '<span class="docs-term" data-term="hero"><strong>Hero</strong></span>: the big area in the downloader with the video\'s title, thumbnail, and progress.',
         '<span class="docs-term" data-term="processing"><strong>Finishing up</strong></span>: the last step of a download, when the video and audio get joined into one file.',
         '<span class="docs-term" data-term="stall watchdog"><strong>Stall watchdog</strong></span>: notices a download that stopped making progress and steps in, so it doesn\'t hang forever.',
@@ -252,8 +252,8 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
         '<span class="docs-term" data-term="card"><strong>Card</strong></span>: the tile you click in the library, with a thumbnail and title.',
         '<span class="docs-term" data-term="playlist collection"><strong>Playlist collection</strong></span>: videos downloaded together as a playlist. They show up as one stack you can open.',
         '<span class="docs-term" data-term="gallery"><strong>Gallery</strong></span>: another name for the library grid.',
-        '<strong>Internal vault</strong>: RuForge\'s own download folder, <code>C:\\RuForge\\Media</code> by default. It\'s always in your library.',
-        '<strong>Scan folder</strong>: a folder you added so its files show up in your library. The internal vault is always one of them.',
+        '<span class="docs-term" data-term="internal vault"><strong>Internal vault</strong></span>: RuForge\'s own download folder, <code>C:\\RuForge\\Media</code> by default. It\'s always in your library.',
+        '<span class="docs-term" data-term="scan folder"><strong>Scan folder</strong></span>: a folder you added so its files show up in your library. The internal vault is always one of them.',
       ],
     },
     'Files next to your videos': {
@@ -274,7 +274,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
       ],
       bullets: [
         '<span class="docs-term" data-term="player"><strong>Player</strong></span>: plays video and audio, with chapters, subtitles, keyboard shortcuts, and SponsorBlock.',
-        '<strong>Mini player</strong>: a small separate window, so you can keep watching while you use other apps.',
+        '<span class="docs-term" data-term="mini player"><strong>Mini player</strong></span>: a small separate window, so you can keep watching while you use other apps.',
         '<span class="docs-term" data-term="control dock"><strong>Control dock</strong></span>: the bar at the bottom of the player with play/pause, volume, and loop.',
         '<span class="docs-term" data-term="chapter scrubber"><strong>Chapter scrubber</strong></span>: the seek bar split into the video\'s chapters. Hover a part to see its name, click it to jump there.',
         '<span class="docs-term" data-term="scrub preview"><strong>Scrub preview</strong></span>: the small picture that shows up when you hover the seek bar.',
