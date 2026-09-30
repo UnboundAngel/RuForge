@@ -41,14 +41,14 @@ export type TechTickerItem = {
 };
 
 export const techTickerItems: TechTickerItem[] = [
-  { name: 'YouTube Downloader', icon: 'youtube' },
-  { name: 'yt-dlp Engine', icon: 'ytdlp' },
-  { name: 'SponsorBlock API', icon: 'sponsorblock' },
-  { name: 'Tauri v2 Shell', icon: 'tauri' },
-  { name: 'Rust Core', icon: 'rust' },
-  { name: 'React 19 Core', icon: 'react' },
-  { name: 'FFmpeg Processing', icon: 'ffmpeg' },
-  { name: 'Zustand State Store', icon: 'zustand' },
+  { name: 'YouTube', icon: 'youtube' },
+  { name: 'yt-dlp', icon: 'ytdlp' },
+  { name: 'SponsorBlock', icon: 'sponsorblock' },
+  { name: 'Tauri v2', icon: 'tauri' },
+  { name: 'Rust', icon: 'rust' },
+  { name: 'React 19', icon: 'react' },
+  { name: 'FFmpeg', icon: 'ffmpeg' },
+  { name: 'Zustand', icon: 'zustand' },
 ];
 
 /** Docs mega-menu only: 4x4 grid (ticker strip stays at eight). */

@@ -3,8 +3,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import RoadmapFieldNotes from '../components/RoadmapFieldNotes';
 import { SITE } from '../lib/site';
 import { loadRoadmapEntries, transformRoadmapItems } from '../lib/roadmapFieldNotes';
+import { readNextVersion } from '../lib/roadmapNextVersion';
 
 const items = transformRoadmapItems(loadRoadmapEntries());
+const nextVersion = readNextVersion();
 ---
 
 <BaseLayout
@@ -37,9 +39,9 @@ const items = transformRoadmapItems(loadRoadmapEntries());
         Roadmap
       </span>
       <h1 class="rf-roadmap-hero-title">
-        <span class="rf-roadmap-hero-line">What we're building</span>
+        <span class="rf-roadmap-hero-line">what's coming</span>
         <span class="rf-roadmap-hero-hand">
-          next.
+          next
           <svg
             class="rf-roadmap-squiggle rf-roadmap-squiggle--hero"
             viewBox="0 0 200 16"
@@ -59,8 +61,8 @@ const items = transformRoadmapItems(loadRoadmapEntries());
         </span>
       </h1>
       <p class="rf-roadmap-hero-copy">
-        what's shipped, what we're hammering on now, and what's on the horizon. honest list, nothing
-        polished.
+        everything RuForge has shipped, what's being built now, and what's planned after that<br />
+        priorities can shift as things come up
       </p>
       <a href={SITE.discussions} class="rf-roadmap-ghost-cta no-underline">
         <svg
@@ -81,5 +83,5 @@ const items = transformRoadmapItems(loadRoadmapEntries());
     </div>
   </section>
 
-  <RoadmapFieldNotes client:load items={items} />
+  <RoadmapFieldNotes client:load items={items} nextVersion={nextVersion} />
 </BaseLayout>

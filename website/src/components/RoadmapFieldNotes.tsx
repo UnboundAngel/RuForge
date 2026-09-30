@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useHaptic } from './mobile/useHaptic';
+import RoadmapReadySection from './RoadmapReadySection';
 import {
   priorityArcDasharray,
   priorityLabel,
@@ -14,6 +15,7 @@ const MOBILE_PRIORITY_MS = 2000;
 
 type RoadmapFieldNotesProps = {
   items: RoadmapItem[];
+  nextVersion?: string | null;
   touchTooltips?: boolean;
 };
 
@@ -21,17 +23,23 @@ function useMobilePriorityFlash(mobile: boolean, onReveal?: () => void) {
   const [active, setActive] = useState(false);
   const timerRef = useRef<number>();
 
-  const reveal = useCallback(() => {
+  const show = useCallback(() => {
     if (!mobile) return;
-    onReveal?.();
     window.clearTimeout(timerRef.current);
     setActive(true);
     timerRef.current = window.setTimeout(() => setActive(false), MOBILE_PRIORITY_MS);
-  }, [mobile, onReveal]);
+  }, [mobile]);
+
+  const reveal = useCallback(() => {
+    if (!mobile) return;
+    onReveal?.();
+    show();
+  }, [mobile, onReveal, show]);
 
   useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
-  return { active, reveal };
+  // `show` is for `.rf-m-*` hosts, whose haptic already fires from MobileShell on pointerdown.
+  return { active, reveal, show };
 }
 
 function MetaSwap({
@@ -117,7 +125,7 @@ function PriorityGauge({
       </svg>
       {!mobile && (
         <span className="rf-roadmap-priority-tt" role="tooltip">
-          {label}
+          {label} priority
         </span>
       )}
     </span>
@@ -169,7 +177,7 @@ function ProgressRow({
   mobile: boolean;
   onPriorityReveal: () => void;
 }) {
-  const { active, reveal } = useMobilePriorityFlash(mobile, onPriorityReveal);
+  const { active, reveal, show } = useMobilePriorityFlash(mobile, onPriorityReveal);
 
   return (
     <li className="rf-roadmap-item rf-roadmap-item--progress">
@@ -184,8 +192,8 @@ function ProgressRow({
         {mobile ? (
           <button
             type="button"
-            className="rf-roadmap-item-title rf-roadmap-item-title--progress rf-roadmap-item-title--tappable"
-            onClick={reveal}
+            className="rf-roadmap-item-title rf-roadmap-item-title--progress rf-roadmap-item-title--tappable rf-m-link"
+            onClick={show}
           >
             {item.title}
           </button>
@@ -215,7 +223,7 @@ function PlannedRow({
   mobile: boolean;
   onPriorityReveal: () => void;
 }) {
-  const { active, reveal } = useMobilePriorityFlash(mobile, onPriorityReveal);
+  const { active, reveal, show } = useMobilePriorityFlash(mobile, onPriorityReveal);
 
   return (
     <li className="rf-roadmap-item rf-roadmap-item--planned">
@@ -224,8 +232,8 @@ function PlannedRow({
         {mobile ? (
           <button
             type="button"
-            className="rf-roadmap-item-title rf-roadmap-item-title--planned rf-roadmap-item-title--tappable"
-            onClick={reveal}
+            className="rf-roadmap-item-title rf-roadmap-item-title--planned rf-roadmap-item-title--tappable rf-m-link"
+            onClick={show}
           >
             {item.title}
           </button>
@@ -255,13 +263,9 @@ function PlannedRow({
 function ShippedSection({
   items,
   mobile,
-  onExpand,
-  onSeeMore,
 }: {
   items: RoadmapItem[];
   mobile: boolean;
-  onExpand?: () => void;
-  onSeeMore?: () => void;
 }) {
   const [expanded, setExpanded] = useState(!mobile);
   const [visibleCount, setVisibleCount] = useState(mobile ? 0 : items.length);
@@ -276,7 +280,6 @@ function ShippedSection({
 
   const toggleExpanded = () => {
     if (!mobile) return;
-    onExpand?.();
     setExpanded((open) => {
       if (open) {
         setVisibleCount(0);
@@ -289,7 +292,6 @@ function ShippedSection({
   };
 
   const loadMore = () => {
-    onSeeMore?.();
     setStaggerFrom(visibleCount);
     setVisibleCount((count) => Math.min(count + SHIPPED_BATCH, items.length));
   };
@@ -306,9 +308,9 @@ function ShippedSection({
       aria-controls="roadmap-shipped-list"
     >
       <div className="rf-roadmap-section-head rf-roadmap-section-head--shipped">
-        <div className="rf-roadmap-eyebrow rf-roadmap-eyebrow--shipped">Shipped</div>
+        <div className="rf-roadmap-eyebrow rf-roadmap-eyebrow--shipped">shipped</div>
         <h2 id="status-shipped" className="rf-roadmap-heading rf-roadmap-heading--shipped">
-          {items.length} done.
+          {items.length} shipped
         </h2>
       </div>
       <span className={`rf-roadmap-shipped-chevron${expanded ? ' is-open' : ''}`} aria-hidden="true">
@@ -319,9 +321,9 @@ function ShippedSection({
     </button>
   ) : (
     <div className="rf-roadmap-section-head rf-roadmap-section-head--shipped">
-      <div className="rf-roadmap-eyebrow rf-roadmap-eyebrow--shipped">Shipped</div>
+      <div className="rf-roadmap-eyebrow rf-roadmap-eyebrow--shipped">shipped</div>
       <h2 id="status-shipped" className="rf-roadmap-heading rf-roadmap-heading--shipped">
-        {items.length} done.
+        {items.length} shipped
       </h2>
     </div>
   );
@@ -357,7 +359,7 @@ function ShippedSection({
           </ul>
           {hasMore && (
             <button type="button" className="rf-roadmap-shipped-more rf-m-btn" onClick={loadMore}>
-              See more
+              show more
             </button>
           )}
         </div>
@@ -366,11 +368,16 @@ function ShippedSection({
   );
 }
 
-export default function RoadmapFieldNotes({ items, touchTooltips = false }: RoadmapFieldNotesProps) {
+export default function RoadmapFieldNotes({
+  items,
+  nextVersion = null,
+  touchTooltips = false,
+}: RoadmapFieldNotesProps) {
   const mobile = touchTooltips;
-  const { select, tap } = useHaptic();
+  const { select } = useHaptic();
 
   const progress = items.filter((item) => item.status === 'progress');
+  const ready = items.filter((item) => item.status === 'unreleased');
   const planned = items.filter((item) => item.status === 'planned');
   const shipped = items.filter((item) => item.status === 'shipped');
 
@@ -381,10 +388,10 @@ export default function RoadmapFieldNotes({ items, touchTooltips = false }: Road
       {progress.length > 0 && (
         <section className="rf-roadmap-brewing" aria-labelledby="status-progress">
           <div className="rf-roadmap-section-head">
-            <div className="rf-roadmap-eyebrow rf-roadmap-eyebrow--brewing">Brewing now</div>
+            <div className="rf-roadmap-eyebrow rf-roadmap-eyebrow--brewing">brewing now</div>
             <div className="rf-roadmap-heading-wrap">
               <h2 id="status-progress" className="rf-roadmap-heading rf-roadmap-heading--progress">
-                {progress.length} in the works.
+                {progress.length} being built right now
               </h2>
               <svg
                 className="rf-roadmap-squiggle rf-roadmap-squiggle--section"
@@ -417,12 +424,14 @@ export default function RoadmapFieldNotes({ items, touchTooltips = false }: Road
         </section>
       )}
 
+      {ready.length > 0 && <RoadmapReadySection items={ready} nextVersion={nextVersion} mobile={mobile} />}
+
       {planned.length > 0 && (
         <section className="rf-roadmap-horizon" aria-labelledby="status-planned">
           <div className="rf-roadmap-section-head rf-roadmap-section-head--horizon">
-            <div className="rf-roadmap-eyebrow rf-roadmap-eyebrow--horizon">On the horizon</div>
+            <div className="rf-roadmap-eyebrow rf-roadmap-eyebrow--horizon">on the horizon</div>
             <h2 id="status-planned" className="rf-roadmap-heading rf-roadmap-heading--planned">
-              {planned.length} planned.
+              {planned.length} planned
             </h2>
           </div>
           <ul className="rf-roadmap-grid rf-roadmap-grid--planned">
@@ -439,12 +448,7 @@ export default function RoadmapFieldNotes({ items, touchTooltips = false }: Road
       )}
 
       {shipped.length > 0 && (
-        <ShippedSection
-          items={shipped}
-          mobile={mobile}
-          onExpand={select}
-          onSeeMore={tap}
-        />
+        <ShippedSection items={shipped} mobile={mobile} />
       )}
     </div>
   );

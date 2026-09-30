@@ -7,10 +7,11 @@ import MobileFooter from '../../components/mobile/MobileFooter.astro';
 import { AnimatedText } from '../../components/ui/animated-underline-text-one';
 import { Image, getImage } from 'astro:assets';
 import ruforgeLogo from '../../assets/ruforge-logo.png';
-import { landingFeatureRows, landingFeatureIntro } from '../../lib/landingFeatures';
+import { landingFeatureRows, landingFeatureIntro, landingLoginTrust } from '../../lib/landingFeatures';
 import { SITE } from '../../lib/site';
 
 const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
+const loginTrust = landingLoginTrust('/m');
 const featureImages = await Promise.all(
   landingFeatureRows.map((row) => getImage({ src: row.image, width: 640 }))
 );
@@ -18,7 +19,7 @@ const featureImages = await Promise.all(
 const features = landingFeatureRows.map((row, i) => ({
   id: row.id,
   pill: row.pill,
-  headline: row.headline[0],
+  headline: row.title,
   paragraph: row.paragraph,
   bullets: [...row.bullets],
   imageSrc: featureImages[i].src,
@@ -50,7 +51,7 @@ const features = landingFeatureRows.map((row, i) => ({
           </AnimatedText>
         </div>
         <p class="text-[15px] leading-relaxed text-rf-text-muted/85 max-w-xs mx-auto">
-          Open-source media library and yt-dlp GUI for Windows. Download to disk, browse your catalog, and play offline.
+          a free, open-source Windows app that saves YouTube videos and music to your PC, keeps them in one library, and plays them offline
         </p>
         <a
           href="/m/download"
@@ -78,10 +79,27 @@ const features = landingFeatureRows.map((row, i) => ({
           id="m-features-heading"
           class="font-display text-2xl font-bold tracking-tight text-rf-text leading-tight"
         >
-          {landingFeatureIntro.headline[0]}
+          {landingFeatureIntro.headline}
         </h2>
       </div>
       <MobileFeatureAccordion client:visible features={features} />
+    </section>
+
+    <section class="px-5 pb-4" aria-labelledby="m-login-heading">
+      <div class="rounded-2xl border border-rf-border/30 bg-rf-surface/25 p-5 space-y-4">
+        <h2 id="m-login-heading" class="font-display text-xl font-bold tracking-tight text-rf-text leading-snug">
+          {loginTrust.headline}
+        </h2>
+        <div class="space-y-3 text-[14px] leading-relaxed text-rf-text-muted/85">
+          {loginTrust.paragraphs.map((html) => <p set:html={html} />)}
+        </div>
+        <p class="flex items-start gap-2 border-t border-rf-border/30 pt-4 text-[13px] leading-relaxed text-rf-text-muted/70">
+          <svg class="mt-[3px] shrink-0 opacity-60" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          </svg>
+          <span set:html={loginTrust.note} />
+        </p>
+      </div>
     </section>
   </main>
 

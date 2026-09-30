@@ -4,57 +4,57 @@ import { getTestimonialImage } from './imageAssets';
 export type Testimonial = {
   text: string;
   image: ImageMetadata;
-  /** e.g. angel-03; cards with the same key share rim color and avatar */
+  /** e.g. theo-03; cards with the same key share rim color and avatar */
   imageKey: string;
   rimRgb: string;
   name: string;
   role: string;
 };
 
-const ANGEL_IMAGES = [
-  'angel-01.webp',
-  'angel-02.webp',
-  'angel-03.webp',
-  'angel-04.webp',
-  'angel-05.webp',
-  'angel-06.webp',
-  'angel-07.webp',
-  'angel-08.webp',
-  'angel-09.webp',
+const THEO_IMAGES = [
+  'theo-01.webp',
+  'theo-02.webp',
+  'theo-03.webp',
+  'theo-04.webp',
+  'theo-05.webp',
+  'theo-06.webp',
+  'theo-07.webp',
+  'theo-08.webp',
+  'theo-09.webp',
 ] as const;
 
-const SUSIE_IMAGES = [
-  'susie-01.webp',
-  'susie-02.webp',
-  'susie-03.webp',
-  'susie-04.webp',
-  'susie-05.webp',
-  'susie-06.webp',
-  'susie-07.webp',
+const MAYA_IMAGES = [
+  'maya-01.webp',
+  'maya-02.webp',
+  'maya-03.webp',
+  'maya-04.webp',
+  'maya-05.webp',
+  'maya-06.webp',
+  'maya-07.webp',
 ] as const;
 
 /** Muted rim RGB per avatar file; same key = same border on scroll. */
 const IMAGE_RIM_RGB: Record<string, string> = {
-  'angel-01': '186 165 128',
-  'angel-02': '168 188 152',
-  'angel-03': '148 172 186',
-  'angel-04': '186 148 128',
-  'angel-05': '198 178 142',
-  'angel-06': '172 142 186',
-  'angel-07': '142 186 168',
-  'angel-08': '186 128 148',
-  'angel-09': '158 142 118',
-  'susie-01': '196 152 142',
-  'susie-02': '142 158 196',
-  'susie-03': '196 168 142',
-  'susie-04': '168 142 172',
-  'susie-05': '142 186 162',
-  'susie-06': '186 162 142',
-  'susie-07': '172 142 158',
+  'theo-01': '186 165 128',
+  'theo-02': '168 188 152',
+  'theo-03': '148 172 186',
+  'theo-04': '186 148 128',
+  'theo-05': '198 178 142',
+  'theo-06': '172 142 186',
+  'theo-07': '142 186 168',
+  'theo-08': '186 128 148',
+  'theo-09': '158 142 118',
+  'maya-01': '196 152 142',
+  'maya-02': '142 158 196',
+  'maya-03': '196 168 142',
+  'maya-04': '168 142 172',
+  'maya-05': '142 186 162',
+  'maya-06': '186 162 142',
+  'maya-07': '172 142 158',
 };
 
-function imageFileFor(name: 'Angel' | 'Susie', index: number): (typeof ANGEL_IMAGES)[number] | (typeof SUSIE_IMAGES)[number] {
-  const pool = name === 'Angel' ? ANGEL_IMAGES : SUSIE_IMAGES;
+function imageFileFor(name: 'Theo' | 'Maya', index: number): (typeof THEO_IMAGES)[number] | (typeof MAYA_IMAGES)[number] {
+  const pool = name === 'Theo' ? THEO_IMAGES : MAYA_IMAGES;
   return pool[index % pool.length];
 }
 
@@ -81,167 +81,167 @@ export function quoteSegments(text: string): QuoteSegment[] {
   return out;
 }
 
-type QuoteInput = { text: string; name: 'Angel' | 'Susie'; role: string };
+type QuoteInput = { text: string; name: 'Theo' | 'Maya'; role: string };
 
 /** Home page only. Avatar files live in `src/assets/testimonials/` (see README in public/testimonials). */
 const QUOTES: QuoteInput[] = [
   {
     text: 'honestly i just wanted one app for grabbing videos and watching later without a browser tab graveyard — ruforge does that',
-    name: 'Angel',
+    name: 'Theo',
     role: 'uses it daily',
   },
   {
-    text: "angel put it on my laptop to 'test' and i still have it. the cooking playlist situation is out of control",
-    name: 'Susie',
+    text: "theo put it on my laptop to 'test' and i still have it. the cooking playlist situation is out of control",
+    name: 'Maya',
     role: 'friend',
   },
   {
     text: 'mini player sits in the corner during homework and i keep forgetting its a whole separate window lol',
-    name: 'Angel',
+    name: 'Theo',
     role: 'mini player person',
   },
   {
     text: 'sponsorblock jumped a segment while i was making dinner and i did not expect to care but i did',
-    name: 'Susie',
+    name: 'Maya',
     role: 'playback',
   },
   {
     text: 'we are not calling it neotube anymore. ruforge stuck.',
-    name: 'Angel',
+    name: 'Theo',
     role: 'windows',
   },
   {
     text: 'the floating download list is actually nice?? it doesnt eat the whole screen',
-    name: 'Susie',
+    name: 'Maya',
     role: 'downloader regular',
   },
   {
     text: 'library stays on disk. no account no sync drama that was kinda the whole point',
-    name: 'Angel',
+    name: 'Theo',
     role: 'local library',
   },
   {
     text: 'i still roast him in the group chat. also told my sister to download it so',
-    name: 'Susie',
+    name: 'Maya',
     role: 'friend',
   },
   {
     text: 'when yt-dlp changes something i patch rebuild move on — not glamorous but it keeps working',
-    name: 'Angel',
+    name: 'Theo',
     role: 'maintainer',
   },
   {
     text: 'queued like six baking videos at once and the little card just sat there judging me. worth it',
-    name: 'Susie',
+    name: 'Maya',
     role: 'uses it daily',
   },
   {
     text: 'explorer tab is mostly for cookies when youtube gets annoying. not trying to replace chrome',
-    name: 'Angel',
+    name: 'Theo',
     role: 'explorer when needed',
   },
   {
     text: 'audio only downloads are smaller now thank god my drive was crying',
-    name: 'Susie',
+    name: 'Maya',
     role: 'audio downloads',
   },
   {
     text: 'chapters on the scrub bar look stupidly fancy for something i built in my room but ok',
-    name: 'Angel',
+    name: 'Theo',
     role: 'player',
   },
   {
     text: 'caught an ad skip i didnt even click and did a little chef kiss. dramatic but true',
-    name: 'Susie',
+    name: 'Maya',
     role: 'sponsorblock',
   },
   {
     text: 'download stalled once and the watchdog actually yelled at me (toast). fair',
-    name: 'Angel',
+    name: 'Theo',
     role: 'downloader',
   },
   {
     text: 'replaced a file in library without redownloading the whole channel — felt like cheating',
-    name: 'Susie',
+    name: 'Maya',
     role: 'library',
   },
   {
     text: 'volume mixer finally says ruforge instead of whatever webview2 is. tiny win huge',
-    name: 'Angel',
+    name: 'Theo',
     role: 'windows',
   },
   {
     text: 'mini player tiny mode is cursed i love it. title marquee at 70px height is insane',
-    name: 'Susie',
+    name: 'Maya',
     role: 'mini player',
   },
   {
     text: 'settings sponsorblock tree is nested chaos but at least its all in one place',
-    name: 'Angel',
+    name: 'Theo',
     role: 'settings person',
   },
   {
     text: 'told him the hero progress bar was giving math test anxiety and he removed the big percent. king behavior',
-    name: 'Susie',
+    name: 'Maya',
     role: 'friend',
   },
   {
     text: 'duplicate library rows after muxed downloads were driving me nuts — dedupe pass fixed my sanity',
-    name: 'Angel',
+    name: 'Theo',
     role: 'maintainer',
   },
   {
     text: 'watched the same pasta tutorial four times. nobody on the internet knows. perfect',
-    name: 'Susie',
+    name: 'Maya',
     role: 'repeat viewer',
   },
   {
     text: 'led visualizer on audio only tracks is so extra i cant disable it',
-    name: 'Angel',
+    name: 'Theo',
     role: 'audio only',
   },
   {
     text: 'he sent a screenshot of ruforge at 2am with caption "fixed" and i pretended to be asleep',
-    name: 'Susie',
+    name: 'Maya',
     role: 'friend',
   },
   {
     text: 'auto preview sprites for downloads are nice when im picking what to delete later',
-    name: 'Angel',
+    name: 'Theo',
     role: 'downloads',
   },
   {
     text: 'pop out to mini while folding laundry — yes i am that person',
-    name: 'Susie',
+    name: 'Maya',
     role: 'mini player',
   },
   {
     text: 'updater whats new modal finally scrolls on my laptop screen. small text big win',
-    name: 'Angel',
+    name: 'Theo',
     role: 'uses it daily',
   },
   {
     text: 'if this ever asks me to make an account im uninstalling (joking. mostly.)',
-    name: 'Susie',
+    name: 'Maya',
     role: 'local files fan',
   },
   {
     text: 'still weird seeing our names on a real website testimonials section but here we are',
-    name: 'Angel',
+    name: 'Theo',
     role: 'also built it',
   },
   {
     text: 'pinterest pics incoming for these cards. until then initials are doing heavy lifting',
-    name: 'Susie',
+    name: 'Maya',
     role: 'friend',
   },
 ];
 
-const angelCount = { n: 0 };
-const susieCount = { n: 0 };
+const theoCount = { n: 0 };
+const mayaCount = { n: 0 };
 
 export const TESTIMONIALS: Testimonial[] = QUOTES.map((q) => {
-  const idx = q.name === 'Angel' ? angelCount.n++ : susieCount.n++;
+  const idx = q.name === 'Theo' ? theoCount.n++ : mayaCount.n++;
   const fileName = imageFileFor(q.name, idx);
   const imageKey = imageKeyFrom(fileName);
   return {

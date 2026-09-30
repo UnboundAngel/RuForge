@@ -1,6 +1,8 @@
 import type { ImageMetadata } from 'astro';
-import heroDownload from '../assets/screenshots/02-download-downloading.webp';
+import { SITE } from './site';
 import heroMusic from '../assets/screenshots/03-music-now-playing.webp';
+import pasteLink from '../assets/tutorials/docs/pastealink.png';
+import libraryPlaylist from '../assets/tutorials/docs/library.png';
 import playerChapters from '../assets/tutorials/player/player-chapters.png';
 import sponsorScrub from '../assets/tutorials/sponsor/sponsor-scrub.png';
 
@@ -8,7 +10,10 @@ export interface LandingFeatureRow {
   id: string;
   reverse: boolean;
   pill: string;
-  headline: [string, string];
+  /** Short label for the mobile accordion row, which has room for about 24 characters. */
+  title: string;
+  headline: string;
+  /** One thought per line, split on `\n`; each line renders as its own spaced row. */
   paragraph: string;
   bullets: [string, string, string];
   image: ImageMetadata;
@@ -16,72 +21,123 @@ export interface LandingFeatureRow {
 }
 
 export const landingFeatureIntro = {
-  kicker: 'What you actually get',
-  headline: [
-    'Download, library, and playback.',
-    'Your files, offline, no strings attached.',
-  ],
+  kicker: 'what it does',
+  headline: 'save videos and music from YouTube and play them offline',
 };
+
+const LOGIN_CODE_URL = `${SITE.github}/blob/main/src-tauri/src/commands/explorer_cookies.rs`;
+
+/** Paragraphs are trusted HTML so they can carry `.rf-inline-link` anchors. `base` is '' on desktop, '/m' on mobile. */
+export function landingLoginTrust(base: '' | '/m') {
+  const privacy = `${base}/legal/privacy`;
+  const linkClass = base === '/m' ? 'rf-inline-link rf-m-link' : 'rf-inline-link';
+  const link = (href: string, label: string) => `<a class="${linkClass}" href="${href}">${label}</a>`;
+  return {
+    headline: 'your YouTube login stays between you and YouTube',
+    paragraphs: [
+      "you sign in on YouTube's own page inside RuForge, the same one you'd see in a browser. when you download something, RuForge hands your session to the downloader for that one job and deletes the copy when it finishes. you can also use the login from your normal browser, or none at all",
+      `there's no RuForge account and nothing to pay for, and RuForge doesn't send ${link(`${privacy}#no-telemetry`, 'usage stats')} or ${link(`${privacy}#no-crash-data`, 'crash reports')} anywhere`,
+    ],
+    note: `read ${link(`${privacy}#login-cookies`, 'where your login goes')} in the privacy policy, or ${link(LOGIN_CODE_URL, 'the code that handles it')} on GitHub`,
+  };
+}
 
 export const landingFeatureRows: LandingFeatureRow[] = [
   {
     id: 'downloader',
     reverse: false,
-    pill: 'Downloader',
-    headline: ['Paste a URL. Hit download.', 'The queue keeps working while you leave the tab.'],
-    paragraph:
-      'yt-dlp under the hood, with a UI that shows size before you commit. Batches use a card carousel with speed on the active job. Pause, resume, reorder, or replace from the queue. If a job stalls, RuForge kills it and marks it failed instead of pretending it is fine.',
+    pill: 'downloader',
+    title: 'download YouTube videos',
+    headline: 'paste a link to download one video or a whole playlist',
+    paragraph: [
+      'you see the file size before anything starts downloading',
+      'queue up as many links as you want, and choose how many download at once',
+      'pause, resume, or reorder anything in the queue',
+      "if a download gets stuck, RuForge stops it and marks it failed so it doesn't hang forever",
+    ].join('\n'),
     bullets: [
-      'Video or audio-only (real m4a extraction)',
-      'Playlists land in numbered folders',
-      'Deno installs itself when yt-dlp needs a JS runtime',
+      'save just the audio as an m4a file',
+      'playlists save into their own folder, numbered in order',
+      'the extra tools YouTube downloads need install themselves',
     ],
-    image: heroDownload,
-    imageAlt: 'RuForge downloader with an active download in progress',
+    image: pasteLink,
+    imageAlt: 'RuForge showing a pasted YouTube video with its length and file size before downloading',
+  },
+  {
+    id: 'library',
+    reverse: true,
+    pill: 'library',
+    title: 'everything in one place',
+    headline: 'everything you download lands in one library',
+    paragraph: [
+      'videos are grouped by the day you saved them, newest first',
+      'separate tabs for playlists, videos you started, and videos you finished',
+      'open a video you stopped halfway and it picks up where you left off',
+    ].join('\n'),
+    bullets: [
+      'play a whole playlist in order or shuffle it',
+      'each video shows its length and size on disk',
+      'saved videos play without an internet connection',
+    ],
+    image: libraryPlaylist,
+    imageAlt: 'RuForge library showing a playlist of downloaded videos with play all and shuffle buttons',
   },
   {
     id: 'music',
-    reverse: true,
-    pill: 'Music',
-    headline: ['Music mode with a Now Playing rail.', 'Albums, playlists, and cover art that stays put.'],
-    paragraph:
-      'Explore music.youtube.com in-app, pull playlists as audio, and keep listening from the Now Playing rail. Library shelves group albums and artists. Sidecars track which tracks finished so a partial playlist download is not a mystery.',
+    reverse: false,
+    pill: 'music',
+    title: 'a music player built in',
+    headline: 'a music player for everything you save from YouTube Music',
+    paragraph: [
+      'browse YouTube Music inside the app and download songs or whole playlists as audio',
+      'your library sorts everything by album and artist, with cover art',
+      'lyrics show up while you listen, when the song has them',
+      'if a playlist download gets interrupted, RuForge remembers which songs already finished',
+    ].join('\n'),
     bullets: [
-      'Audio-only batch downloads from Music Explore',
-      'Now Playing rail with lyrics when available',
-      'Playlist status sidecars under your Playlists folder',
+      'download a full playlist as audio in one go',
+      'songs blend into each other between tracks',
+      'loop a single song or a whole playlist',
     ],
     image: heroMusic,
-    imageAlt: 'RuForge music Now Playing rail with cover art and playback controls',
+    imageAlt: 'RuForge music player showing the current song, cover art, and playback controls',
   },
   {
     id: 'chapters',
-    reverse: false,
-    pill: 'Chapters',
-    headline: ['Chapters on the scrub bar.', 'Hover a segment to preview the frame.'],
-    paragraph:
-      'If the video has chapters in its yt-dlp sidecar, the scrub bar splits into labeled segments. Hover shows a frame from the sprite sheet ffmpeg built after download. Jump with prev/next or Shift+arrow.',
+    reverse: true,
+    pill: 'chapters',
+    title: 'chapters on the seek bar',
+    headline: 'chapters on the seek bar, so you can jump to the part you want',
+    paragraph: [
+      'if a video has chapters, the seek bar splits into named sections',
+      'hover anywhere on it to see a preview frame of that moment',
+      'skip between chapters with the buttons, or Shift and the arrow keys',
+    ].join('\n'),
     bullets: [
-      'Sprite sheets generate after download (optional in Settings)',
-      'Long chapter titles scroll instead of clipping',
-      'No extra network call; chapters come from the sidecar',
+      'works offline, chapters are saved with the video',
+      'long chapter names scroll so nothing gets cut off',
+      'preview frames can be turned off in Settings',
     ],
     image: playerChapters,
-    imageAlt: 'RuForge player chapter scrubber with hover preview',
+    imageAlt: 'RuForge video player with chapters on the seek bar and a hover preview',
   },
   {
     id: 'sponsorblock',
-    reverse: true,
+    reverse: false,
     pill: 'SponsorBlock',
-    headline: ['Skip sponsors on files you already own.', 'Same categories as the browser extension.'],
-    paragraph:
-      'First play fetches segments and writes a sidecar next to the video. After that it works offline. Categories include sponsor, intro, outro, self-promo, and music offtopic. It learns what you actually skip.',
+    title: 'skips sponsors for you',
+    headline: "skips sponsors, even in videos you've already downloaded",
+    paragraph: [
+      'RuForge uses SponsorBlock, the same community database as the browser extension',
+      'the first time you play a video, it looks up the sponsor segments and saves them with the file',
+      'after that, skipping works without an internet connection',
+    ].join('\n'),
     bullets: [
-      'Color-coded ranges on the scrub bar',
-      'On by default; tune categories in Settings',
-      'Privacy hash fetch (prefix only, not the full id)',
+      'intros, outros, and self-promotion can be skipped too',
+      'skipped segments show up in color on the seek bar',
+      'the lookup never sends the full video ID',
     ],
     image: sponsorScrub,
-    imageAlt: 'RuForge player with SponsorBlock scrub overlay',
+    imageAlt: 'RuForge video player with sponsor segments marked on the seek bar',
   },
 ];

@@ -8,7 +8,7 @@ export type RoadmapArea =
   | 'Settings'
   | 'Performance';
 
-export type RoadmapStatus = 'shipped' | 'progress' | 'planned';
+export type RoadmapStatus = 'shipped' | 'unreleased' | 'progress' | 'planned';
 
 export type RoadmapPriority = 'essential' | 'high' | 'medium' | 'low';
 

@@ -7,9 +7,11 @@ import { getImage } from 'astro:assets';
 import ruforgeLogo from '../../assets/ruforge-logo.png';
 import { SITE } from '../../lib/site';
 import { loadRoadmapEntries, transformRoadmapItems } from '../../lib/roadmapFieldNotes';
+import { readNextVersion } from '../../lib/roadmapNextVersion';
 
 const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
 const items = transformRoadmapItems(loadRoadmapEntries());
+const nextVersion = readNextVersion();
 ---
 
 <MobileShell
@@ -36,11 +38,12 @@ const items = transformRoadmapItems(loadRoadmapEntries());
         >
           <path d="M15 18l-6-6 6-6"></path>
         </svg>
-        Back
+        back
       </a>
-      <h1 class="font-display text-2xl font-bold tracking-tight text-rf-text">Roadmap</h1>
+      <h1 class="font-display text-2xl font-bold tracking-tight text-rf-text">what's coming next</h1>
       <p class="mt-2 text-sm text-rf-text-muted/80 leading-relaxed max-w-md">
-        What's shipped, what we're hammering on now, and what's on the horizon.
+        everything RuForge has shipped, what's being built now, and what's planned after that<br />
+        priorities can shift as things come up
       </p>
       <a
         href={SITE.discussions}
@@ -65,7 +68,7 @@ const items = transformRoadmapItems(loadRoadmapEntries());
       </a>
     </div>
 
-    <RoadmapFieldNotes client:load items={items} touchTooltips />
+    <RoadmapFieldNotes client:load items={items} nextVersion={nextVersion} touchTooltips />
   </main>
 
   <MobileFooter />
