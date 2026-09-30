@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   useCallback,
   useRef,
+  useState,
   type CSSProperties,
   type MouseEvent,
   type ReactNode,
@@ -22,6 +23,8 @@ import {
 } from "./IslandDownloadContent";
 import { IslandDownloadExpandedContent, islandDownloadExpandedDims } from "./IslandDownloadExpandedContent";
 import { IslandExpandedContent } from "./IslandExpandedContent";
+import { IslandNotificationsContent, islandNotificationsDims } from "./IslandNotificationsContent";
+import type { NotificationCenterPanelProps } from "@/components/notifications/NotificationCenterPanel";
 import {
   IslandUpdateCompactContent,
   IslandUpdateExpandedContent,
@@ -52,7 +55,8 @@ export type IslandState =
   | "download"
   | "download-expanded"
   | "watchlist"
-  | "watchlist-expanded";
+  | "watchlist-expanded"
+  | "notifications";
 
 const ISLAND_SPRING = {
   type: "spring" as const,
@@ -74,10 +78,16 @@ const ISLAND_DIMENSIONS: Record<
   expanded: { width: 350, height: 184, borderRadius: 40 },
   watchlist: { width: 240, height: 36, borderRadius: 18 },
   "watchlist-expanded": { ...ISLAND_WATCHLIST_EXPANDED_DIMENSIONS },
+  notifications: { width: 400, height: 220, borderRadius: 24 },
 };
 
 import type { AudioOutputDevice } from "@/audioOutputDevices";
 import type { LoopMode } from "@/playbackLoopStorage";
+
+const COLLAPSED_PILL_H = 36;
+/** Desktop overlay pills: the in-app island stays at 36 to match the onboarding island in the same slot. */
+const COMPACT_PILL_H = 32;
+const COMPACT_PILL_TRIM_W = 12;
 
 export type DynamicIslandContent = {
   coverSrc: string | null;
@@ -146,6 +156,12 @@ type DynamicIslandProps = {
   onWatchlistOpen?: (videoId: string) => void;
   onWatchlistMarkAllSeen?: () => void;
   onWatchlistShowMore?: () => void;
+  /** Main island only: the notification center when `state` is "notifications". */
+  notifications?: NotificationCenterPanelProps | null;
+  /** The empty idle pill reacts to taps (it opens notifications). */
+  idleTappable?: boolean;
+  /** Desktop overlay: slimmer collapsed pills. */
+  compactPills?: boolean;
 };
 
 function ContentShell({
@@ -164,6 +180,19 @@ function ContentShell({
     >
       {children}
     </motion.div>
+  );
+}
+
+/**
+ * Pins a content layer to its own state's size, anchored top-center, so it never reflows while the
+ * shell springs between sizes; the shell clips it instead. An exiting layer keeps the size it had,
+ * since AnimatePresence renders it with its last props.
+ */
+function IslandStage({ width, height, children }: { width: number; height: number; children: ReactNode }) {
+  return (
+    <div className="absolute left-1/2 top-0 -translate-x-1/2" style={{ width, height }}>
+      {children}
+    </div>
   );
 }
 
@@ -269,7 +298,12 @@ export function DynamicIsland({
   onWatchlistOpen,
   onWatchlistMarkAllSeen,
   onWatchlistShowMore,
+  notifications = null,
+  idleTappable = false,
+  compactPills = false,
 }: DynamicIslandProps) {
+  const [notificationsHeight, setNotificationsHeight] = useState<number | null>(null);
+  const [sizeSettled, setSizeSettled] = useState(true);
   const pendingSkipDirRef = useRef<IslandSkipDir>(1);
   const skipDirRef = useRef<IslandSkipDir>(1);
   const prevTrackKeyRef = useRef(content.trackKey);
@@ -320,7 +354,7 @@ export function DynamicIsland({
       : "expanded"
     : state;
   const baseDims = ISLAND_DIMENSIONS[effectiveState];
-  const dims =
+  const fullDims =
     updateMode && updateAvailable?.collapsed
       ? {
           width: islandUpdateCollapsedWidth(),
@@ -337,10 +371,29 @@ export function DynamicIsland({
             ? { ...baseDims, width: islandWatchlistCollapsedWidth(watchlist.count) }
             : effectiveState === "download-expanded" && download
               ? islandDownloadExpandedDims(download.jobs.length)
-              : baseDims;
-  const interactive = effectiveState !== "idle" || Boolean(devCaptureIdle) || updateMode;
+              : effectiveState === "notifications"
+                ? islandNotificationsDims(notificationsHeight)
+                : baseDims;
+  const dims =
+    compactPills && fullDims.height === COLLAPSED_PILL_H
+      ? {
+          width: fullDims.width - COMPACT_PILL_TRIM_W,
+          height: COMPACT_PILL_H,
+          borderRadius: COMPACT_PILL_H / 2,
+        }
+      : fullDims;
+  const interactive = effectiveState !== "idle" || Boolean(devCaptureIdle) || updateMode || idleTappable;
   const watchlistFloating = !updateMode && effectiveState === "watchlist-expanded";
   const downloadFloating = !updateMode && effectiveState === "download-expanded" && download != null;
+  const notificationsFloating = !updateMode && effectiveState === "notifications" && notifications != null;
+  // Expanded needs overflow for its menus, but only once grown; mid-spring it would spill full-size controls.
+  const overflowVisible = !updateMode && effectiveState === "expanded" && sizeSettled;
+
+  const stage = (key: string, node: ReactNode) => (
+    <IslandStage key={key} width={dims.width} height={dims.height}>
+      {node}
+    </IslandStage>
+  );
 
   return (
     <motion.div
@@ -350,111 +403,132 @@ export function DynamicIsland({
       style={{ originY: 0, WebkitAppRegion: "no-drag" } as CSSProperties}
       className="pointer-events-auto relative"
       onClick={onClick}
+      onAnimationStart={() => setSizeSettled(false)}
+      onAnimationComplete={() => setSizeSettled(true)}
     >
       <div
         className={`rf-island-shell relative h-full w-full ${
           updateMode ? "rf-island-shell--update" : ""
-        } ${
-          updateMode || effectiveState !== "expanded"
-            ? "overflow-hidden"
-            : "overflow-visible shadow-2xl"
-        } ${(updateMode && !updateAvailable?.collapsed) || watchlistFloating || downloadFloating ? "shadow-2xl" : ""} ${
+        } ${overflowVisible ? "overflow-visible" : "overflow-hidden"} ${
+          !updateMode && effectiveState === "expanded" ? "shadow-2xl" : ""
+        } ${(updateMode && !updateAvailable?.collapsed) || watchlistFloating || downloadFloating || notificationsFloating ? "shadow-2xl" : ""} ${
           interactive ? "cursor-pointer" : "cursor-default"
         }`}
         style={{ borderRadius: dims.borderRadius }}
       >
         <AnimatePresence initial={false}>
-          {updateMode && updateAvailable ? (
-            updateAvailable.collapsed ? (
-              <ContentShell key="update-compact">
-                <IslandUpdateCompactContent />
-              </ContentShell>
-            ) : (
-              <ContentShell key="update-expanded" enterScale={0.95}>
-                <IslandUpdateExpandedContent
-                  notes={updateAvailable.notes}
-                  installableVersion={updateAvailable.installableVersion}
-                  selectedVersion={updateAvailable.selectedVersion}
-                  onHideUntilRestart={updateAvailable.onHideUntilRestart}
-                  onInstallRestart={updateAvailable.onInstallRestart}
-                />
-              </ContentShell>
-            )
-          ) : null}
-          {!updateMode && state === "idle" && devCaptureIdle ? (
-            <IslandIdleDevCaptureContent
-              key="idle"
-              hover={devCaptureIdle.hover}
-              busy={devCaptureIdle.busy}
-              onCapture={devCaptureIdle.onCapture}
-            />
-          ) : null}
-          {!updateMode && state === "idle" && !devCaptureIdle ? <IdleContent key="idle" /> : null}
-          {!updateMode && state === "compact" && (
-            <CompactContent
-              key="compact"
-              content={content}
-              waveformLevels={waveformLevels}
-              skipDir={skipDir}
-            />
-          )}
-          {!updateMode && state === "capture" && captureSavedCaption && captureSavedPreviewSrc && onCaptureSavedOpen ? (
-            <IslandCaptureSavedContent
-              key="capture"
-              caption={captureSavedCaption}
-              previewSrc={captureSavedPreviewSrc}
-              onOpen={onCaptureSavedOpen}
-            />
-          ) : null}
-          {noticeActive ? (
-            <IslandNoticeContent key={`notice-${notice!.id}`} notice={notice!} accentColor={content.accentColor} />
-          ) : null}
-          {!updateMode && state === "download" && download ? (
-            <IslandDownloadContent key="download" download={download} />
-          ) : null}
-          {downloadFloating ? (
-            <IslandDownloadExpandedContent
-              key="download-expanded"
-              download={download!}
-              accentColor={content.accentColor}
-              onOpenDownloads={() => onOpenDownloads?.()}
-            />
-          ) : null}
-          {!updateMode && state === "watchlist" && watchlist ? (
-            <IslandWatchlistCompactContent key="watchlist-compact" watchlist={watchlist} />
-          ) : null}
-          {watchlistFloating && watchlist ? (
-            <IslandWatchlistExpandedContent
-              key="watchlist-expanded"
-              watchlist={watchlist}
-              accentColor={content.accentColor}
-              onQueue={(id) => onWatchlistQueue?.(id)}
-              onOpen={(id) => onWatchlistOpen?.(id)}
-              onMarkAllSeen={() => onWatchlistMarkAllSeen?.()}
-              onShowMore={() => onWatchlistShowMore?.()}
-            />
-          ) : null}
-          {!updateMode && state === "expanded" && (
-            <IslandExpandedContent
-              key="expanded"
-              content={content}
-              waveformLevels={waveformLevels}
-              skipDir={skipDir}
-              onPlayPause={onPlayPause}
-              onSeek={onSeek}
-              onBeginScrub={onBeginScrub}
-              onReleaseScrub={onReleaseScrub}
-              onOpenPlayer={onOpenPlayer}
-              onSkipPrev={handleSkipPrev}
-              onSkipNext={handleSkipNext}
-              onSkipBySeconds={onSkipBySeconds}
-              onVolume={onVolume}
-              onMuted={onMuted}
-              onToggleLoop={onToggleLoop}
-              onAudioOutput={onAudioOutput}
-              onPopOut={onPopOut}
-            />
-          )}
+          {updateMode && updateAvailable
+            ? updateAvailable.collapsed
+              ? stage(
+                  "update-compact",
+                  <ContentShell>
+                    <IslandUpdateCompactContent />
+                  </ContentShell>,
+                )
+              : stage(
+                  "update-expanded",
+                  <ContentShell enterScale={0.95}>
+                    <IslandUpdateExpandedContent
+                      notes={updateAvailable.notes}
+                      installableVersion={updateAvailable.installableVersion}
+                      selectedVersion={updateAvailable.selectedVersion}
+                      onHideUntilRestart={updateAvailable.onHideUntilRestart}
+                      onInstallRestart={updateAvailable.onInstallRestart}
+                    />
+                  </ContentShell>,
+                )
+            : null}
+          {!updateMode && state === "idle" && devCaptureIdle
+            ? stage(
+                "idle",
+                <IslandIdleDevCaptureContent
+                  hover={devCaptureIdle.hover}
+                  busy={devCaptureIdle.busy}
+                  onCapture={devCaptureIdle.onCapture}
+                />,
+              )
+            : null}
+          {!updateMode && state === "idle" && !devCaptureIdle ? stage("idle", <IdleContent />) : null}
+          {!updateMode && state === "compact"
+            ? stage(
+                "compact",
+                <CompactContent content={content} waveformLevels={waveformLevels} skipDir={skipDir} />,
+              )
+            : null}
+          {!updateMode && state === "capture" && captureSavedCaption && captureSavedPreviewSrc && onCaptureSavedOpen
+            ? stage(
+                "capture",
+                <IslandCaptureSavedContent
+                  caption={captureSavedCaption}
+                  previewSrc={captureSavedPreviewSrc}
+                  onOpen={onCaptureSavedOpen}
+                />,
+              )
+            : null}
+          {noticeActive
+            ? stage(
+                `notice-${notice!.id}`,
+                <IslandNoticeContent notice={notice!} accentColor={content.accentColor} />,
+              )
+            : null}
+          {!updateMode && state === "download" && download
+            ? stage("download", <IslandDownloadContent download={download} />)
+            : null}
+          {downloadFloating
+            ? stage(
+                "download-expanded",
+                <IslandDownloadExpandedContent
+                  download={download!}
+                  accentColor={content.accentColor}
+                  onOpenDownloads={() => onOpenDownloads?.()}
+                />,
+              )
+            : null}
+          {notificationsFloating
+            ? stage(
+                "notifications",
+                <IslandNotificationsContent panel={notifications!} onHeight={setNotificationsHeight} />,
+              )
+            : null}
+          {!updateMode && state === "watchlist" && watchlist
+            ? stage("watchlist-compact", <IslandWatchlistCompactContent watchlist={watchlist} />)
+            : null}
+          {watchlistFloating && watchlist
+            ? stage(
+                "watchlist-expanded",
+                <IslandWatchlistExpandedContent
+                  watchlist={watchlist}
+                  accentColor={content.accentColor}
+                  onQueue={(id) => onWatchlistQueue?.(id)}
+                  onOpen={(id) => onWatchlistOpen?.(id)}
+                  onMarkAllSeen={() => onWatchlistMarkAllSeen?.()}
+                  onShowMore={() => onWatchlistShowMore?.()}
+                />,
+              )
+            : null}
+          {!updateMode && state === "expanded"
+            ? stage(
+                "expanded",
+                <IslandExpandedContent
+                  content={content}
+                  waveformLevels={waveformLevels}
+                  skipDir={skipDir}
+                  onPlayPause={onPlayPause}
+                  onSeek={onSeek}
+                  onBeginScrub={onBeginScrub}
+                  onReleaseScrub={onReleaseScrub}
+                  onOpenPlayer={onOpenPlayer}
+                  onSkipPrev={handleSkipPrev}
+                  onSkipNext={handleSkipNext}
+                  onSkipBySeconds={onSkipBySeconds}
+                  onVolume={onVolume}
+                  onMuted={onMuted}
+                  onToggleLoop={onToggleLoop}
+                  onAudioOutput={onAudioOutput}
+                  onPopOut={onPopOut}
+                />,
+              )
+            : null}
         </AnimatePresence>
         {download && !updateMode && (effectiveState === "download" || effectiveState === "compact") ? (
           <IslandProgressRing pct={download.pct} radius={dims.borderRadius} color={content.accentColor} />

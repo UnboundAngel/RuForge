@@ -17,6 +17,7 @@ type Props = {
   channels: WatchedChannel[];
   onManageChannels: () => void;
   onAllSettings: () => void;
+  compact?: boolean;
 };
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -28,7 +29,28 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Row({ title, description, control }: { title: string; description: string; control: ReactNode }) {
+function Row({
+  title,
+  description,
+  control,
+  stacked = false,
+}: {
+  title: string;
+  description: string;
+  control: ReactNode;
+  stacked?: boolean;
+}) {
+  if (stacked) {
+    return (
+      <div className="rf-settings-row flex-col items-stretch! gap-2.5!">
+        <div className="rf-settings-row-label space-y-0.5">
+          <h4 className="text-stone-100">{title}</h4>
+          <p className={panelRowDetailClass}>{description}</p>
+        </div>
+        {control}
+      </div>
+    );
+  }
   return (
     <div className="rf-settings-row">
       <div className="rf-settings-row-label space-y-0.5">
@@ -40,9 +62,17 @@ function Row({ title, description, control }: { title: string; description: stri
   );
 }
 
-function IntervalSelect({ value, onChange }: { value: number; onChange: (minutes: number) => void }) {
+function IntervalSelect({
+  value,
+  onChange,
+  fill = false,
+}: {
+  value: number;
+  onChange: (minutes: number) => void;
+  fill?: boolean;
+}) {
   return (
-    <div role="radiogroup" aria-label="Check interval" className={`flex p-1 ${raisedClass}`}>
+    <div role="radiogroup" aria-label="Check interval" className={`flex p-1 ${fill ? "w-full" : ""} ${raisedClass}`}>
       {CHECK_INTERVAL_OPTIONS.map((o) => {
         const on = o.minutes === value;
         return (
@@ -52,7 +82,7 @@ function IntervalSelect({ value, onChange }: { value: number; onChange: (minutes
             role="radio"
             aria-checked={on}
             onClick={() => onChange(o.minutes)}
-            className={`h-7 rounded-lg px-2.5 transition-colors duration-150 ${controlLabelClass} ${
+            className={`h-7 rounded-lg px-2.5 transition-colors duration-150 ${fill ? "flex-1" : ""} ${controlLabelClass} ${
               on
                 ? "bg-[color:var(--accent)] text-[color:var(--rf-popover-cta-fg,#1d1613)]"
                 : "text-stone-400 hover:bg-white/[0.05] hover:text-stone-200"
@@ -66,7 +96,14 @@ function IntervalSelect({ value, onChange }: { value: number; onChange: (minutes
   );
 }
 
-export function NotificationPrefsView({ prefs, handlers, channels, onManageChannels, onAllSettings }: Props) {
+export function NotificationPrefsView({
+  prefs,
+  handlers,
+  channels,
+  onManageChannels,
+  onAllSettings,
+  compact = false,
+}: Props) {
   const autoCount = channels.filter((c) => c.autoDownload).length;
 
   return (
@@ -88,7 +125,10 @@ export function NotificationPrefsView({ prefs, handlers, channels, onManageChann
         <Row
           title="Check for uploads"
           description="How often followed channels are checked."
-          control={<IntervalSelect value={prefs.checkIntervalMin} onChange={handlers.onCheckInterval} />}
+          stacked={compact}
+          control={
+            <IntervalSelect value={prefs.checkIntervalMin} onChange={handlers.onCheckInterval} fill={compact} />
+          }
         />
       </Section>
       <Section title="Channels">

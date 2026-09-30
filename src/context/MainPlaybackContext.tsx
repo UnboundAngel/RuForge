@@ -18,6 +18,8 @@ export type MainPlaybackSnapshot = {
   paused: boolean;
   currentTime: number;
   duration: number;
+  /** Identifies the loaded track so a restart at 0 on a new track is not mistaken for a time glitch. */
+  mediaKey?: string | null;
   togglePlay?: () => void;
   seek?: (seconds: number) => void;
   beginScrub?: () => void;
@@ -63,6 +65,7 @@ export function MainPlaybackProvider({
       paused: existing?.paused ?? v.paused,
       currentTime: existing?.currentTime ?? v.currentTime,
       duration: existing?.duration ?? v.duration,
+      mediaKey: v.mediaKey,
       hasPrevInQueue: v.hasPrevInQueue,
       hasNextInQueue: v.hasNextInQueue,
       togglePlay: () => latestRef.current.togglePlay?.(),
@@ -76,6 +79,7 @@ export function MainPlaybackProvider({
     bridgeOwner,
     active,
     liveTelemetry,
+    value.mediaKey,
     value.hasPrevInQueue,
     value.hasNextInQueue,
     ...(liveTelemetry

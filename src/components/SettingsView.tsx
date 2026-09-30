@@ -2243,6 +2243,22 @@ export const SettingsView: React.FC<{
               </SettingsSection>
               <SettingsSection title="Debugging">
                 <SettingItem
+                  title="Notifications in island"
+                  description="The bell opens notifications inside the Dynamic Island. Tapping the empty island opens them too."
+                  active={settings.notificationsInIsland === true}
+                  control={
+                    <ToggleSlot
+                      active={settings.notificationsInIsland === true}
+                      onClick={() =>
+                        void updateSetting(
+                          "notificationsInIsland",
+                          settings.notificationsInIsland !== true,
+                        )
+                      }
+                    />
+                  }
+                />
+                <SettingItem
                   title="Hide songs from main library"
                   description="Keep audio downloads and music playlists in Music mode only. The main Video Library shows movies and videos."
                   control={

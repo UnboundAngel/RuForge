@@ -184,6 +184,8 @@ export interface RuforgeSettings {
   watchlistAlerts: boolean;
   /** When true, the title bar shows the export-to-drive button (Settings > Export always has it). */
   showExportInTitlebar: boolean;
+  /** Experiment: the bell opens the notification center inside the titlebar island instead of the popover. */
+  notificationsInIsland: boolean;
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -227,6 +229,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   discordPresenceShowBrowsing: true,
   watchlistAlerts: true,
   showExportInTitlebar: false,
+  notificationsInIsland: false,
 };
 
 /** Hidden legacy default was `"chrome"` (not in downloader UI). Treat as no cookie source. */
@@ -276,6 +279,7 @@ export function loadMergedSettings(): RuforgeSettings {
       discordPresenceShowBrowsing: merged.discordPresenceShowBrowsing !== false,
       watchlistAlerts: merged.watchlistAlerts !== false,
       showExportInTitlebar: merged.showExportInTitlebar === true,
+      notificationsInIsland: merged.notificationsInIsland === true,
     };
   } catch {
     return DEFAULT_SETTINGS;

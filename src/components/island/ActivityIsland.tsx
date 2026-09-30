@@ -38,8 +38,11 @@ import { readPlaybackSpeed } from "@/playbackSpeedStorage";
 import { useCurrentActivity } from "@/hooks/useCurrentActivity";
 import { primaryArtist, rawArtistFromFile } from "@/components/music/musicArtist";
 import { buildIslandDownload } from "@/lib/islandDownload";
+import { setNotificationPopoverOpen } from "@/notifications/notificationCenterStore";
+import { closeNotificationPopover } from "@/notifications/popoverActions";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { DynamicIsland, type IslandState } from "./DynamicIsland";
+import { useIslandNotifications } from "./useIslandNotifications";
 
 type IslandSavedCapture = {
   entry: DevCaptureEntry;
@@ -155,13 +158,20 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   const [downloadOpen, setDownloadOpen] = useState(false);
   const downloadExpanded = downloadOpen && download != null && !isExpanded;
 
+  const notificationsInIsland = useRuforgeStore((s) => s.settings.notificationsInIsland === true);
+  const islandNotifications = useIslandNotifications(notificationsInIsland && !devCaptureIsland);
+  const notificationsOpen = islandNotifications != null;
+
   // Never collapse something the user opened on purpose.
-  const showNotice = notice != null && !isExpanded && !updateExpanded && !downloadExpanded;
+  const showNotice =
+    notice != null && !isExpanded && !updateExpanded && !downloadExpanded && !notificationsOpen;
 
   const islandState: IslandState = devCaptureIsland
     ? savedCapture
       ? "capture"
       : "idle"
+    : notificationsOpen
+      ? "notifications"
     : showNotice
       ? "notice"
     : updateMode
@@ -181,6 +191,12 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   useEffect(() => {
     if (!download) setDownloadOpen(false);
   }, [download]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    setUserExpanded(false);
+    setDownloadOpen(false);
+  }, [notificationsOpen]);
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -228,11 +244,15 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   }, [hasSession]);
 
   useEffect(() => {
-    if (!isExpanded && !savedCapture && !downloadExpanded) return;
+    if (!isExpanded && !savedCapture && !downloadExpanded && !notificationsOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (savedCapture) {
         dismissSavedCapture();
+        return;
+      }
+      if (notificationsOpen) {
+        closeNotificationPopover();
         return;
       }
       if (isExpanded) setUserExpanded(false);
@@ -240,7 +260,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isExpanded, savedCapture, downloadExpanded, dismissSavedCapture]);
+  }, [isExpanded, savedCapture, downloadExpanded, notificationsOpen, dismissSavedCapture]);
   const handlePlayPause = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -405,6 +425,10 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
 
   const handleShellClick = () => {
     if (devCaptureIsland) return;
+    if (notificationsOpen) {
+      closeNotificationPopover();
+      return;
+    }
     if (showNotice) {
       dismissNotification(notice.id);
       return;
@@ -429,7 +453,11 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       setUserExpanded(false);
       return;
     }
-    if (canExpand) setUserExpanded(true);
+    if (canExpand) {
+      setUserExpanded(true);
+      return;
+    }
+    if (islandState === "idle" && notificationsInIsland) setNotificationPopoverOpen(true);
   };
 
   const handleOpenDownloads = () => {
@@ -463,12 +491,24 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
 
   return createPortal(
     <>
-      {isExpanded || updateExpanded || downloadExpanded ? (
+      {notificationsOpen || isExpanded || updateExpanded || downloadExpanded ? (
         <button
           type="button"
           className="pointer-events-auto fixed inset-0 z-[109] bg-transparent"
-          aria-label={updateExpanded ? "Collapse update details" : downloadExpanded ? "Close downloads" : "Dismiss now playing"}
+          aria-label={
+            notificationsOpen
+              ? "Close notifications"
+              : updateExpanded
+                ? "Collapse update details"
+                : downloadExpanded
+                  ? "Close downloads"
+                  : "Dismiss now playing"
+          }
           onClick={() => {
+            if (notificationsOpen) {
+              closeNotificationPopover();
+              return;
+            }
             if (updateExpanded && updateAvailable) {
               updateAvailable.onCollapse();
               return;
@@ -507,10 +547,12 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
             notice={showNotice ? notice : null}
             download={download}
             onOpenDownloads={handleOpenDownloads}
+            notifications={islandNotifications}
+            idleTappable={notificationsInIsland && !devCaptureIsland}
             content={content}
             waveformLevels={waveformLevels}
             updateAvailable={
-              updateAvailable
+              updateAvailable && !notificationsOpen
                 ? {
                     version: updateAvailable.version,
                     notes: updateAvailable.notes,

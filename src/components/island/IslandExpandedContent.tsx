@@ -27,9 +27,15 @@ const CENTER_GAP_PX = 4;
 function formatClock(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
   const s = Math.floor(seconds);
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${r.toString().padStart(2, "0")}`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
+  return `${m}:${(s % 60).toString().padStart(2, "0")}`;
+}
+
+function formatRemaining(seconds: number): string {
+  const s = Math.max(0, seconds);
+  return s >= 3600 ? formatClock(s) : `-${formatClock(s)}`;
 }
 
 function IslandTitleCopy({ text, trackKey }: { text: string; trackKey: string }) {
@@ -295,7 +301,7 @@ function IslandScrubber({
 
   return (
     <div className="flex items-center gap-2 text-[12px] text-zinc-400">
-      <span className="inline-block w-9 shrink-0 text-right tabular-nums">
+      <span className="inline-block min-w-9 shrink-0 whitespace-nowrap text-right tabular-nums">
         {formatClock(displayCurrentTime)}
       </span>
       <div
@@ -317,9 +323,9 @@ function IslandScrubber({
           />
         </div>
       </div>
-      <span className="inline-block w-10 shrink-0 tabular-nums">
+      <span className="inline-block min-w-10 shrink-0 whitespace-nowrap tabular-nums">
         {content.duration > 0
-          ? `-${formatClock(Math.max(0, content.duration - displayCurrentTime))}`
+          ? formatRemaining(content.duration - displayCurrentTime)
           : "0:00"}
       </span>
     </div>
