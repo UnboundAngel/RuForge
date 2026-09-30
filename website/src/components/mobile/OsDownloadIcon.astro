@@ -1,0 +1,40 @@
+---
+import type { DetectedPlatform } from '../../lib/detectPlatform';
+import { OS_ICONS } from '../../lib/osIcons';
+
+interface Props {
+  size?: number;
+}
+
+const { size = 16 } = Astro.props;
+const entries = Object.entries(OS_ICONS) as [DetectedPlatform, (typeof OS_ICONS)[DetectedPlatform]][];
+---
+
+<span class="inline-flex" aria-hidden="true" data-os-icon>
+  {
+    entries.map(([os, { paths, filled }]) => (
+      <span class="inline-flex" data-os={os} hidden={os !== 'windows'}>
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill={filled ? 'currentColor' : 'none'}
+          stroke={filled ? undefined : 'currentColor'}
+          stroke-width={filled ? undefined : 1.75}
+          stroke-linecap="round"
+        >
+          {paths.map((d) => <path d={d} />)}
+        </svg>
+      </span>
+    ))
+  }
+</span>
+
+<script>
+  import { detectPlatform } from '../../lib/detectPlatform';
+
+  const os = detectPlatform();
+  document.querySelectorAll('[data-os-icon] [data-os]').forEach((el) => {
+    el.toggleAttribute('hidden', el.getAttribute('data-os') !== os);
+  });
+</script>

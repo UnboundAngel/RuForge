@@ -37,6 +37,7 @@
   html {
     @apply bg-rf-bg text-rf-text antialiased;
     font-family: var(--font-sans);
+    color-scheme: dark;
   }
 
   body {
@@ -457,34 +458,34 @@
     opacity: 0.95;
   }
 
-  /* Canonical slim scrollbar: accent thumb, no native arrow buttons. */
-  .rf-scrollbar,
-  .rf-scrollbar * {
-    scrollbar-width: thin;
-    scrollbar-color: rgb(237 215 156 / 0.25) transparent;
+  /* Canonical slim scrollbar. Chrome ignores ::-webkit-scrollbar on any element
+     that sets scrollbar-color or scrollbar-width, and only the webkit rules can
+     hide the arrow buttons, so the standard properties are Firefox-only. */
+  @supports not selector(::-webkit-scrollbar) {
+    .rf-scrollbar,
+    .rf-scrollbar * {
+      scrollbar-width: thin;
+      scrollbar-color: rgb(237 215 156 / 0.25) transparent;
+    }
   }
 
   .rf-scrollbar::-webkit-scrollbar,
   .rf-scrollbar *::-webkit-scrollbar {
     width: 7px;
     height: 7px;
+    background: transparent;
   }
 
   .rf-scrollbar::-webkit-scrollbar-button,
-  .rf-scrollbar *::-webkit-scrollbar-button {
+  .rf-scrollbar *::-webkit-scrollbar-button,
+  .rf-scrollbar::-webkit-scrollbar-corner,
+  .rf-scrollbar *::-webkit-scrollbar-corner {
     display: none;
-    width: 0;
-    height: 0;
-  }
-
-  .rf-scrollbar::-webkit-scrollbar-track,
-  .rf-scrollbar *::-webkit-scrollbar-track {
-    background: transparent;
   }
 
   .rf-scrollbar::-webkit-scrollbar-thumb,
   .rf-scrollbar *::-webkit-scrollbar-thumb {
-    background: rgb(237 215 156 / 0.2);
+    background: rgb(237 215 156 / 0.25);
     border-radius: 999px;
   }
 
@@ -505,6 +506,16 @@
   .rf-inline-code {
     font-family: var(--font-mono);
     @apply rounded-md border border-rf-border/70 bg-rf-surface/80 px-1.5 py-0.5 text-[0.8125rem] font-normal text-rf-accent;
+  }
+
+  /* Mobile long-form text: code chips sit in the line instead of boxing it. */
+  .rf-m-read {
+    @apply text-[15px] leading-7 text-rf-text-muted;
+  }
+
+  .rf-m-read .rf-inline-code {
+    @apply rounded border-0 bg-rf-accent/10 px-1 py-0 text-[0.85em] text-rf-accent/90;
+    overflow-wrap: anywhere;
   }
 
   .rf-code-panel {
@@ -814,21 +825,6 @@
   box-shadow:
     0 12px 32px rgb(0 0 0 / 0.55),
     0 1px 3px rgb(0 0 0 / 0.3);
-  scrollbar-width: thin;
-  scrollbar-color: rgb(237 215 156 / 0.15) transparent;
-}
-
-.docs-search__results::-webkit-scrollbar {
-  width: 5px;
-}
-
-.docs-search__results::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.docs-search__results::-webkit-scrollbar-thumb {
-  background: rgb(237 215 156 / 0.15);
-  border-radius: 9999px;
 }
 
 .docs-search__result {
@@ -1032,36 +1028,9 @@
     margin-inline: auto;
   }
 
-  /* Download owl page: glassy scrollbar, no track, no arrow buttons */
   html.rf-dl-owl-page,
   html.rf-dl-owl-page body {
     background: #120d0a !important;
-  }
-  html.rf-dl-owl-page {
-    scrollbar-width: thin;
-    scrollbar-color: rgb(237 215 156 / 0.1) transparent;
-  }
-  html.rf-dl-owl-page::-webkit-scrollbar {
-    width: 6px;
-    background: transparent;
-  }
-  html.rf-dl-owl-page::-webkit-scrollbar-button {
-    display: none;
-    width: 0;
-    height: 0;
-  }
-  html.rf-dl-owl-page::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  html.rf-dl-owl-page::-webkit-scrollbar-thumb {
-    background: rgb(237 215 156 / 0.1);
-    border-radius: 999px;
-  }
-  html.rf-dl-owl-page::-webkit-scrollbar-thumb:hover {
-    background: rgb(237 215 156 / 0.22);
-  }
-  html.rf-dl-owl-page::-webkit-scrollbar-corner {
-    background: transparent;
   }
 
   /* Hero: generous space below fixed header pill */

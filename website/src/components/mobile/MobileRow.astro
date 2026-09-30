@@ -1,0 +1,34 @@
+---
+interface Props {
+  href: string;
+  title: string;
+  meta: string;
+}
+
+const { href, title, meta } = Astro.props;
+const external = href.startsWith('http');
+---
+
+<a
+  href={href}
+  class="rf-m-card flex items-center gap-4 rounded-xl bg-rf-surface px-4 py-4 no-underline"
+  {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+>
+  <div class="min-w-0 flex-1">
+    <p class="text-base font-semibold text-rf-text">{title}</p>
+    <p class="mt-1 truncate text-xs text-rf-text-muted/60">{meta}</p>
+  </div>
+  <svg class="shrink-0 text-rf-text-muted/50" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    {
+      external ? (
+        <>
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </>
+      ) : (
+        <path d="M9 18l6-6-6-6" />
+      )
+    }
+  </svg>
+</a>

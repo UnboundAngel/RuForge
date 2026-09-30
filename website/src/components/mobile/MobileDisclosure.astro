@@ -1,0 +1,46 @@
+---
+interface Props {
+  id: string;
+  buttonClass?: string;
+  triggerAfter?: boolean;
+}
+
+const { id, buttonClass, triggerAfter = false } = Astro.props;
+---
+
+{
+  triggerAfter ? null : (
+    <button type="button" class:list={['rf-m-btn group', buttonClass]} aria-expanded="false" aria-controls={id} data-disclosure>
+      <slot name="trigger" />
+    </button>
+  )
+}
+<div
+  id={id}
+  class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none data-[open]:grid-rows-[1fr]"
+>
+  <div class="min-h-0 overflow-hidden" inert data-disclosure-inner>
+    <slot />
+  </div>
+</div>
+{
+  triggerAfter && (
+    <button type="button" class:list={['rf-m-btn group', buttonClass]} aria-expanded="false" aria-controls={id} data-disclosure>
+      <slot name="trigger" />
+    </button>
+  )
+}
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-disclosure]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const open = button.getAttribute('aria-expanded') !== 'true';
+      button.setAttribute('aria-expanded', String(open));
+      const panel = document.getElementById(button.getAttribute('aria-controls') ?? '');
+      panel?.toggleAttribute('data-open', open);
+      panel?.querySelector('[data-disclosure-inner]')?.toggleAttribute('inert', !open);
+      button.querySelectorAll('[data-when-open]').forEach((el) => el.toggleAttribute('hidden', !open));
+      button.querySelectorAll('[data-when-closed]').forEach((el) => el.toggleAttribute('hidden', open));
+    });
+  });
+</script>

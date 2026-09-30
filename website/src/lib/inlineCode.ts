@@ -27,3 +27,7 @@ export function parseInlineCode(text: string): InlineSegment[] {
 
   return segments.length > 0 ? segments : [{ type: 'text', value: text }];
 }
+
+export function stripInlineCode(text: string): string {
+  return text.replace(/`([^`]+)`/g, '$1');
+}

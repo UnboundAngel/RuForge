@@ -1,0 +1,22 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+  backHref?: string;
+  backLabel?: string;
+}
+
+const { title, description, backHref = '/m/', backLabel = 'Back' } = Astro.props;
+---
+
+<div class="mb-8">
+  <a href={backHref} class="rf-m-btn mb-4 inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+    {backLabel}
+  </a>
+  <h1 class="font-display text-4xl font-bold tracking-tight text-rf-text">{title}</h1>
+  {description && <p class="mt-2 text-[15px] leading-relaxed text-rf-text-muted/80">{description}</p>}
+  <slot />
+</div>

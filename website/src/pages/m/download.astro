@@ -2,6 +2,7 @@
 import MobileShell from '../../layouts/MobileShell.astro';
 import MobileHeader from '../../components/mobile/MobileHeader';
 import MobileFooter from '../../components/mobile/MobileFooter.astro';
+import OsDownloadIcon from '../../components/mobile/OsDownloadIcon.astro';
 import { getImage } from 'astro:assets';
 import ruforgeLogo from '../../assets/ruforge-logo.png';
 import { SITE } from '../../lib/site';
@@ -54,10 +55,7 @@ const releaseUrl = releaseNotesUrl(version);
         download={filename}
         class="rf-m-btn inline-flex items-center justify-center gap-2.5 w-full max-w-xs mx-auto py-3.5 rounded-xl bg-rf-accent text-rf-bg text-sm font-bold tracking-wide no-underline hover:opacity-100 hover:brightness-105"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
-          <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-        </svg>
+        <OsDownloadIcon size={18} />
         <span id="dl-cta-label">Download for Windows</span>
       </a>
 

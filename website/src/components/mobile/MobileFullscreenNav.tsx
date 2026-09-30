@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { mobileHref } from '../../lib/mobileHref';
 import { NAV_SECTIONS, pageHref, type NavSectionId } from '../../lib/sitePages';
-import { detectPlatform, downloadCtaLabel } from '../../lib/detectPlatform';
+import { detectPlatform, downloadCtaLabel, type DetectedPlatform } from '../../lib/detectPlatform';
+import OsIcon from './OsIcon';
 
 const sections: { id: NavSectionId; label: string }[] = [
   { id: 'features', label: 'Features' },
@@ -115,14 +116,14 @@ function NavSection({
 
 export default function MobileFullscreenNav({ open, onClose, logoSrc }: Props) {
   const [expandedId, setExpandedId] = useState<NavSectionId | null>(null);
-  const [ctaLabel, setCtaLabel] = useState('Download for Windows');
+  const [platform, setPlatform] = useState<DetectedPlatform>('windows');
 
   const handleToggle = useCallback((id: NavSectionId) => {
     setExpandedId((prev) => (prev === id ? null : id));
   }, []);
 
   useEffect(() => {
-    setCtaLabel(downloadCtaLabel(detectPlatform()));
+    setPlatform(detectPlatform());
   }, []);
 
   useEffect(() => {
@@ -197,13 +198,10 @@ export default function MobileFullscreenNav({ open, onClose, logoSrc }: Props) {
       >
         <a
           href="/m/download"
-          className="rf-m-btn flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-rf-accent/15 border border-rf-accent/25 text-rf-accent text-sm font-semibold tracking-wide no-underline hover:bg-rf-accent/25"
+          className="rf-m-btn flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl bg-rf-accent text-rf-bg text-sm font-bold tracking-wide no-underline shadow-[0_4px_16px_rgb(0_0_0/0.28)]"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
-            <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-          </svg>
-          {ctaLabel}
+          <OsIcon os={platform} size={16} />
+          {downloadCtaLabel(platform)}
         </a>
       </div>
     </div>

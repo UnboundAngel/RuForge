@@ -9,6 +9,7 @@ import { Image, getImage } from 'astro:assets';
 import ruforgeLogo from '../../assets/ruforge-logo.png';
 import highlightCoffee from '../../assets/highlight-coffee-beans.webp';
 import InkStamp from '../../components/InkStamp.astro';
+import OsDownloadIcon from '../../components/mobile/OsDownloadIcon.astro';
 import { landingFeatureRows, landingFeatureIntro, landingLoginTrust } from '../../lib/landingFeatures';
 import { SITE } from '../../lib/site';
 
@@ -57,12 +58,9 @@ const features = landingFeatureRows.map((row, i) => ({
         </p>
         <a
           href="/m/download"
-          class="rf-m-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rf-accent/15 border border-rf-accent/25 text-rf-accent text-sm font-semibold tracking-wide no-underline hover:bg-rf-accent/25"
+          class="rf-m-btn inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-rf-accent text-rf-bg text-sm font-bold tracking-wide no-underline shadow-[0_4px_16px_rgb(0_0_0/0.28)]"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
-            <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
-          </svg>
+          <OsDownloadIcon size={16} />
           <span id="m-hero-cta-label">Download for Windows</span>
         </a>
       </div>

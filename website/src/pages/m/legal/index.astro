@@ -2,6 +2,8 @@
 import MobileShell from '../../../layouts/MobileShell.astro';
 import MobileHeader from '../../../components/mobile/MobileHeader';
 import MobileFooter from '../../../components/mobile/MobileFooter.astro';
+import MobilePageHeader from '../../../components/mobile/MobilePageHeader.astro';
+import MobileRow from '../../../components/mobile/MobileRow.astro';
 import { getImage } from 'astro:assets';
 import ruforgeLogo from '../../../assets/ruforge-logo.png';
 import { LEGAL_LINKS, SITE } from '../../../lib/site';
@@ -15,31 +17,12 @@ const docs = LEGAL_LINKS.map((doc) => ({ ...doc, ...legalDocInfo(doc.file) }));
   <MobileHeader client:load logoSrc={logoImage.src} />
 
   <main class="pt-20 pb-12 px-5 min-h-screen">
-    <div class="mb-6">
-      <a href="/m/" class="rf-m-btn inline-flex items-center gap-1.5 text-sm text-rf-text-muted no-underline hover:text-rf-text mb-4">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-        Back
-      </a>
-      <h1 class="font-display text-4xl font-bold tracking-tight text-rf-text">Legal</h1>
-      <p class="mt-2 text-[15px] text-rf-text-muted/80 leading-relaxed">
-        The policies that cover the RuForge desktop app.
-      </p>
-    </div>
+    <MobilePageHeader title="Legal" description="The policies that cover the RuForge desktop app." />
 
-    <ul class="mt-8 space-y-2">
+    <ul class="space-y-2">
       {docs.map((doc) => (
         <li>
-          <a href={`/m${doc.href}`} class="rf-m-card flex items-center gap-4 rounded-xl bg-rf-surface px-4 py-4 no-underline">
-            <div class="min-w-0 flex-1">
-              <p class="text-base font-semibold text-rf-text">{doc.title}</p>
-              <p class="mt-1 text-xs text-rf-text-muted/60">Updated {doc.updated} · {doc.minutes} min read</p>
-            </div>
-            <svg class="shrink-0 text-rf-text-muted/50" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </a>
+          <MobileRow href={`/m${doc.href}`} title={doc.title} meta={`Updated ${doc.updated} · ${doc.minutes} min read`} />
         </li>
       ))}
     </ul>
