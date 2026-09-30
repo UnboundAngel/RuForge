@@ -30,7 +30,7 @@ Rules: root `AGENTS.md` → **How to log Unreleased**.
 ## Now
 
 0.4.0 is out. App work pause-friendly. Website hero / marketing pass done for the 3-slide set. Storage cap before enqueue shipped (#10). Playlist import Phase 1 (prompt + paste JSON, review, save) merged to main; CLI entry is Phase 2. Library home rework landed (YouTube-style sections, Shorts shelves, channel avatars, feed mixed into the grid).
-Channel watchlist + notification center is built on `feature/channel-watchlist` (PR #4), awaiting Angel's live QA.
+Channel watchlist + notification center is done on `feature/channel-watchlist` (PR #4), ships with 0.4.1.
 Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shipped target. Windows dev: `npm run dev:app` (Vite on 1430). Website: `npm run dev` in `website/` (Astro on 4321).
 
 ## Open P0 (blocks release)

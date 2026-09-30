@@ -78,6 +78,12 @@ Follow `.cursor/rules/design-style*.mdc` for visual work. Read `.cursor/rules/de
 
 Each mode has its own palette chosen for its purpose. Library and downloads use the sand gold on warm brown, Music uses red on black, and future modes get their own (Movies will be purple). Do not unify accents across modes or pull one mode's accent into another.
 
+Website only (`website/`, not the desktop app): after every visual change, screenshot it at two sizes: desktop and mobile (390px wide; the `/m/` route when one exists). Crop each shot to the region you changed (element screenshot by selector), look at both yourself for visible issues before reporting, and give Angel both as markdown file links. Cursor chat does not render image attachments. Copy the shots into `.screenshots/` at the repo root (gitignored) and link them by workspace-relative path with forward slashes; links into `%TEMP%` do not open.
+
+Website links and images: every inline text link uses `.rf-inline-link` from `global.css` (the docs link look: underline, text slides right and a link glyph fades in on hover). Prefer linking to a page on the site over GitHub when one covers it. Images are never draggable (global `img` rule; add `draggable="false"` on big decorative photos).
+
+Website mobile (`/m/`): every pressable gets the shared press feedback by class, never a bespoke handler: `rf-m-btn` (buttons, light impact), `rf-m-card` (cards, selection), `rf-m-link` (links and tappable rows, selection). `MobileShell.astro` fires the haptic and ripple on pointerdown, so do not also call `useHaptic()` in the same element's `onClick` (it double-fires). Call `useHaptic()` directly only for pressables that cannot carry the class. The height expand (`MobileFeatureAccordion`) is only for elements that actually reveal more content below.
+
 Custom over native, always. Do not ship browser or OS defaults where RuForge has its own piece: hover labels use `data-tooltip` (served by `TooltipLayer`), never the `title` attribute; the same goes for menus, scrollbars, selects and dialogs. If no custom piece exists yet, build one in the house style instead of falling back to the default.
 
 ## Who ships a release
@@ -122,3 +128,5 @@ Dev: `npm run dev:app`. Builds: `npm run build` (web), `npm run tauri build` (in
 ## Website copy
 
 If the task is SEO, `llms.txt`, robots, JSON-LD, or public site copy: read the website rows in `docs/agents/DOC-ROUTING.md` first. Never use bypass / circumvention / DRM / rip / "any video any site". Lead with open-source media library / yt-dlp GUI / Tauri app. Never fabricate `aggregateRating`.
+
+If `VOICE.local.md` exists at the repo root, it sets the voice for visible website copy (headings, cards, roadmap, buttons, empty states). Do not commit it. Write for someone who has never heard of RuForge or yt-dlp: say plainly what the feature does for them. Sound smart and relaxed, not corporate and not cute. No idioms or slogans ("heavy lifting", "no strings attached", "before you commit", "what you actually get"), no paired tagline headlines, no forced German or slang, no internal terms (sidecar, sprite sheet, queue job, Deno). Keep product and brand names cased, check every claim against the code, and leave SEO metadata (`<title>`, meta descriptions, JSON-LD, `llms.txt`) in plain sentence case.

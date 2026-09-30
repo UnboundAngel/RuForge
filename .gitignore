@@ -57,10 +57,14 @@ _live-updater-check*.json
 # Unreleased log scratch (written by agents, consumed by scripts/shipped.mjs)
 .shipped-entry.txt
 
-# Local chat tone (not for GitHub)
+# Local chat tone and site voice (not for GitHub)
 AGENTS.local.md
+VOICE.local.md
 
 # Ad-hoc archives and large optional FFmpeg binaries (see AGENTS.md; do not commit multi-hundred-MB exes)
 ffmpeg.7z
 src-tauri/binaries/ffmpeg*.exe
 src-tauri/binaries/ffprobe*.exe
+
+# Agent review screenshots
+.screenshots/

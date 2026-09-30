@@ -59,3 +59,15 @@ A 2–4px rounded accent bar beside every section title (`| All-time top tracks`
 ## 13. Engraved / stamped controls
 Chips, buttons, badges, or media frames with dual-lip inset shadows (light top edge + dark bottom edge) or a deep carved sink (`inset 2px 2px 8px…`) so the control looks pressed into the panel.
 - **Instead:** tonal fills only for resting controls. Soft outer shadow only when something floats (menus, dialogs). Large well vignettes on page shells stay allowed — that is not engraving a button.
+
+## 14. Indicator dots
+Small colored circles used as status, unread, priority, or category markers (in tooltips, rows, badges, tabs, anywhere). Banned everywhere, app and website.
+- **Instead:** say it in text, or use the element's own icon or color. Dot-separated metadata text (`·`) is fine; a drawn dot is not.
+
+## 15. Fake "chips"
+A text capsule (pill) or an icon in a padded tile is not a chip. When Angel asks for a chip on a card, he means a shape docked into a card corner that fits tight to the edges: a notched corner tab with concave fillet curves where it meets the card (reference: `RoadmapReadySection.tsx`, `.rf-roadmap-ready-notch`).
+- **Instead:** cut the corner with a notch in the background color, fillet both joins with radial-gradient curves, and seat the chip in the notch. Default to the top-right corner and float it, so the text starts at the left edge, runs up to the chip, and the next line wraps under it (the eye barely moves). Size the card to its content. No big empty zones reserved for the chip.
+
+## 16. Glassy / translucent cards
+Cards filled with low-alpha tints (`rgb(... / 0.06)`) over a tinted panel read fuzzy and glassy. So does a panel wrapping a card grid (an inner well).
+- **Instead:** solid opaque tonal fills, and cards sitting straight on the page background.
