@@ -1,18 +1,31 @@
-import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 import { setAudioOutputDeviceId } from "@/audioOutputDevices";
 import type { DynamicIslandContent } from "@/components/island/DynamicIsland";
 import type { IslandDownload } from "@/components/island/IslandDownloadContent";
 import type { IslandNotice } from "@/components/island/IslandNoticeContent";
+import type { IslandWatchlist } from "@/components/island/IslandWatchlistContent";
 import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
 import type { ActivityRenderState } from "@/lib/activityTypes";
 import { navigateToActivityOwningSurface } from "@/lib/activityIslandResolve";
 import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
+import {
+  listenPrivateQueue,
+  listenPrivateState,
+  postPrivateState,
+  pushPrivateRecord,
+} from "@/lib/privateMailbox";
 import { getMainPlaybackBridge } from "@/lib/mainPlaybackBridge";
 import { isAudioOnlyPath } from "@/mediaKind";
 import { readPlaybackSpeed } from "@/playbackSpeedStorage";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import {
+  markAllSeenFromIsland,
+  openFromIsland,
+  queueFromIsland,
+  showAllFromIsland,
+} from "@/watchlist/islandWatchlistControls";
 
 export const DESKTOP_ISLAND_LABEL = "island";
 export const DESKTOP_ISLAND_STATE_EVENT = "desktop-island-state";
@@ -27,6 +40,8 @@ export type DesktopIslandStatePayload = {
   filePath: string | null;
   download: IslandDownload | null;
   notice: IslandNotice | null;
+  /** New uploads that arrived while main was unfocused; null when none are left unseen. */
+  watchlist: IslandWatchlist | null;
   /** Present on track changes so the overlay webview can slide prev vs next. */
   skipDir?: IslandSkipDir;
 };
@@ -44,14 +59,19 @@ export type DesktopIslandControl =
   | { type: "loop" }
   | { type: "audioOutput"; deviceId: string }
   | { type: "openPlayer" }
-  | { type: "popOut" };
+  | { type: "popOut" }
+  | { type: "watchlistQueue"; videoId: string }
+  | { type: "watchlistOpen"; videoId: string }
+  | { type: "watchlistMarkAllSeen" }
+  | { type: "watchlistShowAll" }
+  | { type: "openDownloads" };
 
 export async function pushDesktopIslandState(payload: DesktopIslandStatePayload): Promise<void> {
-  await emitTo(DESKTOP_ISLAND_LABEL, DESKTOP_ISLAND_STATE_EVENT, payload);
+  await postPrivateState("desktop-island-state", DESKTOP_ISLAND_LABEL, DESKTOP_ISLAND_STATE_EVENT, payload);
 }
 
 export async function emitDesktopIslandControl(control: DesktopIslandControl): Promise<void> {
-  await emitTo("main", DESKTOP_ISLAND_CONTROL_EVENT, control);
+  await pushPrivateRecord("desktop-island-control", "main", DESKTOP_ISLAND_CONTROL_EVENT, control);
 }
 
 export async function restoreMainFromDesktopIsland(): Promise<void> {
@@ -151,6 +171,21 @@ export function applyDesktopIslandControl(control: DesktopIslandControl): void {
       });
       return;
     }
+    case "watchlistQueue":
+      queueFromIsland(control.videoId);
+      return;
+    case "watchlistOpen":
+      openFromIsland(control.videoId);
+      return;
+    case "watchlistMarkAllSeen":
+      markAllSeenFromIsland();
+      return;
+    case "watchlistShowAll":
+      showAllFromIsland();
+      return;
+    case "openDownloads":
+      st.openDownloader();
+      return;
     default:
       return;
   }
@@ -159,17 +194,25 @@ export function applyDesktopIslandControl(control: DesktopIslandControl): void {
 export function listenDesktopIslandControl(
   onControl: (control: DesktopIslandControl) => void,
 ): Promise<UnlistenFn> {
-  return listen<DesktopIslandControl>(DESKTOP_ISLAND_CONTROL_EVENT, (event) => {
-    if (!event.payload || typeof event.payload !== "object") return;
-    onControl(event.payload);
-  });
+  return listenPrivateQueue<DesktopIslandControl>(
+    "desktop-island-control",
+    DESKTOP_ISLAND_CONTROL_EVENT,
+    (control) => {
+      if (!control || typeof control !== "object") return;
+      onControl(control);
+    },
+  );
 }
 
 export function listenDesktopIslandState(
   onState: (payload: DesktopIslandStatePayload) => void,
 ): Promise<UnlistenFn> {
-  return listen<DesktopIslandStatePayload>(DESKTOP_ISLAND_STATE_EVENT, (event) => {
-    if (!event.payload || typeof event.payload !== "object") return;
-    onState(event.payload);
-  });
+  return listenPrivateState<DesktopIslandStatePayload>(
+    "desktop-island-state",
+    DESKTOP_ISLAND_STATE_EVENT,
+    (payload) => {
+      if (!payload || typeof payload !== "object") return;
+      onState(payload);
+    },
+  );
 }

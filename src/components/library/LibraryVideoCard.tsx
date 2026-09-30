@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, memo, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Play, Music, FileText, FolderOutput, FolderOpen, Clock, ListPlus } from "lucide-react";
+import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Play, Music, FileText, FolderOutput, FolderOpen, Clock, ListPlus, UserCheck, UserPlus, CircleUserRound } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { copyTranscriptForFile, type TranscriptVariant } from "@/copyTranscript";
 import { isAudioOnlyPath } from "@/mediaKind";
@@ -11,9 +11,11 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useGalleryScrubExtracting } from "@/scrubSpriteGallerySync";
 import { MorphMenu, type MorphMenuItem } from "@/components/ui/Morph";
+import { useChannelFollow } from "@/components/watchlist/useChannelFollow";
 import { cn } from "@/lib/utils";
 import { formatAge, formatViewCount } from "./youtubeFeed";
 import { MetaParts, VideoByline } from "./VideoByline";
+import { openCreatorPage } from "./creatorPageStore";
 
 export type ThumbnailBar = { show: boolean; widthPct: number; completed: boolean };
 
@@ -90,6 +92,7 @@ export const VideoCard = memo(function VideoCard({
   );
   const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
   const extracting = useGalleryScrubExtracting(file.path);
+  const channelFollow = useChannelFollow(file.youtube?.channelId, file.youtube?.channel);
   const [isHovered, setIsHovered] = useState(false);
   const [previewActive, setPreviewActive] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -206,6 +209,31 @@ export const VideoCard = memo(function VideoCard({
         icon: <ListPlus size={14} className="shrink-0 ml-1.5" />,
         onSelect: () => onSaveToPlaylist(file),
       },
+    ];
+    if (channelFollow.available) {
+      const channel = file.youtube?.channel?.trim();
+      rows.push({
+        id: "follow-channel",
+        label: channelFollow.following ? `Unfollow ${channel}` : `Follow ${channel}`,
+        icon: channelFollow.following ? (
+          <UserCheck size={14} className="shrink-0 ml-1.5" />
+        ) : (
+          <UserPlus size={14} className="shrink-0 ml-1.5" />
+        ),
+        onSelect: () => void channelFollow.toggle(),
+      });
+    }
+    const channelId = file.youtube?.channelId;
+    const channelName = file.youtube?.channel?.trim();
+    if (channelId && channelName) {
+      rows.push({
+        id: "channel",
+        label: "Go to channel",
+        icon: <CircleUserRound size={14} className="shrink-0 ml-1.5" />,
+        onSelect: () => openCreatorPage(channelId, channelName),
+      });
+    }
+    rows.push(
       {
         id: "previews",
         label: "Previews",
@@ -218,7 +246,7 @@ export const VideoCard = memo(function VideoCard({
         icon: <FolderOutput size={14} className="shrink-0 ml-1.5" />,
         onSelect: () => openExportPanel({ paths: [file.path], label: file.name }),
       },
-    ];
+    );
     if (file.subtitlePath) {
       rows.push({
         id: "transcript",
@@ -268,6 +296,9 @@ export const VideoCard = memo(function VideoCard({
     return rows;
   }, [
     file,
+    channelFollow.available,
+    channelFollow.following,
+    channelFollow.toggle,
     handlePlayFile,
     inWatchLater,
     onDelete,

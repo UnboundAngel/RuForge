@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@source not "../website";
+@source not "../docs";
 
 @font-face {
   font-family: "Patrick Hand";
@@ -8,8 +10,20 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/fonts/cabinet-grotesk-variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 .font-hand {
   font-family: var(--font-hand);
+}
+
+.font-display {
+  font-family: var(--font-display);
 }
 
 @custom-variant snap-hover (&.is-hovered);
@@ -129,6 +143,9 @@
   /* Near-neutral so thumbnails carry the color; the bezel stays brand brown. */
   --rf-well: #151211;
   --rf-well-raised: #201c1a;
+  /* Lighter than both bezel and well so a floating panel separates from the page behind it. */
+  --rf-popover-bg: #322620;
+  --rf-popover-raised: rgb(255 255 255 / 0.06);
   --surface: rgba(43, 30, 25, 0.7);
   --surface-elevated: rgba(56, 39, 32, 0.85);
   --border: rgba(212, 163, 115, 0.1);
@@ -139,6 +156,7 @@
   --text-muted: #a8a29e;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --font-hand: "Patrick Hand", cursive;
+  --font-display: "Cabinet Grotesk", Inter, system-ui, sans-serif;
   
   --radius-input: 12px;
   --radius-card: 20px;
@@ -149,6 +167,8 @@
   --rf-tab-chrome-h: 40px;
   --rf-tab-strip-h: calc(var(--rf-titlebar-h) + var(--rf-tab-chrome-h));
   --rf-window-outer-radius: 12px;
+  /* MusicTopBar search pill; the Music island slot is laid out against it. */
+  --rf-music-search-w: min(420px, 32vw);
   /* Activity island shell: darker espresso pocket on #271C18 chrome (portal sets data-rf-nav-mode). */
   --rf-island-shell-media: #181210;
   --rf-island-shell-music: #000000;
@@ -473,7 +493,7 @@ html.ruforge-island-root #root {
   margin: 0 0 1rem;
 }
 
-.rf-settings-row--block {
+.rf-settings-row.rf-settings-row--block {
   display: block;
   padding: 0;
 }
@@ -648,6 +668,12 @@ html.ruforge-island-root #root {
   --bg: #0a0a0a;
   /* Pull the global accent token to music red so all existing hover:text-[var(--accent)] surfaces get it for free. */
   --accent: #ff0033;
+  --rf-popover-bg: #282828;
+  --rf-popover-raised: rgb(255 255 255 / 0.08);
+  /* Music chips go white when active, like the Home mood chips. */
+  --rf-popover-chip-on: #ffffff;
+  --rf-popover-chip-on-fg: #0a0a0a;
+  --rf-popover-cta-fg: #ffffff;
 }
 
 /* Immersive player (vinyl + full cover): pure black frame matches expanded hero. */
@@ -1519,7 +1545,14 @@ button.rf-yt-profile-pill {
   background-color: var(--rf-island-shell-music);
 }
 
-/* Music centers its search bar in the titlebar; an empty island would sit on top of it. */
+/* Music centers Home + search in the titlebar, so the island takes the gap between the logo and Home.
+   Safe centering keeps the expanded panel on screen when the gap is narrower than the pill. */
+.rf-activity-island-portal--music {
+  left: 56px;
+  right: calc(50% + (44px + var(--rf-music-search-w)) / 2 + 12px);
+  justify-content: safe center;
+}
+
 .rf-activity-island-portal[data-rf-nav-mode="music"][data-rf-island-empty="true"] {
   opacity: 0;
 }
@@ -1594,19 +1627,21 @@ button.rf-yt-profile-pill {
   height: 0;
 }
 
-.rf-island-waveform-bar {
-  box-shadow: 0 0 0 0.5px rgb(255 255 255 / 0.35);
+/* Light catches the upper half of the waveform lens so it reads as liquid, not a flat cutout. */
+.rf-island-waveform-sheen {
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0) 50%);
+  pointer-events: none;
 }
 
 .rf-island-waveform-art-bg {
-  filter: blur(5px) saturate(1.35);
+  filter: blur(5px) saturate(1.35) brightness(1.2);
   transform: scale(1.3);
   transform-origin: center center;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .rf-island-waveform-art-bg {
-    filter: blur(4px) saturate(1.2);
+    filter: blur(4px) saturate(1.2) brightness(1.2);
     transform: scale(1.15);
   }
 }

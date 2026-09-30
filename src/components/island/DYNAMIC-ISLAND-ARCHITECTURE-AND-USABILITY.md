@@ -194,6 +194,10 @@ pt-[6px]                    // centers 36px pill in 48px titlebar
 overflow-visible            // expanded card extends below titlebar
 max-w-lg
 
+// Music mode swaps the centered classes for .rf-activity-island-portal--music (index.css):
+// the slot spans the gap between the Music logo and MusicTopBar's Home + search group
+// (sized from --rf-music-search-w) and uses justify-content: safe center.
+
 // DynamicIsland (pointer-events-auto)
 WebkitAppRegion: "no-drag"  // Tauri: clicks hit island, not drag strip
 ```
@@ -299,10 +303,15 @@ When the **main** window is OS-minimized or hidden to tray, and playback is **ma
 
 - Media stays in `main`. Overlay is remote control only (no media element).
 - Events: `desktop-island-state` (main → island), `desktop-island-control` (island → main). Control types include play/seek/skip/volume/mute/loop/`audioOutput`/open/popOut.
-- Window bounds hug compact (~380×56) or expanded (~380×220); `sync_island_overlay_bounds` on expand/collapse. Expanded collapses on Escape or when the overlay window blurs (click outside).
+- Both events are payload-free pings. The state (latest slot) and controls (queue) go through `src/lib/privateMailbox.ts` and the `private_mailbox_*` commands, because a targeted `emitTo` still reaches any webview listening with the `Any` target, including the youtube.com Explorer.
+- Window width is fixed at 366 (resize and re-center are two calls and the webview repaints late, so a width change slides the pill). Height hugs the pill (52) and is 220 / 272 when expanded for the shadow and audio output menu (`islandOverlayBounds`). `useIslandOverlayBounds` grows the window at once and shrinks it only after the spring settles (600 ms). Rust keeps the last bounds so a re-show does not reset them.
+- Click-through: `useIslandClickThrough` polls `island_cursor_position` every 50 ms and calls `set_island_click_through` so the window ignores the cursor unless it is over `[data-island-hit]` (never mid-press). Clicks in the transparent margin reach whatever is underneath.
+- Expanded collapses on Escape or when the overlay window blurs (click outside).
 - Placement uses the main window's monitor (`note_main_window_monitor` on move/resize and before tray hide); minimized outer coords are ignored so the island does not jump to the primary display.
 - Reuses `DynamicIsland` presentation; does not mount idle empty pill on the desktop (window hidden when nothing to show).
-- Monitor: the one under the cursor first, then the cached main-window monitor, then primary.
+- Monitor: the foreground window's monitor first (`foreground_monitor`, skips the island itself), then the one under the cursor, then the cached main-window monitor, then primary. While visible and not expanded, the overlay calls `island_follow_active_monitor` every 750 ms; it moves only when the foreground window's monitor changed (cursor alone never moves it).
+- Desktop pills are compact (`compactPills`): collapsed pills are 32 tall and 12 narrower; the in-app island stays at 36 to match the onboarding island in the same slot. Top gap is 4 physical px plus a 6px CSS inset.
+- Expand/collapse: each content layer renders inside `IslandStage`, fixed to its own state's size and anchored top-center, so it never reflows while the shell springs; exiting layers keep their old size. The shell stays `overflow-hidden` until the expand spring completes (`sizeSettled`), then goes visible for the menus.
 
 **Downloads and background notices (replaces the old bottom-right `notify` window)**
 
@@ -310,6 +319,20 @@ When the **main** window is OS-minimized or hidden to tray, and playback is **ma
 - If music is also showing, the music `compact` pill stays and only the ring is added. Ring is CSS-geometry SVG so it follows the spring width.
 - `deliverUserNotification` emits `desktop-island-notice` to main when RuForge is not focused; main shows it as a `notice` for ~4.5s. Foreground still uses the in-app toast.
 - Clicking a download or notice pill restores main.
+
+**Watchlist variant (new uploads from followed channels)**
+
+- Source: `useWatchlistStore` `islandBatchIds` / `islandBatchAt`, filled by `handleNewUploads` only while RuForge is unfocused and `watchlistAlerts` is on. Main builds `IslandWatchlist` with `buildIslandWatchlist` (batch ids still unseen, faces up to 3, rows up to 6) and pushes it as `payload.watchlist`. Avatars resolve in main (`islandAvatars.ts`); the island never fetches.
+- States: `watchlist` (collapsed pill, ~240×36: stacked channel avatars + "N new uploads") and `watchlist-expanded` (350×248, radius 24: header with faces, count and "Mark all seen"; up to 3 rows with 16:9 thumb, title, channel, Queue and Open; "+N more in RuForge"). Overlay bounds go to 380×272 while expanded (Rust caps at 420×280).
+- Priority (`resolveOverlayIslandState`): watchlist expanded, music expanded, notice, `watchlist` while `takeover` (first 8 s of a batch) or when no music session, music compact, download, idle. After the takeover a single re-sync hands the slot back to music.
+- Controls: `watchlistQueue`, `watchlistOpen`, `watchlistMarkAllSeen`, `watchlistShowAll`. Main resolves every id against its own snapshot (`islandWatchlistControls.ts`) and ignores unknown ids, seen rows and upcoming rows for Queue. Open and "+N more" restore main first.
+- Collapse on Escape, blur, focus loss, and when `watchlist` becomes null. Main clears the batch when it regains focus.
+
+**Notifications variant (experiment, Settings > Debugging > Notifications in island)**
+
+- Main window only. `notifications` state (400 wide, height fits the panel's measured content up to 560 or the viewport, radius 24) renders the shared `NotificationCenterPanel`; props come from `useIslandNotifications` so `DynamicIsland` stays store-free.
+- Driven by the same `popoverOpen` flag as the bell popover. With the flag on, `NotificationCenterPopover` skips Host A and Host B but still hides the Explorer via `explorerCoveredByPopover`, since the island panel is page DOM under the child webview.
+- Entry points: bell, and tapping the empty idle pill (`idleTappable`). Wins over notice, update, download and music expanded while open. Closes on backdrop, Escape, shell padding click, or surface change.
 
 **Do not** drive desktop overlay from Zustand inside `DynamicIsland.tsx`. Keep bridge apply logic in `desktopIslandBridge.ts` / `useDesktopIslandOverlay.ts`.
 
@@ -323,6 +346,8 @@ When the **main** window is OS-minimized or hidden to tray, and playback is **ma
 - Adding non-interactive badges in compact/expanded content.
 - New handlers wired from `ActivityIsland` through existing callback props.
 - Waveform bar fill: blurred cover slices (`ActivityIslandWaveform` + `.rf-island-waveform-art-bg`). No canvas palette extraction on the island path.
+- Waveform response: each band tracks its own adaptive floor and ceiling (`islandBandRange.ts`, fast to widen, slow to narrow) and reports where the current sample sits between them, so bars ride the middle and move independently. No shared AGC boost; volume gain only scales down (mute). Band value is mostly average with some peak, since the peak bin alone pins near max.
+- Waveform shape: one mirrored lens (28x16), not bars. The five band levels set the crests of a Catmull-Rom top edge, the bottom mirrors it, and both taper to points at the ends. Drawn as a CSS `clip-path: path()` over the blurred cover with a top sheen (`.rf-island-waveform-sheen`). Silence is a 1px-thick ribbon. A white top sheen (`.rf-island-waveform-bar::after`) gives a glassy tube look. No outline.
 - Tests in `activityIslandResolve.test.ts`.
 
 ### Change with care (read this doc first)
@@ -437,7 +462,7 @@ if (onboardingOccupied) return null;
 - [ ] With post-install open: island hidden entirely.
 - [ ] Onboarding island step plays through to completion: hint → celebrate ("nice!") → idle pill, with **no flash/disappear/pop** at any transition, including the final handoff to `ActivityIsland`.
 - [ ] Start real playback mid-onboarding: activity pill stays hidden until the onboarding hint reaches idle/dismisses (precedence rule).
-- [ ] Resize window: pill stays centered horizontally, aligned to titlebar.
+- [ ] Resize window: pill stays centered horizontally, aligned to titlebar (Music: centered in the logo-to-Home gap, never over the search pill, down to the 900px min width).
 - [ ] Play content, minimize main: desktop island appears top-center; expand + transport work; Open restores main.
 - [ ] Play content, close-to-tray: desktop island appears; restore via tray Show hides it.
 - [ ] Mini owns playback + minimize main: no desktop island.

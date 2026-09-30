@@ -14,7 +14,7 @@ fn playlists_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 /// Temp file then rename, so a crash mid-write never leaves a truncated file behind.
-fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
+pub(crate) fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }

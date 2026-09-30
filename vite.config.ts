@@ -20,6 +20,7 @@ export default defineConfig(async () => ({
     watch: {
       ignored: [
         "**/src-tauri/**",
+        "**/website/**",
         "**/STATE.md",
         "**/AGENTS.md",
         "**/docs/**/*.md",

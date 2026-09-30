@@ -35,7 +35,7 @@ async function pushDesktopIslandNotice(payload: DesktopIslandNoticePayload): Pro
   await emitTo("main", DESKTOP_ISLAND_NOTICE_EVENT, payload);
 }
 
-async function isAnyRuforgeWindowFocused(): Promise<boolean> {
+export async function isAnyRuforgeWindowFocused(): Promise<boolean> {
   if (isRuforgeAppInForeground()) return true;
   try {
     const current = getCurrentWindow();

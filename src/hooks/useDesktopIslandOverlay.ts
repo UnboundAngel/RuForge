@@ -13,7 +13,6 @@ import {
 import type { LoopMode } from "@/playbackLoopStorage";
 import { primaryArtist, rawArtistFromFile } from "@/components/music/musicArtist";
 import type { DynamicIslandContent } from "@/components/island/DynamicIsland";
-import type { IslandDownload } from "@/components/island/IslandDownloadContent";
 import type { IslandNotice } from "@/components/island/IslandNoticeContent";
 import { useCurrentActivity } from "@/hooks/useCurrentActivity";
 import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
@@ -34,12 +33,16 @@ import {
   getMainPlaybackBridge,
   subscribeMainPlaybackBridge,
 } from "@/lib/mainPlaybackBridge";
-import { jobHasDownloadTransferStarted, type DownloadJob } from "@/downloadQueue";
+import { buildIslandDownload } from "@/lib/islandDownload";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { DESKTOP_ISLAND_NOTICE_EVENT, type DesktopIslandNoticePayload } from "@/systemNotify";
+import { islandAvatarSrc, subscribeIslandAvatars } from "@/watchlist/islandAvatars";
+import { buildIslandWatchlist, ISLAND_WATCHLIST_TAKEOVER_MS } from "@/watchlist/islandWatchlist";
+import { clearIslandBatch, useWatchlistStore } from "@/watchlist/watchlistStore";
 
 const TELEMETRY_MIN_MS = 100;
 const NOTICE_MS = 4500;
+const FOREGROUND_POLL_MS = 1000;
 
 type MainWindowState = { away: boolean; focused: boolean };
 
@@ -59,9 +62,13 @@ async function readMainWindowState(): Promise<MainWindowState> {
     /* ignore */
   }
   try {
-    focused = await win.isFocused();
+    focused = await invoke<boolean>("app_is_foreground");
   } catch {
-    /* ignore */
+    try {
+      focused = await win.isFocused();
+    } catch {
+      /* ignore */
+    }
   }
   const away = minimized || !visible;
   return { away, focused: focused && !away };
@@ -155,25 +162,6 @@ function emptyContent(accentColor: string): DynamicIslandContent {
   };
 }
 
-function buildIslandDownload(jobs: readonly DownloadJob[]): IslandDownload | null {
-  const active = jobs.filter(
-    (j) => j.status === "queued" || j.status === "downloading" || j.status === "paused",
-  );
-  const job =
-    active.find((j) => j.status === "downloading") ??
-    active.find((j) => j.status === "queued") ??
-    active[0];
-  if (!job) return null;
-  const flowing = job.status === "downloading" && jobHasDownloadTransferStarted(job);
-  return {
-    key: job.id,
-    title: job.metadata?.title || "Downloading",
-    thumbnail: job.metadata?.thumbnail ?? null,
-    pct: flowing ? Math.min(100, Math.max(0, job.progress?.percentage ?? 0)) : null,
-    remaining: active.length - 1,
-  };
-}
-
 function attachSkipDirForTrackChange(
   payload: DesktopIslandStatePayload,
   lastPushedTrackKeyRef: { current: string | null },
@@ -256,6 +244,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     let musicShown = false;
     let pushTimer: ReturnType<typeof setTimeout> | null = null;
     let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+    let takeoverTimer: ReturnType<typeof setTimeout> | null = null;
     let lastPushAt = 0;
     let pending: DesktopIslandStatePayload | null = null;
     const lastPushedTrackKeyRef = { current: null as string | null };
@@ -315,8 +304,17 @@ export function useDesktopIslandOverlay(enabled: boolean) {
         : null;
       const download = focused ? null : buildIslandDownload(i.downloadJobs);
       const notice = focused ? null : noticeRef.current;
+      const batch = useWatchlistStore.getState();
+      const watchlist = focused ? null : buildIslandWatchlist(batch, islandAvatarSrc, Date.now());
+      if (watchlist?.takeover && takeoverTimer == null) {
+        // Nothing else re-syncs when the takeover window lapses, so music would never get the pill back.
+        takeoverTimer = setTimeout(() => {
+          takeoverTimer = null;
+          sync();
+        }, ISLAND_WATCHLIST_TAKEOVER_MS - (Date.now() - batch.islandBatchAt) + 50);
+      }
 
-      if (!music && !download && !notice) {
+      if (!music && !download && !notice && !watchlist) {
         hide();
         return;
       }
@@ -329,6 +327,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
           waveformLevels: music ? getIslandWaveformLevels() : [],
           download,
           notice,
+          watchlist,
         },
         lastPushedTrackKeyRef,
       );
@@ -351,6 +350,8 @@ export function useDesktopIslandOverlay(enabled: boolean) {
 
     const refreshWindow = async () => {
       windowRef.current = await readMainWindowState();
+      // Back in the app the bell and shelf carry these; a stale batch would replay on the next minimize.
+      if (windowRef.current.focused) clearIslandBatch();
       sync();
     };
 
@@ -383,20 +384,30 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     });
 
     const unsubBridge = subscribeMainPlaybackBridge(sync);
+    const unsubWatchlist = useWatchlistStore.subscribe(sync);
+    const unsubAvatars = subscribeIslandAvatars(sync);
     const unsubWave = subscribeIslandWaveformLevels(() => {
       if (musicShown) sync();
     });
     const onVis = () => void refreshWindow();
     document.addEventListener("visibilitychange", onVis);
+    // Focus moving from the Explorer webview or an overlay window to another app fires nothing on main.
+    const foregroundPoll = window.setInterval(() => {
+      if (shown || buildIslandDownload(inputsRef.current.downloadJobs)) void refreshWindow();
+    }, FOREGROUND_POLL_MS);
 
     return () => {
       cancelled = true;
       syncRef.current = () => {};
       if (pushTimer != null) clearTimeout(pushTimer);
       if (noticeTimer != null) clearTimeout(noticeTimer);
+      if (takeoverTimer != null) clearTimeout(takeoverTimer);
       noticeRef.current = null;
       document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(foregroundPoll);
       unsubBridge();
+      unsubWatchlist();
+      unsubAvatars();
       unsubWave();
       void unlistenResize.then((fn) => fn());
       void unlistenFocus.then((fn) => fn());

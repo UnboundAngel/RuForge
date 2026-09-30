@@ -2,22 +2,23 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 
-import {
-  DynamicIsland,
-  type DynamicIslandContent,
-  type IslandState,
-} from "@/components/island/DynamicIsland";
+import { DynamicIsland, type DynamicIslandContent } from "@/components/island/DynamicIsland";
+import { AppTooltipLayer } from "@/components/ui/TooltipLayer";
 import {
   emitDesktopIslandControl,
   listenDesktopIslandState,
   restoreMainFromDesktopIsland,
   type DesktopIslandStatePayload,
 } from "@/lib/desktopIslandBridge";
+import { resolveOverlayIslandState, type IslandExpandedTarget } from "@/lib/islandOverlayState";
 import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
 import { useOverlayWaveformLevels } from "@/hooks/useOverlayWaveformLevels";
-
-const COMPACT_BOUNDS = { width: 380, height: 56 };
-const EXPANDED_BOUNDS = { width: 380, height: 220 };
+import {
+  useIslandClickThrough,
+  useIslandFollowActiveMonitor,
+  useIslandOverlayBounds,
+} from "@/hooks/useIslandOverlayWindow";
+import { islandOverlayBounds } from "@/lib/islandOverlayBounds";
 
 const EMPTY_CONTENT: DynamicIslandContent = {
   coverSrc: null,
@@ -46,7 +47,7 @@ const EMPTY_CONTENT: DynamicIslandContent = {
 
 export default function IslandOverlayApp() {
   const [payload, setPayload] = useState<DesktopIslandStatePayload | null>(null);
-  const [userExpanded, setUserExpanded] = useState(false);
+  const [expandedTarget, setExpandedTarget] = useState<IslandExpandedTarget>(null);
 
   useEffect(() => {
     document.documentElement.classList.add("ruforge-island-root");
@@ -77,33 +78,43 @@ export default function IslandOverlayApp() {
   const hasSession = Boolean(payload?.content.trackKey);
   const download = payload?.download ?? null;
   const notice = payload?.notice ?? null;
-  const visible = hasSession || download != null || notice != null;
-  const isExpanded = userExpanded && hasSession;
-  const islandState: IslandState = isExpanded
-    ? "expanded"
-    : notice
-      ? "notice"
-      : hasSession
-        ? "compact"
-        : download
-          ? "download"
-          : "idle";
+  const watchlist = payload?.watchlist ?? null;
+  const visible = hasSession || download != null || notice != null || watchlist != null;
+  const islandState = resolveOverlayIslandState({
+    expandedTarget,
+    hasSession,
+    hasNotice: notice != null,
+    hasDownload: download != null,
+    watchlist,
+  });
+  const isExpanded = islandState === "expanded";
+  const anyExpanded =
+    isExpanded || islandState === "watchlist-expanded" || islandState === "download-expanded";
 
   useEffect(() => {
-    if (!hasSession) setUserExpanded(false);
+    if (!hasSession) setExpandedTarget((t) => (t === "music" ? null : t));
   }, [hasSession]);
 
   useEffect(() => {
-    const bounds = isExpanded ? EXPANDED_BOUNDS : COMPACT_BOUNDS;
-    void invoke("sync_island_overlay_bounds", bounds).catch(() => {});
-  }, [isExpanded]);
+    if (!watchlist) setExpandedTarget((t) => (t === "watchlist" ? null : t));
+  }, [watchlist]);
+
+  const hasDownload = download != null;
+  useEffect(() => {
+    if (!hasDownload) setExpandedTarget((t) => (t === "download" ? null : t));
+  }, [hasDownload]);
+
+  const bounds = islandOverlayBounds(islandState);
+  useIslandOverlayBounds(bounds.width, bounds.height);
+  useIslandClickThrough(visible);
+  useIslandFollowActiveMonitor(visible && !anyExpanded);
 
   useEffect(() => {
-    if (!isExpanded) return;
+    if (!anyExpanded) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setUserExpanded(false);
+      if (e.key === "Escape") setExpandedTarget(null);
     };
-    const collapse = () => setUserExpanded(false);
+    const collapse = () => setExpandedTarget(null);
     window.addEventListener("keydown", onKey);
     window.addEventListener("blur", collapse);
     const unlistenFocus = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
@@ -114,7 +125,7 @@ export default function IslandOverlayApp() {
       window.removeEventListener("blur", collapse);
       void unlistenFocus.then((fn) => fn());
     };
-  }, [isExpanded]);
+  }, [anyExpanded]);
 
   const content: DynamicIslandContent = payload
     ? {
@@ -129,12 +140,48 @@ export default function IslandOverlayApp() {
   );
 
   const handleShellClick = useCallback(() => {
+    if (islandState === "watchlist") {
+      setExpandedTarget("watchlist");
+      return;
+    }
+    if (islandState === "watchlist-expanded" || islandState === "download-expanded") {
+      setExpandedTarget(null);
+      return;
+    }
+    if (islandState === "download") {
+      setExpandedTarget("download");
+      return;
+    }
     if (!hasSession) {
       void restoreMainFromDesktopIsland();
       return;
     }
-    setUserExpanded((prev) => !prev);
-  }, [hasSession]);
+    setExpandedTarget((prev) => (prev === "music" ? null : "music"));
+  }, [hasSession, islandState]);
+
+  const handleWatchlistQueue = useCallback((videoId: string) => {
+    void emitDesktopIslandControl({ type: "watchlistQueue", videoId });
+  }, []);
+
+  const handleWatchlistOpen = useCallback(async (videoId: string) => {
+    await restoreMainFromDesktopIsland();
+    void emitDesktopIslandControl({ type: "watchlistOpen", videoId });
+  }, []);
+
+  const handleOpenDownloads = useCallback(async () => {
+    setExpandedTarget(null);
+    await restoreMainFromDesktopIsland();
+    void emitDesktopIslandControl({ type: "openDownloads" });
+  }, []);
+
+  const handleWatchlistMarkAllSeen = useCallback(() => {
+    void emitDesktopIslandControl({ type: "watchlistMarkAllSeen" });
+  }, []);
+
+  const handleWatchlistShowMore = useCallback(async () => {
+    await restoreMainFromDesktopIsland();
+    void emitDesktopIslandControl({ type: "watchlistShowAll" });
+  }, []);
 
   const handlePlayPause = useCallback((e: MouseEvent) => {
     e.stopPropagation();
@@ -182,15 +229,22 @@ export default function IslandOverlayApp() {
   }
 
   return (
-    <div className="pointer-events-none flex h-full w-full justify-center overflow-visible bg-transparent pt-[8px]">
-      <div className="pointer-events-auto">
+    <div className="pointer-events-none flex h-full w-full justify-center overflow-visible bg-transparent pt-[6px]">
+      <div className="pointer-events-auto" data-island-hit="">
         <DynamicIsland
+          compactPills
           state={islandState}
           content={content}
           waveformLevels={waveformLevels}
           skipDirHint={payload?.skipDir ?? null}
           download={download}
+          onOpenDownloads={() => void handleOpenDownloads()}
           notice={notice}
+          watchlist={watchlist}
+          onWatchlistQueue={handleWatchlistQueue}
+          onWatchlistOpen={(id) => void handleWatchlistOpen(id)}
+          onWatchlistMarkAllSeen={handleWatchlistMarkAllSeen}
+          onWatchlistShowMore={() => void handleWatchlistShowMore()}
           onClick={handleShellClick}
           onPlayPause={handlePlayPause}
           onSeek={handleSeek}
@@ -219,6 +273,7 @@ export default function IslandOverlayApp() {
           onPopOut={handlePopOut}
         />
       </div>
+      <AppTooltipLayer />
     </div>
   );
 }

@@ -38,5 +38,5 @@ export function IslandNoticeContent({ notice, accentColor }: { notice: IslandNot
 }
 
 export function noticeIslandWidth(message: string): number {
-  return Math.min(380, Math.max(160, Math.ceil(message.length * 6.4) + 60));
+  return Math.min(350, Math.max(160, Math.ceil(message.length * 6.4) + 60));
 }

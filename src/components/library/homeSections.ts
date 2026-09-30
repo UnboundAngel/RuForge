@@ -1,11 +1,13 @@
+import type { ChannelShelf } from "./channelShelf";
 import type { FeedVideo, MixedGridItem } from "./youtubeFeed";
 
 export type HomeSection<T> =
   | { kind: "grid"; key: string; items: MixedGridItem<T>[]; title?: string }
   | { kind: "continue"; key: string; files: T[] }
   | { kind: "shorts"; key: string; videos: FeedVideo[] }
+  | { kind: "watchlist"; key: string; videos: FeedVideo[] }
   | { kind: "playlists"; key: string }
-  | { kind: "channel"; key: string; channel: string; channelId: string | null; files: T[] };
+  | { kind: "channel"; key: string; channel: string; channelId: string | null; items: MixedGridItem<T>[] };
 
 export type ChannelSpotlight<T> = { channel: string; channelId: string | null; files: T[] };
 
@@ -13,6 +15,7 @@ type Plan =
   | { kind: "rows"; rows: number }
   | { kind: "continue" }
   | { kind: "shorts" }
+  | { kind: "watchlist" }
   | { kind: "playlists" }
   | { kind: "channel" };
 
@@ -22,10 +25,12 @@ type Plan =
  */
 const PLAN: Plan[] = [
   { kind: "rows", rows: 1 },
+  { kind: "watchlist" },
   { kind: "continue" },
   { kind: "rows", rows: 1 },
   { kind: "shorts" },
   { kind: "rows", rows: 2 },
+  { kind: "channel" },
   { kind: "playlists" },
   { kind: "rows", rows: 1 },
   { kind: "shorts" },
@@ -66,21 +71,27 @@ export function composeHomeSections<T>({
   columns,
   continueFiles,
   shorts,
+  watchlist,
   hasPlaylists,
-  spotlight,
+  channels,
 }: {
   /** Library and feed videos already interleaved, minus anything a shelf below shows. */
   mixed: MixedGridItem<T>[];
   columns: number;
   continueFiles: T[];
   shorts: FeedVideo[];
+  /** Unseen uploads from followed channels, already capped to one row and stripped of premieres. */
+  watchlist: FeedVideo[];
   hasPlaylists: boolean;
-  spotlight: ChannelSpotlight<T> | null;
+  /** "More from" shelves in order; each channel step takes the next non-empty one. */
+  channels: ChannelShelf<T>[];
 }): HomeSection<T>[] {
   const sections: HomeSection<T>[] = [];
   const perShelf = shortsPerShelf(columns);
+  const shelves = channels.filter((c) => c.items.length > 0);
   let cursor = 0;
   let shortsCursor = 0;
+  let channelCursor = 0;
 
   PLAN.forEach((step, i) => {
     const key = `${step.kind}-${i}`;
@@ -94,10 +105,12 @@ export function composeHomeSections<T>({
       const videos = shorts.slice(shortsCursor, shortsCursor + perShelf);
       shortsCursor += videos.length;
       if (videos.length >= 3) sections.push({ kind: "shorts", key, videos });
+    } else if (step.kind === "watchlist") {
+      if (watchlist.length > 0) sections.push({ kind: "watchlist", key, videos: watchlist });
     } else if (step.kind === "playlists") {
       if (hasPlaylists) sections.push({ kind: "playlists", key });
-    } else if (spotlight) {
-      sections.push({ kind: "channel", key, ...spotlight });
+    } else if (channelCursor < shelves.length) {
+      sections.push({ kind: "channel", key, ...shelves[channelCursor++] });
     }
   });
 

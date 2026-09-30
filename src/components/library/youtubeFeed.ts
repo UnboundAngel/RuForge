@@ -37,10 +37,17 @@ export function interleaveFeed<T>(files: T[], feed: FeedVideo[], every = FEED_EV
 }
 
 /** Rust `get_video_stats` row: what the flat feed listing leaves out. */
-export type VideoStats = { videoId: string; channel: string | null; channelId: string | null; viewCount: number | null };
+export type VideoStats = {
+  videoId: string;
+  channel: string | null;
+  channelId: string | null;
+  viewCount: number | null;
+  /** Unix seconds; optional because older builds of the command left it out. */
+  publishedAt?: number | null;
+};
 
 export function feedVideoNeedsStats(video: FeedVideo): boolean {
-  return !video.channelId || video.viewCount == null;
+  return !video.channelId || video.viewCount == null || video.timestamp == null;
 }
 
 export function applyVideoStats(items: FeedVideo[], stats: VideoStats[]): FeedVideo[] {
@@ -54,6 +61,7 @@ export function applyVideoStats(items: FeedVideo[], stats: VideoStats[]): FeedVi
       channel: video.channel ?? s.channel,
       channelId: video.channelId || s.channelId,
       viewCount: video.viewCount ?? s.viewCount,
+      timestamp: video.timestamp ?? s.publishedAt ?? null,
     };
   });
 }

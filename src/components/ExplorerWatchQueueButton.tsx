@@ -16,9 +16,8 @@ import {
 import { WarningPlaylistIcon } from "./icons/WarningPlaylistIcon";
 import { titlebarIconButtonClass } from "./TitlebarHoverButton";
 import { deliverUserNotification } from "../systemNotify";
-
-const STORAGE_FULL_NOTIFY =
-  "Library storage limit reached. Free space in Settings or switch to an external download folder.";
+import { STORAGE_FULL_NOTIFY } from "../lib/storageBlocks";
+import { recordStorageFullRefusal } from "../notifications/sources/downloadItems";
 
 const STORAGE_FULL_REASON = "Your storage is full";
 
@@ -146,6 +145,7 @@ export function ExplorerWatchQueueButton({
         { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
         notify,
       );
+      recordStorageFullRefusal();
       return;
     }
     if (settings.skipDuplicatesAutomatically) {

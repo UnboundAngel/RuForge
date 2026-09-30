@@ -60,9 +60,10 @@ After research comes back, add an entry to `website/src/content/roadmap.json` us
 Bucketing rules:
 - Omit `roadmapStatus` → lands in **On the horizon** (planned)
 - Set `roadmapStatus: "progress"` → lands in **Brewing now** (active)
-- Set `status: "Finished"` → lands in **Shipped** (done)
+- Set `status: "Finished"` + `roadmapStatus: "unreleased"` → lands in **Landing next** (built, not in a public build yet)
+- Set `status: "Finished"` with no `roadmapStatus` → lands in **Shipped** (users have it)
 
-If the feature is being actively worked on right now, set `roadmapStatus: "progress"`. If it's a future idea, omit it.
+Only use `progress` for work someone is actively touching right now. Built-but-unreleased work goes to `unreleased`, not `progress`. If it's a future idea, omit `roadmapStatus`.
 
 Do NOT edit any other file. Do NOT touch the Astro page or any components.
 
@@ -78,7 +79,7 @@ Read the `### vX.Y.Z` block in `AGENTS.md` that was just released. Extract every
 
 ### Step 2: Flip completed entries
 
-For every matched entry in `website/src/content/roadmap.json`:
+For every matched entry in `website/src/content/roadmap.json`, and every entry with `"roadmapStatus": "unreleased"` that shipped in this version:
 - Set `"status": "Finished"`
 - Remove `"roadmapStatus"` if present
 
@@ -89,6 +90,16 @@ Do not add new entries for things that shipped without a roadmap row. Do not tou
 List every entry you flipped. Show old vs new status. Do not run a build — the release ritual already verified the build.
 
 ---
+
+## Writing `featureName`
+
+The roadmap is read by everyday users, not devs. Every title:
+
+- Says what the user gets, in plain words anyone could read: "Warns you before a download won't fit", not "Storage estimate before enqueue".
+- No internal jargon: enqueue, sidecar, hydrate, backfill, runtime, manifest, SQLite, overlay, boundary, SPA, rail, hero, carousel, product codenames.
+- Warm and a little personable, like a friend describing it. Not cutesy, no exclamation marks.
+- Short: aim for under 60 characters, one idea per title.
+- If `VOICE.local.md` exists at the repo root, write in its default (Angel) voice: lowercase, no closing period, keep product and brand names cased (YouTube, RuForge, SponsorBlock, Windows).
 
 ## Hard rules
 

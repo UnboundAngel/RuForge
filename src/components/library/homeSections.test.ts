@@ -16,6 +16,8 @@ const short = (id: string): FeedVideo => ({
   short: true,
 });
 
+const video = (id: string): FeedVideo => ({ ...short(id), short: false });
+
 const files = (n: number): MixedGridItem<string>[] =>
   Array.from({ length: n }, (_, i) => ({ kind: "file", file: `v${i}` }));
 
@@ -26,15 +28,34 @@ describe("composeHomeSections", () => {
       columns: 4,
       continueFiles: ["c1"],
       shorts: Array.from({ length: 12 }, (_, i) => short(`s${i}`)),
+      watchlist: [],
       hasPlaylists: true,
-      spotlight: { channel: "CaseOh", channelId: null, files: ["a", "b", "c"] },
+      channels: [{ channel: "CaseOh", channelId: null, items: files(3) }],
     });
     expect(sections.map((s) => s.kind)).toEqual([
-      "grid", "continue", "grid", "shorts", "grid", "playlists", "grid", "shorts", "channel", "grid",
+      "grid", "continue", "grid", "shorts", "grid", "channel", "playlists", "grid", "shorts", "grid",
     ]);
     const grids = sections.filter((s) => s.kind === "grid");
     expect(grids.map((g) => g.items.length)).toEqual([4, 4, 8, 4, 20]);
     expect(grids[grids.length - 1]?.title).toBe("Keep exploring");
+  });
+
+  it("gives each channel shelf its own slot and drops empty ones", () => {
+    const sections = composeHomeSections({
+      mixed: files(40),
+      columns: 4,
+      continueFiles: [],
+      shorts: [],
+      watchlist: [],
+      hasPlaylists: false,
+      channels: [
+        { channel: "Followed", channelId: "UC1", items: [{ kind: "feed", video: video("f1") }] },
+        { channel: "Empty", channelId: "UC2", items: [] },
+        { channel: "Library", channelId: "UC3", items: files(2) },
+      ],
+    });
+    const shelves = sections.flatMap((s) => (s.kind === "channel" ? [s.channel] : []));
+    expect(shelves).toEqual(["Followed", "Library"]);
   });
 
   it("skips shelves with nothing to show", () => {
@@ -43,10 +64,27 @@ describe("composeHomeSections", () => {
       columns: 4,
       continueFiles: [],
       shorts: [short("s1")],
+      watchlist: [],
       hasPlaylists: false,
-      spotlight: null,
+      channels: [],
     });
     expect(sections.map((s) => s.kind)).toEqual(["grid"]);
+  });
+
+  it("puts the followed-channels shelf right after the first video row", () => {
+    const uploads = [video("w1"), video("w2")];
+    const sections = composeHomeSections({
+      mixed: files(12),
+      columns: 4,
+      continueFiles: ["c1"],
+      shorts: [],
+      watchlist: uploads,
+      hasPlaylists: false,
+      channels: [],
+    });
+    expect(sections.map((s) => s.kind)).toEqual(["grid", "watchlist", "continue", "grid", "grid"]);
+    const shelf = sections[1];
+    expect(shelf?.kind === "watchlist" ? shelf.videos : null).toBe(uploads);
   });
 });
 

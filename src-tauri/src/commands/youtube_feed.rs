@@ -6,6 +6,7 @@ use super::downloader::{
     best_thumbnail_url, run_ytdlp_json, run_ytdlp_json_with_cookie_fallback,
     ytdlp_music_cookie_retry_args, ytdlp_push_cookie_cli_args,
 };
+use super::explorer_cookies::RuforgeCookieExport;
 use super::music_preview::{most_replayed_start, MusicPreviewStream};
 
 /// The signed-in home feed; yt-dlp maps it to youtube.com/feed/recommended.
@@ -39,13 +40,13 @@ pub struct YoutubeFeedPage {
     pub has_more: bool,
 }
 
-fn is_video_id(id: &str) -> bool {
+pub(crate) fn is_video_id(id: &str) -> bool {
     id.len() == 11 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Keeps single videos and Shorts: playlists and mixes have no single file to download, and live
 /// or upcoming streams can't be downloaded as a finished video yet.
-fn feed_item_from_entry(entry: &Value) -> Option<YoutubeFeedItem> {
+pub(crate) fn feed_item_from_entry(entry: &Value) -> Option<YoutubeFeedItem> {
     let id = entry.get("id").and_then(Value::as_str)?;
     let url = entry.get("url").and_then(Value::as_str).unwrap_or("");
     if !is_video_id(id) || url.contains("list=") {
@@ -111,6 +112,29 @@ fn cookie_file_has_youtube_login(path: &str) -> bool {
     std::fs::read_to_string(path).map_or(true, |c| netscape_has_youtube_login(&c))
 }
 
+/// Cookie args for a feed that only exists signed in (home, history), or `FEED_SIGNED_OUT`.
+/// The guard keeps an exported Internal cookie file alive until yt-dlp has run.
+pub(crate) async fn signed_in_cookie_args(
+    app: &AppHandle,
+    browser_cookies: Option<&str>,
+    cookie_file: Option<&str>,
+) -> Result<(Vec<String>, Option<RuforgeCookieExport>), String> {
+    let (browser, file, guard) = ytdlp_music_cookie_retry_args(app, browser_cookies, cookie_file).await?;
+    if browser.as_deref().filter(|b| !b.is_empty() && *b != "chrome").is_none()
+        && file.as_deref().filter(|f| !f.is_empty()).is_none()
+    {
+        return Err(FEED_SIGNED_OUT.into());
+    }
+    if let Some(path) = file.as_deref().filter(|f| !f.is_empty()) {
+        if !cookie_file_has_youtube_login(path) {
+            return Err(FEED_SIGNED_OUT.into());
+        }
+    }
+    let mut args = Vec::new();
+    ytdlp_push_cookie_cli_args(app, &mut args, file.as_deref(), browser.as_deref())?;
+    Ok((args, guard))
+}
+
 /// One page of the user's YouTube home feed. Cookies go on the first attempt because the
 /// signed-out feed is empty, so a cookieless try would only cost a slow round trip.
 #[tauri::command]
@@ -122,18 +146,8 @@ pub async fn get_youtube_feed_page(
     cookie_file: Option<String>,
 ) -> Result<YoutubeFeedPage, String> {
     let limit = limit.clamp(1, FEED_PAGE_MAX);
-    let (browser, file, _cookie_guard) =
-        ytdlp_music_cookie_retry_args(&app, browser_cookies.as_deref(), cookie_file.as_deref()).await?;
-    if browser.as_deref().filter(|b| !b.is_empty() && *b != "chrome").is_none()
-        && file.as_deref().filter(|f| !f.is_empty()).is_none()
-    {
-        return Err(FEED_SIGNED_OUT.into());
-    }
-    if let Some(path) = file.as_deref().filter(|f| !f.is_empty()) {
-        if !cookie_file_has_youtube_login(path) {
-            return Err(FEED_SIGNED_OUT.into());
-        }
-    }
+    let (cookie_args, _cookie_guard) =
+        signed_in_cookie_args(&app, browser_cookies.as_deref(), cookie_file.as_deref()).await?;
     let mut args: Vec<String> = vec![
         "--flat-playlist".into(),
         "-J".into(),
@@ -145,7 +159,7 @@ pub async fn get_youtube_feed_page(
         "--playlist-end".into(),
         (offset + limit).to_string(),
     ];
-    ytdlp_push_cookie_cli_args(&app, &mut args, file.as_deref(), browser.as_deref())?;
+    args.extend(cookie_args);
     args.push(FEED_URL.into());
     let root = run_ytdlp_json(&app, args, "YouTube feed").await?;
     let no_entries = root
@@ -166,19 +180,44 @@ pub struct VideoStats {
     pub channel: Option<String>,
     pub channel_id: Option<String>,
     pub view_count: Option<u64>,
+    /// Unix seconds; channel tab listings carry no date at all.
+    pub published_at: Option<i64>,
 }
 
 fn video_stats_from_player(video_id: &str, player: &Value) -> Option<VideoStats> {
     let details = player.get("videoDetails")?;
+    let published_at = player
+        .pointer("/microformat/playerMicroformatRenderer/publishDate")
+        .and_then(Value::as_str)
+        .and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
+        .map(|d| d.timestamp());
     Some(VideoStats {
         video_id: video_id.to_string(),
         channel: details.get("author").and_then(Value::as_str).map(str::to_string),
         channel_id: details.get("channelId").and_then(Value::as_str).map(str::to_string),
         view_count: details.get("viewCount").and_then(Value::as_str).and_then(|v| v.parse().ok()),
+        published_at,
     })
 }
 
 const STATS_CONCURRENCY: usize = 4;
+
+/// The cookie-free player endpoint: channel, views, duration and live state in about 10 KB.
+pub(crate) async fn fetch_player_response(client: &reqwest::Client, video_id: &str) -> Option<Value> {
+    let body = serde_json::json!({
+        "videoId": video_id,
+        "context": { "client": { "clientName": "WEB", "clientVersion": "2.20250101.00.00", "hl": "en" } },
+    });
+    client
+        .post("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+        .json(&body)
+        .send()
+        .await
+        .ok()?
+        .json()
+        .await
+        .ok()
+}
 
 /// Flat feed entries carry no channel id or view count. The player endpoint returns both in
 /// about 10 KB without cookies, far cheaper than a full yt-dlp extraction per card.
@@ -198,19 +237,7 @@ pub async fn get_video_stats(video_ids: Vec<String>) -> Result<Vec<VideoStats>, 
         .map(|id| {
             let client = client.clone();
             async move {
-                let body = serde_json::json!({
-                    "videoId": id,
-                    "context": { "client": { "clientName": "WEB", "clientVersion": "2.20250101.00.00", "hl": "en" } },
-                });
-                let player: Value = client
-                    .post("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
-                    .json(&body)
-                    .send()
-                    .await
-                    .ok()?
-                    .json()
-                    .await
-                    .ok()?;
+                let player = fetch_player_response(&client, &id).await?;
                 video_stats_from_player(&id, &player)
             }
         })
@@ -370,7 +397,10 @@ mod tests {
 
     #[test]
     fn reads_channel_and_views_from_the_player_response() {
-        let player = json!({ "videoDetails": { "author": "Dan Dingle", "channelId": "UCY-PrcA-mjq3OhgsAH9C52A", "viewCount": "162571" } });
+        let player = json!({
+            "videoDetails": { "author": "Dan Dingle", "channelId": "UCY-PrcA-mjq3OhgsAH9C52A", "viewCount": "162571" },
+            "microformat": { "playerMicroformatRenderer": { "publishDate": "2026-09-24T12:30:26-07:00" } },
+        });
         assert_eq!(
             video_stats_from_player("5hVUPuuo2QM", &player),
             Some(VideoStats {
@@ -378,6 +408,7 @@ mod tests {
                 channel: Some("Dan Dingle".into()),
                 channel_id: Some("UCY-PrcA-mjq3OhgsAH9C52A".into()),
                 view_count: Some(162_571),
+                published_at: Some(1_790_278_226),
             })
         );
         assert_eq!(video_stats_from_player("x", &json!({ "playabilityStatus": {} })), None);

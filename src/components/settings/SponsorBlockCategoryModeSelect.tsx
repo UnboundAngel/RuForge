@@ -1,12 +1,17 @@
 import React, { useRef, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown } from "lucide-react";
+import { Ban, ChevronDown, FastForward, MousePointerClick, type LucideIcon } from "lucide-react";
 import type { SponsorBlockCategoryMode } from "../../sponsorBlock";
 
-const MODE_OPTIONS: ReadonlyArray<{ value: SponsorBlockCategoryMode; label: string }> = [
-  { value: "button", label: "Show skip button" },
-  { value: "auto", label: "Auto-skip" },
-  { value: "off", label: "Disabled" },
+const MODE_OPTIONS: ReadonlyArray<{
+  value: SponsorBlockCategoryMode;
+  label: string;
+  Icon: LucideIcon;
+  tone: string;
+}> = [
+  { value: "auto", label: "Auto-skip", Icon: FastForward, tone: "text-[color:var(--accent)]" },
+  { value: "button", label: "Show skip button", Icon: MousePointerClick, tone: "text-stone-200" },
+  { value: "off", label: "Disabled", Icon: Ban, tone: "text-stone-500" },
 ];
 
 type Props = {
@@ -17,7 +22,7 @@ type Props = {
 export const SponsorBlockCategoryModeSelect: React.FC<Props> = ({ value, onChange }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const current = MODE_OPTIONS.find((o) => o.value === value) ?? MODE_OPTIONS[0];
+  const current = MODE_OPTIONS.find((o) => o.value === value) ?? MODE_OPTIONS[1];
 
   useEffect(() => {
     const onOutside = (e: MouseEvent) => {
@@ -32,11 +37,12 @@ export const SponsorBlockCategoryModeSelect: React.FC<Props> = ({ value, onChang
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center justify-between gap-3 min-w-[148px] px-3 py-2 bg-[#1D1613] hover:bg-stone-800 cursor-pointer shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 transition-all rounded-xl ${
+        className={`flex items-center justify-between gap-3 min-w-[172px] px-3 py-2 bg-[#1D1613] hover:bg-[#241A16] cursor-pointer shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 transition-all rounded-xl ${
           open ? "rounded-b-none border-b-0" : ""
         }`}
       >
-        <span className="text-[10px] font-black tracking-wide text-stone-300 text-left">
+        <span className={`flex items-center gap-2 text-[12px] font-medium text-left ${current.tone}`}>
+          <current.Icon size={14} strokeWidth={2.25} aria-hidden />
           {current.label}
         </span>
         <ChevronDown
@@ -59,12 +65,11 @@ export const SponsorBlockCategoryModeSelect: React.FC<Props> = ({ value, onChang
                   onChange(opt.value);
                   setOpen(false);
                 }}
-                className={`w-full px-3 py-2.5 text-left text-[10px] font-black tracking-wide border-t border-white/[0.03] transition-colors ${
-                  value === opt.value
-                    ? "bg-[color:var(--accent)] text-[#1D1613]"
-                    : "text-stone-400 hover:bg-white/5"
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium transition-colors hover:bg-white/5 ${opt.tone} ${
+                  value === opt.value ? "bg-white/[0.05]" : "opacity-80 hover:opacity-100"
                 }`}
               >
+                <opt.Icon size={14} strokeWidth={2.25} aria-hidden />
                 {opt.label}
               </button>
             ))}

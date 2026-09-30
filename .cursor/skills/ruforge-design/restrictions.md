@@ -143,6 +143,7 @@ Do:
 - Close X is a bare icon, `text-stone-500`, lightens on hover (`hover:text-stone-200`). No circle, no fill, no border.
 - Enter: overlay fades 0.2s, panel opacity + `y: 12` + scale `0.98 → 1` in 0.22s, ease `[0.16, 1, 0.3, 1]`. Exit is the reverse, slightly less Y. No snap. Honor reduced motion (duration 0).
 - Ghost / secondary footer actions are text-only. No engraved inset plate behind Back/Cancel.
+- Page-sized surfaces (Settings, downloader, Free internal space) nest a well inside a bezel rim: outer `#271C18`, radius 24px, 7px padding; inner well `#1D1613`, radius 18px; scrim `bg-black/65`. `SettingsModalShell` gets this with `bezel`. Small confirms stay flat.
 
 Don't:
 

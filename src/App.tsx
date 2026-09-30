@@ -51,6 +51,9 @@ import MusicMiniPlayer from "./components/music-mini/MusicMiniPlayer";
 import { isAudioOnlyPath } from "./mediaKind";
 import { flattenGalleryScanToMediaFiles } from "./galleryScan";
 import { ExplorerWatchQueueButton } from "./components/ExplorerWatchQueueButton";
+import { ExplorerFollowButton } from "./components/watchlist/ExplorerFollowButton";
+import { NotificationBellButton } from "./components/notifications/NotificationBellButton";
+import { NotificationCenterPopover } from "./components/notifications/NotificationCenterPopover";
 import { ExplorerTitlebarNav } from "./components/ExplorerTitlebarNav";
 import { TitlebarHoverButton } from "./components/TitlebarHoverButton";
 import { DownloaderOverlay } from "./components/downloader/DownloaderOverlay";
@@ -93,6 +96,12 @@ import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { MusicToastHost } from "./components/music/MusicToastHost";
 import { startMusicPlaylistsFileSync } from "./musicPlaylistsFileSync";
+import { handleAutoReady, handleNewUploads } from "./watchlist/watchlistAlerts";
+import { startWatchlistSync } from "./watchlist/watchlistSync";
+import { startNotificationCenter } from "./notifications/recordNotification";
+import { useNotificationCenterStore } from "./notifications/notificationCenterStore";
+import { isNotifyOverlayDocument } from "./lib/notifyOverlayEvents";
+import { storageBlocksNewDownloads as storageBlocksNewDownloadsFor } from "./lib/storageBlocks";
 import { YouTubeProfileChip } from "./components/music/YouTubeProfileChip";
 import { MUSIC_TOP_BAR_HALF_WIDTH_PX } from "./components/music/MusicTopBar";
 import {
@@ -110,10 +119,24 @@ import {
 } from "./lib/youtubeProfileProbeRunner";
 import { MediaFile, type GalleryEntry } from "./types";
 import {
+  ChevronLeft,
   Settings,
   Search,
   Trash2,
 } from "lucide-react";
+import {
+  CREATOR_TAB_LABELS,
+  closeCreatorPage,
+  setCreatorTab,
+  useCreatorPage,
+} from "./components/library/creatorPageStore";
+
+const GALLERY_FILTER_TABS = [
+  { id: "all", label: "All" },
+  { id: "playlists", label: "Playlists" },
+  { id: "in-progress", label: "In Progress" },
+  { id: "watched", label: "Watched" },
+] as const;
 import { OnboardingFlow, resolveActiveOnboardingSteps } from "./components/onboarding/OnboardingFlow";
 import { ActivityIsland } from "./components/island/ActivityIsland";
 import { WindowResizeEdges } from "./components/window/WindowResizeEdges";
@@ -182,6 +205,7 @@ const WindowControls = ({
   isMaximized,
   onExportUsbClick,
   hasRemovableDrive,
+  showExportButton,
   navMode,
   updaterPhase,
   updaterVersion,
@@ -192,6 +216,7 @@ const WindowControls = ({
   isMaximized: boolean;
   onExportUsbClick: () => void;
   hasRemovableDrive: boolean;
+  showExportButton: boolean;
   navMode: string;
   updaterPhase: UpdaterPhase;
   updaterVersion: string | null;
@@ -211,13 +236,17 @@ const WindowControls = ({
         />
       </div>
 
+      {showExplorerQueueToolbar && <ExplorerFollowButton />}
+
       {showExplorerQueueToolbar && (
         <ExplorerWatchQueueButton
           storageBlocksNewDownloads={storageBlocksNewDownloads}
         />
       )}
 
-      {navMode !== "music" && (
+      <NotificationBellButton />
+
+      {showExportButton && navMode !== "music" && (
         <TitlebarHoverButton
           tooltip={
             hasRemovableDrive
@@ -300,6 +329,25 @@ function App() {
       ? Math.min(1, Math.max(0, galleryScrollChromeRaw))
       : 0;
   const galleryScrollBulge = galleryScrollChrome > 0.08;
+  const creatorOpen = useCreatorPage((s) => s.creator !== null);
+  const creatorTab = useCreatorPage((s) => s.tab);
+  const creatorTabList = useCreatorPage((s) => s.tabs);
+  const creatorTabCounts = useCreatorPage((s) => s.counts);
+  const stripTabs = creatorOpen
+    ? creatorTabList.map((t) => ({
+        id: t,
+        label: CREATOR_TAB_LABELS[t],
+        count: creatorTabCounts[t],
+        active: (creatorTabList.includes(creatorTab) ? creatorTab : "home") === t,
+        pick: () => setCreatorTab(t),
+      }))
+    : GALLERY_FILTER_TABS.map(({ id, label }) => ({
+        id,
+        label,
+        count: undefined,
+        active: galleryFilter === id,
+        pick: () => setGalleryFilter(id),
+      }));
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
   const selectedPlaylist = useRuforgeStore((s) => s.selectedPlaylist);
@@ -389,6 +437,8 @@ function App() {
   const explorerWebviewLabelRef = useRef(EMBEDDED_EXPLORER_WEBVIEW_LABEL);
   const prevActiveTabRef = useRef<ActiveTab>(activeTab);
   const prevExplorerSurfaceRef = useRef(false);
+  const explorerCoveredByPopover = useNotificationCenterStore((s) => s.explorerCoveredByPopover);
+  const prevExplorerCoveredRef = useRef(false);
   /** One reload when entering Explorer; layout sync must not re-arm this. */
   const explorerReloadPendingRef = useRef(false);
   const explorerLastSyncedBoundsRef = useRef<ExplorerBounds | null>(null);
@@ -442,16 +492,57 @@ function App() {
     if (label !== "main") return;
     void startMusicPlaylistsFileSync(() => useRuforgeStore.getState().refreshVirtualPlaylists());
   }, []);
+
+  useEffect(() => {
+    // Mini windows run these hooks too; a second listener there would double-enqueue auto-downloads.
+    let label = "";
+    try {
+      label = getCurrentWindow().label;
+    } catch {
+      return;
+    }
+    if (label !== "main" || isNotifyOverlayDocument()) return;
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void startWatchlistSync({
+      onNewUploads: (u) => void handleNewUploads(u).catch((e) => console.error("watchlist alerts failed", e)),
+      onAutoReady: (u) => void handleAutoReady(u).catch((e) => console.error("watchlist auto-ready failed", e)),
+    }).then((un) => {
+      if (cancelled) un();
+      else stop = un;
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    // Mini shares localStorage; only main may load or write the notification feed.
+    let label = "";
+    try {
+      label = getCurrentWindow().label;
+    } catch {
+      return;
+    }
+    if (label !== "main" || isNotifyOverlayDocument()) return;
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    void startNotificationCenter().then((un) => {
+      if (cancelled) un();
+      else stop = un;
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
   const setLastExplorerUrl = useRuforgeStore((s) => s.setLastExplorerUrl);
   const setYoutubeProfileSession = useRuforgeStore((s) => s.setYoutubeProfileSession);
   const lastExplorerUrlRef = useRef(lastExplorerUrl);
   lastExplorerUrlRef.current = lastExplorerUrl;
-  const storageBlocksNewDownloads =
-    saveToInternal &&
-    (storageStats
-      ? storageStats.total_bytes / (1024 * 1024 * 1024) >= settings.storageLimitGB
-      : false);
+  const storageBlocksNewDownloads = storageBlocksNewDownloadsFor({ saveToInternal, storageStats, settings });
 
   const updateRef = useRef<Update | null>(null);
   const handleInstallRestartRef = useRef<() => Promise<void>>(async () => {});
@@ -858,9 +949,14 @@ function App() {
       navMode !== "music" &&
       !downloaderOpen &&
       !settingsOpen &&
-      !shellBlocked;
+      !shellBlocked &&
+      !explorerCoveredByPopover;
     const wasOnExplorer = prevExplorerSurfaceRef.current;
+    const wasCovered = prevExplorerCoveredRef.current;
     const onExplorer = explorerSurfaceActive;
+    // The popover fallback hides the page the user is watching; only a real leave may pause it.
+    const leavingExplorer = !onExplorer && !explorerCoveredByPopover && (wasOnExplorer || wasCovered);
+    prevExplorerCoveredRef.current = explorerCoveredByPopover;
     const tabEnteringExplorer =
       prevActiveTabRef.current !== "explorer" && activeTab === "explorer";
     const tabLeavingExplorer =
@@ -895,7 +991,8 @@ function App() {
     };
 
     const reloadExplorerPage = async () => {
-      const url = lastExplorerUrlRef.current.trim();
+      const { explorerNavTarget, setExplorerNavTarget } = useRuforgeStore.getState();
+      const url = (explorerNavTarget ?? lastExplorerUrlRef.current).trim();
       const target = url.startsWith("http") ? url : "https://www.youtube.com";
       try {
         await invoke("eval_in_webview", {
@@ -903,7 +1000,9 @@ function App() {
           script: explorerNavigateOrReloadScript(target),
         });
       } catch {
-        /* webview still creating */
+        /* webview still creating; it opens at lastExplorerUrl anyway */
+      } finally {
+        if (explorerNavTarget) setExplorerNavTarget(null);
       }
     };
 
@@ -1012,7 +1111,7 @@ function App() {
         return;
       }
 
-      if (wasOnExplorer) {
+      if (leavingExplorer) {
         await pauseExplorerMedia();
       }
       if (explorerLinuxEmbedRef.current) {
@@ -1072,7 +1171,7 @@ function App() {
       resizeObserver?.disconnect();
       unlistenWindowResize?.();
     };
-  }, [activeTab, navMode, downloaderOpen, settingsOpen, shellBlocked, isMainMaximized]);
+  }, [activeTab, navMode, downloaderOpen, settingsOpen, shellBlocked, isMainMaximized, explorerCoveredByPopover]);
 
   useEffect(() => {
     if (activeTab !== "explorer") return;
@@ -1615,8 +1714,9 @@ function App() {
     let alive = true;
     const tick = async () => {
       try {
+        if (useRuforgeStore.getState().explorerNavTarget) return;
         const u = await invoke<string>("get_embedded_explorer_webview_url");
-        if (alive) setLastExplorerUrl(u);
+        if (alive && !useRuforgeStore.getState().explorerNavTarget) setLastExplorerUrl(u);
       } catch {
         /* Embedded explorer webview not mounted yet */
       }
@@ -1766,6 +1866,7 @@ function App() {
         isMaximized={isMainMaximized}
         onExportUsbClick={() => void handleExportUsbTitlebar()}
         hasRemovableDrive={hasRemovableDrive}
+        showExportButton={settings.showExportInTitlebar === true}
         navMode={navMode}
         updaterPhase={updaterPhase}
         updaterVersion={updaterVersion}
@@ -1773,6 +1874,7 @@ function App() {
         storageBlocksNewDownloads={storageBlocksNewDownloads}
         onUpdaterStatusClick={undefined}
       />
+      <NotificationCenterPopover />
 
       {!shellBlocked && (
         <ActivityIsland
@@ -1809,14 +1911,14 @@ function App() {
             data-tauri-drag-region
           />
           <div
-            className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
+            className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[400px]" : "right-[280px]"}`}
             style={{ left: `calc(50% + ${MUSIC_TOP_BAR_HALF_WIDTH_PX}px)` }}
             data-tauri-drag-region
           />
         </>
       ) : (
         <div
-          className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[320px]" : "right-[240px]"}`}
+          className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[400px]" : "right-[280px]"}`}
           style={{ left: SIDEBAR_RAIL_PX }}
           data-tauri-drag-region
         />
@@ -1909,21 +2011,23 @@ function App() {
                 ) : null}
 
                 <div className="relative flex items-end pb-1 px-6">
+                  {creatorOpen ? (
+                    <button
+                      type="button"
+                      onClick={closeCreatorPage}
+                      aria-label="Back to Library"
+                      data-tooltip="Back to Library"
+                      className="relative z-10 flex h-[var(--rf-tab-strip-h)] items-end pb-[7px] pl-1 pr-2 text-stone-500 hover:text-stone-200 transition-colors pointer-events-auto"
+                    >
+                      <ChevronLeft size={16} strokeWidth={2.75} />
+                    </button>
+                  ) : null}
                   <div className="flex items-end">
-                    {(['all', 'playlists', 'in-progress', 'watched'] as const).map((t) => {
-                      const isActive = galleryFilter === t;
-                      const label =
-                        t === 'all'
-                          ? 'All'
-                          : t === 'playlists'
-                            ? 'Playlists'
-                            : t === 'in-progress'
-                              ? 'In Progress'
-                              : 'Watched';
+                    {stripTabs.map(({ id: t, label, count, active: isActive, pick }) => {
                       return (
                         <button
                           key={t}
-                          onClick={() => setGalleryFilter(t)}
+                          onClick={pick}
                           className="relative flex h-[var(--rf-tab-strip-h)] px-6 items-end pb-2 justify-center cursor-pointer pointer-events-auto group/tab"
                         >
                           {isActive && !galleryScrollBulge && (
@@ -1946,6 +2050,7 @@ function App() {
                           )}
                           <span className={`font-black text-[10px] uppercase tracking-[0.2em] transition-colors relative z-10 ${isActive ? "text-[color:var(--accent)]" : "text-stone-500 group-hover/tab:text-stone-300"}`}>
                             {label}
+                            {count ? <span className="ml-1.5 tabular-nums tracking-normal text-stone-600">{count}</span> : null}
                           </span>
                         </button>
                       );

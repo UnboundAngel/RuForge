@@ -77,8 +77,10 @@ use crate::commands::musicmeta::{
 };
 use crate::commands::music_artist_about::music_artist_about;
 use crate::commands::island_overlay::{
-    hide_island_overlay, island_overlay_ready, note_main_window_monitor, show_island_overlay,
-    sync_island_overlay_bounds, MAIN_HIDDEN_EVENT,
+    app_is_foreground, hide_island_overlay, island_cursor_position, island_follow_active_monitor,
+    island_overlay_ready,
+    note_main_window_monitor, set_island_click_through, show_island_overlay, sync_island_overlay_bounds,
+    MAIN_HIDDEN_EVENT,
 };
 use crate::commands::player::{
     eval_in_webview, get_embedded_explorer_webview_url, open_mini_player, open_music_mini_player,
@@ -96,6 +98,7 @@ use crate::commands::music_playlists::{
 use crate::commands::music_preview::{music_preview_local_hook, resolve_music_preview_stream};
 use crate::commands::youtube_feed::{get_video_stats, get_youtube_feed_page, resolve_video_preview_stream};
 use crate::commands::channel_avatar::get_channel_avatar;
+use crate::commands::channel_profile::get_channel_profile;
 use crate::commands::disk_space::get_disk_space;
 use crate::commands::recently_deleted::{
     list_recently_deleted, remove_recently_deleted_entry, restore_recently_deleted,
@@ -176,6 +179,7 @@ pub fn run() {
         .manage(RemovableDrivesState::default())
         .manage(crate::companion::CompanionState::new())
         .manage(crate::discord_rpc::DiscordRpcState::new())
+        .manage(crate::commands::private_mailbox::PrivateMailbox::default())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
@@ -246,6 +250,8 @@ pub fn run() {
             });
 
             spawn_removable_drives_watcher(app.handle());
+            app.manage(crate::commands::watchlist::WatchlistState::load(app.handle()));
+            crate::commands::watchlist::poller::spawn_watchlist_poller(app.handle());
 
             setup_tray(app)?;
 
@@ -347,7 +353,25 @@ pub fn run() {
             get_youtube_feed_page,
             resolve_video_preview_stream,
             get_channel_avatar,
+            get_channel_profile,
             get_video_stats,
+            crate::commands::channel_videos::get_channel_videos,
+            crate::commands::channel_videos::get_youtube_history,
+            crate::commands::watchlist::get_watchlist,
+            crate::commands::watchlist::follow_channel,
+            crate::commands::watchlist::unfollow_channel,
+            crate::commands::watchlist::set_channel_auto_download,
+            crate::commands::watchlist::mark_watchlist_seen,
+            crate::commands::watchlist::mark_all_watchlist_seen,
+            crate::commands::watchlist::mark_watchlist_auto_queued,
+            crate::commands::watchlist::resolve_watchlist_channel,
+            crate::commands::watchlist::set_watchlist_check_interval,
+            crate::commands::watchlist::refresh_watchlist_now,
+            crate::commands::watchlist::take_watchlist_events,
+            crate::commands::private_mailbox::private_mailbox_put,
+            crate::commands::private_mailbox::private_mailbox_get,
+            crate::commands::private_mailbox::private_mailbox_push,
+            crate::commands::private_mailbox::private_mailbox_take,
             start_download_job,
             pause_download_job,
             stop_all_active_download_jobs,
@@ -419,8 +443,12 @@ pub fn run() {
             download_deno,
             show_island_overlay,
             hide_island_overlay,
+            app_is_foreground,
             sync_island_overlay_bounds,
             island_overlay_ready,
+            island_cursor_position,
+            island_follow_active_monitor,
+            set_island_click_through,
             export_media_bundle,
             cancel_export_bundle,
             get_removable_drives,

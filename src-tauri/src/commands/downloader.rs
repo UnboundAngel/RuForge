@@ -1374,8 +1374,9 @@ pub async fn start_download_job(
                         payload.code,
                         browser_cookies_for_errors.as_deref(),
                     );
+                    // Diagnostics trail the cause: the UI shows the first line, and prefix checks read the start.
                     if let Some(summary) = &cookie_export_summary {
-                        err = format!("{summary}\n{err}");
+                        err = format!("{err}\n{summary}");
                     }
                     crate::rf_log!("download.jobs", log::Level::Error, "job {} failed: {}", job_id, err);
                     let _ = app.emit(
@@ -2015,7 +2016,7 @@ pub(crate) async fn run_ytdlp_json_with_cookie_fallback(
                         browser_cookies,
                     );
                     if let Some(summary) = export_summary {
-                        msg = format!("{summary}\n{msg}");
+                        msg = format!("{msg}\n{summary}");
                     }
                     Err(msg)
                 }
