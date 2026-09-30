@@ -403,44 +403,6 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
     opacity: 0.7;
   }
 
-  .docs-content__placeholder a {
-    position: relative;
-    color: var(--color-rf-docs-link);
-    text-decoration: underline;
-    text-decoration-color: rgb(212 165 116 / 0.4);
-    text-underline-offset: 3px;
-    text-decoration-thickness: 1px;
-    transition: color 0.12s ease, text-decoration-color 0.12s ease, padding-left 0.15s ease;
-  }
-
-  .docs-content__placeholder a:hover {
-    text-decoration-color: var(--color-rf-docs-link);
-    opacity: 1;
-    padding-left: 1.1em;
-  }
-
-  .docs-content__placeholder a::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 0.9em;
-    height: 0.9em;
-    border-radius: 2px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d4a574' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E");
-    background-size: 78%;
-    background-repeat: no-repeat;
-    background-position: center;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.15s ease;
-  }
-
-  .docs-content__placeholder a:hover::before {
-    opacity: 1;
-  }
-
   /* Prev / Next navigation */
   .docs-nav-footer {
     display: grid;
@@ -707,52 +669,6 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
     background: rgb(237 215 156 / 0.05);
     color: var(--color-rf-text);
     box-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
-  }
-
-  .docs-p :global(a),
-  .docs-steps :global(a),
-  .docs-bullets :global(a) {
-    position: relative;
-    color: var(--color-rf-docs-link);
-    text-decoration: underline;
-    text-decoration-color: rgb(212 165 116 / 0.4);
-    text-underline-offset: 3px;
-    text-decoration-thickness: 1px;
-    transition: text-decoration-color 0.12s ease, padding-left 0.15s ease;
-  }
-
-  .docs-p :global(a:hover),
-  .docs-steps :global(a:hover),
-  .docs-bullets :global(a:hover) {
-    text-decoration-color: var(--color-rf-docs-link);
-    opacity: 1;
-    padding-left: 1.1em;
-  }
-
-  .docs-p :global(a::before),
-  .docs-steps :global(a::before),
-  .docs-bullets :global(a::before) {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 0.9em;
-    height: 0.9em;
-    border-radius: 2px;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d4a574' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E");
-    background-size: 78%;
-    background-repeat: no-repeat;
-    background-position: center;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.15s ease;
-  }
-
-  .docs-p :global(a:hover::before),
-  .docs-steps :global(a:hover::before),
-  .docs-bullets :global(a:hover::before) {
-    opacity: 1;
   }
 
   .docs-steps {

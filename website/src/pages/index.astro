@@ -2,17 +2,19 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import LandingBackdrop from '../components/LandingBackdrop.astro';
 import HeroCarousel from '../components/HeroCarousel.astro';
-import Icon from '../components/Icon.astro';
-import TestimonialsSection from '../components/TestimonialsSection.astro';
 import HeroAnimatedTitle from '../components/HeroAnimatedTitle';
 import LandingFeaturesSection from '../components/LandingFeaturesSection.astro';
 import TechTickerIcon from '../components/TechTickerIcon.astro';
+import Icon from '../components/Icon.astro';
 import { techTickerItems } from '../lib/techTickerIcons';
 import { Image } from 'astro:assets';
 import highlightCoffee from '../assets/highlight-coffee-beans.webp';
 import landingGrain from '../assets/landing-grain.webp';
 import { softwareApplicationSchema, organizationSchema } from '../lib/structuredData';
 import { SITE } from '../lib/site';
+import { landingLoginTrust } from '../lib/landingFeatures';
+
+const loginTrust = landingLoginTrust('');
 ---
 
 <BaseLayout
@@ -32,8 +34,19 @@ import { SITE } from '../lib/site';
         </div>
 
         <p class="hero-subcopy max-w-xl mx-auto text-lg leading-relaxed text-rf-text-muted/90">
-          Open-source media library and yt-dlp GUI for Windows. Download to disk, browse your catalog, and play offline with SponsorBlock, chapters, and a music Now Playing rail.
+          a free, open-source Windows app that saves YouTube videos and music to your PC, keeps them in one library, and plays them offline
         </p>
+
+        <div class="flex items-center justify-center gap-3">
+          <a href="/download?start=1" class="rf-btn no-underline">
+            <Icon name="download" size={16} class="text-rf-bg" />
+            <span id="hero-cta-label">Download for Windows</span>
+          </a>
+          <a href={SITE.github} class="rf-btn-ghost no-underline">
+            <Icon name="github" size={16} />
+            Source on GitHub
+          </a>
+        </div>
       </div>
 
       {/* 3D Slanted Carousel Container */}
@@ -88,15 +101,14 @@ import { SITE } from '../lib/site';
 
     <LandingFeaturesSection />
 
-    <TestimonialsSection />
-
     {/* High-Fidelity Rich Highlight Card at Bottom */}
-    <section class="rf-container pb-24 scroll-reveal">
+    <section class="rf-container pb-4 scroll-reveal">
       <div class="highlight-card relative overflow-hidden rounded-3xl p-14 border border-rf-border/40 group/highlight">
         <Image
           src={highlightCoffee}
           alt=""
           class="highlight-card-photo"
+          draggable="false"
           width={1376}
           height={768}
           widths={[768, 1024, 1376]}
@@ -106,19 +118,36 @@ import { SITE } from '../lib/site';
         />
         <div class="highlight-card-scrim" aria-hidden="true"></div>
 
+        <svg class="highlight-card-stamp" viewBox="0 0 200 200" role="img" aria-label="open source, runs on your PC">
+          <defs>
+            <path id="stamp-arc-top" d="M 30,100 A 70,70 0 0 1 170,100" />
+            <path id="stamp-arc-bottom" d="M 18,100 A 82,82 0 0 0 182,100" />
+          </defs>
+          <circle cx="100" cy="100" r="93" fill="none" stroke="currentColor" stroke-width="2.5" />
+          <circle cx="100" cy="100" r="60" fill="none" stroke="currentColor" stroke-width="1.25" />
+          <text class="highlight-card-stamp__ring">
+            <textPath href="#stamp-arc-top" startOffset="50%" text-anchor="middle">open source</textPath>
+          </text>
+          <text class="highlight-card-stamp__ring">
+            <textPath href="#stamp-arc-bottom" startOffset="50%" text-anchor="middle">runs on your pc</textPath>
+          </text>
+          <text class="highlight-card-stamp__mark" x="100" y="108" text-anchor="middle">RuForge</text>
+        </svg>
+
         <div class="relative z-10 flex flex-col">
-          <div class="max-w-2xl space-y-8">
-            <div class="inline-flex items-center gap-2 rounded-full bg-rf-accent/10 px-4 py-1.5 border border-rf-accent/20">
-              <Icon name="star" size={14} class="text-rf-accent" />
-              <span class="text-xs font-semibold tracking-wider text-rf-accent uppercase">Open-source, local-first</span>
-            </div>
+          <div class="max-w-xl space-y-8">
 
             <h2 class="text-4xl font-bold tracking-tight text-rf-text leading-[1.25]">
-              Designed for speed.<br />Engineered for local privacy.
+              {loginTrust.headline}
             </h2>
 
-            <p class="text-base leading-relaxed text-rf-text-muted/90">
-              RuForge compiles direct Rust bindings with Tauri to deliver near-zero overhead. Your downloads run concurrently, SponsorBlock filters on the fly, and your library indexing is entirely local. No trackers, no accounts, no subscriptions.
+            <div class="space-y-3 text-base leading-relaxed text-rf-text-muted/90">
+              {loginTrust.paragraphs.map((html) => <p set:html={html} />)}
+            </div>
+
+            <p class="flex items-start gap-2.5 border-t border-rf-border/30 pt-5 text-sm leading-relaxed text-rf-text-muted/75">
+              <Icon name="shield" size={15} class="mt-[3px] shrink-0 text-rf-text-muted/60" />
+              <span set:html={loginTrust.note} />
             </p>
           </div>
         </div>
@@ -221,6 +250,54 @@ import { SITE } from '../lib/site';
     height: 100%;
     object-fit: cover;
     object-position: center 42%;
+  }
+
+  /* Ink stamp pressed onto the paper photo; sits in the empty right side, so it only shows once there is room. */
+  .highlight-card-stamp {
+    position: absolute;
+    top: 50%;
+    right: 3.25rem;
+    z-index: 10;
+    display: none;
+    width: 10.5rem;
+    height: 10.5rem;
+    color: var(--color-rf-accent);
+    opacity: 0.72;
+    transform: translateY(-50%) rotate(-11deg);
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s ease;
+  }
+
+  .highlight-card:hover .highlight-card-stamp {
+    opacity: 0.9;
+    transform: translateY(-50%) rotate(-6deg);
+  }
+
+  @media (min-width: 1152px) {
+    .highlight-card-stamp {
+      display: block;
+    }
+  }
+
+  .highlight-card-stamp__ring {
+    fill: currentColor;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  .highlight-card-stamp__mark {
+    fill: currentColor;
+    font-family: var(--font-hand);
+    font-size: 26px;
+    font-weight: 700;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .highlight-card-stamp {
+      transition: none;
+    }
   }
 
   .highlight-card-scrim {
@@ -330,6 +407,11 @@ import { SITE } from '../lib/site';
 </style>
 
 <script>
+  import { detectPlatform, downloadCtaLabel } from '../lib/detectPlatform';
+
+  const heroCtaLabel = document.getElementById('hero-cta-label');
+  if (heroCtaLabel) heroCtaLabel.textContent = downloadCtaLabel(detectPlatform());
+
   // Card spotlight tracking
   function initCardSpotlights() {
     const cards = document.querySelectorAll<HTMLElement>('.feature-card, .spotlight-card');
