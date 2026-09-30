@@ -1,228 +1,115 @@
-\# Privacy
+# Privacy
 
 
+Last updated: September 29, 2026
 
-Last updated: June 28, 2026
 
+RuForge runs on your computer. The project has no servers and no accounts, and nothing you download, watch or search is sent to the maintainer. This page lists what RuForge keeps on your PC and every place it connects to.
 
 
-RuForge runs entirely on your computer. This page tells you exactly what
+## What RuForge stores locally
 
-data exists, where it lives, and what leaves the machine.
 
+- Videos and audio you download, saved to the folder you pick. RuForge reads the folders you add to the library and only moves or copies files when you run an action such as export or library migration.
+- Sidecar files next to each download: video details from yt-dlp, SponsorBlock segments, music tags, lyrics, comments (only if you turn on comment downloads) and preview thumbnails.
+- Settings, watch progress and other app state, kept in the app's WebView storage and in RuForge's app data folder on your PC.
+- The channels you follow and your notifications, stored in the app data folder.
+- Artist details for the Music "About the artist" sheet, cached in the app data folder after the first lookup.
+- Optional sign-in data. If you sign in to YouTube in RuForge's built-in YouTube tab, browser session data is stored locally in RuForge's own WebView2 profile, separate from your normal browser. RuForge does not upload it.
+- A log file in the app's log folder. By default it records warnings and errors; the Debugging tab can turn on more detail. Log lines can include file paths and links. The log stays on your PC unless you attach it to a bug report yourself.
 
 
-\## What RuForge stores locally
+## What leaves your computer
 
 
+RuForge has no server of its own, so none of the traffic below goes to the project. Each connection goes straight from your PC to the service named.
 
-\- Videos and audio you download. Saved to the folder you pick. RuForge
 
-&#x20; does not move, copy, or read them outside that folder unless you point
+**YouTube and other sites you download from.** When you queue a download or open a video's details, yt-dlp connects directly to the site to fetch it. RuForge does not proxy these requests. Downloads use no cookies unless you pick a cookie source in the downloader: Internal (RuForge's built-in YouTube tab), Firefox, Edge, Safari, Brave, or a cookies file. When yt-dlp uses cookies, it sends those cookies to the source site, not to RuForge. That is how signing in works. With Internal, RuForge copies your YouTube session from the built-in browser into a temporary file for that one job and deletes the file when the job ends.
 
-&#x20; the library at them.
 
-\- A local library index. Tracks file paths, durations, thumbnails, watch
+**The YouTube tab.** The built-in YouTube and YouTube Music browser uses Microsoft Edge WebView2. The sites you open there see what they would see in Edge: your IP address, cookies and request headers. RuForge does not send that browsing anywhere else.
 
-&#x20; progress, view counters, and chapter data for files you have
 
-&#x20; downloaded or scanned in. This index is a local database. It is not
+**Other YouTube requests.** Thumbnails, channel avatars and banners in the app load from YouTube's image servers. For view counts, channel details and new uploads from channels you follow, RuForge asks YouTube directly without your cookies. Followed channels are checked through their public RSS feeds on the schedule you set (every 30 minutes by default). Two features are on by default and can be turned off in Settings: the YouTube home feed in the Video Library, which uses your YouTube session when you are signed in, and YouTube Music song suggestions, which send the IDs of songs in a playlist to YouTube to find similar tracks.
 
-&#x20; synced anywhere.
 
-\- Settings. Output paths, default formats, accent color, SponsorBlock
+**SponsorBlock (on by default).** When you play a downloaded video that has a YouTube ID, RuForge sends the first four characters of a SHA-256 hash of that ID to sponsor.ajay.app. The response contains skip segments for every video sharing that prefix, and RuForge picks the matching one locally, so the full video ID never leaves your PC in the request. The request carries no cookies or account data. Segments are cached next to the file. SponsorBlock is an open-source service run by a third party. You can turn it off in Settings > Playback.
 
-&#x20; preferences, and similar. Stored in the app's WebView storage and
 
-&#x20; local app data folders on your PC, not on any RuForge server.
+**Music metadata.** After each audio download, RuForge looks the track up on MusicBrainz using the artist and title from the file's tags or its YouTube details, and looks up the artist's genres. No account data is sent. Requests are spaced about one second apart, and the User-Agent identifies RuForge and its version (`RuForge/{version} ( https://ruforge.app )`). When a match includes a release and the track has no cover yet, RuForge downloads the front cover from Cover Art Archive using only the MusicBrainz release ID. Results are saved in `.musicmeta.json` files next to your tracks, so each track is looked up once. The Enrich music metadata action in the Debugging tab runs the same lookup for older files.
 
-\- Download metadata cache (titles, thumbnails, file sizes). Speeds up
 
-&#x20; re-queueing. Local only.
+**Lyrics.** After each audio download, and when you open the lyrics view for a song with no saved lyrics, RuForge asks LRCLIB (lrclib.net) for lyrics, sending the artist, title, album and track length. You can also search LRCLIB by hand with an artist and title you type. The result is saved next to the file. When nothing is found, RuForge waits 7 days before trying that song again.
 
-\- Optional cookie data. If you use the in-app browser to log into a site
 
-&#x20; so yt-dlp can download restricted content, browser session data is
+**About the artist.** When you open the About the artist sheet in Music, RuForge looks the artist name up on MusicBrainz, reads the biography from Wikipedia (through Wikidata when needed) and loads the artist photo from Wikimedia. The result is cached, so this happens once per artist.
 
-&#x20; stored locally for that webview. RuForge does not upload it.
 
+**App updates.** On launch, and when you press Check now in Settings, RuForge fetches a small `updater.json` file from GitHub to see whether a newer version exists. When one is available, it also reads the list of recent releases from GitHub's API to show the release notes. No account or identifier is sent. The signed installer downloads from GitHub only after you choose to install.
 
 
-\## What leaves your computer
+**yt-dlp updates.** At startup RuForge checks GitHub's API for a newer yt-dlp release, at most once every 12 hours (the result is cached). The User-Agent names RuForge and its version. A new yt-dlp binary downloads from GitHub only when you choose to update it.
 
 
+**Deno (optional).** YouTube sometimes requires a JavaScript runtime for yt-dlp. If you install Deno from Settings > Downloads, RuForge checks GitHub's API for the latest Deno release and downloads it from GitHub into your app data folder. Deno is not included in the RuForge installer, and nothing is downloaded until you press Install or Reinstall.
 
-Seven things. Most are automatic only when a feature runs; Deno and music enrichment run only when you trigger them. SponsorBlock is on by default but can be turned off.
 
+**Discord Rich Presence (off by default).** If you turn it on in Settings > General, RuForge passes your status to the Discord app on your PC over a local connection, and Discord shows it on your profile to people who can see your activity. The status can include the title of what you are playing or downloading, the song's artist, elapsed time, and which part of RuForge you are in. You can hide titles or the browsing status, or turn it off at any time. RuForge itself makes no network request for this.
 
 
-\*\*1. yt-dlp requests.\*\* When you queue a download, yt-dlp connects
+**Links you open.** Links to GitHub, YouTube, artist pages and other sites open in your default browser.
 
-directly to the source site (YouTube or other sites it supports) to
 
-fetch the media. RuForge does not proxy these requests. When yt-dlp
+## Domains RuForge contacts
 
-uses cookies (from your browser or from RuForge's internal browser
 
-profile), it sends those cookies to the source site, not to RuForge.
+- `youtube.com`, `music.youtube.com` and YouTube's media and image servers (`googlevideo.com`, `i.ytimg.com`, `yt3.googleusercontent.com`): downloads, the YouTube tab, thumbnails, previews and followed channels.
+- Other video sites: only when you paste a link from them.
+- `sponsor.ajay.app`: SponsorBlock segments when a video plays, if SponsorBlock is on.
+- `raw.githubusercontent.com`: app update check on launch.
+- `api.github.com`: release notes when an update is available, the yt-dlp release check at most every 12 hours, and the Deno release check when you install it.
+- `github.com` and its download servers: RuForge, yt-dlp and Deno downloads when you choose to install them.
+- `musicbrainz.org` and `coverartarchive.org`: music metadata after audio downloads and for About the artist.
+- `lrclib.net`: lyrics after audio downloads and when you open lyrics.
+- `wikidata.org`, `en.wikipedia.org` and `upload.wikimedia.org`: About the artist.
 
-That is how authentication works.
 
+## What RuForge does not do
 
 
-\*\*2. SponsorBlock (default on).\*\* When you play a video that has a
+- We do not collect or report any data about your downloads, browsing or playback. yt-dlp and the built-in browser still connect to the sites you use, the same way any browser or downloader does.
+- No analytics or telemetry in a standard session. Settings > General has a Debugging settings switch, off by default, that reveals optional usage and crash telemetry toggles, which are also off until you turn them on. With usage telemetry on, RuForge sends one event per launch with a random install ID. With crash telemetry on, pressing Report on the error screen also sends the first 200 characters of the error message. Both go to an Aptabase analytics service.
+- No RuForge account, no login to RuForge and no cloud sync.
+- No ads, no referral links and no affiliate rewrites of URLs.
+- No background uploading of files, library data or watch history.
 
-YouTube ID, RuForge sends the first four characters of a SHA-256 hash
 
-of that ID to sponsor.ajay.app. The response contains skip segments for
+## Logs and crash data
 
-all videos sharing that hash prefix, and RuForge picks the matching one
 
-locally. The full video ID never leaves your machine in the request.
+RuForge does not collect crash data in a standard session. When something breaks, the error screen lets you copy the details or press Report, which opens a pre-filled GitHub issue in your browser. Nothing is posted until you review and submit it yourself. You can attach your log file the same way. You control what gets shared.
 
-Skip segments are cached on disk next to the file. SponsorBlock is
 
-operated by a third party and is open source. You can disable it in
+## Windows
 
-Settings → Playback.
 
+The Windows installer is signed. Windows SmartScreen may check the signature against Microsoft's reputation service when you run the installer. That check is between your computer and Microsoft.
 
 
-\*\*3. App update checks.\*\* On launch, RuForge fetches a single JSON file
+## Children
 
-from GitHub to see whether a newer version of RuForge exists. The
 
-request includes your current version and the standard headers any HTTP
+RuForge is not directed at children. It is a general-purpose desktop tool.
 
-client sends. No account, no fingerprint, no telemetry. Installing an
 
-update downloads the signed installer from GitHub when you tap install.
+## Changes
 
 
+If this page changes in a way that affects what data leaves your PC, the change ships with a release and is listed in its release notes, which the in-app updater shows.
 
-\*\*4. yt-dlp update checks.\*\* On launch, RuForge checks GitHub's API
 
-(every 12 hours, cached) for a newer version of the bundled yt-dlp
+## Contact
 
-binary. The request includes a User-Agent identifying RuForge and its
 
-version. If you tap "Update yt-dlp," the new binary downloads from
-
-GitHub. No upload, no install without your tap.
-
-
-
-\*\*5. Links you click.\*\* GitHub, Discord (if added), or any other link
-
-opens in your default browser like any other link.
-
-
-
-\*\*6. Music metadata (music mode, when enrichment runs).\*\* When you download audio with metadata stamping, run Enrich music metadata, or open artist pages that need a lookup, RuForge sends search queries to MusicBrainz: artist and title strings taken from your local files or sidecars, not account data or other personally identifying information. Requests are rate-limited to about one per second. The User-Agent identifies RuForge and its version (`RuForge/{version} ( https://ruforge.app )`). When a confident match includes a release, RuForge may fetch cover art from Cover Art Archive using the MusicBrainz release ID only. Results are cached in local `{stem}.musicmeta.json` and artist sidecars next to your files. This does not run on every launch.
-
-\*\*7. Deno JavaScript runtime (optional).\*\* YouTube sometimes requires a JS runtime for yt-dlp. If you install Deno from Settings → Downloads, RuForge checks GitHub's API for the latest Deno release and downloads the binary into your app data folder (about 100 MB). Deno does not ship inside the RuForge installer. No upload, no install without your tap on Install or Reinstall.
-
-
-
-\## Domains RuForge contacts automatically
-
-
-
-\- `raw.githubusercontent.com` — app update manifest, once per launch
-
-\- `api.github.com` — yt-dlp release check every 12 hours; Deno release check when you install the JS runtime
-
-\- `github.com` — release downloads when you tap install
-
-\- `sponsor.ajay.app` — SponsorBlock segments when enabled
-
-\- `musicbrainz.org` — music metadata search when enrichment or artist lookup runs
-
-\- `coverartarchive.org` — album cover art when a MusicBrainz match includes a release
-
-\- `github.com/denoland` — Deno binary download when you install the JS runtime from Settings
-
-
-
-MusicBrainz and Cover Art Archive traffic runs only when music enrichment or artist lookup is active, not on every launch. Everything else on the network is either listed above or initiated by you: yt-dlp connecting to a site you queued, or the in-app browser loading a page you opened.
-
-
-
-\## What RuForge does not do
-
-
-
-\- We do not collect or report any data about your downloads, browsing,
-
-&#x20; or playback. yt-dlp and the embedded browser still connect to the
-
-&#x20; sites you use, the same way any browser or downloader does.
-
-\- No analytics or telemetry in a standard session. Optional debugging telemetry exists and is off by default; it is only accessible via developer tools.
-
-\- No account. No login. No cloud sync.
-
-\- No ads. No referral injections. No affiliate rewrites of URLs.
-
-\- No background uploading of files, library data, or watch history.
-
-
-
-\## Network exceptions worth knowing
-
-
-
-\- The Windows installer is signed. Windows SmartScreen may check the
-
-&#x20; signature against Microsoft's reputation service when you run the
-
-&#x20; installer. That check is between your computer and Microsoft, not us.
-
-\- The embedded webview uses Microsoft Edge WebView2. When you log into a
-
-&#x20; site through the in-app browser, that site sees the same data it
-
-&#x20; would see in normal Edge: your IP, cookies, headers. RuForge does not
-
-&#x20; add or remove anything from those requests.
-
-
-
-\## Logs and crash data
-
-
-
-RuForge does not collect crash data. If you hit a bug and open a GitHub
-
-issue, you can attach logs manually. You control what gets shared.
-
-
-
-\## Children
-
-
-
-RuForge is not directed at children. It is a general-purpose desktop
-
-tool.
-
-
-
-\## Changes
-
-
-
-If this page changes in a way that affects what data leaves your
-
-machine, the change ships with a release and shows in the in-app
-
-changelog.
-
-
-
-\## Contact
-
-
-
-Open an issue at https://github.com/UnboundAngel/RuForge/issues.
-
+Open an issue on [GitHub Issues](https://github.com/UnboundAngel/RuForge/issues).

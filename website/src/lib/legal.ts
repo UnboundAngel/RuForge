@@ -76,6 +76,14 @@ export function loadLegalMarkdown(filename: string): string {
   return normalizeLegalMarkdown(readFileSync(filePath, 'utf-8'));
 }
 
+export function legalDocInfo(filename: string): { updated: string; minutes: number } {
+  const markdown = loadLegalMarkdown(filename);
+  const updated = markdown.match(/Last updated:\s*([^\n]+)/)?.[1]?.trim();
+  if (!updated) throw new Error(`${filename}: missing "Last updated:" line`);
+  const words = markdown.split(/\s+/).filter(Boolean).length;
+  return { updated, minutes: Math.max(1, Math.round(words / 220)) };
+}
+
 marked.setOptions({
   gfm: true,
   breaks: false,

@@ -25,7 +25,7 @@ The name "RuForge" and the RuForge logo are not licensed under the Apache Licens
 ## Nature of the software
 
 
-RuForge is a desktop application that runs on the user's own computer. It downloads media only when the user requests it, or for channels on which the user has turned on automatic downloads. The project operates no servers for media and does not host, mirror or redistribute any media. Files downloaded with RuForge are stored on the user's device and are not transmitted to the project or its maintainer.
+RuForge is a desktop application that runs on the user's own computer. It downloads media when the user requests it, or automatically through download settings the user controls, such as automatic downloads for followed channels and Auto-save Playing Songs in YouTube Music, which is on by default. The project operates no servers for media and does not host, mirror or redistribute any media. Files downloaded with RuForge are stored on the user's device and are not transmitted to the project or its maintainer.
 
 
 RuForge is built on yt-dlp, an open-source tool with substantial lawful uses, including journalism, accessibility, personal archiving, creator backups and offline viewing on limited connections. For background, see the Electronic Frontier Foundation's [article on the 2020 reinstatement of youtube-dl](https://www.eff.org/deeplinks/2020/11/github-reinstates-youtube-dl-after-riaas-abuse-dmca).
