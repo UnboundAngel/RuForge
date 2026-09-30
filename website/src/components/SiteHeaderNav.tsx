@@ -41,7 +41,7 @@ function MenuTextLink({
     <NavigationMenuLink asChild>
       <a
         href={href}
-        className="rf-mega-menu-link flex min-h-[2.75rem] items-center whitespace-nowrap select-none outline-none"
+        className="rf-mega-menu-link flex min-h-[2.5rem] items-center whitespace-nowrap select-none outline-none"
         {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       >
         {title}
@@ -236,7 +236,7 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
   const linkColumns = (
     <ul
       className={cn(
-        'grid min-w-0 content-start gap-y-1.5',
+        'grid min-w-0 content-start gap-y-0.5',
         twoCols ? 'grid-cols-2 gap-x-5' : 'grid-cols-1',
       )}
     >
@@ -244,7 +244,7 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
         const href = page.externalHref ?? pageHref(sectionId, page.slug);
         const external = Boolean(page.externalHref?.startsWith('http'));
         return (
-          <li key={page.slug} className="min-h-[2.75rem]">
+          <li key={page.slug} className="min-h-[2.5rem]">
             <MenuTextLink href={href} title={page.title} external={external} />
           </li>
         );
@@ -265,7 +265,7 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
         ))}
       </div>
     ) : config.layout === 'links-featured-pair' ? (
-      <div className="rf-mega-menu-featured rf-scrollbar flex max-w-full shrink-0 flex-col gap-2.5 pl-1">
+      <div className="rf-mega-menu-featured rf-scrollbar flex h-full max-w-full shrink-0 flex-col gap-2.5 pl-1">
         {config.featured.map((item) => (
           <FeaturedVisualCard
             key={item.slug}
@@ -288,7 +288,7 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
   return (
     <div
       className={cn(
-        'rf-mega-menu grid shrink-0 items-stretch px-7 py-6',
+        'rf-mega-menu grid shrink-0 items-stretch px-7 py-5',
         'max-w-[calc(100vw-3rem)]',
         config.layout === 'links-icons'
           ? 'gap-x-10 grid-cols-[minmax(0,1.55fr)_minmax(10.5rem,13.25rem)]'
@@ -299,7 +299,7 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
       )}
     >
       {linkColumns}
-      <div>
+      <div className="min-h-0">
         {config.layout === 'links-icons' ? <DocsBuiltWithRail /> : featuredAside}
       </div>
     </div>

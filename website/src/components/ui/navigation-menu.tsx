@@ -79,7 +79,7 @@ const NavigationMenuViewport = React.forwardRef<
     <NavigationMenuPrimitive.Viewport
       ref={ref}
       className={cn(
-        'rf-nav-viewport pointer-events-auto relative mt-1.5 overflow-hidden rounded-2xl',
+        'rf-nav-viewport pointer-events-auto relative mt-1.5 shrink-0 overflow-hidden rounded-2xl',
         'h-[var(--radix-navigation-menu-viewport-height)] w-[var(--radix-navigation-menu-viewport-width)]',
         className,
       )}
