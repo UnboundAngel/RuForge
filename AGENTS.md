@@ -89,7 +89,7 @@ Website layout calls from Angel:
 - Wide screens: do not hang everything off one left edge (icon, title, text, footnote all on the same line). Use the width: split the header (title left, secondary note right) and lay peer items side by side in cards with matching heights.
 - Leave clear safe space between the fixed top nav and the first content on every page.
 - Mobile: keep sections short. Show the headline and the key line, and put the longer explanation behind a tap-to-expand (grid-rows `0fr` to `1fr`, `inert` while closed) so users do not scroll forever.
-- Mobile lists of pages (legal, docs indexes): tappable rows with title, one meta line and a chevron. No summaries, icon tiles or emoji. Use `MobilePageHeader.astro` + `MobileRow.astro`; grouped lists expand with `MobileDisclosure.astro`.
+- Mobile lists of pages (legal, docs indexes): tappable rows with title, one meta line and a chevron. No summaries, icon tiles or emoji. Use `MobilePageHeader.astro` + `MobileRow.astro`; grouped lists and "read more" toggles expand with `Disclosure.astro` (desktop too; never a native `<details>`).
 - Transitions between two states of the same thing morph (clip-path and transforms), never crossfade two copies. The mobile header bar morphs into the pill (`MobileHeader.tsx`).
 - Every big card needs a visual anchor (photo, stamp, art). A bordered box of text reads as undesigned. The login trust card uses the coffee paper photo plus `InkStamp.astro` on both desktop and mobile.
 - Legal pages read like documents: big display title, "Last updated" as a small label under it, typographic section heads, bold defined terms. Every claim is checked against the code before the date changes.

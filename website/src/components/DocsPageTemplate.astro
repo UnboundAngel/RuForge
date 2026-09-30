@@ -1,6 +1,7 @@
 ---
 import { Image } from 'astro:assets';
 import DocsSidebar from './DocsSidebar.astro';
+import Disclosure from './Disclosure.astro';
 import { SpiralLoader } from './SpiralLoader';
 import type { DocsPage } from '../lib/docsTree';
 import { docsNavNeighbors } from '../lib/docsTree';
@@ -31,6 +32,10 @@ function docsImage(filename: string): ImageMetadata | undefined {
 function sectionContent(heading: string): DocsSectionContent | undefined {
   return pageContent?.[heading];
 }
+
+function sectionId(heading: string): string {
+  return heading.toLowerCase().replace(/\s+/g, '-');
+}
 ---
 
 <div class="docs-layout">
@@ -45,7 +50,7 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
         page.outline.map((heading) => {
           const sc = sectionContent(heading);
           return (
-            <section class="docs-content__section" id={heading.toLowerCase().replace(/\s+/g, '-')}>
+            <section class="docs-content__section" id={sectionId(heading)}>
               <h2 class={`docs-content__h2${sc?.headingWidget ? ' docs-content__h2--with-widget' : ''}`}>
                 {heading}
                 {sc?.headingWidget === 'spiral-loader' && (
@@ -71,8 +76,8 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
                     </div>
                     <div class="docs-split__aside">
                       {sc.table && (
-                        <div class="docs-table-wrap">
-                          <table class="docs-table">
+                        <div class="rf-doc-table-wrap">
+                          <table class="rf-doc-table">
                             <thead>
                               <tr>
                                 {sc.table.headers.map((h) => <th>{h}</th>)}
@@ -89,12 +94,15 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
                         </div>
                       )}
                       {sc.collapsible && (
-                        <details class="docs-collapsible">
-                          <summary class="docs-collapsible__label">{sc.collapsible.label}</summary>
-                          <div class="docs-collapsible__body">
-                            <p set:html={sc.collapsible.content} />
-                          </div>
-                        </details>
+                        <div>
+                          <Disclosure id={`docs-more-${sectionId(heading)}`} buttonClass="rf-doc-disclosure">
+                            <span slot="trigger">{sc.collapsible.label}</span>
+                            <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                            <div class="rf-doc-disclosure-body" set:html={sc.collapsible.content} />
+                          </Disclosure>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -118,29 +126,29 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
                   {sc.paragraphs3?.map((p) => <p class="docs-p" set:html={p} />)}
 
                   {sc.note && (
-                    <aside class="docs-note">
-                      <span class="docs-note__icon" aria-hidden="true"></span>
+                    <aside class="rf-callout rf-callout--note">
+                      <span class="rf-callout__icon" aria-hidden="true"></span>
                       <p set:html={sc.note} />
                     </aside>
                   )}
 
                   {sc.tip && (
-                    <aside class="docs-tip">
-                      <span class="docs-tip__icon" aria-hidden="true"></span>
+                    <aside class="rf-callout rf-callout--tip">
+                      <span class="rf-callout__icon" aria-hidden="true"></span>
                       <p set:html={sc.tip} />
                     </aside>
                   )}
 
                   {sc.warning && (
-                    <aside class="docs-warning">
-                      <span class="docs-warning__icon" aria-hidden="true"></span>
+                    <aside class="rf-callout rf-callout--warning">
+                      <span class="rf-callout__icon" aria-hidden="true"></span>
                       <p set:html={sc.warning} />
                     </aside>
                   )}
 
                   {sc.table && (
-                    <div class="docs-table-wrap">
-                      <table class="docs-table">
+                    <div class="rf-doc-table-wrap">
+                      <table class="rf-doc-table">
                         <thead>
                           <tr>
                             {sc.table.headers.map((h) => <th>{h}</th>)}
@@ -158,12 +166,15 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
                   )}
 
                   {sc.collapsible && (
-                    <details class="docs-collapsible">
-                      <summary class="docs-collapsible__label">{sc.collapsible.label}</summary>
-                      <div class="docs-collapsible__body">
-                        <p set:html={sc.collapsible.content} />
-                      </div>
-                    </details>
+                    <div>
+                      <Disclosure id={`docs-more-${sectionId(heading)}`} buttonClass="rf-doc-disclosure">
+                        <span slot="trigger">{sc.collapsible.label}</span>
+                        <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <path d="M6 9l6 6 6-6" />
+                        </svg>
+                        <div class="rf-doc-disclosure-body" set:html={sc.collapsible.content} />
+                      </Disclosure>
+                    </div>
                   )}
 
                   {sc.codeBlock && (
@@ -221,7 +232,8 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
         {page.outline.map((heading) => (
           <li>
             <a
-              href={`#${heading.toLowerCase().replace(/\s+/g, '-')}`}
+              href={`#${sectionId(heading)}`}
+              data-toc-link
               class="docs-toc__link"
             >
               {heading}
@@ -236,6 +248,8 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
 <div id="glossary-terms" hidden set:html={JSON.stringify(GLOSSARY_TERMS)} />
 
 <script>
+  import { initDocsToc } from '../lib/docsToc';
+
   function initGlossaryTooltips() {
     const dataEl = document.getElementById('glossary-terms');
     if (!dataEl) return;
@@ -327,8 +341,14 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
     history.replaceState(null, '', url.pathname);
   }
 
+  let teardownToc: (() => void) | null = null;
+
   document.addEventListener('astro:page-load', initGlossaryTooltips);
   document.addEventListener('astro:page-load', highlightSearchQuery);
+  document.addEventListener('astro:page-load', () => {
+    teardownToc?.();
+    teardownToc = initDocsToc(96);
+  });
 </script>
 
 <style>
@@ -367,7 +387,7 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
   .docs-content__body {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: 3.25rem;
   }
 
   .docs-content__section {
@@ -375,7 +395,7 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
   }
 
   .docs-content__h2 {
-    margin: 0 0 0.75rem;
+    margin: 0 0 1.125rem;
     font-family: var(--font-display);
     font-size: 1.25rem;
     font-weight: 600;
@@ -405,10 +425,11 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
 
   /* Prev / Next navigation */
   .docs-nav-footer {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
     gap: 1rem;
-    margin-top: 3rem;
+    margin-top: 4rem;
     padding-top: 1.5rem;
     border-top: 1px solid rgb(237 215 156 / 0.08);
   }
@@ -417,9 +438,10 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    padding: 0.875rem 1rem;
-    border-radius: 0.625rem;
-    border: 1px solid rgb(237 215 156 / 0.08);
+    max-width: 48%;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(237 215 156 / 0.2);
     text-decoration: none;
     transition:
       border-color 0.15s ease,
@@ -427,8 +449,8 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
   }
 
   .docs-nav-footer__link:hover {
-    border-color: rgb(237 215 156 / 0.2);
-    background: rgb(237 215 156 / 0.03);
+    border-color: rgb(237 215 156 / 0.38);
+    background: rgb(237 215 156 / 0.04);
     opacity: 1;
   }
 
@@ -547,7 +569,7 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
 
   /* ---------- Section figure (screenshot) ---------- */
   .docs-figure {
-    margin: 0 0 0.75rem;
+    margin: 0 0 1.25rem;
   }
 
   .docs-figure__img {
@@ -561,7 +583,12 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
   .docs-section-rich {
     display: flex;
     flex-direction: column;
-    gap: 0.875rem;
+    gap: 1.125rem;
+  }
+
+  .docs-section-rich > .docs-steps,
+  .docs-section-rich > .docs-bullets {
+    margin: 0.5rem 0;
   }
 
   /* ---------- Split layout (text left, table right) ---------- */
@@ -575,70 +602,15 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
   .docs-split__text {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1.125rem;
   }
 
   .docs-split__aside {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 1rem;
   }
 
-
-  /* ---------- Collapsible click pill ---------- */
-  .docs-collapsible {
-    border-radius: 0.5rem;
-    border: 1px solid rgb(220 120 60 / 0.15);
-    background: rgb(220 120 60 / 0.04);
-    transition:
-      border-color 0.2s ease,
-      background 0.2s ease;
-  }
-
-  .docs-collapsible__label {
-    display: block;
-    padding: 0.5rem 0.875rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    color: rgb(220 140 80);
-    cursor: pointer;
-    user-select: none;
-    list-style: none;
-  }
-
-  .docs-collapsible__label::-webkit-details-marker {
-    display: none;
-  }
-
-  .docs-collapsible__label::marker {
-    content: none;
-  }
-
-  .docs-collapsible__body {
-    padding: 0 0.875rem 0.75rem;
-  }
-
-  .docs-collapsible__body p {
-    margin: 0;
-    font-size: 0.8125rem;
-    line-height: 1.65;
-    color: var(--color-rf-text-muted);
-  }
-
-  .docs-collapsible__body :global(code) {
-    font-family: var(--font-mono);
-    font-size: 0.8em;
-    padding: 0.1em 0.35em;
-    border-radius: 3px;
-    background: rgb(237 215 156 / 0.07);
-    color: var(--color-rf-text);
-  }
-
-  .docs-collapsible[open] {
-    border-color: rgb(220 120 60 / 0.3);
-    background: rgb(220 120 60 / 0.06);
-  }
 
   .docs-p {
     margin: 0;
@@ -723,126 +695,6 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
     left: -1rem;
     color: var(--color-rf-docs-link);
     opacity: 0.6;
-  }
-
-  .docs-note,
-  .docs-tip,
-  .docs-warning {
-    display: flex;
-    gap: 0.75rem;
-    padding: 0.875rem 1rem;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    line-height: 1.65;
-  }
-
-  .docs-note {
-    background: rgb(212 165 116 / 0.06);
-    border-left: 3px solid rgb(212 165 116 / 0.3);
-    color: var(--color-rf-text-muted);
-  }
-
-  .docs-tip {
-    background: rgb(156 184 106 / 0.06);
-    border-left: 3px solid rgb(156 184 106 / 0.3);
-    color: var(--color-rf-text-muted);
-  }
-
-  .docs-warning {
-    background: rgb(220 120 60 / 0.08);
-    border-left: 3px solid rgb(220 120 60 / 0.45);
-    color: var(--color-rf-text-muted);
-  }
-
-  .docs-note__icon,
-  .docs-tip__icon,
-  .docs-warning__icon {
-    flex-shrink: 0;
-    width: 1rem;
-    height: 1rem;
-    margin-top: 0.2em;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-  }
-
-  .docs-note__icon {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23d4a574' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
-  }
-
-  .docs-tip__icon {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%239cb86a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E");
-  }
-
-  .docs-warning__icon {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23dc783c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
-  }
-
-  .docs-note p,
-  .docs-tip p,
-  .docs-warning p {
-    margin: 0;
-  }
-
-  .docs-note :global(a),
-  .docs-tip :global(a),
-  .docs-warning :global(a) {
-    color: var(--color-rf-docs-link);
-    text-decoration: underline;
-    text-decoration-color: rgb(212 165 116 / 0.4);
-    text-underline-offset: 3px;
-    text-decoration-thickness: 1px;
-  }
-
-  /* ---------- Extension / format table ---------- */
-  .docs-table-wrap {
-    border-radius: 0.625rem;
-    border: 1px solid rgb(237 215 156 / 0.1);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .docs-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.875rem;
-    line-height: 1.6;
-  }
-
-  .docs-table thead th {
-    padding: 0.625rem 1rem;
-    font-family: var(--font-display);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-rf-docs-link);
-    text-align: left;
-    background: rgb(237 215 156 / 0.04);
-    border-bottom: 1px solid rgb(237 215 156 / 0.1);
-  }
-
-  .docs-table tbody td {
-    padding: 0.5rem 1rem;
-    color: var(--color-rf-text-muted);
-    border-bottom: 1px solid rgb(237 215 156 / 0.04);
-  }
-
-  .docs-table tbody tr:last-child td {
-    border-bottom: none;
-  }
-
-  .docs-table tbody tr:hover {
-    background: rgb(237 215 156 / 0.02);
-  }
-
-  .docs-table :global(code) {
-    font-family: var(--font-mono);
-    font-size: 0.8125em;
-    padding: 0.1em 0.4em;
-    border-radius: 3px;
-    background: rgb(237 215 156 / 0.07);
-    color: var(--color-rf-text);
   }
 
   .docs-code-wrap {

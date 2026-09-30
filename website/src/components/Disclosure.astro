@@ -32,15 +32,15 @@ const { id, buttonClass, triggerAfter = false } = Astro.props;
 }
 
 <script>
-  document.querySelectorAll<HTMLButtonElement>('[data-disclosure]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const open = button.getAttribute('aria-expanded') !== 'true';
-      button.setAttribute('aria-expanded', String(open));
-      const panel = document.getElementById(button.getAttribute('aria-controls') ?? '');
-      panel?.toggleAttribute('data-open', open);
-      panel?.querySelector('[data-disclosure-inner]')?.toggleAttribute('inert', !open);
-      button.querySelectorAll('[data-when-open]').forEach((el) => el.toggleAttribute('hidden', !open));
-      button.querySelectorAll('[data-when-closed]').forEach((el) => el.toggleAttribute('hidden', open));
-    });
+  document.addEventListener('click', (event) => {
+    const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-disclosure]');
+    if (!button) return;
+    const open = button.getAttribute('aria-expanded') !== 'true';
+    button.setAttribute('aria-expanded', String(open));
+    const panel = document.getElementById(button.getAttribute('aria-controls') ?? '');
+    panel?.toggleAttribute('data-open', open);
+    panel?.querySelector('[data-disclosure-inner]')?.toggleAttribute('inert', !open);
+    button.querySelectorAll('[data-when-open]').forEach((el) => el.toggleAttribute('hidden', !open));
+    button.querySelectorAll('[data-when-closed]').forEach((el) => el.toggleAttribute('hidden', open));
   });
 </script>
