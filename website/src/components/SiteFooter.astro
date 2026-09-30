@@ -28,7 +28,7 @@ const legalLinks = [
 ];
 ---
 
-<footer class="site-footer mt-28 text-sm text-rf-text-muted">
+<footer class="site-footer mt-12 text-sm text-rf-text-muted">
   <div class="site-footer__media" aria-hidden="true">
     <Image
       src={footerDoodles}
@@ -61,7 +61,7 @@ const legalLinks = [
           <span class="text-base font-semibold tracking-tight text-rf-text">RuForge</span>
         </div>
         <p class="max-w-xs text-xs leading-relaxed text-rf-text-muted/95">
-          The lightweight, local-first media manager and downloader for Windows. Built with Tauri, Rust, and React.
+          a free, open-source Windows app for saving YouTube videos and music and playing them offline
         </p>
       </div>
 
@@ -123,17 +123,10 @@ const legalLinks = [
       </div>
     </div>
 
-    <div
-      class="mt-16 flex flex-row gap-4 border-t border-rf-border/25 pt-6 text-xs text-rf-text-muted/90 items-center justify-between"
-    >
+    <div class="mt-16 border-t border-rf-border/25 pt-6 text-xs text-rf-text-muted/90">
       <p class="leading-relaxed">
         &copy; {new Date().getFullYear()} RuForge. Apache-2.0 licensed. Not affiliated with YouTube or Google.
       </p>
-      <div class="flex flex-wrap gap-x-6 gap-y-2">
-        <a href="/legal/privacy" class="text-rf-text-muted no-underline hover:text-rf-text">Privacy Policy</a>
-        <a href="/legal/terms" class="text-rf-text-muted no-underline hover:text-rf-text">Terms of Use</a>
-        <a href="/legal/notice" class="text-rf-text-muted no-underline hover:text-rf-text">Legal Notice</a>
-      </div>
     </div>
   </div>
 </footer>

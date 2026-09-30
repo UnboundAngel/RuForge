@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import { useHaptic } from './useHaptic';
-
 interface FeatureItem {
   id: string;
   pill: string;
@@ -16,7 +14,6 @@ interface Props {
 }
 
 function AccordionCard({ feature, isOpen, onToggle }: { feature: FeatureItem; isOpen: boolean; onToggle: () => void }) {
-  const { select } = useHaptic();
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
 
@@ -28,7 +25,7 @@ function AccordionCard({ feature, isOpen, onToggle }: { feature: FeatureItem; is
 
   return (
     <button
-      onClick={() => { select(); onToggle(); }}
+      onClick={onToggle}
       className="rf-m-card w-full text-left rounded-2xl border border-rf-border/30 bg-rf-surface/30 overflow-hidden hover:border-rf-border/50"
       aria-expanded={isOpen}
     >
@@ -73,7 +70,9 @@ function AccordionCard({ feature, isOpen, onToggle }: { feature: FeatureItem; is
       >
         <div ref={contentRef} className="px-4 pb-5">
           <p className="text-sm leading-relaxed text-rf-text-muted/90 mb-3">
-            {feature.paragraph}
+            {feature.paragraph.split('\n').map((line) => (
+              <span key={line} className="block mt-1.5 first:mt-0">{line}</span>
+            ))}
           </p>
           <ul className="space-y-1.5">
             {feature.bullets.map((b, i) => (
