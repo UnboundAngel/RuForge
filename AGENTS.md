@@ -84,6 +84,18 @@ Website links and images: every inline text link uses `.rf-inline-link` from `gl
 
 Website mobile (`/m/`): every pressable gets the shared press feedback by class, never a bespoke handler: `rf-m-btn` (buttons, light impact), `rf-m-card` (cards, selection), `rf-m-link` (links and tappable rows, selection). `MobileShell.astro` fires the haptic and ripple on pointerdown, so do not also call `useHaptic()` in the same element's `onClick` (it double-fires). Call `useHaptic()` directly only for pressables that cannot carry the class. The height expand (`MobileFeatureAccordion`) is only for elements that actually reveal more content below.
 
+Website layout calls from Angel:
+
+- Wide screens: do not hang everything off one left edge (icon, title, text, footnote all on the same line). Use the width: split the header (title left, secondary note right) and lay peer items side by side in cards with matching heights.
+- Leave clear safe space between the fixed top nav and the first content on every page.
+- Mobile: keep sections short. Show the headline and the key line, and put the longer explanation behind a tap-to-expand (grid-rows `0fr` to `1fr`, `inert` while closed) so users do not scroll forever.
+- Mobile lists of pages (legal, docs indexes): tappable rows with title, one meta line and a chevron. No summaries, icon tiles or emoji.
+- Transitions between two states of the same thing morph (clip-path and transforms), never crossfade two copies. The mobile header bar morphs into the pill (`MobileHeader.tsx`).
+- Every big card needs a visual anchor (photo, stamp, art). A bordered box of text reads as undesigned. The login trust card uses the coffee paper photo plus `InkStamp.astro` on both desktop and mobile.
+- Legal pages read like documents: big display title, "Last updated" as a small label under it, typographic section heads, bold defined terms. Every claim is checked against the code before the date changes.
+
+Visual work (website or app) is done by Mint directly, never handed to a subagent.
+
 Custom over native, always. Do not ship browser or OS defaults where RuForge has its own piece: hover labels use `data-tooltip` (served by `TooltipLayer`), never the `title` attribute; the same goes for menus, scrollbars, selects and dialogs. If no custom piece exists yet, build one in the house style instead of falling back to the default.
 
 ## Who ships a release
