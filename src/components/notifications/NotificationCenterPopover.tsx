@@ -21,38 +21,18 @@ import {
 import { useNotificationItems } from "@/notifications/selectors";
 import type { NotificationActionId, NotificationItem } from "@/notifications/types";
 import { useRuforgeStore } from "@/store/ruforgeStore";
-import {
-  checkChannelsNow,
-  clearChannelFollowMessage,
-  followFromPanel,
-  setChannelAutoDownload,
-  unfollowFromPanel,
-  useChannelsUiStore,
-} from "@/watchlist/channelManage";
-import { changeCheckInterval, openNotificationSettings, setWatchlistAlerts } from "@/watchlist/watchlistSettings";
+import { clearChannelFollowMessage, useChannelsUiStore } from "@/watchlist/channelManage";
+import { openNotificationSettings } from "@/watchlist/watchlistSettings";
 import { useWatchlistStore } from "@/watchlist/watchlistStore";
 import type { WatchedChannel } from "@/watchlist/types";
 import { bellAnchorRect, isInsideBell } from "./bellAnchor";
-import type { ChannelHandlers } from "./channels/ChannelsPanel";
+import { mainChannelHandlers, mainPrefsHandlers } from "./mainPanelHandlers";
 import { NotificationCenterPanel } from "./NotificationCenterPanel";
-import type { PrefsHandlers } from "./NotificationPrefsView";
 import { useNotificationPrefs } from "./useNotificationPrefs";
 import { useNotifyOverlayHost } from "./useNotifyOverlayHost";
 
 const PANEL_GAP_PX = 6;
 const NO_CHANNELS: WatchedChannel[] = [];
-
-const channelHandlers: ChannelHandlers = {
-  onFollowInput: (input) => void followFromPanel(input),
-  onAutoDownload: setChannelAutoDownload,
-  onUnfollow: unfollowFromPanel,
-  onCheckNow: () => void checkChannelsNow(),
-};
-
-const prefsHandlers: PrefsHandlers = {
-  onAlerts: setWatchlistAlerts,
-  onCheckInterval: changeCheckInterval,
-};
 
 type Anchor = { top: number; right: number };
 
@@ -77,6 +57,7 @@ export function NotificationCenterPopover() {
   const activeTab = useRuforgeStore((s) => s.activeTab);
   const settingsOpen = useRuforgeStore((s) => s.settingsOpen);
   const downloaderOpen = useRuforgeStore((s) => s.downloaderOpen);
+  const inIsland = useRuforgeStore((s) => s.settings.notificationsInIsland === true);
   const reduceMotion = useReducedMotion();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
@@ -97,7 +78,7 @@ export function NotificationCenterPopover() {
 
   const prefs = useNotificationPrefs();
   const youtubeSurface = open ? activeRadialNavSurface() : null;
-  const overlayFallback = useNotifyOverlayHost(youtubeSurface != null, readAnchor, {
+  const overlayFallback = useNotifyOverlayHost(youtubeSurface != null && !inIsland, readAnchor, {
     navMode,
     items,
     channels,
@@ -106,7 +87,8 @@ export function NotificationCenterPopover() {
     filter,
     prefs,
   });
-  const fallbackSurface = overlayFallback ? youtubeSurface : null;
+  // The island panel is page DOM too, so it needs the same Explorer hide as the in-page fallback.
+  const fallbackSurface = overlayFallback || inIsland ? youtubeSurface : null;
 
   useEffect(() => {
     setExplorerCoveredByPopover(fallbackSurface === EMBEDDED_EXPLORER_WEBVIEW_LABEL);
@@ -116,7 +98,7 @@ export function NotificationCenterPopover() {
   }, [fallbackSurface]);
   useEffect(() => () => setExplorerCoveredByPopover(false), []);
 
-  const hostAOpen = open && (youtubeSurface == null || overlayFallback);
+  const hostAOpen = open && !inIsland && (youtubeSurface == null || overlayFallback);
 
   useLayoutEffect(() => {
     if (!hostAOpen) return;
@@ -168,9 +150,9 @@ export function NotificationCenterPopover() {
             items={items}
             channels={channels}
             channelsUi={channelsUi}
-            channelHandlers={channelHandlers}
+            channelHandlers={mainChannelHandlers}
             prefs={prefs}
-            prefsHandlers={prefsHandlers}
+            prefsHandlers={mainPrefsHandlers}
             tab={tab}
             onAction={onAction}
             onMarkRead={markOneNotificationRead}

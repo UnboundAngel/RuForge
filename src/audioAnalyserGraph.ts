@@ -1,5 +1,7 @@
 /** Web Audio tap for audio-only LED visualizer (WebView-safe, MES reuse). */
 
+import { createBandRanges, stepBandRange, type BandRange } from "@/lib/islandBandRange";
+
 export type AnalyserGraph = {
   ctx: AudioContext;
   analyser: AnalyserNode;
@@ -8,8 +10,8 @@ export type AnalyserGraph = {
   gain: GainNode;
   freqData: Uint8Array;
   tappedStream: boolean;
-  /** AGC running level estimate (RMS, 0..1), adapts per-track. */
-  agcLevel: number;
+  /** Island waveform per-band adaptive range, low-to-high band order. */
+  bandRanges: BandRange[];
 };
 
 const graphs = new WeakMap<HTMLMediaElement, AnalyserGraph>();
@@ -79,7 +81,7 @@ function wireGraph(
     gain,
     freqData: new Uint8Array(analyser.frequencyBinCount),
     tappedStream,
-    agcLevel: AGC_TARGET,
+    bandRanges: createBandRanges(ISLAND_BAND_START.length),
   };
   graphs.set(el, graph);
   void ctx.resume();
@@ -292,24 +294,9 @@ const ISLAND_BAND_START = [1, 5, 14, 40, 100] as const;
 const ISLAND_BAND_END = [5, 14, 40, 100, 280] as const;
 
 /**
- * Perceptual weighting per band (low-to-high order, pre-reverse). Bass and
- * treble get a mild lift so outer bars stay readable; mids are not visually
- * capped elsewhere, so keep mid weight near 1 (Apple bars all share one max).
+ * `gain` only scales the result down (mute, low volume); it never boosts, so loud tracks cannot
+ * push every bar to the ceiling. Range normalization per band happens in `stepBandRange`.
  */
-const PERCEPTUAL_WEIGHT = [1.2, 1.05, 1, 1.05, 1.15] as const;
-
-/**
- * AGC: target RMS the visualizer normalizes toward. The running level
- * estimate (`graph.agcLevel`) adapts toward the current RMS each tick;
- * normalization gain is `AGC_TARGET / agcLevel`, clamped so quiet passages
- * get boosted and loud passages get attenuated without overshooting.
- */
-const AGC_TARGET = 0.22;
-const AGC_ATTACK = 0.08;
-const AGC_RELEASE = 0.015;
-const AGC_MIN_GAIN = 0.6;
-const AGC_MAX_GAIN = 3.2;
-
 export function readIslandBandLevels(
   graph: AnalyserGraph,
   out: number[],
@@ -318,10 +305,9 @@ export function readIslandBandLevels(
   graph.analyser.getByteFrequencyData(graph.freqData);
   const bins = graph.freqData;
   const count = Math.min(out.length, ISLAND_BAND_START.length);
+  const scale = Math.min(1, Math.max(0, gain));
 
-  const raw: number[] = [];
-  let sumSq = 0;
-  let sumN = 0;
+  const norm: number[] = [];
   for (let i = 0; i < count; i++) {
     const start = ISLAND_BAND_START[i];
     const end = Math.min(ISLAND_BAND_END[i], bins.length);
@@ -331,34 +317,20 @@ export function readIslandBandLevels(
     for (let j = start; j < end; j++) {
       const v = bins[j] / 255;
       sum += v;
-      sumSq += v * v;
       if (v > peak) peak = v;
     }
-    sumN += n;
-    const avg = sum / n;
-    const mixed = Math.max(peak, avg * 1.45);
-    raw.push(mixed * (PERCEPTUAL_WEIGHT[i] ?? 1));
+    // Mostly average: the peak bin alone sits near max on most mixes and pins the bar.
+    const raw = (sum / n) * 0.65 + peak * 0.35;
+    norm.push(stepBandRange(graph.bandRanges[i]!, raw));
   }
-
-  // AGC: adapt the running level toward the current overall RMS, faster
-  // when the signal gets louder (attack) than when it gets quieter (release)
-  // so the visualizer doesn't pump during brief silences.
-  const rms = sumN > 0 ? Math.sqrt(sumSq / sumN) : 0;
-  const agcRate = rms > graph.agcLevel ? AGC_ATTACK : AGC_RELEASE;
-  graph.agcLevel += (rms - graph.agcLevel) * agcRate;
-  const agcGain = Math.min(
-    AGC_MAX_GAIN,
-    Math.max(AGC_MIN_GAIN, AGC_TARGET / Math.max(0.01, graph.agcLevel)),
-  );
 
   // Light neighbor blend keeps motion coherent without forcing a permanent
   // middle-tall silhouette (Apple's bars stay largely independent).
   const smoothed: number[] = [];
   for (let i = 0; i < count; i++) {
-    const prev = raw[i - 1] ?? raw[i];
-    const next = raw[i + 1] ?? raw[i];
-    const blended = raw[i] * 0.82 + prev * 0.09 + next * 0.09;
-    smoothed.push(Math.min(1, Math.pow(blended * agcGain * gain, 0.85)));
+    const prev = norm[i - 1] ?? norm[i];
+    const next = norm[i + 1] ?? norm[i];
+    smoothed.push((norm[i] * 0.82 + prev * 0.09 + next * 0.09) * scale);
   }
 
   // Reverse: leftmost bar = highest band (bass stays on the right).

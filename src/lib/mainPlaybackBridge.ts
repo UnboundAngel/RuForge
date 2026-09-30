@@ -34,7 +34,7 @@ function mergeSnapshot(
   let currentTime = value.currentTime;
   let paused = value.paused;
 
-  if (prev) {
+  if (prev && prev.mediaKey === value.mediaKey) {
     if (
       currentTime < prev.currentTime - 0.75 &&
       !paused &&
@@ -65,6 +65,7 @@ function snapshotsEqual(a: MainPlaybackSnapshot, b: MainPlaybackSnapshot): boole
   return (
     a.paused === b.paused &&
     a.duration === b.duration &&
+    a.mediaKey === b.mediaKey &&
     Math.abs(a.currentTime - b.currentTime) < 0.05
   );
 }

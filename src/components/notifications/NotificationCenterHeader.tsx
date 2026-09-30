@@ -4,8 +4,10 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { OVERLAY_EASE } from "@/lib/overlayMotion";
 import type { NotificationCenterTab } from "@/notifications/types";
 
-const iconButtonClass =
-  "flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition-colors duration-150 hover:bg-white/[0.05] hover:text-stone-200";
+const iconButtonBase =
+  "flex items-center justify-center rounded-full text-stone-500 transition-colors duration-150 hover:bg-white/[0.05] hover:text-stone-200";
+const fullIconButtonClass = `h-9 w-9 ${iconButtonBase}`;
+const compactIconButtonClass = `h-7 w-7 ${iconButtonBase}`;
 
 type Props = {
   tab: NotificationCenterTab;
@@ -13,6 +15,7 @@ type Props = {
   channelCount: number;
   onTab: (tab: NotificationCenterTab) => void;
   onClose: () => void;
+  compact?: boolean;
 };
 
 function copyFor(tab: NotificationCenterTab, unread: number, channelCount: number) {
@@ -27,22 +30,26 @@ function copyFor(tab: NotificationCenterTab, unread: number, channelCount: numbe
   return { title: "Notifications", subtitle: unread > 0 ? `${unread} new` : "You're all caught up." };
 }
 
-export function NotificationCenterHeader({ tab, unread, channelCount, onTab, onClose }: Props) {
+export function NotificationCenterHeader({ tab, unread, channelCount, onTab, onClose, compact = false }: Props) {
   const reduceMotion = useReducedMotion();
   const nested = tab !== "feed";
   const { title, subtitle } = copyFor(tab, unread, channelCount);
+  const iconButtonClass = compact ? compactIconButtonClass : fullIconButtonClass;
+  const iconSize = compact ? 16 : 19;
 
   return (
-    <header className="flex shrink-0 items-start gap-2 px-4 pb-3 pt-4">
+    <header
+      className={`flex shrink-0 gap-2 ${compact ? "items-center px-4 pb-1 pt-3.5" : "items-start px-4 pb-3 pt-4"}`}
+    >
       {nested ? (
         <button
           type="button"
           onClick={() => onTab("feed")}
           aria-label="Back to notifications"
           data-tooltip="Back"
-          className={`-ml-2 mt-0.5 ${iconButtonClass}`}
+          className={`${compact ? "-ml-1.5" : "-ml-2 mt-0.5"} ${iconButtonClass}`}
         >
-          <ChevronLeft size={20} />
+          <ChevronLeft size={compact ? 17 : 20} />
         </button>
       ) : null}
       <AnimatePresence mode="wait" initial={false}>
@@ -54,8 +61,19 @@ export function NotificationCenterHeader({ tab, unread, channelCount, onTab, onC
           transition={reduceMotion ? { duration: 0 } : { duration: 0.16, ease: OVERLAY_EASE }}
           className="min-w-0 flex-1"
         >
-          <h2 className="rf-settings-page-title truncate text-[1.375rem] leading-tight">{title}</h2>
-          <p className="mt-0.5 truncate text-[13px] font-medium text-stone-500">{subtitle}</p>
+          {compact ? (
+            <p className="flex min-w-0 items-baseline gap-2">
+              <span className="shrink-0 text-[14px] font-bold text-stone-100">
+                {tab === "settings" ? "Settings" : title}
+              </span>
+              <span className="truncate text-[11px] font-medium text-stone-500">{subtitle}</span>
+            </p>
+          ) : (
+            <>
+              <h2 className="rf-settings-page-title truncate text-[1.375rem] leading-tight">{title}</h2>
+              <p className="mt-0.5 truncate text-[13px] font-medium text-stone-500">{subtitle}</p>
+            </>
+          )}
         </motion.div>
       </AnimatePresence>
       <div className="-mr-2 flex shrink-0 items-center">
@@ -68,7 +86,7 @@ export function NotificationCenterHeader({ tab, unread, channelCount, onTab, onC
               data-tooltip="Channels"
               className={iconButtonClass}
             >
-              <Icon icon="tabler:users" width={19} height={19} aria-hidden />
+              <Icon icon="tabler:users" width={iconSize} height={iconSize} aria-hidden />
             </button>
             <button
               type="button"
@@ -77,12 +95,12 @@ export function NotificationCenterHeader({ tab, unread, channelCount, onTab, onC
               data-tooltip="Notification settings"
               className={iconButtonClass}
             >
-              <Icon icon="tabler:settings" width={19} height={19} aria-hidden />
+              <Icon icon="tabler:settings" width={iconSize} height={iconSize} aria-hidden />
             </button>
           </>
         ) : null}
         <button type="button" onClick={onClose} aria-label="Close" data-tooltip="Close" className={iconButtonClass}>
-          <X size={19} />
+          <X size={iconSize} />
         </button>
       </div>
     </header>

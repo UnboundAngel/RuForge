@@ -13,11 +13,12 @@ import {
 import { resolveOverlayIslandState, type IslandExpandedTarget } from "@/lib/islandOverlayState";
 import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
 import { useOverlayWaveformLevels } from "@/hooks/useOverlayWaveformLevels";
-
-const COMPACT_BOUNDS = { width: 380, height: 56 };
-const EXPANDED_BOUNDS = { width: 380, height: 220 };
-/** Rust clamps island bounds to 420x280; the 248px panel plus the 8px top inset fits. */
-const WATCHLIST_EXPANDED_BOUNDS = { width: 380, height: 272 };
+import {
+  useIslandClickThrough,
+  useIslandFollowActiveMonitor,
+  useIslandOverlayBounds,
+} from "@/hooks/useIslandOverlayWindow";
+import { islandOverlayBounds } from "@/lib/islandOverlayBounds";
 
 const EMPTY_CONTENT: DynamicIslandContent = {
   coverSrc: null,
@@ -103,15 +104,10 @@ export default function IslandOverlayApp() {
     if (!hasDownload) setExpandedTarget((t) => (t === "download" ? null : t));
   }, [hasDownload]);
 
-  useEffect(() => {
-    const bounds =
-      islandState === "watchlist-expanded"
-        ? WATCHLIST_EXPANDED_BOUNDS
-        : isExpanded || islandState === "download-expanded"
-          ? EXPANDED_BOUNDS
-          : COMPACT_BOUNDS;
-    void invoke("sync_island_overlay_bounds", bounds).catch(() => {});
-  }, [islandState, isExpanded]);
+  const bounds = islandOverlayBounds(islandState);
+  useIslandOverlayBounds(bounds.width, bounds.height);
+  useIslandClickThrough(visible);
+  useIslandFollowActiveMonitor(visible && !anyExpanded);
 
   useEffect(() => {
     if (!anyExpanded) return;
@@ -233,9 +229,10 @@ export default function IslandOverlayApp() {
   }
 
   return (
-    <div className="pointer-events-none flex h-full w-full justify-center overflow-visible bg-transparent pt-[8px]">
-      <div className="pointer-events-auto">
+    <div className="pointer-events-none flex h-full w-full justify-center overflow-visible bg-transparent pt-[6px]">
+      <div className="pointer-events-auto" data-island-hit="">
         <DynamicIsland
+          compactPills
           state={islandState}
           content={content}
           waveformLevels={waveformLevels}

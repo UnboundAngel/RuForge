@@ -31,6 +31,8 @@ export type NotificationCenterPanelProps = {
   onTab: (tab: NotificationCenterTab) => void;
   onOpenSettings: () => void;
   onClose: () => void;
+  /** Island density: smaller header and stacked settings rows for a narrow host. */
+  compact?: boolean;
 };
 
 /** Props only, so the in-page popover and the overlay webview render the same panel. */
@@ -48,6 +50,7 @@ export function NotificationCenterPanel({
   onTab,
   onOpenSettings,
   onClose,
+  compact = false,
 }: NotificationCenterPanelProps) {
   const shown = useMemo(() => filterNotificationItems(items, "all"), [items]);
   const unread = useMemo(() => shown.reduce((n, i) => (i.read ? n : n + 1), 0), [shown]);
@@ -84,6 +87,7 @@ export function NotificationCenterPanel({
         channelCount={channels.length}
         onTab={onTab}
         onClose={onClose}
+        compact={compact}
       />
       <div
         ref={scrollRef}
@@ -102,6 +106,7 @@ export function NotificationCenterPanel({
               channels={channels}
               onManageChannels={() => onTab("channels")}
               onAllSettings={onOpenSettings}
+              compact={compact}
             />
           ) : tab === "channels" ? (
             <ChannelsPanel channels={channels} ui={channelsUi} handlers={channelHandlers} />

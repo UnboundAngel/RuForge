@@ -77,8 +77,10 @@ use crate::commands::musicmeta::{
 };
 use crate::commands::music_artist_about::music_artist_about;
 use crate::commands::island_overlay::{
-    app_is_foreground, hide_island_overlay, island_overlay_ready, note_main_window_monitor, show_island_overlay,
-    sync_island_overlay_bounds, MAIN_HIDDEN_EVENT,
+    app_is_foreground, hide_island_overlay, island_cursor_position, island_follow_active_monitor,
+    island_overlay_ready,
+    note_main_window_monitor, set_island_click_through, show_island_overlay, sync_island_overlay_bounds,
+    MAIN_HIDDEN_EVENT,
 };
 use crate::commands::player::{
     eval_in_webview, get_embedded_explorer_webview_url, open_mini_player, open_music_mini_player,
@@ -444,6 +446,9 @@ pub fn run() {
             app_is_foreground,
             sync_island_overlay_bounds,
             island_overlay_ready,
+            island_cursor_position,
+            island_follow_active_monitor,
+            set_island_click_through,
             export_media_bundle,
             cancel_export_bundle,
             get_removable_drives,
