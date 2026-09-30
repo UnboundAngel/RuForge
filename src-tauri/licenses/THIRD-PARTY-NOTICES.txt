@@ -1,0 +1,38 @@
+RuForge third-party notices
+
+RuForge is licensed under the Apache License 2.0 (RUFORGE-LICENSE.txt).
+The installer also includes the following programs, each distributed
+under its own license.
+
+
+FFmpeg and FFprobe
+------------------
+Version 8.1.1, gyan.dev full build.
+License: GNU General Public License version 3 (FFMPEG-GPL-3.0.txt).
+The build is configured with --enable-gpl --enable-version3.
+
+Corresponding source code:
+  FFmpeg 8.1.1: https://github.com/FFmpeg/FFmpeg/tree/n8.1.1
+  Release tarballs: https://ffmpeg.org/releases/
+  Build configuration and bundled libraries: https://www.gyan.dev/ffmpeg/builds/
+
+RuForge runs FFmpeg and FFprobe as separate programs and does not modify them.
+
+
+yt-dlp
+------
+License: The Unlicense (YT-DLP-UNLICENSE.txt).
+Source code: https://github.com/yt-dlp/yt-dlp
+
+
+SponsorBlock
+------------
+Uses SponsorBlock data licensed under CC BY-NC-SA 4.0 from
+https://sponsor.ajay.app/
+
+
+Deno is not included in the installer. When installed from Settings it is
+downloaded from https://github.com/denoland/deno under the MIT License.
+
+Other open-source libraries compiled into RuForge are listed in package.json
+and src-tauri/Cargo.toml at https://github.com/UnboundAngel/RuForge

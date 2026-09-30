@@ -52,6 +52,10 @@
       "binaries/ffmpeg",
       "binaries/ffprobe"
     ],
+    "resources": {
+      "licenses/*": "licenses/",
+      "../LICENSE": "licenses/RUFORGE-LICENSE.txt"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
