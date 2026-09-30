@@ -8,6 +8,7 @@ import { docsNavNeighbors } from '../lib/docsTree';
 import { SITE } from '../lib/site';
 import { DOCS_CONTENT, type DocsSectionContent } from '../lib/docsContent';
 import { GLOSSARY_TERMS } from '../lib/glossaryTerms';
+import { docsReadingMinutes } from '../lib/docsReading';
 
 interface Props {
   page: DocsPage;
@@ -16,6 +17,7 @@ interface Props {
 const { page } = Astro.props;
 const { prev, next } = docsNavNeighbors(page.slug);
 const pageContent = DOCS_CONTENT[page.slug];
+const readingMinutes = docsReadingMinutes(page.slug);
 
 const docsImageModules = import.meta.glob<{ default: ImageMetadata }>(
   '../assets/tutorials/docs/*.png',
@@ -42,37 +44,68 @@ function sectionId(heading: string): string {
   <DocsSidebar activeSlug={page.slug} />
 
   <article class="docs-content">
+    <div class="rf-read-progress" data-read-progress aria-hidden="true"></div>
     <h1 class="docs-content__title">{page.title}</h1>
     <p class="docs-content__desc">{page.description}</p>
+    {readingMinutes && (
+      <p class="docs-content__meta">
+        {readingMinutes} min read · {page.outline.length} {page.outline.length === 1 ? 'section' : 'sections'}
+      </p>
+    )}
 
-    <div class="docs-content__body">
+    <div class="docs-content__body" data-read-scope>
       {page.outline.length > 0 ? (
         page.outline.map((heading) => {
           const sc = sectionContent(heading);
+          const image = sc?.image ? docsImage(sc.image) : undefined;
+          const leadCard = Boolean(image && sc && sc.layout !== 'split');
+          const lead = leadCard ? sc?.paragraphs?.[0] : undefined;
+          const bodyParagraphs = leadCard ? sc?.paragraphs?.slice(1) : sc?.paragraphs;
           return (
             <section class="docs-content__section" id={sectionId(heading)}>
-              <h2 class={`docs-content__h2${sc?.headingWidget ? ' docs-content__h2--with-widget' : ''}`}>
-                {heading}
-                {sc?.headingWidget === 'spiral-loader' && (
-                  <SpiralLoader size={20} client:load />
-                )}
-              </h2>
-              {sc?.image && docsImage(sc.image) && (
+              {leadCard && image ? (
+                <div class="docs-lead-card">
+                  <Image
+                    src={image}
+                    alt=""
+                    widths={[480, 720, 960]}
+                    sizes="(max-width: 767px) 100vw, 42rem"
+                    draggable="false"
+                    class="docs-lead-card__img"
+                  />
+                  <div class="docs-lead-card__body rf-doc-prose">
+                    <h2 class="docs-lead-card__title">
+                      <span class="rf-heading-text">{heading}</span>
+                      {sc?.headingWidget === 'spiral-loader' && <SpiralLoader size={20} client:load />}
+                    </h2>
+                    {lead && <p class="docs-p" set:html={lead} />}
+                  </div>
+                </div>
+              ) : (
+                <h2 class={`docs-content__h2${sc?.headingWidget ? ' docs-content__h2--with-widget' : ''}`}>
+                  <span class="rf-heading-text">{heading}</span>
+                  {sc?.headingWidget === 'spiral-loader' && (
+                    <SpiralLoader size={20} client:load />
+                  )}
+                </h2>
+              )}
+              {image && !leadCard && (
                 <figure class="docs-figure">
                   <Image
-                    src={docsImage(sc.image)!}
+                    src={image}
                     alt={heading}
                     widths={[480, 720, 960]}
                     sizes="(max-width: 767px) 100vw, 42rem"
+                    draggable="false"
                     class="docs-figure__img"
                   />
                 </figure>
               )}
               {sc ? (
                 sc.layout === 'split' ? (
-                  <div class="docs-split">
+                  <div class="docs-split rf-doc-prose">
                     <div class="docs-split__text">
-                      {sc.paragraphs?.map((p) => <p class="docs-p" set:html={p} />)}
+                      {bodyParagraphs?.map((p) => <p class="docs-p" set:html={p} />)}
                     </div>
                     <div class="docs-split__aside">
                       {sc.table && (
@@ -94,21 +127,21 @@ function sectionId(heading: string): string {
                         </div>
                       )}
                       {sc.collapsible && (
-                        <div>
-                          <Disclosure id={`docs-more-${sectionId(heading)}`} buttonClass="rf-doc-disclosure">
+                        <div class="rf-doc-disclosure">
+                          <Disclosure id={`docs-more-${sectionId(heading)}`} buttonClass="rf-doc-disclosure__trigger">
                             <span slot="trigger">{sc.collapsible.label}</span>
-                            <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                               <path d="M6 9l6 6 6-6" />
                             </svg>
-                            <div class="rf-doc-disclosure-body" set:html={sc.collapsible.content} />
+                            <div class="rf-doc-disclosure__body" set:html={sc.collapsible.content} />
                           </Disclosure>
                         </div>
                       )}
                     </div>
                   </div>
                 ) : (
-                <div class="docs-section-rich">
-                  {sc.paragraphs?.map((p) => <p class="docs-p" set:html={p} />)}
+                <div class="docs-section-rich rf-doc-prose">
+                  {bodyParagraphs?.map((p) => <p class="docs-p" set:html={p} />)}
 
                   {sc.steps && (
                     <ol class="docs-steps">
@@ -166,13 +199,13 @@ function sectionId(heading: string): string {
                   )}
 
                   {sc.collapsible && (
-                    <div>
-                      <Disclosure id={`docs-more-${sectionId(heading)}`} buttonClass="rf-doc-disclosure">
+                    <div class="rf-doc-disclosure">
+                      <Disclosure id={`docs-more-${sectionId(heading)}`} buttonClass="rf-doc-disclosure__trigger">
                         <span slot="trigger">{sc.collapsible.label}</span>
-                        <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                           <path d="M6 9l6 6 6-6" />
                         </svg>
-                        <div class="rf-doc-disclosure-body" set:html={sc.collapsible.content} />
+                        <div class="rf-doc-disclosure__body" set:html={sc.collapsible.content} />
                       </Disclosure>
                     </div>
                   )}
@@ -248,7 +281,7 @@ function sectionId(heading: string): string {
 <div id="glossary-terms" hidden set:html={JSON.stringify(GLOSSARY_TERMS)} />
 
 <script>
-  import { initDocsToc } from '../lib/docsToc';
+  import { initDocsToc, initReadingProgress } from '../lib/docsToc';
 
   function initGlossaryTooltips() {
     const dataEl = document.getElementById('glossary-terms');
@@ -342,12 +375,15 @@ function sectionId(heading: string): string {
   }
 
   let teardownToc: (() => void) | null = null;
+  let teardownProgress: (() => void) | null = null;
 
   document.addEventListener('astro:page-load', initGlossaryTooltips);
   document.addEventListener('astro:page-load', highlightSearchQuery);
   document.addEventListener('astro:page-load', () => {
     teardownToc?.();
+    teardownProgress?.();
     teardownToc = initDocsToc(96);
+    teardownProgress = initReadingProgress();
   });
 </script>
 
@@ -378,16 +414,61 @@ function sectionId(heading: string): string {
   }
 
   .docs-content__desc {
-    margin: 0 0 2rem;
+    margin: 0;
     font-size: 0.9375rem;
     line-height: 1.65;
     color: var(--color-rf-text-muted);
+  }
+
+  .docs-content__meta {
+    margin: 0.75rem 0 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-rf-text-muted);
+    opacity: 0.6;
   }
 
   .docs-content__body {
     display: flex;
     flex-direction: column;
     gap: 3.25rem;
+    margin-top: 2.5rem;
+  }
+
+  .docs-lead-card {
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+    border-radius: 1rem;
+    background: var(--color-rf-surface);
+  }
+
+  .docs-lead-card__img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .docs-lead-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.25rem 1.5rem 1.5rem;
+  }
+
+  .docs-lead-card__title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--color-rf-text);
+  }
+
+  .docs-lead-card__title :global(.docs-spiral-loader) {
+    opacity: 0.45;
   }
 
   .docs-content__section {

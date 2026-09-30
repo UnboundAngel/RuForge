@@ -1,0 +1,92 @@
+---
+import Disclosure from '../Disclosure.astro';
+import type { DocsSectionContent } from '../../lib/docsContent';
+
+interface Props {
+  sc: DocsSectionContent;
+  id: string;
+  skipLead: boolean;
+}
+
+const { sc, id, skipLead } = Astro.props;
+const paragraphs = skipLead ? (sc.paragraphs ?? []).slice(1) : (sc.paragraphs ?? []);
+---
+
+<div class="rf-m-read rf-doc-prose space-y-4">
+  {paragraphs.map((p) => <p set:html={p} />)}
+
+  {sc.steps && (
+    <ol class="list-inside list-decimal space-y-2 py-2">
+      {sc.steps.map((s) => <li set:html={s} />)}
+    </ol>
+  )}
+
+  {sc.bullets && (
+    <ul class="space-y-2 py-2">
+      {sc.bullets.map((b) => (
+        <li class="flex gap-3">
+          <span class="mt-3 h-1 w-1 shrink-0 rounded-full bg-rf-accent/60" aria-hidden="true" />
+          <span set:html={b} />
+        </li>
+      ))}
+    </ul>
+  )}
+
+  {sc.paragraphs2?.map((p) => <p set:html={p} />)}
+  {sc.paragraphs3?.map((p) => <p set:html={p} />)}
+
+  {sc.note && (
+    <aside class="rf-callout rf-callout--note">
+      <span class="rf-callout__icon" aria-hidden="true" />
+      <p set:html={sc.note} />
+    </aside>
+  )}
+
+  {sc.tip && (
+    <aside class="rf-callout rf-callout--tip">
+      <span class="rf-callout__icon" aria-hidden="true" />
+      <p set:html={sc.tip} />
+    </aside>
+  )}
+
+  {sc.warning && (
+    <aside class="rf-callout rf-callout--warning">
+      <span class="rf-callout__icon" aria-hidden="true" />
+      <p set:html={sc.warning} />
+    </aside>
+  )}
+
+  {sc.table && (
+    <div class="rf-doc-table-wrap">
+      <table class="rf-doc-table">
+        <thead>
+          <tr>{sc.table.headers.map((h) => <th>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {sc.table.rows.map((row) => (
+            <tr>{row.map((cell) => <td set:html={cell} />)}</tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  {sc.collapsible && (
+    <div class="rf-doc-disclosure">
+      <Disclosure id={`m-docs-q-${id}`} buttonClass="rf-doc-disclosure__trigger">
+        <span slot="trigger">{sc.collapsible.label}</span>
+        <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+        <div class="rf-doc-disclosure__body" set:html={sc.collapsible.content} />
+      </Disclosure>
+    </div>
+  )}
+
+  {sc.codeBlock && (
+    <div class="overflow-hidden rounded-xl bg-rf-bg">
+      {sc.codeBlock.lang && <span class="block border-b border-rf-border/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-rf-text-muted/60">{sc.codeBlock.lang}</span>}
+      <pre class="overflow-x-auto px-3 py-2.5 font-mono text-xs leading-relaxed text-rf-text"><code set:html={sc.codeBlock.code} /></pre>
+    </div>
+  )}
+</div>

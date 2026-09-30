@@ -90,6 +90,9 @@ Website layout calls from Angel:
 - Leave clear safe space between the fixed top nav and the first content on every page.
 - Mobile: keep sections short. Show the headline and the key line, and put the longer explanation behind a tap-to-expand (grid-rows `0fr` to `1fr`, `inert` while closed) so users do not scroll forever.
 - Mobile lists of pages (legal, docs indexes): tappable rows with title, one meta line and a chevron. No summaries, icon tiles or emoji. Use `MobilePageHeader.astro` + `MobileRow.astro`; grouped lists and "read more" toggles expand with `Disclosure.astro` (desktop too; never a native `<details>`).
+- Solid surfaces. No faded outline with a see-through fill on cards, callouts, tables or toggles. Glass is only for the nav bar and the menus that drop from it.
+- A toggle's content opens inside the thing you clicked, as one card that grows downward, never as loose text under a separate button.
+- Only change what Angel asked for. A spacing request is not permission to restyle the element.
 - Transitions between two states of the same thing morph (clip-path and transforms), never crossfade two copies. The mobile header bar morphs into the pill (`MobileHeader.tsx`).
 - Every big card needs a visual anchor (photo, stamp, art). A bordered box of text reads as undesigned. The login trust card uses the coffee paper photo plus `InkStamp.astro` on both desktop and mobile.
 - Legal pages read like documents: big display title, "Last updated" as a small label under it, typographic section heads, bold defined terms. Every claim is checked against the code before the date changes.

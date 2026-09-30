@@ -2,11 +2,13 @@
 import { Image } from 'astro:assets';
 import { SpiralLoader } from '../SpiralLoader';
 import MobilePageHeader from './MobilePageHeader.astro';
+import MobileDocsSectionBody from './MobileDocsSectionBody.astro';
 import Disclosure from '../Disclosure.astro';
 import type { DocsPage } from '../../lib/docsTree';
 import { docsNavNeighbors } from '../../lib/docsTree';
 import { SITE } from '../../lib/site';
 import { DOCS_CONTENT, type DocsSectionContent } from '../../lib/docsContent';
+import { docsReadingMinutes } from '../../lib/docsReading';
 import { GLOSSARY_TERMS } from '../../lib/glossaryTerms';
 
 interface Props {
@@ -16,6 +18,7 @@ interface Props {
 const { page } = Astro.props;
 const { prev, next } = docsNavNeighbors(page.slug);
 const pageContent = DOCS_CONTENT[page.slug];
+const readingMinutes = docsReadingMinutes(page.slug);
 
 const docsImageModules = import.meta.glob<{ default: ImageMetadata }>(
   '../../assets/tutorials/docs/*.png',
@@ -36,12 +39,28 @@ function sectionContent(heading: string): DocsSectionContent | undefined {
 function sectionId(heading: string): string {
   return heading.toLowerCase().replace(/\s+/g, '-');
 }
+
+function hasMoreThanLead(sc: DocsSectionContent): boolean {
+  return Boolean(
+    (sc.paragraphs?.length ?? 0) > 1 ||
+      sc.steps || sc.bullets || sc.paragraphs2 || sc.paragraphs3 ||
+      sc.note || sc.tip || sc.warning || sc.table || sc.collapsible || sc.codeBlock,
+  );
+}
 ---
 
-<MobilePageHeader title={page.title} description={page.description} backHref="/m/docs" backLabel="Docs" />
+<div class="rf-read-progress" data-read-progress aria-hidden="true" />
+
+<MobilePageHeader title={page.title} description={page.description} backHref="/m/docs" backLabel="Docs">
+  {readingMinutes && (
+    <p class="mt-3 text-xs font-medium text-rf-text-muted/60">
+      {readingMinutes} min read · {page.outline.length} {page.outline.length === 1 ? 'section' : 'sections'}
+    </p>
+  )}
+</MobilePageHeader>
 
 {page.outline.length > 0 && (
-  <nav class="mb-10 rounded-xl bg-rf-surface px-4 py-3" aria-label="On this page">
+  <nav class="mb-8 rounded-xl bg-rf-surface px-4 py-3" aria-label="On this page">
     <p class="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-rf-text-muted/60">On this page</p>
     <ul>
       {page.outline.map((heading) => (
@@ -59,123 +78,60 @@ function sectionId(heading: string): string {
   </nav>
 )}
 
-<div class="space-y-12">
+<div class="space-y-4" data-read-scope>
   {page.outline.length > 0 ? (
     page.outline.map((heading) => {
       const sc = sectionContent(heading);
+      const id = sectionId(heading);
+      const image = sc?.image ? docsImage(sc.image) : undefined;
+      const lead = sc?.paragraphs?.[0];
+      const collapse = Boolean(sc && lead && hasMoreThanLead(sc));
       return (
-        <section id={sectionId(heading)} class="scroll-mt-24">
-          <h2 class="mb-4 flex items-center gap-2 font-display text-xl font-semibold tracking-tight text-rf-text">
-            {heading}
-            {sc?.headingWidget === 'spiral-loader' && <SpiralLoader size={18} client:load />}
-          </h2>
-
-          {sc?.image && docsImage(sc.image) && (
-            <figure class="mb-5">
-              <Image
-                src={docsImage(sc.image)!}
-                alt={heading}
-                widths={[360, 480, 720]}
-                sizes="100vw"
-                draggable="false"
-                class="h-auto w-full rounded-xl"
-              />
-            </figure>
+        <section id={id} class="rf-doc-card scroll-mt-24 overflow-hidden rounded-2xl bg-rf-surface">
+          {image && (
+            <Image
+              src={image}
+              alt=""
+              widths={[360, 480, 720]}
+              sizes="100vw"
+              draggable="false"
+              class="block h-auto w-full"
+            />
           )}
 
-          {sc ? (
-            <div class="rf-m-read space-y-4">
-              {sc.paragraphs?.map((p) => <p set:html={p} />)}
+          <div class="px-4 pt-4 pb-5">
+            <h2 class="flex items-center gap-2 font-display text-xl font-semibold tracking-tight text-rf-text">
+              <span class="rf-heading-text">{heading}</span>
+              {sc?.headingWidget === 'spiral-loader' && <SpiralLoader size={18} client:load />}
+            </h2>
 
-              {sc.steps && (
-                <ol class="space-y-3 py-2">
-                  {sc.steps.map((s, i) => (
-                    <li class="flex gap-3">
-                      <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rf-accent/12 text-xs font-semibold tabular-nums text-rf-accent">
-                        {i + 1}
-                      </span>
-                      <span set:html={s} />
-                    </li>
-                  ))}
-                </ol>
-              )}
+            {!sc ? (
+              <p class="rf-m-read rf-doc-prose mt-2 text-rf-text-muted/70">
+                Full write-up coming soon. Check{' '}
+                <a href="/m/docs/common-issues" class="rf-m-link">Troubleshooting</a>{' '}
+                or{' '}
+                <a href={SITE.discussions} class="rf-m-link" target="_blank" rel="noopener noreferrer">GitHub Discussions</a>.
+              </p>
+            ) : collapse ? (
+              <p class="rf-m-read rf-doc-prose mt-2" set:html={lead} />
+            ) : (
+              <div class="mt-3">
+                <MobileDocsSectionBody sc={sc} id={id} skipLead={false} />
+              </div>
+            )}
+          </div>
 
-              {sc.bullets && (
-                <ul class="space-y-2 py-2">
-                  {sc.bullets.map((b) => (
-                    <li class="flex gap-3">
-                      <span class="mt-3 h-1 w-1 shrink-0 rounded-full bg-rf-accent/60" aria-hidden="true" />
-                      <span set:html={b} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {sc.paragraphs2?.map((p) => <p set:html={p} />)}
-              {sc.paragraphs3?.map((p) => <p set:html={p} />)}
-
-              {sc.note && (
-                <aside class="rf-callout rf-callout--note">
-                  <span class="rf-callout__icon" aria-hidden="true" />
-                  <p set:html={sc.note} />
-                </aside>
-              )}
-
-              {sc.tip && (
-                <aside class="rf-callout rf-callout--tip">
-                  <span class="rf-callout__icon" aria-hidden="true" />
-                  <p set:html={sc.tip} />
-                </aside>
-              )}
-
-              {sc.warning && (
-                <aside class="rf-callout rf-callout--warning">
-                  <span class="rf-callout__icon" aria-hidden="true" />
-                  <p set:html={sc.warning} />
-                </aside>
-              )}
-
-              {sc.table && (
-                <div class="rf-doc-table-wrap">
-                  <table class="rf-doc-table">
-                    <thead>
-                      <tr>{sc.table.headers.map((h) => <th>{h}</th>)}</tr>
-                    </thead>
-                    <tbody>
-                      {sc.table.rows.map((row) => (
-                        <tr>{row.map((cell) => <td set:html={cell} />)}</tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {sc.collapsible && (
-                <div>
-                  <Disclosure id={`m-docs-more-${sectionId(heading)}`} buttonClass="rf-doc-disclosure">
-                    <span slot="trigger">{sc.collapsible.label}</span>
-                    <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                    <div class="rf-doc-disclosure-body" set:html={sc.collapsible.content} />
-                  </Disclosure>
-                </div>
-              )}
-
-              {sc.codeBlock && (
-                <div class="overflow-hidden rounded-xl border border-rf-border/10 bg-black/20">
-                  {sc.codeBlock.lang && <span class="block border-b border-rf-border/5 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-rf-text-muted/50">{sc.codeBlock.lang}</span>}
-                  <pre class="overflow-x-auto px-3 py-2.5 font-mono text-xs leading-relaxed text-rf-text"><code set:html={sc.codeBlock.code} /></pre>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p class="rf-m-read text-rf-text-muted/60">
-              Full write-up coming soon. Check{' '}
-              <a href="/m/docs/common-issues" class="rf-inline-link rf-m-link">Troubleshooting</a>{' '}
-              or{' '}
-              <a href={SITE.discussions} class="rf-inline-link rf-m-link" target="_blank" rel="noopener noreferrer">GitHub Discussions</a>.
-            </p>
+          {sc && collapse && (
+            <Disclosure id={`m-docs-more-${id}`} triggerAfter buttonClass="rf-section-more">
+              <div class="px-4 pb-5">
+                <MobileDocsSectionBody sc={sc} id={id} skipLead />
+              </div>
+              <span slot="trigger" data-when-closed>Read more</span>
+              <span slot="trigger" data-when-open hidden>Show less</span>
+              <svg slot="trigger" class="shrink-0 transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </Disclosure>
           )}
         </section>
       );
@@ -186,7 +142,7 @@ function sectionId(heading: string): string {
 </div>
 
 {(prev || next) && (
-  <nav class="mt-14 flex items-start justify-between gap-3" aria-label="Page navigation">
+  <nav class="mt-12 flex items-start justify-between gap-3" aria-label="Page navigation">
     {prev ? (
       <a href={`/m/docs/${prev.slug}`} class="rf-m-card flex max-w-[48%] flex-col gap-0.5 rounded-xl border border-rf-accent/20 px-4 py-3 no-underline">
         <span class="text-[10px] font-semibold uppercase tracking-wider text-rf-text-muted/60">Previous</span>
@@ -205,7 +161,8 @@ function sectionId(heading: string): string {
 <div id="glossary-terms" hidden set:html={JSON.stringify(GLOSSARY_TERMS)} />
 
 <script>
-  import { initDocsToc } from '../../lib/docsToc';
+  import { initDocsToc, initReadingProgress } from '../../lib/docsToc';
 
   initDocsToc(96);
+  initReadingProgress();
 </script>
