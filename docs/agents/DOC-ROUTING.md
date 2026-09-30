@@ -23,6 +23,7 @@ Read `STATE.md` then root `AGENTS.md` first. Then open **one** of these if the t
 | [`docs/ruforge/research/ai-llm-discoverability.md`](../ruforge/research/ai-llm-discoverability.md) | llms.txt, robots, IndexNow, GPTBot, AI discoverability |
 | [`website/public/llms.txt`](../../website/public/llms.txt) | live site AI index |
 | [`website/public/robots.txt`](../../website/public/robots.txt) | crawler policy |
+| [`website/README.md`](../../website/README.md) | any website work: /m/ twins, where copy lives, versions, legal build rules, dev server |
 | [`website/src/pages/`](../../website/src/pages/) + [`docs/ruforge/website/design.md`](../ruforge/website/design.md) | Astro pages, JSON-LD, BaseLayout |
 | [`.cursor/rules/roadmap-workflow.mdc`](../../.cursor/rules/roadmap-workflow.mdc) | when/how to edit roadmap.json |
 | [`website/src/content/roadmap.json`](../../website/src/content/roadmap.json) | public roadmap rows |

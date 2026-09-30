@@ -4,6 +4,8 @@
 @theme {
   --color-rf-bg: #1d1613;
   --color-rf-surface: #271c18;
+  --color-rf-raised: #342721;
+  --color-rf-raised-hover: #402f27;
   --color-rf-text: #edd79c;
   --color-rf-text-muted: #c9b87a;
   --color-rf-accent: #edd79c;
@@ -167,7 +169,11 @@
   }
 
   .rf-btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-rf-border px-4 py-2 text-sm text-rf-text no-underline transition-colors duration-200 ease-out hover:bg-rf-surface/65 hover:border-rf-accent/25 active:scale-[0.98];
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-rf-raised px-5 py-2.5 text-sm font-medium text-rf-text no-underline transition-colors duration-200 ease-out hover:bg-rf-raised-hover active:scale-[0.98];
+  }
+
+  .rf-pill-link {
+    @apply inline-flex items-center gap-2 rounded-full bg-rf-raised px-4 py-2 text-[13px] font-medium text-rf-text-muted no-underline transition-colors duration-150 ease-out hover:bg-rf-raised-hover hover:text-rf-text active:scale-[0.98];
   }
 
   .rf-version {
@@ -201,18 +207,6 @@
 
   .rf-badge-high {
     @apply bg-rf-high-bg text-rf-high;
-  }
-
-  .rf-section-label {
-    @apply mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest;
-  }
-
-  .rf-section-label-add {
-    @apply text-rf-add;
-  }
-
-  .rf-section-label-fix {
-    @apply text-rf-fix;
   }
 
   /* Header mega-menu: beat global `a { hover:opacity-80 }` so color hover reads. */
@@ -461,26 +455,6 @@
 
   .group\/icon-tip:hover .rf-docs-built-with__img {
     opacity: 0.95;
-  }
-
-  .rf-change-list {
-    @apply space-y-3;
-  }
-
-  .rf-change-item {
-    @apply flex gap-3 rounded-lg px-4 py-3.5 leading-relaxed;
-  }
-
-  .rf-change-item-add {
-    @apply bg-rf-add-bg text-rf-text-muted;
-  }
-
-  .rf-change-item-fix {
-    @apply bg-rf-fix-bg text-rf-text-muted;
-  }
-
-  .rf-release-block {
-    @apply space-y-10 rounded-xl bg-rf-surface/50 px-8 py-10;
   }
 
   /* Canonical slim scrollbar: accent thumb, no native arrow buttons. */

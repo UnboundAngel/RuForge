@@ -12,7 +12,10 @@ import { SITE } from '../lib/site';
       <a href="/" class="site-header-logo-link shrink-0 no-underline" aria-label="RuForge home">
         <Logo size={32} showWordmark={false} class="site-header-logo shrink-0" />
       </a>
-      <span class="site-header-version rf-version">v{SITE.latestVersion}</span>
+      <a href="/changelog" class="site-header-version no-underline" aria-label={`Latest release v${SITE.latestVersion}, open changelog`}>
+        <span class="site-header-version__label">Latest</span>
+        <span class="site-header-version__number">v{SITE.latestVersion}</span>
+      </a>
     </div>
 
     <div class="site-header-nav-wrap">
@@ -116,18 +119,45 @@ import { SITE } from '../lib/site';
 
   .site-header-version {
     display: inline-flex;
-    align-items: center;
+    flex-direction: column;
     justify-content: center;
+    gap: 0.125rem;
     flex-shrink: 0;
-    min-height: 2rem;
-    padding: 0.45rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid rgb(237 215 156 / 0.18);
-    background: rgb(29 22 19 / 0.55);
-    font-size: 0.75rem;
-    line-height: 1.1;
-    letter-spacing: 0.05em;
+    min-height: 2.25rem;
+    padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+    border-radius: 9999px;
+    color: var(--color-rf-text);
+  }
+
+  .site-header-version__label {
+    font-size: 0.5625rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
     color: var(--color-rf-text-muted);
+    opacity: 0.7;
+    transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .site-header-version__number {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+  }
+
+  .site-header-version:hover .site-header-version__label,
+  .site-header-version:focus-visible .site-header-version__label {
+    opacity: 1;
+  }
+
+  .site-header-version:hover .site-header-version__number,
+  .site-header-version:focus-visible .site-header-version__number {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
   }
 
   .site-header-nav-wrap {

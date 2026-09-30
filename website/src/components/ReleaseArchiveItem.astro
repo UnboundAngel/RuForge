@@ -1,0 +1,252 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import Icon from './Icon.astro';
+import ReleaseChangeGroup from './ReleaseChangeGroup.astro';
+import { releaseAnchor } from '../lib/releaseNotes';
+import { SITE } from '../lib/site';
+
+interface Props {
+  release: CollectionEntry<'releases'>;
+  compact?: boolean;
+}
+
+const { release, compact = false } = Astro.props;
+const { version, date, additions, fixes } = release.data;
+const anchor = releaseAnchor(version);
+const bodyId = `${anchor}-notes`;
+const dateLabel = date
+  .toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+  .toLowerCase();
+---
+
+<article id={anchor} class="archive" data-release-archive>
+  <div class="archive__row">
+    <div class="archive__title">
+      <time class="archive__date" datetime={date.toISOString()}>{dateLabel}</time>
+      <h2 class="archive__heading-wrap">
+        <button
+          type="button"
+          class:list={['archive__toggle', compact && 'rf-m-btn']}
+          aria-expanded="false"
+          aria-controls={bodyId}
+          data-release-toggle
+        >
+          v{version}
+        </button>
+      </h2>
+    </div>
+    <p class="archive__counts">
+      {additions.length > 0 && <span class="text-rf-add">{additions.length} added</span>}
+      {fixes.length > 0 && <span class="text-rf-fix">{fixes.length} fixed</span>}
+    </p>
+    {
+      !compact && (
+        <a href={`${SITE.releases}/tag/v${version}`} target="_blank" rel="noopener noreferrer" class="rf-pill-link archive__github">
+          <Icon name="github" size={14} />
+          on GitHub
+        </a>
+      )
+    }
+    <span class="archive__chevron" aria-hidden="true">
+      <Icon name="chevron-right" size={16} />
+    </span>
+  </div>
+
+  <div id={bodyId} class="archive__collapse" inert>
+    <div class="archive__collapse-inner">
+      <div class="archive__body">
+        {additions.length > 0 && <ReleaseChangeGroup kind="add" items={additions} compact={compact} />}
+        {fixes.length > 0 && <ReleaseChangeGroup kind="fix" items={fixes} compact={compact} />}
+        {
+          compact && (
+            <a href={`${SITE.releases}/tag/v${version}`} target="_blank" rel="noopener noreferrer" class="rf-pill-link rf-m-btn self-start">
+              <Icon name="github" size={14} />
+              v{version} on GitHub
+            </a>
+          )
+        }
+      </div>
+    </div>
+  </div>
+</article>
+
+<script>
+  function setOpen(article: HTMLElement, open: boolean) {
+    const toggle = article.querySelector<HTMLButtonElement>('[data-release-toggle]');
+    const body = article.querySelector<HTMLElement>('.archive__collapse');
+    if (!toggle || !body) return;
+    article.dataset.open = String(open);
+    toggle.setAttribute('aria-expanded', String(open));
+    body.inert = !open;
+  }
+
+  function openFromHash() {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (!id) return;
+    const target = document.getElementById(id);
+    if (target?.hasAttribute('data-release-archive')) setOpen(target, true);
+  }
+
+  function init() {
+    document.querySelectorAll<HTMLElement>('[data-release-archive]').forEach((article) => {
+      if (article.dataset.bound) return;
+      article.dataset.bound = 'true';
+      article.querySelector('[data-release-toggle]')?.addEventListener('click', () => {
+        setOpen(article, article.dataset.open !== 'true');
+      });
+    });
+    openFromHash();
+  }
+
+  init();
+  document.addEventListener('astro:page-load', init);
+  window.addEventListener('hashchange', openFromHash);
+</script>
+
+<style>
+  .archive {
+    scroll-margin-top: 6.5rem;
+    border-radius: 24px;
+    background: #271c18;
+    transition: background-color 0.15s ease;
+  }
+
+  .archive:not([data-open='true']):hover {
+    background: #2d211c;
+  }
+
+  .archive__row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.25rem 1.5rem;
+  }
+
+  .archive__title {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .archive__date {
+    font-size: 0.625rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgb(201 184 122 / 0.44);
+  }
+
+  .archive__heading-wrap {
+    margin: 0;
+  }
+
+  .archive__toggle {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--color-rf-text);
+    cursor: pointer;
+  }
+
+  /* The whole row is the hit area; the GitHub pill sits above it. */
+  .archive__toggle::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 24px;
+  }
+
+  .archive__toggle:focus-visible {
+    outline: none;
+  }
+
+  .archive__toggle:focus-visible::after {
+    outline: 2px solid rgb(237 215 156 / 0.6);
+    outline-offset: -2px;
+  }
+
+  .archive__counts {
+    display: flex;
+    gap: 1rem;
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  .archive__github {
+    position: relative;
+    z-index: 1;
+  }
+
+  .archive__chevron {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    background: var(--color-rf-raised);
+    color: var(--color-rf-text-muted);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.15s ease;
+  }
+
+  .archive:hover .archive__chevron {
+    background: var(--color-rf-raised-hover);
+    color: var(--color-rf-text);
+  }
+
+  .archive[data-open='true'] .archive__chevron {
+    transform: rotate(90deg);
+  }
+
+  .archive__collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .archive[data-open='true'] .archive__collapse {
+    grid-template-rows: 1fr;
+  }
+
+  .archive__collapse-inner {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .archive__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    padding: 0.5rem 1.5rem 1.5rem;
+  }
+
+  @media (max-width: 767px) {
+    .archive__row {
+      gap: 1rem;
+      padding: 1rem 1.125rem;
+    }
+
+    .archive__counts {
+      flex-direction: column;
+      gap: 0.25rem;
+      text-align: right;
+    }
+
+    .archive__body {
+      padding: 0.25rem 0.75rem 0.75rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .archive__collapse,
+    .archive__chevron {
+      transition: none;
+    }
+  }
+</style>

@@ -1,34 +1,119 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import PageHeader from '../components/PageHeader.astro';
 import ReleaseList from '../components/ReleaseList.astro';
-import Icon from '../components/Icon.astro';
 import { getCollection } from 'astro:content';
-import { SITE } from '../lib/site';
+import { compareReleasesNewestFirst } from '../lib/releaseNotes';
 
-const releases = (await getCollection('releases')).sort(
-  (a, b) => b.data.date.getTime() - a.data.date.getTime(),
-);
+const releases = (await getCollection('releases')).sort((a, b) => compareReleasesNewestFirst(a.data, b.data));
+
+const totalAdded = releases.reduce((sum, release) => sum + release.data.additions.length, 0);
+const totalFixed = releases.reduce((sum, release) => sum + release.data.fixes.length, 0);
+
 ---
 
-<BaseLayout title="RuForge changelog" description="Release notes and version history for the open-source desktop media library.">
-  <div class="rf-container space-y-12">
-    <PageHeader
-      title="Changelog"
-      description="Newest releases first. Installers are on GitHub Releases."
-      icon="list"
-    >
-      <a
-        href={SITE.releases}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="rf-btn-ghost mt-2 inline-flex w-fit text-rf-text-muted hover:text-rf-text"
-      >
-        <Icon name="github" size={16} />
-        GitHub Releases
-        <Icon name="external" size={14} class="opacity-60" />
-      </a>
-    </PageHeader>
+<BaseLayout title="RuForge changelog" description="Release notes and version history for the open-source desktop media library." flushTop>
+  <div class="rf-roadmap-ambient" aria-hidden="true">
+    <div class="rf-roadmap-glow rf-roadmap-glow--1"></div>
+    <div class="rf-roadmap-glow rf-roadmap-glow--2"></div>
+  </div>
+
+  <section class="rf-roadmap-hero changelog-hero">
+    <div>
+      <h1 class="changelog-title">Changelog</h1>
+      <p class="changelog-sub">what changed in every RuForge release, newest first</p>
+    </div>
+
+    <div class="changelog-hero-side">
+      <dl class="changelog-stats">
+        <div class="changelog-stat">
+          <dt>releases</dt>
+          <dd>{releases.length}</dd>
+        </div>
+        <div class="changelog-stat">
+          <dt class="text-rf-add">added</dt>
+          <dd>{totalAdded}</dd>
+        </div>
+        <div class="changelog-stat">
+          <dt class="text-rf-fix">fixed</dt>
+          <dd>{totalFixed}</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <div class="rf-roadmap-body">
     <ReleaseList releases={releases} />
   </div>
 </BaseLayout>
+
+<style>
+  /* Same two columns and gap as the release card grid, so the side column lines up with the right-hand cards. */
+  .changelog-hero {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+    column-gap: 0.625rem;
+    padding-bottom: 4.5rem;
+  }
+
+  /* Pull the C's side bearing back so its ink sits on the page edge like the text below it. */
+  .changelog-title {
+    margin: 0 0 0 -0.03em;
+    font-family: var(--font-display);
+    font-size: 4.5rem;
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+    color: var(--color-rf-text);
+  }
+
+  .changelog-sub {
+    margin: 1rem 0 0;
+    max-width: 22rem;
+    font-size: 1.0625rem;
+    line-height: 1.55;
+    color: rgb(201 184 122 / 0.72);
+  }
+
+  /* Bezel with carved wells (house pattern), so the stats read as one hero unit, not as more change cards. */
+  .changelog-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    margin: 0;
+    padding: 7px;
+    border-radius: 24px;
+    background: #271c18;
+  }
+
+  .changelog-stat {
+    padding: 1rem 1.125rem 1.125rem;
+    border-radius: 18px;
+    background: var(--color-rf-bg);
+  }
+
+  .changelog-stat dt {
+    font-size: 0.625rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgb(201 184 122 / 0.55);
+  }
+
+  .changelog-stat dd {
+    margin: 0.625rem 0 0;
+    font-family: var(--font-display);
+    font-size: 2.75rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--color-rf-text);
+  }
+
+  @media (max-width: 767px) {
+    .changelog-hero {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 2rem;
+    }
+  }
+</style>

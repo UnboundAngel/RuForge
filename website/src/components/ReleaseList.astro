@@ -1,6 +1,10 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import Icon from './Icon.astro';
+import ReleaseArchiveItem from './ReleaseArchiveItem.astro';
+import ReleaseChangeGroup from './ReleaseChangeGroup.astro';
+import { releaseAnchor } from '../lib/releaseNotes';
+import { SITE } from '../lib/site';
 
 interface Props {
   releases: CollectionEntry<'releases'>[];
@@ -8,65 +12,194 @@ interface Props {
 }
 
 const { releases, compact = false } = Astro.props;
+const [latest, ...earlier] = releases;
 
 const formatDate = (date: Date) =>
-  date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    timeZone: 'UTC',
-  });
+  date
+    .toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+    .toLowerCase();
 ---
 
-<div class:list={[compact ? 'space-y-8' : 'space-y-16']}>
+<div class:list={['release-list', compact && 'release-list--compact']}>
   {
-    releases.map((release) => (
-      <article class:list={[!compact && 'rf-release-block']}>
-        <header class="mb-8 space-y-2">
-          <p class="rf-version rounded-md bg-rf-bg/60 px-2.5 py-1 w-fit">
-            v{release.data.version}
-          </p>
-          <time class="block text-sm text-rf-text-muted" datetime={release.data.date.toISOString()}>
-            {formatDate(release.data.date)}
-          </time>
-        </header>
+    latest && (() => {
+      const { version, date, additions, fixes } = latest.data;
+      const anchor = releaseAnchor(version);
+      return (
+        <article id={anchor} class="release">
+          <header class="release__head">
+            <div>
+              <p class="release__eyebrow">latest release</p>
+              <h2 class="release__heading-wrap">
+                <a href={`#${anchor}`} class="release__heading no-underline">v{version}</a>
+              </h2>
+              <p class="release__date">
+                <time datetime={date.toISOString()}>{formatDate(date)}</time>
+              </p>
+            </div>
+            {!compact ? (
+              <div class="release__links">
+                <a href={`${SITE.releases}/tag/v${version}`} target="_blank" rel="noopener noreferrer" class="release__link release__link--primary no-underline">
+                  <Icon name="github" size={14} />
+                  v{version} on GitHub
+                </a>
+                <a href={SITE.releases} target="_blank" rel="noopener noreferrer" class="release__link no-underline">
+                  all installers
+                  <Icon name="external" size={12} class="opacity-60" />
+                </a>
+              </div>
+            ) : (
+              <a href={`${SITE.releases}/tag/v${version}`} target="_blank" rel="noopener noreferrer" class="rf-pill-link">
+                <Icon name="github" size={14} />
+                v{version} on GitHub
+              </a>
+            )}
+          </header>
 
-        {release.data.additions.length > 0 && (
-          <section class="mb-10">
-            <h3 class="rf-section-label rf-section-label-add">
-              <Icon name="plus" size={14} />
-              Additions
-              <span class="rf-badge rf-badge-add ml-1">{release.data.additions.length}</span>
-            </h3>
-            <ul class="rf-change-list">
-              {release.data.additions.map((item) => (
-                <li class="rf-change-item rf-change-item-add">
-                  <Icon name="plus" size={14} class="mt-1 text-rf-add shrink-0" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {release.data.fixes.length > 0 && (
-          <section>
-            <h3 class="rf-section-label rf-section-label-fix">
-              <Icon name="wrench" size={14} />
-              Fixes
-              <span class="rf-badge rf-badge-fix ml-1">{release.data.fixes.length}</span>
-            </h3>
-            <ul class="rf-change-list">
-              {release.data.fixes.map((item) => (
-                <li class="rf-change-item rf-change-item-fix">
-                  <Icon name="wrench" size={14} class="mt-1 text-rf-fix shrink-0" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </article>
-    ))
+          <div class="release__body">
+            {additions.length > 0 && <ReleaseChangeGroup kind="add" items={additions} compact={compact} />}
+            {fixes.length > 0 && <ReleaseChangeGroup kind="fix" items={fixes} compact={compact} />}
+          </div>
+        </article>
+      );
+    })()
+  }
+  {
+    earlier.length > 0 && (
+      <section class="release-archive" aria-label="Earlier releases">
+        <p class="release-archive__label">
+          earlier releases
+          <span class="release-archive__count">{earlier.length}</span>
+        </p>
+        <div class="release-archive__list">
+          {earlier.map((release) => <ReleaseArchiveItem release={release} compact={compact} />)}
+        </div>
+      </section>
+    )
   }
 </div>
+
+<style>
+  .release-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5.5rem;
+  }
+
+  .release-list--compact {
+    gap: 3.5rem;
+  }
+
+  .release {
+    scroll-margin-top: 6.5rem;
+  }
+
+  .release__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .release__eyebrow {
+    margin-bottom: 0.75rem;
+    font-size: 0.625rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgb(237 215 156 / 0.7);
+  }
+
+  .release-archive__label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.625rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgb(201 184 122 / 0.6);
+  }
+
+  .release-archive__count {
+    color: rgb(201 184 122 / 0.4);
+  }
+
+  .release-archive__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+  }
+
+  .release__heading-wrap {
+    position: relative;
+    display: inline-block;
+    margin: 0;
+    color: var(--color-rf-text);
+  }
+
+  .release__heading {
+    font-family: var(--font-display);
+    font-size: 2.125rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: inherit;
+  }
+
+  .release__date {
+    margin-top: 0.625rem;
+    font-size: 0.9375rem;
+    color: var(--color-rf-text-muted);
+  }
+
+  /* One pill, two halves: the bezel is the pill, each half lights up on its own. */
+  .release__links {
+    display: inline-flex;
+    gap: 3px;
+    padding: 3px;
+    border-radius: 9999px;
+    background: var(--color-rf-raised);
+  }
+
+  .release__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4375rem 0.875rem;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-rf-text-muted);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .release__link:hover,
+  .release__link:focus-visible {
+    background: var(--color-rf-raised-hover);
+    color: var(--color-rf-text);
+  }
+
+  .release__link--primary {
+    background: var(--color-rf-raised-hover);
+    color: var(--color-rf-text);
+  }
+
+  .release__link--primary:hover,
+  .release__link--primary:focus-visible {
+    background: #4c3a30;
+  }
+
+  .release__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  .release-list--compact .release__heading {
+    font-size: 1.75rem;
+  }
+</style>

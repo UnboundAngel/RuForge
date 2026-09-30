@@ -65,13 +65,11 @@ const loginTrust = landingLoginTrust('');
     {/* Tech stack ticker */}
     <section class="tech-ticker w-full overflow-hidden py-8 scroll-reveal" aria-label="Built with">
       <div class="tech-ticker__rail relative w-full overflow-hidden">
-        <div class="tech-ticker__fade tech-ticker__fade--left" aria-hidden="true"></div>
-        <div class="tech-ticker__fade tech-ticker__fade--right" aria-hidden="true"></div>
         <div class="tech-ticker__marquee flex w-max animate-marquee">
-          <div class="tech-ticker__row flex shrink-0 items-center gap-6 pe-6">
+          <div class="tech-ticker__row flex shrink-0 items-center gap-14 pe-14">
             {
               techTickerItems.map((item) => (
-                <div class="tech-ticker__item group flex items-center gap-3 bg-rf-surface/20 hover:bg-rf-surface/35 px-5 py-2.5 rounded-xl border border-rf-border/40 hover:border-rf-border/60 transition-colors duration-300 cursor-default">
+                <div class="tech-ticker__item group flex items-center gap-3 py-2.5 cursor-default">
                   <span class="tech-ticker__icon-slot flex shrink-0 items-center justify-center">
                     <TechTickerIcon icon={item.icon} />
                   </span>
@@ -82,10 +80,10 @@ const loginTrust = landingLoginTrust('');
               ))
             }
           </div>
-          <div class="tech-ticker__row flex shrink-0 items-center gap-6 pe-6" aria-hidden="true">
+          <div class="tech-ticker__row flex shrink-0 items-center gap-14 pe-14" aria-hidden="true">
             {
               techTickerItems.map((item) => (
-                <div class="tech-ticker__item group flex items-center gap-3 bg-rf-surface/20 hover:bg-rf-surface/35 px-5 py-2.5 rounded-xl border border-rf-border/40 hover:border-rf-border/60 transition-colors duration-300 cursor-default">
+                <div class="tech-ticker__item group flex items-center gap-3 py-2.5 cursor-default">
                   <span class="tech-ticker__icon-slot flex shrink-0 items-center justify-center">
                     <TechTickerIcon icon={item.icon} />
                   </span>
@@ -124,7 +122,7 @@ const loginTrust = landingLoginTrust('');
         </div>
 
         <div class="relative z-10 flex flex-col">
-          <div class="max-w-xl space-y-8">
+          <div class="highlight-card-copy space-y-8">
 
             <h2 class="text-4xl font-bold tracking-tight text-rf-text leading-[1.25]">
               {loginTrust.headline}
@@ -188,27 +186,14 @@ const loginTrust = landingLoginTrust('');
     height: 1rem;
   }
 
-  .tech-ticker__fade--left,
-  .tech-ticker__fade--right {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: min(7rem, 16vw);
-    z-index: 10;
-    pointer-events: none;
+  /* Mask instead of color overlays: the backdrop behind the rail is not a flat color. */
+  .tech-ticker__rail {
+    --tech-ticker-fade: min(9rem, 18vw);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--tech-ticker-fade), #000 calc(100% - var(--tech-ticker-fade)), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 var(--tech-ticker-fade), #000 calc(100% - var(--tech-ticker-fade)), transparent);
   }
 
-  .tech-ticker__fade--left {
-    left: 0;
-    background: linear-gradient(90deg, #1d1613 20%, transparent);
-  }
-
-  .tech-ticker__fade--right {
-    right: 0;
-    background: linear-gradient(270deg, #1d1613 20%, transparent);
-  }
-
-  /* Two identical rows, no gap between rows: pe-6 on each row matches internal gap-6 at the loop seam */
+  /* Two identical rows, no gap between rows: pe-14 on each row matches internal gap-14 at the loop seam */
   .tech-ticker__marquee {
     will-change: transform;
   }
@@ -229,6 +214,11 @@ const loginTrust = landingLoginTrust('');
   /* Bottom highlight card: coffee photo background */
   .highlight-card {
     min-height: 18rem;
+    container-type: inline-size;
+  }
+
+  .highlight-card-copy {
+    max-width: 36rem;
   }
 
   .highlight-card-photo,
@@ -241,15 +231,15 @@ const loginTrust = landingLoginTrust('');
     object-position: center 42%;
   }
 
-  /* Ink stamp pressed onto the paper photo; sits in the empty right side, so it only shows once there is room. */
+  /* Ink stamp pressed onto the paper photo, in the right side; the copy column narrows to keep clear of it. */
   .highlight-card-stamp {
     position: absolute;
     top: 50%;
-    right: 3.25rem;
+    right: clamp(1.75rem, 4.5cqi, 3.25rem);
     z-index: 10;
     display: none;
-    width: 10.5rem;
-    height: 10.5rem;
+    width: clamp(7.5rem, 18cqi, 10.5rem);
+    height: clamp(7.5rem, 18cqi, 10.5rem);
     color: var(--color-rf-accent);
     opacity: 0.72;
     transform: translateY(-50%) rotate(-11deg);
@@ -261,9 +251,13 @@ const loginTrust = landingLoginTrust('');
     transform: translateY(-50%) rotate(-6deg);
   }
 
-  @media (min-width: 1152px) {
+  @container (min-width: 40rem) {
     .highlight-card-stamp {
       display: block;
+    }
+
+    .highlight-card-copy {
+      max-width: min(36rem, calc(100% - 11rem));
     }
   }
 
