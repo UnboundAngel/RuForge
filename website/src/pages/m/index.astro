@@ -7,6 +7,8 @@ import MobileFooter from '../../components/mobile/MobileFooter.astro';
 import { AnimatedText } from '../../components/ui/animated-underline-text-one';
 import { Image, getImage } from 'astro:assets';
 import ruforgeLogo from '../../assets/ruforge-logo.png';
+import highlightCoffee from '../../assets/highlight-coffee-beans.webp';
+import InkStamp from '../../components/InkStamp.astro';
 import { landingFeatureRows, landingFeatureIntro, landingLoginTrust } from '../../lib/landingFeatures';
 import { SITE } from '../../lib/site';
 
@@ -86,19 +88,57 @@ const features = landingFeatureRows.map((row, i) => ({
     </section>
 
     <section class="px-5 pb-4" aria-labelledby="m-login-heading">
-      <div class="rounded-2xl border border-rf-border/30 bg-rf-surface/25 p-5 space-y-4">
-        <h2 id="m-login-heading" class="font-display text-xl font-bold tracking-tight text-rf-text leading-snug">
-          {loginTrust.headline}
-        </h2>
-        <div class="space-y-3 text-[14px] leading-relaxed text-rf-text-muted/85">
-          {loginTrust.paragraphs.map((html) => <p set:html={html} />)}
+      <div class="overflow-hidden rounded-2xl bg-rf-surface">
+        <div class="relative aspect-[5/2]">
+          <Image
+            src={highlightCoffee}
+            alt=""
+            class="h-full w-full object-cover"
+            draggable="false"
+            widths={[480, 780]}
+            sizes="100vw"
+            loading="lazy"
+            decoding="async"
+          />
+          <div class="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-rf-surface to-transparent" aria-hidden="true"></div>
+          <div class="absolute right-5 top-3 h-24 w-24 -rotate-[11deg] text-rf-accent opacity-75">
+            <InkStamp id="m-login-stamp" />
+          </div>
         </div>
-        <p class="flex items-start gap-2 border-t border-rf-border/30 pt-4 text-[13px] leading-relaxed text-rf-text-muted/70">
-          <svg class="mt-[3px] shrink-0 opacity-60" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </svg>
-          <span set:html={loginTrust.note} />
-        </p>
+        <div class="relative -mt-8 px-5 pb-4">
+          <h2 id="m-login-heading" class="font-display text-xl font-bold tracking-tight text-rf-text leading-snug">
+            {loginTrust.headline}
+          </h2>
+          <p class="mt-3 text-[14px] leading-relaxed text-rf-text-muted/85" set:html={loginTrust.paragraphs[1]} />
+
+          <div
+            id="m-login-more"
+            class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none data-[open]:grid-rows-[1fr]"
+          >
+            <div class="min-h-0 overflow-hidden" inert data-more-inner>
+              <p class="pt-3 text-[14px] leading-relaxed text-rf-text-muted/85" set:html={loginTrust.paragraphs[0]} />
+              <p class="mt-4 flex items-start gap-2 border-t border-rf-border/30 pt-4 text-[13px] leading-relaxed text-rf-text-muted/70">
+                <svg class="mt-[3px] shrink-0 opacity-60" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span set:html={loginTrust.note} />
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="m-login-toggle"
+            class="rf-m-btn group -mx-2 mt-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium text-rf-accent"
+            aria-expanded="false"
+            aria-controls="m-login-more"
+          >
+            <span data-label>how your login is handled</span>
+            <svg class="transition-transform duration-300 group-aria-expanded:rotate-180 motion-reduce:transition-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+        </div>
       </div>
     </section>
   </main>
@@ -109,5 +149,16 @@ const features = landingFeatureRows.map((row, i) => ({
     import { detectPlatform, downloadCtaLabel } from '../../lib/detectPlatform';
     const label = document.getElementById('m-hero-cta-label');
     if (label) label.textContent = downloadCtaLabel(detectPlatform());
+
+    const loginToggle = document.getElementById('m-login-toggle');
+    const loginMore = document.getElementById('m-login-more');
+    loginToggle?.addEventListener('click', () => {
+      const open = loginToggle.getAttribute('aria-expanded') !== 'true';
+      loginToggle.setAttribute('aria-expanded', String(open));
+      loginMore?.toggleAttribute('data-open', open);
+      loginMore?.querySelector('[data-more-inner]')?.toggleAttribute('inert', !open);
+      const text = loginToggle.querySelector('[data-label]');
+      if (text) text.textContent = open ? 'show less' : 'how your login is handled';
+    });
   </script>
 </MobileShell>

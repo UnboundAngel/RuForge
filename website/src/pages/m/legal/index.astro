@@ -4,15 +4,11 @@ import MobileHeader from '../../../components/mobile/MobileHeader';
 import MobileFooter from '../../../components/mobile/MobileFooter.astro';
 import { getImage } from 'astro:assets';
 import ruforgeLogo from '../../../assets/ruforge-logo.png';
-import { LEGAL_LINKS } from '../../../lib/site';
+import { LEGAL_LINKS, SITE } from '../../../lib/site';
+import { legalDocInfo } from '../../../lib/legal';
 
 const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
-
-const docMeta: Record<string, { icon: string; blurb: string }> = {
-  'Privacy Policy': { icon: '🛡', blurb: 'What RuForge stores locally and what leaves your machine.' },
-  'Terms of Use': { icon: '⚖', blurb: 'License, responsibilities, and acceptable use.' },
-  'Legal Notice': { icon: '📄', blurb: 'Copyright, disclaimers, and contact.' },
-};
+const docs = LEGAL_LINKS.map((doc) => ({ ...doc, ...legalDocInfo(doc.file) }));
 ---
 
 <MobileShell title="RuForge legal: privacy and terms" description="Privacy policy, terms of service, and license information for RuForge open-source.">
@@ -26,28 +22,31 @@ const docMeta: Record<string, { icon: string; blurb: string }> = {
         </svg>
         Back
       </a>
-      <h1 class="font-display text-2xl font-bold tracking-tight text-rf-text">Legal</h1>
-      <p class="mt-2 text-sm text-rf-text-muted/80 leading-relaxed">
-        Policies for the RuForge desktop app. Select a document to read the full text.
+      <h1 class="font-display text-4xl font-bold tracking-tight text-rf-text">Legal</h1>
+      <p class="mt-2 text-[15px] text-rf-text-muted/80 leading-relaxed">
+        The policies that cover the RuForge desktop app.
       </p>
     </div>
 
-    <ul class="space-y-3">
-      {LEGAL_LINKS.map((doc) => {
-        const meta = docMeta[doc.title];
-        return (
-          <li>
-            <a href={`/m${doc.href}`} class="rf-m-card flex items-center gap-3 px-4 py-4 rounded-xl border border-rf-border/20 bg-rf-surface/20 no-underline hover:border-rf-accent/20">
-              <span class="text-xl" aria-hidden="true">{meta.icon}</span>
-              <div class="min-w-0">
-                <p class="text-[15px] font-semibold text-rf-text">{doc.title}</p>
-                <p class="text-xs text-rf-text-muted/70 mt-0.5">{meta.blurb}</p>
-              </div>
-            </a>
-          </li>
-        );
-      })}
+    <ul class="mt-8 space-y-2">
+      {docs.map((doc) => (
+        <li>
+          <a href={`/m${doc.href}`} class="rf-m-card flex items-center gap-4 rounded-xl bg-rf-surface px-4 py-4 no-underline">
+            <div class="min-w-0 flex-1">
+              <p class="text-base font-semibold text-rf-text">{doc.title}</p>
+              <p class="mt-1 text-xs text-rf-text-muted/60">Updated {doc.updated} · {doc.minutes} min read</p>
+            </div>
+            <svg class="shrink-0 text-rf-text-muted/50" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </a>
+        </li>
+      ))}
     </ul>
+
+    <p class="mt-8 text-sm text-rf-text-muted/75">
+      Questions about these documents? <a class="rf-inline-link rf-m-link" href={`${SITE.github}/issues`}>Open an issue on GitHub</a>.
+    </p>
   </main>
 
   <MobileFooter />

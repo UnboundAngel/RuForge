@@ -1,6 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import MobileFullscreenNav from './MobileFullscreenNav';
 const SCROLL_THRESHOLD = 64;
+/** Pill padding (16 each side) + gap (16) + menu button (44, pulled in 4). */
+const PILL_CHROME = 88;
+const PILL_LOGO_SCALE = 0.75;
 
 interface Props {
   logoSrc: string;
@@ -9,7 +12,20 @@ interface Props {
 export default function MobileHeader({ logoSrc }: Props) {
   const [scrolled, setScrolled] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [pillWidth, setPillWidth] = useState(200);
   const rafRef = useRef(0);
+  const logoRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    const measure = () => {
+      const logo = logoRef.current;
+      if (logo) setPillWidth(Math.ceil(logo.offsetWidth * PILL_LOGO_SCALE + PILL_CHROME));
+    };
+    measure();
+    document.fonts?.ready.then(measure);
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   useEffect(() => {
     let ticking = false;
@@ -81,48 +97,56 @@ export default function MobileHeader({ logoSrc }: Props) {
     </button>
   );
 
+  const pillEdge = 'calc(50% - var(--pill-w) / 2)';
+  const shift = 'calc(50vw - var(--pill-w) / 2 - 4px)';
+  const morph = 'transition-[clip-path,background-color,transform,filter] duration-[450ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none';
+
   return (
     <>
-      {/* Full-width bar (visible at top) */}
+      {/* One header that morphs from the full-width bar into the floating pill. */}
       <header
-        className="fixed top-0 left-0 w-full z-[100] px-5 py-4 bg-rf-bg/90 backdrop-blur-md border-b border-rf-border/20 will-change-[opacity]"
+        className={`fixed inset-x-0 top-0 z-[100] h-[76px] ${morph}`}
         style={{
-          opacity: scrolled ? 0 : 1,
+          '--pill-w': `${pillWidth}px`,
           pointerEvents: scrolled ? 'none' : 'auto',
-          transition: 'opacity 350ms cubic-bezier(0.22, 1, 0.36, 1)',
-        }}
+          filter: scrolled ? 'drop-shadow(0 8px 14px rgb(0 0 0 / 0.3))' : 'drop-shadow(0 0 0 rgb(0 0 0 / 0))',
+        } as CSSProperties}
       >
-        <div className="flex items-center justify-between gap-4">
-          <a href="/m/" className="flex items-center gap-2.5 no-underline shrink-0">
+        <div
+          aria-hidden="true"
+          className={`absolute inset-0 bg-rf-border/40 ${morph}`}
+          style={{
+            clipPath: scrolled ? `inset(12px ${pillEdge} 4px ${pillEdge} round 30px)` : 'inset(0px 0px 0px 0px round 0px)',
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className={`absolute inset-0 ${morph}`}
+          style={{
+            backgroundColor: scrolled ? 'var(--color-rf-surface)' : 'var(--color-rf-bg)',
+            clipPath: scrolled
+              ? `inset(13px calc(${pillEdge} + 1px) 5px calc(${pillEdge} + 1px) round 29px)`
+              : 'inset(0px 0px 1px 0px round 0px)',
+          }}
+        />
+        <div className="relative flex h-full items-center justify-between px-5">
+          <a
+            ref={logoRef}
+            href="/m/"
+            className={`pointer-events-auto flex shrink-0 origin-left items-center gap-2.5 no-underline ${morph}`}
+            style={{ transform: scrolled ? `translate(${shift}, 4px) scale(0.75)` : 'none' }}
+          >
             <img src={logoSrc} alt="RuForge" className="w-8 h-8 rounded-md" width={32} height={32} />
             <span className="font-hand text-2xl font-bold text-rf-text tracking-tight leading-none">
               RuForge
             </span>
           </a>
-          {hamburger}
-        </div>
-      </header>
-
-      {/* Floating pill (visible after scroll) */}
-      <header
-        className="fixed top-3 left-1/2 z-[100] px-4 py-2 rounded-full bg-rf-surface/80 backdrop-blur-xl border border-rf-border/40 shadow-lg shadow-black/30 will-change-[opacity,transform]"
-        style={{
-          opacity: scrolled ? 1 : 0,
-          pointerEvents: scrolled ? 'auto' : 'none',
-          transform: scrolled
-            ? 'translateX(-50%) translateY(0) scale(1)'
-            : 'translateX(-50%) translateY(-8px) scale(0.95)',
-          transition: 'opacity 350ms cubic-bezier(0.22, 1, 0.36, 1), transform 350ms cubic-bezier(0.22, 1, 0.36, 1)',
-        }}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <a href="/m/" className="flex items-center gap-2.5 no-underline shrink-0">
-            <img src={logoSrc} alt="RuForge" className="w-6 h-6 rounded-md" width={24} height={24} />
-            <span className="font-hand text-lg text-rf-text tracking-tight leading-none">
-              RuForge
-            </span>
-          </a>
-          {hamburger}
+          <div
+            className={`pointer-events-auto ${morph}`}
+            style={{ transform: scrolled ? `translate(calc(-1 * ${shift}), 4px)` : 'none' }}
+          >
+            {hamburger}
+          </div>
         </div>
       </header>
 

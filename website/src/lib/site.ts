@@ -18,7 +18,22 @@ export const SITE = {
 export const DOWNLOAD_PAGE = '/download';
 
 export const LEGAL_LINKS = [
-  { href: '/legal/privacy', title: 'Privacy Policy', file: 'PRIVACY.md' },
-  { href: '/legal/terms', title: 'Terms of Use', file: 'TERMS.md' },
-  { href: '/legal/notice', title: 'Legal Notice', file: 'LEGAL.md' },
+  {
+    href: '/legal/privacy',
+    title: 'Privacy Policy',
+    file: 'PRIVACY.md',
+    summary: 'What RuForge stores on your computer, what it sends and to which sites, and what it never collects.',
+  },
+  {
+    href: '/legal/terms',
+    title: 'Terms of Use',
+    file: 'TERMS.md',
+    summary: 'What RuForge is, your responsibilities when using it, the license, updates and the no-warranty terms.',
+  },
+  {
+    href: '/legal/notice',
+    title: 'Legal Notice',
+    file: 'LEGAL.md',
+    summary: 'Publisher, copyright and license, trademarks, infringement notices and third-party software.',
+  },
 ] as const;
