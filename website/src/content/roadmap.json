@@ -1,329 +1,68 @@
 [
-  {
-    "appArea": "Download Screen",
-    "difficulty": "High",
-    "featureName": "Audio-only downloads",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Low",
-    "featureName": "Mini player compact layout",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "High",
-    "featureName": "Download progress carousel and batch hero",
-    "priority": "Medium",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Low",
-    "featureName": "Hero art crossfade on metadata hydrate",
-    "priority": "Low",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Medium",
-    "featureName": "Player comments drawer and comments sidecar",
-    "priority": "Extremely important",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Medium",
-    "featureName": "SponsorBlock import, skip, and scrub segments",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "High",
-    "featureName": "Deno JS runtime auto-install for yt-dlp",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Settings Screen",
-    "difficulty": "Low",
-    "featureName": "Auto scrubber previews on download (default on)",
-    "priority": "Medium",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Settings Screen",
-    "difficulty": "Medium",
-    "featureName": "Chapter markers in player",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Player",
-    "difficulty": "Medium",
-    "featureName": "Scrub hover preview sprites",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Player",
-    "difficulty": "Low",
-    "featureName": "Custom subtitle overlay with drag positioning",
-    "priority": "Medium",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Video Library",
-    "difficulty": "Medium",
-    "featureName": "Scrub preview generation and library backfill",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Video Library",
-    "difficulty": "Low",
-    "featureName": "Authorize Cleanup storage modal",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Music Library",
-    "difficulty": "High",
-    "featureName": "Music mode (Explore, Library, Now Playing)",
-    "priority": "Extremely important",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Music Library",
-    "difficulty": "High",
-    "featureName": "YTM playlist batch download with sidecar roster",
-    "priority": "Extremely important",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Music Library",
-    "difficulty": "Medium",
-    "featureName": "Music metadata enrichment and album grouping",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "Medium",
-    "featureName": "Auto-updater with signed releases",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "Medium",
-    "featureName": "Crash recovery screen and root error boundary",
-    "priority": "High",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "Medium",
-    "featureName": "Windows taskbar transport controls",
-    "priority": "Medium",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "Low",
-    "featureName": "Website /features/library redirect to media-library",
-    "priority": "Low",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Settings Screen",
-    "difficulty": "High",
-    "featureName": "Crash reporting (opt-in, Aptabase)",
-    "priority": "High",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
-  },
-  {
-    "appArea": "Browser",
-    "difficulty": "High",
-    "featureName": "Browser companion support for phone, desktop, and TV",
-    "priority": "High",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
-  },
-  {
-    "appArea": "Browser",
-    "difficulty": "Medium",
-    "featureName": "Migrate Companion from the single-file HTML client to a more compatible, performant, and expandable app client",
-    "priority": "Medium",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Medium",
-    "featureName": "Download dock with expandable hero popup",
-    "priority": "High",
-    "status": "Finished",
-    "roadmapStatus": "progress"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "High",
-    "featureName": "Storage estimate before enqueue",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Medium",
-    "featureName": "Download history log",
-    "priority": "Extremely important",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Video Library",
-    "difficulty": "High",
-    "featureName": "User-created playlists from library items",
-    "priority": "Extremely important",
-    "status": "Finished",
-    "roadmapStatus": "progress"
-  },
-  {
-    "appArea": "Music Library",
-    "difficulty": "Medium",
-    "featureName": "Delay between batch job starts (rate-limit guard)",
-    "priority": "Medium",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Video Library",
-    "difficulty": "Medium",
-    "featureName": "Playlist folder right-click menu (Play all, shuffle, delete, ...)",
-    "priority": "Low",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Medium",
-    "featureName": "Accurate file size on download card preview",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "High",
-    "featureName": "WinGet manifest auto-update on release",
-    "priority": "Medium",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Player",
-    "difficulty": "Medium",
-    "featureName": "In-app onboarding walkthrough for new features",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Music Library",
-    "difficulty": "Medium",
-    "featureName": "Explore download dock and batch retry polish",
-    "priority": "Medium",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Settings Screen",
-    "difficulty": "Low",
-    "featureName": "Storage target vs download path clarity in Settings",
-    "priority": "Low",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "High",
-    "featureName": "SQLite-backed gallery index",
-    "priority": "Low",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "Low",
-    "featureName": "Release checklist automation (updater.json + signatures)",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "High",
-    "featureName": "SmartScreen reputation and Azure Trusted Signing",
-    "priority": "Medium",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "Low",
-    "featureName": "Move video catalog metadata from JSON sidecars to SQLite",
-    "priority": "Low",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Player",
-    "difficulty": "High",
-    "featureName": "Movie and TV show mode (posters, episode progress, continue watching)",
-    "priority": "Extremely important",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Download Screen",
-    "difficulty": "High",
-    "featureName": "Scheduled and overnight downloads",
-    "priority": "High",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Video Library",
-    "difficulty": "Medium",
-    "featureName": "Drag-and-drop import into library scan paths",
-    "priority": "Medium",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Settings Screen",
-    "difficulty": "Medium",
-    "featureName": "Theme and accent picker",
-    "priority": "Medium",
-    "status": "Finished"
-  },
-  {
-    "appArea": "Settings Screen",
-    "difficulty": "Low",
-    "featureName": "Custom keyboard shortcuts",
-    "priority": "Low",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Explorer",
-    "difficulty": "Medium",
-    "featureName": "Channel watchlist and new-upload notifications",
-    "priority": "Medium",
-    "status": "To-Do",
-    "roadmapStatus": "progress"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "High",
-    "featureName": "Linux packaging (dev builds exist, no user installer yet)",
-    "priority": "Low",
-    "status": "To-Do"
-  },
-  {
-    "appArea": "Infra",
-    "difficulty": "High",
-    "featureName": "macOS port",
-    "priority": "Low",
-    "status": "To-Do"
-  }
+  { "appArea": "Download Screen", "difficulty": "High", "featureName": "download audio only", "priority": "High", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "Low", "featureName": "a compact mini player", "priority": "High", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "High", "featureName": "watch a whole batch download, one card at a time", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "Low", "featureName": "cover art fades in as downloads load", "priority": "Low", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "Medium", "featureName": "read the comments right in the player", "priority": "Extremely important", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "Medium", "featureName": "automatic sponsor skipping with SponsorBlock", "priority": "High", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "High", "featureName": "installs the tools YouTube downloads need automatically", "priority": "High", "status": "Finished" },
+  { "appArea": "Settings Screen", "difficulty": "Low", "featureName": "preview thumbnails for every download", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Settings Screen", "difficulty": "Medium", "featureName": "chapters right on the seek bar", "priority": "High", "status": "Finished" },
+  { "appArea": "Player", "difficulty": "Medium", "featureName": "preview frames when you hover the seek bar", "priority": "High", "status": "Finished" },
+  { "appArea": "Player", "difficulty": "Low", "featureName": "move subtitles anywhere on screen", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Video Library", "difficulty": "Medium", "featureName": "thumbnails for videos you already had", "priority": "High", "status": "Finished" },
+  { "appArea": "Video Library", "difficulty": "Low", "featureName": "free up disk space from inside the app", "priority": "High", "status": "Finished" },
+  { "appArea": "Music Library", "difficulty": "High", "featureName": "a full music mode with its own library", "priority": "Extremely important", "status": "Finished" },
+  { "appArea": "Music Library", "difficulty": "High", "featureName": "download full YouTube Music playlists", "priority": "Extremely important", "status": "Finished" },
+  { "appArea": "Music Library", "difficulty": "Medium", "featureName": "songs sorted into albums with the right info", "priority": "High", "status": "Finished" },
+  { "appArea": "Infra", "difficulty": "Medium", "featureName": "updates itself, safely", "priority": "High", "status": "Finished" },
+  { "appArea": "Infra", "difficulty": "Medium", "featureName": "a recovery screen instead of a crash", "priority": "High", "status": "Finished" },
+  { "appArea": "Infra", "difficulty": "Medium", "featureName": "play and pause from the Windows taskbar", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Infra", "difficulty": "Low", "featureName": "old links on this site still work", "priority": "Low", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "Medium", "featureName": "playlists land in numbered folders", "priority": "High", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "Medium", "featureName": "stuck downloads are detected and stopped", "priority": "High", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "Low", "featureName": "a heads-up before you download something twice", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Video Library", "difficulty": "Medium", "featureName": "delete to the Recycle Bin or copy to a drive", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Infra", "difficulty": "Medium", "featureName": "hold Alt to switch between modes", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Infra", "difficulty": "Low", "featureName": "keyboard media keys control playback", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Infra", "difficulty": "High", "featureName": "a now-playing island at the top of the screen", "priority": "High", "status": "Finished" },
+  { "appArea": "Music Library", "difficulty": "Medium", "featureName": "songs blend into each other", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Music Library", "difficulty": "Medium", "featureName": "loop a song or a whole playlist", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Music Library", "difficulty": "Medium", "featureName": "lyrics that follow along with the song", "priority": "High", "status": "Finished" },
+  { "appArea": "Player", "difficulty": "Medium", "featureName": "up next suggestions when a video ends", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Settings Screen", "difficulty": "Medium", "featureName": "settings you can actually search", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Settings Screen", "difficulty": "Medium", "featureName": "optional Discord status for what you're watching", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Settings Screen", "difficulty": "High", "featureName": "opt-in crash reports", "priority": "High", "status": "To-Do" },
+  { "appArea": "Download Screen", "difficulty": "Medium", "featureName": "one bell for finished downloads and new uploads", "priority": "Extremely important", "status": "Finished", "roadmapStatus": "unreleased" },
+  { "appArea": "Video Library", "difficulty": "High", "featureName": "a library home that feels like YouTube, with creator pages", "priority": "High", "status": "Finished", "roadmapStatus": "unreleased" },
+  { "appArea": "Music Library", "difficulty": "High", "featureName": "make playlists, even from a screenshot of one", "priority": "High", "status": "Finished", "roadmapStatus": "unreleased" },
+  { "appArea": "Music Library", "difficulty": "Medium", "featureName": "import playlists with one terminal command", "priority": "High", "status": "To-Do", "roadmapStatus": "progress" },
+  { "appArea": "Music Library", "difficulty": "Medium", "featureName": "song suggestions you can preview before adding", "priority": "Medium", "status": "Finished", "roadmapStatus": "unreleased" },
+  { "appArea": "Music Library", "difficulty": "Medium", "featureName": "one search bar for your music and YouTube Music", "priority": "Medium", "status": "Finished", "roadmapStatus": "unreleased" },
+  { "appArea": "Player", "difficulty": "Medium", "featureName": "see each sponsor skip and undo it", "priority": "Medium", "status": "Finished", "roadmapStatus": "unreleased" },
+  { "appArea": "Browser", "difficulty": "High", "featureName": "control RuForge from your phone or TV", "priority": "High", "status": "To-Do" },
+  { "appArea": "Browser", "difficulty": "Medium", "featureName": "a faster, more reliable remote app", "priority": "Low", "status": "To-Do" },
+  { "appArea": "Download Screen", "difficulty": "Medium", "featureName": "downloads tucked into a dock that pops open", "priority": "High", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "High", "featureName": "warns you before a download won't fit", "priority": "High", "status": "Finished", "roadmapStatus": "unreleased" },
+  { "appArea": "Download Screen", "difficulty": "Medium", "featureName": "a history of everything you've downloaded", "priority": "Extremely important", "status": "To-Do" },
+  { "appArea": "Video Library", "difficulty": "High", "featureName": "make your own video playlists", "priority": "Extremely important", "status": "Finished" },
+  { "appArea": "Music Library", "difficulty": "Medium", "featureName": "spaces out big batches so YouTube doesn't block you", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Video Library", "difficulty": "Medium", "featureName": "right-click a playlist to play, shuffle, or delete it", "priority": "Low", "status": "Finished" },
+  { "appArea": "Download Screen", "difficulty": "Medium", "featureName": "exact file sizes before you download", "priority": "High", "status": "To-Do" },
+  { "appArea": "Infra", "difficulty": "High", "featureName": "install and update with WinGet", "priority": "Medium", "status": "To-Do" },
+  { "appArea": "Player", "difficulty": "Medium", "featureName": "tips that point out new features", "priority": "High", "status": "Finished" },
+  { "appArea": "Music Library", "difficulty": "Medium", "featureName": "retry failed songs from the music dock", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Settings Screen", "difficulty": "Low", "featureName": "choose where downloads are saved", "priority": "Low", "status": "Finished" },
+  { "appArea": "Infra", "difficulty": "High", "featureName": "stays fast even with a huge library", "priority": "Low", "status": "To-Do" },
+  { "appArea": "Infra", "difficulty": "Low", "featureName": "smoother releases behind the scenes", "priority": "Medium", "status": "To-Do" },
+  { "appArea": "Infra", "difficulty": "High", "featureName": "no more scary Windows warning when you install", "priority": "High", "status": "To-Do" },
+  { "appArea": "Download Screen", "difficulty": "Low", "featureName": "the library loads quicker as it grows", "priority": "Low", "status": "To-Do" },
+  { "appArea": "Player", "difficulty": "High", "featureName": "a movies and TV mode with posters and episode tracking", "priority": "Medium", "status": "To-Do" },
+  { "appArea": "Download Screen", "difficulty": "High", "featureName": "schedule downloads to run overnight", "priority": "High", "status": "To-Do" },
+  { "appArea": "Video Library", "difficulty": "Medium", "featureName": "drag files in to add them to your library", "priority": "Medium", "status": "To-Do" },
+  { "appArea": "Settings Screen", "difficulty": "Medium", "featureName": "pick your own accent color", "priority": "Medium", "status": "Finished" },
+  { "appArea": "Settings Screen", "difficulty": "Low", "featureName": "set your own keyboard shortcuts", "priority": "Low", "status": "To-Do" },
+  { "appArea": "Explorer", "difficulty": "Medium", "featureName": "follow channels and hear about new uploads", "priority": "High", "status": "Finished", "roadmapStatus": "unreleased" },
+  { "appArea": "Infra", "difficulty": "High", "featureName": "a proper Linux installer", "priority": "Low", "status": "To-Do" },
+  { "appArea": "Infra", "difficulty": "High", "featureName": "RuForge on Mac", "priority": "Low", "status": "To-Do" }
 ]

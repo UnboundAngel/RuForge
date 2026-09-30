@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import MobileFullscreenNav from './MobileFullscreenNav';
-import { useHaptic } from './useHaptic';
-
 const SCROLL_THRESHOLD = 64;
 
 interface Props {
@@ -11,7 +9,6 @@ interface Props {
 export default function MobileHeader({ logoSrc }: Props) {
   const [scrolled, setScrolled] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-  const { tap } = useHaptic();
   const rafRef = useRef(0);
 
   useEffect(() => {
@@ -49,9 +46,8 @@ export default function MobileHeader({ logoSrc }: Props) {
   }, [navOpen]);
 
   const toggle = useCallback(() => {
-    tap();
     setNavOpen((v) => !v);
-  }, [tap]);
+  }, []);
 
   const hamburger = (
     <button

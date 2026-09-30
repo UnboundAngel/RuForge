@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { mobileHref } from '../../lib/mobileHref';
 import { NAV_SECTIONS, pageHref, type NavSectionId } from '../../lib/sitePages';
-import { useHaptic } from './useHaptic';
 import { detectPlatform, downloadCtaLabel } from '../../lib/detectPlatform';
 
 const sections: { id: NavSectionId; label: string }[] = [
@@ -33,7 +32,6 @@ function NavSection({
   onToggle: (id: NavSectionId) => void;
   index: number;
 }) {
-  const { select } = useHaptic();
   const isExpanded = expandedId === section.id;
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
@@ -61,7 +59,7 @@ function NavSection({
     >
       <button
         type="button"
-        onClick={() => { select(); onToggle(section.id); }}
+        onClick={() => onToggle(section.id)}
         className="rf-m-link group flex items-center justify-between w-full py-4 px-2 border-b border-rf-border/15 hover:border-rf-border/40 min-h-[44px] bg-transparent text-left"
         aria-expanded={isExpanded}
       >
@@ -116,7 +114,6 @@ function NavSection({
 }
 
 export default function MobileFullscreenNav({ open, onClose, logoSrc }: Props) {
-  const { tap } = useHaptic();
   const [expandedId, setExpandedId] = useState<NavSectionId | null>(null);
   const [ctaLabel, setCtaLabel] = useState('Download for Windows');
 
@@ -147,7 +144,7 @@ export default function MobileFullscreenNav({ open, onClose, logoSrc }: Props) {
           <span className="font-hand text-2xl font-bold text-rf-text tracking-tight">RuForge</span>
         </a>
         <button
-          onClick={() => { tap(); onClose(); }}
+          onClick={onClose}
           className="rf-m-btn relative z-[210] flex items-center justify-center w-11 h-11 -mr-1 rounded-lg text-rf-text-muted hover:text-rf-text"
           aria-label="Close menu"
         >
@@ -200,7 +197,6 @@ export default function MobileFullscreenNav({ open, onClose, logoSrc }: Props) {
       >
         <a
           href="/m/download"
-          onClick={tap}
           className="rf-m-btn flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-rf-accent/15 border border-rf-accent/25 text-rf-accent text-sm font-semibold tracking-wide no-underline hover:bg-rf-accent/25"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

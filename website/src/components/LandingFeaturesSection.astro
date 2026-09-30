@@ -7,9 +7,7 @@ import { landingFeatureIntro, landingFeatureRows } from '../lib/landingFeatures'
   <header class="landing-features__intro">
     <p class="landing-features__kicker">{landingFeatureIntro.kicker}</p>
     <h2 id="landing-features-heading" class="landing-features__headline">
-      {landingFeatureIntro.headline[0]}
-      <br />
-      {landingFeatureIntro.headline[1]}
+      {landingFeatureIntro.headline}
     </h2>
   </header>
 
@@ -23,11 +21,13 @@ import { landingFeatureIntro, landingFeatureRows } from '../lib/landingFeatures'
           <div class="landing-features__copy">
             <p class="landing-features__pill">{row.pill}</p>
             <h3 class="landing-features__title">
-              {row.headline[0]}
-              <br />
-              {row.headline[1]}
+              {row.headline}
             </h3>
-            <p class="landing-features__body">{row.paragraph}</p>
+            <p class="landing-features__body">
+              {row.paragraph.split('\n').map((line) => (
+                <span class="landing-features__line">{line}</span>
+              ))}
+            </p>
             <ul class="landing-features__bullets">
               {row.bullets.map((item) => (
                 <li>
@@ -153,6 +153,14 @@ import { landingFeatureIntro, landingFeatureRows } from '../lib/landingFeatures'
     font-weight: 400;
     line-height: 1.7;
     color: var(--features-text-dim);
+  }
+
+  .landing-features__line {
+    display: block;
+  }
+
+  .landing-features__line + .landing-features__line {
+    margin-top: 0.45rem;
   }
 
   .landing-features__bullets {
