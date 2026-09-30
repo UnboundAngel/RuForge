@@ -88,7 +88,7 @@ function hasMoreThanLead(sc: DocsSectionContent): boolean {
       const lead = sc?.paragraphs?.[0];
       const collapse = Boolean(sc && lead && hasMoreThanLead(sc));
       return (
-        <section id={id} class:list={['rf-doc-card scroll-mt-24 overflow-hidden rounded-2xl bg-rf-surface', collapse && 'cursor-pointer']} data-doc-card={collapse ? '' : undefined}>
+        <section id={id} class:list={['rf-doc-card scroll-mt-24 overflow-hidden rounded-2xl bg-rf-surface', collapse && 'rf-m-card cursor-pointer']} data-doc-card={collapse ? '' : undefined}>
           {image && (
             <Image
               src={image}
