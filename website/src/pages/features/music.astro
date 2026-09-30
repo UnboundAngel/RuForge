@@ -1,0 +1,30 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FeaturePageTemplate from '../../components/FeaturePageTemplate.astro';
+import type { FeatureSection } from '../../components/FeaturePageTemplate.astro';
+import { findFeaturePage } from '../../lib/featurePageData';
+
+import musicHome from '../../assets/tutorials/music/musicHome.png';
+import musicLyrics from '../../assets/tutorials/music/musicLyrics.png';
+import musicArtist from '../../assets/tutorials/music/musicArtist.png';
+
+const page = findFeaturePage('music')!;
+const images: Record<string, ImageMetadata> = {
+  'musicHome.png': musicHome,
+  'musicLyrics.png': musicLyrics,
+  'musicArtist.png': musicArtist,
+};
+
+const sections: FeatureSection[] = page.sections.map((section) => ({
+  heading: section.heading,
+  body: section.body,
+  bullets: section.bullets,
+  image: images[section.imageFile],
+  imageAlt: section.imageAlt,
+  fullFrame: true,
+}));
+---
+
+<BaseLayout title={page.metaTitle} description={page.metaDescription}>
+  <FeaturePageTemplate title={page.title} description={page.description} sections={sections} />
+</BaseLayout>

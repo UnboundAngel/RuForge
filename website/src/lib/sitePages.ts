@@ -64,6 +64,13 @@ export const NAV_SECTIONS: NavSection[] = [
         outline: ['Playback controls', 'Chapter scrubber', 'Scrubber previews', 'Auto-advance'],
       },
       {
+        slug: 'music',
+        title: 'Music mode',
+        description:
+          'Play your songs with lyrics, albums, artists, playlists, and crossfade, and find new music on YouTube Music.',
+        outline: ['Your music home', 'Lyrics and Now Playing', 'Artists, albums and playlists'],
+      },
+      {
         slug: 'mini-player',
         title: 'Mini player',
         description:

@@ -24,7 +24,7 @@ export interface NavMenuConfig {
 
 export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   features: {
-    featuredSlugs: ['downloader', 'media-library', 'explorer', 'player'],
+    featuredSlugs: ['downloader', 'media-library', 'explorer', 'music'],
     layout: 'links-featured-row',
     panelClass: 'w-[54rem] min-h-[15.5rem]',
     featured: [
@@ -50,7 +50,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
         shadowColor: 'rgba(120, 90, 60, 1)',
       },
       {
-        slug: 'player',
+        slug: 'music',
         title: 'Music',
         image: '/tutorials/music-mode.webp',
         variant: 'hero',
@@ -61,7 +61,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   company: {
     featuredSlugs: ['about', 'open-source'],
     layout: 'links-featured-pair',
-    panelClass: 'w-[40rem] min-h-[17rem]',
+    panelClass: 'w-[31rem] min-h-[14rem]',
     featured: [
       {
         slug: 'about',

@@ -9,6 +9,8 @@ export interface FeatureSection {
   bullets?: string[];
   image: ImageMetadata;
   imageAlt: string;
+  /** Size the frame to the image's own ratio instead of cropping to 4:3 (full-window app shots). */
+  fullFrame?: boolean;
 }
 
 interface Props {
@@ -56,7 +58,10 @@ const { title, description, sections } = Astro.props;
             )}
           </div>
           <figure class="feature-page__figure">
-            <div class="feature-page__frame">
+            <div
+              class="feature-page__frame"
+              style={section.fullFrame ? { aspectRatio: `${section.image.width} / ${section.image.height}` } : undefined}
+            >
               <Image
                 src={section.image}
                 alt={section.imageAlt}

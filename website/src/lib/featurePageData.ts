@@ -127,6 +127,52 @@ export const FEATURE_PAGES: FeaturePageDef[] = [
     ],
   },
   {
+    slug: 'music',
+    title: 'Music mode',
+    metaTitle: 'Music mode: offline music player with lyrics and playlists',
+    metaDescription: 'Play downloaded songs in a dedicated music player with lyrics, albums, artists, playlists, crossfade, and YouTube Music browsing.',
+    description: 'A separate space for your songs: albums, artists, playlists, lyrics, and a way to find and save new music from YouTube Music.',
+    imageDir: 'music',
+    sections: [
+      {
+        heading: 'Your music home',
+        body: 'Music mode opens on a home page built from the songs you already downloaded: quick picks to start something fast, and a row of your artists. Relax and Focus filters narrow it down to the mood you want.',
+        bullets: [
+          'Quick picks from your own library',
+          'Artists row with song counts',
+          'Search your songs, or open Explore to find new ones on YouTube Music',
+          'Storage bar shows how close you are to your storage limit',
+        ],
+        imageFile: 'musicHome.png',
+        imageAlt: 'RuForge Music mode home page with quick picks and an artists row',
+      },
+      {
+        heading: 'Lyrics and Now Playing',
+        body: 'When a song has lyrics, they scroll along with the music and the current line lights up. The side panel shows the cover art, the next lines, and related songs. The player bar at the bottom keeps shuffle, loop, skip, and volume in reach.',
+        bullets: [
+          'Lyrics follow the song line by line',
+          'Crossfade blends the end of one song into the next',
+          'Smart shuffle favors songs you like and holds back ones you just heard',
+          'Like songs to collect them in Liked Songs',
+        ],
+        imageFile: 'musicLyrics.png',
+        imageAlt: 'RuForge Music mode showing synced lyrics with the current line highlighted',
+      },
+      {
+        heading: 'Artists, albums and playlists',
+        body: 'Your songs are grouped into artists and albums automatically. Artist pages add genres, where the artist is from, and a short bio from MusicBrainz and Wikipedia. Make your own playlists, or bring one over from another service and check the matches before anything downloads.',
+        bullets: [
+          'Artist and album pages built from your downloaded files',
+          'Play or shuffle a whole artist in one click',
+          'Create, rename, and sort playlists',
+          'Import a playlist and review each matched song first',
+        ],
+        imageFile: 'musicArtist.png',
+        imageAlt: 'RuForge Music mode artist page with albums, genre tags, and play and shuffle buttons',
+      },
+    ],
+  },
+  {
     slug: 'player',
     title: 'Media Player',
     metaTitle: 'Built-in media player for downloaded files',
