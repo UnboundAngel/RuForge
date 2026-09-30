@@ -20,13 +20,13 @@ const dateLabel = date
 ---
 
 <article id={anchor} class="archive" data-release-archive>
-  <div class="archive__row">
+  <div class:list={['archive__row', compact && 'rf-m-card']} data-release-row>
     <div class="archive__title">
       <time class="archive__date" datetime={date.toISOString()}>{dateLabel}</time>
       <h2 class="archive__heading-wrap">
         <button
           type="button"
-          class:list={['archive__toggle', compact && 'rf-m-btn']}
+          class="archive__toggle"
           aria-expanded="false"
           aria-controls={bodyId}
           data-release-toggle
@@ -91,7 +91,8 @@ const dateLabel = date
     document.querySelectorAll<HTMLElement>('[data-release-archive]').forEach((article) => {
       if (article.dataset.bound) return;
       article.dataset.bound = 'true';
-      article.querySelector('[data-release-toggle]')?.addEventListener('click', () => {
+      article.querySelector('[data-release-row]')?.addEventListener('click', (event) => {
+        if ((event.target as Element).closest('a')) return;
         setOpen(article, article.dataset.open !== 'true');
       });
     });
@@ -121,6 +122,8 @@ const dateLabel = date
     align-items: center;
     gap: 1.5rem;
     padding: 1.25rem 1.5rem;
+    border-radius: 24px;
+    cursor: pointer;
   }
 
   .archive__title {
