@@ -59,13 +59,13 @@ Paste `.sig` **file contents** (base64) into `signature`. Set `pub_date`. Never 
 
 `npm run prep:website-release` from repo root (needs signed NSIS). `npm run prep:website-release:changelog-only` if the signed build is not ready.
 
-## 6. Commit + push to main
+## 6. Commit + push to public main
 
-Confirm branch is `main`. Commit must include `updater.json`, all three version files, generated website changelog when applicable, and unreleased code. Push `origin main`. Record the hash.
+Confirm branch is `main`. Commit must include `updater.json`, all three version files, generated website changelog when applicable, and unreleased code. Ensure the `public` remote points at `UnboundAngel/RuForge` (`node scripts/setup-git-remotes.mjs` if needed). Push **`public` `main`** (the public release repo). Do not treat `sync` / RuForge-sync as the release target. Record the hash.
 
 ## 7. GitHub Release
 
-Tag **`v<semver>`** must match the `updater.json` download path. Upload NSIS `.exe` (required). MSI optional. Do not attach `.sig` files.
+Create the release on **`UnboundAngel/RuForge`** (public). Tag **`v<semver>`** must match the `updater.json` download path. Upload NSIS `.exe` (required). MSI optional. Do not attach `.sig` files.
 
 ## 8. Drain Unreleased → graph + roll STATE
 

@@ -19,6 +19,26 @@ If `STATE.md` and the code disagree, the code wins. Fix STATE forward. Never `gi
 
 Do not start from `docs/agents/handoffs/`, `docs/ruforge/RuForge.md`, or `docs/ruforge/product-feature-catalogue.md` unless Angel points there.
 
+## Remotes (sync vs public)
+
+Two GitHub remotes. Do not treat them as interchangeable.
+
+| Remote | Repo | Use |
+|--------|------|-----|
+| `sync` | `UnboundAngel/RuForge-sync` (private) | Default. All session WIP, feature branches, cloud-agent handoffs, laptop/desktop continuity. |
+| `public` | `UnboundAngel/RuForge` (this public repo) | Only intentional public publish, or the release skill. |
+
+Wire remotes on a clone with `node scripts/setup-git-remotes.mjs`. Angel creates the private repo once (see that script's header). Prefer cloning / attaching Cursor Cloud Agents to **RuForge-sync** so `origin` is already private.
+
+**Default push:** `git push -u sync <branch>`. Never push routine session branches to `public`, and never to `origin` when `origin` still points at the public RuForge URL.
+
+**Public push is allowed only when:**
+
+1. Angel says ship / release / push it out (release skill → `public` `main`), or
+2. Angel explicitly asks to open or update a **public** PR / publish a branch.
+
+Otherwise keep branches and PRs on `sync`. If `sync` is missing or push fails (repo not created yet, token cannot see the private repo), stop and tell Angel; do not fall back to the public remote.
+
 ## How to log Unreleased
 
 Do not paste changelog lines into `STATE.md`. Do not open `docs/agents/release/shipped.jsonl`. `v` comes from `STATE.md` `Shipping version`.
@@ -103,7 +123,7 @@ Custom over native, always. Do not ship browser or OS defaults where RuForge has
 
 ## Who ships a release
 
-On ship / release / push it out: Angel signs. Mint does version bump, `updater.json`, commit + push to **main**, `gh release create`, drain Unreleased, live `updater.json` check. Do not ask Angel to tag or write release copy unless `gh` auth is missing. Full sequence: the release skill.
+On ship / release / push it out: Angel signs. Mint does version bump, `updater.json`, commit + push to **`public` `main`** (the public RuForge remote), `gh release create` on `UnboundAngel/RuForge`, drain Unreleased, live `updater.json` check. Do not ask Angel to tag or write release copy unless `gh` auth is missing. Full sequence: the release skill. Daily WIP stays on `sync`; do not use a release as an excuse to dump unrelated private branches onto public.
 
 ## Edit in place
 
@@ -131,7 +151,7 @@ Dev: `npm run dev:app`. Builds: `npm run build` (web), `npm run tauri build` (in
 - The island is its own `island` webview capped at 420x280. Size new variants inside that.
 - Hiding the Explorer does not pause it; `EXPLORER_PAUSE_MEDIA_SCRIPT` does. Popovers over web content use the see-through overlay webview pattern (`radialNavOverlayHost.ts`).
 - Background Rust work: `tauri::async_runtime::spawn` for async HTTP, emit only on change, never hold a mutex across an await, and stay off the yt-dlp rate gate when a plain HTTP request works (for example, channel RSS).
-- Big features: plan doc in `docs/ruforge/plans/`, one phase per session, each phase verified, committed and pushed on a feature branch with a PR comment. Handoff in `docs/agents/handoffs/`.
+- Big features: plan doc in `docs/ruforge/plans/`, one phase per session, each phase verified, committed and pushed on a feature branch on **`sync`** with a PR comment there (public PR only if Angel asks). Handoff in `docs/agents/handoffs/`.
 
 ## Updater (do not get these wrong)
 

@@ -138,10 +138,18 @@ Mint implements visuals in Cursor. Do not route Gemini.
 
 ## GitHub Hygiene
 
+Remotes follow root `AGENTS.md` → **Remotes (sync vs public)**:
+
+- Default push target is **`sync`** (`UnboundAngel/RuForge-sync`).
+- **`public`** (`UnboundAngel/RuForge`) only for intentional public publish or the
+  release skill.
+- If `sync` is missing, run `node scripts/setup-git-remotes.mjs` or stop and tell
+  Angel. Do not fall back to the public remote for WIP.
+
 Before pushing:
 
 - `git status --short`
-- fetch the target branch
+- fetch the target branch on the correct remote (`sync` or `public`)
 - confirm ahead and behind counts
 - push normally only when behind is zero
 
