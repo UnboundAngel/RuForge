@@ -1,0 +1,9 @@
+# Paths that stay on UnboundAngel/Ruforge-priv only.
+# Public RuForge must not track these. Listed paths are removed on public
+# publish and restored on the private remote (see scripts/apply-private-only.mjs).
+# One path per line. Directories end with /.
+docs/agents/codex/MEMORY.md
+docs/agents/codex/context/
+docs/agents/handoffs/
+docs/ruforge/archive/
+.claude/

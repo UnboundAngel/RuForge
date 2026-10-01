@@ -39,6 +39,16 @@ Wire remotes on a clone with `node scripts/setup-git-remotes.mjs`. Prefer clonin
 
 Otherwise keep branches and PRs on `sync`. If `sync` is missing or push fails (repo not created yet, token cannot see the private repo), stop and tell Angel; do not fall back to the public remote.
 
+### Private-only paths
+
+Some paths stay on **`sync` / Ruforge-priv** only. They must not land on `public` / RuForge. List: `scripts/private-only-paths.txt`.
+
+Current set: Codex memory + imported context, agent handoffs, `docs/ruforge/archive/`, `.claude/`.
+
+- Before any intentional **public** push or PR: `node scripts/apply-private-only.mjs strip` (then commit if the tree changed).
+- After pulling public history into a **private** clone that is missing those files: `node scripts/apply-private-only.mjs restore --from sync/main` (or another private ref that still has them), commit only to `sync`.
+- Never push a restore commit to `public`.
+
 ## How to log Unreleased
 
 Do not paste changelog lines into `STATE.md`. Do not open `docs/agents/release/shipped.jsonl`. `v` comes from `STATE.md` `Shipping version`.

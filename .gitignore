@@ -61,6 +61,15 @@ _live-updater-check*.json
 AGENTS.local.md
 VOICE.local.md
 
+# Private-remote only (UnboundAngel/Ruforge-priv). Stripped from public RuForge.
+# On the private remote these are force-tracked; see scripts/private-only-paths.txt
+# and scripts/apply-private-only.mjs. Do not re-add on a public publish.
+docs/agents/codex/MEMORY.md
+docs/agents/codex/context/
+docs/agents/handoffs/
+docs/ruforge/archive/
+.claude/
+
 # Ad-hoc archives and large optional FFmpeg binaries (see AGENTS.md; do not commit multi-hundred-MB exes)
 ffmpeg.7z
 src-tauri/binaries/ffmpeg*.exe

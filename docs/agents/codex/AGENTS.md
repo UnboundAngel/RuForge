@@ -76,10 +76,13 @@ it.
 
 ## Memory
 
-Codex memory lives at `docs/agents/codex/MEMORY.md`.
+Codex memory lives at `docs/agents/codex/MEMORY.md` on **`sync` / Ruforge-priv**
+only (see root `AGENTS.md` → Private-only paths). Public RuForge clones will not
+have it.
 
 Use it when Angel asks for prior context, project memory, Codex continuity,
-prompt history, or old ChatGPT/Claude memory reconciliation.
+prompt history, or old ChatGPT/Claude memory reconciliation, and the file is
+present.
 
 Rules:
 

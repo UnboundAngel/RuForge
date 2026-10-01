@@ -20,6 +20,7 @@ Read `STATE.md` then root `AGENTS.md` first. Then open **one** of these if the t
 | [`.cursor/rules/design-style-anti-patterns.mdc`](../../.cursor/rules/design-style-anti-patterns.mdc) | banned UI patterns, generic AI UI |
 | [`.cursor/skills/ruforge-release/SKILL.md`](../../.cursor/skills/ruforge-release/SKILL.md) | ship, release, push it out, updater.json, gh release, version bump for users |
 | `node scripts/setup-git-remotes.mjs` + root `AGENTS.md` **Remotes** | private sync remote, public vs sync push rules, laptop/desktop/cloud continuity without public WIP |
+| `scripts/private-only-paths.txt` + `node scripts/apply-private-only.mjs` | strip/restore Codex memory, handoffs, archive, `.claude/` so public RuForge stays clean |
 | [`docs/agents/release/CHANGELOG-AUTHORING.md`](release/CHANGELOG-AUTHORING.md) | release step 8 only: version graph, versioner, MANIFEST |
 | [`docs/ruforge/research/google-seo-and-domain-strategy.md`](../ruforge/research/google-seo-and-domain-strategy.md) | website, SEO, comparison page, domain |
 | [`docs/ruforge/research/ai-llm-discoverability.md`](../ruforge/research/ai-llm-discoverability.md) | llms.txt, robots, IndexNow, GPTBot, AI discoverability |
