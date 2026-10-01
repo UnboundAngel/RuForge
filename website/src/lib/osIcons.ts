@@ -1,4 +1,5 @@
 import type { DetectedPlatform } from './detectPlatform';
+import { APPLE_ICON_PATH } from './downloadPlatformIcons';
 
 export interface OsIconShape {
   paths: string[];
@@ -17,7 +18,7 @@ export const OS_ICONS: Record<DetectedPlatform, OsIconShape> = {
     ],
   },
   mac: {
-    filled: false,
-    paths: ['M4 3h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M8 21h8M12 17v4'],
+    filled: true,
+    paths: [APPLE_ICON_PATH],
   },
 };

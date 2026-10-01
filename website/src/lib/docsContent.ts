@@ -211,7 +211,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
       layout: 'split',
       paragraphs: [
         'The library picks up <strong>MP4, MKV and WebM</strong> videos and <strong>MP3, M4A, FLAC, Opus, OGG and WAV</strong> audio.',
-        'Upper or lowercase extensions both work from <strong>RuForge 0.4.1</strong>. On 0.4.0, rename <code>video.MP4</code> to <code>video.mp4</code> if it doesn\'t show up.',
+        'Upper or lowercase extensions both work from <strong>RuForge 0.5</strong>. On 0.4.0, rename <code>video.MP4</code> to <code>video.mp4</code> if it doesn\'t show up.',
       ],
       table: {
         headers: ['Type', 'Shows up', 'Doesn\'t show up'],

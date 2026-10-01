@@ -103,5 +103,9 @@ const mobileAlternateUrl = new URL('/m' + Astro.url.pathname, Astro.site).href;
     </main>
     <SiteFooter />
     <BuiltWithTransitions />
+    <script>
+      import { initSmoothAnchors } from '../lib/smoothAnchors';
+      initSmoothAnchors();
+    </script>
   </body>
 </html>

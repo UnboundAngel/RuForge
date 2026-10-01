@@ -4,9 +4,12 @@ export type RoadmapArea =
   | 'Downloads'
   | 'Player'
   | 'Library'
+  | 'Music'
   | 'Browser'
+  | 'Remote'
   | 'Settings'
-  | 'Performance';
+  | 'Performance'
+  | 'General';
 
 export type RoadmapStatus = 'shipped' | 'unreleased' | 'progress' | 'planned';
 
@@ -51,15 +54,17 @@ const AREA_MAP: Record<string, RoadmapArea> = {
   'Download Screen': 'Downloads',
   'Settings Screen': 'Settings',
   'Video Library': 'Library',
-  'Music Library': 'Library',
-  Infra: 'Performance',
+  'Music Library': 'Music',
+  Infra: 'General',
+  Performance: 'Performance',
   Explorer: 'Browser',
   Browser: 'Browser',
+  Remote: 'Remote',
   Player: 'Player',
 };
 
 function mapArea(appArea: string): RoadmapArea {
-  return AREA_MAP[appArea] ?? 'Settings';
+  return AREA_MAP[appArea] ?? 'General';
 }
 
 function mapPriority(priority: string): RoadmapPriority {

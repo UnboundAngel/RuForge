@@ -1,68 +1,12 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import FeaturePageTemplate from '../../components/FeaturePageTemplate.astro';
-import type { FeatureSection } from '../../components/FeaturePageTemplate.astro';
+import { findFeaturePage, featureSectionsWithImages } from '../../lib/featurePageData';
 
-import downloadStep1 from '../../assets/tutorials/download/downloadStep1.png';
-import downloadStep2 from '../../assets/tutorials/download/downloadStep2.png';
-import downloadStep3 from '../../assets/tutorials/download/downloadStep3.png';
-import download2 from '../../assets/tutorials/download/download2.png';
-
-const sections: FeatureSection[] = [
-  {
-    heading: 'Paste a URL and go',
-    body: 'Drop a YouTube link into the input and RuForge fetches metadata immediately. You see the title, thumbnail, and size estimates before anything downloads. The hero area shows a live progress bar with speed and ETA once a job starts.',
-    bullets: [
-      'Metadata fetch uses yt-dlp simulate (no partial download)',
-      'Size estimates differ for audio-only vs video (dual simulate)',
-      'Clipboard paste, drag-drop, and manual entry all work',
-    ],
-    image: downloadStep1,
-    imageAlt: 'RuForge downloader with URL pasted and metadata loaded',
-  },
-  {
-    heading: 'Playlist support',
-    body: 'Paste a playlist URL and every video appears as a row with its own toggle. Flip individual rows to audio-only, see per-row sizes, and check for duplicates before you commit. Downloads land in a numbered subfolder so file order matches playlist order.',
-    bullets: [
-      'Per-row audio/video toggle with individual size previews',
-      'Duplicate detection warns before you waste bandwidth',
-      'Output folder: PlaylistName/01 - Title.mp4, 02 - Title.mp4, etc.',
-      'Settings tool regroups flat files into playlist folders after the fact',
-    ],
-    image: downloadStep2,
-    imageAlt: 'RuForge playlist download with per-row controls',
-  },
-  {
-    heading: 'Batch carousel and queue',
-    body: 'Multi-item batches keep you on the download screen with a centered card carousel: plain progress on each row, MB/s on the active job, and focus that follows what is actually transferring. The corner queue drawer still holds pause, resume, reorder, and replace. Format selection picks video (best muxed) or audio-only (m4a extraction, not a re-encode).',
-    bullets: [
-      'Batch UI persists through playlist picks and Explorer multi-add',
-      'Deno JS runtime auto-install when yt-dlp reports no supported runtime',
-      'Failed music batch tracks retry up to three times at batch end',
-      'Stall watchdog kills idle yt-dlp processes and marks the job failed',
-    ],
-    image: download2,
-    imageAlt: 'RuForge download batch carousel with active jobs',
-  },
-  {
-    heading: 'Post-download processing',
-    body: 'After a successful download, RuForge generates scrubber preview sprites (ffmpeg sprite sheets) so hover previews work immediately in the player. Duplicate outputs from yt-dlp (video-only + muxed for the same id) are cleaned up automatically.',
-    bullets: [
-      'Sprite generation runs in background (toggle off in Settings > Downloads)',
-      'Orphan .fNNN video-only leftovers removed after mux completes',
-      'Library scan picks up new files and deduplicates by source_id',
-      'Processing phase shows "Processing..." in queue row while ffmpeg works',
-    ],
-    image: downloadStep3,
-    imageAlt: 'RuForge download complete with processing indicator',
-  },
-];
+const page = findFeaturePage('downloader')!;
+const sections = await featureSectionsWithImages(page);
 ---
 
-<BaseLayout title="Downloader: persistent queue and playlists" description="Download videos and audio offline with a yt-dlp frontend. Queue survives restarts, supports playlists and audio extraction.">
-  <FeaturePageTemplate
-    title="Downloader"
-    description="Reliable YouTube downloads with real size estimates, playlist folders, audio extraction, and a queue that does not pretend hung jobs are fine."
-    sections={sections}
-  />
+<BaseLayout title={page.metaTitle} description={page.metaDescription}>
+  <FeaturePageTemplate title={page.title} description={page.description} sections={sections} />
 </BaseLayout>

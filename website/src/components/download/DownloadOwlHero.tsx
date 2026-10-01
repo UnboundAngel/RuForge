@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Monitor } from 'lucide-react';
 import { SITE } from '../../lib/site';
 import {
   type DetectedPlatform,
@@ -16,10 +15,8 @@ type DownloadOwlHeroProps = {
 };
 
 function HeroPlatformIcon({ platform }: { platform: DetectedPlatform }) {
-  if (platform === 'mac') {
-    return <Monitor size={18} strokeWidth={1.75} aria-hidden />;
-  }
-  return <PlatformIcon icon={platform === 'linux' ? 'linux' : 'windows'} size={18} />;
+  const icon = platform === 'mac' ? 'apple' : platform === 'linux' ? 'linux' : 'windows';
+  return <PlatformIcon icon={icon} size={18} />;
 }
 
 export default function DownloadOwlHero({

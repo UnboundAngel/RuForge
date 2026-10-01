@@ -18,7 +18,7 @@ function Card({
   return (
     <div
       className={cn(
-        'w-[300px] h-[440px] relative overflow-hidden rounded-[1.35rem]',
+        'w-[300px] h-[372px] relative overflow-hidden rounded-[1.35rem]',
         'shadow-[0_12px_36px_rgb(0_0_0_/_0.25)]',
         className,
       )}
@@ -29,7 +29,7 @@ function Card({
         className="absolute inset-0 w-full h-full object-cover object-top"
         loading="lazy"
       />
-      <div className="absolute left-[9%] right-[9%] top-[62%] bottom-[5%] flex flex-col justify-start pt-6">
+      <div className="absolute left-[9%] right-[9%] top-[63%] bottom-[5%] flex flex-col justify-start">
         <h4 className="text-[1rem] font-bold leading-snug m-0 text-[#2c221e]" style={{ fontFamily: 'var(--font-display)' }}>
           {title}
         </h4>
@@ -75,7 +75,7 @@ function FeatureCardStack({
       </h3>
 
       <a href={href} className="no-underline block">
-        <div className="relative w-[300px] h-[440px]">
+        <div className="relative w-[300px] h-[372px]">
           {limited.map((card, index) => {
             const isFirst = index === 0;
             let xOffset = 0;

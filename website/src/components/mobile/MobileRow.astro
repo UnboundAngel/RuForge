@@ -3,9 +3,10 @@ interface Props {
   href: string;
   title: string;
   meta: string;
+  detail?: string;
 }
 
-const { href, title, meta } = Astro.props;
+const { href, title, meta, detail } = Astro.props;
 const external = href.startsWith('http');
 ---
 
@@ -17,6 +18,7 @@ const external = href.startsWith('http');
   <div class="min-w-0 flex-1">
     <p class="text-base font-semibold text-rf-text">{title}</p>
     <p class="mt-1 truncate text-xs text-rf-text-muted/60">{meta}</p>
+    {detail && <p class="mt-2 line-clamp-2 text-[13px] leading-snug text-rf-text-muted/80">{detail}</p>}
   </div>
   <svg class="shrink-0 text-rf-text-muted/50" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     {

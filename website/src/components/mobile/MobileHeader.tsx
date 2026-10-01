@@ -105,6 +105,7 @@ export default function MobileHeader({ logoSrc }: Props) {
     <>
       {/* One header that morphs from the full-width bar into the floating pill. */}
       <header
+        data-rf-fixed-header
         className={`fixed inset-x-0 top-0 z-[100] h-[76px] ${morph}`}
         style={{
           '--pill-w': `${pillWidth}px`,

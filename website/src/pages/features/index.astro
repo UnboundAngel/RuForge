@@ -6,26 +6,26 @@ import { featureDetailHref } from '../../lib/featurePageData';
 
 const hubs: FeatureHubEntry[] = [
   {
-    eyebrow: 'How downloading works',
+    eyebrow: 'Downloader',
     href: featureDetailHref('downloader'),
     cards: [
       {
-        imageSrc: '/tutorials/downloadstep1.webp',
-        title: 'Paste the link',
+        imageSrc: '/tutorials/hub-dl-1.webp',
+        title: 'Paste a link',
         description:
-          'Drop a YouTube URL into the downloader. RuForge reads title, duration, and format options immediately.',
+          'See the title, length, and file size before you download. Pick video or audio in one click.',
       },
       {
-        imageSrc: '/tutorials/downloadstep2.webp',
-        title: 'Pick your format',
+        imageSrc: '/tutorials/hub-dl-2.webp',
+        title: 'Whole playlists',
         description:
-          'Choose video or audio-only. Size estimates update live. Flip audio-only for real m4a extraction.',
+          'Paste a playlist and choose which videos to keep. Ones you already have are marked.',
       },
       {
-        imageSrc: '/tutorials/downloadstep3.webp',
-        title: 'Batch carousel or queue',
+        imageSrc: '/tutorials/hub-dl-3.webp',
+        title: 'Batches',
         description:
-          'Multi-item batches show a centered card carousel with MB/s on the active row. Single jobs still use the corner drawer and stall watchdog.',
+          'Queue many links at once and watch each one finish, with speed and progress on every item.',
       },
     ],
   },
@@ -34,70 +34,40 @@ const hubs: FeatureHubEntry[] = [
     href: featureDetailHref('media-library'),
     cards: [
       {
-        imageSrc: '/tutorials/medialibrarystep1.webp',
-        title: 'Browse your catalog',
+        imageSrc: '/tutorials/hub-lib-1.webp',
+        title: 'Everything in one place',
         description:
-          'Scan folders, filter by type, and see watch progress on every card. Your library stays on disk with no account sync.',
+          'Every video you downloaded, sorted and searchable. New downloads show up on their own.',
       },
       {
-        imageSrc: '/tutorials/medialibrarystep2.webp',
-        title: 'Playback thumbnails',
+        imageSrc: '/tutorials/hub-lib-2.webp',
+        title: 'Pick up where you left off',
         description:
-          'Progress bars paint on each card using stored playback position. Know what you watched at a glance.',
-      },
-      {
-        imageSrc: '/tutorials/medialibrarystep3.webp',
-        title: 'Delete with confidence',
-        description:
-          'Remove files from disk and the index together. In-flight preview jobs cancel so deletes never block the UI.',
+          'Each card shows how far you got. Continue watching keeps your unfinished videos up front.',
       },
     ],
   },
   {
-    eyebrow: 'Media Player',
+    eyebrow: 'Video Player',
     href: featureDetailHref('player'),
     cards: [
       {
-        imageSrc: '/tutorials/mediaplayerstep1.webp',
-        title: 'Scrub to any moment',
+        imageSrc: '/tutorials/hub-vp-1.webp',
+        title: 'Chapter previews',
         description:
-          'Drag the seeker or hover the chapter bar to jump. Thumbnail previews line up with the playhead.',
+          'Hover the bar to see the chapter name and a frame from that moment, then jump straight there.',
       },
       {
-        imageSrc: '/tutorials/mediaplayerstep2.webp',
-        title: 'Watch without flash',
+        imageSrc: '/tutorials/hub-vp-2.webp',
+        title: 'Skip sponsors',
         description:
-          'Hardware-friendly playback with keyboard shortcuts, volume, and loop. Built for files you already own.',
+          'SponsorBlock skips sponsors, intros, and filler for you, or shows a button so you decide.',
       },
       {
-        imageSrc: '/tutorials/mediaplayerstep3.webp',
-        title: 'See what plays next',
+        imageSrc: '/tutorials/hub-vp-3.webp',
+        title: 'Comments beside the video',
         description:
-          'Folder queue and library order show the next file before you skip. Auto-advance respects your settings.',
-      },
-    ],
-  },
-  {
-    eyebrow: 'SponsorBlock',
-    href: featureDetailHref('sponsorblock'),
-    cards: [
-      {
-        imageSrc: '/tutorials/sponsorstep1.webp',
-        title: 'Skip in one tap',
-        description:
-          'When a segment starts, hit the skip control. RuForge learns your preferences per category over time.',
-      },
-      {
-        imageSrc: '/tutorials/sponsorstep2.webp',
-        title: 'Segments on the bar',
-        description:
-          'Sponsor ranges and chapters paint on the scrubber with extension-aligned colors.',
-      },
-      {
-        imageSrc: '/tutorials/sponsorstep3.webp',
-        title: 'Tune what gets skipped',
-        description:
-          'Toggle categories, intros, and music-offtopic in Playback settings. Hashes stay local.',
+          'Read the comments without leaving the player. They are saved with the video for later.',
       },
     ],
   },
@@ -106,19 +76,19 @@ const hubs: FeatureHubEntry[] = [
     href: featureDetailHref('music'),
     cards: [
       {
-        imageSrc: '/tutorials/musicstep1.webp',
+        imageSrc: '/tutorials/hub-music-1.webp',
         title: 'Your music home',
         description:
           'Quick picks and your artists, built from the songs you already downloaded. Filter by Relax or Focus.',
       },
       {
-        imageSrc: '/tutorials/musicstep2.webp',
+        imageSrc: '/tutorials/hub-music-2.webp',
         title: 'Lyrics that follow along',
         description:
           'The current line lights up as the song plays, with the cover art and related songs beside it.',
       },
       {
-        imageSrc: '/tutorials/musicstep3.webp',
+        imageSrc: '/tutorials/hub-music-3.webp',
         title: 'Artist pages',
         description:
           'Every artist gets a page with their albums, genres, and a short bio from MusicBrainz and Wikipedia.',
@@ -130,58 +100,28 @@ const hubs: FeatureHubEntry[] = [
     href: featureDetailHref('mini-player'),
     cards: [
       {
-        imageSrc: '/tutorials/miniplayerstep1.webp',
-        title: 'Pop out from the title bar',
+        imageSrc: '/tutorials/hub-mini-1.webp',
+        title: 'Keep watching while you work',
         description:
-          'Detach playback into a borderless corner window using the mini player control in the top-right chrome.',
+          'A small window that stays on top of your other apps, with the full controls.',
       },
       {
-        imageSrc: '/tutorials/miniplayerstep2.webp',
-        title: 'Large mode with library',
+        imageSrc: '/tutorials/hub-mini-2.webp',
+        title: 'Any size you want',
         description:
-          'Resize to the comfortable large layout and pick the next file from the bottom media row.',
-      },
-      {
-        imageSrc: '/tutorials/miniplayerstep3.webp',
-        title: 'Shrink out of the way',
-        description:
-          'Drop to the smallest height for a marquee title and tight controls. Stays readable on your workspace.',
-      },
-    ],
-  },
-  {
-    eyebrow: 'Advanced Settings',
-    href: featureDetailHref('settings'),
-    cards: [
-      {
-        imageSrc: '/tutorials/settingsstep1.webp',
-        title: 'General preferences',
-        description:
-          'Set theme, accent, paths, and startup behavior. Everything persists locally for both windows.',
-      },
-      {
-        imageSrc: '/tutorials/settingsstep2.webp',
-        title: 'Download behavior',
-        description:
-          'Parallel jobs, output folders, cookie sync, and automatic scrubber previews.',
-      },
-      {
-        imageSrc: '/tutorials/settingsstep3.webp',
-        title: 'Playback controls',
-        description:
-          'Auto-advance, prefetch, SponsorBlock tree, and ReplayGain placeholders live under Playback.',
+          'Shrink it from a full player down to a thin bar with just play and next.',
       },
     ],
   },
 ];
 ---
 
-<BaseLayout title="Features: RuForge open-source media library" description="What RuForge ships today: music playlists, batch download carousel, Deno auto-install, chapter scrubber, SponsorBlock, and mini player.">
+<BaseLayout title="Features: RuForge open-source media library" description="What RuForge does today: a YouTube downloader, a local library with watch progress, a video player with chapters and SponsorBlock, music mode, and a mini player.">
   <div class="features-index rf-container">
     <header class="features-index__hero">
       <h1 class="features-index__title">Everything you need. Offline.</h1>
       <p class="features-index__desc">
-        Open-source Tauri app: yt-dlp downloads, a local media library, and playback with chapters and SponsorBlock.
+        A free, open-source app for Windows: download from YouTube, keep it all in a local library, and watch with chapters and SponsorBlock.
       </p>
     </header>
 
@@ -191,6 +131,7 @@ const hubs: FeatureHubEntry[] = [
 
 <style>
   .features-index {
+    max-width: 72rem;
     padding-top: 1rem;
     padding-bottom: 6rem;
   }

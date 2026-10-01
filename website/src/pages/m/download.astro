@@ -12,6 +12,7 @@ import {
   releaseNotesUrl,
 } from '../../lib/downloadRelease';
 import { softwareApplicationSchema } from '../../lib/structuredData';
+import { APPLE_ICON_PATH } from '../../lib/downloadPlatformIcons';
 
 const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
 const version = SITE.latestVersion;
@@ -91,10 +92,8 @@ const releaseUrl = releaseNotesUrl(version);
         </li>
         <li class="flex items-center justify-between px-4 py-3.5">
           <div class="flex items-center gap-3">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="text-rf-text-muted/60">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="text-rf-text-muted/60">
+              <path d={APPLE_ICON_PATH} />
             </svg>
             <span class="text-[15px] font-medium text-rf-text-muted/70">macOS</span>
           </div>

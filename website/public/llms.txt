@@ -16,12 +16,10 @@ RuForge uses yt-dlp as the download engine and FFmpeg for media processing. It s
 ## Feature pages
 
 - [Downloader](https://ruforge.app/features/downloader): Persistent download queue, batch carousel hero, playlists, Deno auto-install, audio-only mode
-- [Media library](https://ruforge.app/features/media-library): Local gallery with auto-scan, music albums, Now Playing, and search
-- [Player](https://ruforge.app/features/player): Video and audio playback with chapter navigation
-- [SponsorBlock](https://ruforge.app/features/sponsorblock): Automatic sponsor segment skip on downloaded files
-- [Mini player](https://ruforge.app/features/mini-player): Compact floating player window
-- [Settings](https://ruforge.app/features/settings): Downloads, library paths, player behavior
-
+- [Media library](https://ruforge.app/features/media-library): Local library with watch progress, Continue watching, and In progress and Watched tabs
+- [Music mode](https://ruforge.app/features/music): Offline music player with lyrics, albums, artists, and playlists
+- [Video player](https://ruforge.app/features/player): Chapter previews, SponsorBlock skipping, and saved comments
+- [Mini player](https://ruforge.app/features/mini-player): Small always-on-top window with four sizes
 ## Getting started guides
 
 - [Download and install](https://ruforge.app/docs/install): First-run setup

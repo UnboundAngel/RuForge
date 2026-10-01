@@ -2,12 +2,14 @@
 interface Props {
   /** Unique per page so the arc path ids do not collide. */
   id: string;
+  top?: string;
+  bottom?: string;
 }
 
-const { id } = Astro.props;
+const { id, top = 'open source', bottom = 'runs on your pc' } = Astro.props;
 ---
 
-<svg class="ink-stamp" viewBox="0 0 200 200" role="img" aria-label="open source, runs on your PC">
+<svg class="ink-stamp" viewBox="0 0 200 200" role="img" aria-label={`${top}, ${bottom}`}>
   <defs>
     <path id={`${id}-arc-top`} d="M 30,100 A 70,70 0 0 1 170,100" />
     <path id={`${id}-arc-bottom`} d="M 18,100 A 82,82 0 0 0 182,100" />
@@ -15,10 +17,10 @@ const { id } = Astro.props;
   <circle cx="100" cy="100" r="93" fill="none" stroke="currentColor" stroke-width="2.5" />
   <circle cx="100" cy="100" r="60" fill="none" stroke="currentColor" stroke-width="1.25" />
   <text class="ink-stamp__ring">
-    <textPath href={`#${id}-arc-top`} startOffset="50%" text-anchor="middle">open source</textPath>
+    <textPath href={`#${id}-arc-top`} startOffset="50%" text-anchor="middle">{top}</textPath>
   </text>
   <text class="ink-stamp__ring">
-    <textPath href={`#${id}-arc-bottom`} startOffset="50%" text-anchor="middle">runs on your pc</textPath>
+    <textPath href={`#${id}-arc-bottom`} startOffset="50%" text-anchor="middle">{bottom}</textPath>
   </text>
   <text class="ink-stamp__mark" x="100" y="108" text-anchor="middle">RuForge</text>
 </svg>

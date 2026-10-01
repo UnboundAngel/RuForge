@@ -274,6 +274,7 @@ function DocsTechIcon({
 }
 
 function featuredHref(sectionId: NavSectionId, item: NavFeaturedItem): string {
+  if (item.href) return item.href;
   if (sectionId === 'help' && item.slug === 'getting-started') {
     return HELP_FEATURED_HREF;
   }
@@ -309,6 +310,18 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
   const featuredAside =
     config.layout === 'links-featured-row' ? (
       <div className="rf-mega-menu-featured rf-scrollbar grid max-w-full shrink-0 grid-cols-2 gap-2.5 pl-1">
+        {config.featured.map((item) => (
+          <FeaturedVisualCard
+            key={item.slug}
+            item={item}
+            href={featuredHref(sectionId, item)}
+            className={cn('h-auto min-h-0 w-auto', stacked.card)}
+            imageClassName={stacked.image}
+          />
+        ))}
+      </div>
+    ) : config.layout === 'featured-grid' ? (
+      <div className="rf-mega-menu-featured grid max-w-full grid-cols-3 gap-2.5 max-[57rem]:grid-cols-2">
         {config.featured.map((item) => (
           <FeaturedVisualCard
             key={item.slug}
@@ -356,12 +369,14 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
           ? 'gap-x-10 grid-cols-[minmax(0,1.55fr)_minmax(10.5rem,13.25rem)]'
           : config.layout === 'links-featured-row'
             ? 'gap-x-6 grid-cols-[minmax(14rem,1fr)_minmax(0,1.2fr)]'
-            : 'gap-x-10 grid-cols-[minmax(0,1fr)_auto]',
+            : config.layout === 'featured-grid'
+              ? 'grid-cols-1'
+              : 'gap-x-10 grid-cols-[minmax(0,1fr)_auto]',
         config.panelClass,
         stacked.panel,
       )}
     >
-      {linkColumns}
+      {config.layout !== 'featured-grid' && linkColumns}
       <div className="min-h-0">
         {config.layout === 'links-icons' ? <DocsBuiltWithRail /> : featuredAside}
       </div>

@@ -35,6 +35,9 @@ const canonicalUrl = new URL(desktopPathname, SITE.url).href;
   <body class="flex min-h-screen flex-col bg-rf-bg text-rf-text antialiased font-sans">
     <slot />
     <script>
+      import { initSmoothAnchors } from '../lib/smoothAnchors';
+      initSmoothAnchors();
+
       let h: any = null;
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 

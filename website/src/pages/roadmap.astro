@@ -1,12 +1,20 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import RoadmapFieldNotes from '../components/RoadmapFieldNotes';
+import InkStamp from '../components/InkStamp.astro';
 import { SITE } from '../lib/site';
-import { loadRoadmapEntries, transformRoadmapItems } from '../lib/roadmapFieldNotes';
+import {
+  loadRoadmapEntries,
+  priorityArcDasharray,
+  priorityLabel,
+  transformRoadmapItems,
+} from '../lib/roadmapFieldNotes';
 import { readNextVersion } from '../lib/roadmapNextVersion';
 
 const items = transformRoadmapItems(loadRoadmapEntries());
 const nextVersion = readNextVersion();
+const building = items.filter((item) => item.status === 'progress');
+const readyCount = items.filter((item) => item.status === 'unreleased').length;
 ---
 
 <BaseLayout
@@ -21,23 +29,6 @@ const nextVersion = readNextVersion();
 
   <section class="rf-roadmap-hero">
     <div class="rf-roadmap-hero-inner">
-      <span class="rf-roadmap-page-eyebrow">
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"></path>
-          <path d="M9 3v15M15 6v15"></path>
-        </svg>
-        Roadmap
-      </span>
       <h1 class="rf-roadmap-hero-title">
         <span class="rf-roadmap-hero-line">what's coming</span>
         <span class="rf-roadmap-hero-hand">
@@ -61,27 +52,59 @@ const nextVersion = readNextVersion();
         </span>
       </h1>
       <p class="rf-roadmap-hero-copy">
-        everything RuForge has shipped, what's being built now, and what's planned after that<br />
-        priorities can shift as things come up
+        everything RuForge has shipped, what's being built now, and what comes after that
       </p>
-      <a href={SITE.discussions} class="rf-roadmap-ghost-cta no-underline">
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
-        </svg>
-        suggest a feature
-      </a>
     </div>
+
+    {building.length > 0 && (
+      <aside class="rf-roadmap-now" aria-labelledby="roadmap-now-label">
+        <div class="rf-roadmap-now-stamp">
+          <InkStamp id="roadmap-now-stamp" top="work in progress" bottom="open source" />
+        </div>
+        <p id="roadmap-now-label" class="rf-roadmap-now-label">being built right now</p>
+        <ul class="rf-roadmap-now-list">
+          {building.map((item) => (
+            <li class="rf-roadmap-now-item">
+              <span
+                class={`rf-roadmap-priority-trig rf-roadmap-priority-trig--${item.priority} rf-roadmap-priority-trig--lead`}
+                tabindex="0"
+                role="img"
+                aria-label={`Priority: ${priorityLabel(item.priority)}`}
+              >
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <circle class="rf-roadmap-priority-track" cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="2" />
+                  <circle
+                    class="rf-roadmap-priority-arc"
+                    cx="8"
+                    cy="8"
+                    r="5.5"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-dasharray={priorityArcDasharray(item.priority)}
+                    stroke-dashoffset="-8.6"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <span class="rf-roadmap-priority-tt" role="tooltip">{priorityLabel(item.priority)} priority</span>
+              </span>
+              <span class="rf-roadmap-now-body">
+                <span class="rf-roadmap-now-title">{item.title}</span>
+                <span class="rf-roadmap-now-area">{item.area}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        {readyCount > 0 && (
+          <a href="#roadmap-ready" class="rf-roadmap-now-next no-underline">
+            <span>{readyCount} more {readyCount === 1 ? 'is' : 'are'} finished and coming{nextVersion ? ` in v${nextVersion}` : ' next'}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 5v14M19 12l-7 7-7-7"></path>
+            </svg>
+          </a>
+        )}
+      </aside>
+    )}
   </section>
 
-  <RoadmapFieldNotes client:load items={items} nextVersion={nextVersion} />
+  <RoadmapFieldNotes client:load items={items} nextVersion={nextVersion} hideProgress={building.length > 0} suggestHref={SITE.discussions} />
 </BaseLayout>

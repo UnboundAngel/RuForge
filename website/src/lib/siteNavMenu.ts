@@ -7,6 +7,8 @@ export interface NavFeaturedItem {
   title: string;
   subtitle?: string;
   badge?: string;
+  /** Overrides the section page link. */
+  href?: string;
   image: string;
   variant: NavFeaturedVariant;
   /** Animated shadow overlay color for featured cards. */
@@ -20,7 +22,7 @@ export interface NavMenuConfig {
   /** Slugs omitted from the text link columns (shown as featured cards instead). */
   featuredSlugs: string[];
   featured: NavFeaturedItem[];
-  layout: 'links-featured-row' | 'links-featured-pair' | 'links-featured-single' | 'links-icons';
+  layout: 'links-featured-row' | 'links-featured-pair' | 'links-featured-single' | 'links-icons' | 'featured-grid';
   /** Locks mega-menu size so Radix viewport does not animate/collapse. */
   panelClass: string;
   /** Below this window width the panel stacks, takes the window width and drops card images. */
@@ -29,9 +31,9 @@ export interface NavMenuConfig {
 
 export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   features: {
-    featuredSlugs: ['downloader', 'media-library', 'explorer', 'music'],
-    layout: 'links-featured-row',
-    panelClass: 'w-[54rem] min-h-[15.5rem]',
+    featuredSlugs: ['downloader', 'media-library', 'player', 'music', 'mini-player'],
+    layout: 'featured-grid',
+    panelClass: 'w-[44rem] min-h-[15.5rem]',
     stackBelow: '57rem',
     featured: [
       {
@@ -49,9 +51,9 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
         shadowColor: 'rgba(140, 100, 70, 1)',
       },
       {
-        slug: 'explorer',
-        title: 'Explorer',
-        image: '/tutorials/explorer.webp',
+        slug: 'player',
+        title: 'Video Player',
+        image: '/tutorials/nav-player.webp',
         variant: 'hero',
         shadowColor: 'rgba(120, 90, 60, 1)',
       },
@@ -61,6 +63,22 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
         image: '/tutorials/music-mode.webp',
         variant: 'hero',
         shadowColor: 'rgba(150, 115, 65, 1)',
+      },
+      {
+        slug: 'mini-player',
+        title: 'Mini Player',
+        image: '/tutorials/nav-mini.webp',
+        variant: 'hero',
+        shadowColor: 'rgba(130, 95, 65, 1)',
+      },
+      {
+        slug: 'all',
+        title: 'All features',
+        subtitle: 'Everything RuForge does, on one page.',
+        href: '/features',
+        image: '',
+        variant: 'hero',
+        shadowColor: 'rgba(160, 110, 60, 1)',
       },
     ],
   },

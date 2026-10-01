@@ -32,36 +32,22 @@ export const NAV_SECTIONS: NavSection[] = [
         slug: 'downloader',
         title: 'YouTube downloader',
         description:
-          'Paste URLs, preview sizes, enqueue jobs, and save videos or audio with yt-dlp. Resumable queue with stall detection.',
-        outline: ['URL intake', 'Format and size preview', 'Queue and hero progress', 'Processing and finish'],
-      },
-      {
-        slug: 'playlists',
-        title: 'Playlist downloads',
-        description:
-          'Download full playlists into numbered folders, toggle audio per row, and see duplicate warnings before you start.',
-        outline: ['Playlist URL detection', 'Per-video audio toggle', 'Ordered subfolders', 'Regroup flat files'],
-      },
-      {
-        slug: 'download-queue',
-        title: 'Download queue',
-        description:
-          'Batch carousel hero for multi-item downloads, corner queue drawer for controls, and stall watchdog while you keep browsing.',
-        outline: ['Batch carousel', 'Floating drawer', 'Job controls', 'Stall watchdog'],
+          'Download videos, audio, and whole playlists. See the file size first and skip what you already have.',
+        outline: ['See what you are getting first', 'Whole playlists', 'Download a lot at once'],
       },
       {
         slug: 'media-library',
         title: 'Media library',
         description:
-          'Scan download and custom folders, stack cards, playback progress, and quick open in the player.',
-        outline: ['Library roots', 'Scan and dedupe', 'Stacks and metadata', 'Replace and delete'],
+          'Everything you downloaded in one place, with your place saved in every video.',
+        outline: ['Everything in one place', 'Pick up where you left off'],
       },
       {
         slug: 'player',
         title: 'Video player',
         description:
-          'Watch local files with chapters, scrubber previews, SponsorBlock, subtitles, and a frosted control dock.',
-        outline: ['Playback controls', 'Chapter scrubber', 'Scrubber previews', 'Auto-advance'],
+          'Watch your downloads with chapter previews, SponsorBlock skipping, and the comments beside the video.',
+        outline: ['Chapters', 'SponsorBlock', 'Comments'],
       },
       {
         slug: 'music',
@@ -74,57 +60,8 @@ export const NAV_SECTIONS: NavSection[] = [
         slug: 'mini-player',
         title: 'Mini player',
         description:
-          'Pop out a compact always-on-top window with library browse, compact layouts, and sync back to the main app.',
-        outline: ['Pop-out window', 'Size layouts', 'Library strip', 'Cross-window sync'],
-      },
-      {
-        slug: 'sponsorblock',
-        title: 'SponsorBlock',
-        description:
-          'Skip segments, chapter colors, and POI markers aligned with the browser extension, plus adaptive learning.',
-        outline: ['Segment fetch', 'Skip button', 'Scrub overlays', 'Settings tree'],
-      },
-      {
-        slug: 'chapters',
-        title: 'Chapters and previews',
-        description:
-          'Segmented chapter bar, hover thumbnails, and optional ffmpeg sprite sheets on download or on demand.',
-        outline: ['yt-dlp chapters', 'Chapter navigation', 'Hover previews', 'Auto sprites'],
-      },
-      {
-        slug: 'subtitles',
-        title: 'Custom subtitles',
-        description:
-          'VTT cues rendered over the video with drag positioning that persists and stays above the scrub strip.',
-        outline: ['Cue overlay', 'Drag and persist', 'Main and mini player'],
-      },
-      {
-        slug: 'explorer',
-        title: 'Explorer',
-        description:
-          'Embedded webview for cookie and session flows when age-restricted or members-only content needs a login, not general browsing.',
-        outline: ['When to use it', 'Title bar navigation', 'Cookie export', 'Layout constraints'],
-      },
-      {
-        slug: 'audio-only',
-        title: 'Audio-only downloads',
-        description:
-          'Extract m4a audio without pulling a full video stream, with a dedicated audio hero visualizer when you play.',
-        outline: ['Download toggle', 'Format selection', 'Library badge', 'LED visualizer'],
-      },
-      {
-        slug: 'auto-updater',
-        title: 'Auto-updater',
-        description:
-          'Signed Windows updates with a teaser card, structured post-install notes, and GitHub Release artifacts.',
-        outline: ['Check on startup', 'Download and install', 'What is new modal', 'Signing'],
-      },
-      {
-        slug: 'settings',
-        title: 'Settings',
-        description:
-          'Configure downloads, playback, SponsorBlock categories, auto-updates, and power-user debugging tools.',
-        outline: ['General', 'Downloads', 'Playback', 'Advanced and debugging'],
+          'Keep a video playing in a small window on top of your other apps.',
+        outline: ['Keep watching while you work', 'As big or as small as you want'],
       },
     ],
   },
