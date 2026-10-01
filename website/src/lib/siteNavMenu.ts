@@ -13,6 +13,9 @@ export interface NavFeaturedItem {
   shadowColor?: string;
 }
 
+/** Window widths (panel width plus 3rem) below which a mega panel stacks. */
+export type NavStackBreakpoint = '34rem' | '41rem' | '43rem' | '45rem' | '57rem';
+
 export interface NavMenuConfig {
   /** Slugs omitted from the text link columns (shown as featured cards instead). */
   featuredSlugs: string[];
@@ -20,6 +23,8 @@ export interface NavMenuConfig {
   layout: 'links-featured-row' | 'links-featured-pair' | 'links-featured-single' | 'links-icons';
   /** Locks mega-menu size so Radix viewport does not animate/collapse. */
   panelClass: string;
+  /** Below this window width the panel stacks, takes the window width and drops card images. */
+  stackBelow: NavStackBreakpoint;
 }
 
 export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
@@ -27,6 +32,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
     featuredSlugs: ['downloader', 'media-library', 'explorer', 'music'],
     layout: 'links-featured-row',
     panelClass: 'w-[54rem] min-h-[15.5rem]',
+    stackBelow: '57rem',
     featured: [
       {
         slug: 'downloader',
@@ -62,6 +68,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
     featuredSlugs: ['about', 'open-source'],
     layout: 'links-featured-pair',
     panelClass: 'w-[31rem] min-h-[14rem]',
+    stackBelow: '34rem',
     featured: [
       {
         slug: 'about',
@@ -85,6 +92,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
     featuredSlugs: ['getting-started'],
     layout: 'links-featured-single',
     panelClass: 'w-[40rem] min-h-[14.5rem]',
+    stackBelow: '43rem',
     featured: [
       {
         slug: 'getting-started',
@@ -101,6 +109,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
     featuredSlugs: [],
     layout: 'links-featured-single',
     panelClass: 'w-[38rem] min-h-[14.5rem]',
+    stackBelow: '41rem',
     featured: [
       {
         slug: 'getting-started',
@@ -116,6 +125,7 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
     featuredSlugs: [],
     layout: 'links-icons',
     panelClass: 'w-[42rem] min-h-[16rem]',
+    stackBelow: '45rem',
     featured: [],
   },
 };

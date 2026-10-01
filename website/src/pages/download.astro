@@ -9,9 +9,6 @@ import {
 } from '../lib/downloadRelease';
 import { softwareApplicationSchema } from '../lib/structuredData';
 
-const params = Astro.url.searchParams;
-const autoStart = params.get('start') === '1';
-
 const version = SITE.latestVersion;
 const filename = windowsInstallerFilename(version);
 const fetchUrls = installerFetchUrls(version);
@@ -36,7 +33,6 @@ const directDownloadUrl = directInstallerDownloadUrl(version);
     fetchUrls={fetchUrls}
     directDownloadUrl={directDownloadUrl}
     filename={filename}
-    autoStart={autoStart}
     troubleHref={SITE.releases}
   />
 </BaseLayout>

@@ -246,10 +246,18 @@ export default function DownloadOwlFlow({
     [clearTimers, directDownloadUrl, fetchUrls, showFlash],
   );
 
+  // The page is prerendered, so ?start=1 only exists in the browser URL.
   const startedRef = useRef(false);
   useEffect(() => {
-    if (startedRef.current || !autoStart) return;
+    if (startedRef.current) return;
+    const url = new URL(window.location.href);
+    const requested = url.searchParams.get('start') === '1';
+    if (!autoStart && !requested) return;
     startedRef.current = true;
+    if (requested) {
+      url.searchParams.delete('start');
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    }
     void runDownload(false);
   }, [autoStart, runDownload]);
 

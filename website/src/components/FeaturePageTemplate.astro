@@ -270,4 +270,24 @@ const { title, description, sections } = Astro.props;
     color: var(--color-rf-text);
   }
 
+  @media (max-width: 47.99rem) {
+    .feature-page__sections {
+      gap: 4rem;
+    }
+
+    .feature-page__row,
+    .feature-page__row--reverse {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 1.75rem;
+    }
+
+    .feature-page__row--reverse .feature-page__copy,
+    .feature-page__row--reverse .feature-page__figure {
+      order: 0;
+    }
+
+    .feature-page__copy {
+      max-width: none;
+    }
+  }
 </style>

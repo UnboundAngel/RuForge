@@ -5,6 +5,7 @@ import { DOWNLOAD_PAGE } from '../lib/site';
 <a
   href={`${DOWNLOAD_PAGE}?start=1`}
   class="header-download-btn no-underline"
+  aria-label="Download RuForge"
   data-header-download
 >
   <span class="header-download-btn__icon" aria-hidden="true">
@@ -106,5 +107,17 @@ import { DOWNLOAD_PAGE } from '../lib/site';
   .header-download-btn__text {
     display: inline;
     margin-left: 0.5rem;
+  }
+
+  @media (max-width: 44.99rem) {
+    .header-download-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+      padding: 0;
+    }
+
+    .header-download-btn__text {
+      display: none;
+    }
   }
 </style>

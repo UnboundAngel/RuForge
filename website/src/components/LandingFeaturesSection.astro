@@ -203,7 +203,7 @@ import { landingFeatureIntro, landingFeatureRows } from '../lib/landingFeatures'
 
   .landing-features__frame {
     position: relative;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 16 / 10;
     overflow: hidden;
     border-radius: 14px;
     border: 1px solid var(--features-border);
@@ -219,7 +219,36 @@ import { landingFeatureIntro, landingFeatureRows } from '../lib/landingFeatures'
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center top;
+    object-position: center;
   }
 
+  @media (max-width: 44.99rem) {
+    .landing-features {
+      padding-top: 5rem;
+      padding-bottom: 5rem;
+    }
+
+    .landing-features__intro {
+      margin-bottom: 3.5rem;
+    }
+
+    .landing-features__rows {
+      gap: 4.5rem;
+    }
+
+    .landing-features__row,
+    .landing-features__row--reverse {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 2rem;
+    }
+
+    .landing-features__row--reverse .landing-features__copy,
+    .landing-features__row--reverse .landing-features__figure {
+      order: 0;
+    }
+
+    .landing-features__copy {
+      max-width: none;
+    }
+  }
 </style>

@@ -6,6 +6,7 @@ import {
   HELP_FEATURED_HREF,
   NAV_MENU_CONFIG,
   type NavFeaturedItem,
+  type NavStackBreakpoint,
 } from '../lib/siteNavMenu';
 import { docsBuiltWithItems, techTickerSvgPaths } from '../lib/techTickerIcons';
 import type { TechTickerIconId } from '../lib/techTickerIcons';
@@ -26,6 +27,53 @@ const featuredWidth: Record<NavFeaturedItem['variant'], string> = {
   portrait: 'w-[9.75rem]',
   landscape: 'w-[12.5rem]',
   hero: 'w-[13rem]',
+};
+
+// Spelled out per breakpoint because Tailwind only emits classes it finds as literals.
+const STACKED: Record<
+  NavStackBreakpoint,
+  { panel: string; links: string; card: string; image: string; pairAside: string; pairCard: string }
+> = {
+  '34rem': {
+    panel: 'max-[34rem]:w-[calc(100vw-3rem)] max-[34rem]:grid-cols-1 max-[34rem]:gap-y-5',
+    links: 'max-[34rem]:grid-cols-2 max-[34rem]:gap-x-5',
+    card: 'max-[34rem]:min-h-0 max-[34rem]:pb-1.5',
+    image: 'max-[34rem]:hidden',
+    pairAside: 'max-[34rem]:flex-row max-[34rem]:pl-0',
+    pairCard: 'max-[34rem]:w-auto max-[34rem]:min-w-0',
+  },
+  '41rem': {
+    panel: 'max-[41rem]:w-[calc(100vw-3rem)] max-[41rem]:grid-cols-1 max-[41rem]:gap-y-5',
+    links: 'max-[41rem]:grid-cols-2 max-[41rem]:gap-x-5',
+    card: 'max-[41rem]:min-h-0 max-[41rem]:pb-1.5',
+    image: 'max-[41rem]:hidden',
+    pairAside: 'max-[41rem]:flex-row max-[41rem]:pl-0',
+    pairCard: 'max-[41rem]:w-auto max-[41rem]:min-w-0',
+  },
+  '43rem': {
+    panel: 'max-[43rem]:w-[calc(100vw-3rem)] max-[43rem]:grid-cols-1 max-[43rem]:gap-y-5',
+    links: 'max-[43rem]:grid-cols-2 max-[43rem]:gap-x-5',
+    card: 'max-[43rem]:min-h-0 max-[43rem]:pb-1.5',
+    image: 'max-[43rem]:hidden',
+    pairAside: 'max-[43rem]:flex-row max-[43rem]:pl-0',
+    pairCard: 'max-[43rem]:w-auto max-[43rem]:min-w-0',
+  },
+  '45rem': {
+    panel: 'max-[45rem]:w-[calc(100vw-3rem)] max-[45rem]:grid-cols-1 max-[45rem]:gap-y-5',
+    links: 'max-[45rem]:grid-cols-2 max-[45rem]:gap-x-5',
+    card: 'max-[45rem]:min-h-0 max-[45rem]:pb-1.5',
+    image: 'max-[45rem]:hidden',
+    pairAside: 'max-[45rem]:flex-row max-[45rem]:pl-0',
+    pairCard: 'max-[45rem]:w-auto max-[45rem]:min-w-0',
+  },
+  '57rem': {
+    panel: 'max-[57rem]:w-[calc(100vw-3rem)] max-[57rem]:grid-cols-1 max-[57rem]:gap-y-5',
+    links: 'max-[57rem]:grid-cols-2 max-[57rem]:gap-x-5',
+    card: 'max-[57rem]:min-h-0 max-[57rem]:pb-1.5',
+    image: 'max-[57rem]:hidden',
+    pairAside: 'max-[57rem]:flex-row max-[57rem]:pl-0',
+    pairCard: 'max-[57rem]:w-auto max-[57rem]:min-w-0',
+  },
 };
 
 function MenuTextLink({
@@ -54,10 +102,12 @@ function FeaturedVisualCard({
   item,
   href,
   className: extraClassName,
+  imageClassName,
 }: {
   item: NavFeaturedItem;
   href: string;
   className?: string;
+  imageClassName?: string;
 }) {
   const widthClass = featuredWidth[item.variant];
   const showImage = Boolean(item.image);
@@ -81,7 +131,7 @@ function FeaturedVisualCard({
         </div>
 
         {showImage && item.variant === 'hero' && (
-          <div className="relative z-10 mt-auto min-h-0 flex-1 px-3.5 pb-3.5 pt-1">
+          <div className={cn('relative z-10 mt-auto min-h-0 flex-1 px-3.5 pb-3.5 pt-1', imageClassName)}>
             <div
               className="h-full min-h-[4.5rem] w-full overflow-hidden rounded-lg border border-[#2a2420]/80 bg-[#120e0c] bg-cover bg-top transition-transform duration-200 ease-out group-hover:scale-[1.01]"
               style={{ backgroundImage: `url(${item.image})` }}
@@ -92,7 +142,10 @@ function FeaturedVisualCard({
 
         {showImage && item.variant === 'portrait' && (
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 top-[2.75rem] opacity-[0.38] transition-opacity duration-200 group-hover:opacity-[0.52]"
+            className={cn(
+              'pointer-events-none absolute inset-x-0 bottom-0 top-[2.75rem] opacity-[0.38] transition-opacity duration-200 group-hover:opacity-[0.52]',
+              imageClassName,
+            )}
             style={{
               backgroundImage: `url(${item.image})`,
               backgroundSize: 'cover',
@@ -232,12 +285,13 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
   const config = NAV_MENU_CONFIG[sectionId];
   const linkPages = section.pages.filter((p) => !config.featuredSlugs.includes(p.slug));
   const twoCols = linkPages.length > 5;
+  const stacked = STACKED[config.stackBelow];
 
   const linkColumns = (
     <ul
       className={cn(
         'grid min-w-0 content-start gap-y-0.5',
-        twoCols ? 'grid-cols-2 gap-x-5' : 'grid-cols-1',
+        twoCols ? 'grid-cols-2 gap-x-5' : cn('grid-cols-1', stacked.links),
       )}
     >
       {linkPages.map((page: SitePage) => {
@@ -260,18 +314,25 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
             key={item.slug}
             item={item}
             href={featuredHref(sectionId, item)}
-            className="h-auto min-h-0 w-auto"
+            className={cn('h-auto min-h-0 w-auto', stacked.card)}
+            imageClassName={stacked.image}
           />
         ))}
       </div>
     ) : config.layout === 'links-featured-pair' ? (
-      <div className="rf-mega-menu-featured rf-scrollbar flex h-full max-w-full shrink-0 flex-col gap-2.5 pl-1">
+      <div
+        className={cn(
+          'rf-mega-menu-featured rf-scrollbar flex h-full max-w-full shrink-0 flex-col gap-2.5 pl-1',
+          stacked.pairAside,
+        )}
+      >
         {config.featured.map((item) => (
           <FeaturedVisualCard
             key={item.slug}
             item={item}
             href={featuredHref(sectionId, item)}
-            className="min-h-0 flex-1"
+            className={cn('min-h-0 flex-1', stacked.pairCard, stacked.card)}
+            imageClassName={stacked.image}
           />
         ))}
       </div>
@@ -280,7 +341,8 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
         <FeaturedVisualCard
           item={config.featured[0]}
           href={featuredHref(sectionId, config.featured[0])}
-          className="h-auto min-h-[8.25rem] w-full"
+          className={cn('h-auto min-h-[8.25rem] w-full', stacked.card)}
+          imageClassName={stacked.image}
         />
       </div>
     ) : null;
@@ -296,6 +358,7 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
             ? 'gap-x-6 grid-cols-[minmax(14rem,1fr)_minmax(0,1.2fr)]'
             : 'gap-x-10 grid-cols-[minmax(0,1fr)_auto]',
         config.panelClass,
+        stacked.panel,
       )}
     >
       {linkColumns}
@@ -309,7 +372,7 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
 
 export default function SiteHeaderNav() {
   return (
-    <NavigationMenu className="max-w-none flex-1 justify-center flex">
+    <NavigationMenu className="static max-w-none flex-1 justify-center flex">
       <NavigationMenuList>
         {NAV_SECTIONS.map((section) => (
           <NavigationMenuItem key={section.id}>

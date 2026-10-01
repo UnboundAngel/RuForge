@@ -36,8 +36,9 @@ NavigationMenuList.displayName = NavigationMenuPrimitive.List.displayName;
 const NavigationMenuItem = NavigationMenuPrimitive.Item;
 
 const navigationMenuTriggerStyle = cn(
-  'rf-header-nav-trigger group inline-flex h-10 items-center justify-center px-4',
-  'text-xs font-semibold tracking-[0.12em] uppercase',
+  'rf-header-nav-trigger group inline-flex h-10 items-center justify-center whitespace-nowrap',
+  'px-1.5 min-[45rem]:px-3 min-[56rem]:px-4',
+  'text-xs font-semibold tracking-[0.08em] min-[45rem]:tracking-[0.12em] uppercase',
   'hover:bg-transparent focus:bg-transparent data-[state=open]:bg-transparent',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-accent/30',
   'disabled:pointer-events-none disabled:opacity-50',
@@ -63,7 +64,10 @@ const NavigationMenuContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <NavigationMenuPrimitive.Content
     ref={ref}
-    className={cn('rf-nav-content left-0 top-0 absolute w-auto', className)}
+    className={cn(
+      'rf-nav-content rf-scrollbar left-0 top-0 absolute w-auto max-h-[calc(100dvh-6rem)] overflow-x-hidden overflow-y-auto',
+      className,
+    )}
     {...props}
   />
 ));

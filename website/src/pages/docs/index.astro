@@ -59,6 +59,13 @@ import { DOCS_TREE } from '../../lib/docsTree';
     padding-bottom: 4rem;
   }
 
+  @media (max-width: 47.99rem) {
+    .docs-home-layout {
+      flex-direction: column;
+      gap: 0;
+    }
+  }
+
   .docs-home__title {
     margin: 0 0 0.75rem;
     font-family: var(--font-display);
@@ -79,7 +86,7 @@ import { DOCS_TREE } from '../../lib/docsTree';
 
   .docs-home__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
     gap: 1rem;
   }
 

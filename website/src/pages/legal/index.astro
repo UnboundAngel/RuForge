@@ -19,13 +19,13 @@ const docs = LEGAL_LINKS.map((doc) => ({ ...doc, ...legalDocInfo(doc.file) }));
       </p>
     </header>
 
-    <ul class="grid grid-cols-3 gap-5">
+    <ul class="grid grid-cols-1 gap-5 lg:grid-cols-3">
       {
         docs.map((doc) => (
           <li>
             <a
               href={doc.href}
-              class="group flex h-full min-h-60 flex-col rounded-xl bg-rf-surface p-6 no-underline transition-colors duration-150 hover:bg-rf-surface-2"
+              class="group flex h-full flex-col lg:min-h-60 rounded-xl bg-rf-surface p-6 no-underline transition-colors duration-150 hover:bg-rf-surface-2"
             >
               <span class="text-xs text-rf-text-muted/60">Updated {doc.updated}</span>
               <span class="mt-4 block text-xl font-semibold tracking-tight text-rf-text">{doc.title}</span>

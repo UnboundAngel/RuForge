@@ -1,10 +1,10 @@
 import type { ImageMetadata } from 'astro';
 import { SITE } from './site';
-import heroMusic from '../assets/screenshots/03-music-now-playing.webp';
-import pasteLink from '../assets/tutorials/docs/pastealink.png';
-import libraryPlaylist from '../assets/tutorials/docs/library.png';
+import musicHome from '../assets/screenshots/landing-music.webp';
+import downloaderPaste from '../assets/screenshots/landing-downloader.webp';
+import videoLibrary from '../assets/screenshots/landing-library.webp';
 import playerChapters from '../assets/tutorials/player/player-chapters.png';
-import sponsorScrub from '../assets/tutorials/sponsor/sponsor-scrub.png';
+import skipFiller from '../assets/screenshots/landing-skip-filler.webp';
 
 export interface LandingFeatureRow {
   id: string;
@@ -60,8 +60,8 @@ export const landingFeatureRows: LandingFeatureRow[] = [
       'playlists save into their own folder, numbered in order',
       'the extra tools YouTube downloads need install themselves',
     ],
-    image: pasteLink,
-    imageAlt: 'RuForge showing a pasted YouTube video with its length and file size before downloading',
+    image: downloaderPaste,
+    imageAlt: 'RuForge downloader showing a pasted YouTube video with its length, estimated size, and a download button',
   },
   {
     id: 'library',
@@ -79,8 +79,8 @@ export const landingFeatureRows: LandingFeatureRow[] = [
       'each video shows its length and size on disk',
       'saved videos play without an internet connection',
     ],
-    image: libraryPlaylist,
-    imageAlt: 'RuForge library showing a playlist of downloaded videos with play all and shuffle buttons',
+    image: videoLibrary,
+    imageAlt: 'RuForge video library with a saved video and new uploads from followed channels',
   },
   {
     id: 'music',
@@ -99,8 +99,8 @@ export const landingFeatureRows: LandingFeatureRow[] = [
       'songs blend into each other between tracks',
       'loop a single song or a whole playlist',
     ],
-    image: heroMusic,
-    imageAlt: 'RuForge music player showing the current song, cover art, and playback controls',
+    image: musicHome,
+    imageAlt: 'RuForge music home with quick picks, artists, and the player bar',
   },
   {
     id: 'chapters',
@@ -137,7 +137,7 @@ export const landingFeatureRows: LandingFeatureRow[] = [
       'skipped segments show up in color on the seek bar',
       'the lookup never sends the full video ID',
     ],
-    image: sponsorScrub,
-    imageAlt: 'RuForge video player with sponsor segments marked on the seek bar',
+    image: skipFiller,
+    imageAlt: 'RuForge video player with a filler segment on the seek bar and a Skip filler button',
   },
 ];

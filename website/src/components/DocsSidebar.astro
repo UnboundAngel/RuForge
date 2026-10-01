@@ -25,10 +25,23 @@ function sectionHasActive(sectionId: string) {
       <span class="docs-sidebar__brand-name">RuForge</span>{' '}
       <span class="docs-sidebar__brand-label">Docs</span>
     </a>
+    <button
+      type="button"
+      class="docs-sidebar__toggle"
+      aria-expanded="false"
+      aria-controls="docs-sidebar-tree"
+      data-docs-sidebar-toggle
+    >
+      Browse docs
+      <svg class="docs-sidebar__toggle-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </button>
   </div>
 
   <DocsSearch client:idle />
 
+  <div class="docs-sidebar__tree-wrap" id="docs-sidebar-tree" data-docs-sidebar-tree>
   <nav class="docs-sidebar__tree">
     {DOCS_TREE.map((section) => {
       const hasActive = sectionHasActive(section.id);
@@ -75,7 +88,31 @@ function sectionHasActive(sectionId: string) {
       );
     })}
   </nav>
+  </div>
 </aside>
+
+<script>
+  const NARROW = '(max-width: 47.99rem)';
+
+  function initDocsSidebar() {
+    const toggle = document.querySelector<HTMLButtonElement>('[data-docs-sidebar-toggle]');
+    const tree = document.querySelector<HTMLElement>('[data-docs-sidebar-tree]');
+    if (!toggle || !tree) return;
+    const media = window.matchMedia(NARROW);
+
+    const apply = (open: boolean) => {
+      toggle.setAttribute('aria-expanded', String(open));
+      tree.classList.toggle('docs-sidebar__tree-wrap--open', open);
+      tree.inert = media.matches && !open;
+    };
+
+    apply(false);
+    toggle.addEventListener('click', () => apply(toggle.getAttribute('aria-expanded') !== 'true'));
+    media.addEventListener('change', () => apply(false));
+  }
+
+  document.addEventListener('astro:page-load', initDocsSidebar);
+</script>
 
 <style>
   .docs-sidebar {
@@ -252,5 +289,84 @@ function sectionHasActive(sectionId: string) {
   .docs-sidebar__link--active:hover {
     color: var(--color-rf-accent);
     background: rgb(237 215 156 / 0.1);
+  }
+
+  .docs-sidebar__toggle {
+    display: none;
+  }
+
+  @media (max-width: 47.99rem) {
+    .docs-sidebar {
+      position: static;
+      width: auto;
+      max-height: none;
+      overflow: visible;
+      padding-bottom: 0;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid rgb(237 215 156 / 0.08);
+    }
+
+    .docs-sidebar__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .docs-sidebar__toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.375rem 0.625rem;
+      border: 1px solid rgb(237 215 156 / 0.12);
+      border-radius: 0.5rem;
+      background: rgb(29 22 19 / 0.5);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--color-rf-text-muted);
+      cursor: pointer;
+      transition:
+        color 0.12s ease,
+        border-color 0.12s ease;
+    }
+
+    .docs-sidebar__toggle:hover {
+      color: var(--color-rf-text);
+      border-color: rgb(237 215 156 / 0.22);
+    }
+
+    .docs-sidebar__toggle-chevron {
+      transition: transform 0.2s ease;
+    }
+
+    .docs-sidebar__toggle[aria-expanded='true'] .docs-sidebar__toggle-chevron {
+      transform: rotate(180deg);
+    }
+
+    .docs-sidebar__tree-wrap {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .docs-sidebar__tree-wrap--open {
+      grid-template-rows: 1fr;
+    }
+
+    .docs-sidebar__tree {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .docs-sidebar__tree-wrap--open .docs-sidebar__tree {
+      padding-bottom: 1rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .docs-sidebar__tree-wrap,
+    .docs-sidebar__toggle-chevron {
+      transition: none;
+    }
   }
 </style>
