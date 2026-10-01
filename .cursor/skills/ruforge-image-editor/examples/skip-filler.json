@@ -1,0 +1,18 @@
+{
+  "src": "C:/Users/Attic/.cursor/projects/c-Projects-RuForge/assets/c__Users_Attic_AppData_Roaming_Cursor_User_workspaceStorage_24fec075eb9cd24c4561008b6f40eea4_images_image-f9e08719-3182-4d08-80ca-913aa9409270.jpg",
+  "out": "website/src/assets/screenshots/landing-skip-filler.webp",
+  "scale": 2,
+  "background": { "blur": 9, "brightness": 0.32, "saturation": 0.55 },
+  "keep": [
+    { "box": [67, 414, 237, 516], "radius": 12 },
+    { "box": [130, 520, 175, 543], "radius": 11 },
+    { "box": [134, 545, 169, 568], "radius": 5 },
+    { "box": [150, 568, 154, 582], "radius": 1 },
+    { "box": [52, 581, 172, 593], "radius": 6 },
+    { "box": [886, 518, 1000, 550], "radius": 16 }
+  ],
+  "zooms": [
+    { "box": [50, 404, 254, 600], "zoom": 2.2, "at": [70, 104], "radius": 26, "border": 0.13 },
+    { "box": [888, 520, 998, 548], "zoom": 3.4, "at": [566, 306], "radius": 47.6, "border": 0.09 }
+  ]
+}

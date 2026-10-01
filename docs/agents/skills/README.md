@@ -43,6 +43,7 @@ Some skills were originally written for Claude. Any agent may use them.
 | Skill | Package | Use when |
 |------|---------|----------|
 | RuForge design | `.cursor/skills/ruforge-design/SKILL.md` | UI chrome restrictions (bezel/well, popups, errors). Lock new patterns from the live app into `restrictions.md`. |
+| RuForge image editor | `.cursor/skills/ruforge-image-editor/SKILL.md` | Turn screenshots into website imagery: measure display size, crop, spotlight, loupe zoom, verify at real size. Scripts: `edit.py` (JSON spec), `probe.py` (pixel grid). |
 | RuForge release | `.cursor/skills/ruforge-release/SKILL.md` | Angel says ship / release / push it out, or the task is updater.json / gh release / a public version bump. |
 | Cursor audit router | `cursor-audit-router.skill` | Auditing Cursor output or writing a message Angel will paste back into Cursor. |
 | Prompt master | `prompt-master.skill` | Writing, tightening, adapting, or splitting prompts for Cursor, Codex, Gemini, Perplexity, or another AI tool. |

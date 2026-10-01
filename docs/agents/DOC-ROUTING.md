@@ -11,6 +11,7 @@ Read `STATE.md` then root `AGENTS.md` first. Then open **one** of these if the t
 | [`docs/agents/skills/README.md`](skills/README.md) | packaged `.skill` bundles (audit router, prompt-master, research-master, design-style) |
 | `node scripts/shipped.mjs find` / `list` | looking up this cycle's log. Do not open `shipped.jsonl` by hand. |
 | [`.cursor/skills/ruforge-design/SKILL.md`](../../.cursor/skills/ruforge-design/SKILL.md) | bezel, well, chrome, scrollbars, popups, warnings, errors, toasts, design restrictions, design taste |
+| [`.cursor/skills/ruforge-image-editor/SKILL.md`](../../.cursor/skills/ruforge-image-editor/SKILL.md) | website screenshots, crop, edit, highlight, zoom, annotate images, landing images, marketing imagery |
 | [`src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md`](../../src/components/island/DYNAMIC-ISLAND-ARCHITECTURE-AND-USABILITY.md) | Activity Island, island onboarding, playback bridge, activityOwner |
 | [`.cursor/rules/design-style.mdc`](../../.cursor/rules/design-style.mdc) | visual, UI polish, layout, motion, tokens, typography |
 | [`.cursor/rules/design-style-ruforge-tokens.mdc`](../../.cursor/rules/design-style-ruforge-tokens.mdc) | `--color-rf-*`, `--accent`, desktop palette |
