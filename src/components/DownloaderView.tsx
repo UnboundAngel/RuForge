@@ -32,6 +32,7 @@ import {
   resolveImmersiveDownloadPhase,
 } from "./downloader/ImmersiveDownloadHero";
 import { MultiDownloadSlotCarousel } from "./downloader/MultiDownloadSlotCarousel";
+import { ProgressBarStreak } from "./downloader/ProgressBarStreak";
 import { StorageBlockNote } from "./downloader/StorageBlockNote";
 import { YtdlpUpdateBanner } from "./downloader/YtdlpUpdateBanner";
 import {
@@ -1171,7 +1172,11 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               animate={{ width: `${bigProgressPct}%` }}
                               transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
                             />
-                          ) : (
+                          ) : null}
+                          {immersivePhase === "downloading" && bigProgressPct >= 2 ? (
+                            <ProgressBarStreak pct={bigProgressPct} />
+                          ) : null}
+                          {immersivePhase !== "downloading" ? (
                             <div
                               className={
                                 immersivePhase === "finishing"
@@ -1179,7 +1184,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                   : "rf-download-progress-indeterminate absolute inset-y-0 rounded-full bg-[color:var(--accent)]"
                               }
                             />
-                          )}
+                          ) : null}
                         </div>
                         <p className="mt-3 text-center text-sm font-medium text-stone-500">
                           {immersivePhase === "preparing"

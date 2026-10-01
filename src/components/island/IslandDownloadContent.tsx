@@ -1,7 +1,13 @@
-import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useRef, useState, type SVGProps } from "react";
+import { motion } from "motion/react";
+import { useRef, useState, type SVGProps } from "react";
 import { ArrowDown, Loader2, Pause, Play } from "lucide-react";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
+import {
+  easeInOutCubic,
+  easeInOutCubicSlope,
+  useProgressStreak,
+  type StreakTiming,
+} from "@/hooks/useProgressStreak";
 
 export type IslandDownloadJob = {
   key: string;
@@ -134,32 +140,23 @@ export function IslandDownloadContent({
 
 /** Slices that make up the streak; each is dimmer than the one ahead, so the tail fades out. */
 const PULSE_SLICES = 12;
-const PULSE_MIN_LEN = 0.012;
-const PULSE_MAX_LEN = 0.34;
-/** Streak length per unit of speed (ring lengths per second), like a motion trail. */
-const PULSE_LEN_PER_SPEED = 0.12;
-const PULSE_FADE_IN_S = 0.06;
-const PULSE_FADE_OUT_S = 0.22;
-const PULSE_REST_S = 0.7;
 const SLICE_OPACITY = Array.from({ length: PULSE_SLICES }, (_, i) => (1 - i / PULSE_SLICES) ** 1.3);
-
-function easeInOutCubic(k: number): number {
-  return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-}
-
-function easeInOutCubicSlope(k: number): number {
-  return k < 0.5 ? 12 * k * k : 3 * Math.pow(-2 * k + 2, 2);
-}
-
-function pulseTravelSeconds(end: number): number {
-  return 0.3 + 0.5 * end;
-}
+const RING_STREAK: StreakTiming = {
+  travel: (end) => 0.3 + 0.5 * end,
+  ease: easeInOutCubic,
+  slope: easeInOutCubicSlope,
+  lenPerSpeed: 0.12,
+  minLen: 0.012,
+  maxLen: 0.34,
+  fadeInS: 0.06,
+  fadeOutS: 0.22,
+  restS: 0.7,
+};
 
 /**
- * A streak that shoots from the start of the filled ring to the progress head, fades, rests, and
- * goes again. It stretches with speed and its tail fades out. Each run reads the latest progress
- * at its start so updates never restart it. Driven per frame on the dash attributes: CSS cannot
- * interpolate a var-fed stroke-dashoffset.
+ * A streak that shoots from the start of the filled ring to the progress head. SVG strokes cannot
+ * carry a gradient along the path, so the fading tail is stacked dash slices. Written on the dash
+ * attributes: CSS cannot interpolate a var-fed stroke-dashoffset.
  */
 function RingPulse({
   rect,
@@ -170,51 +167,20 @@ function RingPulse({
   pct: number;
   color: string;
 }) {
-  const reduceMotion = useReducedMotion();
-  const pctRef = useRef(pct);
-  pctRef.current = pct;
   const groupRef = useRef<SVGGElement>(null);
   const sliceRefs = useRef<(SVGRectElement | null)[]>([]);
+  const running = useProgressStreak(pct, RING_STREAK, ({ x, len, opacity }) => {
+    const slice = Math.max(len, RING_STREAK.minLen) / PULSE_SLICES;
+    const dash = `${slice} 2`;
+    sliceRefs.current.forEach((el, i) => {
+      if (!el) return;
+      el.setAttribute("stroke-dasharray", dash);
+      el.setAttribute("stroke-dashoffset", String((i + 1) * slice - x));
+    });
+    groupRef.current?.setAttribute("opacity", String(opacity));
+  });
 
-  useEffect(() => {
-    if (reduceMotion) return;
-    let raf = 0;
-    let start = performance.now();
-    let end = Math.min(100, pctRef.current) / 100;
-    const tick = (now: number) => {
-      let t = (now - start) / 1000;
-      let travel = pulseTravelSeconds(end);
-      if (t > travel + PULSE_FADE_OUT_S + PULSE_REST_S) {
-        start = now;
-        end = Math.min(100, pctRef.current) / 100;
-        travel = pulseTravelSeconds(end);
-        t = 0;
-      }
-      const k = Math.min(1, t / travel);
-      const x = end * easeInOutCubic(k);
-      const speed = k < 1 ? (end * easeInOutCubicSlope(k)) / travel : 0;
-      const len = Math.min(PULSE_MAX_LEN, x, Math.max(PULSE_MIN_LEN, speed * PULSE_LEN_PER_SPEED));
-      const slice = Math.max(len, PULSE_MIN_LEN) / PULSE_SLICES;
-      const opacity =
-        t < PULSE_FADE_IN_S
-          ? t / PULSE_FADE_IN_S
-          : t <= travel
-            ? 1
-            : Math.max(0, 1 - (t - travel) / PULSE_FADE_OUT_S);
-      const dash = `${slice} 2`;
-      sliceRefs.current.forEach((el, i) => {
-        if (!el) return;
-        el.setAttribute("stroke-dasharray", dash);
-        el.setAttribute("stroke-dashoffset", String((i + 1) * slice - x));
-      });
-      groupRef.current?.setAttribute("opacity", String(opacity));
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [reduceMotion]);
-
-  if (reduceMotion) return null;
+  if (!running) return null;
   return (
     <g
       ref={groupRef}

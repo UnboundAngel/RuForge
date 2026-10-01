@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ProgressBarStreak } from "./ProgressBarStreak";
 
 export type ImmersiveDownloadPhase = "preparing" | "downloading" | "finishing";
 
@@ -129,7 +130,9 @@ export function ImmersiveDownloadHero({
                 animate={{ width: `${pct}%` }}
                 transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
               />
-            ) : (
+            ) : null}
+            {showDeterminate && pct >= 2 ? <ProgressBarStreak pct={pct} /> : null}
+            {!showDeterminate ? (
               <div
                 className={cn(
                   "absolute inset-y-0 rounded-full bg-[color:var(--accent)]",
@@ -138,7 +141,7 @@ export function ImmersiveDownloadHero({
                     : "rf-download-progress-indeterminate",
                 )}
               />
-            )}
+            ) : null}
           </div>
 
           {metaBits.length > 0 ? (
