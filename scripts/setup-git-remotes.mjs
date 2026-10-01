@@ -1,21 +1,23 @@
 #!/usr/bin/env node
 /**
  * Wire the two RuForge remotes on this clone:
- *   sync   -> UnboundAngel/RuForge-sync (private WIP)
+ *   sync   -> UnboundAngel/Ruforge-priv (private WIP)
  *   public -> UnboundAngel/RuForge (intentional public publish / release)
  *
- * Does not create the private GitHub repo. Angel runs once:
- *   gh repo create UnboundAngel/RuForge-sync --private \
- *     --description "Private WIP sync for RuForge. Not the public release repo."
- * Then from a clone with full history:
+ * Private repo already exists. On a clone with full history:
  *   node scripts/setup-git-remotes.mjs
  *   git push sync --all
  *   git push sync --tags
+ *
+ * Cloud agents attached only to public RuForge get a single-repo GitHub token.
+ * They cannot push sync unless the session also has Ruforge-priv in scope
+ * (or a short-lived PAT). Prefer attaching daily cloud agents to Ruforge-priv,
+ * or keep both remotes and push sync from a machine / multi-repo session.
  */
 import { execFileSync } from 'node:child_process';
 
 const PUBLIC_URL = 'https://github.com/UnboundAngel/RuForge.git';
-const SYNC_URL = 'https://github.com/UnboundAngel/RuForge-sync.git';
+const SYNC_URL = 'https://github.com/UnboundAngel/Ruforge-priv.git';
 
 function run(args, opts = {}) {
   return execFileSync('git', args, {
@@ -76,7 +78,7 @@ if (origin) {
       'note origin still points at the public repo. Daily pushes use sync, not origin.',
     );
   } else if (n === normalizeGithub(SYNC_URL)) {
-    console.log('note origin points at RuForge-sync (good for laptop/desktop/cloud WIP).');
+    console.log('note origin points at Ruforge-priv (good for laptop/desktop/cloud WIP).');
   } else {
     console.log(`note origin is ${origin} (left unchanged).`);
   }
@@ -85,10 +87,10 @@ if (origin) {
 }
 
 console.log(`
-Next (once RuForge-sync exists and your token can push it):
+Next (when your token can push Ruforge-priv):
   git push sync --all
   git push sync --tags
 
-Point Cursor Cloud Agents at UnboundAngel/RuForge-sync for daily work.
+Point Cursor Cloud Agents at UnboundAngel/Ruforge-priv for daily work.
 Public UnboundAngel/RuForge is for intentional publish and releases only.
 `);

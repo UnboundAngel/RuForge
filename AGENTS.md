@@ -25,10 +25,10 @@ Two GitHub remotes. Do not treat them as interchangeable.
 
 | Remote | Repo | Use |
 |--------|------|-----|
-| `sync` | `UnboundAngel/RuForge-sync` (private) | Default. All session WIP, feature branches, cloud-agent handoffs, laptop/desktop continuity. |
+| `sync` | `UnboundAngel/Ruforge-priv` (private) | Default. All session WIP, feature branches, cloud-agent handoffs, laptop/desktop continuity. |
 | `public` | `UnboundAngel/RuForge` (this public repo) | Only intentional public publish, or the release skill. |
 
-Wire remotes on a clone with `node scripts/setup-git-remotes.mjs`. Angel creates the private repo once (see that script's header). Prefer cloning / attaching Cursor Cloud Agents to **RuForge-sync** so `origin` is already private.
+Wire remotes on a clone with `node scripts/setup-git-remotes.mjs`. Prefer cloning / attaching Cursor Cloud Agents to **Ruforge-priv** so `origin` is already private. Cloud agents attached only to public RuForge get a single-repo GitHub token and cannot push `sync` unless `Ruforge-priv` is also in that session's scope.
 
 **Default push:** `git push -u sync <branch>`. Never push routine session branches to `public`, and never to `origin` when `origin` still points at the public RuForge URL.
 

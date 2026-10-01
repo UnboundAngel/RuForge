@@ -140,7 +140,7 @@ Mint implements visuals in Cursor. Do not route Gemini.
 
 Remotes follow root `AGENTS.md` → **Remotes (sync vs public)**:
 
-- Default push target is **`sync`** (`UnboundAngel/RuForge-sync`).
+- Default push target is **`sync`** (`UnboundAngel/Ruforge-priv`).
 - **`public`** (`UnboundAngel/RuForge`) only for intentional public publish or the
   release skill.
 - If `sync` is missing, run `node scripts/setup-git-remotes.mjs` or stop and tell
