@@ -37,13 +37,13 @@ import { mainWindowPortalRoot } from "@/lib/mainWindowFrame";
 import { readPlaybackSpeed } from "@/playbackSpeedStorage";
 import { useCurrentActivity } from "@/hooks/useCurrentActivity";
 import { primaryArtist, rawArtistFromFile } from "@/components/music/musicArtist";
-import { buildIslandDownload } from "@/lib/islandDownload";
+import { buildIslandDownload, startIslandDownload } from "@/lib/islandDownload";
 import { setNotificationPopoverOpen } from "@/notifications/notificationCenterStore";
 import { closeNotificationPopover } from "@/notifications/popoverActions";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { DynamicIsland, type IslandState } from "./DynamicIsland";
+import { useIslandDownloadTurn } from "./useIslandDownloadTurn";
 import { useIslandNotifications } from "./useIslandNotifications";
-
 type IslandSavedCapture = {
   entry: DevCaptureEntry;
   previewSrc: string;
@@ -143,7 +143,12 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
 
   const notifications = useRuforgeStore((s) => s.notifications);
   const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
-  const latest = navMode === "music" ? undefined : notifications[notifications.length - 1];
+  const activeTab = useRuforgeStore((s) => s.activeTab);
+  // Toasts live in AppToastHost; only the Explorer webview covers that spot, so it borrows the island.
+  const latest =
+    navMode !== "music" && activeTab === "explorer"
+      ? notifications[notifications.length - 1]
+      : undefined;
   const notice = useMemo(
     () => (latest ? { id: latest.id, message: latest.message, type: latest.type ?? "info" } : null),
     [latest],
@@ -161,6 +166,14 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   const notificationsInIsland = useRuforgeStore((s) => s.settings.notificationsInIsland === true);
   const islandNotifications = useIslandNotifications(notificationsInIsland && !devCaptureIsland);
   const notificationsOpen = islandNotifications != null;
+
+  const hasDownload = download != null;
+  const [islandHovered, setIslandHovered] = useState(false);
+  const downloadTurn = useIslandDownloadTurn(
+    download,
+    hasSession && showIslandChrome && !isExpanded,
+    islandHovered,
+  );
 
   // Never collapse something the user opened on purpose.
   const showNotice =
@@ -186,7 +199,9 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
         : "idle"
       : isExpanded
         ? "expanded"
-        : "compact";
+        : downloadTurn && hasDownload
+          ? "download"
+          : "compact";
 
   useEffect(() => {
     if (!download) setDownloadOpen(false);
@@ -532,11 +547,13 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
           ref={islandWrapRef}
           className="pointer-events-auto relative"
           onMouseEnter={() => {
+            setIslandHovered(true);
             if (!devCaptureIsland) return;
             if (savedCapture) setSavedCaptureHover(true);
             else setCaptureHover(true);
           }}
           onMouseLeave={() => {
+            setIslandHovered(false);
             if (!devCaptureIsland) return;
             setSavedCaptureHover(false);
             if (!savedCapture) setCaptureHover(false);
@@ -547,6 +564,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
             notice={showNotice ? notice : null}
             download={download}
             onOpenDownloads={handleOpenDownloads}
+            onStartDownload={startIslandDownload}
             notifications={islandNotifications}
             idleTappable={notificationsInIsland && !devCaptureIsland}
             content={content}

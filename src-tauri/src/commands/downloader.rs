@@ -274,6 +274,36 @@ pub(crate) fn ytdlp_stderr_is_missing_js_runtime(err: &str) -> bool {
 /// Marker prefix on errors caused by a missing JS runtime so the frontend can distinguish them.
 pub(crate) const JS_RUNTIME_MISSING_PREFIX: &str = "JS_RUNTIME_MISSING: ";
 
+/// Only thumbnails come back when YouTube's n-challenge goes unsolved.
+pub(crate) fn ytdlp_stderr_is_challenge_failure(err: &str) -> bool {
+    let lower = err.to_ascii_lowercase();
+    lower.contains("n challenge solving failed")
+        || lower.contains("requested format is not available")
+            && lower.contains("only images are available")
+}
+
+/// A challenge failure only blames the yt-dlp build when yt-dlp itself says it is stale;
+/// a current build fails the same way when no JS runtime is available.
+pub(crate) fn ytdlp_stderr_is_outdated_solver(err: &str) -> bool {
+    err.to_ascii_lowercase().contains("older than 90 days") && ytdlp_stderr_is_challenge_failure(err)
+}
+
+fn ytdlp_stale_version_from_stderr(err: &str) -> Option<&str> {
+    let start = err.find("Your yt-dlp version (")? + "Your yt-dlp version (".len();
+    let len = err[start..].find(')')?;
+    Some(err[start..start + len].trim()).filter(|v| !v.is_empty())
+}
+
+fn humanize_outdated_ytdlp_error(err: &str) -> String {
+    let which = ytdlp_stale_version_from_stderr(err)
+        .map(|v| format!("yt-dlp {}", v))
+        .unwrap_or_else(|| "yt-dlp".to_string());
+    format!(
+        "Download failed: {} is out of date and can no longer read this video from YouTube. Update yt-dlp in Settings > Downloads, then retry.",
+        which
+    )
+}
+
 fn ytdlp_browser_cookie_arg(app: &AppHandle, browser: &str) -> Result<String, String> {
     if browser == "ruforge" {
         let data_dir = app
@@ -425,9 +455,24 @@ fn format_download_job_failure(
     error_log: &str,
     code: Option<i32>,
     browser_cookies: Option<&str>,
+    deno_present: bool,
 ) -> String {
-    if ytdlp_stderr_is_missing_js_runtime(error_log) {
+    let challenge_failed = ytdlp_stderr_is_challenge_failure(error_log);
+    if ytdlp_stderr_is_missing_js_runtime(error_log) || (challenge_failed && !deno_present) {
         return format!("{}Download failed: no JavaScript runtime installed. Open Settings > Downloads to install Deno automatically.", JS_RUNTIME_MISSING_PREFIX);
+    }
+    if ytdlp_stderr_is_outdated_solver(error_log) {
+        return format!(
+            "{}\n\nFull yt-dlp log:\n{}",
+            humanize_outdated_ytdlp_error(error_log),
+            error_log.trim()
+        );
+    }
+    if challenge_failed {
+        return format!(
+            "Download failed: YouTube's playback check could not be solved, so only thumbnails were available. Check for yt-dlp and Deno updates in Settings > Downloads, then retry.\n\nFull yt-dlp log:\n{}",
+            error_log.trim()
+        );
     }
     if ytdlp_stderr_is_cookie_export_failure(error_log) {
         let humanized = humanize_ytdlp_cookie_error(error_log, browser_cookies);
@@ -1373,6 +1418,7 @@ pub async fn start_download_job(
                         &error_log,
                         payload.code,
                         browser_cookies_for_errors.as_deref(),
+                        crate::deno_binary::resolved_deno_path_if_present(&app).is_some(),
                     );
                     // Diagnostics trail the cause: the UI shows the first line, and prefix checks read the start.
                     if let Some(summary) = &cookie_export_summary {
@@ -1610,6 +1656,9 @@ fn entry_url_looks_like_channel_tab(url: &str) -> bool {
 }
 
 fn humanize_music_ytdlp_error(stderr: &str) -> String {
+    if !ytdlp_stderr_is_missing_js_runtime(stderr) && ytdlp_stderr_is_outdated_solver(stderr) {
+        return humanize_outdated_ytdlp_error(stderr);
+    }
     if ytdlp_stderr_is_rate_limited(stderr) {
         return "YouTube rate-limited this session. Wait a few minutes, turn off Auto-save in Explore, \
                 lower concurrent downloads, and add a batch start delay in Settings."
@@ -2477,6 +2526,59 @@ mod cookie_error_tests {
         assert!(msg.contains(raw));
     }
 
+}
+
+#[cfg(test)]
+mod outdated_solver_tests {
+    use super::*;
+
+    const STALE_LOG: &str = "WARNING: Your yt-dlp version (2026.06.09) is older than 90 days!\n\
+WARNING: [youtube] 3D7tcrMYo5M: n challenge solving failed: Some formats may be missing.\n\
+WARNING: Only images are available for download. use --list-formats to see them\n\
+ERROR: [youtube] 3D7tcrMYo5M: Requested format is not available. Use --list-formats for a list of available formats";
+
+    #[test]
+    fn detects_stale_solver() {
+        assert!(ytdlp_stderr_is_outdated_solver(STALE_LOG));
+        assert!(!ytdlp_stderr_is_outdated_solver("ERROR: Video unavailable"));
+        assert!(!ytdlp_stderr_is_outdated_solver(
+            "WARNING: Your yt-dlp version (2026.06.09) is older than 90 days!\nERROR: Video unavailable"
+        ));
+    }
+
+    const FRESH_LOG: &str = "WARNING: [youtube] 6niBKNW_IO0: n challenge solving failed: Some formats may be missing.\n\
+WARNING: Only images are available for download. use --list-formats to see them\n\
+ERROR: [youtube] 6niBKNW_IO0: Requested format is not available. Use --list-formats for a list of available formats";
+
+    #[test]
+    fn job_failure_says_update_with_version() {
+        let msg = format_download_job_failure(STALE_LOG, Some(1), None, true);
+        assert!(msg.starts_with("Download failed: yt-dlp 2026.06.09 is out of date"));
+        assert!(msg.contains("Settings > Downloads"));
+        assert!(msg.contains("Full yt-dlp log:"));
+    }
+
+    #[test]
+    fn missing_runtime_wins_over_stale_solver() {
+        let log = format!("{}\nWARNING: No supported JavaScript runtime could be found", STALE_LOG);
+        let msg = format_download_job_failure(&log, Some(1), None, true);
+        assert!(msg.starts_with(JS_RUNTIME_MISSING_PREFIX));
+    }
+
+    #[test]
+    fn fresh_build_without_deno_asks_for_runtime() {
+        assert!(!ytdlp_stderr_is_outdated_solver(FRESH_LOG));
+        let msg = format_download_job_failure(FRESH_LOG, Some(1), None, false);
+        assert!(msg.starts_with(JS_RUNTIME_MISSING_PREFIX));
+        let stale = format_download_job_failure(STALE_LOG, Some(1), None, false);
+        assert!(stale.starts_with(JS_RUNTIME_MISSING_PREFIX));
+    }
+
+    #[test]
+    fn fresh_build_with_deno_does_not_blame_version() {
+        let msg = format_download_job_failure(FRESH_LOG, Some(1), None, true);
+        assert!(msg.starts_with("Download failed: YouTube's playback check"));
+    }
 }
 
 #[cfg(test)]

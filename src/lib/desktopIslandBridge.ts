@@ -9,6 +9,7 @@ import type { IslandWatchlist } from "@/components/island/IslandWatchlistContent
 import type { IslandSkipDir } from "@/components/island/islandSkipMotion";
 import type { ActivityRenderState } from "@/lib/activityTypes";
 import { navigateToActivityOwningSurface } from "@/lib/activityIslandResolve";
+import { startIslandDownload } from "@/lib/islandDownload";
 import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
 import {
   listenPrivateQueue,
@@ -64,7 +65,8 @@ export type DesktopIslandControl =
   | { type: "watchlistOpen"; videoId: string }
   | { type: "watchlistMarkAllSeen" }
   | { type: "watchlistShowAll" }
-  | { type: "openDownloads" };
+  | { type: "openDownloads" }
+  | { type: "startDownload"; jobId: string };
 
 export async function pushDesktopIslandState(payload: DesktopIslandStatePayload): Promise<void> {
   await postPrivateState("desktop-island-state", DESKTOP_ISLAND_LABEL, DESKTOP_ISLAND_STATE_EVENT, payload);
@@ -185,6 +187,9 @@ export function applyDesktopIslandControl(control: DesktopIslandControl): void {
       return;
     case "openDownloads":
       st.openDownloader();
+      return;
+    case "startDownload":
+      if (typeof control.jobId === "string") startIslandDownload(control.jobId);
       return;
     default:
       return;

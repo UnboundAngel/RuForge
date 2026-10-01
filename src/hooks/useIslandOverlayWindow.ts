@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   islandOverlayTransitionBounds,
@@ -48,9 +48,14 @@ export function useIslandFollowActiveMonitor(enabled: boolean) {
  * land on RuForge. Ignore cursor events unless the cursor is over the pill; since an ignoring window
  * receives no mouse events, the cursor position is polled instead.
  */
-export function useIslandClickThrough(enabled: boolean) {
+export function useIslandClickThrough(enabled: boolean): boolean {
+  // Mouse enter/leave are unreliable here: once click-through is on, the leave never arrives.
+  const [pointerOver, setPointerOver] = useState(false);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setPointerOver(false);
+      return;
+    }
 
     let cancelled = false;
     let ignoring: boolean | null = null;
@@ -70,7 +75,9 @@ export function useIslandClickThrough(enabled: boolean) {
         const pos = await invoke<[number, number] | null>("island_cursor_position");
         if (cancelled || buttonDown) return;
         const hit = pos ? document.elementFromPoint(pos[0], pos[1]) : null;
-        setIgnoring(!hit?.closest(ISLAND_HIT_SELECTOR));
+        const over = Boolean(hit?.closest(ISLAND_HIT_SELECTOR));
+        setIgnoring(!over);
+        setPointerOver(over);
       } catch {
         /* ignore */
       } finally {
@@ -102,4 +109,5 @@ export function useIslandClickThrough(enabled: boolean) {
       void invoke("set_island_click_through", { ignore: false }).catch(() => {});
     };
   }, [enabled]);
+  return pointerOver;
 }

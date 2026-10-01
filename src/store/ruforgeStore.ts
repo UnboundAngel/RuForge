@@ -153,10 +153,13 @@ export type {
 } from "./types";
 export { RUFORGE_INTERNAL_DIR } from "./types";
 
+export type RuforgeNotificationAction = { label: string; run: () => void };
+
 export type RuforgeNotification = {
   id: number;
   message: string;
   type?: "info" | "error" | "progress" | "warning";
+  action?: RuforgeNotificationAction;
 };
 
 export type GalleryContextMenuState = {
@@ -447,7 +450,12 @@ export interface RuforgeStore extends DownloadQueueSlice {
     profile: YouTubeExplorerProfile | null;
   }) => void;
 
-  notify: (message: string, type?: RuforgeNotification["type"]) => number;
+  notify: (
+    message: string,
+    type?: RuforgeNotification["type"],
+    action?: RuforgeNotificationAction,
+  ) => number;
+  updateNotification: (id: number, message: string) => void;
   dismissNotification: (id: number) => void;
 
   setDownloaderUrl: (url: string) => void;
@@ -1698,9 +1706,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
           youtubeExplorerProfile: session.profile,
         }),
 
-      notify: (message, type = "info") => {
+      notify: (message, type = "info", action) => {
         const id = Date.now() + Math.floor(Math.random() * 1000);
-        set((s) => ({ notifications: [...s.notifications, { id, message, type }] }));
+        set((s) => ({ notifications: [...s.notifications, { id, message, type, action }] }));
         if (type === "info" || type === "warning") {
           const handle = setTimeout(() => {
             get().dismissNotification(id);
@@ -1714,6 +1722,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
         }
         return id;
       },
+
+      updateNotification: (id, message) =>
+        set((s) => ({
+          notifications: s.notifications.map((n) => (n.id === id ? { ...n, message } : n)),
+        })),
 
       dismissNotification: (id) => {
         forgetNotificationDismissTimer(id);

@@ -32,7 +32,8 @@ import {
   DEFAULT_MAX_CONCURRENT_DOWNLOADS,
   jobHasDownloadTransferStarted,
 } from "../downloadQueue";
-import type { ProgressPayload } from "../types";
+import { JS_RUNTIME_MISSING_PREFIX, type ProgressPayload } from "../types";
+import { installDenoAndRetry } from "../lib/denoInstallFlow";
 import {
   appendOutputPathToLastBatch,
   appendReplayOutputPath,
@@ -1594,18 +1595,25 @@ export const createDownloadQueueSlice: StateCreator<
           error: DOWNLOAD_TIMED_OUT_MESSAGE,
         });
       } else {
-        const line = (payload.error ?? "Download failed").split("\n")[0];
+        const rawError = payload.error ?? "Download failed";
+        const runtimeMissing = rawError.startsWith(JS_RUNTIME_MISSING_PREFIX);
+        const cleanError = rawError.replace(JS_RUNTIME_MISSING_PREFIX, "");
+        const line = cleanError.split("\n")[0].replace(/^Download failed:\s*/i, "");
+        const failedJobId = payload.jobId;
         void deliverUserNotification(
           {
-            dedupeKey: `download-failed:${payload.jobId}`,
+            dedupeKey: `download-failed:${failedJobId}`,
             body: `Failed: ${line}`,
             kind: "error",
+            action: runtimeMissing
+              ? { label: "Install", run: () => void installDenoAndRetry() }
+              : { label: "Retry", run: () => get().retryDownloadJob(failedJobId) },
           },
-          (message, type) => get().notify(message, type),
+          (message, type, action) => get().notify(message, type, action),
         );
         recordDownloadNotification("download-failed", {
           ...finishedJobNotificationInfo(finishedJobBefore, finishedUrl),
-          error: payload.error ?? line,
+          error: cleanError,
         });
       }
     },

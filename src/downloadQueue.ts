@@ -205,7 +205,9 @@ export type DownloadEnqueueSource =
   /** Watchlist: the user queued a new upload from a followed channel. */
   | "watchlistAdd"
   /** Watchlist: a new upload queued on its own because its channel has auto-download on. */
-  | "watchlistAuto";
+  | "watchlistAuto"
+  /** Notification feed: Retry on a failed download whose job already left the queue. */
+  | "notificationRetry";
 
 export type DownloadJobFinishedPayload = {
   jobId: string;

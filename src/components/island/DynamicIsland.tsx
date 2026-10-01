@@ -1,6 +1,7 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -17,6 +18,9 @@ import { IslandIdleDevCaptureContent } from "./IslandIdleDevCaptureContent";
 import { IslandNoticeContent, noticeIslandWidth, type IslandNotice } from "./IslandNoticeContent";
 import {
   DOWNLOAD_ISLAND_WIDTH,
+  downloadIslandWidth,
+  ISLAND_SWAP_CONTENT,
+  ISLAND_SWAP_SQUEEZE_MS,
   IslandDownloadContent,
   IslandProgressRing,
   type IslandDownload,
@@ -84,6 +88,10 @@ const ISLAND_DIMENSIONS: Record<
 import type { AudioOutputDevice } from "@/audioOutputDevices";
 import type { LoopMode } from "@/playbackLoopStorage";
 
+function isPillSwap(from: IslandState, to: IslandState): boolean {
+  return (from === "compact" && to === "download") || (from === "download" && to === "compact");
+}
+
 const COLLAPSED_PILL_H = 36;
 /** Desktop overlay pills: the in-app island stays at 36 to match the onboarding island in the same slot. */
 const COMPACT_PILL_H = 32;
@@ -148,6 +156,8 @@ type DynamicIslandProps = {
   /** Active download: its own pill in "download", a ring around the music pill in "compact". */
   download?: IslandDownload | null;
   onOpenDownloads?: () => void;
+  /** Starts a paused or held lead download from the pill. */
+  onStartDownload?: (jobId: string) => void;
   /** Cross-window hint (desktop overlay). Wins over local pending when trackKey changes. */
   skipDirHint?: IslandSkipDir | null;
   /** Desktop overlay only: new uploads from followed channels for "watchlist" states. */
@@ -167,10 +177,20 @@ type DynamicIslandProps = {
 function ContentShell({
   children,
   enterScale = 0.8,
+  swap = false,
 }: {
   children: ReactNode;
   enterScale?: number;
+  /** Rides the shell squeeze when music and download trade places. */
+  swap?: boolean;
 }) {
+  if (swap) {
+    return (
+      <motion.div {...ISLAND_SWAP_CONTENT} className="absolute inset-0">
+        {children}
+      </motion.div>
+    );
+  }
   return (
     <motion.div
       initial={{ opacity: 0, scale: enterScale }}
@@ -247,7 +267,7 @@ function CompactContent({
   skipDir: IslandSkipDir;
 }) {
   return (
-    <ContentShell>
+    <ContentShell swap>
       <div className="pointer-events-none flex h-full items-center justify-between px-2">
         <CompactCoverArt
           src={content.coverSrc}
@@ -292,6 +312,7 @@ export function DynamicIsland({
   notice = null,
   download = null,
   onOpenDownloads,
+  onStartDownload,
   skipDirHint = null,
   watchlist = null,
   onWatchlistQueue,
@@ -304,6 +325,7 @@ export function DynamicIsland({
 }: DynamicIslandProps) {
   const [notificationsHeight, setNotificationsHeight] = useState<number | null>(null);
   const [sizeSettled, setSizeSettled] = useState(true);
+  const reduceMotion = useReducedMotion();
   const pendingSkipDirRef = useRef<IslandSkipDir>(1);
   const skipDirRef = useRef<IslandSkipDir>(1);
   const prevTrackKeyRef = useRef(content.trackKey);
@@ -353,8 +375,20 @@ export function DynamicIsland({
       ? "idle"
       : "expanded"
     : state;
+  const [prevState, setPrevState] = useState(effectiveState);
+  const [squeezing, setSqueezing] = useState(false);
+  if (prevState !== effectiveState) {
+    setPrevState(effectiveState);
+    setSqueezing(!reduceMotion && isPillSwap(prevState, effectiveState));
+  }
+  useEffect(() => {
+    if (!squeezing) return;
+    const timer = window.setTimeout(() => setSqueezing(false), ISLAND_SWAP_SQUEEZE_MS);
+    return () => window.clearTimeout(timer);
+  }, [squeezing, effectiveState]);
+
   const baseDims = ISLAND_DIMENSIONS[effectiveState];
-  const fullDims =
+  const restingDims =
     updateMode && updateAvailable?.collapsed
       ? {
           width: islandUpdateCollapsedWidth(),
@@ -369,19 +403,19 @@ export function DynamicIsland({
           ? { ...baseDims, width: noticeIslandWidth(notice!.message) }
           : effectiveState === "watchlist" && watchlist
             ? { ...baseDims, width: islandWatchlistCollapsedWidth(watchlist.count) }
+            : effectiveState === "download" && download
+              ? { ...baseDims, width: downloadIslandWidth(download) }
             : effectiveState === "download-expanded" && download
               ? islandDownloadExpandedDims(download.jobs.length)
               : effectiveState === "notifications"
                 ? islandNotificationsDims(notificationsHeight)
                 : baseDims;
-  const dims =
-    compactPills && fullDims.height === COLLAPSED_PILL_H
-      ? {
-          width: fullDims.width - COMPACT_PILL_TRIM_W,
-          height: COMPACT_PILL_H,
-          borderRadius: COMPACT_PILL_H / 2,
-        }
-      : fullDims;
+  const fitPills = (d: { width: number; height: number; borderRadius: number }) =>
+    compactPills && d.height === COLLAPSED_PILL_H
+      ? { width: d.width - COMPACT_PILL_TRIM_W, height: COMPACT_PILL_H, borderRadius: COMPACT_PILL_H / 2 }
+      : d;
+  const stageDims = fitPills(restingDims);
+  const dims = squeezing ? fitPills({ ...restingDims, width: ISLAND_DIMENSIONS.idle.width }) : stageDims;
   const interactive = effectiveState !== "idle" || Boolean(devCaptureIdle) || updateMode || idleTappable;
   const watchlistFloating = !updateMode && effectiveState === "watchlist-expanded";
   const downloadFloating = !updateMode && effectiveState === "download-expanded" && download != null;
@@ -390,7 +424,7 @@ export function DynamicIsland({
   const overflowVisible = !updateMode && effectiveState === "expanded" && sizeSettled;
 
   const stage = (key: string, node: ReactNode) => (
-    <IslandStage key={key} width={dims.width} height={dims.height}>
+    <IslandStage key={key} width={stageDims.width} height={stageDims.height}>
       {node}
     </IslandStage>
   );
@@ -472,7 +506,7 @@ export function DynamicIsland({
               )
             : null}
           {!updateMode && state === "download" && download
-            ? stage("download", <IslandDownloadContent download={download} />)
+            ? stage("download", <IslandDownloadContent download={download} onStart={onStartDownload} />)
             : null}
           {downloadFloating
             ? stage(
@@ -531,7 +565,12 @@ export function DynamicIsland({
             : null}
         </AnimatePresence>
         {download && !updateMode && (effectiveState === "download" || effectiveState === "compact") ? (
-          <IslandProgressRing pct={download.pct} radius={dims.borderRadius} color={content.accentColor} />
+          <IslandProgressRing
+            pct={download.waiting ? (download.pct ?? 0) : download.pct}
+            pulse={!download.waiting && download.pct != null}
+            radius={dims.borderRadius}
+            color={content.accentColor}
+          />
         ) : null}
       </div>
     </motion.div>

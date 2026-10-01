@@ -33,6 +33,7 @@ import {
 } from "./downloader/ImmersiveDownloadHero";
 import { MultiDownloadSlotCarousel } from "./downloader/MultiDownloadSlotCarousel";
 import { StorageBlockNote } from "./downloader/StorageBlockNote";
+import { YtdlpUpdateBanner } from "./downloader/YtdlpUpdateBanner";
 import {
   downloadJobMediaNeedsHydration,
   jobHasDownloadTransferStarted,
@@ -425,64 +426,17 @@ export const DownloaderView = (props: DownloaderViewProps) => {
       ) : null}
       <div className="relative z-10 flex h-full flex-col p-4 sm:p-10 lg:p-16">
         <AnimatePresence>
-          {d.showYtdlpStrip && (
-            <motion.div
+          {d.showYtdlpStrip && (!d.anyDownloading || d.ytdlpUpdating) && (
+            <YtdlpUpdateBanner
               key="ytdlp-update-strip"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
-              role="region"
-              aria-label="yt-dlp update available"
-              className="mb-4 shrink-0 rounded-xl border border-[color-mix(in_srgb,var(--accent),transparent_72%)] bg-[#271C18]/92 px-4 py-3 text-[#EDD79C]/90 shadow-[0_8px_28px_rgba(0,0,0,0.35)] backdrop-blur-md sm:mb-6"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[color:var(--accent)]/90">
-                    yt-dlp update
-                  </p>
-                  <p className="text-xs font-semibold tracking-tight text-[#EDD79C]/85">
-                    {d.ytdlpUpdateStatus?.latestVersion != null &&
-                    d.ytdlpUpdateStatus.latestVersion !== ""
-                      ? `Release ${d.ytdlpUpdateStatus.latestVersion} is available. You're on ${d.ytdlpUpdateStatus.activeVersion}.`
-                      : `A newer yt-dlp release is available (current ${d.ytdlpUpdateStatus?.activeVersion ?? "unknown"}).`}
-                  </p>
-                  {d.ytdlpUpdateInvokeError != null ? (
-                    <p className="text-[11px] text-amber-300/95">{d.ytdlpUpdateInvokeError}</p>
-                  ) : d.ytdlpUpdateStatus?.checkError ? (
-                    <p className="text-[11px] text-stone-500/90">{d.ytdlpUpdateStatus.checkError}</p>
-                  ) : null}
-                  {typeof d.ytdlpUpdatePercent === "number" && (
-                    <div className="mt-2 h-1.5 w-full max-w-md overflow-hidden rounded-full bg-white/10">
-                      <div
-                        className="h-full rounded-full bg-[color:var(--accent)] transition-[width] duration-200"
-                        style={{
-                          width: `${Math.min(100, Math.max(0, d.ytdlpUpdatePercent))}%`,
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={d.ytdlpUpdating}
-                    onClick={() => void d.downloadYtdlpUpdateNow()}
-                    className="rounded-lg bg-[color:var(--accent)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#1D1613] shadow-sm transition-opacity disabled:opacity-50"
-                  >
-                    {d.ytdlpUpdating ? "Updating…" : "Update yt-dlp"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={d.ytdlpUpdating}
-                    onClick={d.dismissYtdlpUpdateBanner}
-                    className="rounded-lg border border-white/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[#EDD79C]/65 transition-colors hover:bg-white/5 hover:text-[#EDD79C]"
-                  >
-                    Later
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+              status={d.ytdlpUpdateStatus}
+              percent={d.ytdlpUpdatePercent}
+              updating={d.ytdlpUpdating}
+              done={d.ytdlpUpdateJustFinished}
+              invokeError={d.ytdlpUpdateInvokeError}
+              onUpdate={() => void d.downloadYtdlpUpdateNow()}
+              onDismiss={d.dismissYtdlpUpdateBanner}
+            />
           )}
         </AnimatePresence>
         <div className="relative hidden min-h-[3.25rem] shrink-0 min-[800px]:block">

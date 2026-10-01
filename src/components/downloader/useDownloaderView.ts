@@ -278,13 +278,31 @@ export function useDownloaderView({
     updating: ytdlpUpdating,
     percent: ytdlpUpdatePercent,
     invokeError: ytdlpUpdateInvokeError,
-    downloadUpdate: downloadYtdlpUpdateNow,
+    downloadUpdate: downloadYtdlpUpdate,
   } = useYtdlpUpdate();
+  const [ytdlpUpdateJustFinished, setYtdlpUpdateJustFinished] = useState(false);
+  const ytdlpFinishedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (ytdlpFinishedTimerRef.current) clearTimeout(ytdlpFinishedTimerRef.current);
+    },
+    [],
+  );
+  const downloadYtdlpUpdateNow = useCallback(async () => {
+    const result = await downloadYtdlpUpdate();
+    if (!result.ok) return;
+    setYtdlpUpdateJustFinished(true);
+    if (ytdlpFinishedTimerRef.current) clearTimeout(ytdlpFinishedTimerRef.current);
+    ytdlpFinishedTimerRef.current = setTimeout(() => setYtdlpUpdateJustFinished(false), 1600);
+  }, [downloadYtdlpUpdate]);
   const showYtdlpStrip = Boolean(
     !ytdlpUpdateDismissed &&
       !ytdlpUpdateLoading &&
       ytdlpUpdateStatus &&
-      (ytdlpUpdateStatus.updateAvailable || ytdlpUpdating || Boolean(ytdlpUpdateInvokeError)),
+      (ytdlpUpdateStatus.updateAvailable ||
+        ytdlpUpdating ||
+        ytdlpUpdateJustFinished ||
+        Boolean(ytdlpUpdateInvokeError)),
   );
   const showUrlBubble = useMemo(
     () =>
@@ -2186,6 +2204,7 @@ export function useDownloaderView({
     ytdlpUpdateInvokeError,
     dismissYtdlpUpdateBanner,
     downloadYtdlpUpdateNow,
+    ytdlpUpdateJustFinished,
     browserContextUi: browserContextForDownloaderUi(settings.browserContext),
   };
 }

@@ -1,4 +1,5 @@
-import type { DownloadJob } from "@/downloadQueue";
+import { buildDownloadJobOptions, resolveDownloadOutputDir, type DownloadJob } from "@/downloadQueue";
+import { STORAGE_FULL_NOTIFY, storageBlocksNewDownloads } from "@/lib/storageBlocks";
 import { openInFileManager } from "@/openInFileManager";
 import { mediaPathsMatch } from "@/lib/mediaPathMatch";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -9,7 +10,7 @@ import {
   useNotificationCenterStore,
 } from "../notificationCenterStore";
 import type { NotificationItem, NotificationSource } from "../types";
-import { collapseDownloadAttempts, withLiveDownloadActions } from "./downloadItems";
+import { collapseDownloadAttempts, recordStorageFullRefusal, withLiveDownloadActions } from "./downloadItems";
 
 function findLibraryFile(entries: GalleryEntry[], path: string): MediaFile | null {
   for (const entry of entries) {
@@ -21,6 +22,34 @@ function findLibraryFile(entries: GalleryEntry[], path: string): MediaFile | nul
     if (hit) return hit;
   }
   return null;
+}
+
+function retryFromNotification(item: NotificationItem): void {
+  const s = useRuforgeStore.getState();
+  const job = item.ref.jobId ? s.downloadJobs.find((j) => j.id === item.ref.jobId) : undefined;
+  if (job && (job.status === "failed" || job.status === "timed_out")) {
+    s.retryDownloadJob(job.id);
+    return;
+  }
+  const url = job?.url ?? item.ref.url;
+  if (!url) return;
+  if (storageBlocksNewDownloads(s)) {
+    s.notify(STORAGE_FULL_NOTIFY, "warning");
+    recordStorageFullRefusal();
+    return;
+  }
+  const dir = resolveDownloadOutputDir(s.saveToInternal, s.outputDir, s.internalVault);
+  s.enqueueDownload(url, job?.options ?? buildDownloadJobOptions(s.settings, dir), {
+    title: item.title,
+    snapshot: {
+      title: item.title,
+      thumbnail: item.thumbnail ?? "",
+      duration: 0,
+      isPlaylist: false,
+    },
+    enqueueSource: "notificationRetry",
+  });
+  s.pumpDownloadQueue();
 }
 
 let memo: { local: NotificationItem[]; jobs: DownloadJob[]; items: NotificationItem[] } | null = null;
@@ -57,7 +86,7 @@ export const downloadSource: NotificationSource = {
         if (path) await openInFileManager(path);
         return;
       case "retry":
-        if (item.ref.jobId) s.retryDownloadJob(item.ref.jobId);
+        retryFromNotification(item);
         return;
       case "open-storage-settings":
         // Storage is the first section of General, and Settings opens scrolled to the top.

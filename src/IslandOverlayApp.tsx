@@ -11,6 +11,7 @@ import {
   type DesktopIslandStatePayload,
 } from "@/lib/desktopIslandBridge";
 import { resolveOverlayIslandState, type IslandExpandedTarget } from "@/lib/islandOverlayState";
+import { useIslandDownloadTurn } from "@/components/island/useIslandDownloadTurn";
 import { noteIslandSkipDir } from "@/lib/islandSkipDirection";
 import { useOverlayWaveformLevels } from "@/hooks/useOverlayWaveformLevels";
 import {
@@ -80,12 +81,16 @@ export default function IslandOverlayApp() {
   const notice = payload?.notice ?? null;
   const watchlist = payload?.watchlist ?? null;
   const visible = hasSession || download != null || notice != null || watchlist != null;
+
+  const hovered = useIslandClickThrough(visible);
+  const downloadTurn = useIslandDownloadTurn(download, hasSession && expandedTarget == null, hovered);
   const islandState = resolveOverlayIslandState({
     expandedTarget,
     hasSession,
     hasNotice: notice != null,
     hasDownload: download != null,
     watchlist,
+    downloadTurn,
   });
   const isExpanded = islandState === "expanded";
   const anyExpanded =
@@ -106,7 +111,6 @@ export default function IslandOverlayApp() {
 
   const bounds = islandOverlayBounds(islandState);
   useIslandOverlayBounds(bounds.width, bounds.height);
-  useIslandClickThrough(visible);
   useIslandFollowActiveMonitor(visible && !anyExpanded);
 
   useEffect(() => {
@@ -174,6 +178,10 @@ export default function IslandOverlayApp() {
     void emitDesktopIslandControl({ type: "openDownloads" });
   }, []);
 
+  const handleStartDownload = useCallback((jobId: string) => {
+    void emitDesktopIslandControl({ type: "startDownload", jobId });
+  }, []);
+
   const handleWatchlistMarkAllSeen = useCallback(() => {
     void emitDesktopIslandControl({ type: "watchlistMarkAllSeen" });
   }, []);
@@ -239,6 +247,7 @@ export default function IslandOverlayApp() {
           skipDirHint={payload?.skipDir ?? null}
           download={download}
           onOpenDownloads={() => void handleOpenDownloads()}
+          onStartDownload={handleStartDownload}
           notice={notice}
           watchlist={watchlist}
           onWatchlistQueue={handleWatchlistQueue}

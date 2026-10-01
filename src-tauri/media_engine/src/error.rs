@@ -72,6 +72,12 @@ pub fn classify_ytdlp_stderr(stderr: &str, exit_code: Option<i32>) -> EngineErro
         )
         .with_detail("install Deno or Node");
     }
+    if lower.contains("n challenge solving failed") {
+        return EngineError::new(
+            EngineErrorCode::RuntimeIncompatible,
+            "YouTube's playback check could not be solved. Check for yt-dlp and Deno updates in Settings > Downloads, then retry.",
+        );
+    }
     if lower.contains("rate-limited") || lower.contains("rate limited") {
         return EngineError::new(
             EngineErrorCode::RateLimited,

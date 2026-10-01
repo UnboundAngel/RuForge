@@ -2,7 +2,7 @@ import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { isRuforgeAppInForeground } from "./appWindowFocus";
-import type { RuforgeNotification } from "./store/ruforgeStore";
+import type { RuforgeNotification, RuforgeNotificationAction } from "./store/ruforgeStore";
 
 export type BackgroundNotifyKind = "info" | "warning" | "error";
 
@@ -63,6 +63,8 @@ export type DeliverUserNotificationOptions = {
   /** In-app toast copy when foreground; defaults to `body`. */
   inAppBody?: string;
   inAppType?: RuforgeNotification["type"];
+  /** Button on the in-app toast only; the background overlay has no actions. */
+  action?: RuforgeNotificationAction;
 };
 
 /**
@@ -71,7 +73,11 @@ export type DeliverUserNotificationOptions = {
  */
 export async function deliverUserNotification(
   options: DeliverUserNotificationOptions,
-  inAppNotify: (message: string, type?: RuforgeNotification["type"]) => void,
+  inAppNotify: (
+    message: string,
+    type?: RuforgeNotification["type"],
+    action?: RuforgeNotificationAction,
+  ) => void,
 ): Promise<void> {
   const dedupeKey = options.dedupeKey ?? options.body;
   if (!claimUserNotification(dedupeKey)) return;
@@ -83,7 +89,7 @@ export async function deliverUserNotification(
   const inAppBody = options.inAppBody ?? options.body;
 
   if (await isAnyRuforgeWindowFocused()) {
-    inAppNotify(inAppBody, inAppType);
+    inAppNotify(inAppBody, inAppType, options.action);
     return;
   }
 
@@ -91,6 +97,6 @@ export async function deliverUserNotification(
     await pushDesktopIslandNotice({ message: options.body, kind });
   } catch (e) {
     console.error("deliverUserNotification island:", e);
-    inAppNotify(inAppBody, inAppType);
+    inAppNotify(inAppBody, inAppType, options.action);
   }
 }

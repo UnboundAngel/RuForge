@@ -74,8 +74,32 @@ describe("withLiveDownloadActions", () => {
     expect(withLiveDownloadActions([failed], [job("failed")])[0].actions).toEqual(["retry"]);
   });
 
-  it("drops retry once the job is gone or running again", () => {
-    expect(withLiveDownloadActions([failed], [])[0].actions).toEqual([]);
+  it("drops retry once the job is running again", () => {
     expect(withLiveDownloadActions([failed], [job("downloading")])[0].actions).toEqual([]);
+  });
+
+  it("drops retry when the job is gone and there is no URL to re-queue", () => {
+    expect(withLiveDownloadActions([failed], [])[0].actions).toEqual([]);
+  });
+
+  it("keeps retry for a removed job that still has its URL", () => {
+    const withUrl = buildDownloadNotification("download-failed", {
+      jobId: "gone",
+      url: "https://www.youtube.com/watch?v=3D7tcrMYo5M",
+    });
+    expect(withLiveDownloadActions([withUrl], [])[0].actions).toEqual(["retry"]);
+  });
+
+  it("drops retry while the same video is queued under a new job", () => {
+    const withUrl = buildDownloadNotification("download-failed", {
+      jobId: "old",
+      url: "https://youtu.be/3D7tcrMYo5M",
+    });
+    const retried = {
+      id: "new",
+      status: "queued",
+      url: "https://www.youtube.com/watch?v=3D7tcrMYo5M",
+    } as DownloadJob;
+    expect(withLiveDownloadActions([withUrl], [retried])[0].actions).toEqual([]);
   });
 });

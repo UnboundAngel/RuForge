@@ -284,6 +284,16 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       musicShown = false;
       pending = null;
       setIslandWaveformBackgroundPump(false);
+      // The overlay keeps its last frame while hidden; blank it so the next show doesn't replay a stale notice.
+      void pushDesktopIslandState({
+        content: emptyContent(inputsRef.current.settingsAccent),
+        renderState: "idle",
+        filePath: null,
+        waveformLevels: [],
+        download: null,
+        notice: null,
+        watchlist: null,
+      }).catch(() => {});
       void invoke("hide_island_overlay").catch(() => {});
     };
 
@@ -392,8 +402,10 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     const onVis = () => void refreshWindow();
     document.addEventListener("visibilitychange", onVis);
     // Focus moving from the Explorer webview or an overlay window to another app fires nothing on main.
+    // Also polls while a session is live, so a pill dropped by a transient gap comes back on its own.
     const foregroundPoll = window.setInterval(() => {
-      if (shown || buildIslandDownload(inputsRef.current.downloadJobs)) void refreshWindow();
+      const i = inputsRef.current;
+      if (shown || i.activity.hasSession || buildIslandDownload(i.downloadJobs)) void refreshWindow();
     }, FOREGROUND_POLL_MS);
 
     return () => {

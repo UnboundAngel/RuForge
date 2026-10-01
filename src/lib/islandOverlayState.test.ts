@@ -40,6 +40,14 @@ describe("resolveOverlayIslandState", () => {
     expect(resolveOverlayIslandState({ ...base, expandedTarget: "download", hasSession: true })).toBe("compact");
   });
 
+  it("hands the music slot to the download on its turn", () => {
+    const both = { ...base, hasSession: true, hasDownload: true };
+    expect(resolveOverlayIslandState({ ...both, downloadTurn: true })).toBe("download");
+    expect(resolveOverlayIslandState({ ...both, downloadTurn: false })).toBe("compact");
+    expect(resolveOverlayIslandState({ ...base, hasSession: true, downloadTurn: true })).toBe("compact");
+    expect(resolveOverlayIslandState({ ...both, downloadTurn: true, hasNotice: true })).toBe("notice");
+  });
+
   it("opens the download list over a notice", () => {
     expect(
       resolveOverlayIslandState({ ...base, expandedTarget: "download", hasDownload: true, hasNotice: true }),

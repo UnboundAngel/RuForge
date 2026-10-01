@@ -8,6 +8,8 @@ type OverlayInputs = {
   hasNotice: boolean;
   hasDownload: boolean;
   watchlist: { takeover: boolean } | null;
+  /** Music and download pills alternate; true while the download holds the slot. */
+  downloadTurn?: boolean;
 };
 
 /**
@@ -20,7 +22,7 @@ export function resolveOverlayIslandState(i: OverlayInputs): IslandState {
   if (i.expandedTarget === "download" && i.hasDownload) return "download-expanded";
   if (i.hasNotice) return "notice";
   if (i.watchlist && (i.watchlist.takeover || !i.hasSession)) return "watchlist";
-  if (i.hasSession) return "compact";
+  if (i.hasSession) return i.downloadTurn && i.hasDownload ? "download" : "compact";
   if (i.hasDownload) return "download";
   return "idle";
 }

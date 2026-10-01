@@ -69,6 +69,11 @@ import { resolveExportDestForUsbOpen } from "./lib/exportDestResolve";
 import { askConfirm, ConfirmDialogHost } from "./components/ConfirmDialog";
 import { RfScrollbarHost } from "./components/ui/RfScrollbarHost";
 import { JS_RUNTIME_MISSING_PREFIX } from "./types";
+import {
+  installDenoAndRetry,
+  isDenoInstalling,
+  rememberJsRuntimeFailure,
+} from "./lib/denoInstallFlow";
 import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff";
 import { loopModeFromHandoff } from "./playerHandoff";
 import { stageHandoffListenEventId } from "./lib/musicListenSession";
@@ -95,6 +100,7 @@ function initialMiniKind(): "video" | "music" | null {
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
 import { MusicToastHost } from "./components/music/MusicToastHost";
+import { AppToastHost } from "./components/notifications/AppToastHost";
 import { startMusicPlaylistsFileSync } from "./musicPlaylistsFileSync";
 import { handleAutoReady, handleNewUploads } from "./watchlist/watchlistAlerts";
 import { startWatchlistSync } from "./watchlist/watchlistSync";
@@ -450,8 +456,6 @@ function App() {
   const playerViewRef = useRef<PlayerViewHandle>(null);
   /** Prevents re-prompting if multiple jobs fail before the user responds. */
   const jsRuntimePromptedRef = useRef(false);
-  /** jobIds that hit JS_RUNTIME_MISSING while the install prompt was pending; retried after install. */
-  const jsRuntimeFailedJobIdsRef = useRef<string[]>([]);
   const refreshStorageStats = useRuforgeStore((s) => s.refreshStorageStats);
   const outputDir = useRuforgeStore((s) => s.outputDir);
   const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
@@ -873,33 +877,21 @@ function App() {
           typeof raw.error === "string" &&
           raw.error.startsWith(JS_RUNTIME_MISSING_PREFIX)
         ) {
-          jsRuntimeFailedJobIdsRef.current.push(jobId);
+          rememberJsRuntimeFailure(jobId);
 
-          if (!jsRuntimePromptedRef.current) {
+          if (!jsRuntimePromptedRef.current && !isDenoInstalling()) {
             jsRuntimePromptedRef.current = true;
             void (async () => {
               const approved = await askConfirm({
                 title: "JavaScript runtime needed",
                 message:
-                  "Downloads need a small runtime to solve YouTube's n-challenge. Install Deno automatically? (~100 MB, stored in app data — not a system install).",
+                  "Downloads need a small runtime to solve YouTube's n-challenge. Install Deno automatically? (~100 MB, stored in app data, not a system install).",
                 confirmLabel: "Install",
                 cancelLabel: "Later",
               });
               if (!approved) return;
-              try {
-                await invoke("download_deno");
-                notifyRef.current(
-                  "JavaScript runtime installed, resuming your download.",
-                );
-                const failedJobIds = jsRuntimeFailedJobIdsRef.current;
-                jsRuntimeFailedJobIdsRef.current = [];
-                for (const failedJobId of failedJobIds) {
-                  downloadIpcHandlersRef.current.retryDownloadJob(failedJobId);
-                }
-              } catch (e) {
-                const msg = typeof e === "string" ? e : "Deno install failed.";
-                notifyRef.current(msg, "error");
-              }
+              const ok = await installDenoAndRetry();
+              if (!ok) jsRuntimePromptedRef.current = false;
             })();
           }
         }
@@ -2217,6 +2209,9 @@ function App() {
       </AnimatePresence>
 
       {navMode === "music" && <MusicToastHost />}
+      {navMode !== "music" && activeTab !== "explorer" && (
+        <AppToastHost clearPlayerDock={videoPlayerShellVisible} />
+      )}
       {backgroundVideoFile ? (
         <div
           className={

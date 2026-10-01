@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { DenoDownloadProgressPayload, DenoStatusPayload } from "../types";
+import { retryJsRuntimeFailures } from "../lib/denoInstallFlow";
 
 function invokeErrorMessage(e: unknown, fallback: string): string {
   if (typeof e === "string") return e;
@@ -90,6 +91,7 @@ export function useDenoStatus(enabled = true) {
         setInvokeError(msg);
         return { ok: false as const, error: msg };
       }
+      retryJsRuntimeFailures();
       return { ok: true as const, error: null };
     } catch (e) {
       const msg = invokeErrorMessage(e, "Could not install Deno.");

@@ -43,7 +43,7 @@ function baseActions(kind: DownloadNotificationKind, info: DownloadNotificationI
       return info.outputPath ? ["play", "show-in-folder"] : [];
     case "download-failed":
     case "download-timed-out":
-      return info.jobId ? ["retry"] : [];
+      return info.jobId || info.url ? ["retry"] : [];
     case "download-blocked":
       return ["open-storage-settings"];
   }
@@ -64,7 +64,10 @@ function fallbackTitle(kind: DownloadNotificationKind): string {
 
 function subtitleFor(kind: DownloadNotificationKind, info: DownloadNotificationInfo): string | null {
   if (kind === "download-finished") return info.outputPath ? fileName(info.outputPath) : "Your file is ready.";
-  const line = info.error?.split("\n")[0]?.trim();
+  const line = info.error
+    ?.replace(/^JS_RUNTIME_MISSING:\s*/, "")
+    .split("\n")[0]
+    ?.trim();
   return line || null;
 }
 
@@ -103,12 +106,23 @@ export function buildDownloadNotification(
   };
 }
 
-/** Retry only makes sense while the failed row is still in the queue to re-run. */
+const IN_FLIGHT: ReadonlySet<DownloadJob["status"]> = new Set(["queued", "downloading", "paused"]);
+
+/**
+ * Retry hides only while the video is already queued or running again. A failed job that left
+ * the queue is retried from its URL instead.
+ */
 export function withLiveDownloadActions(items: NotificationItem[], jobs: DownloadJob[]): NotificationItem[] {
   return items.map((item) => {
     if (!item.actions.includes("retry")) return item;
+    const videoKey = item.ref.url ? normalizeYouTubeUrlForCompare(item.ref.url) : null;
+    const inFlight = jobs.some(
+      (j) =>
+        IN_FLIGHT.has(j.status) &&
+        (j.id === item.ref.jobId || (videoKey != null && normalizeYouTubeUrlForCompare(j.url) === videoKey)),
+    );
     const job = item.ref.jobId ? jobs.find((j) => j.id === item.ref.jobId) : undefined;
-    const retryable = job?.status === "failed" || job?.status === "timed_out";
+    const retryable = !inFlight && (job != null || Boolean(item.ref.url));
     return retryable ? item : { ...item, actions: item.actions.filter((a) => a !== "retry") };
   });
 }
