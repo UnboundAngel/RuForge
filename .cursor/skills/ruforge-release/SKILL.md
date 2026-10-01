@@ -61,7 +61,7 @@ Paste `.sig` **file contents** (base64) into `signature`. Set `pub_date`. Never 
 
 ## 6. Commit + push to public main
 
-Confirm branch is `main`. Commit must include `updater.json`, all three version files, generated website changelog when applicable, and unreleased code. Ensure the `public` remote points at `UnboundAngel/RuForge` (`node scripts/setup-git-remotes.mjs` if needed). Push **`public` `main`** (the public release repo). Do not treat `sync` / RuForge-sync as the release target. Record the hash.
+Confirm branch is `main`. Commit must include `updater.json`, all three version files, generated website changelog when applicable, and unreleased code. Ensure the `public` remote points at `UnboundAngel/RuForge` (`node scripts/setup-git-remotes.mjs` if needed). Push **`public` `main`** (the public release repo). Do not treat `sync` / Ruforge-priv as the release target. Record the hash.
 
 ## 7. GitHub Release
 
