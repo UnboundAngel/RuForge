@@ -652,7 +652,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
           ['<strong>MusicBrainz</strong>, <strong>Cover Art Archive</strong>', 'After an audio download', 'The artist and song title'],
           ['<strong>LRCLIB</strong>', 'Loading lyrics', 'The artist, title, album, and length'],
           ['<strong>Wikipedia</strong>, <strong>Wikidata</strong>', 'Opening an artist page', 'The artist name'],
-          ['<strong>GitHub</strong>', 'When RuForge opens', 'A check for new RuForge and yt-dlp versions'],
+          ['<strong>ruforge.app</strong>, <strong>GitHub</strong>', 'When RuForge opens', 'A check for new RuForge and yt-dlp versions. The RuForge check goes to ruforge.app, which counts it and points it to GitHub'],
           ['<strong>Discord</strong>', 'Only if you turn it on in Settings &gt; General (off by default)', 'What you\'re playing, sent to the Discord app on your PC'],
         ],
       },

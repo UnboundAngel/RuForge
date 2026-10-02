@@ -102,7 +102,7 @@ const BUILT_WITH_PAGE_DEFS: BuiltWithPage[] = [
       'Two primary webviews ship today: `main` (full app) and `mini` (always-on-top pop-out). Each loads the same Vite bundle from `dist/` in release, or `http://localhost:1430` during `tauri dev`. Window chrome (minimize, maximize, close, queue drawer, mini toggle) is custom React in `App.tsx`, not native title bars (`decorations: false`).',
       'Rust commands register in `lib.rs` via `generate_handler!`. TypeScript calls them with `invoke` from `@tauri-apps/api/core`. Local media paths go through `convertFileSrc` plus `assetProtocol` scopes in `tauri.conf.json` so `<video>` can read files under your home and download drives.',
       'Cross-window playback does not share Zustand. Main emits `play-in-mini` / `play-media`; mini emits `send-to-main` and `stop-playback`. Each webview has its own JS heap, so events plus a few flat `localStorage` keys bridge state.',
-      'The updater plugin fetches `updater.json` from GitHub on startup (`runUpdateCheck` in `updaterCheck.ts`). Signed NSIS builds download and install in-app. Post-install copy can be structured JSON parsed by `updatePostInstall.ts` for the scrollable What is new modal.',
+      'The updater plugin fetches `updater.json` on startup through a `ruforge.app/updater.json` redirect to GitHub, with the raw GitHub URL as a fallback endpoint (`runUpdateCheck` in `updaterCheck.ts`). Signed NSIS builds download and install in-app. Post-install copy can be structured JSON parsed by `updatePostInstall.ts` for the scrollable What is new modal.',
     ],
     touchpoints: [
       '`src-tauri/tauri.conf.json` windows, sidecars, asset scopes, updater pubkey',

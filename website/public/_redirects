@@ -1,4 +1,5 @@
 # Cloudflare Pages matches sources exactly, so every rule needs its trailing-slash twin.
+/updater.json https://raw.githubusercontent.com/UnboundAngel/RuForge/main/updater.json 302
 /features/library     /features/media-library    301
 /features/library/    /features/media-library    301
 /features/miniplayer  /features/mini-player      301
