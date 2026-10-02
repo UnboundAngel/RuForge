@@ -32,7 +32,7 @@ const canonicalUrl = new URL(desktopPathname, SITE.url).href;
         location.replace('https://ruforge.app' + location.pathname + location.search + location.hash);
     </script>
     {import.meta.env.PROD && (
-      <script is:inline defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "b6fd429246b442f0b7b785782a5524b4", "spa": true}'></script>
+      <script is:inline defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "b6fd429246b442f0b7b785782a5524b4", "spa": false}'></script>
     )}
   </head>
   <body class="flex min-h-screen flex-col bg-rf-bg text-rf-text antialiased font-sans">
