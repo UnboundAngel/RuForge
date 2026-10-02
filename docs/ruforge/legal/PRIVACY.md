@@ -1,10 +1,10 @@
 # Privacy
 
 
-Last updated: September 29, 2026
+Last updated: October 2, 2026
 
 
-RuForge runs on your computer. The project has no servers and no accounts, and nothing you download, watch or search is sent to the maintainer. This page lists what RuForge keeps on your PC and every place it connects to.
+RuForge runs on your computer. The project runs no servers of its own (Cloudflare hosts the ruforge.app website) and has no accounts, and nothing you download, watch or search is sent to the maintainer. This page lists what RuForge keeps on your PC, every place it connects to, and what the website collects.
 
 
 ## What RuForge stores locally
@@ -22,7 +22,7 @@ RuForge runs on your computer. The project has no servers and no accounts, and n
 ## What leaves your computer
 
 
-RuForge has no server of its own, so none of the traffic below goes to the project. Each connection goes straight from your PC to the service named.
+RuForge has no server of its own. Each connection below goes straight from your PC to the service named. The only one that reaches the project's website is the update check.
 
 
 **YouTube and other sites you download from.** When you queue a download or open a video's details, yt-dlp connects directly to the site to fetch it. RuForge does not proxy these requests. Downloads use no cookies unless you pick a cookie source in the downloader: Internal (RuForge's built-in YouTube tab), Firefox, Edge, Safari, Brave, or a cookies file. When yt-dlp uses cookies, it sends those cookies to the source site, not to RuForge. That is how signing in works. With Internal, RuForge copies your YouTube session from the built-in browser into a temporary file for that one job and deletes the file when the job ends.
@@ -46,7 +46,7 @@ RuForge has no server of its own, so none of the traffic below goes to the proje
 **About the artist.** When you open the About the artist sheet in Music, RuForge looks the artist name up on MusicBrainz, reads the biography from Wikipedia (through Wikidata when needed) and loads the artist photo from Wikimedia. The result is cached, so this happens once per artist.
 
 
-**App updates.** On launch, and when you press Check now in Settings, RuForge fetches a small `updater.json` file from GitHub to see whether a newer version exists. When one is available, it also reads the list of recent releases from GitHub's API to show the release notes. No account or identifier is sent. The signed installer downloads from GitHub only after you choose to install.
+**App updates.** On launch, and when you press Check now in Settings, RuForge requests a small `updater.json` file from `ruforge.app/updater.json` to see whether a newer version exists. The website redirects that request to the file on GitHub, and if ruforge.app does not answer, RuForge fetches it from GitHub directly. Versions before 0.5.1 go to GitHub directly. Cloudflare, which hosts ruforge.app, sees your IP address and the User-Agent `tauri-plugin-updater/{version}`, as it does for any request to the website, and its dashboard shows the maintainer how many update checks arrive each day. That count is how the project estimates how many people use RuForge. When a newer version is available, it also reads the list of recent releases from GitHub's API to show the release notes. No account or identifier is sent. The signed installer downloads from GitHub only after you choose to install.
 
 
 **yt-dlp updates.** At startup RuForge checks GitHub's API for a newer yt-dlp release, at most once every 12 hours (the result is cached). The User-Agent names RuForge and its version. A new yt-dlp binary downloads from GitHub only when you choose to update it.
@@ -67,7 +67,8 @@ RuForge has no server of its own, so none of the traffic below goes to the proje
 - `youtube.com`, `music.youtube.com` and YouTube's media and image servers (`googlevideo.com`, `i.ytimg.com`, `yt3.googleusercontent.com`): downloads, the YouTube tab, thumbnails, previews and followed channels.
 - Other video sites: only when you paste a link from them.
 - `sponsor.ajay.app`: SponsorBlock segments when a video plays, if SponsorBlock is on.
-- `raw.githubusercontent.com`: app update check on launch.
+- `ruforge.app`: app update check on launch, redirected to GitHub.
+- `raw.githubusercontent.com`: the `updater.json` file the update check reads.
 - `api.github.com`: release notes when an update is available, the yt-dlp release check at most every 12 hours, and the Deno release check when you install it.
 - `github.com` and its download servers: RuForge, yt-dlp and Deno downloads when you choose to install them.
 - `musicbrainz.org` and `coverartarchive.org`: music metadata after audio downloads and for About the artist.
@@ -89,6 +90,18 @@ RuForge has no server of its own, so none of the traffic below goes to the proje
 
 
 RuForge does not collect crash data in a standard session. When something breaks, the error screen lets you copy the details or press Report, which opens a pre-filled GitHub issue in your browser. Nothing is posted until you review and submit it yourself. You can attach your log file the same way. You control what gets shared.
+
+
+## The ruforge.app website
+
+
+The website is hosted on Cloudflare Pages. It has no accounts or forms, and the site itself sets no cookies. Cloudflare's bot protection may set its own security cookie.
+
+
+**Cloudflare Web Analytics.** Every page loads a small script from `static.cloudflareinsights.com` that reports the page address, the page you came from, how long the page took to load, and your browser, operating system and device type. Cloudflare works out your country from the request. According to Cloudflare, Web Analytics uses no cookies or local storage and does not fingerprint visitors. The maintainer sees only totals in Cloudflare's dashboard, such as visits per page and per country. Blocking `static.cloudflareinsights.com` turns it off without breaking the site.
+
+
+**Request logs.** Like any host, Cloudflare handles every request to the site, including the app's update check, and keeps traffic data such as IP address, User-Agent, page address and country. Cloudflare's dashboard shows the maintainer recent totals for these, including the most active IP addresses.
 
 
 ## Windows
