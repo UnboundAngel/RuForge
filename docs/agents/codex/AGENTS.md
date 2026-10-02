@@ -76,10 +76,13 @@ it.
 
 ## Memory
 
-Codex memory lives at `docs/agents/codex/MEMORY.md`.
+Codex memory lives at `docs/agents/codex/MEMORY.md` on **`sync` / Ruforge-priv**
+only (see root `AGENTS.md` → Private-only paths). Public RuForge clones will not
+have it.
 
 Use it when Angel asks for prior context, project memory, Codex continuity,
-prompt history, or old ChatGPT/Claude memory reconciliation.
+prompt history, or old ChatGPT/Claude memory reconciliation, and the file is
+present.
 
 Rules:
 
@@ -138,10 +141,18 @@ Mint implements visuals in Cursor. Do not route Gemini.
 
 ## GitHub Hygiene
 
+Remotes follow root `AGENTS.md` → **Remotes (sync vs public)**:
+
+- Default push target is **`sync`** (`UnboundAngel/Ruforge-priv`).
+- **`public`** is downstream-only via `scripts/publish-snapshot.mjs` (release /
+  explicit publish). Never push branches to public; never merge public into sync.
+- If remotes are wrong, run `node scripts/setup-git-remotes.mjs` or stop and tell
+  Angel. Do not fall back to pushing WIP at the public URL.
+
 Before pushing:
 
 - `git status --short`
-- fetch the target branch
+- fetch the target branch on the correct remote (`sync` or `public`)
 - confirm ahead and behind counts
 - push normally only when behind is zero
 

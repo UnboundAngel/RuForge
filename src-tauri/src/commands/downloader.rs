@@ -22,7 +22,7 @@ use crate::ytdlp_rate_limit::{
 };
 
 use crate::commands::explorer_cookies::{export_ruforge_cookies_for_ytdlp, RuforgeCookieExport};
-use crate::commands::gallery::cleanup_orphan_downloads_under;
+use crate::download_artifacts::{trash_job_files, JobArtifacts};
 use crate::commands::media::extract_frames;
 use crate::commands::musicmeta::find_recent_audio_files;
 use crate::utils::is_media_ext;
@@ -531,9 +531,7 @@ async fn yt_dlp_comments_json_fetch(
     ytdlp_push_js_runtime_args(app, &mut args);
 
     ytdlp_subprocess_rate_gate_wait().await?;
-    let output = ytdlp_shell_command(app)?
-        .args(args)
-        .output()
+    let output = crate::child_job::output(ytdlp_shell_command(app)?.args(args))
         .await
         .map_err(|e| format!("Failed to run yt-dlp (comments): {}", e))?;
 
@@ -912,6 +910,43 @@ pub async fn get_video_info(
         .map_err(|e| get_video_info_simulate_failure_message(&e.message))
 }
 
+#[tauri::command]
+pub async fn get_playlist_row_sizes(
+    app: AppHandle,
+    engine_state: State<'_, MediaEngineState>,
+    urls: Vec<String>,
+    format: Option<String>,
+    browser_cookies: Option<String>,
+    cookie_file: Option<String>,
+) -> Result<Vec<media_engine::PlaylistRowSize>, String> {
+    if browser_cookies.as_deref() == Some("ruforge") {
+        let export = export_ruforge_cookies_for_ytdlp(&app).await?;
+        let path = export.path().display().to_string();
+        let _export_guard = export;
+        let auth = auth_from_download_options(None, Some(&path), None);
+        return engine_state
+            .engine
+            .playlist_row_sizes(&urls, format.as_deref(), auth.as_ref())
+            .await
+            .map_err(|e| e.message);
+    }
+
+    let browser_arg = browser_cookies
+        .as_deref()
+        .filter(|b| !b.is_empty() && *b != "chrome")
+        .and_then(|b| ytdlp_browser_cookie_arg(&app, b).ok());
+    let auth = auth_from_download_options(
+        browser_cookies.as_deref(),
+        cookie_file.as_deref(),
+        browser_arg,
+    );
+    engine_state
+        .engine
+        .playlist_row_sizes(&urls, format.as_deref(), auth.as_ref())
+        .await
+        .map_err(|e| e.message)
+}
+
 fn collect_recent_video_paths(root: &Path, since: SystemTime) -> Vec<PathBuf> {
     const SLACK_SECS: u64 = 15;
     let cutoff = since
@@ -1042,6 +1077,15 @@ fn resolve_finished_download_output_path(
     }
     let paths = collect_recent_video_paths(listing_root, since);
     pick_best_recent_video_output(paths)
+}
+
+async fn trash_partial_extractions(artifacts: &JobArtifacts, reported: &[PathBuf]) {
+    let artifacts = artifacts.clone();
+    let reported = reported.to_vec();
+    let _ = tokio::task::spawn_blocking(move || {
+        trash_job_files(&artifacts.partial_extractions(&reported), "partial audio extraction");
+    })
+    .await;
 }
 
 const SCRUB_PREVIEW_CONCURRENCY: usize = 3;
@@ -1212,6 +1256,9 @@ pub async fn start_download_job(
     args.push("--print-to-file".into());
     args.push("after_move:filepath".into());
     args.push(escape_output_template(&printed_paths));
+    // Destination lines must round-trip non-ASCII titles to real paths for JobArtifacts.
+    args.push("--encoding".into());
+    args.push("utf-8".into());
 
     let (mut rx, child) = match shell.args(args).spawn() {
         Ok(pair) => pair,
@@ -1220,6 +1267,7 @@ pub async fn start_download_job(
             return Err(format!("Failed to start yt-dlp download: {}", e));
         }
     };
+    let child_job = crate::child_job::ChildJob::adopt(child.pid());
 
     crate::rf_log!(
         "download.ytdlp",
@@ -1247,6 +1295,7 @@ pub async fn start_download_job(
         use tauri_plugin_shell::process::CommandEvent;
 
         let _cookie_export_guard = cookie_export_guard;
+        let _child_job = child_job;
 
         let download_started_at = SystemTime::now();
         let diag_root = post_download_diag_listing_root(
@@ -1258,11 +1307,32 @@ pub async fn start_download_job(
         let scrub_spawned = Arc::new(AtomicBool::new(false));
         let mut tracker = ProgressTracker::default();
         let mut error_log = String::new();
+        let mut artifacts = JobArtifacts::new(Path::new(&options.output_dir));
+        let mut last_output_bytes = 0u64;
+        let mut heartbeat = tokio::time::interval(std::time::Duration::from_secs(5));
+        heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-        while let Some(event) = rx.recv().await {
+        loop {
+            let event = tokio::select! {
+                event = rx.recv() => match event {
+                    Some(event) => event,
+                    None => break,
+                },
+                _ = heartbeat.tick() => {
+                    if artifacts.post_processing() {
+                        let bytes = artifacts.output_bytes();
+                        if bytes != last_output_bytes {
+                            last_output_bytes = bytes;
+                            let _ = app.emit("download-job-heartbeat", job_id.clone());
+                        }
+                    }
+                    continue;
+                }
+            };
             match event {
                 CommandEvent::Stdout(line_bytes) => {
                     let line = String::from_utf8_lossy(&line_bytes).to_string();
+                    artifacts.observe_line(&line);
                     if let Some(mut progress) = tracker.handle_stdout_line(&line) {
                         progress.job_id = job_id.clone();
                         let status = match progress.status {
@@ -1306,18 +1376,26 @@ pub async fn start_download_job(
                         }
                     };
                     let reported_paths = take_printed_paths(&printed_paths);
+                    let succeeded = !paused && payload.code == Some(0);
+                    if !succeeded {
+                        trash_partial_extractions(&artifacts, &reported_paths).await;
+                    }
                     if paused {
                         let _ = app.emit("download-job-paused", job_id.clone());
                         return;
                     }
 
-                    if payload.code == Some(0) {
+                    if succeeded {
                         let diag_root_log = diag_root.clone();
                         let started_log = download_started_at;
-                        let cleanup_root = diag_root.clone();
+                        let job_artifacts = artifacts.clone();
+                        let finals = reported_paths.clone();
                         let _ = tokio::task::spawn_blocking(move || {
                             log_post_download_files_written(&diag_root_log, started_log);
-                            cleanup_orphan_downloads_under(&cleanup_root, started_log);
+                            trash_job_files(
+                                &job_artifacts.leftover_intermediates(&finals),
+                                "download intermediate",
+                            );
                         });
                         if auto_scrub && !scrub_spawned.swap(true, Ordering::SeqCst) {
                             spawn_scrub_previews_for_recent_videos(
@@ -1444,6 +1522,7 @@ pub async fn start_download_job(
         if let Err(e) = manager_bg.remove_active(&job_id) {
             crate::rf_log!("download.jobs", log::Level::Error, "job {} remove_active (channel end): {}", job_id, e);
         }
+        trash_partial_extractions(&artifacts, &take_printed_paths(&printed_paths)).await;
         let paused = match manager_bg.take_paused(&job_id) {
             Ok(b) => b,
             Err(e) => {
@@ -1994,7 +2073,7 @@ pub(crate) async fn run_ytdlp_json(
 
     let output = tokio::time::timeout(
         std::time::Duration::from_secs(90),
-        ytdlp_shell_command(app)?.args(&args).output(),
+        crate::child_job::output(ytdlp_shell_command(app)?.args(&args)),
     )
     .await
     .map_err(|_| format!("yt-dlp {} timed out after 90s", timeout_label))?

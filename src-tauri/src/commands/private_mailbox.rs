@@ -1,6 +1,6 @@
 //! State handed between RuForge's own webviews. An `emitTo` payload reaches every webview that listens
-//! with the `Any` target, including the youtube.com Explorer (it has event permission), so private
-//! payloads sit here and the event only carries a ping. Remote pages cannot invoke app commands.
+//! with the `Any` target, so private payloads sit here and the event only carries a ping. Remote pages
+//! can neither listen for events (see `capability_audit`) nor invoke app commands.
 
 use std::collections::HashMap;
 use std::sync::Mutex;

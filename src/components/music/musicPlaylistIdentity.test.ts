@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MediaFile } from "@/types";
 import type { VirtualPlaylistRecord } from "@/virtualPlaylists";
-import { reconcilePlaylistIdentities } from "./musicPlaylistIdentity";
+import { reconcilePlaylistIdentities, relocationCandidates } from "./musicPlaylistIdentity";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
 import { primaryArtist } from "./musicArtist";
 
@@ -43,10 +43,39 @@ describe("reconcilePlaylistIdentities", () => {
     const moved = file("D:\\music\\Song (1).mp3", { sourceId: "abc" });
     const oldPath = "C:\\m\\Song.mp3";
     const rec = playlist([{ path: oldPath, addedAt: 3, identityKey: "id:abc" }], { thumbnailPath: oldPath });
-    const out = reconcilePlaylistIdentities([rec], [moved], keyFor);
+    const out = reconcilePlaylistIdentities([rec], [moved], keyFor, () => true);
     expect(out.changed).toBe(true);
     expect(out.records[0]?.items[0]).toEqual({ path: moved.path, addedAt: 3, identityKey: "id:abc" });
     expect(out.records[0]?.thumbnailPath).toBe(moved.path);
+  });
+
+  it("never re-points while the original drive is unavailable", () => {
+    const other = file("D:\\B\\Song.mp3", { sourceId: "abc" });
+    const rec = playlist([{ path: "E:\\A\\Song.mp3", addedAt: 3, identityKey: "id:abc" }]);
+    const offline = reconcilePlaylistIdentities([rec], [other], keyFor, () => false);
+    expect(offline.changed).toBe(false);
+    expect(offline.records[0]).toBe(rec);
+    expect(reconcilePlaylistIdentities([rec], [other], keyFor).records[0]).toBe(rec);
+  });
+
+  it("an untagged title-only match never re-points, even when the drive is mounted", () => {
+    const other = file("D:\\B\\01 Intro.mp3");
+    const key = keyFor(other);
+    expect(key).toBe("song:|01 intro");
+    const rec = playlist([{ path: "E:\\A\\01 Intro.mp3", addedAt: 1, identityKey: key }]);
+    const out = reconcilePlaylistIdentities([rec], [other], keyFor, () => true);
+    expect(out.changed).toBe(false);
+    expect(relocationCandidates([rec], [other], keyFor)).toEqual([]);
+  });
+
+  it("asks the disk only about strong-key items with a library match", () => {
+    const tagged = file("D:\\B\\Song.mp3", { sourceId: "abc" });
+    const rec = playlist([
+      { path: "E:\\A\\Song.mp3", addedAt: 1, identityKey: "id:abc" },
+      { path: "E:\\A\\Other.mp3", addedAt: 2, identityKey: "id:zzz" },
+      { path: tagged.path, addedAt: 3, identityKey: "id:abc" },
+    ]);
+    expect(relocationCandidates([rec], [tagged], keyFor)).toEqual(["E:\\A\\Song.mp3"]);
   });
 
   it("leaves a missing item without a key alone (old record, offline drive)", () => {

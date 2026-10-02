@@ -3,6 +3,9 @@ import { useRuforgeStore } from "../store/ruforgeStore";
 
 export const PLAYER_PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
+/** Matches the rewind / forward 15 buttons and their icons. */
+export const PLAYER_SKIP_SECONDS = 15;
+
 function isTypingTarget(): boolean {
   const el = document.activeElement;
   if (!el) return false;
@@ -81,7 +84,7 @@ export function usePlayerKeyboardShortcuts(handlers: PlayerKeyboardShortcutHandl
           if (e.shiftKey && hasChapters && jumpNextChapter) {
             jumpNextChapter();
           } else {
-            skip(10);
+            skip(PLAYER_SKIP_SECONDS);
           }
           break;
         case "ArrowLeft":
@@ -89,7 +92,7 @@ export function usePlayerKeyboardShortcuts(handlers: PlayerKeyboardShortcutHandl
           if (e.shiftKey && hasChapters && jumpPrevChapter) {
             jumpPrevChapter();
           } else {
-            skip(-10);
+            skip(-PLAYER_SKIP_SECONDS);
           }
           break;
         case "ArrowUp":

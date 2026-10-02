@@ -1,0 +1,6 @@
+[package]
+name = "tauri"
+version = "0.0.0"
+edition = "2021"
+[dependencies]
+tauri_macros_stub = { path = "../tauri_macros_stub" }

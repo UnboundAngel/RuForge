@@ -12,6 +12,7 @@ import {
 } from "../downloadProgress";
 import {
   collapseDownloadJobsByUrl,
+  downloadJobDestinationKey,
   createDownloadJobId,
   downloadJobMediaNeedsHydration,
   LIBRARY_DUPLICATE_SKIP_MESSAGE,
@@ -326,6 +327,7 @@ async function hydrateDownloadJobMetadata(
   set: StoreApi<RuforgeStore>["setState"],
   jobId: string,
   url: string,
+  opts?: { failJobOnError?: boolean },
 ): Promise<void> {
   const seed = get().downloadJobs.find((j) => j.id === jobId);
   if (!seed || !downloadJobMediaNeedsHydration(seed.metadata)) return;
@@ -383,7 +385,18 @@ async function hydrateDownloadJobMetadata(
     const snap = mergeVideoInfoFileSizes(base, info, audioOnly);
     commitDownloadJobMetadataCache(cacheKey, snap);
     applySnapshot(snapshotWithResolvedFileSize(snap, audioOnly));
-  } catch {
+  } catch (e) {
+    if (opts?.failJobOnError) {
+      const error = e instanceof Error ? e.message : String(e);
+      set((s) => ({
+        downloadJobs: s.downloadJobs.map((j) =>
+          j.id === jobId && (j.status === "queued" || j.status === "paused")
+            ? { ...j, status: "failed" as const, error, resumeOnStart: false }
+            : j,
+        ),
+      }));
+      persistDownloadJobs(get().downloadJobs);
+    }
     const cur = get().downloadJobs.find((j) => j.id === jobId);
     if (!cur || !downloadJobMediaNeedsHydration(cur.metadata)) return;
     const fallbackTitle =
@@ -874,7 +887,7 @@ export const createDownloadQueueSlice: StateCreator<
           (j.status === "queued" || j.status === "paused") &&
           downloadJobMediaNeedsHydration(j.metadata)
         ) {
-          void hydrateDownloadJobMetadata(get, set, j.id, j.url);
+          void hydrateDownloadJobMetadata(get, set, j.id, j.url, { failJobOnError: true });
         }
       }
     },
@@ -949,28 +962,36 @@ export const createDownloadQueueSlice: StateCreator<
             } satisfies DownloadJobMediaSnapshot)
           : null);
 
-      const existing = get().downloadJobs.find(
+      const destination = downloadJobDestinationKey(options);
+      const live = get().downloadJobs.filter(
         (j) =>
           youtubeUrlsMatch(j.url, urlTrim) &&
           (j.status === "queued" ||
             j.status === "paused" ||
             j.status === "downloading"),
       );
+      // A single is already covered by any live job for the URL; a playlist track needs its own folder's job.
+      const existing =
+        live.find((j) => downloadJobDestinationKey(j.options) === destination) ??
+        (destination === "" ? live[0] : undefined);
       if (existing) {
-        if (existing.status === "downloading") {
+        if (
+          existing.status === "downloading" ||
+          downloadJobDestinationKey(existing.options) !== destination
+        ) {
           return existing.id;
         }
         set((s) => {
           let downloadJobs = s.downloadJobs.map((j) => {
             if (j.id !== existing.id) return j;
+            const audioOnly = j.options.audioOnly === true;
             const metadata = snapshot
-              ? snapshotWithResolvedFileSize(snapshot, options.audioOnly === true)
+              ? snapshotWithResolvedFileSize(snapshot, audioOnly)
               : j.metadata
-                ? snapshotWithResolvedFileSize(j.metadata, options.audioOnly === true)
+                ? snapshotWithResolvedFileSize(j.metadata, audioOnly)
                 : j.metadata;
             return {
               ...j,
-              options,
               title: meta?.title?.trim() ? meta.title : j.title,
               metadata,
               approval:
@@ -1024,7 +1045,10 @@ export const createDownloadQueueSlice: StateCreator<
         };
       });
       const kept = get().downloadJobs.find(
-        (j) => youtubeUrlsMatch(j.url, urlTrim) && j.status !== "failed",
+        (j) =>
+          youtubeUrlsMatch(j.url, urlTrim) &&
+          downloadJobDestinationKey(j.options) === destination &&
+          j.status !== "failed",
       );
       const keptId = kept?.id ?? id;
       if (kept && downloadJobMediaNeedsHydration(kept.metadata)) {
@@ -1487,10 +1511,15 @@ export const createDownloadQueueSlice: StateCreator<
         );
 
         if (payload.success) {
+          const finishedDestination = finishedJob ? downloadJobDestinationKey(finishedJob.options) : "";
           downloadJobs = downloadJobs.filter(
             (j) =>
               j.id !== payload.jobId &&
-              !(finishedUrl && youtubeUrlsMatch(j.url, finishedUrl)),
+              !(
+                finishedUrl &&
+                youtubeUrlsMatch(j.url, finishedUrl) &&
+                downloadJobDestinationKey(j.options) === finishedDestination
+              ),
           );
         }
 

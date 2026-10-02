@@ -5,6 +5,11 @@ Read `STATE.md` then root `AGENTS.md` first. Then open **one** of these if the t
 | Path | Open when |
 |------|-----------|
 | [`docs/agents/AGENT-REFERENCE.md`](AGENT-REFERENCE.md) | architecture, Zustand, code quality detail, onboarding contract, updater/signing manual, mini player, playback persistence |
+| [`docs/agents/GOTCHAS.md`](GOTCHAS.md) | cross-cutting landmines (cargo test on Windows, title-bar drag, background Rust, big-feature phase flow) |
+| [`website/AGENTS.md`](../../website/AGENTS.md) | website visuals, `/m/`, copy, SEO voice |
+| [`src/explorer/AGENTS.md`](../../src/explorer/AGENTS.md) | Explorer title band, pause/overlay, Explorer action validation |
+| [`src/components/island/AGENTS.md`](../../src/components/island/AGENTS.md) | island size cap and action validation |
+| [`src/components/music-mini/AGENTS.md`](../../src/components/music-mini/AGENTS.md) | mini-window App.tsx guards (music mini + video mini) |
 | [`docs/ruforge/plans/companion-action-plan.md`](../ruforge/plans/companion-action-plan.md) | Companion V1 scope, localhost companion, progress sync, Companion product decisions |
 | [`docs/agents/COMPANION-AND-COMPETITOR-INDEX.md`](COMPANION-AND-COMPETITOR-INDEX.md) | companion, LAN, QR, pair, `/library`, `/stream`, companion-web, axum, phone browser |
 | [`docs/ruforge/research/companion-architecture-extraction.md`](../ruforge/research/companion-architecture-extraction.md) | after the index: Jellyfin, Navidrome, range 206, embed SPA, no transcode |
@@ -19,6 +24,9 @@ Read `STATE.md` then root `AGENTS.md` first. Then open **one** of these if the t
 | [`.cursor/rules/design-style-checklist.mdc`](../../.cursor/rules/design-style-checklist.mdc) | design review, visual checklist |
 | [`.cursor/rules/design-style-anti-patterns.mdc`](../../.cursor/rules/design-style-anti-patterns.mdc) | banned UI patterns, generic AI UI |
 | [`.cursor/skills/ruforge-release/SKILL.md`](../../.cursor/skills/ruforge-release/SKILL.md) | ship, release, push it out, updater.json, gh release, version bump for users |
+| `node scripts/setup-git-remotes.mjs` + root `AGENTS.md` **Remotes** | sync vs public remotes, pushDefault, hooksPath, snapshot publishing |
+| `scripts/triggers/` + `node scripts/triggers/run.mjs` | phrase triggers (push, leave, back, add-trigger, ship); registry in `registry.json` |
+| `scripts/private-only-paths.txt` + `scripts/publish-snapshot.mjs` | private-only paths; downstream snapshot publish onto public main |
 | [`docs/agents/release/CHANGELOG-AUTHORING.md`](release/CHANGELOG-AUTHORING.md) | release step 8 only: version graph, versioner, MANIFEST |
 | [`docs/ruforge/research/google-seo-and-domain-strategy.md`](../ruforge/research/google-seo-and-domain-strategy.md) | website, SEO, comparison page, domain |
 | [`docs/ruforge/research/ai-llm-discoverability.md`](../ruforge/research/ai-llm-discoverability.md) | llms.txt, robots, IndexNow, GPTBot, AI discoverability |

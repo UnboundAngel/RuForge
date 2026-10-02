@@ -61,6 +61,7 @@ _live-updater-check*.json
 AGENTS.local.md
 VOICE.local.md
 
+
 # Ad-hoc archives and large optional FFmpeg binaries (see AGENTS.md; do not commit multi-hundred-MB exes)
 ffmpeg.7z
 src-tauri/binaries/ffmpeg*.exe

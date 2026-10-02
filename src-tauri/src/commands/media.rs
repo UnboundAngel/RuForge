@@ -167,12 +167,12 @@ async fn run_ffmpeg_sidecar_unlocked(
 
     let argv = ffmpeg_args_with_thread_cap(args);
     let argv_refs: Vec<&str> = argv.iter().map(String::as_str).collect();
-    let output = app
+    let cmd = app
         .shell()
         .sidecar("ffmpeg")
         .map_err(|e| e.to_string())?
-        .args(argv_refs)
-        .output()
+        .args(argv_refs);
+    let output = crate::child_job::output(cmd)
         .await
         .map_err(|e| format!("Failed to run ffmpeg sidecar: {}", e))?;
 

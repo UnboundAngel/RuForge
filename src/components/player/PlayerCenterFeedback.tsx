@@ -11,13 +11,16 @@ export type PlayerCenterFeedbackState =
 
 const ICON_CLASS = "w-7 h-7 text-white";
 const MUTE_ICON_CLASS = "w-7 h-7 text-red-500";
+const COMPACT_ICON_CLASS = "w-4 h-4 text-white";
+const COMPACT_MUTE_ICON_CLASS = "w-4 h-4 text-red-500";
 
-function VolumeIcon({ level, muted }: { level: number; muted: boolean }) {
+function VolumeIcon({ level, muted, compact = false }: { level: number; muted: boolean; compact?: boolean }) {
+  const base = compact ? COMPACT_ICON_CLASS : ICON_CLASS;
   if (muted || level <= 0) {
-    return <VolumeX className={muted ? MUTE_ICON_CLASS : ICON_CLASS} />;
+    return <VolumeX className={muted ? (compact ? COMPACT_MUTE_ICON_CLASS : MUTE_ICON_CLASS) : base} />;
   }
-  if (level <= 0.5) return <Volume1 className={ICON_CLASS} />;
-  return <Volume2 className={ICON_CLASS} />;
+  if (level <= 0.5) return <Volume1 className={base} />;
+  return <Volume2 className={base} />;
 }
 
 function CcIcon({ enabled, unavailable }: { enabled?: boolean; unavailable?: boolean }) {
@@ -57,9 +60,50 @@ function feedbackKey(feedback: PlayerCenterFeedbackState): string {
 
 export function PlayerCenterFeedback({
   feedback,
+  compact = false,
 }: {
   feedback: PlayerCenterFeedbackState | null;
+  /** Strip-height windows: one small pill with icon and value side by side. */
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <AnimatePresence>
+        {feedback && (
+          <motion.div
+            key={feedbackKey(feedback)}
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.92 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none"
+          >
+            <div className="flex h-7 items-center gap-1.5 rounded-full bg-black/70 px-2.5">
+              {feedback.kind === "play" && <Play className={`${COMPACT_ICON_CLASS} fill-white`} />}
+              {feedback.kind === "pause" && <Pause className={`${COMPACT_ICON_CLASS} fill-white`} />}
+              {feedback.kind === "volume" && (
+                <>
+                  <VolumeIcon level={feedback.level} muted={feedback.muted} compact />
+                  <span className="text-[12px] font-semibold tabular-nums text-white">
+                    {feedback.muted ? 0 : Math.round(feedback.level * 100)}%
+                  </span>
+                </>
+              )}
+              {feedback.kind === "cc" && (
+                <span className="text-[11px] font-semibold text-white">
+                  Captions {feedback.enabled ? "on" : "off"}
+                </span>
+              )}
+              {feedback.kind === "cc-unavailable" && (
+                <span className="text-[11px] font-semibold text-white/90">No captions</span>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
+
   return (
     <AnimatePresence>
       {feedback && (

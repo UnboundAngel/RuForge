@@ -84,7 +84,7 @@ The RuForge installer includes the following third-party programs, each distribu
 - [FFmpeg and FFprobe](https://ffmpeg.org), from the [gyan.dev full build](https://www.gyan.dev/ffmpeg/builds/) (GPL version 3). Source code for this build is available from gyan.dev and the FFmpeg project.
 
 
-Starting with version 0.4.1, the license texts for these programs, a list of their source code locations and the RuForge license are installed in the `licenses` folder inside the RuForge install folder.
+Starting with version 0.5.0, the license texts for these programs, a list of their source code locations and the RuForge license are installed in the `licenses` folder inside the RuForge install folder.
 
 
 RuForge also uses:

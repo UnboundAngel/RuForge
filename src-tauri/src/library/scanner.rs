@@ -147,22 +147,17 @@ struct ProbeResult {
 }
 
 async fn probe_media(app: &AppHandle, path: &Path) -> Option<ProbeResult> {
-    let output = app
-        .shell()
-        .sidecar("ffprobe")
-        .ok()?
-        .args([
-            "-v",
-            "quiet",
-            "-print_format",
-            "json",
-            "-show_format",
-            "-show_streams",
-            &path.to_string_lossy(),
-        ])
-        .output()
-        .await
-        .ok()?;
+    let output = crate::child_job::output(app.shell().sidecar("ffprobe").ok()?.args([
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
+        "-show_format",
+        "-show_streams",
+        &path.to_string_lossy(),
+    ]))
+    .await
+    .ok()?;
     if !output.status.success() {
         return None;
     }

@@ -27,6 +27,16 @@ pub struct AuthConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PlaylistRowSize {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size_bytes_audio: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size_bytes_video: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PlaylistItemPreview {
     pub title: String,
     pub thumbnail: String,

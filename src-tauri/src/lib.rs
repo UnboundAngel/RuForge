@@ -6,12 +6,16 @@ mod deno_binary;
 mod dev_gate;
 pub mod discord_rpc;
 mod media_engine_adapter;
+#[cfg(test)]
+mod capability_audit;
+mod download_artifacts;
 mod download_job_manager;
 mod focus_protocol;
 mod hardware_acceleration;
 mod window_classname;
 pub mod library;
 mod media_bundle;
+mod child_job;
 mod process_tree;
 mod radial_nav_bridge;
 mod telemetry_prefs;
@@ -48,8 +52,8 @@ use crate::commands::dev_captures::{
     read_dev_capture_png, start_dev_capture_file_drag, write_dev_capture_png, DevCaptureMainWindow,
 };
 use crate::commands::downloader::{
-    get_music_browse_info, get_playlist_items_page, get_video_info, pause_download_job,
-    start_download_job, stop_all_active_download_jobs,
+    get_music_browse_info, get_playlist_items_page, get_playlist_row_sizes, get_video_info,
+    pause_download_job, start_download_job, stop_all_active_download_jobs,
 };
 use crate::commands::explorer_embed::{
     embedded_explorer_webview_label, ensure_embedded_explorer_bounds, is_linux_host,
@@ -58,7 +62,7 @@ use crate::commands::explorer_embed::{
 use crate::commands::export::{cancel_export_bundle, export_media_bundle, ExportBundleState};
 use crate::commands::ffprobe::probe_local_media_ffprobe;
 use crate::commands::gallery::{
-    regroup_playlist_downloads, scan_dir_for_neighbors, sweep_library_download_duplicates,
+    regroup_playlist_downloads, scan_dir_for_neighbors,
 };
 use crate::commands::media::{
     delete_media, delete_media_batch, ensure_poster_if_missing, extract_frames,
@@ -92,8 +96,8 @@ use crate::commands::playlist_sidecar::{
     update_playlist_download_sidecar_track,
 };
 use crate::commands::music_playlists::{
-    read_music_playlists_file, read_playlist_text_file, write_music_playlists_file,
-    write_playlist_text_file,
+    playlist_paths_relocatable, read_music_playlists_file, read_playlist_text_file,
+    write_music_playlists_file, write_playlist_text_file,
 };
 use crate::commands::music_preview::{music_preview_local_hook, resolve_music_preview_stream};
 use crate::commands::youtube_feed::{get_video_stats, get_youtube_feed_page, resolve_video_preview_stream};
@@ -346,6 +350,7 @@ pub fn run() {
             sync_telemetry_prefs,
             tray_front_debug,
             get_video_info,
+            get_playlist_row_sizes,
             get_music_browse_info,
             get_playlist_items_page,
             resolve_music_preview_stream,
@@ -382,7 +387,6 @@ pub fn run() {
             media_engine_runtime_status,
             media_engine_list_jobs,
             scan_dir_for_neighbors,
-            sweep_library_download_duplicates,
             regroup_playlist_downloads,
             get_library_snapshot,
             library_get_config,
@@ -461,6 +465,7 @@ pub fn run() {
             write_music_playlists_file,
             read_playlist_text_file,
             write_playlist_text_file,
+            playlist_paths_relocatable,
             music_listen_begin,
             music_listen_transfer,
             music_listen_accumulate,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ClipboardCopy, Loader2 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { noteOnboardingEvent } from "@/lib/onboardingConditions";
 import { OVERLAY_Z_CLASS } from "@/lib/overlayZIndex";
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -75,6 +76,7 @@ function PasteStep() {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(IMPORT_PROMPT);
+      noteOnboardingEvent("import-prompt-copied");
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -435,6 +437,7 @@ function ReviewFooter() {
   const save = () => {
     const res = savePlaylistImport();
     if (!res) return;
+    noteOnboardingEvent("import-saved");
     openMusicPlaylist(res.playlistId);
     const lead = res.merged
       ? res.alreadyIn

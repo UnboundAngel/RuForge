@@ -8,7 +8,6 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { sanitizeVideoInfo } from "../components/downloader/downloaderFormat";
 import type { GalleryEntry, MediaFile, PlaylistCollection, ProgressPayload, VideoInfo } from "../types";
 import {
-  galleryScanRootsFromStore,
   hydrateLibraryFromRust,
   isDirInLibraryScanList,
   libraryConfigToStoreFields,
@@ -75,7 +74,10 @@ import {
   toggleTrackLike,
 } from "../components/music/musicLikedTracks";
 import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
-import { reconcilePlaylistIdentities } from "../components/music/musicPlaylistIdentity";
+import {
+  reconcilePlaylistIdentities,
+  relocationCandidates,
+} from "../components/music/musicPlaylistIdentity";
 import { musicTrackIdentityKey } from "../components/music/musicShelfDedup";
 import { primaryArtist } from "../components/music/musicArtist";
 import {
@@ -226,11 +228,6 @@ export interface RuforgeStore extends DownloadQueueSlice {
 
   /** Gallery slice (not persisted). Library list from Rust `get_library_snapshot`. */
   entries: GalleryEntry[];
-  /**
-   * Scan roots already passed through `sweep_library_download_duplicates` this app session.
-   * Not persisted: each launch may run one full dedupe sweep per root on first `fetchEntries`.
-   */
-  galleryDedupeSweptRoots: string[];
   /** Bumps when `entries` is replaced from a successful on-disk gallery scan (`fetchEntries`). */
   libraryScanRevision: number;
   galleryLoading: boolean;
@@ -563,7 +560,36 @@ function waitForVideoMiniReadyThen(onReady: () => void | Promise<void>): Promise
 
 const playlistIdentityKey = (file: MediaFile) => musicTrackIdentityKey(file, primaryArtist);
 
-/** Stamps identity keys and follows moved files, saving only when something changed. */
+let relocationCheckGeneration = 0;
+
+/** Follows moved files only after the disk confirms each original drive is mounted. */
+function scheduleMovedFileFollow(library: MediaFile[], records: VirtualPlaylistRecord[]): void {
+  const candidates = relocationCandidates(records, library, playlistIdentityKey);
+  if (candidates.length === 0) return;
+  const generation = ++relocationCheckGeneration;
+  void invoke<boolean[]>("playlist_paths_relocatable", { paths: candidates })
+    .then((answers) => {
+      if (generation !== relocationCheckGeneration) return;
+      const confirmed = new Set(
+        candidates.filter((_, i) => answers[i] === true).map((p) => p.replace(/\//g, "\\").toLowerCase()),
+      );
+      if (confirmed.size === 0) return;
+      const disk = stripVirtualPlaylists(useRuforgeStore.getState().entries);
+      const current = [...collectMediaIndex(disk).values()].filter((f) => isAudioOnlyPath(f.path));
+      const result = reconcilePlaylistIdentities(
+        loadVirtualPlaylistRecords(),
+        current,
+        playlistIdentityKey,
+        (path) => confirmed.has(path.replace(/\//g, "\\").toLowerCase()),
+      );
+      if (!result.changed) return;
+      saveVirtualPlaylistRecords(result.records);
+      useRuforgeStore.getState().refreshVirtualPlaylists();
+    })
+    .catch((e) => console.warn("playlist relocation check failed", e));
+}
+
+/** Stamps identity keys, saving only when something changed; moved files follow asynchronously. */
 function reconcileMusicItemIdentities(
   disk: GalleryEntry[],
   records: VirtualPlaylistRecord[],
@@ -571,9 +597,13 @@ function reconcileMusicItemIdentities(
   if (!records.some((r) => r.kind === "music" && r.items.length > 0)) return records;
   const library = [...collectMediaIndex(disk).values()].filter((f) => isAudioOnlyPath(f.path));
   const result = reconcilePlaylistIdentities(records, library, playlistIdentityKey);
-  if (!result.changed) return records;
-  saveVirtualPlaylistRecords(result.records);
-  return loadVirtualPlaylistRecords();
+  let next = records;
+  if (result.changed) {
+    saveVirtualPlaylistRecords(result.records);
+    next = loadVirtualPlaylistRecords();
+  }
+  scheduleMovedFileFollow(library, next);
+  return next;
 }
 
 function syncVirtualPlaylistsIntoState(
@@ -710,7 +740,6 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       entries: mergeVirtualPlaylistsIntoEntries([]),
       virtualPlaylistRecords: loadVirtualPlaylistRecords(),
-      galleryDedupeSweptRoots: [],
       libraryScanRevision: 0,
       galleryLoading: true,
       galleryDesktopReady: false,
@@ -1792,26 +1821,11 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const scrubEpoch =
           opts?.scrubEpoch ??
           (skipScrubBackfill ? galleryScrubEpoch : (++galleryScrubEpoch, galleryScrubEpoch));
-        const { internalVault, libraryScanDirs, notify, settings } = get();
+        const { notify, settings } = get();
         if (manageLoadingStart) set({ galleryLoading: true });
         let posterBackfillList: MediaFile[] | null = null;
         let scrubBackfillList: MediaFile[] | null = null;
         try {
-          const dirs = galleryScanRootsFromStore({ internalVault, libraryScanDirs });
-          const forceSweep = opts?.sweepDuplicates === true;
-          const sweptSet = new Set(get().galleryDedupeSweptRoots);
-          let sweptRootsUpdated = false;
-          for (const dir of dirs) {
-            const key = normalizeScanDirKey(dir);
-            if (forceSweep || !sweptSet.has(key)) {
-              await invoke("sweep_library_download_duplicates", { dir });
-              sweptSet.add(key);
-              sweptRootsUpdated = true;
-            }
-          }
-          if (sweptRootsUpdated) {
-            set({ galleryDedupeSweptRoots: Array.from(sweptSet) });
-          }
           const forceReindex =
             opts?.forceReindex === true || opts?.sweepDuplicates === true;
           const snapshot = await invoke<{

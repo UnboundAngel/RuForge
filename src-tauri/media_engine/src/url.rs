@@ -18,6 +18,19 @@ pub fn validate_http_url(raw: &str) -> Result<String, EngineError> {
     Ok(trimmed.to_string())
 }
 
+pub fn is_youtube_playlist_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    let Some((before_query, query)) = lower.split_once('?') else {
+        return false;
+    };
+    if !before_query.contains("youtube.com/") {
+        return false;
+    }
+    query
+        .split(['&', '#'])
+        .any(|pair| pair.strip_prefix("list=").is_some_and(|v| !v.is_empty()))
+}
+
 pub fn validate_format_selector(raw: &str) -> Result<String, EngineError> {
     let s = raw.trim();
     if s.is_empty() {
@@ -60,4 +73,20 @@ pub fn validate_output_dir(path: &str) -> Result<String, EngineError> {
         ));
     }
     Ok(trimmed.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_youtube_playlist_url;
+
+    #[test]
+    fn detects_youtube_playlist_links() {
+        assert!(is_youtube_playlist_url("https://www.youtube.com/playlist?list=PLuvRKGApO-zp4nimhPQ4M8nytdjxqy8-R"));
+        assert!(is_youtube_playlist_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123"));
+        assert!(is_youtube_playlist_url("https://music.youtube.com/playlist?list=OLAK5uy_x"));
+        assert!(!is_youtube_playlist_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"));
+        assert!(!is_youtube_playlist_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list="));
+        assert!(!is_youtube_playlist_url("https://youtu.be/dQw4w9WgXcQ?list=PL123"));
+        assert!(!is_youtube_playlist_url("https://example.com/page?list=PL123"));
+    }
 }

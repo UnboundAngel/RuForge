@@ -264,6 +264,8 @@ export function timeForScrubberPercent(
 
   for (let i = 0; i < chapters.length; i++) {
     const seg = layouts[i];
+    // The gap before a pill belongs to that pill's start, not the end of the video.
+    if (x < seg.leftPx) return chapters[i].start_time;
     const segEnd = seg.leftPx + seg.widthPx;
     const inSegment =
       i === chapters.length - 1 ? x >= seg.leftPx && x <= segEnd : x >= seg.leftPx && x < segEnd;

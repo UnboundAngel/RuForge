@@ -6,6 +6,7 @@ import {
   useMemo,
   type ClipboardEvent,
 } from "react";
+import { arrayMove } from "@dnd-kit/sortable";
 import { fetchVideoInfoWithTimeout } from "../../downloadVideoInfoFetch";
 import { cookieContextFromSettings } from "../../downloadQueue";
 import { useYtdlpUpdate } from "../../hooks/useYtdlpUpdate";
@@ -72,6 +73,7 @@ import {
 } from "../../lib/devLastDownloadBatch";
 import { deliverUserNotification } from "../../systemNotify";
 import { ytdlpVideoFormatForMetadata } from "../../downloadFormat";
+import { usePlaylistRowSizeFill } from "./usePlaylistRowSizeFill";
 import { STORAGE_FULL_NOTIFY } from "../../lib/storageBlocks";
 import { recordStorageFullRefusal } from "../../notifications/sources/downloadItems";
 
@@ -249,6 +251,7 @@ export function useDownloaderView({
   }, [downloadJobs, batchQueueJobIds]);
 
   const batchQueueActive = batchQueueJobs.length > 1;
+  usePlaylistRowSizeFill(batchQueueActive);
   const focusShowsBigProgress = focusedJob?.status === "downloading";
   const duplicateChoiceResolverRef = useRef<((choice: DuplicateDownloadChoice) => void) | null>(null);
   const lastDupCheckLibraryScanRev = useRef<number | null>(null);
@@ -1618,6 +1621,12 @@ export function useDownloaderView({
     setPlaylistItemAudioOverrides((prev) => ({ ...prev, [itemKey]: audioOnly }));
   }, []);
 
+  const reorderPlaylistItems = useCallback((from: number, to: number) => {
+    const info = useRuforgeStore.getState().videoInfo;
+    if (!info?.playlistItems || from === to) return;
+    setVideoInfo({ ...info, playlistItems: arrayMove(info.playlistItems, from, to) });
+  }, [setVideoInfo]);
+
   const playlistHeroDisplayBytes = useMemo(() => {
     if (!videoInfo?.isPlaylist || !videoInfo.playlistItems?.length) return null;
     return sumPlaylistDisplayBytes(
@@ -2149,6 +2158,7 @@ export function useDownloaderView({
     playlistHeroDisplayBytes,
     playlistItemAudioOverrides,
     togglePlaylistItemAudio,
+    reorderPlaylistItems,
     isPlaylistItemDuplicate,
     playlistItemKey,
     resolveAudioOnlyForPlaylistItem,

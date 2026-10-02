@@ -63,6 +63,20 @@ export function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** Summed playlist length: clock format stops reading as time past a few hours. */
+export function formatTotalDuration(seconds: number): string {
+  const totalMinutes = Math.round(normalizeDurationSeconds(seconds) / 60);
+  const d = Math.floor(totalMinutes / 1440);
+  const h = Math.floor((totalMinutes % 1440) / 60);
+  const m = totalMinutes % 60;
+  if (d > 0) {
+    const days = `${d} ${d === 1 ? "day" : "days"}`;
+    return h > 0 ? `${days} ${h} hr` : days;
+  }
+  if (h > 0) return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+  return `${Math.max(1, m)} min`;
+}
+
 /** Normalize duration fields on hero metadata from `get_video_info`. */
 export function sanitizeVideoInfo(info: VideoInfo): VideoInfo {
   const playlistItems = info.playlistItems?.map((item) => ({

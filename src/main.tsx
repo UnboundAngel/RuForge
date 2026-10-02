@@ -22,6 +22,15 @@ import { syncMainWindowTransparentFrame } from "./lib/mainWindowFrame";
 import "./index.css";
 
 window.addEventListener("beforeunload", clearRuforgeNotificationDismissTimers);
+
+// No native webview menu; surfaces that want one render a house menu. Text fields keep
+// cut/copy/paste until they get a custom menu, and Shift still reaches Inspect in dev.
+window.addEventListener("contextmenu", (e) => {
+  if (import.meta.env.DEV && e.shiftKey) return;
+  const target = e.target as HTMLElement | null;
+  if (target?.closest("input, textarea, [contenteditable=''], [contenteditable='true']")) return;
+  e.preventDefault();
+});
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     clearRuforgeNotificationDismissTimers();

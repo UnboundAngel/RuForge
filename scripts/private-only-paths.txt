@@ -1,0 +1,9 @@
+# Paths that stay on UnboundAngel/Ruforge-priv only.
+# Public RuForge receives snapshot commits from scripts/publish-snapshot.mjs,
+# which drops these paths from the published tree. One path per line; dirs end with /.
+docs/agents/codex/MEMORY.md
+docs/agents/codex/context/
+docs/agents/handoffs/
+docs/agents/PERSONAL.md
+docs/ruforge/archive/
+.claude/

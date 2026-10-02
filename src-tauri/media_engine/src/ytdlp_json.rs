@@ -508,6 +508,23 @@ fn dual_file_sizes_from_entry_json(
     (fallback, fallback)
 }
 
+/// Audio and video estimates from one unfiltered pass. Ignores yt-dlp's default selection,
+/// which only describes the muxed video pick.
+pub fn row_sizes_from_entry_formats(entry: &Value, video_format: &str) -> (Option<u64>, Option<u64>) {
+    let duration = ytdlp_duration_secs(entry).unwrap_or(0.0);
+    let Some(formats) = entry.get("formats").and_then(|v| v.as_array()).filter(|f| !f.is_empty()) else {
+        return (None, None);
+    };
+    let max_height = max_height_from_ytdlp_format(video_format);
+    let audio = pick_best_audio_size_from_formats(formats, duration);
+    let video = match (pick_best_video_only_size_from_formats(formats, max_height, duration), audio) {
+        (Some(v), Some(a)) => Some(v.saturating_add(a)),
+        (Some(v), None) => Some(v),
+        (None, a) => a,
+    };
+    (audio, video)
+}
+
 pub fn ytdlp_duration_secs(v: &Value) -> Option<f64> {
     v.get("duration")
         .and_then(|d| {

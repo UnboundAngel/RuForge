@@ -142,9 +142,7 @@ async fn yt_dlp_version_line<F>(app: &AppHandle, f: F) -> Result<String, String>
 where
     F: FnOnce(&AppHandle) -> Result<ShellCmd, String>,
 {
-    let out = f(app)?
-        .args(["--version"])
-        .output()
+    let out = crate::child_job::output(f(app)?.args(["--version"]))
         .await
         .map_err(|e| format!("Failed to run yt-dlp --version: {}", e))?;
     if !out.status.success() {
@@ -309,11 +307,7 @@ pub async fn get_ytdlp_update_status(
 }
 
 async fn verify_part_binary(app: &AppHandle, part_path: &Path) -> Result<(), String> {
-    let out = app
-        .shell()
-        .command(part_path)
-        .args(["--version"])
-        .output()
+    let out = crate::child_job::output(app.shell().command(part_path).args(["--version"]))
         .await
         .map_err(|e| format!("Verify downloaded yt-dlp: {}", e))?;
     if !out.status.success() {

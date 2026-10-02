@@ -1,32 +1,22 @@
-import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
-import {
-  Ban,
-  Globe,
-  Clock,
-  Download,
-  Info,
-  HardDrive,
-  List,
-  Clipboard,
-  Paperclip,
-  Check,
-  X,
-  AlertTriangle,
-} from "lucide-react";
+import { Ban, Download, Info } from "lucide-react";
 import { DuplicateDownloadDialog } from "./DuplicateDownloadDialog";
 import { downloadSubtitleLangLabel } from "../store/types";
 import {
-  formatApproxFileSize,
-  formatDuration,
   formatHeroDownloadSpeed,
   sanitizeCarouselDisplayTitle,
 } from "./downloader/downloaderFormat";
-import { BROWSER_OPTIONS } from "./downloader/downloaderConstants";
+import { HeroFormatSwitch } from "./downloader/HeroFormatSwitch";
+import { HeroStats } from "./downloader/HeroStats";
 import {
-  DownloadJobAudioToggle,
-  UrlInputPacer,
-} from "./downloader/DownloadJobQueuePanel";
+  DownloaderUrlChip,
+  QuickEnqueueButton,
+  QuickEnqueuePinnedChip,
+} from "./downloader/LinkChips";
+import { PlaylistPreviewList } from "./downloader/PlaylistPreviewList";
+import { PlaylistPreviewRow } from "./downloader/PlaylistPreviewRow";
+import { BROWSER_OPTIONS } from "./downloader/downloaderConstants";
+import { UrlInputPacer } from "./downloader/DownloadJobQueuePanel";
 import {
   ImmersiveDownloadHero,
   resolveImmersiveDownloadPhase,
@@ -43,237 +33,8 @@ import { downloadJobDisplayFileSizeBytes } from "../downloadJobFileSizes";
 import { useDownloaderView, type DownloaderViewProps } from "./downloader/useDownloaderView";
 import { normalizeYouTubeUrlForCompare } from "../youtubeUrl";
 
-const CLIP_ICON_TRANSITION = { duration: 0.32, ease: [0.23, 1, 0.32, 1] as const };
-
-function MainDownloaderUrlChip({
-  url,
-  copied,
-  pasted,
-  onPasteFromClipboard,
-  onCopy,
-  onClear,
-  audioWarning = false,
-}: {
-  url: string;
-  copied: boolean;
-  pasted?: boolean;
-  onPasteFromClipboard: () => void | Promise<void>;
-  onCopy: () => void | Promise<void>;
-  onClear: () => void;
-  audioWarning?: boolean;
-}) {
-  const [chipHovered, setChipHovered] = useState(false);
-
-  return (
-    <div
-      className="pointer-events-auto w-full max-w-[min(380px,calc(100vw-2rem))]"
-      onMouseEnter={() => setChipHovered(true)}
-      onMouseLeave={() => setChipHovered(false)}
-    >
-      <div
-        className={`flex overflow-hidden rounded-lg transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-          audioWarning
-            ? "border border-dotted border-yellow-400/50 bg-yellow-400/10 text-yellow-400"
-            : "border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)]"
-        } backdrop-blur-md ${
-          audioWarning || chipHovered ? "max-w-[min(380px,calc(100vw-3rem))]" : "max-w-9"
-        }`}
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          {audioWarning ? (
-            <motion.div
-              key="audio-warn-inner"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={CLIP_ICON_TRANSITION}
-              className="flex h-9 items-center gap-2 px-3 whitespace-nowrap"
-            >
-              <AlertTriangle size={12} strokeWidth={3} className="shrink-0" />
-              <span className="text-[8px] font-black uppercase tracking-wider">
-                Download time increased - Download size decreased
-              </span>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="normal-inner"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={CLIP_ICON_TRANSITION}
-              className="flex flex-1 min-w-0"
-            >
-              <button
-                type="button"
-                onClick={() => void onPasteFromClipboard()}
-                className="relative flex h-9 w-9 shrink-0 items-center justify-center"
-                aria-label="Paste link from clipboard"
-                data-tooltip="Paste link"
-              >
-                <AnimatePresence mode="wait" initial={false}>
-                  {pasted ? (
-                    <motion.span
-                      key="main-paste-ok"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={CLIP_ICON_TRANSITION}
-                      className="absolute inset-0 flex items-center justify-center"
-                    >
-                      <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
-                    </motion.span>
-                  ) : (
-                    <motion.span
-                      key="main-cl"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={CLIP_ICON_TRANSITION}
-                      className="absolute inset-0 flex items-center justify-center"
-                    >
-                      <Paperclip size={14} strokeWidth={2} />
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </button>
-              <button
-                type="button"
-                onClick={() => void onCopy()}
-                className="relative min-w-0 flex-1 truncate whitespace-nowrap py-2 text-left text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-white"
-                aria-label="Copy link"
-                data-tooltip="Copy link"
-              >
-                <span
-                  className={`block truncate transition-opacity duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-                    chipHovered ? "px-2 opacity-100" : "opacity-0"
-                  }`}
-                >
-                  {copied ? "Copied" : url}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClear();
-                }}
-                className={`relative flex h-9 shrink-0 items-center justify-center overflow-hidden text-[#EDD79C]/40 transition-[opacity,width,padding,color] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#EDD79C] ${
-                  chipHovered ? "pointer-events-auto w-8 opacity-100" : "pointer-events-none w-0 min-w-0 opacity-0"
-                }`}
-                aria-label="Clear link"
-                data-tooltip="Clear link"
-              >
-                <X size={12} strokeWidth={2.5} />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
-  );
-}
-
-function QuickEnqueuePinnedChip({
-  url,
-  onRemove,
-  copyUrl,
-}: {
-  url: string;
-  onRemove: () => void;
-  copyUrl: (u: string) => Promise<void>;
-}) {
-  const [chipHovered, setChipHovered] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (copyResetRef.current) clearTimeout(copyResetRef.current);
-    },
-    [],
-  );
-
-  const handleCopy = async () => {
-    await copyUrl(url);
-    setCopied(true);
-    if (copyResetRef.current) clearTimeout(copyResetRef.current);
-    copyResetRef.current = setTimeout(() => {
-      setCopied(false);
-      copyResetRef.current = null;
-    }, 2000);
-  };
-
-  return (
-    <div
-      className="pointer-events-auto w-full max-w-[min(380px,calc(100vw-2rem))] self-start"
-      onMouseEnter={() => setChipHovered(true)}
-      onMouseLeave={() => setChipHovered(false)}
-    >
-      <div
-        className={`flex shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,width] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-          chipHovered ? "w-full max-w-[min(380px,calc(100vw-3rem))]" : "w-9 max-w-9"
-        }`}
-      >
-        <button
-          type="button"
-          onClick={() => void handleCopy()}
-          className="relative flex min-w-0 flex-1 items-center overflow-hidden text-left"
-          aria-label="Copy link"
-          data-tooltip="Click to copy"
-        >
-          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
-            <AnimatePresence mode="wait" initial={false}>
-              {copied ? (
-                <motion.span
-                  key="pin-ok"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={CLIP_ICON_TRANSITION}
-                  className="absolute inset-0 flex items-center justify-center"
-                >
-                  <Check size={14} strokeWidth={2.5} className="text-[color:var(--accent)]" />
-                </motion.span>
-              ) : (
-                <motion.span
-                  key={`pin-cl-${url}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={CLIP_ICON_TRANSITION}
-                  className="absolute inset-0 flex items-center justify-center"
-                >
-                  <Paperclip size={14} strokeWidth={2} />
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </span>
-          <span
-            className={`min-w-0 flex-1 truncate whitespace-nowrap py-2 text-[9px] font-bold uppercase tracking-widest text-[#EDD79C]/90 transition-[opacity,padding] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-              chipHovered ? "px-2 pr-1 opacity-100" : "opacity-0"
-            }`}
-          >
-            {url}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove();
-          }}
-          className={`relative flex h-9 shrink-0 items-center justify-center overflow-hidden text-[#EDD79C]/40 transition-[opacity,width,padding,color] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-[#EDD79C] ${
-            chipHovered ? "pointer-events-auto w-8 opacity-100" : "pointer-events-none w-0 min-w-0 opacity-0"
-          }`}
-          aria-label="Remove from list"
-          data-tooltip="Remove"
-        >
-          <X size={12} strokeWidth={2.5} />
-        </button>
-      </div>
-    </div>
-  );
-}
+const STORAGE_BLOCK_TIP =
+  "Library storage limit reached. Free space in Settings or switch to an external download folder.";
 
 export const DownloaderView = (props: DownloaderViewProps) => {
   const d = useDownloaderView(props);
@@ -506,7 +267,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   className="pointer-events-none absolute left-4 top-12 z-[60] flex w-[min(380px,calc(100vw-2rem))] flex-col items-stretch gap-2 sm:left-6 sm:top-14 lg:left-8 lg:top-14"
                 >
                   {d.showMainUrlChip && (
-                    <MainDownloaderUrlChip
+                    <DownloaderUrlChip
                       url={d.url}
                       copied={d.urlBubbleCopied}
                       pasted={d.clipboardPastedHint}
@@ -531,25 +292,12 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                   )}
 
                   {!d.anyDownloading && d.showQueueAddToolbar && (
-                    <button
-                      type="button"
+                    <QuickEnqueueButton
                       disabled={d.storageBlocksNewDownloads}
-                      data-tooltip={
-                        d.storageBlocksNewDownloads
-                          ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
-                          : undefined
-                      }
+                      disabledReason={STORAGE_BLOCK_TIP}
                       onClick={() => void d.handleQuickEnqueueFromClipboard()}
-                      className="group/qe pointer-events-auto inline-flex h-9 max-w-9 shrink-0 items-center self-start overflow-hidden rounded-lg border border-dotted border-[#EDD79C]/50 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[0_4px_20px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,border-color] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:max-w-[min(260px,calc(100vw-3rem))] hover:border-[#EDD79C]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:max-w-9"
-                      aria-label="Queue another from clipboard"
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center">
-                        <Clipboard size={14} strokeWidth={2} />
-                      </span>
-                      <span className="min-w-0 whitespace-nowrap py-2 pr-3 text-[8px] font-black uppercase tracking-[0.28em] text-[#EDD79C]/65 opacity-0 transition-opacity duration-300 group-hover/qe:opacity-100">
-                        Queue another
-                      </span>
-                    </button>
+                      className="self-start"
+                    />
                   )}
 
                   {!d.anyDownloading && d.showQueueAddToolbar && (
@@ -804,25 +552,13 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           ))}
                         </div>
                       )}
-                      <button
-                        type="button"
+                      <QuickEnqueueButton
                         disabled={d.storageBlocksNewDownloads}
-                        data-tooltip={
-                          d.storageBlocksNewDownloads
-                            ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
-                            : undefined
-                        }
+                        disabledReason={STORAGE_BLOCK_TIP}
                         onClick={() => void d.handleQuickEnqueueFromClipboard()}
-                        className="group/qe pointer-events-auto mx-auto inline-flex h-9 max-w-9 shrink-0 items-center overflow-hidden rounded-lg border border-dotted border-[#EDD79C]/50 bg-[#271C18]/95 text-[#EDD79C]/85 shadow-[inset_0_2px_4px_rgba(0,0,0,0.35)] backdrop-blur-md transition-[max-width,border-color] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] hover:max-w-[min(280px,calc(100vw-3rem))] hover:border-[#EDD79C]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--accent)] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:max-w-9"
-                        aria-label="Queue another from clipboard"
-                      >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center">
-                          <Clipboard size={14} strokeWidth={2} />
-                        </span>
-                        <span className="min-w-0 whitespace-nowrap py-2 pr-4 text-[8px] font-black uppercase tracking-[0.28em] text-[#EDD79C]/65 opacity-0 transition-opacity duration-300 group-hover/qe:opacity-100">
-                          Queue another
-                        </span>
-                      </button>
+                        alwaysOpen
+                        className="mx-auto"
+                      />
                       <div className="pointer-events-none flex h-10 w-full shrink-0 items-start justify-center overflow-hidden pt-0.5 text-center">
                         <AnimatePresence mode="wait" initial={false}>
                           {d.quickEnqueueHint === "empty" && (
@@ -917,42 +653,23 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                             className={
                               displayHero.loading
                                 ? "line-clamp-2 px-4 text-sm font-bold uppercase tracking-[0.18em] text-stone-500 sm:text-base"
-                                : "line-clamp-2 px-4 pb-0.5 text-xl font-black leading-[1.08] tracking-tighter text-white sm:text-4xl sm:leading-[1.1] lg:text-6xl"
+                                : "line-clamp-2 px-4 pb-[0.18em] text-xl font-black leading-[1.12] tracking-tighter text-white sm:text-4xl sm:leading-[1.12] lg:text-6xl"
                             }
                           >
                             {displayHero.title}
                           </h2>
                         ) : null}
                         {!displayHero.loading && (
-                        <div className="hidden min-[600px]:flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-8 gap-y-2 text-[10px] font-black uppercase tracking-[0.3em] text-[color:var(--accent)] opacity-60">
-                          <div className="flex items-center gap-1.5">
-                            <Clock size={12} className="opacity-50" />
-                            <span>{formatDuration(displayHero.duration)}</span>
-                          </div>
-                          {(() => {
-                            const bytes =
+                          <HeroStats
+                            duration={displayHero.duration}
+                            bytes={
                               displayHero.isPlaylist && displayHeroBytes != null
                                 ? displayHeroBytes
-                                : displayHero.fileSizeBytes;
-                            if (bytes == null || bytes <= 0) return null;
-                            return (
-                              <div className="flex items-center gap-1.5">
-                                <HardDrive size={12} className="opacity-50" />
-                                <span data-tooltip="Approximate size">~{formatApproxFileSize(bytes)}</span>
-                              </div>
-                            );
-                          })()}
-                          {displayHero.isPlaylist && (
-                            <div className="flex items-center gap-1.5">
-                              <List size={12} className="opacity-50" />
-                              <span>{displayHero.playlistItems?.length || 0} Videos</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1.5">
-                            <Globe size={12} className="opacity-50" />
-                            <span>YouTube</span>
-                          </div>
-                        </div>
+                                : displayHero.fileSizeBytes
+                            }
+                            isPlaylist={!!displayHero.isPlaylist}
+                            videoCount={displayHero.playlistItems?.length ?? 0}
+                          />
                         )}
                         {d.showDuplicateBanner && (
                           <motion.div
@@ -992,22 +709,20 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           {!displayHero.loading &&
                             d.settings.downloadSubtitles &&
                             d.subLangsForDisplay && (
-                            <div className="flex flex-col items-center gap-1.5">
-                              <span className="text-[8px] font-black uppercase tracking-[0.4em] text-stone-600">
-                                Enqueued Captions
-                              </span>
-                              <p className="text-center text-[10px] font-bold uppercase tracking-[0.1em] text-stone-400">
+                            <p className="text-center text-[10px] font-black uppercase tracking-[0.25em] text-stone-500">
+                              Captions
+                              <span className="mx-2 text-stone-500">·</span>
+                              <span className="text-stone-300">
                                 {downloadSubtitleLangLabel(d.subLangsForDisplay)}
-                              </p>
-                            </div>
+                              </span>
+                            </p>
                           )}
                           {(d.showHeroAudioToggle || d.showPrimaryDownload) && (
                             <div className="mx-auto flex flex-wrap items-center justify-center gap-3">
                               {d.showHeroAudioToggle && (
-                                <DownloadJobAudioToggle
+                                <HeroFormatSwitch
                                   audioOnly={d.heroAudioOnly}
                                   onToggle={d.toggleHeroAudio}
-                                  className="scale-110 sm:scale-125"
                                 />
                               )}
                               {d.showPrimaryDownload && (
@@ -1016,7 +731,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                                   disabled={d.storageBlocksNewDownloads || d.downloadStartPending}
                                   data-tooltip={
                                     d.storageBlocksNewDownloads
-                                      ? "Library storage limit reached. Free space in Settings or switch to an external download folder."
+                                      ? STORAGE_BLOCK_TIP
                                       : d.downloadStartPending
                                         ? "Download will start when details are ready"
                                         : undefined
@@ -1037,8 +752,13 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           )}
                         </motion.div>
                         {displayHero.isPlaylist && displayHero.playlistItems && (
-                          <div className="max-w-xl mx-auto mt-4 sm:mt-8 pt-4 sm:pt-8 border-t border-white/5 h-[100px] sm:h-[250px] overflow-y-auto space-y-1.5 hidden min-[750px]:block rf-scrollbar">
-                            {displayHero.playlistItems.map((item, idx) => {
+                          <PlaylistPreviewList
+                            items={displayHero.playlistItems}
+                            itemKey={d.playlistItemKey}
+                            onReorder={d.reorderPlaylistItems}
+                            disabled={!!d.batchQueuePlaylistView}
+                            className="mx-auto mt-6 hidden h-[100px] max-w-4xl grid-cols-1 content-start gap-1 overflow-y-auto px-4 lg:grid-cols-2 pb-8 [mask-image:linear-gradient(to_bottom,black_calc(100%-40px),transparent)] min-[750px]:grid sm:mt-10 sm:h-[300px] rf-scrollbar"
+                            renderRow={(item, idx, lifted) => {
                               const batchJob = d.batchQueuePlaylistView
                                 ? d.batchQueueJobs.find((j) => j.id === item.id)
                                 : null;
@@ -1055,59 +775,24 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                               const dup = batchJob
                                 ? d.isBatchQueueJobDuplicate(item.webpageUrl)
                                 : d.isPlaylistItemDuplicate(item);
-                              const rowBytes = rowAudio
-                                ? (item.fileSizeBytesAudio ?? item.fileSizeBytes)
-                                : (item.fileSizeBytesVideo ?? item.fileSizeBytes);
                               return (
-                                <div
+                                <PlaylistPreviewRow
+                                  index={idx + 1}
                                   key={`playlist-row-${idx}-${item.webpageUrl ?? item.title}`}
-                                  className={`flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group ${
-                                    dup ? "opacity-55" : ""
-                                  } ${batchJob?.status === "downloading" ? "bg-white/[0.04]" : ""}`}
-                                >
-                                  <div className="w-24 aspect-video rounded-lg overflow-hidden bg-stone-900 flex-shrink-0 relative">
-                                    {item.thumbnail ? (
-                                      <img
-                                        src={item.thumbnail}
-                                        alt=""
-                                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
-                                      />
-                                    ) : (
-                                      <div className="h-full w-full bg-stone-800" />
-                                    )}
-                                    {dup && (
-                                      <span className="absolute top-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[7px] font-black uppercase tracking-wider text-[#EDD79C]">
-                                        In library
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 text-left min-w-0">
-                                    <h4 className="text-[11px] font-black uppercase tracking-widest text-stone-400 group-hover:text-white truncate">
-                                      {item.title}
-                                    </h4>
-                                    <span className="text-[10px] font-mono text-stone-600 mt-1 block">
-                                      {formatDuration(item.duration)}
-                                      {rowBytes != null && rowBytes > 0
-                                        ? ` · ~${formatApproxFileSize(rowBytes)}`
-                                        : ""}
-                                    </span>
-                                    {batchJob?.storageBlock && (
-                                      <StorageBlockNote job={batchJob} className="mt-2" />
-                                    )}
-                                  </div>
-                                  <DownloadJobAudioToggle
-                                    audioOnly={rowAudio}
-                                    onToggle={() =>
-                                      batchJob
-                                        ? d.toggleBatchQueueJobAudio(batchJob.id, !rowAudio)
-                                        : d.togglePlaylistItemAudio(rowKey, !rowAudio)
-                                    }
-                                    className="shrink-0 scale-90"
-                                  />
-                                </div>
+                                  lifted={lifted}
+                                  item={item}
+                                  audioOnly={rowAudio}
+                                  duplicate={dup}
+                                  batchJob={batchJob}
+                                  onToggleAudio={() =>
+                                    batchJob
+                                      ? d.toggleBatchQueueJobAudio(batchJob.id, !rowAudio)
+                                      : d.togglePlaylistItemAudio(rowKey, !rowAudio)
+                                  }
+                                />
                               );
-                            })}
-                          </div>
+                            }}
+                          />
                         )}
                       </motion.div>
                     ) : (

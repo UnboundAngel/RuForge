@@ -46,7 +46,6 @@ import {
 } from "@/explorerWebviewLifecycle";
 import {
   youtubeMusicSearchUrl,
-  extractYouTubeVideoId,
   classifyMusicExploreUrl,
 } from "@/youtubeUrl";
 import { enqueuePastedExploreWatch } from "@/lib/enqueuePastedExploreWatch";
@@ -68,13 +67,13 @@ import {
 } from "@/lib/musicExplorePageContext";
 import {
   cancelAllMusicExploreAutoSave,
+  musicExploreWatchUrl,
+  noteMusicExploreJobRemoved,
+  runMusicExploreAutoSave,
   scheduleMusicExploreAutoSave,
+  shouldMusicExploreAutoSave,
 } from "@/lib/musicExploreAutoSave";
-import {
-  buildDownloadJobOptions,
-  patchDownloadJobOptionsForAudio,
-  resolveDownloadOutputDir,
-} from "@/downloadQueue";
+import { musicExploreAutoSaveQueue } from "@/lib/musicExploreAutoSaveQueue";
 import {
   readExplorerHostBounds,
   explorerBoundsEqual,
@@ -392,9 +391,6 @@ export function MusicShell() {
   >(null);
   const runPendingMusicExploreNavigateRef = useRef<() => Promise<void>>(async () => {});
   const prevExploreWebviewActiveRef = useRef(false);
-  /** Session-level dedup: videoIds already auto-queued this session. */
-  const autoQueuedVideoIdsRef = useRef<Set<string>>(new Set());
-
   runPendingMusicExploreNavigateRef.current = async () => {
     const url = musicExploreNavigatePendingRef.current;
     if (!url) return;
@@ -787,36 +783,16 @@ export function MusicShell() {
         const store = useRuforgeStore.getState();
         if (store.settings.autoDownloadPlayingSongs === false) return;
 
-        if (autoQueuedVideoIdsRef.current.has(videoId)) return;
+        const early = musicExploreAutoSaveQueue(videoId, title);
+        if (!shouldMusicExploreAutoSave(videoId, early.jobs(), early.inLibrary(musicExploreWatchUrl(videoId)))) {
+          return;
+        }
 
         scheduleMusicExploreAutoSave({ videoId, title }, (payload) => {
           if (!alive) return;
-          if (autoQueuedVideoIdsRef.current.has(payload.videoId)) return;
-          autoQueuedVideoIdsRef.current.add(payload.videoId);
-
-          const s = useRuforgeStore.getState();
-          const watchUrl = `https://www.youtube.com/watch?v=${payload.videoId}`;
-          const dir = resolveDownloadOutputDir(s.saveToInternal, s.outputDir, s.internalVault);
-          const base = buildDownloadJobOptions(s.settings, dir);
-          const opts = patchDownloadJobOptionsForAudio(base, true, s.settings);
-
-          const videoId = payload.videoId;
-          s.enqueueDownload(
-            watchUrl,
-            opts,
-            {
-              title: payload.title ?? undefined,
-              approval: "auto",
-              snapshot: {
-                title: payload.title?.trim() || videoId,
-                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-                duration: 0,
-                isPlaylist: false,
-              },
-            },
-          );
-          s.releaseHeldDownloadJobs();
-          s.pumpDownloadQueue();
+          if (!runMusicExploreAutoSave(payload.videoId, musicExploreAutoSaveQueue(payload.videoId, payload.title))) {
+            return;
+          }
           // Singles stay dock-only; do not expand the Explore download panel.
           setDockMinimized(true);
           setDockPanelSession(true);
@@ -836,7 +812,6 @@ export function MusicShell() {
     };
   }, []);
 
-  // Prune autoQueuedVideoIdsRef when a job is removed so the same song can be re-downloaded.
   // Subscribed rather than selected so download progress events don't re-render the shell.
   useEffect(
     () =>
@@ -845,10 +820,7 @@ export function MusicShell() {
         const prev = prevState.downloadJobs;
         if (downloadJobs === prev) return;
         for (const job of prev) {
-          if (!downloadJobs.some((j) => j.id === job.id)) {
-            const videoId = extractYouTubeVideoId(job.url);
-            if (videoId) autoQueuedVideoIdsRef.current.delete(videoId);
-          }
+          if (!downloadJobs.some((j) => j.id === job.id)) noteMusicExploreJobRemoved(job);
         }
       }),
     [],

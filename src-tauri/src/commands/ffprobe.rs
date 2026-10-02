@@ -54,7 +54,7 @@ fn optional_bitrate_kbps(raw: Option<&serde_json::Value>) -> Option<u32> {
 }
 
 async fn run_ffprobe_json(app: &AppHandle, media_path: &str) -> Result<serde_json::Value, String> {
-    let output = app
+    let cmd = app
         .shell()
         .sidecar("ffprobe")
         .map_err(|e| e.to_string())?
@@ -66,8 +66,8 @@ async fn run_ffprobe_json(app: &AppHandle, media_path: &str) -> Result<serde_jso
             "-show_format",
             "-show_streams",
             media_path,
-        ])
-        .output()
+        ]);
+    let output = crate::child_job::output(cmd)
         .await
         .map_err(|e| format!("{}", e))?;
     if !output.status.success() {

@@ -7,6 +7,8 @@ export type RecentlyDeletedEntry = {
   deletedAt: string;
   files: string[];
   recoverable: boolean;
+  previewPath: string | null;
+  sizeBytes: number | null;
 };
 
 export type RestoreRecentlyDeletedResult = {

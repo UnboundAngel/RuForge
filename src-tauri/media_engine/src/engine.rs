@@ -14,16 +14,21 @@ use crate::rate_limit::{
 };
 use crate::types::{
     DownloadJob, DownloadRequest, DownloadStatus, InspectRequest, InspectionResult,
-    RuntimeVersions, ValidatedDownloadChoices,
+    PlaylistRowSize, RuntimeVersions, ValidatedDownloadChoices,
 };
-use crate::url::{validate_audio_format, validate_format_selector, validate_http_url, validate_output_dir};
+use crate::url::{
+    is_youtube_playlist_url, validate_audio_format, validate_format_selector, validate_http_url,
+    validate_output_dir,
+};
 use crate::ytdlp_args::{
-    build_download_args, build_inspect_args, destination_summary, effective_filename_template,
-    validate_choices_against_inspection, DownloadPaths,
+    build_download_args, build_flat_playlist_args, build_inspect_args, build_row_sizes_args,
+    destination_summary, effective_filename_template, validate_choices_against_inspection,
+    DownloadPaths,
 };
 use crate::ytdlp_json::{
     dual_file_sizes_from_ytdlp_json, effective_video_format_for_probe,
-    media_inspection_from_json, AUDIO_SIMULATE_FORMAT, DEFAULT_VIDEO_FORMAT,
+    media_inspection_from_json, row_sizes_from_entry_formats, ytdlp_usable_playlist_entries,
+    AUDIO_SIMULATE_FORMAT, DEFAULT_VIDEO_FORMAT,
 };
 
 pub struct MediaEngineConfig {
@@ -102,6 +107,28 @@ impl MediaEngine {
             ));
         }
         let ytdlp = std::path::PathBuf::from(&runtime.ytdlp_path);
+
+        // A full simulate resolves every entry with a politeness sleep between each, which takes
+        // minutes on long playlists. Rows only need titles; each row inspects itself when it downloads.
+        if is_youtube_playlist_url(&url) {
+            let json = self.flat_playlist_with_fallback(&url, request.auth.as_ref()).await?;
+            if ytdlp_usable_playlist_entries(&json).is_some() {
+                let inspection = media_inspection_from_json(json.clone(), &video_fmt, request.audio_only, None, None);
+                let (id, expires_at_secs) = self.inspections.insert(
+                    request.url.clone(),
+                    inspection.clone(),
+                    json.clone(),
+                    request.auth.clone(),
+                );
+                return Ok(InspectionResult {
+                    inspection_id: id,
+                    inspection,
+                    expires_at_secs,
+                    runtime_versions: runtime_versions_from_snapshot(&runtime),
+                    metadata_probe: Some(json),
+                });
+            }
+        }
 
         if request.display_only {
             let args = build_inspect_args(&url, None, request.auth.as_ref());
@@ -408,6 +435,85 @@ impl MediaEngine {
                 };
                 let args = build_inspect_args(url, format, Some(auth_cfg));
                 self.run_simulate(&ytdlp, &args).await
+            }
+        }
+    }
+
+    /// Size estimates for a handful of playlist rows, filled in after the quick listing is on screen.
+    pub async fn playlist_row_sizes(
+        &self,
+        urls: &[String],
+        video_format: Option<&str>,
+        auth: Option<&crate::types::AuthConfig>,
+    ) -> Result<Vec<PlaylistRowSize>, EngineError> {
+        const MAX_ROWS_PER_CALL: usize = 10;
+        let urls: Vec<String> = urls
+            .iter()
+            .take(MAX_ROWS_PER_CALL)
+            .map(|u| validate_http_url(u))
+            .collect::<Result<_, _>>()?;
+        if urls.is_empty() {
+            return Ok(Vec::new());
+        }
+        let video_fmt = effective_video_format_for_probe(video_format);
+        let ytdlp = self.runtime.ytdlp_path()?;
+
+        let mut sizes = self.run_row_sizes(&ytdlp, &build_row_sizes_args(&urls, None), &video_fmt).await;
+        let needs_auth = sizes.as_ref().map_or(true, |s| s.is_empty());
+        if needs_auth {
+            if let Some(auth_cfg) = auth.filter(|a| has_auth(a)) {
+                sizes = self
+                    .run_row_sizes(&ytdlp, &build_row_sizes_args(&urls, Some(auth_cfg)), &video_fmt)
+                    .await;
+            }
+        }
+        sizes
+    }
+
+    async fn run_row_sizes(
+        &self,
+        ytdlp: &std::path::Path,
+        args: &[String],
+        video_fmt: &str,
+    ) -> Result<Vec<PlaylistRowSize>, EngineError> {
+        subprocess_rate_gate_wait().await?;
+        let output = self.launcher.output(ytdlp, args).await?;
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        register_rate_limit_from_stderr(&stderr).await;
+
+        let sizes: Vec<PlaylistRowSize> = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| serde_json::from_str::<Value>(line.trim()).ok())
+            .filter_map(|entry| {
+                let id = entry.get("id")?.as_str()?.trim().to_string();
+                let (audio, video) = row_sizes_from_entry_formats(&entry, video_fmt);
+                Some(PlaylistRowSize {
+                    id,
+                    file_size_bytes_audio: audio,
+                    file_size_bytes_video: video,
+                })
+            })
+            .collect();
+
+        if sizes.is_empty() && output.status_code != Some(0) {
+            return Err(classify_ytdlp_stderr(&stderr, output.status_code));
+        }
+        Ok(sizes)
+    }
+
+    async fn flat_playlist_with_fallback(
+        &self,
+        url: &str,
+        auth: Option<&crate::types::AuthConfig>,
+    ) -> Result<Value, EngineError> {
+        let ytdlp = self.runtime.ytdlp_path()?;
+        match self.run_simulate(&ytdlp, &build_flat_playlist_args(url, None)).await {
+            Ok(json) => Ok(json),
+            Err(without_err) => {
+                let Some(auth_cfg) = auth.filter(|a| has_auth(a)) else {
+                    return Err(without_err);
+                };
+                self.run_simulate(&ytdlp, &build_flat_playlist_args(url, Some(auth_cfg))).await
             }
         }
     }

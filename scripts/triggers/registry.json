@@ -1,0 +1,58 @@
+{
+  "match": {
+    "typoMaxDistance": 1
+  },
+  "triggers": [
+    {
+      "id": "push",
+      "phrases": [
+        "commit and push",
+        "commit und push",
+        "commit & push"
+      ],
+      "script": "scripts/triggers/push.mjs",
+      "effect": "Stage all, commit from diff, rebase onto sync/<branch>, push sync only (never public). From another branch, also fast-forwards sync/main, or warns loudly that main did not move."
+    },
+    {
+      "id": "leave",
+      "phrases": [
+        "I'm leaving",
+        "I am leaving",
+        "heading out",
+        "ich bin leaving"
+      ],
+      "script": "scripts/triggers/leave.mjs",
+      "effect": "Run push, write dated handoff under docs/agents/handoffs/, reply with branch + hash."
+    },
+    {
+      "id": "back",
+      "phrases": [
+        "I'm back",
+        "I am back",
+        "picking up",
+        "ich bin back"
+      ],
+      "script": "scripts/triggers/back.mjs",
+      "effect": "Fetch sync, check out newest handoff branch, wire remotes, npm install if lockfile changed, print next step, wait."
+    },
+    {
+      "id": "add-trigger",
+      "phrases": [
+        "add trigger"
+      ],
+      "script": "scripts/triggers/add-trigger.mjs",
+      "effect": "Create scripts/triggers/<id>.mjs + registry row + AGENTS table, then commit and push."
+    },
+    {
+      "id": "ship",
+      "exact": true,
+      "phrases": [
+        "ship it",
+        "cut a release",
+        "push it out"
+      ],
+      "script": "scripts/triggers/ship.mjs",
+      "effect": "Whole message only. Dry-runs publish-snapshot.mjs, shows the file list and commit message, and publishes only after Angel replies yes (ship.mjs --yes). Follow .cursor/skills/ruforge-release/SKILL.md first."
+    }
+  ]
+}

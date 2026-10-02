@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -10,11 +10,16 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
+use super::music_playlists::write_atomic;
+
 const EVENTS_FILENAME: &str = "music-listen-events.jsonl";
 const ACTIVE_FILENAME: &str = "music-listen-active.json";
 const SNAPSHOT_FILENAME: &str = "music-listen-snapshot.json";
 const ROLLUP_FILENAME: &str = "music-listen-rollup.json";
 const INTEGRITY_FILENAME: &str = "music-listen-integrity.json";
+const LEGACY_FILENAME: &str = "music-listen-legacy.json";
+/// A closing session's event is the newest line, so a re-close only has to check the tail.
+const DUPLICATE_SCAN_TAIL_BYTES: u64 = 64 * 1024;
 
 const SCHEMA_V: i32 = 1;
 const EVENT_SCHEMA_V_LEGACY: i32 = 1;
@@ -241,10 +246,38 @@ struct RollupBucket {
     play_count: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EventOrder {
+    started_at: i64,
+    id: String,
+}
+
+impl EventOrder {
+    fn of(event: &TrackPlayedEvent) -> Self {
+        Self {
+            started_at: event.started_at,
+            id: event.id.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct RollupFile {
     v: i32,
     buckets: Vec<RollupBucket>,
+    /// Every event ordered at or before this is already counted in `buckets`, even if a crash
+    /// left it in the events file.
+    #[serde(default, rename = "rolledThrough", skip_serializing_if = "Option::is_none")]
+    rolled_through: Option<EventOrder>,
+}
+
+impl RollupFile {
+    fn already_rolled(&self, event: &TrackPlayedEvent) -> bool {
+        self.rolled_through
+            .as_ref()
+            .is_some_and(|w| EventOrder::of(event) <= *w)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -296,6 +329,10 @@ fn integrity_path(dir: &Path) -> PathBuf {
     dir.join(INTEGRITY_FILENAME)
 }
 
+fn legacy_path(dir: &Path) -> PathBuf {
+    dir.join(LEGACY_FILENAME)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListenIntegrity {
@@ -315,7 +352,7 @@ fn read_integrity(dir: &Path) -> Result<ListenIntegrity, String> {
 fn write_integrity(dir: &Path, integrity: &ListenIntegrity) -> Result<(), String> {
     ensure_data_dir(dir)?;
     let raw = serde_json::to_string(integrity).map_err(|e| e.to_string())?;
-    fs::write(integrity_path(dir), raw).map_err(|e| e.to_string())
+    write_atomic(&integrity_path(dir), &raw)
 }
 
 /// Set once on first post-fix startup. Never overwritten; survives clear/rebuild.
@@ -341,14 +378,20 @@ fn read_active(dir: &Path) -> Result<Option<ActiveSession>, String> {
         return Ok(None);
     }
     let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&raw).map_err(|e| format!("Invalid active session: {e}"))
+    match serde_json::from_str(&raw) {
+        Ok(session) => Ok(Some(session)),
+        Err(e) => {
+            log::warn!("listen log: discarded unreadable active session: {e}");
+            let _ = fs::remove_file(&path);
+            Ok(None)
+        }
+    }
 }
 
 fn write_active(dir: &Path, session: &ActiveSession) -> Result<(), String> {
     ensure_data_dir(dir)?;
-    let path = active_path(dir);
     let raw = serde_json::to_string(session).map_err(|e| e.to_string())?;
-    fs::write(path, raw).map_err(|e| e.to_string())
+    write_atomic(&active_path(dir), &raw)
 }
 
 fn clear_active(dir: &Path) -> Result<(), String> {
@@ -361,33 +404,72 @@ fn clear_active(dir: &Path) -> Result<(), String> {
 
 fn append_event_line(dir: &Path, event: &TrackPlayedEvent) -> Result<(), String> {
     ensure_data_dir(dir)?;
-    let line = serde_json::to_string(event).map_err(|e| e.to_string())?;
+    let mut out = String::new();
     let mut file = OpenOptions::new()
         .create(true)
+        .read(true)
         .append(true)
         .open(events_path(dir))
         .map_err(|e| e.to_string())?;
-    file.write_all(line.as_bytes())
-        .and_then(|_| file.write_all(b"\n"))
-        .map_err(|e| e.to_string())
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
+    if len > 0 {
+        let mut last = [0u8; 1];
+        file.seek(SeekFrom::Start(len - 1))
+            .and_then(|_| file.read_exact(&mut last))
+            .map_err(|e| e.to_string())?;
+        if last[0] != b'\n' {
+            out.push('\n');
+        }
+    }
+    out.push_str(&serde_json::to_string(event).map_err(|e| e.to_string())?);
+    out.push('\n');
+    file.write_all(out.as_bytes()).map_err(|e| e.to_string())
+}
+
+fn event_already_logged(dir: &Path, id: &str) -> Result<bool, String> {
+    let path = events_path(dir);
+    if !path.is_file() {
+        return Ok(false);
+    }
+    let mut file = fs::File::open(&path).map_err(|e| e.to_string())?;
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
+    let start = len.saturating_sub(DUPLICATE_SCAN_TAIL_BYTES);
+    let mut tail = Vec::new();
+    file.seek(SeekFrom::Start(start))
+        .and_then(|_| file.read_to_end(&mut tail))
+        .map_err(|e| e.to_string())?;
+    Ok(String::from_utf8_lossy(&tail).lines().any(|line| {
+        serde_json::from_str::<TrackPlayedEvent>(line.trim()).is_ok_and(|ev| ev.id == id)
+    }))
+}
+
+/// `Ok(None)` when the snapshot is missing or unreadable and must be rebuilt from the log.
+fn read_snapshot_file_opt(dir: &Path) -> Result<Option<ListenSnapshot>, String> {
+    let path = snapshot_path(dir);
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    match serde_json::from_str(&raw) {
+        Ok(snapshot) => Ok(Some(snapshot)),
+        Err(e) => {
+            log::warn!("listen log: unreadable snapshot, rebuilding: {e}");
+            Ok(None)
+        }
+    }
 }
 
 fn read_snapshot_file(dir: &Path) -> Result<ListenSnapshot, String> {
-    let path = snapshot_path(dir);
-    if !path.is_file() {
-        return Ok(ListenSnapshot {
-            v: SCHEMA_V,
-            ..Default::default()
-        });
+    match read_snapshot_file_opt(dir)? {
+        Some(snapshot) => Ok(snapshot),
+        None => rebuild_snapshot_from_sources(dir),
     }
-    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    serde_json::from_str(&raw).map_err(|e| format!("Invalid listen snapshot: {e}"))
 }
 
 fn write_snapshot_file(dir: &Path, snapshot: &ListenSnapshot) -> Result<(), String> {
     ensure_data_dir(dir)?;
     let raw = serde_json::to_string(snapshot).map_err(|e| e.to_string())?;
-    fs::write(snapshot_path(dir), raw).map_err(|e| e.to_string())
+    write_atomic(&snapshot_path(dir), &raw)
 }
 
 fn read_rollup(dir: &Path) -> Result<RollupFile, String> {
@@ -395,7 +477,7 @@ fn read_rollup(dir: &Path) -> Result<RollupFile, String> {
     if !path.is_file() {
         return Ok(RollupFile {
             v: SCHEMA_V,
-            buckets: vec![],
+            ..Default::default()
         });
     }
     let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
@@ -405,7 +487,18 @@ fn read_rollup(dir: &Path) -> Result<RollupFile, String> {
 fn write_rollup(dir: &Path, rollup: &RollupFile) -> Result<(), String> {
     ensure_data_dir(dir)?;
     let raw = serde_json::to_string(rollup).map_err(|e| e.to_string())?;
-    fs::write(rollup_path(dir), raw).map_err(|e| e.to_string())
+    write_atomic(&rollup_path(dir), &raw)
+}
+
+fn read_legacy_stats(dir: &Path) -> Vec<ListenStatRow> {
+    let path = legacy_path(dir);
+    let Ok(raw) = fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    serde_json::from_str(&raw).unwrap_or_else(|e| {
+        log::warn!("listen log: unreadable legacy stats: {e}");
+        Vec::new()
+    })
 }
 
 fn validate_closed_event(event: &TrackPlayedEvent) -> bool {
@@ -455,14 +548,29 @@ fn close_active_session(
     if !validate_closed_event(&event) {
         return Err("Refusing to write malformed listen event".to_string());
     }
-    append_event_line(dir, &event)?;
-    apply_event_to_snapshot(dir, &event)?;
+    let relogged = event_already_logged(dir, &event.id)?;
+    if !relogged {
+        append_event_line(dir, &event)?;
+    }
     clear_active(dir)?;
+    let snapshot_result = if relogged {
+        rebuild_snapshot_from_sources(dir).map(|_| ())
+    } else {
+        apply_event_to_snapshot(dir, &event)
+    };
+    if let Err(e) = snapshot_result {
+        // The log already holds the event; a missing snapshot is rebuilt on the next read.
+        log::warn!("listen log: snapshot update failed, will rebuild: {e}");
+        let _ = fs::remove_file(snapshot_path(dir));
+    }
     Ok(event)
 }
 
+/// Expects `event` to be in the log already, so a rebuild must not apply it a second time.
 fn apply_event_to_snapshot(dir: &Path, event: &TrackPlayedEvent) -> Result<(), String> {
-    let mut snapshot = read_snapshot_file(dir)?;
+    let Some(mut snapshot) = read_snapshot_file_opt(dir)? else {
+        return rebuild_snapshot_from_sources(dir).map(|_| ());
+    };
     snapshot.v = SCHEMA_V;
 
     let path = event.path.clone().unwrap_or_default();
@@ -535,13 +643,20 @@ fn parse_events_jsonl(dir: &Path) -> Result<Vec<TrackPlayedEvent>, String> {
     }
     let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let mut out = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
     for (i, line) in raw.lines().enumerate() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
         match serde_json::from_str::<TrackPlayedEvent>(trimmed) {
-            Ok(ev) if validate_closed_event(&ev) => out.push(ev),
+            Ok(ev) if validate_closed_event(&ev) => {
+                if seen.insert(ev.id.clone()) {
+                    out.push(ev);
+                } else {
+                    log::warn!("listen log: dropped duplicate event at line {}", i + 1);
+                }
+            }
             Ok(_) => {
                 log::warn!("listen log: dropped malformed event at line {}", i + 1);
             }
@@ -577,11 +692,20 @@ fn merge_rollup_into_stats(stats: &mut Vec<ListenStatRow>, rollup: &RollupFile) 
 
 fn rebuild_snapshot_from_sources(dir: &Path) -> Result<ListenSnapshot, String> {
     let events = parse_events_jsonl(dir)?;
-    let rollup = read_rollup(dir)?;
+    let rollup = read_rollup(dir).unwrap_or_else(|e| {
+        log::warn!("listen log: rebuilding without rollup: {e}");
+        RollupFile::default()
+    });
 
-    let mut by_key: std::collections::HashMap<String, ListenStatRow> = std::collections::HashMap::new();
+    let mut by_key: std::collections::HashMap<String, ListenStatRow> = read_legacy_stats(dir)
+        .into_iter()
+        .map(|row| (row.identity_key.clone(), row))
+        .collect();
 
     for event in events {
+        if rollup.already_rolled(&event) {
+            continue;
+        }
         let path = event.path.unwrap_or_default();
         let title = event.title.unwrap_or_default();
         let artist = event.artist.unwrap_or_default();
@@ -662,29 +786,20 @@ fn prune_old_events(dir: &Path) -> Result<(), String> {
 
     let now = Utc::now().timestamp_millis();
     let cutoff = now - RAW_RETENTION_MS;
-    let over_count = events.len() > RAW_RETENTION_MAX;
+    let mut rollup = read_rollup(dir)?;
 
-    let mut keep: Vec<TrackPlayedEvent> = events
-        .iter()
-        .filter(|e| e.started_at >= cutoff)
-        .cloned()
-        .collect();
+    // Rolled events are always the oldest by (started_at, id), so one watermark marks them all.
+    let (_, mut live): (Vec<TrackPlayedEvent>, Vec<TrackPlayedEvent>) =
+        events.into_iter().partition(|e| rollup.already_rolled(e));
+    live.sort_by_key(EventOrder::of);
+    let mut split = live.partition_point(|e| e.started_at < cutoff);
+    split = split.max(live.len().saturating_sub(RAW_RETENTION_MAX));
+    let keep = live.split_off(split);
+    let to_roll = live;
 
-    if over_count && keep.len() > RAW_RETENTION_MAX {
-        keep.sort_by(|a, b| b.started_at.cmp(&a.started_at));
-        keep.truncate(RAW_RETENTION_MAX);
-    }
-
-    // Covers up to RAW_RETENTION_MAX events, so the membership test must not scan `keep`.
-    let kept_ids: HashSet<&str> = keep.iter().map(|k| k.id.as_str()).collect();
-    let to_roll: Vec<TrackPlayedEvent> = events
-        .into_iter()
-        .filter(|e| !kept_ids.contains(e.id.as_str()))
-        .collect();
-
-    if !to_roll.is_empty() {
-        let mut rollup = read_rollup(dir)?;
+    if let Some(last) = to_roll.last() {
         rollup.v = SCHEMA_V;
+        rollup.rolled_through = Some(EventOrder::of(last));
         for event in to_roll {
             let date = chrono::DateTime::from_timestamp_millis(event.started_at)
                 .map(|dt| dt.format("%Y-%m-%d").to_string())
@@ -711,15 +826,13 @@ fn prune_old_events(dir: &Path) -> Result<(), String> {
 
     if keep.len() != count_event_lines(dir)? {
         ensure_data_dir(dir)?;
-        let path = events_path(dir);
         let mut rebuilt = String::new();
-        keep.sort_by(|a, b| a.started_at.cmp(&b.started_at));
         for event in &keep {
             let line = serde_json::to_string(event).map_err(|e| e.to_string())?;
             rebuilt.push_str(&line);
             rebuilt.push('\n');
         }
-        fs::write(path, rebuilt).map_err(|e| e.to_string())?;
+        write_atomic(&events_path(dir), &rebuilt)?;
         rebuild_snapshot_from_sources(dir)?;
     }
 
@@ -732,12 +845,16 @@ fn prune_now(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn prune_if_needed(dir: &Path) -> Result<(), String> {
+/// Never fails the caller: a damaged rollup must not stop new listens from being logged.
+fn prune_if_needed(dir: &Path) {
     let now = Utc::now().timestamp_millis();
     if now - LAST_PRUNE_MS.load(Ordering::Relaxed) < PLAYBACK_PRUNE_INTERVAL_MS {
-        return Ok(());
+        return;
     }
-    prune_now(dir)
+    if let Err(e) = prune_now(dir) {
+        LAST_PRUNE_MS.store(now, Ordering::Relaxed);
+        log::warn!("listen log: prune skipped: {e}");
+    }
 }
 
 /// Crash recovery only: call once per process start, not during playback.
@@ -746,7 +863,9 @@ pub fn music_listen_startup_housekeeping(app: &AppHandle) -> Result<(), String> 
         let dir = data_dir(app)?;
         ensure_integrity_cutover(&dir)?;
         close_orphan_active_if_any(&dir)?;
-        prune_now(&dir)?;
+        if let Err(e) = prune_now(&dir) {
+            log::warn!("listen log: startup prune skipped: {e}");
+        }
         Ok(())
     })
 }
@@ -768,7 +887,7 @@ pub fn music_listen_begin(
 ) -> Result<ListenBeginResult, String> {
     with_log_lock(|| {
         let dir = data_dir(&app)?;
-        prune_if_needed(&dir)?;
+        prune_if_needed(&dir);
 
         if meta.identity_key.trim().is_empty() {
             return Err("identityKey is required".to_string());
@@ -861,7 +980,7 @@ pub fn music_listen_end(
         }
         let ended = ended_at.unwrap_or_else(|| Utc::now().timestamp_millis());
         close_active_session(&dir, active, reason, ended)?;
-        prune_if_needed(&dir)?;
+        prune_if_needed(&dir);
         Ok(())
     })
 }
@@ -887,45 +1006,29 @@ pub fn music_listen_import_legacy(
     stats: Vec<LegacyStatImport>,
     history: Vec<LegacyHistoryImport>,
 ) -> Result<ListenSnapshot, String> {
-    with_log_lock(|| {
-        let dir = data_dir(&app)?;
-        let mut snapshot = ListenSnapshot {
-            v: SCHEMA_V,
-            stats: stats
-                .into_iter()
-                .map(|s| ListenStatRow {
-                    identity_key: s.identity_key,
-                    path: s.path,
-                    title: s.title,
-                    artist: s.artist,
-                    play_count: s.play_count,
-                    listen_time_sec: s.listen_time_sec.max(0.0),
-                    last_played: s.last_played,
-                })
-                .collect(),
-            history: history
-                .into_iter()
-                .map(|h| PlayHistoryRow {
-                    path: h.path,
-                    identity_key: h.identity_key,
-                    title: h.title,
-                    artist: h.artist,
-                    played_at: h.played_at,
-                    play_count: h.play_count,
-                })
-                .collect(),
-        };
-        snapshot.stats.sort_by(|a, b| b.last_played.cmp(&a.last_played));
-        if snapshot.stats.len() > SNAPSHOT_STATS_CAP {
-            snapshot.stats.truncate(SNAPSHOT_STATS_CAP);
-        }
-        snapshot.history.sort_by(|a, b| b.played_at.cmp(&a.played_at));
-        if snapshot.history.len() > SNAPSHOT_HISTORY_CAP {
-            snapshot.history.truncate(SNAPSHOT_HISTORY_CAP);
-        }
-        write_snapshot_file(&dir, &snapshot)?;
-        Ok(snapshot)
-    })
+    // History is derived from stats on every rebuild.
+    let _ = history;
+    with_log_lock(|| import_legacy_stats(&data_dir(&app)?, stats))
+}
+
+/// Legacy stats get their own file so every rebuild from the log keeps them.
+fn import_legacy_stats(dir: &Path, stats: Vec<LegacyStatImport>) -> Result<ListenSnapshot, String> {
+    ensure_data_dir(dir)?;
+    let rows: Vec<ListenStatRow> = stats
+        .into_iter()
+        .map(|s| ListenStatRow {
+            identity_key: s.identity_key,
+            path: s.path,
+            title: s.title,
+            artist: s.artist,
+            play_count: s.play_count,
+            listen_time_sec: s.listen_time_sec.max(0.0),
+            last_played: s.last_played,
+        })
+        .collect();
+    let raw = serde_json::to_string(&rows).map_err(|e| e.to_string())?;
+    write_atomic(&legacy_path(dir), &raw)?;
+    rebuild_snapshot_from_sources(dir)
 }
 
 #[tauri::command]
@@ -937,6 +1040,7 @@ pub fn music_listen_clear(app: AppHandle) -> Result<(), String> {
             ACTIVE_FILENAME,
             SNAPSHOT_FILENAME,
             ROLLUP_FILENAME,
+            LEGACY_FILENAME,
         ] {
             let path = dir.join(name);
             if path.is_file() {
@@ -1258,5 +1362,178 @@ mod tests {
             again.stats_trustworthy_after_ms,
             integrity.stats_trustworthy_after_ms
         );
+    }
+
+    fn event(id: &str, key: &str, started_at: i64) -> TrackPlayedEvent {
+        TrackPlayedEvent {
+            v: EVENT_SCHEMA_V,
+            id: id.to_string(),
+            event_type: "track_played".to_string(),
+            identity_key: key.to_string(),
+            started_at,
+            ended_at: started_at + 10_000,
+            end_reason: "completed".to_string(),
+            path: Some(format!("/music/{key}.mp3")),
+            title: Some("T".to_string()),
+            artist: Some("A".to_string()),
+            listened_sec: Some(10.0),
+            surface: Some("main".to_string()),
+            source: None,
+            was_liked: None,
+        }
+    }
+
+    fn play(dir: &Path, id: &str, key: &str, started_at: i64) {
+        open_session(dir, id, &sample_meta(key), Surface::Main, started_at).unwrap();
+        end_session(dir, EndReason::Completed, 10.0, started_at + 10_000).unwrap();
+    }
+
+    fn plays_of(snapshot: &ListenSnapshot, key: &str) -> u32 {
+        snapshot
+            .stats
+            .iter()
+            .find(|r| r.identity_key == key)
+            .map_or(0, |r| r.play_count)
+    }
+
+    #[test]
+    fn corrupt_snapshot_neither_blocks_tracking_nor_duplicates_events() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        fs::write(snapshot_path(path), "{").unwrap();
+        play(path, "e1", "id:a", 1_700_000_000_000);
+        play(path, "e2", "id:b", 1_700_000_100_000);
+        play(path, "e3", "id:a", 1_700_000_200_000);
+
+        assert_eq!(read_events(path).len(), 3);
+        assert!(!active_path(path).exists());
+        let snap = read_snapshot_file(path).unwrap();
+        assert_eq!(plays_of(&snap, "id:a"), 2);
+        assert_eq!(plays_of(&snap, "id:b"), 1);
+    }
+
+    #[test]
+    fn failed_snapshot_write_still_closes_the_session() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        fs::create_dir_all(snapshot_path(path)).unwrap();
+        play(path, "e1", "id:a", 1_700_000_000_000);
+        assert!(!active_path(path).exists(), "session must be closed");
+        assert_eq!(read_events(path).len(), 1);
+
+        fs::remove_dir_all(snapshot_path(path)).unwrap();
+        play(path, "e2", "id:a", 1_700_000_100_000);
+        assert_eq!(read_events(path).len(), 2);
+        assert_eq!(plays_of(&read_snapshot_file(path).unwrap(), "id:a"), 2);
+    }
+
+    #[test]
+    fn reclosing_after_a_crash_before_clear_does_not_duplicate() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        open_session(path, "e1", &sample_meta("id:a"), Surface::Main, 1_700_000_000_000).unwrap();
+        let mut active = read_active(path).unwrap().unwrap();
+        active.listened_sec = 20.0;
+        active.last_tick_at = active.started_at + 20_000;
+        write_active(path, &active).unwrap();
+        append_event_line(path, &build_event_from_active(&active, EndReason::Completed, active.last_tick_at))
+            .unwrap();
+
+        close_orphan_active_if_any(path).unwrap();
+        assert_eq!(read_events(path).len(), 1);
+        assert!(!active_path(path).exists());
+        assert_eq!(plays_of(&read_snapshot_file(path).unwrap(), "id:a"), 1);
+    }
+
+    #[test]
+    fn corrupt_active_session_does_not_disable_tracking() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        fs::write(active_path(path), "{\"id\":").unwrap();
+        close_orphan_active_if_any(path).unwrap();
+        play(path, "e1", "id:a", 1_700_000_000_000);
+        assert_eq!(read_events(path).len(), 1);
+    }
+
+    #[test]
+    fn missing_newline_is_repaired_before_appending() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let first = serde_json::to_string(&event("e1", "id:a", 1_700_000_000_000)).unwrap();
+        fs::write(events_path(path), first).unwrap();
+        append_event_line(path, &event("e2", "id:b", 1_700_000_100_000)).unwrap();
+        assert_eq!(read_events(path).len(), 2);
+
+        let raw = fs::read_to_string(events_path(path)).unwrap();
+        fs::write(events_path(path), format!("{raw}{{\"v\":2,\"id\":\"torn")).unwrap();
+        append_event_line(path, &event("e3", "id:c", 1_700_000_200_000)).unwrap();
+        let ids: Vec<String> = read_events(path).into_iter().map(|e| e.id).collect();
+        assert_eq!(ids, vec!["e1", "e2", "e3"]);
+    }
+
+    #[test]
+    fn duplicate_lines_in_the_log_count_once() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let line = serde_json::to_string(&event("e1", "id:a", 1_700_000_000_000)).unwrap();
+        fs::write(events_path(path), format!("{line}\n{line}\ngarbage\n")).unwrap();
+        let snap = rebuild_snapshot_from_sources(path).unwrap();
+        assert_eq!(plays_of(&snap, "id:a"), 1);
+    }
+
+    #[test]
+    fn rebuild_after_a_corrupt_line_keeps_imported_legacy_stats() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        import_legacy_stats(
+            path,
+            vec![LegacyStatImport {
+                identity_key: "id:old".to_string(),
+                path: "/music/old.mp3".to_string(),
+                title: "Old".to_string(),
+                artist: "A".to_string(),
+                play_count: 7,
+                listen_time_sec: 700.0,
+                last_played: 1_600_000_000_000,
+            }],
+        )
+        .unwrap();
+        let now = Utc::now().timestamp_millis();
+        play(path, "e1", "id:old", now - 60_000);
+        assert_eq!(plays_of(&read_snapshot_file(path).unwrap(), "id:old"), 8);
+
+        let mut f = OpenOptions::new().append(true).open(events_path(path)).unwrap();
+        f.write_all(b"garbage\n").unwrap();
+        drop(f);
+        prune_old_events(path).unwrap();
+        assert_eq!(count_event_lines(path).unwrap(), 1, "garbage line pruned");
+        assert_eq!(plays_of(&read_snapshot_file(path).unwrap(), "id:old"), 8);
+        assert_eq!(plays_of(&rebuild_snapshot_from_sources(path).unwrap(), "id:old"), 8);
+    }
+
+    #[test]
+    fn prune_crash_between_rollup_and_events_write_does_not_double_count() {
+        let dir = tempdir().unwrap();
+        let path = dir.path();
+        let now = Utc::now().timestamp_millis();
+        for (i, started) in [1_000_000_i64, 2_000_000, 3_000_000].into_iter().enumerate() {
+            append_event_line(path, &event(&format!("old{i}"), "id:a", started)).unwrap();
+        }
+        append_event_line(path, &event("new", "id:a", now - 60_000)).unwrap();
+        let before_prune = fs::read_to_string(events_path(path)).unwrap();
+
+        prune_old_events(path).unwrap();
+        let expected = plays_of(&rebuild_snapshot_from_sources(path).unwrap(), "id:a");
+        assert_eq!(expected, 4);
+        let pruned_events = fs::read_to_string(events_path(path)).unwrap();
+
+        fs::write(events_path(path), &before_prune).unwrap();
+        assert_eq!(plays_of(&rebuild_snapshot_from_sources(path).unwrap(), "id:a"), 4);
+
+        prune_old_events(path).unwrap();
+        assert_eq!(fs::read_to_string(events_path(path)).unwrap(), pruned_events);
+        let rolled: u32 = read_rollup(path).unwrap().buckets.iter().map(|b| b.play_count).sum();
+        assert_eq!(rolled, 3);
+        assert_eq!(plays_of(&read_snapshot_file(path).unwrap(), "id:a"), 4);
     }
 }

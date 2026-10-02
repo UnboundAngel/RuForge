@@ -13,6 +13,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { X } from "lucide-react";
 import { createPortal } from "react-dom";
 
 import logo from "@/assets/ruforgeAppIcon.png";
@@ -23,10 +24,13 @@ import type {
   OnboardingIslandStep,
 } from "@/lib/onboardingSteps";
 import {
+  isOnboardingConditionMet,
+  subscribeOnboardingConditions,
+} from "@/lib/onboardingConditions";
+import {
   setOnboardingIslandOccupied,
   subscribeOnboardingModeSwap,
 } from "@/lib/onboardingRadialBridge";
-import { useRuforgeStore } from "@/store/ruforgeStore";
 import { AltKeyIcon } from "./AltKeyIcon";
 import { useAltHoldProgress } from "./useAltHoldProgress";
 
@@ -60,37 +64,17 @@ type TapStage = "demo" | "guide";
 
 type OnboardingIslandProps = OnboardingIslandStep & {
   onDismiss: () => void;
+  /** Persist the step as done: its `doneWhen` turned true or the user dismissed it. */
+  onDone?: () => void;
 };
 
-function isGuideConditionMet(
-  condition: OnboardingGuideCompleteWhen,
-  settingsOpen: boolean,
-  settingsTab: string,
-  discordOn: boolean,
-): boolean {
-  if (condition === "on-settings") return settingsOpen;
-  if (condition === "on-general") {
-    return settingsOpen && settingsTab === "general";
-  }
-  return discordOn;
+function conditionMet(condition: OnboardingGuideCompleteWhen | undefined): boolean {
+  return condition ? isOnboardingConditionMet(condition) : false;
 }
 
-function nextGuideIndex(
-  phases: readonly OnboardingGuidePhase[],
-  fromIndex: number,
-  settingsOpen: boolean,
-  settingsTab: string,
-  discordOn: boolean,
-): number {
+function nextGuideIndex(phases: readonly OnboardingGuidePhase[], fromIndex: number): number {
   let i = fromIndex;
-  while (i < phases.length) {
-    const skip = phases[i]?.skipWhen;
-    if (skip && isGuideConditionMet(skip, settingsOpen, settingsTab, discordOn)) {
-      i += 1;
-      continue;
-    }
-    break;
-  }
+  while (i < phases.length && conditionMet(phases[i]?.skipWhen)) i += 1;
   return i;
 }
 
@@ -587,8 +571,10 @@ export function OnboardingIsland({
   mediaObjectFit = "cover",
   mediaLightboxSrc,
   guidePhases,
+  doneWhen,
   defaultExpanded = false,
   onDismiss,
+  onDone,
 }: OnboardingIslandProps) {
   const hasGuide = Boolean(guidePhases && guidePhases.length > 0);
   const isTapSettings = compactVariant === "tap-settings";
@@ -631,14 +617,7 @@ export function OnboardingIsland({
         beginCelebrate();
         return;
       }
-      const state = useRuforgeStore.getState();
-      const next = nextGuideIndex(
-        guidePhases,
-        fromIndex,
-        state.settingsOpen,
-        state.settingsTab,
-        state.settings.discordPresenceEnabled === true,
-      );
+      const next = nextGuideIndex(guidePhases, fromIndex);
       if (next >= guidePhases.length) {
         beginCelebrate();
         return;
@@ -652,21 +631,14 @@ export function OnboardingIsland({
     [guidePhases, beginCelebrate],
   );
 
-  const advanceGuide = useCallback(() => {
+  const advanceGuide = useCallback((from?: number) => {
     if (advancingRef.current) return;
     if (!guidePhases?.length) {
       beginCelebrate();
       return;
     }
     advancingRef.current = true;
-    const state = useRuforgeStore.getState();
-    const next = nextGuideIndex(
-      guidePhases,
-      guideIndexRef.current + 1,
-      state.settingsOpen,
-      state.settingsTab,
-      state.settings.discordPresenceEnabled === true,
-    );
+    const next = nextGuideIndex(guidePhases, from ?? guideIndexRef.current + 1);
     if (next >= guidePhases.length) {
       // Morph straight into celebrate. Do not flash compact first.
       beginCelebrate();
@@ -679,6 +651,13 @@ export function OnboardingIsland({
       advancingRef.current = false;
     }, 80);
   }, [guidePhases, beginCelebrate]);
+
+  const dismissTip = useCallback(() => {
+    if (phase !== "active") return;
+    setLightboxOpen(false);
+    onDone?.();
+    setPhase("idle");
+  }, [phase, onDone]);
 
   const continueFromDemo = useCallback(() => {
     if (phase !== "active") return;
@@ -723,43 +702,45 @@ export function OnboardingIsland({
 
   // Rising-edge only: off→on (or not-on-general → on-general). Survives
   // "already enabled, toggle off, toggle on" during the Discord beat.
+  // A later phase finishing first (reply pasted without Copy prompt) jumps past it.
   useEffect(() => {
     if (phase !== "active") return;
     if (!isTapSettings) return;
-    if (tapStage !== "guide" || !currentGuide?.completeWhen) return;
+    if (tapStage !== "guide" || !guidePhases?.length) return;
 
-    const condition = currentGuide.completeWhen;
     const phaseIndex = guideIndex;
-    const state = useRuforgeStore.getState();
-    let prevMet = isGuideConditionMet(
-      condition,
-      state.settingsOpen,
-      state.settingsTab,
-      state.settings.discordPresenceEnabled === true,
-    );
+    const ahead = guidePhases.slice(phaseIndex);
+    const prevMet = ahead.map((p) => conditionMet(p.completeWhen));
 
-    return useRuforgeStore.subscribe((s) => {
+    return subscribeOnboardingConditions(() => {
       if (advancingRef.current) return;
       if (tapStageRef.current !== "guide") return;
       if (guideIndexRef.current !== phaseIndex) return;
-      const met = isGuideConditionMet(
-        condition,
-        s.settingsOpen,
-        s.settingsTab,
-        s.settings.discordPresenceEnabled === true,
-      );
+      let furthest = -1;
+      ahead.forEach((p, i) => {
+        const met = conditionMet(p.completeWhen);
+        if (met && !prevMet[i]) furthest = i;
+        prevMet[i] = met;
+      });
+      if (furthest >= 0) advanceGuide(phaseIndex + furthest + 1);
+    });
+  }, [phase, isTapSettings, tapStage, guideIndex, guidePhases, advanceGuide]);
+
+  useEffect(() => {
+    if (phase !== "active" || !doneWhen) return;
+    let prevMet = conditionMet(doneWhen);
+    return subscribeOnboardingConditions(() => {
+      const met = conditionMet(doneWhen);
       const rose = met && !prevMet;
       prevMet = met;
-      if (rose) advanceGuide();
+      if (!rose) return;
+      onDone?.();
+      const guiding = tapStageRef.current === "guide" && guidePhases?.[guideIndexRef.current];
+      // The guide's own watcher advances when this phase waits on the same condition.
+      if (guiding && guiding.completeWhen === doneWhen) return;
+      beginCelebrate();
     });
-  }, [
-    phase,
-    isTapSettings,
-    tapStage,
-    guideIndex,
-    currentGuide?.completeWhen,
-    advanceGuide,
-  ]);
+  }, [phase, doneWhen, onDone, guidePhases, beginCelebrate]);
 
   const dims =
     phase === "celebrate" || phase === "idle"
@@ -886,7 +867,7 @@ export function OnboardingIsland({
           <OnboardingMediaLightbox
             key="onboarding-media-lightbox"
             src={lightboxUrl}
-            alt={mediaAlt}
+            alt={mediaAlt ?? ""}
             onClose={() => setLightboxOpen(false)}
           />
         ) : null}
@@ -919,14 +900,14 @@ export function OnboardingIsland({
               phase === "celebrate"
                 ? "Onboarding step complete"
                 : isTapSettings && tapStage === "demo"
-                  ? "Discord integration — click to continue"
+                  ? `${compactPurpose}, click to continue`
                   : expanded
                     ? currentGuide?.expandedCaption ?? "Onboarding hint expanded"
                     : guideLabel
                       ? guideLabel
                       : holdComplete
                         ? `Click RuForge icon ${compactFollowUp}`
-                        : `${compactPurpose} — hold Alt`
+                        : `${compactPurpose}, hold Alt`
             }
             interactive={phase === "active"}
             className="h-full w-full"
@@ -942,11 +923,11 @@ export function OnboardingIsland({
                     key={contentKey}
                     caption={currentGuide.expandedCaption}
                   />
-                ) : contentKey === "expanded" ? (
+                ) : contentKey === "expanded" && mediaSrc ? (
                   <ExpandedDemo
                     key="expanded"
                     mediaSrc={mediaSrc}
-                    mediaAlt={mediaAlt}
+                    mediaAlt={mediaAlt ?? ""}
                     caption={expandedCaption}
                     objectFit={mediaObjectFit}
                     lightboxSrc={lightboxUrl}
@@ -970,6 +951,23 @@ export function OnboardingIsland({
               </AnimatePresence>
             </div>
           </IslandProgressShell>
+          <AnimatePresence>
+            {phase === "active" && !lightboxOpen ? (
+              <motion.button
+                key="dismiss"
+                type="button"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1, transition: { duration: 0.16, ease: SHRINK_EASE } }}
+                exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.12, ease: SHRINK_EASE } }}
+                onClick={dismissTip}
+                data-tooltip="Dismiss tip"
+                aria-label={`Dismiss ${compactPurpose} tip`}
+                className="absolute top-[6px] -right-[30px] flex h-6 w-6 items-center justify-center rounded-full bg-black text-stone-500 transition-colors hover:text-stone-100 focus-visible:text-stone-100 focus-visible:outline-none"
+              >
+                <X size={12} strokeWidth={2.5} />
+              </motion.button>
+            ) : null}
+          </AnimatePresence>
         </motion.div>
       </motion.div>
     </>,

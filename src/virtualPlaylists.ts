@@ -64,8 +64,15 @@ function watchLaterRecord(): VirtualPlaylistRecord {
 
 /** Last saved records, so edits keep working when localStorage is blocked or reset mid-session. */
 let memoryRecords: VirtualPlaylistRecord[] | null = null;
+/** False after a failed write (quota): the stored key is older than `memoryRecords`. */
+let localIsCurrent = true;
+
+export function virtualPlaylistsLocalIsCurrent(): boolean {
+  return localIsCurrent;
+}
 
 export function loadVirtualPlaylistRecords(): VirtualPlaylistRecord[] {
+  if (memoryRecords && !localIsCurrent) return memoryRecords;
   try {
     const raw = localStorage.getItem(VIRTUAL_PLAYLISTS_LS_KEY);
     if (!raw) return memoryRecords ?? [watchLaterRecord()];
@@ -137,8 +144,10 @@ export function writeVirtualPlaylistsLocal(records: VirtualPlaylistRecord[]): Vi
   memoryRecords = next;
   try {
     localStorage.setItem(VIRTUAL_PLAYLISTS_LS_KEY, JSON.stringify(next));
+    localIsCurrent = true;
   } catch {
     // storage unavailable; memory and the file copy still hold it
+    localIsCurrent = false;
   }
   return next;
 }

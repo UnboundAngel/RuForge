@@ -88,6 +88,7 @@ async fn output_via_tokio(exe: &Path, args: &[String]) -> Result<ProcessOutput, 
                 format!("Failed to launch {}: {}", exe.display(), e),
             )
         })?;
+    let _child_job = child.id().and_then(crate::child_job::ChildJob::adopt);
 
     let mut stdout_pipe = child.stdout.take().expect("stdout piped");
     let mut stderr_pipe = child.stderr.take().expect("stderr piped");
@@ -160,6 +161,7 @@ impl ProcessLauncher for TauriProcessLauncher {
                 format!("Failed to run yt-dlp: {e}"),
             )
         })?;
+        let _child_job = crate::child_job::ChildJob::adopt(child.pid());
 
         let collect = async {
             let mut stdout = Vec::new();

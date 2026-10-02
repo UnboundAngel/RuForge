@@ -112,6 +112,28 @@ pub fn build_inspect_args(url: &str, format: Option<&str>, auth: Option<&AuthCon
     args
 }
 
+/// One listing pass: entries carry title, duration, and thumbnails but no formats, so no per-video lookups.
+pub fn build_flat_playlist_args(url: &str, auth: Option<&AuthConfig>) -> Vec<String> {
+    let mut args = vec!["--flat-playlist".into(), "-J".into(), "--no-warnings".into()];
+    push_auth_args(&mut args, auth);
+    args.push(url.to_string());
+    args
+}
+
+/// One JSON line per video. `--ignore-errors` keeps one private or removed video from dropping the batch.
+pub fn build_row_sizes_args(urls: &[String], auth: Option<&AuthConfig>) -> Vec<String> {
+    let mut args = vec![
+        "-j".into(),
+        "-s".into(),
+        "--no-warnings".into(),
+        "--ignore-errors".into(),
+        "--no-playlist".into(),
+    ];
+    push_auth_args(&mut args, auth);
+    args.extend(urls.iter().cloned());
+    args
+}
+
 pub fn build_download_args(
     url: &str,
     choices: &ValidatedDownloadChoices,

@@ -138,10 +138,19 @@ function bindRfScrollbar(el: HTMLElement) {
 
   const ro = new ResizeObserver(() => layout());
   ro.observe(el);
-  // Content size changes often do not resize the scroller box itself.
-  for (const child of el.children) {
-    if (child !== thumb && child instanceof Element) ro.observe(child);
-  }
+  // Content size changes often do not resize the scroller box itself, and children mounted
+  // after bind (a list replacing a spinner) must be watched too or animated growth goes unseen.
+  const observeChildren = () => {
+    for (const child of el.children) {
+      if (child !== thumb) ro.observe(child);
+    }
+  };
+  observeChildren();
+  const childMo = new MutationObserver(() => {
+    observeChildren();
+    layout();
+  });
+  childMo.observe(el, { childList: true });
 
   layout();
   requestAnimationFrame(layout);
@@ -154,6 +163,7 @@ function bindRfScrollbar(el: HTMLElement) {
       thumb.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("scroll", onScroll);
       ro.disconnect();
+      childMo.disconnect();
       thumb.remove();
       bound.delete(el);
       boundEls.delete(el);

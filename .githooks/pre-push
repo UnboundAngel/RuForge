@@ -1,0 +1,4 @@
+#!/bin/sh
+# RuForge: block unsafe pushes to public; see scripts/githooks-pre-push.mjs
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+exec node "$ROOT/scripts/githooks-pre-push.mjs" "$@"

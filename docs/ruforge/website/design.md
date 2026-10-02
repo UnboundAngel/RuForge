@@ -181,6 +181,16 @@ CSS classes in `global.css` `@layer components`:
 
 **Motion:** mega-menu and built-with transitions use `cubic-bezier(0.16, 1, 0.3, 1)` at 280ms. Reduced motion falls back to fade-only.
 
+### Scrolling within a page
+
+Anything that moves the reader to another spot on the same page goes through `src/lib/smoothAnchors.ts`, never a bare jump or a hand-rolled `scrollIntoView`.
+
+- **Links:** both layouts run `initSmoothAnchors()`, so a plain `<a href="#section-id">` scrolls smoothly, stops 20px below the fixed nav (desktop pill or mobile bar), waits 140ms for the press ripple on `rf-m-*` links, and jumps instantly under reduced motion.
+- **From code** (a button, a tab, a search result): call `scrollToElement(el)`.
+- **Target:** the section wrapper, not its heading, so eyebrows and labels above the heading stay in view.
+- **Fixed headers:** any new one gets `data-rf-fixed-header` so the offset includes it.
+- **Tap target:** the whole visible row or card strip, at least 44px tall, not just the text. A full-bleed strip keeps its fill still on press and pushes in only its label (see `.rf-roadmap-now-next`).
+
 ---
 
 ## Landing page atmosphere
@@ -207,6 +217,7 @@ Testimonial cards use rotating rim hues derived from avatar sets; default rim fa
 | Tech icons | `src/lib/techTickerIcons.ts`, `public/icons/tech/` |
 | Logo | `src/components/Logo.astro`, `src/assets/ruforge-logo.png` |
 | Code colors | `src/lib/ruforgeShikiTheme.ts` |
+| In-page scrolling | `src/lib/smoothAnchors.ts` |
 | Icon wishlist | [`icon-wishlist.md`](icon-wishlist.md) |
 
 ---

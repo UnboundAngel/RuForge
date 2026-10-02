@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { refreshListenSnapshot } from "./musicListenSnapshot";
 
-const IMPORT_FLAG = "ruforge-music-listen-legacy-imported-v1";
+/** v2 resends once so legacy stats land in their own file, which rebuilds keep. */
+const IMPORT_FLAG = "ruforge-music-listen-legacy-imported-v2";
 const LS_STATS = "ruforge-music-listen-stats";
 const LS_HISTORY = "ruforge-music-play-history";
 

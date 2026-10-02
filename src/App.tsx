@@ -14,6 +14,7 @@ import { appDataDir, dirname, join } from "@tauri-apps/api/path";
 import { syncRuforgeAccentCss } from "./accentCss";
 import { hydrateLibraryFromRust, libraryConfigToStoreFields } from "./lib/libraryConfig";
 import { wireScrubSpriteGalleryIndicators } from "./scrubSpriteGallerySync";
+import { touchDownloadJobWatchdog } from "./downloadJobWatchdog";
 import { wireCompanionProgressSync } from "./lib/companionProgressSync";
 import { isDebugCategoryEnabled } from "./debug/debugCategories";
 import { debugLog } from "./debug/debugLog";
@@ -62,6 +63,7 @@ import { SettingsView } from "./components/SettingsView";
 import { MediaView } from "./components/MediaView";
 import { AuthorizeCleanupModal } from "./components/AuthorizeCleanupModal";
 import { RecentlyDeletedModal } from "./components/RecentlyDeletedModal";
+import { RecycleBinIcon } from "./components/icons/RecycleBinIcon";
 import { ExportBundleHost } from "./components/ExportBundleModal";
 import { useRemovableDrives } from "./hooks/useRemovableDrives";
 import { buildEntireLibraryExportPreset } from "./lib/exportSelection";
@@ -126,9 +128,7 @@ import {
 import { MediaFile, type GalleryEntry } from "./types";
 import {
   ChevronLeft,
-  Settings,
   Search,
-  Trash2,
 } from "lucide-react";
 import {
   CREATOR_TAB_LABELS,
@@ -166,12 +166,15 @@ import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
 import { useDesktopIslandOverlay } from "./hooks/useDesktopIslandOverlay";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
-import { writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
+import { clearOnboardingDoneSteps, writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
 import {
   registerDiscordOnboardingPreview,
   registerReplayOnboardingPreview,
 } from "./lib/onboardingDebugPreview";
-import { DISCORD_PRESENCE_PREVIEW_LAST_SEEN } from "./lib/onboardingSteps";
+import {
+  DISCORD_PRESENCE_ONBOARDING_ID,
+  DISCORD_PRESENCE_PREVIEW_LAST_SEEN,
+} from "./lib/onboardingSteps";
 
 import { useRuforgeStore, type ActiveTab } from "./store/ruforgeStore";
 import {
@@ -910,6 +913,16 @@ function App() {
         return;
       }
       unsubs.push(uPaused);
+
+      const uHeartbeat = await listen<string>("download-job-heartbeat", (event) => {
+        const job = useRuforgeStore.getState().downloadJobs.find((j) => j.id === event.payload);
+        if (job?.status === "downloading") touchDownloadJobWatchdog(event.payload);
+      });
+      if (disposed) {
+        uHeartbeat();
+        return;
+      }
+      unsubs.push(uHeartbeat);
     };
 
     void (async () => {
@@ -1348,6 +1361,7 @@ function App() {
     const startReplayOnboarding = () => {
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
       writeOnboardingLastSeenVersion("0.0.0");
+      clearOnboardingDoneSteps();
       setOnboardingNonce((n) => n + 1);
       setOnboardingOpen(true);
     };
@@ -1355,6 +1369,7 @@ function App() {
     const startDiscordOnboardingPreview = () => {
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
       writeOnboardingLastSeenVersion(DISCORD_PRESENCE_PREVIEW_LAST_SEEN);
+      clearOnboardingDoneSteps([DISCORD_PRESENCE_ONBOARDING_ID]);
       void useRuforgeStore.getState().updateSetting("discordPresenceEnabled", false);
       setOnboardingNonce((n) => n + 1);
       setOnboardingOpen(true);
@@ -1521,7 +1536,7 @@ function App() {
     };
   }, []);
 
-  // System tray "Show" — event name must match `TRAY_SHOW_MAIN_EVENT` in `src-tauri/src/tray.rs`.
+  // System tray "Show": event name must match `TRAY_SHOW_MAIN_EVENT` in `src-tauri/src/tray.rs`.
   // Uses the official JS `WebviewWindow` APIs (`unminimize` / `show` / `setFocus`), same layer as
   // https://v2.tauri.app/learn/system-tray/ (JS menu `action` / window helpers).
   // Tray debug lines go to the terminal via `tray_front_debug` when app.tray-debug is enabled.
@@ -2058,7 +2073,7 @@ function App() {
         {(activeTab === "media" && !shellBlocked) && (
           <div className="absolute right-6 top-0 z-20 flex h-[var(--rf-tab-strip-h)] pointer-events-none">
             <div
-              className="relative flex h-[var(--rf-tab-strip-h)] bg-[#271C18] rounded-b-[28px] px-6 items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+              className="relative flex h-[var(--rf-tab-strip-h)] bg-[#271C18] rounded-b-[28px] px-[15px] items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
               style={{
                 clipPath: "inset(var(--rf-titlebar-h) -100px -100px -100px)",
               }}
@@ -2070,7 +2085,7 @@ function App() {
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
               </div>
 
-              <div className="flex items-center gap-5 h-[34px] flex-shrink-0">
+              <div className="flex items-center gap-0.5 h-[34px] flex-shrink-0">
                 <AnimatePresence>
                   {isSearchExpanded && (
                     <motion.div
@@ -2103,7 +2118,9 @@ function App() {
                 <button
                   id="search-toggle-btn"
                   onClick={() => setIsSearchExpanded((p) => !p)}
-                  className={`transition-colors relative z-10 flex-shrink-0 ${isSearchExpanded ? "text-stone-50" : "text-stone-400 hover:text-stone-50"}`}
+                  aria-label="Search library"
+                  data-tooltip="Search"
+                  className={`relative z-10 flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center transition-colors ${isSearchExpanded ? "text-stone-50" : "text-stone-400 hover:text-stone-50"}`}
                 >
                   <Search size={16} />
                 </button>
@@ -2111,17 +2128,11 @@ function App() {
                   type="button"
                   id="recently-deleted-btn"
                   onClick={() => setRecentlyDeletedOpen(true)}
-                  className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex-shrink-0"
+                  className="relative z-10 flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center text-stone-400 transition-colors hover:text-stone-50"
                   aria-label="Recently deleted"
                   data-tooltip="Recently deleted"
                 >
-                  <Trash2 size={16} />
-                </button>
-                <button
-                  onClick={() => openSettings()}
-                  className="text-stone-400 hover:text-stone-50 transition-colors relative z-10 flex-shrink-0"
-                >
-                  <Settings size={16} />
+                  <RecycleBinIcon size={16} />
                 </button>
               </div>
             </div>

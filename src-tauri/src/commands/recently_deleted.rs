@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-#[cfg(windows)]
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
@@ -18,6 +16,9 @@ pub struct RecentlyDeletedEntry {
     pub deleted_at: String,
     pub files: Vec<String>,
     pub recoverable: bool,
+    /// Thumbnail or poster, read from its original path or its trashed copy.
+    pub preview_path: Option<String>,
+    pub size_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -67,6 +68,10 @@ pub fn append_manifest_entry(
     files: Vec<String>,
 ) -> Result<String, String> {
     let mut manifest = read_manifest(app)?;
+    let key = TrashIndex::path_key(Path::new(media_path));
+    manifest
+        .entries
+        .retain(|e| TrashIndex::path_key(Path::new(&e.media_path)) != key);
     let id = format!(
         "{}-{:x}",
         Utc::now().timestamp_millis(),
@@ -316,8 +321,54 @@ fn trash_home() -> Option<PathBuf> {
         })
 }
 
+/// The original path while it still exists, otherwise the trashed copy (keeps its extension on Windows).
+fn live_or_trashed(path: &Path, index: &TrashIndex) -> Option<PathBuf> {
+    if path.is_file() {
+        return Some(path.to_path_buf());
+    }
+    if let Some((content, _)) = index.pair(path) {
+        return content.is_file().then_some(content);
+    }
+    let parent = path.parent()?;
+    let (dir, _) = index.pair(parent)?;
+    let inner = dir.join(path.file_name()?);
+    inner.is_file().then_some(inner)
+}
+
+fn preview_path(media_path: &str, index: &TrashIndex) -> Option<String> {
+    let media = Path::new(media_path);
+    let stem = media.file_stem()?.to_str()?;
+    let parent = media.parent()?;
+    [
+        parent.join(format!("{stem}.jpg")),
+        parent.join(format!("{stem}.webp")),
+        crate::utils::thumb_dir_for_stem(parent, stem).join(crate::utils::POSTER_FILE),
+    ]
+    .iter()
+    .find_map(|c| live_or_trashed(c, index))
+    .map(|p| p.to_string_lossy().into_owned())
+}
+
+fn media_size_bytes(media_path: &str, index: &TrashIndex) -> Option<u64> {
+    live_or_trashed(Path::new(media_path), index)
+        .and_then(|p| std::fs::metadata(p).ok())
+        .map(|m| m.len())
+}
+
+/// Keeps the newest entry per media path. The trash index holds one copy per original path,
+/// so older entries for a re-downloaded and re-deleted file would all point at the same item.
+fn dedupe_by_media_path(entries: &mut Vec<ManifestEntry>) -> bool {
+    let before = entries.len();
+    let mut seen = HashSet::new();
+    entries.retain(|e| seen.insert(TrashIndex::path_key(Path::new(&e.media_path))));
+    entries.len() != before
+}
+
 fn list_recently_deleted_sync(app: &AppHandle) -> Result<Vec<RecentlyDeletedEntry>, String> {
-    let manifest = read_manifest(app)?;
+    let mut manifest = read_manifest(app)?;
+    if dedupe_by_media_path(&mut manifest.entries) {
+        let _ = write_manifest(app, &manifest);
+    }
     let index = TrashIndex::for_paths(manifest.entries.iter().flat_map(|e| {
         std::iter::once(e.media_path.as_str()).chain(e.files.iter().map(String::as_str))
     }));
@@ -326,6 +377,8 @@ fn list_recently_deleted_sync(app: &AppHandle) -> Result<Vec<RecentlyDeletedEntr
         .into_iter()
         .map(|e| {
             let recoverable = entry_recoverable(&e.media_path, &e.files, &index);
+            let preview_path = preview_path(&e.media_path, &index);
+            let size_bytes = media_size_bytes(&e.media_path, &index);
             RecentlyDeletedEntry {
                 id: e.id,
                 title: e.title,
@@ -333,6 +386,8 @@ fn list_recently_deleted_sync(app: &AppHandle) -> Result<Vec<RecentlyDeletedEntr
                 deleted_at: e.deleted_at,
                 files: e.files,
                 recoverable,
+                preview_path,
+                size_bytes,
             }
         })
         .collect())

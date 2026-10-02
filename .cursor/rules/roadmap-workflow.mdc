@@ -49,7 +49,7 @@ After research comes back, add an entry to `website/src/content/roadmap.json` us
 ```json
 {
   "featureName": "Short, plain-English title",
-  "appArea": "Download Screen | Player | Music Library | Explorer | Infra | Settings Screen | Video Library",
+  "appArea": "Download Screen | Player | Music Library | Explorer | Remote | Performance | Infra | Settings Screen | Video Library",
   "priority": "Low | Medium | High | Extremely important",
   "difficulty": "Low | Medium | High",
   "status": "To-Do",

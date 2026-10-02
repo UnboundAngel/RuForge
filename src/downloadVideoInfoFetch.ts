@@ -162,11 +162,13 @@ async function invokeGetVideoInfo(
 
     inflightByKey.set(inflightKey, p);
 
-    void p.finally(() => {
+    const forget = () => {
 
       inflightByKey.delete(inflightKey);
 
-    });
+    };
+
+    p.then(forget, forget);
 
   }
 
@@ -193,6 +195,44 @@ export async function fetchVideoInfoWithTimeout(
 ): Promise<VideoInfo> {
 
   return invokeGetVideoInfo(url, videoFormat, audioOnly, cookies, false, timeoutMs);
+
+}
+
+
+
+export type PlaylistRowSize = {
+
+  id: string;
+
+  fileSizeBytesAudio?: number;
+
+  fileSizeBytesVideo?: number;
+
+};
+
+
+
+export function fetchPlaylistRowSizes(
+
+  urls: string[],
+
+  videoFormat: string,
+
+  cookies?: VideoInfoCookieContext,
+
+): Promise<PlaylistRowSize[]> {
+
+  return invoke<PlaylistRowSize[]>("get_playlist_row_sizes", {
+
+    urls,
+
+    format: videoFormat,
+
+    browserCookies: cookies?.browserCookies ?? "",
+
+    cookieFile: cookies?.cookieFile ?? "",
+
+  });
 
 }
 

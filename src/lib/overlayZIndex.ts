@@ -14,3 +14,6 @@ export const OVERLAY_Z_CLASS = {
 } as const;
 
 export type OverlayZTier = keyof typeof OVERLAY_Z_CLASS;
+
+/** Portaled drag previews must sit above the settings / downloader tier they are dragged inside. */
+export const DRAG_OVERLAY_Z = 350;

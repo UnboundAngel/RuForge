@@ -39,13 +39,23 @@ function clampTip(anchor: DOMRect, tip: DOMRect, side: TipSide): TipPos {
     };
   }
 
-  let top = anchor.top - tip.height - gap;
-  if (top < pad) {
-    top = anchor.bottom + gap;
+  const maxTop = window.innerHeight - tip.height - pad;
+  const maxLeft = window.innerWidth - tip.width - pad;
+  const above = anchor.top - tip.height - gap;
+  const below = anchor.bottom + gap;
+
+  // Strip-height windows (condensed mini player) fit neither above nor below, so go beside the anchor.
+  if (above < pad && below > maxTop) {
+    const leftSide = anchor.left - gap - tip.width;
+    const rightSide = anchor.right + gap;
+    const left = leftSide >= pad ? leftSide : rightSide <= maxLeft ? rightSide : Math.max(pad, Math.min(leftSide, maxLeft));
+    const top = anchor.top + anchor.height / 2 - tip.height / 2;
+    return { top: Math.max(pad, Math.min(top, maxTop)), left };
   }
 
+  const top = above >= pad ? above : below;
   let left = anchor.left + anchor.width / 2 - tip.width / 2;
-  left = Math.max(pad, Math.min(left, window.innerWidth - tip.width - pad));
+  left = Math.max(pad, Math.min(left, maxLeft));
 
   return { top, left };
 }

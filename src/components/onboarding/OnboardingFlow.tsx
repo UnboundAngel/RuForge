@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { resolveOnboardingSteps } from "@/lib/onboardingSteps";
 import {
-  readOnboardingLastSeenVersion,
-  semverGreater,
-  writeOnboardingLastSeenVersion,
-} from "@/lib/onboardingStorage";
+  isOnboardingConditionMet,
+  subscribeOnboardingConditions,
+} from "@/lib/onboardingConditions";
+import {
+  markOnboardingStepFinished,
+  resolveOnboardingSteps,
+  type OnboardingStep,
+} from "@/lib/onboardingSteps";
+import { readOnboardingLastSeenVersion } from "@/lib/onboardingStorage";
 import { OnboardingIsland } from "./OnboardingIsland";
 
 type OnboardingFlowProps = {
@@ -13,39 +17,64 @@ type OnboardingFlowProps = {
 };
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
-  const steps = useMemo(
-    () => resolveOnboardingSteps(readOnboardingLastSeenVersion(), false),
-    [],
-  );
-  const [stepIndex, setStepIndex] = useState(0);
+  const [pending, setPending] = useState<OnboardingStep[]>(resolveActiveOnboardingSteps);
+  const [currentId, setCurrentId] = useState<string | null>(null);
 
-  const current = steps[stepIndex];
-
-  const advance = useCallback(() => {
-    // Persist per step so a refresh mid-flow does not replay finished steps.
-    const finished = steps[stepIndex];
-    const lastSeen = readOnboardingLastSeenVersion();
-    if (finished && (!lastSeen || semverGreater(finished.introducedIn, lastSeen))) {
-      writeOnboardingLastSeenVersion(finished.introducedIn);
-    }
-    if (stepIndex >= steps.length - 1) {
+  useEffect(() => {
+    if (pending.length === 0) {
       onComplete();
       return;
     }
-    setStepIndex((i) => i + 1);
-  }, [stepIndex, steps, onComplete]);
+    if (currentId) return;
 
-  useEffect(() => {
-    if (steps.length === 0) {
-      onComplete();
-    }
-  }, [steps.length, onComplete]);
+    const pick = (): boolean => {
+      const alreadyDone = pending.filter(
+        (s) => s.doneWhen && isOnboardingConditionMet(s.doneWhen),
+      );
+      if (alreadyDone.length > 0) {
+        for (const s of alreadyDone) markOnboardingStepFinished(s.id);
+        setPending((list) => list.filter((s) => !alreadyDone.includes(s)));
+        return true;
+      }
+      const next = pending.find((s) => !s.showWhen || isOnboardingConditionMet(s.showWhen));
+      if (!next) return false;
+      setCurrentId(next.id);
+      return true;
+    };
+
+    if (pick()) return;
+    let picked = false;
+    const unsubscribe = subscribeOnboardingConditions(() => {
+      if (!picked) picked = pick();
+    });
+    return unsubscribe;
+  }, [pending, currentId, onComplete]);
+
+  const current = currentId ? pending.find((s) => s.id === currentId) : undefined;
+
+  const finishCurrent = useCallback(() => {
+    if (current) markOnboardingStepFinished(current.id);
+  }, [current]);
+
+  const advance = useCallback(() => {
+    if (!current) return;
+    markOnboardingStepFinished(current.id);
+    setPending((list) => list.filter((s) => s.id !== current.id));
+    setCurrentId(null);
+  }, [current]);
 
   if (!current) return null;
 
-  return <OnboardingIsland {...current} onDismiss={advance} />;
+  return (
+    <OnboardingIsland
+      key={current.id}
+      {...current}
+      onDismiss={advance}
+      onDone={finishCurrent}
+    />
+  );
 }
 
-export function resolveActiveOnboardingSteps(): import("@/lib/onboardingSteps").OnboardingStep[] {
+export function resolveActiveOnboardingSteps(): OnboardingStep[] {
   return resolveOnboardingSteps(readOnboardingLastSeenVersion(), false);
 }

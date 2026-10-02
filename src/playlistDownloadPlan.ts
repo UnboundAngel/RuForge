@@ -96,14 +96,14 @@ export function buildPlaylistEnqueuePlan(
   };
 }
 
-/** Sum display bytes for playlist hero from per-row estimates and audio mode. */
+/** Sum display bytes for playlist hero from per-row estimates and audio mode. Null until every row has one. */
 export function sumPlaylistDisplayBytes(
   items: PlaylistItem[],
   overrides: Record<string, boolean>,
   defaultAudioOnly: boolean,
 ): number | null {
   let sum = 0;
-  let any = false;
+  let missing = items.length === 0;
   items.forEach((item, i) => {
     const key = playlistItemKey(item, i + 1);
     const audio = resolveAudioOnlyForPlaylistItem(key, overrides, defaultAudioOnly);
@@ -124,10 +124,11 @@ export function sumPlaylistDisplayBytes(
       : (videoB ?? legacy);
     if (typeof pick === "number" && pick > 0) {
       sum += pick;
-      any = true;
+    } else {
+      missing = true;
     }
   });
-  return any ? sum : null;
+  return missing ? null : sum;
 }
 
 export function isPlaylistDownloaderUrl(url: string): boolean {

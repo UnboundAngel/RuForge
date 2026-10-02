@@ -10,6 +10,7 @@ import {
 import {
   loadVirtualPlaylistRecords,
   setVirtualPlaylistsPersistHook,
+  virtualPlaylistsLocalIsCurrent,
   writeVirtualPlaylistsLocal,
   type VirtualPlaylistRecord,
 } from "./virtualPlaylists";
@@ -41,7 +42,7 @@ async function drainWrites(): Promise<void> {
 
 function queueFileWrite(records: VirtualPlaylistRecord[]): void {
   const savedAt = Date.now();
-  writeLocalSavedAt(savedAt);
+  writeLocalSavedAt(savedAt, virtualPlaylistsLocalIsCurrent());
   pending = serializeMusicPlaylistsFile(records, savedAt);
   void drainWrites();
 }
@@ -76,7 +77,7 @@ export async function startMusicPlaylistsFileSync(onRestored: () => void): Promi
 
   if (plan.writeLocal && read.kind === "ok") {
     writeVirtualPlaylistsLocal(plan.records);
-    writeLocalSavedAt(read.file.savedAt);
+    writeLocalSavedAt(read.file.savedAt, virtualPlaylistsLocalIsCurrent());
   }
   if (plan.writeFile || editedBeforeHydration) queueFileWrite(plan.records);
   if (plan.source === "file") onRestored();

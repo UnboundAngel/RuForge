@@ -12,6 +12,11 @@ export type MusicPlaylistsFile = {
   version: number;
   savedAt: number;
   playlists: VirtualPlaylistRecord[];
+  /**
+   * Fallback copy of Watch later and other video playlists. localStorage stays their home;
+   * this is read only when the file wins hydration (localStorage was stale or wiped).
+   */
+  videoPlaylists?: VirtualPlaylistRecord[];
 };
 
 export function serializeMusicPlaylistsFile(
@@ -22,6 +27,7 @@ export function serializeMusicPlaylistsFile(
     version: MUSIC_PLAYLISTS_FILE_VERSION,
     savedAt,
     playlists: records.filter(isMusicPlaylistRecord),
+    videoPlaylists: records.filter((r) => !isMusicPlaylistRecord(r)),
   };
   return JSON.stringify(file, null, 2);
 }
@@ -36,18 +42,26 @@ export function parseMusicPlaylistsFile(raw: string): MusicPlaylistsFile | null 
       .filter((r): r is VirtualPlaylistRecord => r != null && isMusicPlaylistRecord(r));
     const savedAt = typeof parsed.savedAt === "number" && Number.isFinite(parsed.savedAt) ? parsed.savedAt : 0;
     const version = typeof parsed.version === "number" ? parsed.version : MUSIC_PLAYLISTS_FILE_VERSION;
-    return { version, savedAt, playlists };
+    if (!Array.isArray(parsed.videoPlaylists)) return { version, savedAt, playlists };
+    const videoPlaylists = parsed.videoPlaylists
+      .map((r) => normalizeRecord(r))
+      .filter((r): r is VirtualPlaylistRecord => r != null && !isMusicPlaylistRecord(r));
+    return { version, savedAt, playlists, videoPlaylists };
   } catch {
     return null;
   }
 }
 
-/** Video playlists (Watch later and friends) always come from localStorage; music ones from `music`. */
+/**
+ * Music records come from `music`. Video playlists (Watch later and friends) come from `video`
+ * when the file carried them, else from localStorage (files written before the fallback copy).
+ */
 export function replaceMusicRecords(
   local: VirtualPlaylistRecord[],
   music: VirtualPlaylistRecord[],
+  video?: VirtualPlaylistRecord[],
 ): VirtualPlaylistRecord[] {
-  return [...local.filter((r) => !isMusicPlaylistRecord(r)), ...music];
+  return [...(video ?? local.filter((r) => !isMusicPlaylistRecord(r))), ...music];
 }
 
 export type FileReadResult =
@@ -92,7 +106,7 @@ export function planMusicPlaylistsHydration(
     return { records: local, writeFile: localSavedAt > file.savedAt, writeLocal: false, source: "local" };
   }
   return {
-    records: replaceMusicRecords(local, file.playlists),
+    records: replaceMusicRecords(local, file.playlists, file.videoPlaylists),
     writeFile: false,
     writeLocal: true,
     source: "file",
@@ -109,9 +123,14 @@ export function readLocalSavedAt(): number | null {
   }
 }
 
-export function writeLocalSavedAt(savedAt: number): void {
+/**
+ * Stamps localStorage only when its records really hold this state. A stale key keeps no
+ * stamp, so the next hydration takes the file instead.
+ */
+export function writeLocalSavedAt(savedAt: number, localIsCurrent = true): void {
   try {
-    localStorage.setItem(MUSIC_PLAYLISTS_SAVED_AT_LS_KEY, String(savedAt));
+    if (localIsCurrent) localStorage.setItem(MUSIC_PLAYLISTS_SAVED_AT_LS_KEY, String(savedAt));
+    else localStorage.removeItem(MUSIC_PLAYLISTS_SAVED_AT_LS_KEY);
   } catch {
     /* the file copy still carries the stamp */
   }

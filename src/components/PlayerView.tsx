@@ -1,22 +1,18 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from "react";
-import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "motion/react";
 import { Icon } from "@iconify/react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 // @ts-ignore
 import { openPath } from "@tauri-apps/plugin-opener";
 import {
-  Play,
   Volume2,
   Volume1,
   VolumeX,
   Maximize2,
   Minimize2,
   ArrowLeft,
-  Music,
   SkipBack,
   SkipForward,
-  X,
-  Video,
   Layers,
   Ellipsis,
   MessageSquare,
@@ -86,6 +82,8 @@ import {
   SlidingCommentsDrawer,
 } from "./player/comments/SlidingCommentsDrawer";
 import { useVideoComments } from "./player/comments/useVideoComments";
+import { NEXT_UP_PANEL_WIDTH, NextUpPanel } from "./player/NextUpPanel";
+import { PlayerSkipFlash, useSkipFlash } from "./player/PlayerSkipFlash";
 import { usePlayerKeyboardShortcuts } from "../hooks/usePlayerKeyboardShortcuts";
 import {
   PlayerBarGroupBubble,
@@ -406,8 +404,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [showPlayerMoreMenu, setShowPlayerMoreMenu] = useState(false);
   const { feedback: centerFeedback, showFeedback: showCenterFeedback } =
     usePlayerCenterFeedback();
-  const [skipFlash, setSkipFlash] = useState<{ side: "left" | "right"; amount: number } | null>(null);
-  const skipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { flash: skipFlash, showSkip } = useSkipFlash();
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
   const commentCookies = useMemo(
     () => cookieContextFromSettings(settings),
@@ -421,16 +418,24 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     commentCookies.cookieFile,
   );
   const commentsPanelX = useMotionValue(COMMENTS_PANEL_WIDTH);
+  const nextUpPanelX = useSpring(NEXT_UP_PANEL_WIDTH, { stiffness: 340, damping: 30 });
+  useEffect(() => {
+    nextUpPanelX.set(showPlaylist ? 0 : NEXT_UP_PANEL_WIDTH);
+  }, [showPlaylist, nextUpPanelX]);
+  /** How much of the right edge a side panel covers; the video and the control bar give that space up. */
+  const sidePanelInset = useTransform(() =>
+    Math.max(
+      COMMENTS_PANEL_WIDTH - commentsPanelX.get(),
+      NEXT_UP_PANEL_WIDTH - nextUpPanelX.get(),
+      0,
+    ),
+  );
   const commentsVideoScale = useTransform(
-    commentsPanelX,
+    sidePanelInset,
     [0, COMMENTS_PANEL_WIDTH],
-    [0.82, 1],
+    [1, 0.82],
   );
-  const commentsVideoTranslateX = useTransform(
-    commentsPanelX,
-    [0, COMMENTS_PANEL_WIDTH],
-    [-(COMMENTS_PANEL_WIDTH / 2), 0],
-  );
+  const commentsVideoTranslateX = useTransform(sidePanelInset, (inset) => -inset / 2);
 
   useEffect(() => {
     setCommentsPanelOpen(false);
@@ -752,18 +757,14 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const skip = (seconds: number) => {
     if (audioDelegated && hostAudio) {
       hostAudio.skipBySeconds(seconds);
-      setSkipFlash({ side: seconds > 0 ? "right" : "left", amount: Math.abs(seconds) });
-      if (skipTimeoutRef.current) clearTimeout(skipTimeoutRef.current);
-      skipTimeoutRef.current = setTimeout(() => setSkipFlash(null), 600);
+      showSkip(seconds);
       return;
     }
     const vid = mediaRef.current;
     if (!vid || !isFinite(vid.duration) || vid.duration <= 0) return;
     const next = Math.min(vid.duration, Math.max(0, vid.currentTime + seconds));
     applyScrubPosition(next / vid.duration, { persist: true });
-    setSkipFlash({ side: seconds > 0 ? "right" : "left", amount: Math.abs(seconds) });
-    if (skipTimeoutRef.current) clearTimeout(skipTimeoutRef.current);
-    skipTimeoutRef.current = setTimeout(() => setSkipFlash(null), 600);
+    showSkip(seconds);
   };
 
   const changeVolume = (v: number) => {
@@ -1561,70 +1562,14 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       className={`absolute inset-0 bg-black flex flex-col select-none overflow-hidden z-50 ${!showControls ? 'controls-hidden' : ''}`}
       style={{ cursor: showControls ? "default" : "none" }}
     >
-      {/* Next Up Drawer */}
-      <AnimatePresence>
-        {showPlaylist && (
-          <motion.div
-            initial={{ x: "110%", opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: "110%", opacity: 0 }}
-            transition={{ type: "spring", damping: 28, stiffness: 200 }}
-            className="absolute top-8 bottom-8 right-0 w-80 bg-stone-950/80 backdrop-blur-3xl rounded-l-[32px] z-[60] flex flex-col shadow-[0_32px_64px_-12px_rgba(0,0,0,0.8)] pointer-events-auto border border-white/5"
-          >
-            <div className="p-7 flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-[0.2em] text-stone-400 ml-2">Next Up</h3>
-              <button 
-                onClick={() => setShowPlaylist(false)}
-                className="p-2 text-stone-500 hover:text-white transition-colors hover:bg-white/5 rounded-full"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 pb-8 space-y-2 rf-scrollbar">
-              {folderAudioPlaylist.map((item) => {
-                const isActive = item.path === file.path;
-                return (
-                  <button
-                    key={item.path}
-                    onClick={() => setPlayingFile(item)}
-                    className={`w-full flex flex-col gap-3 p-3 rounded-[24px] transition-all group ${isActive ? 'bg-[color:var(--accent)]/10 ring-1 ring-[color:var(--accent)]/20' : 'hover:bg-white/5'}`}
-                  >
-                    <div className="w-full aspect-video rounded-[18px] bg-stone-900 overflow-hidden flex-shrink-0 relative border border-white/5 shadow-xl">
-                      {(item.thumbnailPath || item.ruforgePosterPath) ? (
-                        <img src={convertFileSrc(item.thumbnailPath || item.ruforgePosterPath!)} className="w-full h-full object-cover" alt="" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          {isAudioOnlyPath(item.path) ? <Music size={24} className="text-stone-700" /> : <Video size={24} className="text-stone-700" />}
-                        </div>
-                      )}
-                      <div className={`absolute inset-0 bg-black/20 transition-opacity ${isActive ? 'opacity-0' : 'group-hover:opacity-0'}`} />
-                      
-                      {item.duration > 0 && (
-                        <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded-md border border-white/10">
-                          <p className="text-[10px] font-black text-white leading-none">
-                            {formatTime(item.duration)}
-                          </p>
-                        </div>
-                      )}
-
-                      {isActive && (
-                        <div className="absolute inset-0 bg-[color:var(--accent)]/40 flex items-center justify-center backdrop-blur-[2px]">
-                           <Play size={28} className="text-[#1D1613] fill-current" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="px-2 pb-1 text-left">
-                      <p className={`text-[13px] font-bold leading-snug line-clamp-2 ${isActive ? 'text-[color:var(--accent)]' : 'text-stone-100 group-hover:text-white'}`}>
-                        {item.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "")}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <NextUpPanel
+        open={showPlaylist}
+        x={nextUpPanelX}
+        items={folderAudioPlaylist}
+        currentPath={file.path}
+        onSelect={setPlayingFile}
+        onClose={() => setShowPlaylist(false)}
+      />
       {/* Local <video> or host-delegated audio presentation */}
       <div className="absolute inset-0">
         {audioOnly ? (
@@ -1827,23 +1772,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       {/* Center feedback (play/pause, volume, captions) */}
       <PlayerCenterFeedback feedback={centerFeedback} />
 
-      {/* Skip feedback overlay */}
-      <AnimatePresence mode="popLayout">
-        {skipFlash && (
-          <motion.div
-            key={skipFlash.side}
-            initial={{ opacity: 0, x: skipFlash.side === "left" ? -20 : 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: skipFlash.side === "left" ? -40 : 40 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            className={`absolute top-1/2 ${skipFlash.side === "left" ? "left-[15%]" : "right-[15%]"} -translate-y-1/2 z-[100] pointer-events-none`}
-          >
-            <span className="text-[clamp(1.25rem,4vw,2.5rem)] font-black tracking-[0.2em] text-white opacity-40 uppercase whitespace-nowrap">
-              {skipFlash.side === "left" ? "−" : "+"}{skipFlash.amount}s
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <PlayerSkipFlash flash={skipFlash} />
 
       {/* SponsorBlock skip */}
       <AnimatePresence>
@@ -1864,7 +1793,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.2 }}
-            className="absolute top-0 left-0 right-0 px-8 pt-6 pb-20 flex items-start justify-between z-[70] bg-gradient-to-b from-black/85 via-black/30 to-transparent pointer-events-none"
+            style={{ right: sidePanelInset }}
+            className="absolute top-0 left-0 px-8 pt-6 pb-20 flex items-start justify-between z-[70] bg-gradient-to-b from-black/85 via-black/30 to-transparent pointer-events-none"
           >
             <div className="flex items-center gap-5 pointer-events-auto">
               <button
@@ -1913,7 +1843,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="absolute bottom-0 left-0 right-0 px-3 pb-2 pt-20 z-[70] bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"
+            style={{ right: sidePanelInset }}
+            className="absolute bottom-0 left-0 px-3 pb-2 pt-20 z-[70] bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"
           >
             {/* Scrubber */}
             <div
@@ -1938,9 +1869,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                   overlay={settings.sponsorBlockEnabled ? sponsorBlock.scrubOverlay : undefined}
                 />
               ) : (
-                <div className="relative w-full overflow-visible">
+                <div className="relative flex h-3 w-full items-end overflow-visible">
                   <div
-                    className={`w-full rounded-full relative transition-all duration-150 ${isScrubbing || isHoveringScrubber ? "h-3" : "h-1.5"} bg-white/15 overflow-hidden`}
+                    className={`h-1.5 w-full origin-bottom rounded-full relative transition-transform duration-150 ${isScrubbing || isHoveringScrubber ? "scale-y-[2]" : ""} bg-white/15 overflow-hidden`}
                   >
                     {settings.sponsorBlockEnabled && scrubDuration > 0 && sponsorBlock.scrubOverlay && (
                       <SponsorBlockScrubOverlay duration={scrubDuration} overlay={sponsorBlock.scrubOverlay} />

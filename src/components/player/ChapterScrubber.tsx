@@ -100,7 +100,7 @@ export function ChapterScrubber({
     <div
       ref={trackRef}
       className="w-full min-w-0 max-w-full relative overflow-visible"
-      style={{ height: isHovering ? BASE_TRACK_H * HOVER_SCALE : BASE_TRACK_H }}
+      style={{ height: BASE_TRACK_H * HOVER_SCALE }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}

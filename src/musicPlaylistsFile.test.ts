@@ -81,7 +81,16 @@ describe("music playlists file format", () => {
 describe("hydration plan", () => {
   const local = [watchLater, music("a", ["C:\\m\\1.mp3"])];
   const fileWith = (savedAt: number, playlists: VirtualPlaylistRecord[]) =>
-    classifyFileRead(serializeMusicPlaylistsFile(playlists, savedAt));
+    classifyFileRead(
+      serializeMusicPlaylistsFile([watchLater, ...playlists.filter((p) => p.id !== WATCH_LATER_ID)], savedAt),
+    );
+
+  it("takes video playlists from the file's fallback copy when the file wins", () => {
+    const fileWatchLater = { ...watchLater, items: [{ path: "C:\\v\\new.mp4", addedAt: 9 }] };
+    const read = classifyFileRead(serializeMusicPlaylistsFile([fileWatchLater, music("b", [])], 100));
+    const plan = planMusicPlaylistsHydration([watchLater], null, read);
+    expect(plan.records.find((r) => r.id === WATCH_LATER_ID)?.items.map((i) => i.path)).toEqual(["C:\\v\\new.mp4"]);
+  });
 
   it("migrates localStorage into a missing file once", () => {
     const plan = planMusicPlaylistsHydration(local, null, { kind: "missing" });

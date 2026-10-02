@@ -1,0 +1,10 @@
+[package]
+name = "rf_artifacts_harness"
+version = "0.0.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+trash = "5"
+log = "0.4"

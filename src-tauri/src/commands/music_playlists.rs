@@ -79,9 +79,45 @@ pub fn write_playlist_text_file(path: String, contents: String) -> Result<(), St
     write_atomic(&p, &contents)
 }
 
+/// A playlist entry may follow its file elsewhere only when the original drive or share is
+/// mounted and the file is really gone (a renamed album folder still qualifies). An unplugged
+/// drive must keep the old path.
+fn path_relocatable(path: &Path) -> bool {
+    let volume = path.ancestors().last().unwrap_or(path);
+    path.has_root() && volume.has_root() && volume.is_dir() && !path.exists()
+}
+
+#[tauri::command]
+pub async fn playlist_paths_relocatable(paths: Vec<String>) -> Result<Vec<bool>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        paths.iter().map(|p| path_relocatable(Path::new(p))).collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relocatable_only_when_volume_mounted_and_file_gone() {
+        let dir = std::env::temp_dir().join(format!("rf-reloc-{}", std::process::id()));
+        let album = dir.join("Album");
+        std::fs::create_dir_all(&album).unwrap();
+        let track = album.join("01 Intro.mp3");
+        std::fs::write(&track, b"x").unwrap();
+        assert!(!path_relocatable(&track), "file still there");
+        assert!(path_relocatable(&album.join("gone.mp3")));
+
+        std::fs::rename(&album, dir.join("Album (Deluxe)")).unwrap();
+        assert!(path_relocatable(&track), "renamed album folder on a mounted drive");
+
+        assert!(!path_relocatable(Path::new("Q:\\RuForgeNoSuchDrive\\A\\01 Intro.mp3")));
+        assert!(!path_relocatable(Path::new("\\\\rf-no-such-host\\share\\A\\01 Intro.mp3")));
+        assert!(!path_relocatable(Path::new("relative\\01 Intro.mp3")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn playlist_extension_gate() {

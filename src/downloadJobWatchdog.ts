@@ -35,13 +35,11 @@ const MIN_ACTIVE_IDLE_MS = 5 * 60_000;
 const MAX_ACTIVE_IDLE_MS = 45 * 60_000;
 const PROCESSING_IDLE_MS = 10 * 60_000;
 const PROCESSING_LARGE_IDLE_MS = 25 * 60_000;
-const AUDIO_PROCESSING_IDLE_MS = 45_000;
+/** Post-processing output growth arrives as `download-job-heartbeat`, so this only trips when ffmpeg stops writing. */
+const AUDIO_PROCESSING_IDLE_MS = 2 * 60_000;
 const AUDIO_ACTIVE_IDLE_MS = 45_000;
 const AUDIO_ACTIVE_IDLE_MAX_MS = 90_000;
 const LARGE_BYTES = 1_000_000_000;
-
-/** Hard cap from when status becomes downloading (auto-save audio should finish well under this). */
-export const MAX_DOWNLOAD_WALL_CLOCK_MS = 2 * 60_000;
 
 type WatchEntry = {
   lastActivityMs: number;
@@ -91,22 +89,6 @@ function bindDownloadWatchdogForegroundRecovery(): void {
     syncDownloadJobWatchdogsFromStore();
     void evaluateAllDownloadingJobsNow();
   });
-}
-
-function jobWallClockAgeMs(job: DownloadJob): number {
-  const started =
-    typeof job.downloadingSince === "number" && job.downloadingSince > 0
-      ? job.downloadingSince
-      : typeof job.createdAt === "number" && job.createdAt > 0
-        ? job.createdAt
-        : Date.now();
-  return Date.now() - started;
-}
-
-function jobExceededWallClock(job: DownloadJob): boolean {
-  if (job.options?.audioOnly !== true) return false;
-  if (!jobHasDownloadTransferStarted(job)) return false;
-  return jobWallClockAgeMs(job) >= MAX_DOWNLOAD_WALL_CLOCK_MS;
 }
 
 async function evaluateAllDownloadingJobsNow(): Promise<void> {
@@ -206,12 +188,6 @@ async function evaluateStall(jobId: string, generation: number): Promise<void> {
     return;
   }
 
-  if (jobExceededWallClock(job)) {
-    disarmDownloadJobWatchdog(jobId);
-    onTimeout?.(jobId);
-    return;
-  }
-
   const now = Date.now();
   const idleMs = now - entry.lastActivityMs;
   const threshold = computeDownloadJobStallThresholdMs(job);
@@ -227,25 +203,11 @@ async function evaluateStall(jobId: string, generation: number): Promise<void> {
     return;
   }
 
-  scheduleCheck(
-    jobId,
-    generation,
-    Math.max(
-      1000,
-      job.options?.audioOnly === true
-        ? Math.min(threshold - idleMs, MAX_DOWNLOAD_WALL_CLOCK_MS - jobWallClockAgeMs(job))
-        : threshold - idleMs,
-    ),
-  );
+  scheduleCheck(jobId, generation, threshold - idleMs);
 }
 
 function scheduleWatchdogCheck(jobId: string, generation: number, job: DownloadJob | undefined): void {
-  const idleDelay = job ? computeDownloadJobStallThresholdMs(job) : PRE_TRANSFER_MAX_MS;
-  const wallRemaining =
-    job != null && job.options?.audioOnly === true
-      ? MAX_DOWNLOAD_WALL_CLOCK_MS - jobWallClockAgeMs(job)
-      : Number.POSITIVE_INFINITY;
-  scheduleCheck(jobId, generation, Math.max(1000, Math.min(idleDelay, wallRemaining)));
+  scheduleCheck(jobId, generation, job ? computeDownloadJobStallThresholdMs(job) : PRE_TRANSFER_MAX_MS);
 }
 
 function touchEntry(jobId: string): WatchEntry {
@@ -263,13 +225,7 @@ function touchEntry(jobId: string): WatchEntry {
 /** Start or refresh idle tracking for a downloading job. */
 export function armDownloadJobWatchdog(jobId: string): void {
   const entry = touchEntry(jobId);
-  const job = resolveJob(jobId);
-  if (job?.status === "downloading" && jobExceededWallClock(job)) {
-    disarmDownloadJobWatchdog(jobId);
-    onTimeout?.(jobId);
-    return;
-  }
-  scheduleWatchdogCheck(jobId, entry.generation, job);
+  scheduleWatchdogCheck(jobId, entry.generation, resolveJob(jobId));
 }
 
 /** Reset the idle window after progress IPC (or other meaningful activity). */

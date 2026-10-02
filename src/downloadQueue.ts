@@ -437,11 +437,23 @@ function downloadJobUrlRank(j: DownloadJob): number {
   return 1;
 }
 
-/** One queue row per video URL — keeps the most active / newest job. */
+/** Where a job's file lands: its playlist folder, or "" for a plain single. */
+export function downloadJobDestinationKey(options: Pick<DownloadJobOptions, "playlistOutputFolder">): string {
+  return options.playlistOutputFolder?.trim() ?? "";
+}
+
+function collapseKey(j: DownloadJob): string {
+  return `${normalizeYouTubeUrlForCompare(j.url)}\u0000${downloadJobDestinationKey(j.options)}`;
+}
+
+/**
+ * One queue row per video URL and destination, keeping the most active / newest job. A track
+ * shared by two playlists keeps a row per playlist folder.
+ */
 export function collapseDownloadJobsByUrl(jobs: DownloadJob[]): DownloadJob[] {
   const byUrl = new Map<string, DownloadJob>();
   for (const j of jobs) {
-    const key = normalizeYouTubeUrlForCompare(j.url);
+    const key = collapseKey(j);
     const prev = byUrl.get(key);
     if (!prev) {
       byUrl.set(key, j);
@@ -455,7 +467,7 @@ export function collapseDownloadJobsByUrl(jobs: DownloadJob[]): DownloadJob[] {
         : prev;
     byUrl.set(key, keep);
   }
-  return jobs.filter((j) => byUrl.get(normalizeYouTubeUrlForCompare(j.url)) === j);
+  return jobs.filter((j) => byUrl.get(collapseKey(j)) === j);
 }
 
 export function loadPersistedDownloadJobs(): DownloadJob[] {
