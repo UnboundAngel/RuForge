@@ -1,5 +1,5 @@
 // @ts-check
-import { readFileSync } from 'node:fs';
+import { readFileSync, renameSync, rmdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
@@ -27,6 +27,17 @@ export default defineConfig({
       lastmod: new Date(),
       filter: (page) => !page.includes('/m/'),
     }),
+    {
+      // Cloudflare Pages serves the nearest `404.html` up the path; Astro only flattens the root one.
+      name: 'mobile-404',
+      hooks: {
+        'astro:build:done': ({ dir }) => {
+          const mobileDir = join(fileURLToPath(dir), 'm');
+          renameSync(join(mobileDir, '404', 'index.html'), join(mobileDir, '404.html'));
+          rmdirSync(join(mobileDir, '404'));
+        },
+      },
+    },
   ],
   vite: {
     define: {

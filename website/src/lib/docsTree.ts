@@ -1,8 +1,9 @@
 /**
  * Obsidian-style docs sidebar tree.
  * Each section can have children (collapsible in the sidebar).
- * Pages without `outline` are section stubs that still render a page.
  */
+
+import { DOCS_CONTENT } from './docsContent';
 
 export interface DocsPage {
   slug: string;
@@ -21,7 +22,7 @@ export interface DocsSection {
   pages: DocsPage[];
 }
 
-export const DOCS_TREE: DocsSection[] = [
+const FULL_DOCS_TREE: DocsSection[] = [
   {
     id: 'getting-started',
     label: 'Getting started',
@@ -133,24 +134,24 @@ export const DOCS_TREE: DocsSection[] = [
         slug: 'formats-and-quality',
         title: 'Formats and quality',
         description:
-          'Video vs audio, size estimates, and what yt-dlp writes to disk.',
+          'Pick the video quality, the audio format, and subtitles, and see what gets saved next to each file.',
         outline: [
-          'Video formats',
-          'Audio-only',
-          'Size preview',
-          'Sidecar metadata',
+          'Video quality',
+          'Audio only',
+          'Subtitles',
+          'Files saved with each download',
         ],
       },
       {
         slug: 'cookies-and-ytdlp',
         title: 'yt-dlp and cookies',
         description:
-          'Use Explorer or a cookie file when videos need login, age verification, or membership.',
+          'Download videos that need you to be signed in, and keep the downloader up to date.',
         outline: [
-          'When cookies matter',
-          'Explorer flow',
-          'Cookie file path',
-          'Metadata simulate',
+          'When you need cookies',
+          'Pick a cookie source',
+          'Use a cookies.txt file',
+          'Keep yt-dlp up to date',
         ],
       },
     ],
@@ -451,48 +452,110 @@ export const DOCS_TREE: DocsSection[] = [
         slug: 'common-issues',
         title: 'Common issues',
         description:
-          'Fix stalled downloads, missing library entries, and playback glitches.',
+          'Fix downloads that stall or fail, videos that need a sign-in, and files missing from your library.',
         outline: [
-          'Downloads stall',
-          'Missing files',
-          'Playback issues',
-          'Explorer problems',
+          'A download stalls or times out',
+          'A download fails',
+          'The video needs you to sign in',
+          'Not enough storage',
+          'A file is missing from your library',
+          'The app shows an error screen',
         ],
       },
       {
         slug: 'report-a-bug',
         title: 'Report a bug',
         description:
-          'What to include in a GitHub issue so the problem can be reproduced.',
+          'What to include in a GitHub issue so the problem can be found and fixed.',
         outline: [
-          'Version info',
-          'Steps to reproduce',
-          'Logs',
-          'Sample URL or file',
+          'Before you report',
+          'What to include',
+          'From the error screen',
+          'Where to post it',
         ],
       },
       {
         slug: 'known-limitations',
         title: 'Known limitations',
         description:
-          'Platform scope, extension edge cases, and experimental areas.',
+          'What RuForge does not do yet, so you know before you hit it.',
         outline: [
-          'Windows shipping target',
-          'Linux dev only',
-          'Explorer webview',
-          'Extensions',
+          'Windows only',
+          'Made for YouTube',
+          'The queue clears when you close the app',
+          'Signed-in videos need cookies',
+          'Audio playback',
         ],
       },
       {
         slug: 'faq',
         title: 'FAQ',
         description:
-          'Common questions about downloads, playback, and the library.',
+          'Quick answers about cost, accounts, downloads, updates, and your data.',
         outline: [
-          'Downloads',
-          'Playback',
-          'Library',
-          'Updates',
+          'Is RuForge free?',
+          'Do I need a YouTube account?',
+          'Where do my downloads go?',
+          'Can I download whole playlists?',
+          'Does it work offline?',
+          'How do updates work?',
+          'Is there a Mac or Linux version?',
+          'Does RuForge collect my data?',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'about',
+    label: 'About RuForge',
+    pages: [
+      {
+        slug: 'about',
+        title: 'About RuForge',
+        description:
+          'What RuForge is, what it is built on, and why it runs on Windows.',
+        outline: [
+          'What RuForge does',
+          'What it is built on',
+          'Why Windows first',
+          'Free and open source',
+        ],
+      },
+      {
+        slug: 'open-source',
+        title: 'Open source',
+        description:
+          'The license, the source code, and the open projects RuForge stands on.',
+        outline: [
+          'License',
+          'Source code',
+          'Open projects inside RuForge',
+          'Get involved',
+        ],
+      },
+      {
+        slug: 'security-and-privacy',
+        title: 'Security and privacy',
+        description:
+          'What stays on your PC, what goes out and why, and how updates are kept safe.',
+        outline: [
+          'No account, no ads',
+          'What leaves your PC',
+          'Your YouTube sign-in',
+          'Usage stats and crash reports',
+          'Signed updates',
+          'Where your data lives',
+        ],
+      },
+      {
+        slug: 'contact',
+        title: 'Contact and community',
+        description:
+          'Where to ask questions, share ideas, report bugs, and report security issues.',
+        outline: [
+          'Questions and ideas',
+          'Bugs',
+          'Security issues',
         ],
       },
     ],
@@ -528,6 +591,18 @@ export const DOCS_TREE: DocsSection[] = [
     ],
   },
 ];
+
+/** Pages and headings without written content stay out of the site until they are written. */
+export const DOCS_TREE: DocsSection[] = FULL_DOCS_TREE.map((section) => ({
+  ...section,
+  pages: section.pages.flatMap((page) => {
+    if (page.externalHref) return [page];
+    const content = DOCS_CONTENT[page.slug];
+    if (!content) return [];
+    const outline = page.outline.filter((heading) => content[heading]);
+    return outline.length > 0 ? [{ ...page, outline }] : [];
+  }),
+})).filter((section) => section.pages.length > 0);
 
 /** Flat lookup: slug -> { section, page, sectionIndex, pageIndex }. */
 export interface DocsPageMatch {

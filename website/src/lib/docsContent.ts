@@ -282,4 +282,429 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
       ],
     },
   },
+
+  /* ------------------------------------------------------------------ */
+  /*  Downloader > Formats and quality                                   */
+  /* ------------------------------------------------------------------ */
+  'formats-and-quality': {
+    'Video quality': {
+      paragraphs: [
+        'Pick a quality with <strong>Preferred Quality</strong> in <strong>Settings</strong> &gt; <strong>Downloads</strong>. The default is <strong>1080p (HD)</strong>.',
+      ],
+      table: {
+        headers: ['Setting', 'What you get'],
+        rows: [
+          ['<strong>720p</strong>', 'Up to 720p. Smallest files.'],
+          ['<strong>1080p (HD)</strong>', 'Up to 1080p. The default.'],
+          ['<strong>4K (2160p)</strong>', 'Up to 4K. Much bigger files.'],
+          ['<strong>Best Available</strong>', 'The highest quality the video has.'],
+        ],
+      },
+      paragraphs2: [
+        'Each setting is a ceiling. If a video doesn\'t come in that quality, RuForge takes the best one below it.',
+      ],
+    },
+    'Audio only': {
+      paragraphs: [
+        'Turn on <strong>Download audio only</strong> in <strong>Settings</strong> &gt; <strong>Downloads</strong> to save just the sound. That\'s handy for music, podcasts, and talks.',
+      ],
+      bullets: [
+        '<strong>Audio format</strong> appears once audio only is on. Pick <strong>M4A</strong> (the default), <strong>MP3</strong>, or <strong>OPUS</strong>.',
+        'M4A is the fastest, since it\'s what YouTube sends. MP3 and Opus get converted after the download.',
+        'In a playlist preview you can also switch single videos between audio and video before you download.',
+      ],
+    },
+    Subtitles: {
+      paragraphs: [
+        '<strong>Download Subtitles</strong> is on by default and saves English captions next to each video, so the player can show them offline.',
+      ],
+      bullets: [
+        'Pick other languages under <strong>Subtitle Languages</strong> in <strong>Settings</strong> &gt; <strong>Downloads</strong>.',
+        'RuForge saves both captions the creator uploaded and YouTube\'s automatic ones.',
+        'Audio-only downloads skip subtitles.',
+      ],
+    },
+    'Files saved with each download': {
+      paragraphs: [
+        'Next to every video, RuForge saves a few small files. Keep them with the video if you move it.',
+      ],
+      bullets: [
+        'The <strong>thumbnail</strong>, as a <code>.jpg</code>.',
+        'A <span class="docs-term" data-term=".info.json"><code>.info.json</code></span> file with the title, channel, chapters, and original link. Your library reads it to show the right details offline.',
+        'Subtitles, as <code>.vtt</code> files, when they\'re turned on.',
+        'Comments, if you turn on <strong>Download comments</strong>. It\'s off by default.',
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  Downloader > yt-dlp and cookies                                    */
+  /* ------------------------------------------------------------------ */
+  'cookies-and-ytdlp': {
+    'When you need cookies': {
+      paragraphs: [
+        'Most videos download without signing in. Some need YouTube to know who you are: age-restricted videos, members-only videos, and some private or unlisted ones.',
+        'For those, RuForge passes your YouTube sign-in to the downloader as <strong>cookies</strong>. You pick where they come from.',
+      ],
+    },
+    'Pick a cookie source': {
+      paragraphs: [
+        'Open the downloader. Above the <strong>Paste link</strong> box is a row of cookie sources. It shows when nothing is downloading and the box is empty.',
+      ],
+      table: {
+        headers: ['Source', 'Uses'],
+        rows: [
+          ['<strong>None</strong>', 'No sign-in. Fine for public videos. The default.'],
+          ['<strong>Internal</strong>', 'Your sign-in from Explorer, the YouTube browser built into RuForge. Sign in there once.'],
+          ['<strong>Firefox</strong>, <strong>Edge</strong>, <strong>Safari</strong>, <strong>Brave</strong>', 'Your sign-in from that browser on this PC.'],
+          ['<strong>Cookies</strong>', 'A <code>cookies.txt</code> file you pick.'],
+        ],
+      },
+      note: 'Chrome isn\'t in the list. If Chrome is your browser, use <strong>Internal</strong> or a <code>cookies.txt</code> file instead.',
+    },
+    'Use a cookies.txt file': {
+      steps: [
+        'Export your YouTube cookies to a <code>cookies.txt</code> file with a browser extension that saves them in Netscape format.',
+        'In the downloader, click <strong>Cookies</strong> in the cookie row.',
+        'Pick the file. RuForge remembers it for next time.',
+      ],
+      warning: 'A cookies file can sign anyone into your YouTube account. Keep it private and delete it when you\'re done.',
+    },
+    'Keep yt-dlp up to date': {
+      paragraphs: [
+        'RuForge downloads with <strong>yt-dlp</strong>, a free tool that comes with the app. YouTube changes often, so yt-dlp gets frequent updates.',
+      ],
+      bullets: [
+        'When a newer yt-dlp is out, a banner in the downloader says <strong>A newer yt-dlp is out</strong>. Click <strong>Update</strong>.',
+        'You can also update from <strong>Settings</strong> &gt; <strong>Downloads</strong> &gt; <strong>Updates</strong> with <strong>CHECK &amp; UPDATE</strong>.',
+        'Updates never install on their own, and they wait until your downloads are finished or paused.',
+        'Some downloads also need <strong>Deno</strong>, a small helper that answers YouTube\'s download check. RuForge offers to install it the first time it\'s needed (about 100 MB, kept in RuForge\'s own folder).',
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  Troubleshooting > Common issues                                    */
+  /* ------------------------------------------------------------------ */
+  'common-issues': {
+    'A download stalls or times out': {
+      paragraphs: [
+        'RuForge watches every download. If one stops making progress, it steps in instead of hanging forever.',
+      ],
+      bullets: [
+        'A stuck video stops with <strong>Download stalled</strong>. Check your internet, then click <strong>Retry</strong> or <strong>Resume</strong>. Resume picks up where it left off.',
+        'A stuck song in a batch shows <strong>Timed out</strong> and the queue moves on to the next one.',
+        'In a playlist, failed videos are retried automatically, up to three tries each.',
+      ],
+    },
+    'A download fails': {
+      paragraphs: [
+        'The message under the failed download usually says what to do. The most common ones:',
+      ],
+      table: {
+        headers: ['Message says', 'Fix'],
+        rows: [
+          ['yt-dlp is <strong>out of date</strong>', 'Update it from the banner, or with <strong>CHECK &amp; UPDATE</strong> in <strong>Settings</strong> &gt; <strong>Downloads</strong> &gt; <strong>Updates</strong>. Then retry.'],
+          ['<strong>JavaScript runtime needed</strong>', 'Click <strong>Install</strong>. RuForge installs Deno and retries the failed downloads on its own.'],
+          ['<strong>HTTP 403</strong>', 'The download link expired. Click <strong>Retry</strong>.'],
+          ['<strong>rate-limited</strong>', 'YouTube is slowing you down. Wait a few minutes, lower <strong>Concurrent downloads</strong>, or add a <strong>Batch start delay</strong> in Settings.'],
+        ],
+      },
+      paragraphs2: [
+        'For anything else, the message comes straight from yt-dlp. <a href="/docs/cookies-and-ytdlp">Updating yt-dlp</a> fixes most of them.',
+      ],
+    },
+    'The video needs you to sign in': {
+      paragraphs: [
+        'Age-restricted and members-only videos need your YouTube sign-in. Pick a cookie source above the <strong>Paste link</strong> box: <strong>Internal</strong> (sign in to Explorer first), a browser, or a <code>cookies.txt</code> file.',
+        '<a href="/docs/cookies-and-ytdlp">yt-dlp and cookies</a> walks through each one.',
+      ],
+    },
+    'Not enough storage': {
+      paragraphs: [
+        'If a download won\'t fit, RuForge puts it on hold and shows <strong>Not enough storage</strong> instead of filling your disk.',
+      ],
+      bullets: [
+        'Free up space on the drive, then resume it.',
+        'Saving to the internal vault? It has a 50 GB cap by default. Raise it with <strong>Storage Limit</strong> in <strong>Settings</strong> &gt; <strong>General</strong>.',
+      ],
+    },
+    'A file is missing from your library': {
+      bullets: [
+        'Make sure its folder is in your library: <strong>Settings</strong> &gt; <strong>Downloads</strong> &gt; <strong>Library scan locations</strong> &gt; <strong>ADD FOLDER</strong>.',
+        'Check the file type. The library shows MP4, MKV, and WebM videos and MP3, M4A, FLAC, Opus, OGG, and WAV audio.',
+        'On RuForge 0.4.0, rename uppercase extensions like <code>.MP4</code> to lowercase. From 0.5 both work.',
+      ],
+      paragraphs2: [
+        '<a href="/docs/library-folders">Library folders</a> has the details.',
+      ],
+    },
+    'The app shows an error screen': {
+      paragraphs: [
+        'If you see <strong>uh oh.. something broke in the ui</strong>, click <strong>Reload app</strong>. That usually fixes it, and your library and downloads are safe.',
+        'If it keeps happening, open <strong>Error details</strong> and click <strong>Report</strong>. <a href="/docs/report-a-bug">Report a bug</a> explains what happens next.',
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  Troubleshooting > Report a bug                                     */
+  /* ------------------------------------------------------------------ */
+  'report-a-bug': {
+    'Before you report': {
+      bullets: [
+        'Update RuForge. The fix may already be out.',
+        'For download problems, update yt-dlp too. See <a href="/docs/cookies-and-ytdlp">yt-dlp and cookies</a>.',
+        'Check <a href="/docs/common-issues">Common issues</a> and <a href="/docs/known-limitations">Known limitations</a>.',
+      ],
+    },
+    'What to include': {
+      bullets: [
+        '<strong>Your RuForge version.</strong> It\'s under <strong>Settings</strong> &gt; <strong>Advanced</strong> &gt; <strong>Updates</strong>, next to <strong>Installed</strong>.',
+        '<strong>What you did</strong>, step by step, and what you expected to happen.',
+        '<strong>The exact error message</strong>, copied from the failed download or the error screen.',
+        '<strong>The link</strong>, if the problem is with one video and it\'s public. Don\'t share private or members-only links.',
+        '<strong>A screenshot</strong>, if something looks wrong.',
+      ],
+    },
+    'From the error screen': {
+      paragraphs: [
+        'If RuForge shows its error screen, open <strong>Error details</strong>.',
+      ],
+      bullets: [
+        '<strong>Copy all</strong> copies the error so you can paste it anywhere.',
+        '<strong>Report</strong> opens a new GitHub issue in your browser, already filled in with the error and your version. Nothing is sent until you read it and post it yourself.',
+      ],
+    },
+    'Where to post it': {
+      paragraphs: [
+        'Post bugs on <a href="https://github.com/UnboundAngel/RuForge/issues/new">GitHub Issues</a>. You need a free GitHub account.',
+        'Not sure it\'s a bug? Ask on <a href="https://github.com/UnboundAngel/RuForge/discussions">GitHub Discussions</a> first.',
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  Troubleshooting > Known limitations                                */
+  /* ------------------------------------------------------------------ */
+  'known-limitations': {
+    'Windows only': {
+      paragraphs: [
+        'RuForge runs on <strong>64-bit Windows 10 and 11</strong>. There are no Mac or Linux versions yet. Both are on the <a href="/roadmap">roadmap</a>.',
+      ],
+    },
+    'Made for YouTube': {
+      paragraphs: [
+        'RuForge is built and tested for <strong>YouTube</strong> and <strong>YouTube Music</strong>. Dragging in links and picking them up from your clipboard only works with YouTube links.',
+        'Links from other sites can sometimes download, because yt-dlp supports them, but they aren\'t supported. If one breaks, there\'s no fix coming.',
+      ],
+    },
+    'The queue clears when you close the app': {
+      paragraphs: [
+        'Downloads that are waiting or running are lost when you quit RuForge. Finished files are safe in your library.',
+        'Reloading the window keeps the queue. Running downloads come back paused, and you can resume them.',
+      ],
+    },
+    'Signed-in videos need cookies': {
+      paragraphs: [
+        'Age-restricted, members-only, and some private videos only download with your YouTube sign-in. See <a href="/docs/cookies-and-ytdlp">yt-dlp and cookies</a>.',
+      ],
+    },
+    'Audio playback': {
+      bullets: [
+        'There\'s no volume leveling between songs yet.',
+        'Songs can crossfade, but there\'s no true gapless playback, so albums that flow from track to track may have a short gap.',
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  Troubleshooting > FAQ                                              */
+  /* ------------------------------------------------------------------ */
+  faq: {
+    'Is RuForge free?': {
+      paragraphs: [
+        'Yes. RuForge is free and open source under the Apache-2.0 license. No ads, no subscription, no account.',
+      ],
+    },
+    'Do I need a YouTube account?': {
+      paragraphs: [
+        'No. Public videos download without signing in. You only need your sign-in for age-restricted or members-only videos. See <a href="/docs/cookies-and-ytdlp">yt-dlp and cookies</a>.',
+      ],
+    },
+    'Where do my downloads go?': {
+      paragraphs: [
+        'To <code>C:\\RuForge\\Media</code> by default. You can pick any folder instead. See <a href="/docs/library-folders">Library folders</a>.',
+      ],
+    },
+    'Can I download whole playlists?': {
+      paragraphs: [
+        'Yes. Paste a playlist link and RuForge lists every video first. Reorder them, switch single videos to audio only, and see which ones you already have. Each playlist saves to its own folder, in order.',
+      ],
+    },
+    'Does it work offline?': {
+      paragraphs: [
+        'Your library and the player work fully offline. You only need internet to download, check for updates, and load things like lyrics and SponsorBlock segments the first time.',
+      ],
+    },
+    'How do updates work?': {
+      paragraphs: [
+        'RuForge checks for a new version each time it opens. When one is out, click <strong>Install &amp; Restart</strong>. Your library and settings stay put. See <a href="/docs/install">Download and install</a>.',
+      ],
+    },
+    'Is there a Mac or Linux version?': {
+      paragraphs: [
+        'Not yet. RuForge is Windows only for now. Both are on the <a href="/roadmap">roadmap</a>.',
+      ],
+    },
+    'Does RuForge collect my data?': {
+      paragraphs: [
+        'No. There are no accounts and no ads, and usage stats are off unless you opt in. <a href="/docs/security-and-privacy">Security and privacy</a> lists everything RuForge connects to and why.',
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  About RuForge > About                                              */
+  /* ------------------------------------------------------------------ */
+  about: {
+    'What RuForge does': {
+      paragraphs: [
+        'RuForge is a free Windows app that saves YouTube videos and music to your PC, keeps them in one library, and plays them offline.',
+        'Paste a link or a whole playlist and RuForge downloads it in the quality you pick. Everything you save shows up in one library, with a player that has chapters, subtitles, sponsor skipping, and a mini player you can pin on top of other windows. Music gets its own mode, with albums, lyrics, and playlists.',
+      ],
+    },
+    'What it is built on': {
+      paragraphs: [
+        'RuForge downloads with <strong>yt-dlp</strong> and joins video and audio with <strong>ffmpeg</strong>, two of the most trusted open tools for the job. The app itself is built with <strong>Tauri</strong> and <strong>Rust</strong>, with a <strong>React</strong> interface.',
+        '<a href="/docs/built-with">Built with</a> covers each one and what it does inside RuForge.',
+      ],
+    },
+    'Why Windows first': {
+      paragraphs: [
+        'Doing one platform well beats doing three badly. RuForge is built and tested on Windows 10 and 11 first. Mac and Linux are on the <a href="/roadmap">roadmap</a>.',
+      ],
+    },
+    'Free and open source': {
+      paragraphs: [
+        'RuForge is free, with no ads, accounts, or paid tier. All of the code is public on GitHub. See <a href="/docs/open-source">Open source</a>.',
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  About RuForge > Open source                                        */
+  /* ------------------------------------------------------------------ */
+  'open-source': {
+    License: {
+      paragraphs: [
+        'RuForge is licensed under <strong>Apache-2.0</strong>. You can use it, change it, and share it, including in your own projects, as long as you keep the license and copyright notices.',
+        'Read the full text in the <a href="https://github.com/UnboundAngel/RuForge/blob/main/LICENSE">LICENSE file</a>.',
+      ],
+    },
+    'Source code': {
+      paragraphs: [
+        'All of the code is on <a href="https://github.com/UnboundAngel/RuForge">GitHub</a>. Every release there comes with the installer and its release notes.',
+      ],
+    },
+    'Open projects inside RuForge': {
+      paragraphs: [
+        'RuForge stands on other open projects:',
+      ],
+      bullets: [
+        '<strong>yt-dlp</strong> downloads the videos.',
+        '<strong>ffmpeg</strong> joins video and audio and converts audio formats.',
+        '<strong>SponsorBlock</strong> supplies the sponsor segments the player skips.',
+        '<strong>MusicBrainz</strong> and <strong>Cover Art Archive</strong> fill in song details and album art.',
+        '<strong>LRCLIB</strong> supplies synced lyrics.',
+      ],
+      paragraphs2: [
+        'From RuForge 0.5, their license texts install with the app, in the <code>licenses</code> folder inside the RuForge install folder.',
+      ],
+    },
+    'Get involved': {
+      bullets: [
+        'Ideas and questions: <a href="https://github.com/UnboundAngel/RuForge/discussions">GitHub Discussions</a>.',
+        'Bugs: <a href="/docs/report-a-bug">Report a bug</a>.',
+        'What\'s planned next: the <a href="/roadmap">roadmap</a>.',
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  About RuForge > Security and privacy                               */
+  /* ------------------------------------------------------------------ */
+  'security-and-privacy': {
+    'No account, no ads': {
+      paragraphs: [
+        'RuForge has no account and no ads. Your library, history, and settings stay on your PC.',
+      ],
+    },
+    'What leaves your PC': {
+      paragraphs: [
+        'RuForge only connects to a service when a feature needs it:',
+      ],
+      table: {
+        headers: ['Service', 'When', 'What it gets'],
+        rows: [
+          ['<strong>YouTube</strong>', 'Downloads, video details, thumbnails, channel pages', 'The videos and channels you ask for'],
+          ['<strong>SponsorBlock</strong>', 'Playing a video, if SponsorBlock is on in Settings &gt; Playback', 'A short piece of a hash of the video ID, never the ID itself'],
+          ['<strong>MusicBrainz</strong>, <strong>Cover Art Archive</strong>', 'After an audio download', 'The artist and song title'],
+          ['<strong>LRCLIB</strong>', 'Loading lyrics', 'The artist, title, album, and length'],
+          ['<strong>Wikipedia</strong>, <strong>Wikidata</strong>', 'Opening an artist page', 'The artist name'],
+          ['<strong>GitHub</strong>', 'When RuForge opens', 'A check for new RuForge and yt-dlp versions'],
+          ['<strong>Discord</strong>', 'Only if you turn it on in Settings &gt; General (off by default)', 'What you\'re playing, sent to the Discord app on your PC'],
+        ],
+      },
+    },
+    'Your YouTube sign-in': {
+      bullets: [
+        'Signing in is optional. RuForge only uses your sign-in when you pick a cookie source for a download.',
+        'Cookies are handed to yt-dlp and go only to YouTube. With <strong>Internal</strong>, they\'re copied to a temporary file for that download and deleted after.',
+        'When you\'re signed in to Explorer, your library home loads your YouTube recommendations and watch history to show next to your downloads. Turn the recommendations off with <strong>YouTube feed in Video Library</strong> in Settings.',
+      ],
+    },
+    'Usage stats and crash reports': {
+      paragraphs: [
+        'Usage stats and crash reports are off by default. They only appear if you turn on <strong>Debugging settings</strong> and then opt in.',
+        'The <strong>Report</strong> button on the error screen opens a GitHub issue in your browser for you to read first. Nothing is sent on its own.',
+      ],
+    },
+    'Signed updates': {
+      paragraphs: [
+        'Updates come from RuForge\'s GitHub releases. Each one is signed, and RuForge checks the signature before installing, so a tampered update gets rejected.',
+      ],
+    },
+    'Where your data lives': {
+      bullets: [
+        'Your downloads: <code>C:\\RuForge\\Media</code>, or the folder you picked.',
+        'Settings, playlists, and your Explorer sign-in: <code>%APPDATA%\\com.attic.ruforge</code>.',
+        'Caches like channel pictures: <code>%LOCALAPPDATA%\\com.attic.ruforge</code>.',
+      ],
+      paragraphs2: [
+        'The full details are in the <a href="/legal/privacy">privacy policy</a>. Found a security problem? See <a href="/docs/contact">Contact</a>.',
+      ],
+    },
+  },
+
+  /* ------------------------------------------------------------------ */
+  /*  About RuForge > Contact and community                             */
+  /* ------------------------------------------------------------------ */
+  contact: {
+    'Questions and ideas': {
+      paragraphs: [
+        'Ask questions, share ideas, and request features on <a href="https://github.com/UnboundAngel/RuForge/discussions">GitHub Discussions</a>.',
+      ],
+    },
+    Bugs: {
+      paragraphs: [
+        'Post bugs on <a href="https://github.com/UnboundAngel/RuForge/issues/new">GitHub Issues</a>. <a href="/docs/report-a-bug">Report a bug</a> covers what to include.',
+      ],
+    },
+    'Security issues': {
+      paragraphs: [
+        'Please don\'t post security problems in public. Report them privately through <a href="https://github.com/UnboundAngel/RuForge/security/advisories/new">GitHub security advisories</a>.',
+      ],
+    },
+  },
 };

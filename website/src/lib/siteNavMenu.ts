@@ -107,13 +107,13 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
     ],
   },
   resources: {
-    featuredSlugs: ['getting-started'],
+    featuredSlugs: ['install'],
     layout: 'links-featured-single',
-    panelClass: 'w-[40rem] min-h-[14.5rem]',
-    stackBelow: '43rem',
+    panelClass: 'w-[31rem] min-h-[14.5rem]',
+    stackBelow: '34rem',
     featured: [
       {
-        slug: 'getting-started',
+        slug: 'install',
         title: 'Getting started',
         subtitle: 'Install and first download',
         badge: 'Start here',
@@ -126,13 +126,14 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
   help: {
     featuredSlugs: [],
     layout: 'links-featured-single',
-    panelClass: 'w-[38rem] min-h-[14.5rem]',
-    stackBelow: '41rem',
+    panelClass: 'w-[31rem] min-h-[14.5rem]',
+    stackBelow: '34rem',
     featured: [
       {
-        slug: 'getting-started',
+        slug: 'library-folders',
+        href: '/docs/library-folders',
         title: 'Your library',
-        subtitle: 'Library paths, folders, first video',
+        subtitle: 'Where files save, adding folders',
         image: '/tutorials/playlists.webp',
         variant: 'hero',
         shadowColor: 'rgba(150, 115, 65, 1)',
@@ -147,6 +148,3 @@ export const NAV_MENU_CONFIG: Record<NavSectionId, NavMenuConfig> = {
     featured: [],
   },
 };
-
-/** Help mega-menu hero links into Resources getting started. */
-export const HELP_FEATURED_HREF = '/resources/getting-started';

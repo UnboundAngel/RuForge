@@ -1,0 +1,20 @@
+---
+import MobileShell from '../../layouts/MobileShell.astro';
+import MobileHeader from '../../components/mobile/MobileHeader';
+import MobileFooter from '../../components/mobile/MobileFooter.astro';
+import NotFoundStamp from '../../components/NotFoundStamp.astro';
+import { getImage } from 'astro:assets';
+import ruforgeLogo from '../../assets/ruforge-logo.png';
+
+const logoImage = await getImage({ src: ruforgeLogo, width: 64 });
+---
+
+<MobileShell title="Page not found" description="This page does not exist on the RuForge site. Head back to the home page or download RuForge for Windows.">
+  <MobileHeader client:load logoSrc={logoImage.src} />
+
+  <main class="flex min-h-svh flex-col justify-center px-5 pt-20 pb-16">
+    <NotFoundStamp mobile />
+  </main>
+
+  <MobileFooter />
+</MobileShell>

@@ -3,7 +3,6 @@
 import { memo } from 'react';
 import { NAV_SECTIONS, pageHref, type NavSectionId, type SitePage } from '../lib/sitePages';
 import {
-  HELP_FEATURED_HREF,
   NAV_MENU_CONFIG,
   type NavFeaturedItem,
   type NavStackBreakpoint,
@@ -275,9 +274,6 @@ function DocsTechIcon({
 
 function featuredHref(sectionId: NavSectionId, item: NavFeaturedItem): string {
   if (item.href) return item.href;
-  if (sectionId === 'help' && item.slug === 'getting-started') {
-    return HELP_FEATURED_HREF;
-  }
   return pageHref(sectionId, item.slug);
 }
 
@@ -350,11 +346,11 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
         ))}
       </div>
     ) : config.layout === 'links-featured-single' && config.featured[0] ? (
-      <div className="rf-mega-menu-featured flex max-w-full shrink-0 pl-1">
+      <div className="rf-mega-menu-featured flex h-full max-w-full shrink-0 pl-1">
         <FeaturedVisualCard
           item={config.featured[0]}
           href={featuredHref(sectionId, config.featured[0])}
-          className={cn('h-auto min-h-[8.25rem] w-full', stacked.card)}
+          className={cn('h-full min-h-[8.25rem] w-full', stacked.card)}
           imageClassName={stacked.image}
         />
       </div>

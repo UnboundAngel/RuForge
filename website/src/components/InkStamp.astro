@@ -1,28 +1,53 @@
 ---
+import RuforgeMark from '../assets/ruforge-mark.svg';
+
 interface Props {
   /** Unique per page so the arc path ids do not collide. */
   id: string;
   top?: string;
   bottom?: string;
+  /** Center of the stamp: the wordmark, or the app icon. */
+  mark?: 'text' | 'logo';
+  /** Uneven, bled ink edges like a real rubber stamp. */
+  rough?: boolean;
 }
 
-const { id, top = 'open source', bottom = 'runs on your pc' } = Astro.props;
+const { id, top = 'open source', bottom = 'runs on your pc', mark = 'text', rough = false } = Astro.props;
 ---
 
 <svg class="ink-stamp" viewBox="0 0 200 200" role="img" aria-label={`${top}, ${bottom}`}>
   <defs>
     <path id={`${id}-arc-top`} d="M 30,100 A 70,70 0 0 1 170,100" />
     <path id={`${id}-arc-bottom`} d="M 18,100 A 82,82 0 0 0 182,100" />
+    {
+      rough && (
+        <filter id={`${id}-rough`} x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="2" seed="7" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.3" result="bled" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="2" seed="3" result="wear" />
+          <feColorMatrix in="wear" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1.9" result="wearAlpha" />
+          <feComposite in="bled" in2="wearAlpha" operator="in" />
+        </filter>
+      )
+    }
   </defs>
-  <circle cx="100" cy="100" r="93" fill="none" stroke="currentColor" stroke-width="2.5" />
-  <circle cx="100" cy="100" r="60" fill="none" stroke="currentColor" stroke-width="1.25" />
-  <text class="ink-stamp__ring">
-    <textPath href={`#${id}-arc-top`} startOffset="50%" text-anchor="middle">{top}</textPath>
-  </text>
-  <text class="ink-stamp__ring">
-    <textPath href={`#${id}-arc-bottom`} startOffset="50%" text-anchor="middle">{bottom}</textPath>
-  </text>
-  <text class="ink-stamp__mark" x="100" y="108" text-anchor="middle">RuForge</text>
+  <g filter={rough ? `url(#${id}-rough)` : undefined}>
+    <circle cx="100" cy="100" r="93" fill="none" stroke="currentColor" stroke-width="2.5" />
+    <circle cx="100" cy="100" r="60" fill="none" stroke="currentColor" stroke-width="1.25" />
+    <text class="ink-stamp__ring">
+      <textPath href={`#${id}-arc-top`} startOffset="50%" text-anchor="middle">{top}</textPath>
+    </text>
+    <text class="ink-stamp__ring">
+      <textPath href={`#${id}-arc-bottom`} startOffset="50%" text-anchor="middle">{bottom}</textPath>
+    </text>
+    {
+      mark === 'logo' ? (
+        <RuforgeMark x="52" y="52" width="96" height="96" aria-hidden="true" />
+      ) : (
+        <text class="ink-stamp__mark" x="100" y="108" text-anchor="middle">RuForge</text>
+      )
+    }
+  </g>
 </svg>
 
 <style>
