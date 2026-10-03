@@ -100,4 +100,4 @@ See `public/screenshots/README.md` for full steps and `unlock()` when done.
 
 ## Constraints
 
-- No analytics or third-party scripts.
+- No third-party scripts except the Cloudflare Web Analytics beacon (production only, no cookies).

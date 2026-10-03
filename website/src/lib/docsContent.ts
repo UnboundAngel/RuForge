@@ -559,7 +559,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
     },
     'Does RuForge collect my data?': {
       paragraphs: [
-        'No. There are no accounts and no ads, and usage stats are off unless you opt in. <a href="/docs/security-and-privacy">Security and privacy</a> lists everything RuForge connects to and why.',
+        'No. There are no accounts, no ads, no usage stats and no crash reports. The update check is the only request the project counts. <a href="/docs/security-and-privacy">Security and privacy</a> lists everything RuForge connects to and why.',
       ],
     },
   },
@@ -666,7 +666,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
     },
     'Usage stats and crash reports': {
       paragraphs: [
-        'Usage stats and crash reports are off by default. They only appear if you turn on <strong>Debugging settings</strong> and then opt in.',
+        'RuForge doesn\'t collect usage stats or crash reports. The only request the project counts is the update check.',
         'The <strong>Report</strong> button on the error screen opens a GitHub issue in your browser for you to read first. Nothing is sent on its own.',
       ],
     },

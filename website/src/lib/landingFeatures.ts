@@ -36,7 +36,7 @@ export function landingLoginTrust(base: '' | '/m') {
     headline: 'your YouTube login stays between you and YouTube',
     paragraphs: [
       "you sign in on YouTube's own page inside RuForge, the same one you'd see in a browser. when you download something, RuForge hands your session to the downloader for that one job and deletes the copy when it finishes. you can also use the login from your normal browser, or none at all",
-      `there's no RuForge account and nothing to pay for, and no ${link(`${privacy}#no-telemetry`, 'usage stats or crash reports')} unless you turn them on. the only time RuForge calls home is the ${link(`${privacy}#update-check`, 'update check')}, which ruforge.app counts`,
+      `there's no RuForge account and nothing to pay for, and no ${link(`${privacy}#no-telemetry`, 'usage stats or crash reports')}. the only time RuForge calls home is the ${link(`${privacy}#update-check`, 'update check')}, which ruforge.app counts`,
     ],
     note: `read ${link(`${privacy}#login-cookies`, 'where your login goes')} in the privacy policy, or ${link(LOGIN_CODE_URL, 'the code that handles it')} on GitHub`,
   };

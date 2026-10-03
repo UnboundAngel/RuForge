@@ -115,7 +115,7 @@ const LEGAL_ITEM_ANCHORS: Record<string, Record<string, string>> = {
   'PRIVACY.md': {
     'login-cookies': 'it sends those cookies to the source site',
     'login-stored-locally': 'browser session data is stored locally',
-    'no-telemetry': 'No analytics or telemetry in a standard session',
+    'no-telemetry': 'RuForge has no analytics or telemetry',
     'no-crash-data': 'RuForge does not collect crash data',
     'update-check': 'The website redirects that request to the file on GitHub',
   },
