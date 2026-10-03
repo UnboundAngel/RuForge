@@ -52,7 +52,7 @@
         "push it out"
       ],
       "script": "scripts/triggers/ship.mjs",
-      "effect": "Whole message only. Dry-runs publish-snapshot.mjs, shows the file list and commit message, and publishes only after Angel replies yes (ship.mjs --yes). Follow .cursor/skills/ruforge-release/SKILL.md first."
+      "effect": "Whole message only. Dry-runs publish-snapshot.mjs, shows the file list and commit message, and publishes only after Angel replies yes (ship.mjs --yes), then waits for ruforge.app to serve the release (scripts/verify-website-release.mjs). Follow .cursor/skills/ruforge-release/SKILL.md first."
     }
   ]
 }

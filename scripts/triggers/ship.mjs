@@ -52,3 +52,14 @@ execFileSync(process.execPath, [snapshot, message], {
   stdio: 'inherit',
   env: { ...process.env, RUFORGE_PUBLISH: '1' },
 });
+
+console.log('\nChecking ruforge.app (waits up to 10 minutes for the Pages deploy)...');
+try {
+  execFileSync(process.execPath, [join(root, 'scripts/verify-website-release.mjs'), '--wait', '600'], {
+    cwd: root,
+    stdio: 'inherit',
+  });
+} catch {
+  console.error('Website does not serve this release yet. Stop and report.');
+  process.exit(1);
+}

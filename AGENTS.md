@@ -25,7 +25,7 @@ Matching: any casing, typos, and Angel's German swaps (`ich`=`I`, `bin`=`am`, `u
 | `I'm leaving`, `I am leaving`, `heading out`, `ich bin leaving` | `scripts/triggers/leave.mjs` | Run push, write dated handoff under docs/agents/handoffs/, reply with branch + hash. |
 | `I'm back`, `I am back`, `picking up`, `ich bin back` | `scripts/triggers/back.mjs` | Fetch sync, check out newest handoff branch, wire remotes, npm install if lockfile changed, print next step, wait. |
 | `add trigger` | `scripts/triggers/add-trigger.mjs` | Create scripts/triggers/<id>.mjs + registry row + AGENTS table, then commit and push. |
-| `ship it`, `cut a release`, `push it out` | `scripts/triggers/ship.mjs` | Whole message only. Dry-runs publish-snapshot.mjs, shows the file list and commit message, and publishes only after Angel replies yes (ship.mjs --yes). Follow .cursor/skills/ruforge-release/SKILL.md first. |
+| `ship it`, `cut a release`, `push it out` | `scripts/triggers/ship.mjs` | Whole message only. Dry-runs publish-snapshot.mjs, shows the file list and commit message, and publishes only after Angel replies yes (ship.mjs --yes), then waits for ruforge.app to serve the release (scripts/verify-website-release.mjs). Follow .cursor/skills/ruforge-release/SKILL.md first. |
 
 
 ## Every task

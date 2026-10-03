@@ -1,6 +1,6 @@
 // @ts-check
-import { readFileSync, renameSync, rmdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, renameSync, rmdirSync, utimesSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
@@ -9,9 +9,24 @@ import sitemap from '@astrojs/sitemap';
 import { qrcode } from 'vite-plugin-qrcode';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const shippedVersion = JSON.parse(
-  readFileSync(join(repoRoot, 'updater.json'), 'utf-8'),
-).version;
+const updaterPath = join(repoRoot, 'updater.json');
+const shippedVersion = JSON.parse(readFileSync(updaterPath, 'utf-8')).version;
+
+// Astro only reloads `__APP_VERSION__` when this config file changes, so a release would leave a running dev server on the old version.
+function restartOnRelease() {
+  const configPath = fileURLToPath(import.meta.url);
+  return {
+    name: 'ruforge-restart-on-release',
+    configureServer(server) {
+      server.watcher.add(updaterPath);
+      server.watcher.on('change', (file) => {
+        if (resolve(file) !== resolve(updaterPath)) return;
+        const now = new Date();
+        utimesSync(configPath, now, now);
+      });
+    },
+  };
+}
 
 // https://astro.build/config
 export default defineConfig({
@@ -43,7 +58,7 @@ export default defineConfig({
     define: {
       __APP_VERSION__: JSON.stringify(shippedVersion),
     },
-    plugins: [tailwindcss(), qrcode()],
+    plugins: [tailwindcss(), qrcode(), restartOnRelease()],
     server: {
       fs: {
         allow: ['..'],

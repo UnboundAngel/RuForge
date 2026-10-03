@@ -87,6 +87,17 @@ b. In `STATE.md`: set `Last shipped to users` to the version just released; set 
 
 c. In `website/src/content/roadmap.json`: flip matching entries to `"status": "Finished"`. List every entry flipped or write "No roadmap entries to flip."
 
+d. Republish the website so it picks up a-c. The roadmap's "coming in vX" label reads `STATE.md` `Shipping version` at build time, and the step 6 snapshot went out before the roll. Commit a-c to `sync` `main`, then:
+
+```
+git fetch sync main
+git fetch public main
+node scripts/publish-snapshot.mjs --dry-run
+RUFORGE_PUBLISH=1 node scripts/publish-snapshot.mjs "Release: v<semver> website and roadmap"
+```
+
+The dry-run must list only `STATE.md`, `docs/`, and `website/` paths. If app code shows up, stop and ask Angel.
+
 Do not keep a second shipped log in AGENTS.md.
 
 ## 9. HARD BLOCK: live verify
@@ -97,8 +108,16 @@ Fetch `https://raw.githubusercontent.com/UnboundAngel/RuForge/main/updater.json`
 - Parsed `version` equals the version you just released.
 - `platforms.windows-x86_64.signature` is a long base64 string, not a path, URL, or empty.
 
+Then check the website:
+
+```
+node scripts/verify-website-release.mjs --wait 600
+```
+
+It must pass every row: `ruforge.app/updater.json`, the header "Latest" badge and JSON-LD version, both download pages' installer name, the changelog entry, and both roadmap pages' entries and next version. It retries for 10 minutes while Cloudflare Pages deploys.
+
 If any check fails, the release failed. Committed != live on `main`.
 
 ## 10. Report
 
-Chosen version + rationale, bundled yt-dlp version, pushed commit hash, GitHub Release URL, live `version` from step 9, confirmation the Release asset matches `updater.json` `url`.
+Chosen version + rationale, bundled yt-dlp version, pushed commit hash, GitHub Release URL, live `version` from step 9, website check result, confirmation the Release asset matches `updater.json` `url`.

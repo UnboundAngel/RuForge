@@ -1,0 +1,60 @@
+{
+  "nodes": [
+    {
+      "id": "f-ytdlp-selection",
+      "type": "fix",
+      "label": "yt-dlp selection",
+      "agent": "chad",
+      "details": [
+        "An older yt-dlp left in AppData no longer overrides the newer bundled one. On launch, the bundled and AppData versions are compared on a dedicated thread, every yt-dlp spawn waits for that comparison, and the stale copy is removed.",
+        "Ships with yt-dlp 2026.08.19; the release ritual now refreshes the bundled binary before every signed build."
+      ],
+      "files": [
+        "src-tauri/src/ytdlp_binary.rs",
+        "src-tauri/src/commands/ytdlp_update.rs",
+        "src-tauri/src/media_engine_adapter.rs",
+        "src-tauri/src/lib.rs",
+        "src-tauri/binaries/yt-dlp-x86_64-pc-windows-msvc.exe",
+        ".cursor/skills/ruforge-release/SKILL.md"
+      ]
+    },
+    {
+      "id": "f-updates",
+      "type": "fix",
+      "label": "Updates",
+      "agent": "chad",
+      "details": [
+        "Each launch sends one updater.json request instead of two; the log-only Rust check in setup is gone.",
+        "Dev builds no longer request updater.json."
+      ],
+      "files": [
+        "src-tauri/src/lib.rs",
+        "src/updaterCheck.ts",
+        "src/App.tsx"
+      ]
+    },
+    {
+      "id": "f-privacy",
+      "type": "fix",
+      "label": "Privacy",
+      "agent": "chad",
+      "details": [
+        "Removed the optional usage and crash telemetry from Debugging settings. RuForge sends no usage stats or crash reports."
+      ],
+      "files": [
+        "src-tauri/src/lib.rs",
+        "src/components/SettingsView.tsx",
+        "src/store/types.ts",
+        "src/components/crash-recovery/CrashErrorDetails.tsx"
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "f-ytdlp-selection" },
+    { "source": "f-ytdlp-selection", "target": "ruforge" },
+    { "source": "chad", "target": "f-updates" },
+    { "source": "f-updates", "target": "ruforge" },
+    { "source": "chad", "target": "f-privacy" },
+    { "source": "f-privacy", "target": "ruforge" }
+  ]
+}
