@@ -2,9 +2,7 @@
 
 RuForge is a free, open-source Windows app that saves YouTube videos and music to your PC, keeps them in one library, and plays them offline.
 
-<!-- HERO GIF: 10-15s loop. Paste a link, download it, open it in Music mode with synced lyrics scrolling. ~1200px wide, under 8 MB. Uncomment once docs/media/hero.gif exists.
-![RuForge](docs/media/hero.gif)
--->
+![RuForge: paste a YouTube link, download it, then play it in Music mode with synced lyrics](docs/media/hero.gif)
 
 ## What it adds on top of yt-dlp
 
