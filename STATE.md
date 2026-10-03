@@ -2,15 +2,15 @@
 
 > Live cursor. Mint reads this FIRST, then `AGENTS.md`. Update LAST after user-visible app behavior that will ship. If this file and the code disagree, the code wins: fix this file forward. Never git-restore a dirty tree to match it.
 
-Shipping version: 0.5.1 (unreleased)
+Shipping version: 0.6.1 (unreleased)
 
-Last shipped to users: 0.5.0
+Last shipped to users: 0.6.0
 
-Last updated: 2026-10-02 (Unreleased log)
+Last updated: 2026-10-03 (Unreleased log)
 
-Status: 0.5.0 live on GitHub and updater.json (release https://github.com/UnboundAngel/RuForge/releases/tag/v0.5.0, tag on public snapshot `988e34c`). Version files still read 0.5.0; bump at the next release. Companion still developer-gated on localhost. Local Vite binds 1430 (HMR 1431) so it does not collide with Finch on 1420. Website Astro is pinned to 4321.
+Status: 0.6.0 live on GitHub and updater.json (release https://github.com/UnboundAngel/RuForge/releases/tag/v0.6.0, tag on public snapshot `0d1abfb`). Version files read 0.6.0. From 0.6.0 on, the app checks `ruforge.app/updater.json` (Cloudflare Pages 302 to the GitHub raw file) with GitHub as the fallback; daily launch counts are in Cloudflare zone analytics filtered by path `/updater.json`. Companion still developer-gated on localhost. Local Vite binds 1430 (HMR 1431) so it does not collide with Finch on 1420. Website Astro is pinned to 4321.
 
-Closed release notes for 0.5.0 and earlier: `docs/agents/release/versions/`. Do not paste them back into this file.
+Closed release notes for 0.6.0 and earlier: `docs/agents/release/versions/`. Do not paste them back into this file.
 
 ## Unreleased
 
@@ -29,7 +29,7 @@ Rules: root `AGENTS.md` → **How to log Unreleased**.
 
 ## Now
 
-0.5.0 shipped: library home and creator pages, follow + notification center, music playlists, recommendations and screenshot import, desktop island, download lifecycle hardening, and the follow-creators and playlist-import onboarding tips (every tip dismissible). Drained into `docs/agents/release/versions/version-0.5.0.json`; roadmap `unreleased` rows flipped to shipped on sync (public website picks them up at the next website publish).
+0.6.0 shipped (minor: new Settings > Updates "What's new" row): What's New tiles per feature, storage badge on the held download row, update check via ruforge.app. Drained into `docs/agents/release/versions/version-0.6.0.json`; no roadmap entries to flip.
 Rust tests the app crate cannot run (`cargo test` crashes with STATUS_ENTRYPOINT_NOT_FOUND) live in `src-tauri/test-harness/`; see its README.
 Unlanded July companion work (log.rs, trace_log.rs, routes.rs) was a local stash; backed up to sync branch `backup/companion-stash-2026-07-03`, not merged.
 Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shipped target. Windows dev: `npm run dev:app` (Vite on 1430). Website: `npm run dev` in `website/` (Astro on 4321).
@@ -42,7 +42,6 @@ None.
 
 1. Playlist import Phase 2: CLI entry (roadmap "import playlists with one terminal command", in progress).
 2. Download history log in the title bar bell (roadmap "a history of everything you've downloaded").
-3. Opt-in crash reports.
 
 ## Notes (not P0)
 

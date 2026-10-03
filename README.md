@@ -97,7 +97,7 @@ Windows installers: [Releases](https://github.com/UnboundAngel/RuForge/releases)
 
 ## Configuration
 
-No root `.env.example`. Dev server: `http://localhost:1420` (`strictPort`). If `TAURI_DEV_HOST` is set, HMR uses port `1421`. Compile-time telemetry keys for signed builds: `src-tauri/TELEMETRY.example.env` (`APTABASE_APP_KEY`, `APTABASE_HOST`, `GLITCHTIP_DSN`). Usage and crash telemetry are off by default and sit on the Debugging settings tab.
+No root `.env.example`. Dev server: `http://localhost:1420` (`strictPort`). If `TAURI_DEV_HOST` is set, HMR uses port `1421`. RuForge has no telemetry and needs no build-time keys.
 
 User data:
 

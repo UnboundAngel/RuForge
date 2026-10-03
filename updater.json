@@ -1,11 +1,11 @@
 {
-  "version": "0.6.0",
-  "notes": "{\"notes\":\"### RuForge 0.6.0\\n\\n- **Settings**: Reopen What's New any time from Settings > Updates. Each new feature gets a tile that takes you straight to it.\\n- **Notifications**: When storage is full, the video you tried to download gets a storage badge on its own row.\\n- **Updates**: The update check now goes through ruforge.app, with GitHub as the backup.\",\"additions\":[\"What's New: After an update, each new feature gets its own tile that takes you straight to it, with a link to the full changelog on ruforge.app\",\"Settings: Settings > Updates has a What's new row that reopens the latest release notes\",\"Updates: The update check asks ruforge.app first and falls back to GitHub if the site is down\"],\"fixes\":[\"Notifications: When storage is full, the video you tried to download gets a storage badge on its own row instead of a separate Storage limit reached card\"]}",
-  "pub_date": "2026-10-03T12:01:52Z",
+  "version": "0.6.1",
+  "notes": "{\"notes\":\"### RuForge 0.6.1\\n\\n- **Downloads**: Ships with yt-dlp 2026.08.19, and an older copy left over from a past update can no longer override it.\\n- **Updates**: RuForge checks for updates once per launch instead of twice.\\n- **Privacy**: The optional usage and crash telemetry is gone. RuForge sends no usage stats or crash reports.\",\"additions\":[],\"fixes\":[\"Downloads: Ships with yt-dlp 2026.08.19 for the latest YouTube fixes\",\"Downloads: An older yt-dlp left in AppData no longer overrides the newer one bundled with RuForge, and the stale copy is removed on launch\",\"Updates: RuForge checks for app updates once per launch instead of twice\",\"Privacy: Removed the optional usage and crash telemetry. RuForge sends no usage stats or crash reports\"]}",
+  "pub_date": "2026-10-03T12:35:33Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.6.0/RuForge_0.6.0_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWmtHU1gyQzdaNlFCejNhVm1ZeXQ2WTBxYlVDOVdvYnRieXEzbDd0RDhyMU9KT3dzSW1paWRFU1IwV0c2b3M4elVXQVZrTUw1OXZvc3ZVN1I1cXp0NFFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMDI4OTEyCWZpbGU6UnVGb3JnZV8wLjYuMF94NjQtc2V0dXAuZXhlCnZPZ01ObG95aXZRdTBiaE0zWE9hN2M1c0tZenRGcG80dWpjS0RYaWtwelhhcmE3aDllMzN0Q251N2FnWUI5bnpmUjkycHFNYUJSTXlLcGZtYUNMZ0RBPT0K"
+      "url": "https://github.com/UnboundAngel/RuForge/releases/download/v0.6.1/RuForge_0.6.1_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRU1VPL05ZM0tBWms5RTBFLzgxWFZ5NDJsanVuSG9IV3Vzd3R5OUVWS3J3UzlXRmFFcTVuclZ5dTczSFg1OVI5Y2QybWlNVXFBdXM5ZFhWc2ZqWXRGSEtjV29KUG9Tbnc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMDMwOTE0CWZpbGU6UnVGb3JnZV8wLjYuMV94NjQtc2V0dXAuZXhlCnpxYzVPVVFyYWV1Myt5d2ZtRzBQOGt1QzN4R2RuRWNkRHdvSjE2Ymt0VTVySzIwZW1LdURzU1FDZEZQdnRiNnRERVlDWmNjaE52dCtiOUh3N2VuMUNRPT0K"
     }
   }
 }

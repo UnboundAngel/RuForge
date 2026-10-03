@@ -2199,42 +2199,6 @@ export const SettingsView: React.FC<{
                   </SearchableBlock>
                 </SettingsSection>
               ) : null}
-              {settings.showDebuggingSettings ? (
-                <SettingsSection title="Telemetry">
-                  <SettingItem
-                    title="Usage telemetry"
-                    description="Counts launches and grabs the basics: OS, app version, language. What you download never touches it."
-                    active={settings.telemetryUsageEnabled}
-                    control={
-                      <ToggleSlot
-                        active={settings.telemetryUsageEnabled}
-                        onClick={() =>
-                          void updateSetting(
-                            "telemetryUsageEnabled",
-                            !settings.telemetryUsageEnabled,
-                          )
-                        }
-                      />
-                    }
-                  />
-                  <SettingItem
-                    title="Crash reports"
-                    description="When something breaks, it sends me the crash, scrubbed clean first so no links or filenames ride along."
-                    active={settings.telemetryCrashEnabled}
-                    control={
-                      <ToggleSlot
-                        active={settings.telemetryCrashEnabled}
-                        onClick={() =>
-                          void updateSetting(
-                            "telemetryCrashEnabled",
-                            !settings.telemetryCrashEnabled,
-                          )
-                        }
-                      />
-                    }
-                  />
-                </SettingsSection>
-              ) : null}
               <RegroupPlaylistModal
                 open={regroupPlaylistOpen}
                 onClose={() => setRegroupPlaylistOpen(false)}

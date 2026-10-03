@@ -1223,6 +1223,7 @@ function App() {
   performUpdateCheckRef.current = performUpdateCheck;
 
   useEffect(() => {
+    if (import.meta.env.DEV) return;
     void performUpdateCheckRef.current(false);
   }, []);
 

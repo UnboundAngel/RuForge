@@ -1,0 +1,61 @@
+{
+  "nodes": [
+    {
+      "id": "t-whats-new",
+      "type": "task",
+      "label": "What's New",
+      "agent": "chad",
+      "details": [
+        "After an update, each new feature gets its own tile that takes you straight to it, with a link to the full changelog on ruforge.app.",
+        "Settings > Updates has a What's new row that reopens the latest release notes."
+      ],
+      "files": [
+        "src/components/WhatsNewDialog.tsx",
+        "src/lib/whatsNew.ts",
+        "src/lib/whatsNew.test.ts",
+        "src/updatePostInstall.ts",
+        "src/components/UpdaterLayers.tsx",
+        "src/components/SettingsView.tsx",
+        "src/App.tsx"
+      ]
+    },
+    {
+      "id": "t-updates",
+      "type": "task",
+      "label": "Updates",
+      "agent": "chad",
+      "details": [
+        "The update check asks ruforge.app/updater.json first, a Cloudflare Pages redirect to the GitHub raw file, and falls back to GitHub directly if the site is down."
+      ],
+      "files": [
+        "src-tauri/tauri.conf.json",
+        "website/public/_redirects",
+        "docs/ruforge/legal/PRIVACY.md"
+      ]
+    },
+    {
+      "id": "f-notifications",
+      "type": "fix",
+      "label": "Notifications",
+      "agent": "chad",
+      "details": [
+        "When storage is full, the video you tried to download gets a storage badge on its own row instead of a separate Storage limit reached card."
+      ],
+      "files": [
+        "src/notifications/storageHolds.ts",
+        "src/notifications/storageHolds.test.ts",
+        "src/notifications/sources/downloadItems.ts",
+        "src/notifications/sources/downloadSource.ts",
+        "src/components/notifications/NotificationLeading.tsx"
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "chad", "target": "t-whats-new" },
+    { "source": "t-whats-new", "target": "ruforge" },
+    { "source": "chad", "target": "t-updates" },
+    { "source": "t-updates", "target": "ruforge" },
+    { "source": "chad", "target": "f-notifications" },
+    { "source": "f-notifications", "target": "ruforge" }
+  ]
+}

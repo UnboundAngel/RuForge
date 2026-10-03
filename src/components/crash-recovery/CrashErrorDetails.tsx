@@ -10,10 +10,6 @@ import {
   formatCrashMessage,
   parseCrashDetails,
 } from "@/lib/parseCrashStack";
-import { getOrCreateInstallId } from "@/lib/telemetryInstallId";
-import { trackTelemetryEvent } from "@/lib/telemetryTrack";
-import { loadMergedSettings } from "@/store/types";
-
 const ISSUES_NEW = "https://github.com/UnboundAngel/RuForge/issues/new";
 
 type CrashErrorDetailsProps = {
@@ -80,13 +76,6 @@ export function CrashErrorDetails({
 
   const handleReport = async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    const settings = loadMergedSettings();
-    if (settings.showDebuggingSettings && settings.telemetryCrashEnabled) {
-      void trackTelemetryEvent("crash_report_manual", {
-        install_id: getOrCreateInstallId(),
-        message: formatCrashMessage(message, errorName).slice(0, 200),
-      });
-    }
     await openUrl(await buildReportUrl(message, copyDetail ?? detail, errorName));
     setReported(true);
     setTimeout(() => setReported(false), 2200);

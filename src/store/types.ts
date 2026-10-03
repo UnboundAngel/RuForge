@@ -168,10 +168,6 @@ export interface RuforgeSettings {
   showYoutubeFeedInLibrary: boolean;
   /** When true, single-video downloads fetch YouTube comments into `{stem}.comments.json`. */
   downloadComments: boolean;
-  /** When true, anonymous app-launch usage telemetry may be sent (off by default). */
-  telemetryUsageEnabled: boolean;
-  /** When true, scrubbed crash reports may be sent on failure (off by default). */
-  telemetryCrashEnabled: boolean;
   /** User accepted the LAN companion disclosure before enabling the server. */
   companionServerDisclosureAcknowledged: boolean;
   /** Master: share RuForge activity on Discord Rich Presence (off by default). */
@@ -221,8 +217,6 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   suggestYoutubeMusicSongs: true,
   showYoutubeFeedInLibrary: true,
   downloadComments: false,
-  telemetryUsageEnabled: false,
-  telemetryCrashEnabled: false,
   companionServerDisclosureAcknowledged: false,
   discordPresenceEnabled: false,
   discordPresenceShowTitles: true,
@@ -270,8 +264,6 @@ export function loadMergedSettings(): RuforgeSettings {
       sponsorBlockEnabled: merged.sponsorBlockEnabled === true,
       sponsorBlockCategoryModes: mergeCategoryModes(merged.sponsorBlockCategoryModes),
       sponsorBlockCategoryStats: mergeCategoryStats(merged.sponsorBlockCategoryStats),
-      telemetryUsageEnabled: merged.telemetryUsageEnabled === true,
-      telemetryCrashEnabled: merged.telemetryCrashEnabled === true,
       companionServerDisclosureAcknowledged:
         merged.companionServerDisclosureAcknowledged === true,
       discordPresenceEnabled: merged.discordPresenceEnabled === true,

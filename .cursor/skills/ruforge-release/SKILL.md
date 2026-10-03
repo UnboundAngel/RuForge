@@ -37,6 +37,17 @@ State the chosen version and why in the step 10 report.
 
 Structured `notes`: markdown teaser + `additions` and `fixes` arrays. Set `version`, `url` (`.../releases/download/v<semver>/RuForge_<semver>_x64-setup.exe`). Leave `signature` empty until step 5. Do not paste the whole Unreleased dump into `notes`.
 
+## 3b. Refresh bundled yt-dlp (before build)
+
+Replace `src-tauri/binaries/yt-dlp-x86_64-pc-windows-msvc.exe` with the latest upstream `yt-dlp.exe` so fresh installs never ship a stale extractor:
+
+```
+curl -fL -o src-tauri/binaries/yt-dlp-x86_64-pc-windows-msvc.exe https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
+src-tauri/binaries/yt-dlp-x86_64-pc-windows-msvc.exe --version
+```
+
+`--version` must print the tag shown on https://github.com/yt-dlp/yt-dlp/releases/latest. Include the binary in the step 6 commit and state the version in the step 10 report.
+
 ## 4. Signed build (Angel only)
 
 Angel runs `Build-signed-windows.bat` or `npm run build:signed`. Mint reads `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/`.
@@ -51,7 +62,7 @@ Paste `.sig` **file contents** (base64) into `signature`. Set `pub_date`. Never 
 
 ## 6. Commit on sync + snapshot to public main
 
-Confirm release work is on `sync` `main` (private source of truth). Commit must include `updater.json`, all three version files, generated website changelog when applicable, and unreleased code. Push that commit to **`sync` `main`** first.
+Confirm release work is on `sync` `main` (private source of truth). Commit must include `updater.json`, all three version files, the refreshed yt-dlp binary, generated website changelog when applicable, and unreleased code. Push that commit to **`sync` `main`** first.
 
 Then publish a downstream snapshot (no private history) onto public:
 
@@ -90,4 +101,4 @@ If any check fails, the release failed. Committed != live on `main`.
 
 ## 10. Report
 
-Chosen version + rationale, pushed commit hash, GitHub Release URL, live `version` from step 9, confirmation the Release asset matches `updater.json` `url`.
+Chosen version + rationale, bundled yt-dlp version, pushed commit hash, GitHub Release URL, live `version` from step 9, confirmation the Release asset matches `updater.json` `url`.

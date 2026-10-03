@@ -11,7 +11,7 @@ use tauri_plugin_shell::ShellExt;
 
 use crate::deno_binary::resolved_deno_path_if_present;
 use crate::process_tree::kill_shell_child_tree;
-use crate::ytdlp_binary::{userdata_ytdlp_path, ytdlp_shell_command};
+use crate::ytdlp_binary::{active_userdata_ytdlp_path, ytdlp_shell_command};
 
 pub struct RuForgeRuntimeProvider {
     app: AppHandle,
@@ -57,10 +57,8 @@ impl RuntimeProvider for RuForgeRuntimeProvider {
 }
 
 fn resolve_ytdlp_path(app: &AppHandle) -> Result<String, EngineError> {
-    if let Ok(user_path) = userdata_ytdlp_path(app) {
-        if user_path.is_file() && user_path.metadata().map(|m| m.len() > 0).unwrap_or(false) {
-            return Ok(user_path.display().to_string());
-        }
+    if let Some(user_path) = active_userdata_ytdlp_path(app) {
+        return Ok(user_path.display().to_string());
     }
     app.shell()
         .sidecar("yt-dlp")

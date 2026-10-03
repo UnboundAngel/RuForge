@@ -18,15 +18,11 @@ mod media_bundle;
 mod child_job;
 mod process_tree;
 mod radial_nav_bridge;
-mod telemetry_prefs;
 mod tray;
 mod utils;
 mod webview_permissions;
 mod ytdlp_binary;
 mod ytdlp_rate_limit;
-pub mod telemetry_scrub {
-    pub use ::telemetry_scrub::*;
-}
 #[cfg(windows)]
 mod taskbar_thumbbar;
 #[cfg(windows)]
@@ -39,8 +35,6 @@ mod windows_playback_qos;
 use std::sync::Mutex;
 
 use tauri::{Emitter, EventTarget, Listener, Manager};
-use tauri_plugin_updater::UpdaterExt;
-
 use crate::app_state::AppConfig;
 use crate::commands::deno_update::{download_deno, get_deno_status};
 use crate::commands::media_engine_cmd::{
@@ -119,12 +113,10 @@ use crate::commands::settings::{
 };
 use crate::commands::sponsorblock::ensure_sponsorblock_segments;
 use crate::commands::system::{open_external_url, open_in_file_manager};
-use crate::commands::telemetry::sync_telemetry_prefs;
 use crate::commands::ytdlp_update::{
     download_ytdlp_update, get_ytdlp_update_status, warm_ytdlp_release_cache_spawn,
 };
 use crate::debug_log::sync_debug_log_categories;
-use crate::dev_gate::DevGateDisk;
 use crate::download_job_manager::DownloadJobManager;
 use crate::focus_protocol::TRAY_SHOW_MAIN_EVENT;
 use crate::hardware_acceleration::apply_hardware_acceleration_prefs_to_context;
@@ -133,18 +125,6 @@ use crate::library::commands::{
 };
 use crate::library::LibraryState;
 use crate::tray::{setup_tray, tray_front_debug};
-
-fn aptabase_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
-    let key = option_env!("APTABASE_APP_KEY").unwrap_or("");
-    let host = option_env!("APTABASE_HOST").unwrap_or("");
-    let mut opts = tauri_plugin_aptabase::InitOptions::default();
-    if !host.is_empty() {
-        opts.host = Some(host.to_string());
-    }
-    tauri_plugin_aptabase::Builder::new(key)
-        .with_options(opts)
-        .build()
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -158,10 +138,6 @@ pub fn run() {
         windows_audio_brand::set_explicit_app_user_model_id(&app_id);
         windows_playback_qos::disable_background_execution_throttling();
     }
-
-    let identifier = context.config().identifier.clone();
-    // WebView localStorage is unavailable at this point; read the on-disk mirror of showDebuggingSettings so Aptabase registers only when the dev gate was enabled at last quit.
-    let aptabase_dev_gate = DevGateDisk::load(&identifier).show_debugging_settings;
 
     let mut builder = tauri::Builder::default();
 
@@ -210,13 +186,10 @@ pub fn run() {
                 .build(),
         );
 
-    if aptabase_dev_gate {
-        builder = builder.plugin(aptabase_plugin());
-    }
-
     builder
         .setup(|app| {
             let handle = app.handle().clone();
+            crate::ytdlp_binary::start_userdata_ytdlp_reconcile(&handle);
 
             // Rust is the sole authority for library config + index. Seed/load
             // persisted config now, before any command can race the first
@@ -240,18 +213,6 @@ pub fn run() {
             crate::companion::register_progress_query_listener(&handle);
 
             warm_ytdlp_release_cache_spawn(handle.clone());
-            tauri::async_runtime::spawn(async move {
-                if let Ok(updater) = handle.updater() {
-                    if let Ok(Some(update)) = updater.check().await {
-                        crate::rf_log!(
-                            "core.startup",
-                            log::Level::Info,
-                            "Update found: {}",
-                            update.version
-                        );
-                    }
-                }
-            });
 
             spawn_removable_drives_watcher(app.handle());
             app.manage(crate::commands::watchlist::WatchlistState::load(app.handle()));
@@ -347,7 +308,6 @@ pub fn run() {
             delete_dev_captures,
             start_dev_capture_file_drag,
             sync_debug_log_categories,
-            sync_telemetry_prefs,
             tray_front_debug,
             get_video_info,
             get_playlist_row_sizes,

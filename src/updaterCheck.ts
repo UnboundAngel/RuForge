@@ -8,6 +8,9 @@ export type UpdateCheckResult =
   | { kind: "error"; message: string };
 
 export async function runUpdateCheck(): Promise<UpdateCheckResult> {
+  if (import.meta.env.DEV) {
+    return { kind: "error", message: "update checks are off in dev builds" };
+  }
   try {
     const currentVersion = await getVersion();
     const next = await check();
