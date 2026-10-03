@@ -46,7 +46,7 @@ RuForge has no server of its own. Each connection below goes straight from your 
 **About the artist.** When you open the About the artist sheet in Music, RuForge looks the artist name up on MusicBrainz, reads the biography from Wikipedia (through Wikidata when needed) and loads the artist photo from Wikimedia. The result is cached, so this happens once per artist.
 
 
-**App updates.** On launch, and when you press Check now in Settings, RuForge requests a small `updater.json` file from `ruforge.app/updater.json` to see whether a newer version exists. The website redirects that request to the file on GitHub, and if ruforge.app does not answer, RuForge fetches it from GitHub directly. Versions before 0.5.1 go to GitHub directly. Cloudflare, which hosts ruforge.app, sees your IP address and the User-Agent `tauri-plugin-updater/{version}`, as it does for any request to the website, and its dashboard shows the maintainer how many update checks arrive each day. That count is how the project estimates how many people use RuForge. When a newer version is available, it also reads the list of recent releases from GitHub's API to show the release notes. No account or identifier is sent. The signed installer downloads from GitHub only after you choose to install.
+**App updates.** On launch, and when you press Check now in Settings, RuForge requests a small `updater.json` file from `ruforge.app/updater.json` to see whether a newer version exists. The website redirects that request to the file on GitHub, and if ruforge.app does not answer, RuForge fetches it from GitHub directly. Versions before 0.6.0 go to GitHub directly. Cloudflare, which hosts ruforge.app, sees your IP address and the User-Agent `tauri-plugin-updater/{version}`, as it does for any request to the website, and its dashboard shows the maintainer how many update checks arrive each day. That count is how the project estimates how many people use RuForge. When a newer version is available, it also reads the list of recent releases from GitHub's API to show the release notes. No account or identifier is sent. The signed installer downloads from GitHub only after you choose to install.
 
 
 **yt-dlp updates.** At startup RuForge checks GitHub's API for a newer yt-dlp release, at most once every 12 hours (the result is cached). The User-Agent names RuForge and its version. A new yt-dlp binary downloads from GitHub only when you choose to update it.
@@ -80,7 +80,7 @@ RuForge has no server of its own. Each connection below goes straight from your 
 
 
 - We do not collect or report any data about your downloads, browsing or playback. yt-dlp and the built-in browser still connect to the sites you use, the same way any browser or downloader does.
-- No analytics or telemetry in a standard session. Settings > General has a Debugging settings switch, off by default, that reveals optional usage and crash telemetry toggles, which are also off until you turn them on. With usage telemetry on, RuForge sends one event per launch with a random install ID. With crash telemetry on, pressing Report on the error screen also sends the first 200 characters of the error message. Both go to an Aptabase analytics service.
+- RuForge has no analytics or telemetry. It sends no usage stats and no crash reports. The update check described above is the only request the project counts. Versions up to 0.6.0 had optional usage and crash toggles hidden behind the Debugging settings switch, off by default; 0.6.1 removes them.
 - No RuForge account, no login to RuForge and no cloud sync.
 - No ads, no referral links and no affiliate rewrites of URLs.
 - No background uploading of files, library data or watch history.
@@ -89,7 +89,7 @@ RuForge has no server of its own. Each connection below goes straight from your 
 ## Logs and crash data
 
 
-RuForge does not collect crash data in a standard session. When something breaks, the error screen lets you copy the details or press Report, which opens a pre-filled GitHub issue in your browser. Nothing is posted until you review and submit it yourself. You can attach your log file the same way. You control what gets shared.
+RuForge does not collect crash data. When something breaks, the error screen lets you copy the details or press Report, which opens a pre-filled GitHub issue in your browser. Nothing is posted until you review and submit it yourself. You can attach your log file the same way. You control what gets shared.
 
 
 ## The ruforge.app website
