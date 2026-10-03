@@ -83,7 +83,7 @@ export async function queueUpload(upload: WatchlistUpload): Promise<boolean> {
       { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
       useRuforgeStore.getState().notify,
     );
-    recordStorageFullRefusal();
+    recordStorageFullRefusal({ url: upload.url, title: upload.title, thumbnail: upload.thumbnail });
     return false;
   }
   await markSeen([upload.videoId]);

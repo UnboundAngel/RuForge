@@ -44,6 +44,8 @@ export type NotificationItem = {
     failedAttempts?: number;
     /** Full failure text for Copy error: the row's own, or the newest folded failed try's. */
     error?: string;
+    /** A download of this video was refused for storage and storage is still full. */
+    storageHeld?: boolean;
   };
 };
 

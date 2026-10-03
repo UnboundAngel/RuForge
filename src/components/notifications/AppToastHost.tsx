@@ -41,10 +41,10 @@ export function AppToastHost({ clearPlayerDock }: { clearPlayerDock: boolean }) 
               exit={{ opacity: 0, y: 8, scale: 0.96 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               role={t === "error" ? "alert" : "status"}
-              className="pointer-events-auto flex w-fit max-w-[min(100%,40rem)] items-center gap-2.5 rounded-xl bg-[#33271f] py-2.5 pl-4 pr-3 text-sm font-medium text-stone-100 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+              className="pointer-events-auto flex w-fit max-w-[min(100%,30rem)] items-center gap-2.5 rounded-xl bg-[#33271f] py-2.5 pl-4 pr-3 text-sm font-medium text-stone-100 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
             >
               <Icon size={16} className={`shrink-0 ${className}`} />
-              <span className="line-clamp-2 min-w-0 text-balance">{n.message}</span>
+              <span className="line-clamp-2 min-w-0">{n.message}</span>
               {n.action && (
                 <button
                   type="button"

@@ -69,3 +69,6 @@ src-tauri/binaries/ffprobe*.exe
 
 # Agent review screenshots
 .screenshots/
+
+# Agent screenshots shared in chat
+.screenshots/

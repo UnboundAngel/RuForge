@@ -1,0 +1,590 @@
+{
+  "nodes": [
+    {
+      "id": "t-comments",
+      "type": "task",
+      "label": "Comments",
+      "agent": "chad",
+      "details": [
+        "panel sits above the video control bar; sort menu matches player menus and stacks over threads."
+      ],
+      "files": [
+        "src/components/player/comments/SlidingCommentsDrawer.tsx",
+        "src/components/player/comments/CommentsPanel.tsx",
+        "src/index.css"
+      ]
+    },
+    {
+      "id": "t-crash-recovery",
+      "type": "task",
+      "label": "Crash recovery",
+      "agent": "chad",
+      "details": [
+        "first app stack frame section opens by default."
+      ],
+      "files": [
+        "src/lib/parseCrashStack.ts"
+      ]
+    },
+    {
+      "id": "t-downloads",
+      "type": "task",
+      "label": "Downloads",
+      "agent": "chad",
+      "details": [
+        "RuForge Internal cookies now work right after launch without opening Explorer or Music Explore first.",
+        "the queue checks free disk space and your library storage limit before a download starts, and rows that do not fit get a red border with Not enough storage (plus Authorize Cleanup when the library limit is the reason).",
+        "drag videos in a playlist preview to reorder them before downloading, and the queue downloads them in the new order.",
+        "when several music downloads finish back to back, each one is tagged and reported as the right song, and songs queued into a playlist pick back up after a refresh."
+      ],
+      "files": [
+        "src-tauri/src/commands/explorer_cookies.rs",
+        "src/storageFit.ts",
+        "src/store/downloadQueueSlice.ts",
+        "src/components/downloader/StorageBlockNote.tsx",
+        "src-tauri/src/commands/disk_space.rs",
+        "src/components/downloader/PlaylistPreviewList.tsx",
+        "src/components/downloader/useDownloaderView.ts",
+        "src-tauri/src/commands/downloader.rs",
+        "src/App.tsx"
+      ]
+    },
+    {
+      "id": "t-explorer",
+      "type": "task",
+      "label": "Explorer",
+      "agent": "chad",
+      "details": [
+        "the bottom bar now shows which YouTube page you are on and lets you paste a link to open it, reload, or copy the page URL, like Music's Explore bar.",
+        "Follow YouTube channels from Explorer, the library or a pasted link, see their new uploads and premieres on Library home and the desktop island, and optionally auto-download them."
+      ],
+      "files": [
+        "src/components/navigation/ExplorerBottomBar.tsx",
+        "src/components/navigation/explorerPageLabel.ts",
+        "src/App.tsx",
+        "src-tauri/src/commands/watchlist/mod.rs",
+        "src/watchlist/watchlistActions.ts",
+        "src/components/island/IslandWatchlistContent.tsx"
+      ]
+    },
+    {
+      "id": "t-installer",
+      "type": "task",
+      "label": "Installer",
+      "agent": "chad",
+      "details": [
+        "RuForge now installs the FFmpeg (GPLv3), yt-dlp and RuForge license texts, with a third-party notices file, in its licenses folder."
+      ],
+      "files": [
+        "src-tauri/tauri.conf.json"
+      ]
+    },
+    {
+      "id": "t-island",
+      "type": "task",
+      "label": "Island",
+      "agent": "chad",
+      "details": [
+        "While RuForge is in the background, downloads and notices show in the island at the top of the screen you are using, with a progress ring around the music pill when something is playing. The bottom-right popup is gone."
+      ],
+      "files": [
+        "src/hooks/useDesktopIslandOverlay.ts",
+        "src/components/island/IslandDownloadContent.tsx",
+        "src/systemNotify.ts",
+        "src-tauri/src/commands/island_overlay.rs"
+      ]
+    },
+    {
+      "id": "t-library",
+      "type": "task",
+      "label": "Library",
+      "agent": "chad",
+      "details": [
+        "Default grid fits four thumbnails per row at wide widths with tighter spacing.",
+        "the video library home is now laid out like YouTube, with rows of videos broken up by Continue watching, Shorts shelves, your playlists and \"More from\" channel shelves, plus channel avatars, publish dates and YouTube view counts kept apart from your own play count, and your YouTube home feed mixed in so you can preview any video in place and download it with one click. \"More from\" shelves show the channel you download most and the one you just followed, mixing your downloads with their newest, most viewed and already watched uploads. Click a creator's name or avatar, or pick Go to channel from a video's right-click menu, to open their page in RuForge: a banner card with their avatar, handle, subscriber and video counts, Follow and Open in YouTube, while the tabs along the top switch to Home, Videos, Downloaded and Playlists for that creator. Home has sideways-scrolling rows of your downloads, their latest and most popular uploads, your playlists of their videos and the ones you watched on YouTube. Videos there start on YouTube in Explorer with one click. Right-click any video to follow its creator (videos you haven't downloaded also get Download and Copy link).",
+        "Files with uppercase extensions like .MP4 or .MKV now show up in your library."
+      ],
+      "files": [
+        "src/components/MediaView.tsx",
+        "src/components/library/LibraryHome.tsx",
+        "src/components/library/homeSections.ts",
+        "src/App.tsx",
+        "src/components/library/CreatorPage.tsx",
+        "src/components/library/CreatorHeader.tsx",
+        "src/components/library/CreatorHome.tsx",
+        "src/components/library/CreatorShelf.tsx",
+        "src/components/library/creatorPageStore.ts",
+        "src/components/library/FeedVideoMenu.tsx",
+        "src/components/library/useHomeChannelShelves.ts",
+        "src-tauri/src/commands/channel_videos.rs"
+      ]
+    },
+    {
+      "id": "t-music",
+      "type": "task",
+      "label": "Music",
+      "agent": "chad",
+      "details": [
+        "Create playlists in RuForge Music from the sidebar, the Library Playlists tab, Ctrl+N, or Add to playlist on any song, album, or artist, then rename, reorder, search your library to fill them, and drag songs onto sidebar playlists.",
+        "playlist Recommended now suggests songs from YouTube Music you don't own yet; Add downloads the song and drops it into the playlist, and every add slips two similar songs in right beside it. Turn it off in Settings > Audio.",
+        "right-click a song and choose Delete song to move it to the Recycle Bin, with the same confirm and restore path as the video library.",
+        "right-click a Recommended card under a playlist to hide that song or every song by its artist for good, with Undo and a list next to Refresh to bring them back.",
+        "the top search bar is now the one search. Typing shows matching songs, playlists, albums and artists from your library as you go, plus your recent searches and plays, and Enter opens the best match or searches YouTube Music when nothing in your library matches. The separate search box on Home is gone.",
+        "hover any card on a playlist's Recommended shelf and press play for a 15-second preview before adding it. Previews start at the song's most replayed part on YouTube (read from the download's info file for library songs), or near the first chorus when that isn't known. YouTube Music songs stream without downloading, and whatever was playing pauses and picks back up when the preview ends.",
+        "About the artist opens a sheet with a Wikipedia bio, artist photos, your plays and top tracks, and links to their socials.",
+        "Create > Import from screenshots copies a prompt for any chatbot, reads its reply, finds each song on YouTube for you to review and preview, and saves the picks as a playlist, reusing songs already in your library.",
+        "The left nav and the right panel (Now Playing, Queue, History) remember whether they were open or closed, and which tab, across restarts.",
+        "playlist Recommended mixes three YouTube Music radios each round and shows at most two songs per artist."
+      ],
+      "files": [
+        "src/components/music/MusicPlaylistView.tsx",
+        "src/components/music/MusicAddToPlaylistMenu.tsx",
+        "src/components/music/MusicNavPlaylists.tsx",
+        "src/components/music/MusicPlaylistFinder.tsx",
+        "src/components/music/useMusicOutsideRecommendations.ts",
+        "src/components/music/musicOutsideRecommend.ts",
+        "src/components/music/musicShelfFollowUps.ts",
+        "src/components/SettingsView.tsx",
+        "src/deleteLibraryMedia.ts",
+        "src/components/music/MusicRowContextMenu.tsx",
+        "src/components/MediaView.tsx",
+        "src/components/music/MusicTopBar.tsx"
+      ]
+    },
+    {
+      "id": "t-notifications",
+      "type": "task",
+      "label": "Notifications",
+      "agent": "chad",
+      "details": [
+        "New notification center in the title bar, in every mode, collects new uploads and download results with one-click actions."
+      ],
+      "files": [
+        "src/notifications/notificationCenterStore.ts",
+        "src/components/notifications/NotificationCenterPanel.tsx"
+      ]
+    },
+    {
+      "id": "t-onboarding",
+      "type": "task",
+      "label": "Onboarding",
+      "agent": "chad",
+      "details": [
+        "finished tips stay finished after a refresh or restart mid-flow, and the Discord tip completes on its own when Discord activity is already on.",
+        "A tip on the library home shows how to follow a creator and turn on auto-download, and finishes on its own once you follow anyone.",
+        "A tip on your first visit to Music walks through importing a playlist from screenshots, and finishes on its own once an import saves or you make any playlist.",
+        "Every tip has a dismiss button, and a dismissed tip never comes back."
+      ],
+      "files": [
+        "src/components/onboarding/OnboardingFlow.tsx",
+        "src/lib/onboardingSteps.ts",
+        "src/lib/onboardingConditions.ts",
+        "src/components/onboarding/OnboardingIsland.tsx",
+        "src/components/music/MusicPlaylistImport.tsx"
+      ]
+    },
+    {
+      "id": "t-player",
+      "type": "task",
+      "label": "Player",
+      "agent": "chad",
+      "details": [
+        "Expanded keyboard shortcuts (C captions, M mute, K play/pause, arrows, speed, seek) and Ctrl+D to open the paste-link downloader; download ETA tracks live speed better.",
+        "YouTube-style center feedback for play/pause, volume, and captions; C always toggles or shows unavailable.",
+        "Playback stays full-rate on a non-active monitor on Windows."
+      ],
+      "files": [
+        "src/hooks/usePlayerKeyboardShortcuts.ts",
+        "src/components/PlayerView.tsx",
+        "src/MiniPlayer.tsx",
+        "src/downloadProgress.ts",
+        "src/App.tsx",
+        "src/components/player/PlayerCenterFeedback.tsx",
+        "src-tauri/src/hardware_acceleration.rs",
+        "src-tauri/src/windows_playback_qos.rs",
+        "src-tauri/src/lib.rs"
+      ]
+    },
+    {
+      "id": "t-settings",
+      "type": "task",
+      "label": "Settings",
+      "agent": "chad",
+      "details": [
+        "The export-to-drive title bar button is now off by default and can be turned back on in Settings > Export, which also keeps its own Export action."
+      ],
+      "files": [
+        "src/store/types.ts",
+        "src/App.tsx",
+        "src/components/SettingsView.tsx"
+      ]
+    },
+    {
+      "id": "t-storage",
+      "type": "task",
+      "label": "Storage",
+      "agent": "chad",
+      "details": [
+        "Free internal space groups your downloads into Music, Videos and Livestreams, and its footer bar shows how much space each type takes and how much of it you have selected."
+      ],
+      "files": [
+        "src/components/AuthorizeCleanupModal.tsx",
+        "src/components/CleanupSection.tsx",
+        "src/components/CleanupUsageBar.tsx",
+        "src/cleanupCandidates.ts",
+        "src-tauri/src/commands/gallery.rs"
+      ]
+    },
+    {
+      "id": "f-downloads",
+      "type": "fix",
+      "label": "Downloads fixes",
+      "agent": "chad",
+      "details": [
+        "progress no longer jumps to 100% at the start when captions are saved with the video.",
+        "when YouTube's playback check fails, the error now says whether yt-dlp is out of date or the Deno runtime is missing instead of showing the raw log. Installing Deno shows progress and retries the failed downloads when it finishes, failed-download popups have Retry or Install buttons, and failed downloads in the notification feed can be retried.",
+        "pasting a playlist link now lists its videos in a few seconds instead of checking every video first, so long playlists no longer time out. Sizes fill in from the top a few rows at a time, the total shows once every row has one, and switching a row between audio and video no longer freezes long playlists.",
+        "cleanup after a download only removes that download's own leftover streams and temp files, through the recycle bin, and the library no longer deletes look-alike files on launch.",
+        "long audio downloads finish instead of timing out at two minutes, and an audio conversion stopped partway is removed instead of showing up as a finished song.",
+        "yt-dlp and ffmpeg now close with RuForge, including on tray Quit, a crash, or a force-kill, and metadata lookups that time out no longer leave yt-dlp running.",
+        "a queued download whose video info can't be loaded after a restart now shows as failed with the reason, instead of sitting in the queue."
+      ],
+      "files": [
+        "src-tauri/media_engine/src/progress.rs",
+        "src-tauri/src/commands/downloader.rs",
+        "src/lib/denoInstallFlow.ts",
+        "src/store/downloadQueueSlice.ts",
+        "src/notifications/sources/downloadSource.ts",
+        "src/notifications/sources/downloadItems.ts",
+        "src-tauri/media_engine/src/engine.rs",
+        "src-tauri/media_engine/src/ytdlp_args.rs",
+        "src-tauri/media_engine/src/ytdlp_json.rs",
+        "src-tauri/media_engine/src/url.rs",
+        "src/components/downloader/usePlaylistRowSizeFill.ts",
+        "src/duplicateDownload.ts"
+      ]
+    },
+    {
+      "id": "f-island",
+      "type": "fix",
+      "label": "Island fixes",
+      "agent": "chad",
+      "details": [
+        "the download pill at the top of your screen no longer appears while you're still in RuForge (clicking into Explorer used to trigger it); inside the app, download progress now shows in the title bar island instead. Click the download pill in either place to expand it into a list of active downloads with progress bars and an Open downloads button. While music plays, the island shows music and briefly switches to the download every 30 seconds and at each quarter of progress; a paused download stays up with a play button that starts it, and a streak runs along the progress ring while bytes flow."
+      ],
+      "files": [
+        "src/components/island/useIslandDownloadTurn.ts",
+        "src/components/island/IslandDownloadContent.tsx",
+        "src/components/island/DynamicIsland.tsx",
+        "src/components/island/ActivityIsland.tsx",
+        "src/IslandOverlayApp.tsx",
+        "src/lib/islandDownload.ts",
+        "src/hooks/useDesktopIslandOverlay.ts"
+      ]
+    },
+    {
+      "id": "f-library",
+      "type": "fix",
+      "label": "Library fixes",
+      "agent": "chad",
+      "details": [
+        "Hovering or scrolling past cards in the Video Library no longer adds empty space at the bottom or makes the page jump."
+      ],
+      "files": [
+        "src/components/MediaView.tsx",
+        "src/components/ui/Morph.tsx"
+      ]
+    },
+    {
+      "id": "f-music",
+      "type": "fix",
+      "label": "Music fixes",
+      "agent": "chad",
+      "details": [
+        "Volume changes ramp smoothly instead of popping when you nudge volume up or down.",
+        "playlists now save to a file in app data so they survive a cleared cache, follow songs that moved on the next rescan, take a description from Edit details, and export or import as .m3u8 (import reports lines it could not match).",
+        "Music mode stays smooth while a song plays, even on long playlists, and finishing a track no longer stalls on a big listening history.",
+        "listening stats survive crashes and damaged files, a song change no longer logs the same play twice, and play counts carried over from older versions are kept when stats are rebuilt.",
+        "auto-save no longer re-downloads tracks you cancelled or already saved, no longer starts downloads you held elsewhere, and a track shared by two playlists lands in both folders.",
+        "an import in progress survives a refresh or restart and resumes matching from Create > Resume import, and saving under an existing playlist's name adds to that playlist instead of making a twin."
+      ],
+      "files": [
+        "src/components/music/useMusicPlayback.ts",
+        "src/musicPlaylistsFileSync.ts",
+        "src/virtualPlaylists.ts",
+        "src/components/music/musicPlaylistIdentity.ts",
+        "src/components/music/MusicPlaylistEditDetails.tsx",
+        "src/components/music/musicPlaylistM3u8.ts",
+        "src/components/music/MusicNavCreateButton.tsx",
+        "src-tauri/src/commands/music_playlists.rs",
+        "src-tauri/src/commands/music_listen_log.rs",
+        "src/lib/musicListenLegacyImport.ts",
+        "src/store/downloadQueueSlice.ts",
+        "src/downloadQueue.ts"
+      ]
+    },
+    {
+      "id": "f-nav",
+      "type": "fix",
+      "label": "Nav fixes",
+      "agent": "chad",
+      "details": [
+        "The Alt radial menu now opens on top of the YouTube and YouTube Music pages instead of hiding behind them, including while the page has keyboard focus."
+      ],
+      "files": [
+        "useAltRadialNav.ts",
+        "RadialNavOverlay.tsx",
+        "RadialNavOverlayApp.tsx",
+        "radialNavOverlayHost.ts",
+        "radial_nav_bridge.rs"
+      ]
+    },
+    {
+      "id": "f-notifications",
+      "type": "fix",
+      "label": "Notifications fixes",
+      "agent": "chad",
+      "details": [
+        "in-app popups now appear at the bottom center and size to their text, instead of taking over the title bar island; on the Explorer tab they still use the island. A newer yt-dlp is announced in a card at the bottom of the downloader that says how old your copy is and fills in as it updates."
+      ],
+      "files": [
+        "src/components/notifications/AppToastHost.tsx",
+        "src/components/island/ActivityIsland.tsx",
+        "src/components/downloader/YtdlpUpdateBanner.tsx",
+        "src/App.tsx"
+      ]
+    },
+    {
+      "id": "f-player",
+      "type": "fix",
+      "label": "Player fixes",
+      "agent": "chad",
+      "details": [
+        "Loop one no longer sticks to every video or carries over when you skip tracks in Music; loop-one is per-file only, manual skip clears session loop.",
+        "Scrub hover segment pills (Intro, Highlight, etc.) use solid fills instead of glassy transparency.",
+        "Videos resume ~10 seconds before your last position again; music still starts fresh on each track.",
+        "Fix volume not applying on keyboard/slider changes and resume failing when reopening the same video.",
+        "Letting go of a short drag on the comments panel now snaps it fully open or closed instead of leaving it stuck partway.",
+        "SponsorBlock auto-skips now fast-forward visibly over the segment instead of jumping, with an Unskip button after. Sponsor, self-promo, interaction, intro and outro auto-skip by default on new installs. The skip button stays up for the whole segment, and rewinding into an auto-skipped segment shows a Skip button."
+      ],
+      "files": [
+        "src/playbackLoopStorage.ts",
+        "src/store/types.ts",
+        "src/store/ruforgeStore.ts",
+        "src/components/music/useMusicPlayback.ts",
+        "src/components/music/MusicShell.tsx",
+        "src/MiniPlayer.tsx",
+        "src/components/music-mini/useMusicMiniPlayback.ts",
+        "src/sponsorBlockColors.ts",
+        "src/components/player/ScrubHoverPreview.tsx",
+        "src/playbackStorage.ts",
+        "src/playbackStorage.test.ts",
+        "src/components/PlayerView.tsx"
+      ]
+    },
+    {
+      "id": "f-privacy",
+      "type": "fix",
+      "label": "Privacy fixes",
+      "agent": "chad",
+      "details": [
+        "the YouTube page inside Music can no longer read app events that carry your file paths or download details.",
+        "RuForge's own screens no longer stop to ask for microphone or clipboard access; YouTube pages in Explorer still ask as usual."
+      ],
+      "files": [
+        "src-tauri/capabilities/music-explore-webview.json",
+        "src-tauri/src/webview_permissions.rs"
+      ]
+    },
+    {
+      "id": "f-storage",
+      "type": "fix",
+      "label": "Storage fixes",
+      "agent": "chad",
+      "details": [
+        "Free internal space no longer lists a video twice when it is also in a playlist, so the Oldest order holds and the selected size is right."
+      ],
+      "files": [
+        "src/cleanupCandidates.ts"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "chad",
+      "target": "f-downloads"
+    },
+    {
+      "source": "f-downloads",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "f-island"
+    },
+    {
+      "source": "f-island",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "f-library"
+    },
+    {
+      "source": "f-library",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "f-music"
+    },
+    {
+      "source": "f-music",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "f-nav"
+    },
+    {
+      "source": "f-nav",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "f-notifications"
+    },
+    {
+      "source": "f-notifications",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "f-player"
+    },
+    {
+      "source": "f-player",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "f-privacy"
+    },
+    {
+      "source": "f-privacy",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "f-storage"
+    },
+    {
+      "source": "f-storage",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-comments"
+    },
+    {
+      "source": "t-comments",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-crash-recovery"
+    },
+    {
+      "source": "t-crash-recovery",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-downloads"
+    },
+    {
+      "source": "t-downloads",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-explorer"
+    },
+    {
+      "source": "t-explorer",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-installer"
+    },
+    {
+      "source": "t-installer",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-island"
+    },
+    {
+      "source": "t-island",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-library"
+    },
+    {
+      "source": "t-library",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-music"
+    },
+    {
+      "source": "t-music",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-notifications"
+    },
+    {
+      "source": "t-notifications",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-onboarding"
+    },
+    {
+      "source": "t-onboarding",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-player"
+    },
+    {
+      "source": "t-player",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-settings"
+    },
+    {
+      "source": "t-settings",
+      "target": "ruforge"
+    },
+    {
+      "source": "chad",
+      "target": "t-storage"
+    },
+    {
+      "source": "t-storage",
+      "target": "ruforge"
+    }
+  ]
+}

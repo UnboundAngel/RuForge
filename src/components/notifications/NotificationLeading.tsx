@@ -1,4 +1,4 @@
-import { Check, Film, Pause, Radio, X } from "lucide-react";
+import { Check, Film, HardDrive, Radio, X } from "lucide-react";
 import { ChannelAvatar } from "@/components/library/VideoByline";
 import type { NotificationItem } from "@/notifications/types";
 
@@ -6,7 +6,7 @@ const KIND_BADGE: Record<NotificationItem["kind"], { Icon: typeof X; className: 
   "download-finished": { Icon: Check, className: "bg-[color:var(--accent)] text-stone-900" },
   "download-failed": { Icon: X, className: "bg-rose-400 text-stone-900" },
   "download-timed-out": { Icon: X, className: "bg-rose-400 text-stone-900" },
-  "download-blocked": { Icon: Pause, className: "bg-amber-400 text-stone-900" },
+  "download-blocked": { Icon: HardDrive, className: "bg-amber-400 text-stone-900" },
   upload: { Icon: Film, className: "bg-stone-200 text-stone-900" },
   premiere: { Icon: Film, className: "bg-[color:var(--accent)] text-stone-900" },
   live: { Icon: Radio, className: "bg-[color:var(--accent)] text-stone-900" },
@@ -14,8 +14,22 @@ const KIND_BADGE: Record<NotificationItem["kind"], { Icon: typeof X; className: 
 
 const RING = "ring-[3px] ring-[color:var(--rf-popover-bg)]";
 
+const STORAGE_HELD_LABEL = "Storage limit reached. Free space to download";
+
 /** Corner badge on the thumbnail: the channel's face for uploads, a status chip for downloads. */
 export function NotificationLeading({ item, channelName }: { item: NotificationItem; channelName: string | null }) {
+  if (item.ref.storageHeld) {
+    const held = KIND_BADGE["download-blocked"];
+    return (
+      <span
+        data-tooltip={STORAGE_HELD_LABEL}
+        aria-label={STORAGE_HELD_LABEL}
+        className={`pointer-events-auto relative flex h-5 w-5 items-center justify-center rounded-full ${held.className} ${RING}`}
+      >
+        <held.Icon size={11} strokeWidth={2.75} aria-hidden />
+      </span>
+    );
+  }
   if (item.source === "watchlist" && item.channelId) {
     return (
       <ChannelAvatar

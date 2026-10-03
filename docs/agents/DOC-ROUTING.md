@@ -27,6 +27,7 @@ Read `STATE.md` then root `AGENTS.md` first. Then open **one** of these if the t
 | `node scripts/setup-git-remotes.mjs` + root `AGENTS.md` **Remotes** | sync vs public remotes, pushDefault, hooksPath, snapshot publishing |
 | `scripts/triggers/` + `node scripts/triggers/run.mjs` | phrase triggers (push, leave, back, add-trigger, ship); registry in `registry.json` |
 | `scripts/private-only-paths.txt` + `scripts/publish-snapshot.mjs` | private-only paths; downstream snapshot publish onto public main |
+| [`.cursor/rules/version-bump.mdc`](../../.cursor/rules/version-bump.mdc) | picking the next version: patch vs minor vs major |
 | [`docs/agents/release/CHANGELOG-AUTHORING.md`](release/CHANGELOG-AUTHORING.md) | release step 8 only: version graph, versioner, MANIFEST |
 | [`docs/ruforge/research/google-seo-and-domain-strategy.md`](../ruforge/research/google-seo-and-domain-strategy.md) | website, SEO, comparison page, domain |
 | [`docs/ruforge/research/ai-llm-discoverability.md`](../ruforge/research/ai-llm-discoverability.md) | llms.txt, robots, IndexNow, GPTBot, AI discoverability |

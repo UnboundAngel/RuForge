@@ -14,6 +14,8 @@ type NotificationCenterState = {
   filter: NotificationCenterFilter;
   /** Overlay webview unavailable: the in-page popover needs the Explorer hidden, without the leave pause. */
   explorerCoveredByPopover: boolean;
+  /** Video ids whose download was refused for storage this session. Never persisted. */
+  storageHeldVideoIds: ReadonlySet<string>;
 };
 
 export const useNotificationCenterStore = create<NotificationCenterState>(() => ({
@@ -22,7 +24,14 @@ export const useNotificationCenterStore = create<NotificationCenterState>(() => 
   tab: "feed",
   filter: "all",
   explorerCoveredByPopover: false,
+  storageHeldVideoIds: new Set(),
 }));
+
+export function markStorageHeld(videoId: string): void {
+  const held = useNotificationCenterStore.getState().storageHeldVideoIds;
+  if (held.has(videoId)) return;
+  useNotificationCenterStore.setState({ storageHeldVideoIds: new Set([...held, videoId]) });
+}
 
 export function upsertItem(list: NotificationItem[], item: NotificationItem): NotificationItem[] {
   return [{ ...item, read: false }, ...list.filter((i) => i.id !== item.id)];

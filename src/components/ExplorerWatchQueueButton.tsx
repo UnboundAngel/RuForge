@@ -145,7 +145,7 @@ export function ExplorerWatchQueueButton({
         { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
         notify,
       );
-      recordStorageFullRefusal();
+      recordStorageFullRefusal({ url: canon });
       return;
     }
     if (settings.skipDuplicatesAutomatically) {

@@ -23,17 +23,7 @@ Changelog / version-graph field detail: [`docs/agents/release/CHANGELOG-AUTHORIN
 
 Run `node scripts/shipped.mjs list` and read that list. **Do not default to patch +1.** Do not open the whole JSONL unless search needs it (`node scripts/shipped.mjs find …`).
 
-**PATCH** (`0.M.(N+1)`): bug fixes, polish, refactors, and tweaks on existing public surfaces. Internal command wiring and config migrations that keep the same user workflow also count as patch.
-
-**MINOR** (`0.(M+1).0`, patch 0): any new normal-user surface or workflow, a new user-facing Settings control or persisted key, a new on-disk sidecar users rely on, or a headline public feature (rule of thumb: 3+ distinct public addition bullets, or one headline such as a new mode tab or download UX).
-
-**Developer-gated** unfinished surfaces (`showDebuggingSettings`, not in notes or onboarding): do not count toward public semver.
-
-**MAJOR:** not until 1.0. Do not bump to `1.0.0` without Angel.
-
-Scan Unreleased for **public** MINOR triggers only. If count >= 1, minor and zero patch. Else patch +1. When in doubt on user-visible headline work, choose minor.
-
-Ignore Unreleased lines that are unreleased-only bugfixes folded into a feature. `Fix` in notes means users of the **previous public version** will feel the fix.
+Pick the bump with [`.cursor/rules/version-bump.mdc`](../../rules/version-bump.mdc) (SemVer 2.0.0 mapped to RuForge: what counts as patch, minor, major, and what never counts). One public MINOR trigger means minor with patch 0; otherwise patch +1.
 
 **Onboarding:** any new user-facing feature that needs a walkthrough must have a row in `src/lib/onboardingSteps.ts` with `introducedIn` matching the chosen version. Contract: `docs/agents/AGENT-REFERENCE.md`. If warranted and missing, ask Angel. Bug-fix-only releases add no steps.
 

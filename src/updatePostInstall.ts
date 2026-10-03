@@ -85,6 +85,26 @@ export function buildPostInstallPayload(version: string, body: string): PostInst
   return { version, notes: body };
 }
 
+const LAST_SHOWN_KEY = "ruforge.whatsNew.lastShown.v1";
+
+/** Kept after the post-install dialog closes so Settings can reopen it. */
+export function rememberWhatsNew(payload: PostInstallPayload): void {
+  try {
+    localStorage.setItem(LAST_SHOWN_KEY, JSON.stringify(payload));
+  } catch {
+    /* quota or private mode: Settings just hides the reopen row */
+  }
+}
+
+export function readLastWhatsNew(): PostInstallPayload | null {
+  try {
+    const raw = localStorage.getItem(LAST_SHOWN_KEY);
+    return raw ? parsePendingPostInstallRaw(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function setPendingPostInstall(payload: PostInstallPayload): void {
   localStorage.setItem(KEY, JSON.stringify(payload));
 }

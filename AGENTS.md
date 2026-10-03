@@ -8,6 +8,13 @@ Read docs/agents/PERSONAL.md if it exists; it is absent on public by design.
 
 Chat is terse and factual like the rest of this file.
 
+Screenshots in chat, every time, both steps:
+
+1. Save under `.screenshots/` in the repo (gitignored) and link each file in chat as `[name.png](.screenshots/name.png)`.
+2. Also open each one for Angel with the `cursor-app-control` `open_resource` tool (`file:///d:/ruforge/.screenshots/name.png`) so it shows in his editor without clicking. Do this automatically; never only link.
+
+Never `%TEMP%` paths, backslash paths, or inline `![]()` embeds.
+
 ## Trigger phrases
 
 Matching: any casing, typos, and Angel's German swaps (`ich`=`I`, `bin`=`am`, `und`=`and`, `es`=`it`, `mein`=`my`, and the map in `scripts/triggers/lib.mjs`). Example: `commit und push` and `ich bin leaving` both match. Ship phrases match only as the entire message (punctuation and casing ignored), and ship is the only trigger that asks before acting: it waits for an explicit `yes`. Behavior lives in `scripts/triggers/*.mjs` (`node scripts/triggers/run.mjs "<utterance>"`).

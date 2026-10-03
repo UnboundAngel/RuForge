@@ -1134,7 +1134,13 @@ export function useDownloaderView({
         { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
         notify,
       );
-      recordStorageFullRefusal();
+      const st = useRuforgeStore.getState();
+      const barUrl = st.url.trim();
+      recordStorageFullRefusal(
+        barUrl.startsWith("http")
+          ? { url: barUrl, title: st.videoInfo?.title, thumbnail: st.videoInfo?.thumbnail }
+          : undefined,
+      );
       return;
     }
 
@@ -1357,7 +1363,7 @@ export function useDownloaderView({
           { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
           notify,
         );
-        recordStorageFullRefusal();
+        recordStorageFullRefusal(urls.length === 1 ? { url: urls[0] } : undefined);
         return;
       }
 
@@ -1764,7 +1770,11 @@ export function useDownloaderView({
               { dedupeKey: "storage-full", body: STORAGE_FULL_NOTIFY, kind: "warning" },
               notify,
             );
-            recordStorageFullRefusal();
+            recordStorageFullRefusal({
+              url: prev,
+              title: st0.videoInfo.title,
+              thumbnail: st0.videoInfo.thumbnail,
+            });
           } else {
             enqueueDownloadOnly(prev, "replace", {
               approval: "held",

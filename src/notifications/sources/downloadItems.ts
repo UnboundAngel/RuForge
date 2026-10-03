@@ -1,7 +1,10 @@
 import type { DownloadJob } from "@/downloadQueue";
 import { STORAGE_FULL_NOTIFY } from "@/lib/storageBlocks";
-import { normalizeYouTubeUrlForCompare } from "@/youtubeUrl";
+import { useWatchlistStore } from "@/watchlist/watchlistStore";
+import { extractYouTubeVideoId, normalizeYouTubeUrlForCompare } from "@/youtubeUrl";
+import { markStorageHeld, useNotificationCenterStore } from "../notificationCenterStore";
 import { recordNotification } from "../recordNotification";
+import { notificationVideoId } from "../storageHolds";
 import type { NotificationActionId, NotificationItem, NotificationKind } from "../types";
 
 export type DownloadNotificationKind = Extract<
@@ -30,9 +33,8 @@ function fileName(path: string): string {
 
 function notificationId(kind: DownloadNotificationKind, info: DownloadNotificationInfo): string {
   if (kind === "download-blocked") {
-    return info.jobIds?.length
-      ? `download:storage-block:${info.jobIds.join(",")}`
-      : STORAGE_FULL_NOTIFICATION_ID;
+    if (info.jobIds?.length) return `download:storage-block:${info.jobIds.join(",")}`;
+    return info.url ? `${STORAGE_FULL_NOTIFICATION_ID}:${normalizeYouTubeUrlForCompare(info.url)}` : STORAGE_FULL_NOTIFICATION_ID;
   }
   return `download:${info.jobId ?? info.url ?? "unknown"}`;
 }
@@ -175,6 +177,28 @@ export function recordDownloadNotification(kind: DownloadNotificationKind, info:
   recordNotification(buildDownloadNotification(kind, info));
 }
 
-export function recordStorageFullRefusal(): void {
-  recordDownloadNotification("download-blocked", { error: STORAGE_FULL_NOTIFY });
+export type StorageRefusedVideo = { url: string; title?: string | null; thumbnail?: string | null };
+
+function feedHasVideo(videoId: string): boolean {
+  if (useWatchlistStore.getState().snapshot?.uploads.some((u) => u.videoId === videoId)) return true;
+  return useNotificationCenterStore
+    .getState()
+    .local.some((i) => i.source === "download" && i.kind !== "download-blocked" && notificationVideoId(i) === videoId);
+}
+
+/** A refused video that already has a feed row gets badged in place; only unknown videos get a row of their own. */
+export function recordStorageFullRefusal(video?: StorageRefusedVideo): void {
+  const videoId = video ? extractYouTubeVideoId(video.url) : null;
+  if (!video || !videoId) {
+    recordDownloadNotification("download-blocked", { error: STORAGE_FULL_NOTIFY });
+    return;
+  }
+  markStorageHeld(videoId);
+  if (feedHasVideo(videoId)) return;
+  recordDownloadNotification("download-blocked", {
+    url: video.url,
+    title: video.title,
+    thumbnail: video.thumbnail,
+    error: STORAGE_FULL_NOTIFY,
+  });
 }

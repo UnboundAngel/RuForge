@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
+import { readLastWhatsNew } from '../updatePostInstall';
 import { listen } from '@tauri-apps/api/event';
 import { DOWNLOAD_AUDIO_FORMAT_OPTIONS } from '../downloadFormat';
 import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel, CUSTOM_CONCURRENT_DOWNLOADS_MIN, DEFAULT_MAX_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS_CAP } from '../store/types';
@@ -567,6 +568,7 @@ export const SettingsView: React.FC<{
   );
   const watchlistChannelCount = useWatchlistStore((s) => s.snapshot?.channels.length ?? 0);
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [lastWhatsNewVersion] = useState(() => readLastWhatsNew()?.version ?? null);
   const [updateCheckBusy, setUpdateCheckBusy] = useState(false);
   const [devReplayMode, setDevReplayModeState] = useState<DevReplayMode>(() =>
     getDevReplayMode(),
@@ -2126,6 +2128,21 @@ export const SettingsView: React.FC<{
                     </button>
                   }
                 />
+                {lastWhatsNewVersion ? (
+                  <SettingItem
+                    title="What's new"
+                    description={`See what changed in RuForge ${lastWhatsNewVersion} and jump to the new features.`}
+                    control={
+                      <button
+                        type="button"
+                        onClick={() => void emit("ruforge-open-whats-new")}
+                        className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                      >
+                        VIEW
+                      </button>
+                    }
+                  />
+                ) : null}
               </SettingsSection>
               <SettingsSection title="Maintenance">
                 <SettingItem
@@ -2379,6 +2396,19 @@ export const SettingsView: React.FC<{
                       className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
                     >
                       CYCLE PHASES
+                    </button>
+                  }
+                />
+                <SettingItem
+                  title="Preview What's New"
+                  description="Open the post-update release notes dialog with sample notes."
+                  control={
+                    <button
+                      type="button"
+                      onClick={() => void emit("debug-preview-whats-new")}
+                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                    >
+                      PREVIEW
                     </button>
                   }
                 />

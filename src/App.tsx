@@ -28,13 +28,15 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   UpdaterStatusIndicator,
   UpdaterFullWindowUpdate,
-  UpdaterPostInstallStack,
-  RELEASES_PAGE,
+  CHANGELOG_PAGE,
   type UpdaterPhase,
 } from "./components/UpdaterLayers";
+import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import {
   buildPostInstallPayload,
   clearPendingPostInstall,
+  readLastWhatsNew,
+  rememberWhatsNew,
   setPendingPostInstall,
   teaserNotesFromUpdaterBody,
   verifyPendingUpdateOnBoot,
@@ -306,11 +308,17 @@ const WindowControls = ({
   );
 };
 
-/** JSON string for `buildPostInstallPayload` — Settings debug updater cycle (structured What's New). */
+/** Settings > Debugging What's New preview; mirrors a real `updater.json` body. */
 const MOCK_POST_INSTALL_JSON = JSON.stringify({
-  notes: "Structured release notes (debug). Plain `updater.json` notes still render as one block.",
-  additions: ["Polished UI & transitions", "Enhanced accent color integration"],
-  fixes: ["Subtitle ghosting in player", "MiniPlayer sizing on narrow layouts"],
+  notes: [
+    "# Follow your channels",
+    "- **Library**: A YouTube-style home with your feed, channel shelves and creator pages.",
+    "- **Follow**: Follow channels, get new uploads in a notification center, and auto-download them if you like.",
+    "- **Music**: Playlists, YouTube Music recommendations with previews, one search bar, and import from screenshots.",
+    "- **Island**: Downloads and notices show at the top of your screen while RuForge is in the background.",
+    "- **Downloads**: Playlists list in seconds, storage is checked before a download starts, and errors say what to fix.",
+    "- **Fixes**: Steadier playback, downloads that clean up after themselves, and yt-dlp and ffmpeg that close with RuForge.",
+  ].join("\n"),
 });
 
 function App() {
@@ -566,6 +574,9 @@ function App() {
   );
   const [updaterInstallError, setUpdaterInstallError] = useState<string | null>(null);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
+  // The dialog keeps its last payload through the exit animation.
+  const [postInstallShown, setPostInstallShown] = useState<PostInstallPayload | null>(null);
+  if (postInstall && postInstall !== postInstallShown) setPostInstallShown(postInstall);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingNonce, setOnboardingNonce] = useState(0);
   const [crashRecoveryPreview, setCrashRecoveryPreview] =
@@ -1230,6 +1241,7 @@ function App() {
     void (async () => {
       const result = await verifyPendingUpdateOnBoot(getVersion);
       if (result.status === "verified") {
+        rememberWhatsNew(result.payload);
         setPostInstall(result.payload);
       }
     })();
@@ -1410,6 +1422,16 @@ function App() {
       });
     });
 
+    const unlistenOpenWhatsNew = listen("ruforge-open-whats-new", () => {
+      const last = readLastWhatsNew();
+      if (last) setPostInstall(last);
+    });
+
+    const unlistenDebugWhatsNew = listen("debug-preview-whats-new", () => {
+      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
+      void getVersion().then((v) => setPostInstall(buildPostInstallPayload(v, MOCK_POST_INSTALL_JSON)));
+    });
+
     const unlistenDebugUpdater = listen("debug-cycle-updater", () => {
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
       setUpdaterIslandCollapsed(false);
@@ -1453,6 +1475,8 @@ function App() {
       unlistenDebugCrashFatal.then((f) => f());
       unlistenDebugReplayDownloadBatch.then((f) => f());
       unlistenDebugUpdater.then((f) => f());
+      unlistenDebugWhatsNew.then((f) => f());
+      unlistenOpenWhatsNew.then((f) => f());
     };
   }, []);
 
@@ -2241,16 +2265,13 @@ function App() {
         </div>
       ) : null}
 
-      {postInstall && (
-        <UpdaterPostInstallStack
-          version={postInstall.version}
-          notes={postInstall.notes}
-          additions={postInstall.additions}
-          fixes={postInstall.fixes}
-          onDismiss={() => setPostInstall(null)}
-          onOpenChangelog={() => void openUrl(RELEASES_PAGE)}
-        />
-      )}
+      <WhatsNewDialog
+        open={postInstall != null}
+        version={postInstallShown?.version ?? ""}
+        notes={postInstallShown?.notes ?? ""}
+        onDismiss={() => setPostInstall(null)}
+        onOpenChangelog={() => void openUrl(CHANGELOG_PAGE)}
+      />
       {onboardingOpen && !postInstall && (
         <OnboardingFlow
           key={onboardingNonce}

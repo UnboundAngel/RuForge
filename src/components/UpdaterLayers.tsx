@@ -3,7 +3,6 @@ import { Icon } from "@iconify/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Loader2, AlertTriangle, ExternalLink, X } from "lucide-react";
 import Markdown from "markdown-to-jsx";
-import { ChangeItem } from "../updatePostInstall";
 
 /** Shared styles for updater JSON / Tauri `notes` strings (headings, lists, links, code). */
 const UPDATER_NOTES_MARKDOWN_OPTIONS = {
@@ -32,7 +31,7 @@ const UPDATER_NOTES_MARKDOWN_OPTIONS = {
   },
 } as const;
 
-function UpdaterReleaseNotesMarkdown({
+export function UpdaterReleaseNotesMarkdown({
   markdown,
   className,
 }: {
@@ -49,10 +48,7 @@ function UpdaterReleaseNotesMarkdown({
 export type UpdaterPhase = "idle" | "available" | "downloading" | "installing" | "failed";
 
 const RELEASES_PAGE = "https://github.com/UnboundAngel/RuForge/releases";
-
-/** In-app “What’s new” category icons (Iconify); keep in sync with AGENTS.md. */
-export const RUFORGE_ICONIFY_CHANGELOG_ADDITIONS = "material-symbols:add-ad";
-export const RUFORGE_ICONIFY_CHANGELOG_FIXES = "fluent:window-wrench-24-regular";
+const CHANGELOG_PAGE = "https://ruforge.app/changelog";
 
 type SidebarBadgeProps = {
   phase: UpdaterPhase;
@@ -81,113 +77,10 @@ type MainOverlaysProps = {
   phase: UpdaterPhase;
   version: string | null;
   notes: string;
-  additions?: ChangeItem[];
-  fixes?: ChangeItem[];
   onInstallRestart: () => void;
   onDismiss?: () => void;
   dismissed?: boolean;
 };
-
-function ChangelogLayout({
-  version,
-  notes,
-  additions = [],
-  fixes = [],
-  title = "What's New",
-  scope = "RuForge Core",
-  footer,
-}: {
-  version: string;
-  notes?: string;
-  additions?: ChangeItem[];
-  fixes?: ChangeItem[];
-  title?: string;
-  scope?: string;
-  footer: React.ReactNode;
-}) {
-  const notesTrim = notes?.trim() || "";
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="mb-2 flex shrink-0 items-center justify-between">
-        <h2 className="text-[20px] font-black text-stone-100 tracking-tight">{title}</h2>
-        <span className="text-[10px] font-black text-stone-500 tabular-nums tracking-widest uppercase">
-          Build {version}
-        </span>
-      </div>
-
-      <div className="mb-8 flex shrink-0 items-center gap-4">
-        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-stone-500/10 to-transparent" />
-        <span className="text-[9px] font-black uppercase tracking-[0.4em] text-stone-600 whitespace-nowrap">{scope}</span>
-        <div className="h-px flex-1 bg-gradient-to-l from-transparent via-stone-500/10 to-transparent" />
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto pr-3 space-y-10 rf-scrollbar">
-        {notesTrim && (
-          <div className="px-1">
-            <UpdaterReleaseNotesMarkdown markdown={notesTrim} className="text-[12px] leading-relaxed text-stone-400" />
-          </div>
-        )}
-
-        {additions.length > 0 && (
-          <section className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Icon icon={RUFORGE_ICONIFY_CHANGELOG_ADDITIONS} className="text-emerald-500 w-4 h-4 opacity-80" />
-              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-500/90">Additions</h3>
-              <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/20 to-transparent" />
-              <span className="text-[9px] font-black text-stone-600 tabular-nums">{additions.length}</span>
-            </div>
-            <ul className="space-y-3.5 pl-1">
-              {additions.map((item, i) => (
-                <li key={i} className="flex items-start justify-between gap-6 group">
-                  <div className="flex gap-4">
-                    <span className="text-emerald-500/30 mt-1 font-bold select-none text-[10px]">+</span>
-                    <span className="text-[11.5px] leading-relaxed text-stone-300 group-hover:text-stone-100 transition-colors">{item.text}</span>
-                  </div>
-                  {item.handle && (
-                    <span className="shrink-0 mt-1 text-[8.5px] font-black text-stone-600 uppercase tracking-widest group-hover:text-stone-400 transition-colors">
-                      {item.handle}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {fixes.length > 0 && (
-          <section className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Icon icon={RUFORGE_ICONIFY_CHANGELOG_FIXES} className="text-red-500 w-4 h-4 opacity-80" />
-              <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-red-500/90">Fixes</h3>
-              <div className="h-px flex-1 bg-gradient-to-r from-red-500/20 to-transparent" />
-              <span className="text-[9px] font-black text-stone-600 tabular-nums">{fixes.length}</span>
-            </div>
-            <ul className="space-y-3.5 pl-1">
-              {fixes.map((item, i) => (
-                <li key={i} className="flex items-start justify-between gap-6 group">
-                  <div className="flex gap-4">
-                    <span className="text-red-500/30 mt-1 font-bold select-none text-[10px]">•</span>
-                    <span className="text-[11.5px] leading-relaxed text-stone-300 group-hover:text-stone-100 transition-colors">{item.text}</span>
-                  </div>
-                  {item.handle && (
-                    <span className="shrink-0 mt-1 text-[8.5px] font-black text-stone-600 uppercase tracking-widest group-hover:text-stone-400 transition-colors">
-                      {item.handle}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </div>
-
-      <div className="mt-8 shrink-0">
-        {footer}
-      </div>
-    </div>
-  );
-}
 
 /** “Update available” card only (main pane). Download/install uses {@link UpdaterFullWindowUpdate} at app root. */
 export function UpdaterMainOverlays({
@@ -492,84 +385,4 @@ export function UpdaterFullWindowUpdate({
   );
 }
 
-type PostInstallProps = {
-  version: string;
-  notes: string;
-  additions?: ChangeItem[];
-  fixes?: ChangeItem[];
-  onDismiss: () => void;
-  onOpenChangelog: () => void;
-};
-
-export function UpdaterPostInstallStack({
-  version,
-  notes,
-  additions,
-  fixes,
-  onDismiss,
-  onOpenChangelog,
-}: PostInstallProps) {
-  return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-[150] flex items-center justify-center overflow-hidden p-8">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onDismiss}
-          className="absolute inset-0 bg-[#12100e]/80 backdrop-blur-md"
-        />
-        <motion.div 
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 8 }}
-          className="relative flex min-h-0 w-full max-w-2xl max-h-[min(85vh,calc(100dvh-4rem))] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#271C18] p-8 shadow-[0_32px_64px_rgba(0,0,0,0.6)]"
-        >
-          <ChangelogLayout
-            version={version}
-            notes={notes}
-            additions={additions}
-            fixes={fixes}
-            title="What's New"
-            scope="Release Notes"
-            footer={
-              <div className="flex items-center justify-between">
-                <motion.button
-                  whileHover="hover"
-                  initial="initial"
-                  type="button"
-                  onClick={onOpenChangelog}
-                  className="group relative flex h-[42px] items-center overflow-hidden rounded-full border border-white/10 bg-white/5 px-[13px] text-stone-400 transition-colors duration-200 hover:bg-white/10 hover:text-stone-100"
-                >
-                  <ExternalLink className="h-4 w-4 shrink-0 relative z-10" />
-                  <motion.span 
-                    variants={{
-                      initial: { width: 0, opacity: 0, marginLeft: 0 },
-                      hover: { width: "auto", opacity: 1, marginLeft: 10 }
-                    }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="whitespace-nowrap text-[10px] font-black uppercase tracking-widest overflow-hidden"
-                  >
-                    Full Changelog
-                  </motion.span>
-                </motion.button>
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  type="button"
-                  onClick={onDismiss}
-                  className="px-10 py-3 rounded-full bg-[color:var(--accent)] text-[11px] font-black uppercase tracking-widest text-[#1D1613] transition-transform duration-200"
-                >
-                  Close
-                </motion.button>
-              </div>
-            }
-          />
-        </motion.div>
-      </div>
-    </AnimatePresence>
-  );
-}
-
-export { RELEASES_PAGE };
+export { RELEASES_PAGE, CHANGELOG_PAGE };

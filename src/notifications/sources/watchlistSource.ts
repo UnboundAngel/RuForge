@@ -5,6 +5,8 @@ import type { WatchlistSnapshot } from "@/watchlist/types";
 import { markAllSeen, markSeen, openUploadInExplorer, queueUpload } from "@/watchlist/watchlistActions";
 import { useWatchlistStore } from "@/watchlist/watchlistStore";
 import { extractYouTubeVideoId } from "@/youtubeUrl";
+import { useNotificationCenterStore } from "../notificationCenterStore";
+import { activeStorageHolds, storageInputsChanged, withStorageHolds } from "../storageHolds";
 import type { NotificationItem, NotificationSource } from "../types";
 import { videoIdsFromItemIds, watchlistItems } from "./watchlistItems";
 
@@ -30,15 +32,20 @@ let memo: {
   snapshot: WatchlistSnapshot | null;
   entries: GalleryEntry[];
   jobs: DownloadJob[];
+  holds: ReadonlySet<string>;
   items: NotificationItem[];
 } | null = null;
 
 function items(): NotificationItem[] {
   const snapshot = useWatchlistStore.getState().snapshot;
-  const { entries, downloadJobs: jobs } = useRuforgeStore.getState();
-  if (memo && memo.snapshot === snapshot && memo.entries === entries && memo.jobs === jobs) return memo.items;
+  const s = useRuforgeStore.getState();
+  const { entries, downloadJobs: jobs } = s;
+  const holds = activeStorageHolds(useNotificationCenterStore.getState().storageHeldVideoIds, s);
+  if (memo && memo.snapshot === snapshot && memo.entries === entries && memo.jobs === jobs && memo.holds === holds) {
+    return memo.items;
+  }
   const held = snapshot && snapshot.uploads.length > 0 ? heldVideoIds(entries, jobs) : undefined;
-  memo = { snapshot, entries, jobs, items: watchlistItems(snapshot, held) };
+  memo = { snapshot, entries, jobs, holds, items: withStorageHolds(watchlistItems(snapshot, held), holds) };
   return memo.items;
 }
 
@@ -65,11 +72,17 @@ export const watchlistSource: NotificationSource = {
       if (s.snapshot !== prev.snapshot) onChange();
     });
     const offMain = useRuforgeStore.subscribe((s, prev) => {
-      if (s.entries !== prev.entries || s.downloadJobs !== prev.downloadJobs) onChange();
+      if (s.entries !== prev.entries || s.downloadJobs !== prev.downloadJobs || storageInputsChanged(s, prev)) {
+        onChange();
+      }
+    });
+    const offHolds = useNotificationCenterStore.subscribe((s, prev) => {
+      if (s.storageHeldVideoIds !== prev.storageHeldVideoIds) onChange();
     });
     return () => {
       offWatchlist();
       offMain();
+      offHolds();
     };
   },
 };

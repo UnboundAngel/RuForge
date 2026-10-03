@@ -1,0 +1,81 @@
+---
+description: How to pick the next RuForge version number (MAJOR.MINOR.PATCH). Fires at release step 1, on any version bump, or when someone asks whether a change is a patch, minor, or major release.
+alwaysApply: false
+---
+
+# Version bump rule
+
+RuForge follows [Semantic Versioning 2.0.0](https://semver.org/). GitHub does not mandate a scheme for releases; SemVer is the de facto standard (written by GitHub's cofounder) and it is what the Tauri updater compares.
+
+## The standard
+
+Given `MAJOR.MINOR.PATCH`:
+
+- **MAJOR**: incompatible changes to the public API.
+- **MINOR**: new backward-compatible functionality. Resets PATCH to 0.
+- **PATCH**: backward-compatible bug fixes only.
+
+Also from the spec:
+
+- Each number increases numerically, no leading zeros: `0.9.0` then `0.10.0`, never `1.0.0` by rollover.
+- A released version is frozen. Never change the contents of a shipped tag or swap its installer. Any change ships as a new version.
+- `0.y.z` is initial development; the spec allows anything to change. `1.0.0` declares the public API stable.
+- Tags carry a `v` prefix (`v0.5.0`); the version itself is `0.5.0`.
+
+## What "public API" means for RuForge
+
+RuForge is a desktop app, not a library. Its public surface is what users and their data depend on:
+
+- Visible features, screens, modes, and workflows
+- Settings and their persisted keys
+- On-disk data users rely on: library layout, playlist files (`.m3u8`, playlists JSON), sidecars, listening stats, download history
+- The updater contract (`updater.json` shape, installer name, tag pattern)
+
+Internal refactors, command wiring, and code moves are not public surface.
+
+## Picking the bump (while on 0.x)
+
+Read `node scripts/shipped.mjs list`. Developer-gated work (`showDebuggingSettings`) does not count. Unreleased-only bugs folded into a feature do not count as fixes.
+
+**MINOR** `0.(M+1).0` if any one of these shipped:
+
+- A new user-facing surface, mode, or workflow
+- A new Settings control or persisted key
+- A new on-disk file or format users rely on
+- A headline feature, or 3 or more distinct addition bullets in the notes
+- A default that changes how existing users' setups behave (for example, a feature now on by default)
+- Anything that would be MAJOR after 1.0: removed features, data migrations users cannot undo, dropped Windows versions
+
+**PATCH** `0.M.(N+1)` otherwise:
+
+- Bug fixes users of the previous public version will feel
+- Polish, copy, performance, and tweaks on existing surfaces
+- Config migrations that keep the same workflow
+- yt-dlp, ffmpeg, or dependency updates made to fix something
+
+When in doubt between patch and minor on user-visible work, pick minor.
+
+## After 1.0
+
+Same lists, shifted up one place. The "would be MAJOR after 1.0" items above become **MAJOR**. Additions become MINOR. Fixes stay PATCH. Do not bump to `1.0.0` without Angel.
+
+## Pre-release labels
+
+Do not ship pre-release versions (`0.6.0-beta.1`) through `updater.json`. SemVer ranks them below the final version, but RuForge has one update channel. Test builds stay local or go out as GitHub pre-releases that `updater.json` never points at.
+
+## Where the number goes
+
+- `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` `[package] version` (+ `Cargo.lock`), all equal.
+- `STATE.md` `Shipping version` defaults to the next patch after a release. It is a placeholder until release step 1 picks the real bump.
+- State the chosen version and the trigger that decided it in the release report.
+
+## Examples
+
+| Shipped since last release | Bump |
+| --- | --- |
+| Download fix, crash fix, two copy tweaks | `0.5.0` to `0.5.1` |
+| New music recommendations panel | `0.5.0` to `0.6.0` |
+| New Settings toggle, nothing else | `0.5.0` to `0.6.0` |
+| SponsorBlock categories now on by default | `0.5.0` to `0.6.0` |
+| Only debug-gated Companion work | no release needed |
+| Wrong installer uploaded to `v0.5.0` | ship `0.5.1`; never re-upload to `v0.5.0` |
