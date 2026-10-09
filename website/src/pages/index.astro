@@ -25,8 +25,6 @@ const loginTrust = landingLoginTrust('');
   jsonLd={[softwareApplicationSchema(), organizationSchema()]}
 >
   <div class="relative overflow-hidden min-h-screen flex flex-col justify-between">
-    <LandingBackdrop grain={landingGrain} />
-
     {/* Hero Section */}
     <section class="rf-container pt-36 pb-28 text-center relative">
       <div class="max-w-3xl mx-auto space-y-8 animate-fade-in">
@@ -140,6 +138,9 @@ const loginTrust = landingLoginTrust('');
         </div>
       </div>
     </section>
+
+    {/* Last in source order: its layers are placed by % of this container's height, so parsing it before the content makes them jump as the page grows (CLS). */}
+    <LandingBackdrop grain={landingGrain} />
   </div>
 </BaseLayout>
 
@@ -321,9 +322,10 @@ const loginTrust = landingLoginTrust('');
     }
   }
 
+  /* Not 0: Chrome skips LCP for images first painted at opacity 0, and this compositor fade never repaints, so the hero shot only counted when the carousel advanced at 6s. */
   @keyframes slideUp {
     from {
-      opacity: 0;
+      opacity: 0.01;
       transform: translateY(20px);
     }
     to {
