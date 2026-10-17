@@ -1,0 +1,10 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PollView from '../components/poll/PollView';
+---
+
+<BaseLayout title="Poll" description="Vote on a RuForge poll." noindex>
+  <div class="mx-auto w-full max-w-xl min-h-[30rem] px-6 pt-6 pb-10">
+    <PollView client:load />
+  </div>
+</BaseLayout>

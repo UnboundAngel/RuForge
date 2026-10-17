@@ -1,3 +1,9 @@
 name = "ruforge"
 compatibility_date = "2026-05-26"
 pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "POLLS"
+database_name = "ruforge-polls"
+database_id = "a0d16d9e-e13d-4091-8206-ef296079d181"
+migrations_dir = "migrations"

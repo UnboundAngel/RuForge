@@ -40,7 +40,7 @@ export default defineConfig({
       changefreq: 'weekly',
       priority: 0.7,
       lastmod: new Date(),
-      filter: (page) => !page.includes('/m/'),
+      filter: (page) => !page.includes('/m/') && !page.includes('/poll/'),
     }),
     {
       // Cloudflare Pages serves the nearest `404.html` up the path; Astro only flattens the root one.

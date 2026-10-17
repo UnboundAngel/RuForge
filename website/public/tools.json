@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "ffmpeg": {
+    "version": "n8.1.3-18-g46d899d7a0",
+    "url": "https://github.com/UnboundAngel/RuForge/releases/download/tools-ffmpeg-n8.1.3-18/ffmpeg.zip",
+    "sha256": "186cb8509a86ca2eb6146870661b69a224ccd486f384f6a5f441fa775f79cc04",
+    "archive": "zip",
+    "size": 170544161,
+    "ffmpegPath": "ffmpeg-n8.1.3-18-g46d899d7a0-win64-lgpl-8.1/bin/ffmpeg.exe",
+    "ffprobePath": "ffmpeg-n8.1.3-18-g46d899d7a0-win64-lgpl-8.1/bin/ffprobe.exe"
+  }
+}

@@ -19,6 +19,8 @@ interface Props {
   canonicalUrl?: string;
   /** JSON-LD structured data objects to inject into the page head. */
   jsonLd?: object | object[];
+  /** Transient pages (polls) that search engines should skip. */
+  noindex?: boolean;
 }
 
 const {
@@ -28,6 +30,7 @@ const {
   builtWithNav,
   canonicalUrl,
   jsonLd,
+  noindex = false,
 } = Astro.props;
 const pageTitle =
   title === SITE.name || title.includes(SITE.name) ? title : `${title} · ${SITE.name}`;
@@ -49,6 +52,7 @@ const mobileAlternateUrl = new URL('/m' + Astro.url.pathname, Astro.site).href;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex,nofollow" />}
     <link rel="canonical" href={computedCanonical} />
     <link rel="alternate" media="only screen and (max-width: 768px)" href={mobileAlternateUrl} />
     <meta property="og:title" content={pageTitle} />
