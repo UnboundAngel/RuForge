@@ -1,10 +1,12 @@
 import { RuForgeCaptureTrigger } from "@/components/dev-captures/RuForgeCaptureTrigger";
 import { VideoDownloadRailButton } from "@/components/downloader/VideoDownloadDockChip";
-import { SIDEBAR_RAIL_PX } from "@/lib/sidebarLayout";
+import { StorageRailMeter } from "@/components/navigation/StorageRailMeter";
+import { SIDEBAR_RAIL_W } from "@/lib/sidebarLayout";
 import { cn } from "@/lib/utils";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
 import type { ActiveTab } from "@/store/types";
 import type { NavMode } from "@/store/types";
+import { GAMES_RAIL_ITEM } from "@games";
 
 type RailItem = {
   id: ActiveTab;
@@ -16,6 +18,9 @@ const RAIL_ITEMS: RailItem[] = [
   { id: "downloader", iconId: "download", label: "Download" },
   { id: "media", iconId: "videos", label: "Videos" },
   { id: "explorer", iconId: "explorer", label: "YouTube" },
+  ...(GAMES_RAIL_ITEM
+    ? [{ id: GAMES_RAIL_ITEM.id, iconId: GAMES_RAIL_ITEM.iconId, label: GAMES_RAIL_ITEM.label }]
+    : []),
   { id: "settings", iconId: "settings", label: "Settings" },
 ];
 
@@ -41,17 +46,20 @@ export function AppSidebarRail({
   return (
     <div
       className={cn(
-        "rf-sidebar relative z-40 flex shrink-0 flex-col overflow-visible",
+        "rf-sidebar rf-autohide-chrome relative z-40 flex shrink-0 flex-col overflow-visible",
         disabled && "pointer-events-none opacity-30 grayscale-[50%]",
       )}
-      style={{ width: SIDEBAR_RAIL_PX }}
+      style={{ width: SIDEBAR_RAIL_W }}
       data-nav-mode={navMode}
     >
-      <div className="pointer-events-auto relative z-[100] flex h-14 shrink-0 items-center justify-center">
-        <RuForgeCaptureTrigger screenLabel={captureScreenLabel} />
+      <div className="pointer-events-auto relative z-[100] flex h-[var(--rf-titlebar-h)] shrink-0 items-center justify-center">
+        <RuForgeCaptureTrigger
+          screenLabel={captureScreenLabel}
+          imgClassName="h-[var(--rf-rail-logo)] w-[var(--rf-rail-logo)] rounded-lg object-cover"
+        />
       </div>
 
-      <nav className="flex flex-1 flex-col items-center gap-1 px-1 py-2">
+      <nav className="flex flex-1 flex-col items-center gap-1 py-2">
         {RAIL_ITEMS.map((item) => {
           if (item.id === "downloader") {
             return (
@@ -78,7 +86,7 @@ export function AppSidebarRail({
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "group/rail relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-150",
+                "group/rail relative flex h-[var(--rf-rail-btn)] w-[var(--rf-rail-btn)] items-center justify-center rounded-xl transition-colors duration-150",
                 isActive
                   ? "text-[color:var(--accent)]"
                   : "text-stone-500 hover:text-stone-200",
@@ -95,6 +103,10 @@ export function AppSidebarRail({
           );
         })}
       </nav>
+
+      <div className="flex shrink-0 justify-center pb-2">
+        <StorageRailMeter />
+      </div>
     </div>
   );
 }

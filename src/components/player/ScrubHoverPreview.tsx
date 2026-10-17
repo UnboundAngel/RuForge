@@ -28,6 +28,8 @@ type ScrubHoverPreviewProps = {
   chapterKey?: number;
   showChapterTitle?: boolean;
   sbOverlay?: ScrubBarOverlay;
+  /** Peak of YouTube's replay graph; hovering inside it labels the preview "Most replayed". */
+  mostReplayed?: { start: number; end: number } | null;
 };
 
 function SponsorBlockSegmentPill({
@@ -74,7 +76,13 @@ export function ScrubHoverPreview({
   chapterKey = -1,
   showChapterTitle = false,
   sbOverlay,
+  mostReplayed = null,
 }: ScrubHoverPreviewProps) {
+  const inMostReplayed =
+    mostReplayed != null && hoverTimeSec >= mostReplayed.start && hoverTimeSec < mostReplayed.end;
+  const chapterLabel = showChapterTitle ? chapterTitle.trim() : "";
+  const label = inMostReplayed ? "Most replayed" : chapterLabel;
+  const labelKey = inMostReplayed ? "most-replayed" : chapterKey;
   const hasThumb = spritePaths.length > 0;
   const overlay = sbOverlay ?? EMPTY_OVERLAY;
   const activeSegment = useMemo(
@@ -133,21 +141,21 @@ export function ScrubHoverPreview({
           <span className="text-[12px] font-bold tabular-nums text-white shrink-0">
             {formatTime(hoverTimeSec)}
           </span>
-          {showChapterTitle && chapterTitle.trim() && (
+          {label && (
             <>
               <span className="w-px h-3.5 bg-white/20 shrink-0" aria-hidden />
               <motion.div className="min-w-0 shrink" style={{ maxWidth: titleMaxW }}>
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={chapterKey}
+                    key={labelKey}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.08 }}
                   >
                     <MarqueeText
-                      text={chapterTitle}
-                      layoutKey={chapterKey}
+                      text={label}
+                      layoutKey={labelKey}
                       className="text-[11px] font-semibold text-white/95"
                     />
                   </motion.div>

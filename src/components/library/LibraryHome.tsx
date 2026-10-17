@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { FollowChannelButton } from "@/components/watchlist/FollowChannelButton";
 import type { MediaFile } from "@/types";
-import { FeedVideoCard } from "./FeedVideoCard";
-import { type HomeSection, shortsPerShelf } from "./homeSections";
+import type { HomeSection } from "./homeSections";
 import { openCreatorPage } from "./creatorPageStore";
 import { ChannelAvatar } from "./VideoByline";
-import type { MixedGridItem } from "./youtubeFeed";
+import type { FeedVideo, MixedGridItem } from "./youtubeFeed";
+import { useWatchlistStore } from "@/watchlist/watchlistStore";
 
 export function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="mb-5 flex items-center gap-3 text-xl font-bold tracking-tight text-stone-50">{children}</h2>;
@@ -35,21 +35,27 @@ function ChannelHeading({ channel, channelId }: { channel: string; channelId: st
   );
 }
 
+function UnreadUploadCount({ videos }: { videos: FeedVideo[] }) {
+  const unread = useWatchlistStore((s) => {
+    const ids = new Set(videos.map((v) => v.videoId));
+    return s.snapshot?.uploads.filter((u) => !u.seen && ids.has(u.videoId)).length ?? 0;
+  });
+  if (unread === 0) return null;
+  return <span className="text-sm font-medium tabular-nums text-stone-500">{unread} new</span>;
+}
+
 /** The All tab as a YouTube-style home: video rows broken up by shelves of other shapes. */
 export function LibraryHome({
   sections,
   columns,
-  gridClass,
   renderGrid,
   renderPlaylists,
 }: {
   sections: HomeSection<MediaFile>[];
   columns: number;
-  gridClass: string;
   renderGrid: (items: MixedGridItem<MediaFile>[], columns: number) => ReactNode;
   renderPlaylists: () => ReactNode;
 }) {
-  const shortsColumns = shortsPerShelf(columns);
   return (
     <div className="flex flex-col gap-14">
       {sections.map((section) => {
@@ -68,24 +74,13 @@ export function LibraryHome({
                 {renderGrid(asItems(section.files), Math.max(2, columns - 1))}
               </section>
             );
-          case "shorts":
-            return (
-              <section key={section.key}>
-                <SectionTitle>Shorts</SectionTitle>
-                <div className={gridClass} style={{ gridTemplateColumns: `repeat(${shortsColumns}, minmax(0, 1fr))` }}>
-                  {section.videos.map((video) => (
-                    <FeedVideoCard key={`short-${video.videoId}`} video={video} shape="short" />
-                  ))}
-                </div>
-              </section>
-            );
           case "watchlist":
             return (
               <section key={section.key}>
                 <SectionTitle>
                   <span className="flex items-baseline gap-3">
                     New from channels you follow
-                    <span className="text-sm font-medium tabular-nums text-stone-500">{section.videos.length} new</span>
+                    <UnreadUploadCount videos={section.videos} />
                   </span>
                 </SectionTitle>
                 {renderGrid(section.videos.map((video) => ({ kind: "feed", video })), columns)}

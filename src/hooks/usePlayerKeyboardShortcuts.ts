@@ -1,22 +1,12 @@
 import { useEffect } from "react";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import type { HotkeyActionId } from "../lib/hotkeys";
+import { isHotkeyRecording, isTypingTarget, matchHotkeyEvent } from "./useHotkeys";
 
 export const PLAYER_PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 
 /** Matches the rewind / forward 15 buttons and their icons. */
 export const PLAYER_SKIP_SECONDS = 15;
-
-function isTypingTarget(): boolean {
-  const el = document.activeElement;
-  if (!el) return false;
-  const tag = el.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    (el as HTMLElement).isContentEditable
-  );
-}
 
 function stepPlaybackSpeed(current: number, delta: number): number {
   const speeds = PLAYER_PLAYBACK_SPEEDS;
@@ -26,6 +16,24 @@ function stepPlaybackSpeed(current: number, delta: number): number {
   return speeds[next] ?? 1;
 }
 
+const PLAYER_ACTIONS: readonly HotkeyActionId[] = [
+  "player.playPause",
+  "player.prevChapter",
+  "player.nextChapter",
+  "player.seekBack",
+  "player.seekForward",
+  "player.volumeUp",
+  "player.volumeDown",
+  "player.mute",
+  "player.subtitles",
+  "player.fullscreen",
+  "player.loop",
+  "player.speedDown",
+  "player.speedUp",
+  "player.jumpStart",
+  "player.jumpEnd",
+];
+
 export type PlayerKeyboardShortcutHandlers = {
   enabled?: boolean;
   volume: number;
@@ -34,7 +42,7 @@ export type PlayerKeyboardShortcutHandlers = {
   togglePlay: () => void;
   skip: (seconds: number) => void;
   changeVolume: (v: number) => void;
-  /** Preferred for KeyM when mute state is not in the main store. */
+  /** Preferred for mute when mute state is not in the main store. */
   toggleMute?: () => void;
   setMuted: (muted: boolean) => void;
   toggleFullscreen?: () => void;
@@ -45,6 +53,93 @@ export type PlayerKeyboardShortcutHandlers = {
   jumpPrevChapter?: () => void;
   jumpNextChapter?: () => void;
 };
+
+/**
+ * Runs one player action. Returns false when the player cannot do it (no subtitles, no fullscreen),
+ * so the key can fall through. Shared by the in-window keys and the system-wide ghost mode keys.
+ */
+export function runPlayerHotkeyAction(
+  action: HotkeyActionId,
+  handlers: PlayerKeyboardShortcutHandlers,
+): boolean {
+  const {
+    volume,
+    playbackSpeed = 1,
+    hasChapters = false,
+    togglePlay,
+    skip,
+    changeVolume,
+    toggleMute,
+    setMuted,
+    toggleFullscreen,
+    cycleLoopMode,
+    toggleSubtitles,
+    setPlaybackSpeed,
+    seekToPercent,
+    jumpPrevChapter,
+    jumpNextChapter,
+  } = handlers;
+  switch (action) {
+    case "player.playPause":
+      togglePlay();
+      return true;
+    case "player.prevChapter":
+    case "player.nextChapter": {
+      const next = action === "player.nextChapter";
+      const jump = next ? jumpNextChapter : jumpPrevChapter;
+      // A chapter chord on a video without chapters falls through to the plain seek.
+      if (hasChapters && jump) jump();
+      else skip(next ? PLAYER_SKIP_SECONDS : -PLAYER_SKIP_SECONDS);
+      return true;
+    }
+    case "player.seekBack":
+      skip(-PLAYER_SKIP_SECONDS);
+      return true;
+    case "player.seekForward":
+      skip(PLAYER_SKIP_SECONDS);
+      return true;
+    case "player.volumeUp":
+      changeVolume(Math.min(1, volume + 0.1));
+      return true;
+    case "player.volumeDown":
+      changeVolume(Math.max(0, volume - 0.1));
+      return true;
+    case "player.mute":
+      if (toggleMute) toggleMute();
+      else setMuted(!useRuforgeStore.getState().isMuted);
+      return true;
+    case "player.subtitles":
+      if (!toggleSubtitles) return false;
+      toggleSubtitles();
+      return true;
+    case "player.fullscreen":
+      if (!toggleFullscreen) return false;
+      toggleFullscreen();
+      return true;
+    case "player.loop":
+      if (!cycleLoopMode) return false;
+      cycleLoopMode();
+      return true;
+    case "player.speedDown":
+      if (!setPlaybackSpeed) return false;
+      setPlaybackSpeed(stepPlaybackSpeed(playbackSpeed, -1));
+      return true;
+    case "player.speedUp":
+      if (!setPlaybackSpeed) return false;
+      setPlaybackSpeed(stepPlaybackSpeed(playbackSpeed, 1));
+      return true;
+    case "player.jumpStart":
+      if (!seekToPercent) return false;
+      seekToPercent(0);
+      return true;
+    case "player.jumpEnd":
+      if (!seekToPercent) return false;
+      seekToPercent(1);
+      return true;
+    default:
+      return false;
+  }
+}
 
 export function usePlayerKeyboardShortcuts(handlers: PlayerKeyboardShortcutHandlers): void {
   const {
@@ -69,107 +164,38 @@ export function usePlayerKeyboardShortcuts(handlers: PlayerKeyboardShortcutHandl
   useEffect(() => {
     if (!enabled) return;
 
-    const onKey = (e: KeyboardEvent) => {
-      if (e.altKey || e.ctrlKey || e.metaKey) return;
-      if (isTypingTarget()) return;
+    const current: PlayerKeyboardShortcutHandlers = {
+      volume,
+      playbackSpeed,
+      hasChapters,
+      togglePlay,
+      skip,
+      changeVolume,
+      toggleMute,
+      setMuted,
+      toggleFullscreen,
+      cycleLoopMode,
+      toggleSubtitles,
+      setPlaybackSpeed,
+      seekToPercent,
+      jumpPrevChapter,
+      jumpNextChapter,
+    };
 
-      switch (e.code) {
-        case "Space":
-        case "KeyK":
-          e.preventDefault();
-          togglePlay();
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          if (e.shiftKey && hasChapters && jumpNextChapter) {
-            jumpNextChapter();
-          } else {
-            skip(PLAYER_SKIP_SECONDS);
-          }
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          if (e.shiftKey && hasChapters && jumpPrevChapter) {
-            jumpPrevChapter();
-          } else {
-            skip(-PLAYER_SKIP_SECONDS);
-          }
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          changeVolume(Math.min(1, volume + 0.1));
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          changeVolume(Math.max(0, volume - 0.1));
-          break;
-        case "KeyM": {
-          e.preventDefault();
-          if (toggleMute) {
-            toggleMute();
-          } else {
-            setMuted(!useRuforgeStore.getState().isMuted);
-          }
-          break;
-        }
-        case "KeyC":
-          if (toggleSubtitles) {
-            e.preventDefault();
-            toggleSubtitles();
-          }
-          break;
-        case "KeyF":
-          if (toggleFullscreen) {
-            e.preventDefault();
-            toggleFullscreen();
-          }
-          break;
-        case "KeyL":
-          if (cycleLoopMode) {
-            e.preventDefault();
-            cycleLoopMode();
-          }
-          break;
-        case "Comma":
-        case "Less":
-          if (setPlaybackSpeed) {
-            e.preventDefault();
-            setPlaybackSpeed(stepPlaybackSpeed(playbackSpeed, -1));
-          }
-          break;
-        case "Period":
-        case "Greater":
-          if (setPlaybackSpeed) {
-            e.preventDefault();
-            setPlaybackSpeed(stepPlaybackSpeed(playbackSpeed, 1));
-          }
-          break;
-        case "Digit0":
-          if (seekToPercent) {
-            e.preventDefault();
-            seekToPercent(0);
-          }
-          break;
-        case "Home":
-          if (seekToPercent) {
-            e.preventDefault();
-            seekToPercent(0);
-          }
-          break;
-        case "End":
-          if (seekToPercent) {
-            e.preventDefault();
-            seekToPercent(1);
-          }
-          break;
-        default: {
-          const digit = e.code.match(/^Digit([1-9])$/);
-          if (digit && seekToPercent) {
-            e.preventDefault();
-            seekToPercent(Number.parseInt(digit[1]!, 10) * 0.1);
-          }
-          break;
-        }
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget() || isHotkeyRecording()) return;
+
+      const action = matchHotkeyEvent(e, PLAYER_ACTIONS);
+      if (action) {
+        if (runPlayerHotkeyAction(action, current)) e.preventDefault();
+        return;
+      }
+
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const digit = e.code.match(/^Digit([1-9])$/);
+      if (digit && seekToPercent) {
+        e.preventDefault();
+        seekToPercent(Number.parseInt(digit[1]!, 10) * 0.1);
       }
     };
 

@@ -25,6 +25,7 @@
     "core:window:allow-start-dragging",
     "core:window:allow-start-resize-dragging",
     "core:window:allow-set-size",
+    "core:window:allow-set-position",
     "core:window:allow-set-resizable",
     "core:window:allow-maximize",
     "core:window:allow-unmaximize",
@@ -38,20 +39,9 @@
     "snap-layout:default",
     "core:event:default",
     "core:path:default",
-    "opener:default",
     {
-      "identifier": "opener:allow-open-path",
-      "scope": {
-        "allow": [
-          "https://**",
-          "http://**",
-          "C:/**",
-          "C:\\**",
-          "**://**",
-          "**\\**",
-          "**/**"
-        ]
-      }
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://*" }, { "url": "http://*" }]
     },
     "dialog:default",
     "fs:default",
@@ -64,26 +54,6 @@
     "process:allow-restart",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
-    {
-      "identifier": "shell:allow-spawn",
-      "scope": {
-        "allow": [
-          { "args": true, "sidecar": "binaries/yt-dlp" },
-          { "args": true, "sidecar": "binaries/ffmpeg" },
-          { "args": true, "sidecar": "binaries/ffprobe" }
-        ]
-      }
-    },
-    {
-      "identifier": "shell:allow-execute",
-      "scope": {
-        "allow": [
-          { "args": true, "sidecar": "binaries/yt-dlp" },
-          { "args": true, "sidecar": "binaries/ffmpeg" },
-          { "args": true, "sidecar": "binaries/ffprobe" }
-        ]
-      }
-    },
     "core:webview:default",
     "core:webview:allow-create-webview",
     "core:webview:allow-webview-show",

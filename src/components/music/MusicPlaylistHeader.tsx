@@ -14,7 +14,8 @@ type Props = {
   /** Replaces the song count and length line. */
   meta?: React.ReactNode;
   startEditing: boolean;
-  onRename: (title: string) => void;
+  /** Leave out to show the title without click-to-rename. */
+  onRename?: (title: string) => void;
   onBack?: () => void;
   /** Action bar; sits on the same tinted backdrop so the color fades out beneath it. */
   children?: React.ReactNode;
@@ -59,7 +60,7 @@ export function MusicPlaylistHeader({
 
   const commit = () => {
     const next = draft.trim();
-    if (next && next !== title) onRename(next);
+    if (next && next !== title) onRename?.(next);
     setEditing(false);
   };
 
@@ -112,7 +113,7 @@ export function MusicPlaylistHeader({
               aria-label="Playlist name"
               className={`w-full bg-white/[0.08] rounded-md px-2 -mx-2 my-2 font-black tracking-tight leading-tight outline-none text-white focus:bg-white/[0.12] ${titleSize}`}
             />
-          ) : (
+          ) : onRename ? (
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -120,6 +121,8 @@ export function MusicPlaylistHeader({
             >
               <h1 className={`font-black tracking-tight leading-tight truncate text-white ${titleSize}`}>{title}</h1>
             </button>
+          ) : (
+            <h1 className={`my-2 font-black tracking-tight leading-tight truncate text-white ${titleSize}`}>{title}</h1>
           )}
           {description && (
             <button

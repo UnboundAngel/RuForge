@@ -10,6 +10,7 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { HoverMarqueeText } from "./HoverMarqueeText";
 
 export type MusicMenuTone = {
   panel: string;
@@ -19,28 +20,33 @@ export type MusicMenuTone = {
 
 export type MusicMenuRowVariant = "default" | "danger";
 
+/** One menu kit for every mode; the theme only swaps the palette (Music red on black, Library sand gold on brown). */
+export type MenuTheme = "music" | "library";
+
+const MENU_ACCENT = "var(--rf-menu-accent,var(--music-accent))";
+
 const ROW_HOVER: Record<MusicMenuRowVariant, string> = {
   default: "hover:text-white hover:bg-white/[0.07]",
   danger:
-    "hover:text-[color:var(--music-accent)] hover:bg-[color-mix(in_srgb,var(--music-accent)_14%,transparent)] [&:hover_.rf-menu-row-icon]:!text-[color:var(--music-accent)]",
+    "hover:text-[color:var(--rf-menu-danger,var(--music-accent))] hover:bg-[color-mix(in_srgb,var(--rf-menu-danger,var(--music-accent))_14%,transparent)] [&:hover_.rf-menu-row-icon]:!text-[color:var(--rf-menu-danger,var(--music-accent))]",
 };
 
 export const MUSIC_MENU_WIDTH = 208;
 export const MUSIC_MENU_ICON_SIZE = 13;
-export const MUSIC_MENU_EDGE_PAD = 10;
+const MUSIC_MENU_EDGE_PAD = 10;
 
 /** Red and black: sections share one near-black panel with a red label; Playback keeps a faint red wash as the primary group. */
 const NEUTRAL_TONE: MusicMenuTone = {
   panel: "rgb(255 255 255 / 0.035)",
-  label: "color-mix(in srgb, var(--music-accent) 70%, white)",
-  icon: "#b3b3b3",
+  label: `color-mix(in srgb, ${MENU_ACCENT} 70%, white)`,
+  icon: "var(--rf-menu-icon,#b3b3b3)",
 };
 
 export const MUSIC_MENU_TONES = {
   playback: {
-    panel: "color-mix(in srgb, var(--music-accent) 10%, transparent)",
-    label: "color-mix(in srgb, var(--music-accent) 70%, white)",
-    icon: "var(--music-accent)",
+    panel: `color-mix(in srgb, ${MENU_ACCENT} 10%, transparent)`,
+    label: `color-mix(in srgb, ${MENU_ACCENT} 70%, white)`,
+    icon: MENU_ACCENT,
   },
   transport: NEUTRAL_TONE,
   player: NEUTRAL_TONE,
@@ -55,6 +61,9 @@ export const MUSIC_MENU_TONES = {
  * `cursor` slides up just enough to fit, like Spotify's right-click menu, so it stays beside the pointer.
  */
 export type MusicMenuPlacement = "anchor" | "cursor";
+
+/** Where an open menu sits: under its trigger (`anchor`) or at the right-click point (`cursor`). */
+export type MenuAt = { x: number; y: number; placement: MusicMenuPlacement };
 
 export function placeMusicFloatingMenu(
   x: number,
@@ -114,17 +123,31 @@ export function useMusicMenuOutsideDismiss(
   }, [open, onClose, containerRef, opts?.capture, opts?.preventDefault]);
 }
 
-/** Menus portal to body, outside `[data-music-mode]`, so the accent var must be redeclared here. */
-const PANEL_CLASS =
-  "[--music-accent:#ff0033] bg-[#0f0f0f] border border-white/[0.1] rounded-[16px] shadow-2xl overflow-y-auto overflow-x-hidden rf-scrollbar p-1.5 flex flex-col gap-1";
+const PANEL_BASE =
+  "border rounded-[16px] shadow-2xl overflow-y-auto overflow-x-hidden rf-scrollbar p-1.5 flex flex-col gap-1";
+
+/**
+ * Floating menus portal to body, outside `[data-music-mode]`, so `music` redeclares its palette.
+ * `library` reads the mode tokens, so a panel rendered in place (notification center) follows the mode it sits in.
+ */
+const PANEL_THEME: Record<MenuTheme, string> = {
+  music: "[--music-accent:#ff0033] bg-[#0f0f0f] border-white/[0.1]",
+  library:
+    "[--rf-menu-accent:var(--accent)] [--rf-menu-danger:#f87171] [--rf-menu-icon:#a8a29e] bg-[color:var(--rf-popover-bg)] border-white/[0.06]",
+};
+
+function panelClass(theme: MenuTheme) {
+  return cn(PANEL_BASE, PANEL_THEME[theme]);
+}
 
 export function MusicMenuPanel({
   className,
   children,
+  theme = "music",
   ...rest
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: React.HTMLAttributes<HTMLDivElement> & { theme?: MenuTheme }) {
   return (
-    <div className={cn(PANEL_CLASS, className)} {...rest}>
+    <div className={cn(panelClass(theme), className)} {...rest}>
       {children}
     </div>
   );
@@ -180,7 +203,7 @@ export function MusicMenuRow({
   /** Keeps the hover look while this row's flyout is open. */
   expanded?: boolean;
 }) {
-  const iconColor = active ? "var(--music-accent)" : tone.icon;
+  const iconColor = active ? MENU_ACCENT : tone.icon;
 
   if (disabled || !onClick) {
     return (
@@ -215,7 +238,9 @@ export function MusicMenuRow({
       <span className="rf-menu-row-icon shrink-0 transition-colors duration-100" style={{ color: iconColor }}>
         {icon}
       </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="min-w-0 flex-1">
+        <HoverMarqueeText text={label} slow />
+      </span>
       {trailing}
     </button>
   );
@@ -258,6 +283,7 @@ type FloatingMenuProps = {
   ariaLabel: string;
   measureKey?: string | number | boolean;
   placement?: MusicMenuPlacement;
+  theme?: MenuTheme;
   children: ReactNode;
 };
 
@@ -273,6 +299,7 @@ export function MusicFloatingMenu({
   ariaLabel,
   measureKey,
   placement = "anchor",
+  theme = "music",
   children,
 }: FloatingMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -333,9 +360,9 @@ export function MusicFloatingMenu({
           width: MUSIC_MENU_WIDTH,
           maxHeight: `calc(100vh - ${MUSIC_MENU_EDGE_PAD * 2}px)`,
         }}
-        className={PANEL_CLASS}
+        className={panelClass(theme)}
         aria-label={ariaLabel}
-        {...{ [PANEL_ATTR]: "" }}
+        {...{ [PANEL_ATTR]: theme }}
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
@@ -350,7 +377,7 @@ export function MusicFloatingMenu({
  * Submenu beside the menu that owns `anchor` (a row): opens to the right, flips left when there
  * is no room, top-aligned with the row and slid up to stay on screen.
  */
-export function MusicMenuFlyout({
+function MusicMenuFlyout({
   anchor,
   ariaLabel,
   measureKey,
@@ -365,11 +392,14 @@ export function MusicMenuFlyout({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [theme, setTheme] = useState<MenuTheme>("music");
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const panel = anchor.closest(`[${PANEL_ATTR}]`)?.getBoundingClientRect() ?? anchor.getBoundingClientRect();
+    const owner = anchor.closest(`[${PANEL_ATTR}]`)?.getAttribute(PANEL_ATTR);
+    setTheme(owner === "library" ? "library" : "music");
     const row = anchor.getBoundingClientRect();
     const width = el.offsetWidth;
     const height = el.offsetHeight;
@@ -397,7 +427,7 @@ export function MusicMenuFlyout({
         width: MUSIC_MENU_WIDTH,
         maxHeight: `calc(100vh - ${MUSIC_MENU_EDGE_PAD * 2}px)`,
       }}
-      className={PANEL_CLASS}
+      className={panelClass(theme)}
       role="menu"
       aria-label={ariaLabel}
       {...{ [FLYOUT_ATTR]: "" }}
@@ -411,8 +441,93 @@ export function MusicMenuFlyout({
   );
 }
 
+const FLYOUT_OPEN_DELAY_MS = 120;
+/** Grace for cutting diagonally across a neighbouring row on the way into the flyout. */
+const FLYOUT_CLOSE_DELAY_MS = 250;
+
+/** Row that opens a submenu beside the menu on hover (or click), like Spotify's submenus. */
+export function MusicMenuFlyoutRow({
+  icon,
+  label,
+  tone,
+  ariaLabel,
+  disabled = false,
+  renderFlyout,
+}: {
+  icon: ReactNode;
+  label: string;
+  tone: MusicMenuTone;
+  ariaLabel: string;
+  disabled?: boolean;
+  /** `openedByClick` lets the flyout focus its first control only when the user clicked in. */
+  renderFlyout: (openedByClick: boolean) => ReactNode;
+}) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [openedByClick, setOpenedByClick] = useState(false);
+  const rowRef = useRef<HTMLElement | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+
+  const later = (fn: () => void, ms: number) => {
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(fn, ms);
+  };
+  const cancel = () => window.clearTimeout(timer.current);
+
+  const open = anchor != null;
+  useEffect(() => {
+    // Always on, so brushing past the row also cancels a pending open.
+    const onMove = (e: MouseEvent) => {
+      if (!isPointerOnSiblingMenuRow(e.target, rowRef.current)) return;
+      if (open) later(() => setAnchor(null), FLYOUT_CLOSE_DELAY_MS);
+      else cancel();
+    };
+    document.addEventListener("mousemove", onMove);
+    return () => document.removeEventListener("mousemove", onMove);
+  }, [open]);
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  return (
+    <>
+      <MusicMenuRow
+        tone={tone}
+        label={label}
+        icon={icon}
+        expanded={disabled ? undefined : open}
+        onMouseEnter={(e) => {
+          const el = e.currentTarget;
+          rowRef.current = el;
+          if (anchor) cancel();
+          else later(() => setAnchor(el), FLYOUT_OPEN_DELAY_MS);
+        }}
+        onClick={
+          disabled
+            ? undefined
+            : () => {
+                cancel();
+                setOpenedByClick(true);
+                if (rowRef.current) setAnchor(rowRef.current);
+              }
+        }
+        trailing={<ChevronRight size={12} className="shrink-0 text-white/35" aria-hidden />}
+      />
+      {anchor && !disabled && (
+        <MusicMenuFlyout anchor={anchor} ariaLabel={ariaLabel} onMouseEnter={cancel}>
+          {renderFlyout(openedByClick)}
+        </MusicMenuFlyout>
+      )}
+    </>
+  );
+}
+
+/** Where a menu hanging off `el` should open: under it, right edges aligned for `end`. */
+export function menuAnchorPoint(el: HTMLElement, align: "start" | "end" = "end"): { x: number; y: number } {
+  const r = el.getBoundingClientRect();
+  return { x: align === "end" ? r.right - MUSIC_MENU_WIDTH : r.left, y: r.bottom + 6 };
+}
+
 /** Pointer over the owning menu but off this row and its flyout: the flyout should close. */
-export function isPointerOnSiblingMenuRow(target: EventTarget | null, row: HTMLElement | null): boolean {
+function isPointerOnSiblingMenuRow(target: EventTarget | null, row: HTMLElement | null): boolean {
   const el = target as Element | null;
   if (!el?.closest || !row) return false;
   if (row.contains(el) || el.closest(`[${FLYOUT_ATTR}]`)) return false;

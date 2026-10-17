@@ -3,9 +3,6 @@ import React, {
   useRef,
   useEffect,
   useLayoutEffect,
-  createContext,
-  useContext,
-  Fragment,
 } from 'react';
 import {
   animate,
@@ -19,30 +16,27 @@ import {
   Bug,
   ChevronDown,
   Download,
+  Keyboard,
   Minus,
   Paintbrush,
   Play,
   Plus,
-  Search,
   Settings2,
   Wrench,
   X,
-  type LucideIcon,
 } from 'lucide-react';
 import { getVersion } from '@tauri-apps/api/app';
 import { readLastWhatsNew } from '../updatePostInstall';
+import { Switch } from './ui/Switch';
 import { listen } from '@tauri-apps/api/event';
 import { DOWNLOAD_AUDIO_FORMAT_OPTIONS } from '../downloadFormat';
-import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel, CUSTOM_CONCURRENT_DOWNLOADS_MIN, DEFAULT_MAX_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS_CAP } from '../store/types';
+import { DOWNLOAD_SUBTITLE_LANG_PRESETS, downloadSubtitleLangLabel, CUSTOM_CONCURRENT_DOWNLOADS_MIN, DEFAULT_MAX_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS_CAP, clampMiniGhostOpacity, MINI_GHOST_OPACITY_MIN } from '../store/types';
+import { Slider } from './ui/Slider';
 import type { SettingsTab } from '../store/types';
 import { open as openDirectoryDialog } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from "@tauri-apps/api/event";
-import {
-  requestDiscordOnboardingPreview,
-  requestReplayOnboardingPreview,
-} from "../lib/onboardingDebugPreview";
-import { galleryScanRootsFromStore, normalizeScanDirKey } from '../lib/libraryConfig';
+import { normalizeScanDirKey } from '../lib/libraryConfig';
 import { isWindowsPlatform } from '../platformPaths';
 import { useRuforgeStore } from '../store/ruforgeStore';
 import { useWatchlistStore } from '../watchlist/watchlistStore';
@@ -54,23 +48,25 @@ import {
   checkIntervalLabel,
   openChannelsManager,
 } from '../watchlist/watchlistSettings';
-import {
-  clearLastDownloadBatchRecord,
-  formatLastBatchSummary,
-  getDevReplayMode,
-  readLastDownloadBatchRecord,
-  setDevReplayMode,
-  type DevReplayMode,
-} from '../lib/devLastDownloadBatch';
 import { SponsorBlockSettingsTree } from './settings/SponsorBlockSettingsTree';
-import { DebugLogCategoryTree } from './settings/DebugLogCategoryTree';
-import { SettingsDescription } from './settings/settingsDescription';
-import { RegroupPlaylistModal } from './RegroupPlaylistModal';
-import { MigrateLibraryModal } from './MigrateLibraryModal';
-import { MusicMetaBackfillModal } from './MusicMetaBackfillModal';
-import { DevCapturesSection } from './dev-captures/DevCapturesSection';
-import { CompanionSettingsSection } from './settings/CompanionSettingsSection';
+import { DebuggingTab } from './settings/debugging/DebuggingTab';
 import { AccentColorPicker } from './settings/AccentColorPicker';
+import {
+  SearchableBlock,
+  SettingItem,
+  SettingsSearchRootContext,
+  SettingsSection,
+} from './settings/settingsChrome';
+import { ShortcutsTab } from './settings/ShortcutsTab';
+import {
+  GAMES_ENABLED,
+  GamesSettingsSection,
+  GlanceAdblockSettingsSection,
+} from '@games';
+import {
+  HotkeyBindingControl,
+  stopHotkeyRecording,
+} from './settings/HotkeyBindingControl';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { useDenoStatus } from '../hooks/useDenoStatus';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
@@ -83,20 +79,10 @@ import {
 } from '../lib/overlayMotion';
 import { cn } from '../lib/utils';
 import { MORPH_SPRING } from './ui/Morph';
+import { SettingsHeader, type SettingsNavGroup } from './settings/SettingsHeader';
 
 /** Compact chrome rim; thinner than the sticky icon bar (~36px). */
 const SETTINGS_SHELL_PAD_PX = 7;
-
-type SettingsNavItem = {
-  id: SettingsTab;
-  label: string;
-  icon: LucideIcon;
-};
-
-type SettingsNavGroup = {
-  label: string;
-  items: readonly SettingsNavItem[];
-};
 
 const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
   {
@@ -104,6 +90,7 @@ const SETTINGS_NAV_GROUPS: readonly SettingsNavGroup[] = [
     items: [
       { id: "general", label: "General", icon: Settings2 },
       { id: "appearance", label: "Appearance", icon: Paintbrush },
+      { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
     ],
   },
   {
@@ -127,55 +114,9 @@ const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   downloads: "Downloads",
   playback: "Playback",
   appearance: "Appearance",
+  shortcuts: "Keyboard shortcuts",
   advanced: "Advanced",
   debugging: "Debugging",
-};
-
-type SettingsSearchCtx = {
-  query: string;
-  /** Section title/keywords matched: show every child row. */
-  forceShow: boolean;
-};
-
-const SettingsSearchRootContext = createContext("");
-const SettingsSearchContext = createContext<SettingsSearchCtx>({
-  query: "",
-  forceShow: false,
-});
-
-function settingsTextMatches(query: string, ...parts: string[]): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return parts.some((part) => part.toLowerCase().includes(q));
-}
-
-interface SettingItemProps {
-  title: string;
-  description: string;
-  control?: React.ReactNode;
-  active?: boolean;
-  onClick?: () => void;
-}
-
-const SettingsSectionHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <h3 className="rf-settings-section-header">{children}</h3>
-);
-
-const SettingsSection: React.FC<{
-  title: string;
-  keywords?: string;
-  children: React.ReactNode;
-}> = ({ title, keywords = "", children }) => {
-  const query = useContext(SettingsSearchRootContext);
-  const forceShow = settingsTextMatches(query, title, keywords);
-  return (
-    <SettingsSearchContext.Provider value={{ query, forceShow }}>
-      <section className="rf-settings-section">
-        <SettingsSectionHeader>{title}</SettingsSectionHeader>
-        <div className="rf-settings-section-body">{children}</div>
-      </section>
-    </SettingsSearchContext.Provider>
-  );
 };
 
 interface CustomSelectProps {
@@ -202,7 +143,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange })
     <div className="relative" ref={containerRef}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center justify-between gap-4 px-4 py-2.5 bg-[#1D1613] hover:bg-stone-800 cursor-pointer shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 transition-all min-w-[160px] ${
+        className={`flex items-center justify-between gap-4 px-4 py-2.5 bg-[color:var(--rf-set-well)] hover:bg-[color:var(--rf-set-hover)] cursor-pointer shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 transition-all min-w-[160px] ${
           isOpen ? 'rounded-t-xl border-b-0' : 'rounded-xl'
         }`}
       >
@@ -216,7 +157,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange })
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0, pointerEvents: "none" }}
-            className="absolute top-full left-0 right-0 z-50 bg-[#1D1613] border border-white/5 border-t-0 rounded-b-xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)] pointer-events-auto"
+            className="absolute top-full left-0 right-0 z-50 bg-[color:var(--rf-set-well)] border border-white/5 border-t-0 rounded-b-xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)] pointer-events-auto"
           >
             {options.map((opt) => (
               <div
@@ -226,7 +167,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, options, onChange })
                   setIsOpen(false);
                 }}
                 className={`px-4 py-3 text-[10px] font-black tracking-widest cursor-pointer transition-colors border-t border-white/[0.03] ${
-                  value === opt ? 'bg-[color:var(--accent)] text-[#1D1613]' : 'text-stone-400 hover:bg-white/5'
+                  value === opt ? 'bg-[color:var(--accent)] text-[color:var(--rf-set-on-accent)]' : 'text-stone-400 hover:bg-white/5'
                 }`}
               >
                 {opt.toUpperCase()}
@@ -358,7 +299,7 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
       <div className="relative" ref={containerRef}>
         <div
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex min-w-[200px] max-w-[240px] flex-col gap-1 rounded-xl border border-white/5 bg-[#1D1613] px-4 py-2.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] transition-all hover:bg-stone-800 ${
+          className={`flex min-w-[200px] max-w-[240px] flex-col gap-1 rounded-xl border border-white/5 bg-[color:var(--rf-set-well)] px-4 py-2.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] transition-all hover:bg-[color:var(--rf-set-hover)] ${
             isOpen ? "rounded-b-none border-b-0" : ""
           } cursor-pointer`}
         >
@@ -385,7 +326,7 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0, pointerEvents: "none" }}
-              className="absolute left-0 right-0 top-full z-50 overflow-hidden rounded-b-xl border border-t-0 border-white/5 bg-[#1D1613] shadow-[0_15px_30px_rgba(0,0,0,0.6)] pointer-events-auto"
+              className="absolute left-0 right-0 top-full z-50 overflow-hidden rounded-b-xl border border-t-0 border-white/5 bg-[color:var(--rf-set-well)] shadow-[0_15px_30px_rgba(0,0,0,0.6)] pointer-events-auto"
             >
               {PRESET_ROWS.map((row) => {
                 const sel = preset === row.id;
@@ -395,7 +336,7 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
                     onClick={() => applyPresetChoice(row.id)}
                     className={`cursor-pointer border-t border-white/[0.03] px-4 py-3 transition-colors ${
                       sel
-                        ? "bg-[color:var(--accent)] text-[#1D1613]"
+                        ? "bg-[color:var(--accent)] text-[color:var(--rf-set-on-accent)]"
                         : "hover:bg-white/5 text-stone-400"
                     }`}
                   >
@@ -405,7 +346,7 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
                         <span
                           className={`rounded border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider ${
                             sel
-                              ? "border-[#1D1613]/35 text-[#1D1613]/90"
+                              ? "border-[color:var(--rf-set-on-accent)]/35 text-[color:var(--rf-set-on-accent)]/90"
                               : "border-[color-mix(in_srgb,var(--accent),transparent_55%)] text-[color:var(--accent)]"
                           }`}
                         >
@@ -415,7 +356,7 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
                     </div>
                     <p
                       className={`mt-1 text-[9px] font-medium leading-relaxed tracking-wide ${
-                        sel ? "text-[#1D1613]/80" : "text-stone-500"
+                        sel ? "text-[color:var(--rf-set-on-accent)]/80" : "text-stone-500"
                       }`}
                     >
                       {row.hint}
@@ -427,14 +368,14 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
                 onClick={() => applyPresetChoice("custom")}
                 className={`cursor-pointer border-t border-white/[0.03] px-4 py-3 transition-colors ${
                   preset === "custom"
-                    ? "bg-[color:var(--accent)] text-[#1D1613]"
+                    ? "bg-[color:var(--accent)] text-[color:var(--rf-set-on-accent)]"
                     : "hover:bg-white/5 text-stone-400"
                 }`}
               >
                 <div className="text-[10px] font-black tracking-widest">CUSTOM</div>
                 <p
                   className={`mt-1 text-[9px] font-medium leading-relaxed tracking-wide ${
-                    preset === "custom" ? "text-[#1D1613]/80" : "text-stone-500"
+                    preset === "custom" ? "text-[color:var(--rf-set-on-accent)]/80" : "text-stone-500"
                   }`}
                 >
                   Pick {CUSTOM_CONCURRENT_DOWNLOADS_MIN}–{MAX_CONCURRENT_DOWNLOADS_CAP} concurrent downloads (capped).
@@ -446,7 +387,7 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
       </div>
 
       {preset === "custom" && (
-        <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-[#1D1613] px-2 py-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]">
+        <div className="flex items-center gap-2 rounded-xl border border-white/5 bg-[color:var(--rf-set-well)] px-2 py-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]">
           <button
             type="button"
             aria-label="Decrease concurrent downloads"
@@ -474,71 +415,6 @@ const MaxConcurrentDownloadsControl: React.FC<MaxConcurrentDownloadsControlProps
   );
 };
 
-const ToggleSlot: React.FC<{
-  active: boolean;
-  onClick?: () => void;
-  /** Visual only: preference stored but inactive for current download mode. */
-  muted?: boolean;
-  disabled?: boolean;
-}> = ({ active, onClick, muted = false, disabled = false }) => (
-  <button
-    type="button"
-    disabled={disabled}
-    onClick={onClick}
-    className={`w-12 h-6 rounded-full relative cursor-pointer transition-all duration-300 border border-white/[0.05] disabled:pointer-events-none disabled:opacity-50 ${
-      active
-        ? "bg-[#2A1E1A] shadow-[0_2px_5px_rgba(0,0,0,0.5)]"
-        : "bg-[#1D1613] shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]"
-    } ${muted && !disabled ? "opacity-45" : ""}`}
-  >
-    <motion.div
-      animate={{ x: active ? 26 : 2 }}
-      transition={{ type: "spring", stiffness: 600, damping: 35 }}
-      className={`pointer-events-none absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-colors duration-300 ${
-        active ? "bg-[color:var(--accent)]" : "bg-stone-700"
-      }`}
-    />
-  </button>
-);
-
-const SettingItem: React.FC<SettingItemProps> = ({
-  title,
-  description,
-  control,
-  active = true,
-  onClick,
-}) => {
-  const { query, forceShow } = useContext(SettingsSearchContext);
-  if (!settingsTextMatches(query, title, description) && !forceShow) {
-    return null;
-  }
-
-  return (
-    <div onClick={onClick} className={`group rf-settings-row ${onClick ? "cursor-pointer" : ""}`}>
-      <div className="rf-settings-row-label space-y-0.5">
-        <h4 className={active ? "text-stone-100" : "text-stone-400"}>{title}</h4>
-        <SettingsDescription description={description} className="max-w-md" />
-      </div>
-      {control ? (
-        <div className="rf-settings-row-control" onClick={(e) => e.stopPropagation()}>
-          {control}
-        </div>
-      ) : null}
-    </div>
-  );
-};
-
-/** Keeps non-row panels (trees, custom blocks) in search results via keywords. */
-const SearchableBlock: React.FC<{
-  keywords: string;
-  children: React.ReactNode;
-}> = ({ keywords, children }) => {
-  const { query, forceShow } = useContext(SettingsSearchContext);
-  if (!forceShow && !settingsTextMatches(query, keywords)) {
-    return null;
-  }
-  return <div className="rf-settings-row rf-settings-row--block">{children}</div>;
-};
 
 export const SettingsView: React.FC<{
   open: boolean;
@@ -552,15 +428,11 @@ export const SettingsView: React.FC<{
   const libraryScanDirs = useRuforgeStore((s) => s.libraryScanDirs);
   const addLibraryScanDir = useRuforgeStore((s) => s.addLibraryScanDir);
   const removeLibraryScanDir = useRuforgeStore((s) => s.removeLibraryScanDir);
-  const [regroupPlaylistOpen, setRegroupPlaylistOpen] = useState(false);
-  const [migrateLibraryOpen, setMigrateLibraryOpen] = useState(false);
-  const [musicMetaBackfillOpen, setMusicMetaBackfillOpen] = useState(false);
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
   const handleSetSaveToInternal = useRuforgeStore((s) => s.handleSetSaveToInternal);
   const setOutputDir = useRuforgeStore((s) => s.setOutputDir);
   const notify = useRuforgeStore((s) => s.notify);
-  const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const entries = useRuforgeStore((s) => s.entries);
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
   const watchlistIntervalMin = useWatchlistStore(
@@ -570,12 +442,6 @@ export const SettingsView: React.FC<{
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [lastWhatsNewVersion] = useState(() => readLastWhatsNew()?.version ?? null);
   const [updateCheckBusy, setUpdateCheckBusy] = useState(false);
-  const [devReplayMode, setDevReplayModeState] = useState<DevReplayMode>(() =>
-    getDevReplayMode(),
-  );
-  const [lastBatchSummary, setLastBatchSummary] = useState(() =>
-    formatLastBatchSummary(readLastDownloadBatchRecord()),
-  );
   const [searchQuery, setSearchQuery] = useState("");
   const [headerCompact, setHeaderCompact] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -604,14 +470,6 @@ export const SettingsView: React.FC<{
   const bodyMeasureRef = useRef<HTMLDivElement>(null);
   const isSearching = searchQuery.trim().length > 0;
   const showSearchField = !headerCompact || searchExpanded || isSearching;
-  const downloadQueueBusy = downloadJobs.some(
-    (j) =>
-      j.status === "queued" ||
-      j.status === "downloading" ||
-      j.status === "paused",
-  );
-  const hasLastBatch =
-    (readLastDownloadBatchRecord()?.items.length ?? 0) > 0;
   const {
     status: ytdlpStatus,
     loading: ytdlpLoading,
@@ -699,7 +557,9 @@ export const SettingsView: React.FC<{
     }
     if (Math.abs(titleBlockHeight.get() - target) < 0.5) return;
     titleHeightAnimRef.current?.stop();
-    titleHeightAnimRef.current = animate(titleBlockHeight, target, MORPH_SPRING);
+    titleHeightAnimRef.current = animate(titleBlockHeight, target, reduceMotion
+      ? { duration: 0 }
+      : { duration: 0.2, ease: [0.22, 1, 0.36, 1] });
   }, [open, headerCompact, titleBlockHeight, isSearching]);
 
   useLayoutEffect(() => {
@@ -839,16 +699,20 @@ export const SettingsView: React.FC<{
     settings.showDebuggingSettings,
   ]);
 
-  const syncHeaderCompactFromScroll = (scrollTop: number) => {
-    // Hysteresis: enter compact past 40px, leave only near the top.
+  const syncHeaderCompactFromScroll = (el: HTMLElement) => {
+    // Hysteresis: compact past 40px only with spare room (a taller scroll area must not clamp scrollTop and bounce back); leave near the top.
     const next = headerCompactRef.current
-      ? scrollTop > 12
-      : scrollTop > 40;
+      ? el.scrollTop > 12
+      : el.scrollTop > 40 && el.scrollHeight - el.clientHeight > 120;
     if (headerCompactRef.current === next) return;
     headerCompactRef.current = next;
     setHeaderCompact(next);
     if (!next) setSearchExpanded(false);
   };
+
+  useEffect(() => {
+    if (!open || activeTab !== "shortcuts") stopHotkeyRecording();
+  }, [open, activeTab]);
 
   useEffect(() => {
     if (!open) return;
@@ -871,11 +735,6 @@ export const SettingsView: React.FC<{
   }, [open, onClose, searchQuery, searchExpanded]);
 
   useEffect(() => {
-    if (activeTab !== "debugging") return;
-    setLastBatchSummary(formatLastBatchSummary(readLastDownloadBatchRecord()));
-  }, [activeTab, downloadJobs.length]);
-
-  useEffect(() => {
     const unlisten = listen<{ busy?: boolean }>("ruforge-updater-check-status", (event) => {
       setUpdateCheckBusy(!!event.payload.busy);
     });
@@ -883,11 +742,6 @@ export const SettingsView: React.FC<{
       void unlisten.then((fn) => fn());
     };
   }, []);
-
-  const handleDevReplayModeChange = (mode: DevReplayMode) => {
-    setDevReplayMode(mode);
-    setDevReplayModeState(mode);
-  };
 
   const handlePickDirectory = async () => {
     const selected = await openDirectoryDialog({ directory: true, multiple: false });
@@ -1048,7 +902,7 @@ export const SettingsView: React.FC<{
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.98 }}
         transition={motionDuration(reduceMotion, overlayPanelTransition)}
-        className="relative flex w-full max-w-[56rem] flex-col overflow-hidden rounded-[24px] bg-[#271C18] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+        className="rf-settings-dialog relative flex w-full max-w-[56rem] flex-col overflow-hidden rounded-[24px] bg-[color:var(--rf-set-rim)] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
         style={{
           ...(panelMeasured ? { height: panelHeight } : { minHeight: 320 }),
           maxHeight: settingsMaxHeight,
@@ -1057,250 +911,42 @@ export const SettingsView: React.FC<{
         onClick={(e) => e.stopPropagation()}
       >
         <SettingsSearchRootContext.Provider value={searchQuery}>
-          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] bg-[#1D1613]">
-            <div
-              ref={headerMeasureRef}
-              className="relative shrink-0 px-5 pb-2.5 pt-2.5 sm:px-7"
-            >
-            <button
-              type="button"
-              onClick={onClose}
-              className="absolute right-5 top-2.5 z-30 rounded-lg p-1.5 text-stone-500 transition-colors hover:text-stone-200 sm:right-7"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-            <motion.div
-              style={{ height: titleBlockHeight, opacity: titleBlockOpacity }}
-              className="overflow-hidden"
-              aria-hidden={headerCompact}
-            >
-              <div
-                ref={titleInnerRef}
-                className={cn(
-                  "pt-2.5 pr-10",
-                  headerCompact && "pointer-events-none",
-                )}
-              >
-                <div className="mb-4 min-w-0">
-                  <h2
-                    id="rf-settings-dialog-title"
-                    className="rf-settings-page-title text-[1.5rem]"
-                  >
-                    Settings
-                  </h2>
-                  <p className="mt-0.5 text-sm font-medium text-stone-500">
-                    App settings and preferences.
-                  </p>
-                </div>
-
-                <label className="relative mb-4 block">
-                  <Search
-                    size={15}
-                    className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-500"
-                    aria-hidden
-                  />
-                  <input
-                    ref={headerCompact ? undefined : searchInputRef}
-                    type="text"
-                    role="searchbox"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search settings"
-                    autoComplete="off"
-                    spellCheck={false}
-                    tabIndex={headerCompact ? -1 : 0}
-                    className="rf-settings-search-input w-full rounded-xl bg-[#261d18] py-2.5 pl-10 pr-10 text-[13px] text-stone-200 outline-none placeholder:text-stone-600 focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent),transparent_55%)]"
-                  />
-                  {isSearching ? (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-stone-500 hover:text-stone-200"
-                      aria-label="Clear search"
-                      tabIndex={headerCompact ? -1 : 0}
-                    >
-                      <X size={14} />
-                    </button>
-                  ) : null}
-                </label>
-              </div>
-            </motion.div>
-
-            <div>
-              <div
-                className={cn(
-                  "flex items-center gap-2",
-                  headerCompact ? "pr-10" : null,
-                )}
-              >
-                {headerCompact ? (
-                  <button
-                    type="button"
-                    onClick={() => setSearchExpanded((v) => !v)}
-                    className={cn(
-                      "shrink-0 rounded-lg p-1.5 transition-colors",
-                      showSearchField || isSearching
-                        ? "text-[color:var(--accent)]"
-                        : "text-stone-500 hover:text-stone-200",
-                    )}
-                    aria-label="Search settings"
-                    aria-pressed={showSearchField}
-                  >
-                    <Search size={16} />
-                  </button>
-                ) : null}
-
-                <nav
-                  className={cn(
-                    "flex min-w-0 flex-1 justify-center gap-x-5 overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-                    headerCompact && "gap-x-1.5",
-                    isSearching && "pointer-events-none opacity-40",
-                  )}
-                  aria-label="Settings sections"
-                  aria-hidden={isSearching}
-                >
-                  {navGroups.map((group) => (
-                    <div
-                      key={group.label}
-                      className={cn(
-                        "flex shrink-0 flex-col items-center",
-                        headerCompact ? "gap-0" : "gap-1.5",
-                      )}
-                    >
-                      {!headerCompact ? (
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-600">
-                          {group.label}
-                        </p>
-                      ) : null}
-                      <div
-                        className={cn(
-                          "flex items-center gap-1 bg-[#221a16] p-1",
-                          headerCompact ? "rounded-xl" : "rounded-2xl",
-                        )}
-                      >
-                        {group.items.map((item) => {
-                          const isActive = !isSearching && activeTab === item.id;
-                          const Icon = item.icon;
-                          const tabButton = (
-                            <button
-                              type="button"
-                              aria-label={item.label}
-                              onClick={() => selectSettingsTab(item.id)}
-                              className={cn(
-                                "relative flex items-center transition-colors",
-                                headerCompact
-                                  ? "rounded-lg px-2 py-1.5"
-                                  : "gap-2 rounded-xl px-3 py-2",
-                                isActive
-                                  ? "text-stone-100"
-                                  : "text-stone-500 hover:text-stone-200",
-                              )}
-                            >
-                              {isActive ? (
-                                <motion.span
-                                  layoutId={
-                                    headerCompact
-                                      ? "settingsTopNavActiveCompact"
-                                      : "settingsTopNavActive"
-                                  }
-                                  className={cn(
-                                    "absolute inset-0 bg-[#2c241f]",
-                                    headerCompact ? "rounded-lg" : "rounded-xl",
-                                  )}
-                                  transition={MORPH_SPRING}
-                                />
-                              ) : null}
-                              <Icon
-                                size={headerCompact ? 14 : 15}
-                                className={cn(
-                                  "relative z-10 shrink-0",
-                                  isActive
-                                    ? "text-[color:var(--accent)]"
-                                    : "text-current",
-                                )}
-                                aria-hidden
-                              />
-                              {!headerCompact ? (
-                                <span className="relative z-10 text-[12px] font-medium">
-                                  {item.label}
-                                </span>
-                              ) : null}
-                            </button>
-                          );
-
-                          if (!headerCompact) {
-                            return (
-                              <Fragment key={item.id}>{tabButton}</Fragment>
-                            );
-                          }
-
-                          return (
-                            <span key={item.id} data-tooltip={item.label} className="inline-flex">
-                              {tabButton}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </nav>
-
-              </div>
-
-              {headerCompact && showSearchField ? (
-                <label className="relative mt-2 block">
-                  <Search
-                    size={14}
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500"
-                    aria-hidden
-                  />
-                  <input
-                    ref={headerCompact ? searchInputRef : undefined}
-                    type="text"
-                    role="searchbox"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onBlur={() => {
-                      if (!searchQuery.trim()) setSearchExpanded(false);
-                    }}
-                    placeholder="Search settings"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="rf-settings-search-input w-full rounded-xl bg-[#261d18] py-2 pl-9 pr-9 text-[13px] text-stone-200 outline-none placeholder:text-stone-600 focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent),transparent_55%)]"
-                  />
-                  {isSearching ? (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-stone-500 hover:text-stone-200"
-                      aria-label="Clear search"
-                    >
-                      <X size={14} />
-                    </button>
-                  ) : null}
-                </label>
-              ) : null}
-            </div>
-            </div>
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] bg-[color:var(--rf-set-well)]">
+            <SettingsHeader
+              measureRef={headerMeasureRef}
+              titleInnerRef={titleInnerRef}
+              searchInputRef={searchInputRef}
+              titleBlockHeight={titleBlockHeight}
+              titleBlockOpacity={titleBlockOpacity}
+              compact={headerCompact}
+              searchExpanded={searchExpanded}
+              searchQuery={searchQuery}
+              isSearching={isSearching}
+              navGroups={navGroups}
+              activeTab={activeTab}
+              reduceMotion={reduceMotion}
+              onQueryChange={setSearchQuery}
+              onToggleSearch={() => setSearchExpanded((v) => !v)}
+              onSearchBlur={() => {
+                if (!searchQuery.trim()) setSearchExpanded(false);
+              }}
+              onSelectTab={selectSettingsTab}
+              onClose={onClose}
+            />
 
           <div
             ref={settingsScrollRef}
             onScroll={(e) => {
-              syncHeaderCompactFromScroll(e.currentTarget.scrollTop);
+              syncHeaderCompactFromScroll(e.currentTarget);
             }}
             className="rf-settings-shell min-h-0 flex-1 overflow-y-auto rf-scrollbar px-5 pb-6 pt-1 sm:px-7"
           >
             <div ref={bodyMeasureRef}>
-            {!isSearching ? (
-              <h3 className="mb-5 text-base font-semibold tracking-tight text-stone-100">
-                {SETTINGS_TAB_LABELS[activeTab]}
-              </h3>
-            ) : (
+            {isSearching ? (
               <p className="mb-5 text-sm text-stone-500">
                 Results for &ldquo;{searchQuery.trim()}&rdquo;
               </p>
-            )}
+            ) : null}
             <div className="space-y-0">
           <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -1345,9 +991,9 @@ export const SettingsView: React.FC<{
                   description="Automatically start RuForge when you log in to your computer."
                   active={settings.launchAtStartup}
                   control={
-                    <ToggleSlot
-                      active={settings.launchAtStartup}
-                      onClick={() => updateSetting('launchAtStartup', !settings.launchAtStartup)}
+                    <Switch
+                      checked={settings.launchAtStartup}
+                      onChange={() => updateSetting('launchAtStartup', !settings.launchAtStartup)}
                     />
                   }
                 />
@@ -1356,9 +1002,9 @@ export const SettingsView: React.FC<{
                   description="Minimize the app to the system tray instead of closing it."
                   active={settings.minimizeToTray}
                   control={
-                    <ToggleSlot
-                      active={settings.minimizeToTray}
-                      onClick={() => updateSetting('minimizeToTray', !settings.minimizeToTray)}
+                    <Switch
+                      checked={settings.minimizeToTray}
+                      onChange={() => updateSetting('minimizeToTray', !settings.minimizeToTray)}
                     />
                   }
                 />
@@ -1369,9 +1015,9 @@ export const SettingsView: React.FC<{
                   description="When Discord is open, share RuForge activity with friends. What they see is controlled by the two options below."
                   active={settings.discordPresenceEnabled}
                   control={
-                    <ToggleSlot
-                      active={settings.discordPresenceEnabled}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.discordPresenceEnabled}
+                      onChange={() =>
                         void updateSetting(
                           "discordPresenceEnabled",
                           !settings.discordPresenceEnabled,
@@ -1385,10 +1031,10 @@ export const SettingsView: React.FC<{
                   description="When watching or listening, show the real track or video name. Off uses generic lines like Watching a video."
                   active={settings.discordPresenceEnabled}
                   control={
-                    <ToggleSlot
-                      active={settings.discordPresenceShowTitles}
+                    <Switch
+                      checked={settings.discordPresenceShowTitles}
                       disabled={!settings.discordPresenceEnabled}
-                      onClick={() =>
+                      onChange={() =>
                         void updateSetting(
                           "discordPresenceShowTitles",
                           !settings.discordPresenceShowTitles,
@@ -1402,10 +1048,10 @@ export const SettingsView: React.FC<{
                   description="Off: friends only see you while watching, listening, or downloading. On: also show library, Explorer, downloader, and settings."
                   active={settings.discordPresenceEnabled}
                   control={
-                    <ToggleSlot
-                      active={settings.discordPresenceShowBrowsing}
+                    <Switch
+                      checked={settings.discordPresenceShowBrowsing}
                       disabled={!settings.discordPresenceEnabled}
-                      onClick={() =>
+                      onChange={() =>
                         void updateSetting(
                           "discordPresenceShowBrowsing",
                           !settings.discordPresenceShowBrowsing,
@@ -1421,9 +1067,9 @@ export const SettingsView: React.FC<{
                   description="Shows a Debugging tab with developer tools (group playlist files, cycle updater UI, and future debug actions)."
                   active={settings.showDebuggingSettings}
                   control={
-                    <ToggleSlot
-                      active={settings.showDebuggingSettings}
-                      onClick={() => {
+                    <Switch
+                      checked={settings.showDebuggingSettings}
+                      onChange={() => {
                         const next = !settings.showDebuggingSettings;
                         void updateSetting('showDebuggingSettings', next);
                         if (!next && useRuforgeStore.getState().settingsTab === 'debugging') {
@@ -1454,11 +1100,11 @@ export const SettingsView: React.FC<{
                   title="Storage Target"
                   description={saveToInternal ? "Saving to RuForge Internal Vault." : "Saving to Custom Download Path."}
                   control={
-                    <div className="flex p-1 bg-[#1D1613] rounded-xl border border-white/5 relative">
+                    <div className="flex p-1 bg-[color:var(--rf-set-well)] rounded-xl border border-white/5 relative">
                       <button
                         onClick={() => handleSetSaveToInternal(true)}
                         className={`relative px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-colors duration-300 z-10 ${
-                          saveToInternal ? 'text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
+                          saveToInternal ? 'text-[color:var(--rf-set-on-accent)]' : 'text-stone-500 hover:text-stone-300'
                         }`}
                       >
                         {saveToInternal && (
@@ -1473,7 +1119,7 @@ export const SettingsView: React.FC<{
                       <button
                         onClick={() => handleSetSaveToInternal(false)}
                         className={`relative px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-colors duration-300 z-10 ${
-                          !saveToInternal ? 'text-[#1D1613]' : 'text-stone-500 hover:text-stone-300'
+                          !saveToInternal ? 'text-[color:var(--rf-set-on-accent)]' : 'text-stone-500 hover:text-stone-300'
                         }`}
                       >
                         {!saveToInternal && (
@@ -1498,9 +1144,9 @@ export const SettingsView: React.FC<{
                   control={
                     <button
                       onClick={handlePickDirectory}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
+                      className="rf-settings-btn"
                     >
-                      CHANGE DIRECTORY
+                      Change directory
                     </button>
                   }
                 />
@@ -1541,9 +1187,9 @@ export const SettingsView: React.FC<{
                     <button
                       type="button"
                       onClick={() => void handleAddLibraryScanFolder()}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
+                      className="rf-settings-btn"
                     >
-                      ADD FOLDER
+                      Add folder
                     </button>
                   }
                 />
@@ -1554,9 +1200,9 @@ export const SettingsView: React.FC<{
                   description="Extract audio with yt-dlp (no video file). Thumbnail and metadata are still saved for the library player."
                   active={settings.downloadAudioOnly}
                   control={
-                    <ToggleSlot
-                      active={settings.downloadAudioOnly}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.downloadAudioOnly}
+                      onChange={() =>
                         updateSetting('downloadAudioOnly', !settings.downloadAudioOnly)
                       }
                     />
@@ -1567,9 +1213,9 @@ export const SettingsView: React.FC<{
                   description="When you toggle Audio (A) on a queue row, also update the default for new downloads."
                   active={settings.rememberAudioOnlyDefault}
                   control={
-                    <ToggleSlot
-                      active={settings.rememberAudioOnlyDefault}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.rememberAudioOnlyDefault}
+                      onChange={() =>
                         updateSetting(
                           "rememberAudioOnlyDefault",
                           !settings.rememberAudioOnlyDefault,
@@ -1653,10 +1299,10 @@ export const SettingsView: React.FC<{
                     void updateSetting("downloadSubtitles", !settings.downloadSubtitles)
                   }
                   control={
-                    <ToggleSlot
-                      active={settings.downloadSubtitles}
+                    <Switch
+                      checked={settings.downloadSubtitles}
                       muted={settings.downloadAudioOnly}
-                      onClick={() =>
+                      onChange={() =>
                         void updateSetting("downloadSubtitles", !settings.downloadSubtitles)
                       }
                     />
@@ -1705,10 +1351,10 @@ export const SettingsView: React.FC<{
                     )
                   }
                   control={
-                    <ToggleSlot
-                      active={settings.autoDownloadScrubberPreviews}
+                    <Switch
+                      checked={settings.autoDownloadScrubberPreviews}
                       muted={settings.downloadAudioOnly}
-                      onClick={() =>
+                      onChange={() =>
                         void updateSetting(
                           "autoDownloadScrubberPreviews",
                           !settings.autoDownloadScrubberPreviews,
@@ -1731,10 +1377,10 @@ export const SettingsView: React.FC<{
                     void updateSetting("downloadComments", !settings.downloadComments)
                   }
                   control={
-                    <ToggleSlot
-                      active={settings.downloadComments}
+                    <Switch
+                      checked={settings.downloadComments}
                       muted={settings.downloadAudioOnly}
-                      onClick={() =>
+                      onChange={() =>
                         void updateSetting("downloadComments", !settings.downloadComments)
                       }
                     />
@@ -1745,9 +1391,9 @@ export const SettingsView: React.FC<{
                   description="Automatically skip downloads when the video is already in your library."
                   active={settings.skipDuplicatesAutomatically}
                   control={
-                    <ToggleSlot
-                      active={settings.skipDuplicatesAutomatically}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.skipDuplicatesAutomatically}
+                      onChange={() =>
                         updateSetting(
                           "skipDuplicatesAutomatically",
                           !settings.skipDuplicatesAutomatically,
@@ -1761,9 +1407,9 @@ export const SettingsView: React.FC<{
                   description="When browsing YouTube Music, automatically queue an audio download the moment you play a song — no copy-paste needed. Toggle anytime from the Music bar."
                   active={settings.autoDownloadPlayingSongs}
                   control={
-                    <ToggleSlot
-                      active={settings.autoDownloadPlayingSongs}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.autoDownloadPlayingSongs}
+                      onChange={() =>
                         updateSetting(
                           "autoDownloadPlayingSongs",
                           !settings.autoDownloadPlayingSongs,
@@ -1777,9 +1423,9 @@ export const SettingsView: React.FC<{
                   description="Playlist recommendations also show songs you haven't downloaded. A song from the playlist is sent to YouTube Music to find similar ones."
                   active={settings.suggestYoutubeMusicSongs !== false}
                   control={
-                    <ToggleSlot
-                      active={settings.suggestYoutubeMusicSongs !== false}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.suggestYoutubeMusicSongs !== false}
+                      onChange={() =>
                         updateSetting(
                           "suggestYoutubeMusicSongs",
                           settings.suggestYoutubeMusicSongs === false,
@@ -1793,9 +1439,9 @@ export const SettingsView: React.FC<{
                   description="Mixes videos from your YouTube home feed in with your downloads so you can preview and grab them without opening YouTube. Uses your signed-in cookies."
                   active={settings.showYoutubeFeedInLibrary !== false}
                   control={
-                    <ToggleSlot
-                      active={settings.showYoutubeFeedInLibrary !== false}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.showYoutubeFeedInLibrary !== false}
+                      onChange={() =>
                         updateSetting(
                           "showYoutubeFeedInLibrary",
                           settings.showYoutubeFeedInLibrary === false,
@@ -1814,9 +1460,9 @@ export const SettingsView: React.FC<{
                   description="Shows a notice when a channel you follow posts. In the background it appears on the desktop island."
                   active={settings.watchlistAlerts !== false}
                   control={
-                    <ToggleSlot
-                      active={settings.watchlistAlerts !== false}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.watchlistAlerts !== false}
+                      onChange={() =>
                         updateSetting("watchlistAlerts", settings.watchlistAlerts === false)
                       }
                     />
@@ -1846,9 +1492,9 @@ export const SettingsView: React.FC<{
                     <button
                       type="button"
                       onClick={openChannelsManager}
-                      className="px-5 py-2.5 bg-[#261d18] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-colors border border-white/5 active:scale-95"
+                      className="rf-settings-btn"
                     >
-                      MANAGE
+                      Manage
                     </button>
                   }
                 />
@@ -1878,13 +1524,13 @@ export const SettingsView: React.FC<{
                         type="button"
                         disabled={ytdlpBusy}
                         onClick={() => void handleYtdlpCheckAndUpdate()}
-                        className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                        className="rf-settings-btn"
                       >
                         {ytdlpUpdating
-                          ? "UPDATING…"
+                          ? "Updating…"
                           : ytdlpChecking
-                            ? "CHECKING…"
-                            : "CHECK & UPDATE"}
+                            ? "Checking…"
+                            : "Check and update"}
                       </button>
                     </motion.div>
                   }
@@ -1913,13 +1559,13 @@ export const SettingsView: React.FC<{
                         type="button"
                         disabled={denoBusy}
                         onClick={() => void handleDenoInstall()}
-                        className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                        className="rf-settings-btn"
                       >
                         {denoInstalling
-                          ? "INSTALLING…"
+                          ? "Installing…"
                           : denoStatus?.present
-                            ? "REINSTALL"
-                            : "INSTALL"}
+                            ? "Reinstall"
+                            : "Install"}
                       </button>
                     </motion.div>
                   }
@@ -1933,9 +1579,9 @@ export const SettingsView: React.FC<{
                     <button
                       type="button"
                       onClick={handleOpenExportPanel}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95"
+                      className="rf-settings-btn"
                     >
-                      EXPORT
+                      Export
                     </button>
                   }
                 />
@@ -1944,9 +1590,9 @@ export const SettingsView: React.FC<{
                   description="Shows a drive button next to the notifications bell that opens the export for your whole library, pointed at a plugged-in removable drive when there is one."
                   active={settings.showExportInTitlebar === true}
                   control={
-                    <ToggleSlot
-                      active={settings.showExportInTitlebar === true}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.showExportInTitlebar === true}
+                      onChange={() =>
                         updateSetting(
                           "showExportInTitlebar",
                           settings.showExportInTitlebar !== true,
@@ -1977,9 +1623,9 @@ export const SettingsView: React.FC<{
                   description="When an mp3/m4a/flac track ends, plays the next one in alphabetical path order, same folder listing for the fullscreen player's directory scan and the Mini Player strip."
                   active={settings.audioAutoAdvanceFolder !== false}
                   control={
-                    <ToggleSlot
-                      active={settings.audioAutoAdvanceFolder !== false}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.audioAutoAdvanceFolder !== false}
+                      onChange={() =>
                         updateSetting(
                           'audioAutoAdvanceFolder',
                           !(settings.audioAutoAdvanceFolder !== false),
@@ -1993,9 +1639,9 @@ export const SettingsView: React.FC<{
                   description="Preloads the queued track in Chromium/WebView to reduce dead air. True gapless decode is not achievable with standalone HTML audio tags."
                   active={settings.audioPrefetchNext !== false}
                   control={
-                    <ToggleSlot
-                      active={settings.audioPrefetchNext !== false}
-                      onClick={() =>
+                    <Switch
+                      checked={settings.audioPrefetchNext !== false}
+                      onChange={() =>
                         updateSetting('audioPrefetchNext', !(settings.audioPrefetchNext !== false))
                       }
                     />
@@ -2013,10 +1659,49 @@ export const SettingsView: React.FC<{
                 />
               </SettingsSection>
               <SettingsSection
+                title="Ghost mode"
+                keywords="ghost click-through overlay game mini player opacity transparent"
+              >
+                <SettingItem
+                  title="Default ghost opacity"
+                  description={`Ghost mode keeps the mini player on top of ${GAMES_ENABLED ? "a game or " : ""}any other app and lets every click pass through to it. This sets how see-through the player gets.${GAMES_ENABLED ? " A game with a saved layout under Games uses its own opacity instead; reset that layout to go back to this one." : ""} It shows over borderless and windowed games, not over exclusive fullscreen.`}
+                  control={
+                    <div className="flex w-52 items-center gap-3">
+                      <Slider
+                        level={
+                          (clampMiniGhostOpacity(settings.miniGhostOpacity) - MINI_GHOST_OPACITY_MIN) /
+                          (1 - MINI_GHOST_OPACITY_MIN)
+                        }
+                        onChange={(level) =>
+                          updateSetting(
+                            "miniGhostOpacity",
+                            Math.round((MINI_GHOST_OPACITY_MIN + level * (1 - MINI_GHOST_OPACITY_MIN)) * 100) / 100,
+                          )
+                        }
+                        label="Default ghost opacity"
+                        valueText={`${Math.round(clampMiniGhostOpacity(settings.miniGhostOpacity) * 100)}%`}
+                        step={0.05 / (1 - MINI_GHOST_OPACITY_MIN)}
+                        thumbFill="var(--rf-set-well)"
+                        className="flex-1"
+                      />
+                      <span className="w-9 text-right text-[11px] font-black tabular-nums text-stone-300">
+                        {Math.round(clampMiniGhostOpacity(settings.miniGhostOpacity) * 100)}%
+                      </span>
+                    </div>
+                  }
+                />
+                <SettingItem
+                  title="Ghost mode shortcut"
+                  description="Turns ghost mode on or off while another app is in front. While it is on, the playback keys under Shortcuts > Ghost mode work from any app too."
+                  control={<HotkeyBindingControl id="player.ghostMode" />}
+                />
+              </SettingsSection>
+              <GamesSettingsSection />
+              <SettingsSection
                 title="SponsorBlock"
                 keywords="sponsor skip segment youtube chapters"
               >
-                <SearchableBlock keywords="sponsor skip segment youtube chapters">
+                <SearchableBlock flat keywords="sponsor skip segment youtube chapters">
                   <SponsorBlockSettingsTree />
                 </SearchableBlock>
               </SettingsSection>
@@ -2051,19 +1736,45 @@ export const SettingsView: React.FC<{
                   }
                 />
                 <SettingItem
-                  title="Grid Density"
-                  description="Control how many items appear in the gallery view."
+                  title="Legacy colors in video player"
+                  description="Brings back the warm brown look in video mode. Off uses the same black theme as Music, with your accent color."
+                  active={settings.legacyVideoColors === true}
                   control={
-                    <div className="flex p-1.5 bg-[#1D1613] rounded-2xl shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] border border-white/5">
-                      {['Cozy', 'Default', 'Compact'].map(t => (
+                    <Switch
+                      checked={settings.legacyVideoColors === true}
+                      onChange={() =>
+                        updateSetting("legacyVideoColors", settings.legacyVideoColors !== true)
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="Hide bars while a video plays"
+                  description="The side rail and title bar tuck into the window edge while a video is playing. Move the pointer to the top or left edge to bring them back."
+                  active={settings.autoHideChromeWhilePlaying === true}
+                  control={
+                    <Switch
+                      checked={settings.autoHideChromeWhilePlaying === true}
+                      onChange={() =>
+                        updateSetting("autoHideChromeWhilePlaying", settings.autoHideChromeWhilePlaying !== true)
+                      }
+                    />
+                  }
+                />
+                <SettingItem
+                  title="App density"
+                  description="Cozy is the standard size. Compact slims the title bar and the side rail so more of the window goes to your content."
+                  control={
+                    <div className="flex p-1.5 bg-[color:var(--rf-set-well)] rounded-2xl shadow-[inset_0_2px_8px_rgba(0,0,0,0.6)] border border-white/5">
+                      {(['cozy', 'compact'] as const).map(t => (
                         <button
                           key={t}
-                          onClick={() => updateSetting('gridDensity', t)}
+                          onClick={() => updateSetting('appDensity', t)}
                           className={`relative px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-colors duration-300 ${
-                            settings.gridDensity === t ? 'text-[#1D1613]' : 'text-stone-600 hover:text-stone-400'
+                            settings.appDensity === t ? 'text-[color:var(--rf-set-on-accent)]' : 'text-stone-600 hover:text-stone-400'
                           }`}
                         >
-                          {settings.gridDensity === t && (
+                          {settings.appDensity === t && (
                             <motion.div
                               layoutId="activeDensity"
                               className="absolute inset-0 bg-[color:var(--accent)] rounded-xl z-0"
@@ -2078,6 +1789,14 @@ export const SettingsView: React.FC<{
                 />
               </SettingsSection>
             </div>
+          )}
+
+          {showTab("shortcuts") && (
+            <ShortcutsTab
+              isSearching={isSearching}
+              tabLabel={SETTINGS_TAB_LABELS.shortcuts}
+              hasCustomBindings={Object.keys(settings.hotkeyBindings).length > 0}
+            />
           )}
 
           {showTab("advanced") && (
@@ -2100,14 +1819,15 @@ export const SettingsView: React.FC<{
                     description="Lets WebView2 use GPU for page rendering and video playback. Turn off only for graphics glitches, this is not audio quality. Changing this restarts RuForge (Windows)."
                     active={settings.hardwareAcceleration}
                     control={
-                      <ToggleSlot
-                        active={settings.hardwareAcceleration}
-                        onClick={() => updateSetting('hardwareAcceleration', !settings.hardwareAcceleration)}
+                      <Switch
+                        checked={settings.hardwareAcceleration}
+                        onChange={() => updateSetting('hardwareAcceleration', !settings.hardwareAcceleration)}
                       />
                     }
                   />
                 </SettingsSection>
               ) : null}
+              <GlanceAdblockSettingsSection active={activeTab === "advanced" || isSearching} />
               <SettingsSection title="Updates">
                 <SettingItem
                   title="Check for updates"
@@ -2122,9 +1842,9 @@ export const SettingsView: React.FC<{
                       type="button"
                       disabled={updateCheckBusy}
                       onClick={() => void emit("ruforge-check-updater")}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                      className="rf-settings-btn"
                     >
-                      {updateCheckBusy ? "CHECKING…" : "CHECK NOW"}
+                      {updateCheckBusy ? "Checking…" : "Check now"}
                     </button>
                   }
                 />
@@ -2136,9 +1856,9 @@ export const SettingsView: React.FC<{
                       <button
                         type="button"
                         onClick={() => void emit("ruforge-open-whats-new")}
-                        className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
+                        className="rf-settings-btn"
                       >
-                        VIEW
+                        View
                       </button>
                     }
                   />
@@ -2152,9 +1872,9 @@ export const SettingsView: React.FC<{
                   control={
                     <button
                       onClick={handleClearCache}
-                      className="px-5 py-2.5 text-red-400 bg-[#1D1613] hover:bg-red-500/10 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-red-400/20 active:scale-95"
+                      className="rf-settings-btn rf-settings-btn--danger"
                     >
-                      PURGE SYSTEM CACHE
+                      Purge system cache
                     </button>
                   }
                 />
@@ -2174,273 +1894,10 @@ export const SettingsView: React.FC<{
                   {SETTINGS_TAB_LABELS.debugging}
                 </h3>
               ) : null}
-              {settings.showDebuggingSettings &&
-              settingsTextMatches(
-                searchQuery,
-                "companion",
-                "browser",
-                "pair",
-                "lan",
-                "qr",
-              ) ? (
-                <div className="rf-settings-row rf-settings-row--block">
-                  <CompanionSettingsSection
-                    active={activeTab === "debugging" || isSearching}
-                  />
-                </div>
-              ) : null}
-              {import.meta.env.DEV && settings.showDebuggingSettings ? (
-                <SettingsSection
-                  title="Dev captures"
-                  keywords="screenshot capture annotate"
-                >
-                  <SearchableBlock keywords="screenshot capture annotate">
-                    <DevCapturesSection />
-                  </SearchableBlock>
-                </SettingsSection>
-              ) : null}
-              <RegroupPlaylistModal
-                open={regroupPlaylistOpen}
-                onClose={() => setRegroupPlaylistOpen(false)}
-                customOutputDir={outputDir}
+              <DebuggingTab
+                showDebuggingSettings={settings.showDebuggingSettings}
+                active={activeTab === "debugging" || isSearching}
               />
-              <MigrateLibraryModal
-                open={migrateLibraryOpen}
-                onClose={() => setMigrateLibraryOpen(false)}
-                libraryRoot={internalVault}
-              />
-              <MusicMetaBackfillModal
-                open={musicMetaBackfillOpen}
-                onClose={() => setMusicMetaBackfillOpen(false)}
-                roots={galleryScanRootsFromStore({ internalVault, libraryScanDirs })}
-              />
-              <SettingsSection
-                title="Debug logging"
-                keywords="log category verbose rust"
-              >
-                <SearchableBlock keywords="log category verbose rust debug">
-                  <DebugLogCategoryTree />
-                </SearchableBlock>
-              </SettingsSection>
-              <SettingsSection title="Debugging">
-                <SettingItem
-                  title="Notifications in island"
-                  description="The bell opens notifications inside the Dynamic Island. Tapping the empty island opens them too."
-                  active={settings.notificationsInIsland === true}
-                  control={
-                    <ToggleSlot
-                      active={settings.notificationsInIsland === true}
-                      onClick={() =>
-                        void updateSetting(
-                          "notificationsInIsland",
-                          settings.notificationsInIsland !== true,
-                        )
-                      }
-                    />
-                  }
-                />
-                <SettingItem
-                  title="Hide songs from main library"
-                  description="Keep audio downloads and music playlists in Music mode only. The main Video Library shows movies and videos."
-                  control={
-                    <ToggleSlot
-                      active={settings.hideAudioFromMainLibrary !== false}
-                      onClick={() =>
-                        void updateSetting(
-                          "hideAudioFromMainLibrary",
-                          settings.hideAudioFromMainLibrary === false,
-                        )
-                      }
-                    />
-                  }
-                />
-                <SettingItem
-                  title="Stamp artist tags on download"
-                  description="After audio downloads, copy MusicBrainz artist genres and MBID onto each track sidecar. Turn off to skip artist lookups during the session; run Enrich music metadata to backfill later."
-                  active={settings.stampTrackSidecarArtistTags !== false}
-                  control={
-                    <ToggleSlot
-                      active={settings.stampTrackSidecarArtistTags !== false}
-                      onClick={() =>
-                        void updateSetting(
-                          "stampTrackSidecarArtistTags",
-                          settings.stampTrackSidecarArtistTags === false,
-                        )
-                      }
-                    />
-                  }
-                />
-                <SettingItem
-                  title="Enrich music metadata"
-                  description="Scan library audio for missing sidecars and patch legacy sidecars without artist genres. Always includes artist tag stamping."
-                  onClick={() => setMusicMetaBackfillOpen(true)}
-                />
-                <SettingItem
-                  title="Migrate library layout"
-                  description="Reorganize the flat media root into Videos/, Music/, and Playlists/ bucket folders with per-item subfolders. Preview first, then confirm to move."
-                  onClick={() => setMigrateLibraryOpen(true)}
-                />
-                <SettingItem
-                  title="Group playlist downloads"
-                  description="Move flat playlist files into a numbered subfolder so Media shows one stack card."
-                  onClick={() => setRegroupPlaylistOpen(true)}
-                />
-                <SettingItem
-                  title="Replay onboarding"
-                  description="Open the welcome and feature walkthrough overlay."
-                  control={
-                    <button
-                      type="button"
-                      onClick={() => requestReplayOnboardingPreview()}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                    >
-                      REPLAY
-                    </button>
-                  }
-                />
-                <SettingItem
-                  title="Preview Discord onboarding"
-                  description="Island walkthrough for Discord Rich Presence only (skips older steps)."
-                  control={
-                    <button
-                      type="button"
-                      onClick={() => requestDiscordOnboardingPreview()}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                    >
-                      PREVIEW
-                    </button>
-                  }
-                />
-                <SettingItem
-                  title="Preview boot splash"
-                  description="Show the startup screen with the current nav mode background. Click anywhere to dismiss."
-                  control={
-                    <button
-                      type="button"
-                      onClick={() => void emit("debug-preview-boot-splash")}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                    >
-                      PREVIEW
-                    </button>
-                  }
-                />
-                <SettingItem
-                  title="Preview UI crash screen"
-                  description="React error boundary fallback. Only the dynamic island stays above the overlay. Hover it for the in-pill capture icon; after capture the island widens with the filename. Tap that row to annotate. Reload or Escape dismisses."
-                  control={
-                    <button
-                      type="button"
-                      onClick={() => void emit("debug-preview-crash-ui")}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                    >
-                      PREVIEW
-                    </button>
-                  }
-                />
-                <SettingItem
-                  title="Preview fatal crash screen"
-                  description="Renderer or out-of-memory fallback. Only the dynamic island stays above the overlay. Hover it for the in-pill capture icon; after capture the island widens with the filename. Tap that row to annotate. Reload or Escape dismisses."
-                  control={
-                    <button
-                      type="button"
-                      onClick={() => void emit("debug-preview-crash-fatal")}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                    >
-                      PREVIEW
-                    </button>
-                  }
-                />
-                <SettingItem
-                  title="Cycle updater UI"
-                  description="Step through Available, Downloading, Installing, and Post-Install updater phases."
-                  control={
-                    <button
-                      type="button"
-                      onClick={() => void emit("debug-cycle-updater")}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                    >
-                      CYCLE PHASES
-                    </button>
-                  }
-                />
-                <SettingItem
-                  title="Preview What's New"
-                  description="Open the post-update release notes dialog with sample notes."
-                  control={
-                    <button
-                      type="button"
-                      onClick={() => void emit("debug-preview-whats-new")}
-                      className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                    >
-                      PREVIEW
-                    </button>
-                  }
-                />
-                {import.meta.env.DEV && (
-                  <>
-                    <SettingItem
-                      title="Re-download replay mode"
-                      description="Real download runs yt-dlp then deletes resolved output paths. Simulate replays queue/UI paths without bandwidth."
-                      control={
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleDevReplayModeChange("real")}
-                            className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all border active:scale-95 ${
-                              devReplayMode === "real"
-                                ? "bg-[color:var(--accent)] text-[#1D1613] border-[color:var(--accent)]"
-                                : "bg-[#1D1613] text-stone-400 border-white/10 hover:bg-stone-800"
-                            }`}
-                          >
-                            REAL
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDevReplayModeChange("simulate")}
-                            className={`px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all border active:scale-95 ${
-                              devReplayMode === "simulate"
-                                ? "bg-[color:var(--accent)] text-[#1D1613] border-[color:var(--accent)]"
-                                : "bg-[#1D1613] text-stone-400 border-white/10 hover:bg-stone-800"
-                            }`}
-                          >
-                            SIMULATE
-                          </button>
-                        </div>
-                      }
-                    />
-                    <SettingItem
-                      title="Re-download last batch"
-                      description={lastBatchSummary}
-                      control={
-                        <div className="flex flex-col items-end gap-2">
-                          <button
-                            type="button"
-                            disabled={!hasLastBatch || downloadQueueBusy}
-                            onClick={() => void emit("debug-replay-download-batch")}
-                            className="px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-40 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95"
-                          >
-                            REPLAY BATCH
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!hasLastBatch}
-                            onClick={() => {
-                              clearLastDownloadBatchRecord();
-                              setLastBatchSummary(
-                                formatLastBatchSummary(readLastDownloadBatchRecord()),
-                              );
-                              notify("Last batch record cleared.", "info");
-                            }}
-                            className="text-[10px] font-bold tracking-wide text-stone-500 hover:text-stone-300 transition-colors disabled:opacity-40"
-                          >
-                            Clear record
-                          </button>
-                        </div>
-                      }
-                    />
-                  </>
-                )}
-              </SettingsSection>
             </div>
           )}
             </motion.div>

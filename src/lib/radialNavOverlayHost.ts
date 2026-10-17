@@ -81,11 +81,16 @@ async function createOverlay(): Promise<Webview> {
       focus: false,
       ...(additionalBrowserArgs ? { additionalBrowserArgs } : {}),
     });
-    webview.once("tauri://created", () => {
+    // Only one of these fires; drop the other so each recreation does not strand a listener.
+    const onCreated = webview.once("tauri://created", () => {
+      void onError.then((un) => un());
       void webview.hide().catch(() => {});
       resolve(webview);
     });
-    webview.once("tauri://error", (e) => reject(e.payload));
+    const onError = webview.once("tauri://error", (e) => {
+      void onCreated.then((un) => un());
+      reject(e.payload);
+    });
   });
 }
 
@@ -124,9 +129,18 @@ export function ensureRadialNavOverlay(): Promise<Webview | null> {
   return pendingEnsure;
 }
 
+let accent: string | undefined;
+
+export function setRadialNavAccent(next: string | undefined): void {
+  if (next === accent) return;
+  accent = next;
+  if (lastState) pushRadialNavState(lastState);
+}
+
 export function pushRadialNavState(state: RadialNavStatePayload): void {
-  lastState = state;
-  if (overlayReady) void emit(RADIAL_NAV_STATE_EVENT, state);
+  const full = { ...state, accent };
+  lastState = full;
+  if (overlayReady) void emit(RADIAL_NAV_STATE_EVENT, full);
 }
 
 export async function showRadialNavOverlay(

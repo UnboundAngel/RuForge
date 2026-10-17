@@ -14,6 +14,7 @@ import {
   overlayPanelTransition,
 } from "../../lib/overlayMotion";
 import { useRuforgeStore } from "../../store/ruforgeStore";
+import { useLibraryArrivals } from "../library/libraryArrivals";
 
 type DownloaderOverlayProps = {
   open: boolean;
@@ -31,6 +32,15 @@ export function DownloaderOverlay({
   const reduceMotion = useReducedMotion();
   const [dismissReady, setDismissReady] = useState(false);
   const [fly, setFly] = useState<DownloaderCloseMorphPayload | null>(null);
+  const [arrivalFly, setArrivalFly] = useState<{
+    id: string;
+    payload: DownloaderCloseMorphPayload;
+  } | null>(null);
+  // A start still fetching details lives in DownloaderView, so the view stays mounted (hidden) after
+  // close until the job exists; unmounting it dropped the download.
+  const startArmed = useRuforgeStore((s) => s.downloaderStartArmed);
+  const duplicatePromptOpen = useRuforgeStore((s) => s.downloaderDuplicateDialogOpen);
+  const openDownloader = useRuforgeStore((s) => s.openDownloader);
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const hasActiveDownload = downloadJobs.some(
     (j) =>
@@ -43,7 +53,7 @@ export function DownloaderOverlay({
     if (fly) return;
     const shouldMorph =
       !reduceMotion &&
-      hasActiveDownload &&
+      (hasActiveDownload || startArmed) &&
       Boolean(document.querySelector("[data-downloader-hero-thumb]"));
     if (shouldMorph) {
       const payload = measureDownloaderCloseMorph();
@@ -54,7 +64,25 @@ export function DownloaderOverlay({
       }
     }
     onClose();
-  }, [fly, reduceMotion, hasActiveDownload, onClose]);
+  }, [fly, reduceMotion, hasActiveDownload, startArmed, onClose]);
+
+  // The library card is hidden under this panel, so its flight waits for close; meanwhile show the
+  // finished video dropping into the rail button that flight will start from.
+  useEffect(() => {
+    if (!open || reduceMotion) return;
+    return useLibraryArrivals.subscribe((next, prev) => {
+      const fresh = Object.entries(next.arrivals).find(
+        ([key, arrival]) => prev.arrivals[key]?.at !== arrival.at,
+      );
+      if (!fresh) return;
+      const payload = measureDownloaderCloseMorph(fresh[1].thumbnail);
+      if (payload) setArrivalFly({ id: `${fresh[0]}:${fresh[1].at}`, payload });
+    });
+  }, [open, reduceMotion]);
+
+  useEffect(() => {
+    if (!open && startArmed && duplicatePromptOpen) openDownloader();
+  }, [open, startArmed, duplicatePromptOpen, openDownloader]);
 
   useEffect(() => {
     if (!open) {
@@ -74,16 +102,20 @@ export function DownloaderOverlay({
   return (
     <>
       <AnimatePresence>
-        {open ? (
+        {open || startArmed ? (
           <motion.div
             key="downloader-overlay"
-            className={`fixed inset-0 ${OVERLAY_Z_CLASS.downloader} flex items-center justify-center bg-black/65 p-4 sm:p-6`}
+            className={`fixed inset-0 ${OVERLAY_Z_CLASS.downloader} flex items-center justify-center bg-black/65 p-4 sm:p-6 ${open ? "" : "pointer-events-none"}`}
             role="presentation"
+            inert={!open}
+            aria-hidden={!open}
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: open ? 1 : 0 }}
             exit={{ opacity: 0 }}
             transition={motionDuration(reduceMotion, overlayFadeTransition)}
-            onAnimationComplete={() => setDismissReady(true)}
+            onAnimationComplete={() => {
+              if (open) setDismissReady(true);
+            }}
           >
             <button
               type="button"
@@ -97,10 +129,10 @@ export function DownloaderOverlay({
               aria-modal="true"
               aria-labelledby="rf-downloader-dialog-title"
               initial={{ opacity: 0, y: 12, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
+              animate={open ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 8, scale: 0.98 }}
               exit={{ opacity: 0, y: 8, scale: 0.98 }}
               transition={motionDuration(reduceMotion, overlayPanelTransition)}
-              className="relative flex h-[min(88vh,52rem)] w-full max-w-[min(90vw,72rem)] flex-col overflow-hidden rounded-[24px] bg-[#271C18] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+              className="relative flex h-[min(88vh,52rem)] w-full max-w-[min(90vw,72rem)] flex-col overflow-hidden rounded-[24px] bg-[color:var(--rf-surface)] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
               style={{ padding: 7 }}
               onClick={(e) => e.stopPropagation()}
             >
@@ -115,7 +147,7 @@ export function DownloaderOverlay({
               >
                 <X size={18} />
               </button>
-              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] bg-[#1D1613]">
+              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] bg-[color:var(--rf-surface-deep)]">
                 <DownloaderView internalDir={internalDir} storageFull={storageFull} />
               </div>
             </motion.div>
@@ -124,6 +156,13 @@ export function DownloaderOverlay({
       </AnimatePresence>
       {fly ? (
         <DownloaderCloseMorph payload={fly} onDone={() => setFly(null)} />
+      ) : null}
+      {arrivalFly && !fly ? (
+        <DownloaderCloseMorph
+          key={arrivalFly.id}
+          payload={arrivalFly.payload}
+          onDone={() => setArrivalFly(null)}
+        />
       ) : null}
     </>
   );

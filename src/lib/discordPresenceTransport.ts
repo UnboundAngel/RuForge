@@ -43,7 +43,14 @@ const HEARTBEAT_MS = 15_000;
 function isMainPresenceWindow(): boolean {
   try {
     const label = getCurrentWindow().label;
-    return label !== "mini" && label !== "music-mini" && label !== "island";
+    return (
+      label !== "mini" &&
+      label !== "music-mini" &&
+      label !== "island" &&
+      label !== "layout-editor" &&
+      label !== "glance-popout" &&
+      label !== "rf-overlay"
+    );
   } catch {
     return false;
   }

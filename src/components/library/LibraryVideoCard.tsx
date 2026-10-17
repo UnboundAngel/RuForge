@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useMemo, memo, type ReactNode } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import { motion } from "motion/react";
-import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Play, Music, FileText, FolderOutput, FolderOpen, Clock, ListPlus, UserCheck, UserPlus, CircleUserRound } from "lucide-react";
+import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Play, Music, FileText, FolderOutput, FolderOpen, Clock, ListPlus, UserCheck, UserPlus, CircleUserRound, Tag } from "lucide-react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { localImageSrc } from "@/lib/localImageSrc";
 import { copyTranscriptForFile, type TranscriptVariant } from "@/copyTranscript";
 import { isAudioOnlyPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
@@ -10,12 +11,25 @@ import { openInFileManager } from "@/openInFileManager";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useGalleryScrubExtracting } from "@/scrubSpriteGallerySync";
-import { MorphMenu, type MorphMenuItem } from "@/components/ui/Morph";
+import {
+  MUSIC_MENU_ICON_SIZE,
+  MUSIC_MENU_TONES,
+  MusicFloatingMenu,
+  MusicMenuFlyoutRow,
+  MusicMenuRow,
+  MusicMenuSection,
+  menuAnchorPoint,
+  type MenuAt,
+} from "@/components/music/musicMenuUi";
 import { useChannelFollow } from "@/components/watchlist/useChannelFollow";
 import { cn } from "@/lib/utils";
 import { formatAge, formatViewCount } from "./youtubeFeed";
 import { MetaParts, VideoByline } from "./VideoByline";
 import { openCreatorPage } from "./creatorPageStore";
+import { useLibraryArrivalFlight } from "./useLibraryArrivalFlight";
+import { TagBadge } from "./tags/TagChips";
+import { VideoTagsMenu } from "./tags/VideoTagsMenu";
+import { useVideoTags } from "./tags/useVideoTags";
 
 export type ThumbnailBar = { show: boolean; widthPct: number; completed: boolean };
 
@@ -25,48 +39,11 @@ function mediaDisplayTitle(file: MediaFile): string {
 
 const PREVIEW_HOVER_DELAY_MS = 420;
 
-export function GalleryMenuTitle({ text }: { text: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLSpanElement>(null);
-  const [shouldMarquee, setShouldMarquee] = useState(false);
-
-  useEffect(() => {
-    const check = () => {
-      if (!containerRef.current || !textRef.current) return;
-      setShouldMarquee(textRef.current.offsetWidth > containerRef.current.offsetWidth + 1);
-    };
-    check();
-    const t = setTimeout(check, 80);
-    window.addEventListener("resize", check);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("resize", check);
-    };
-  }, [text]);
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative overflow-hidden whitespace-nowrap"
-    >
-      <div className={`flex w-max ${shouldMarquee ? "animate-marquee" : ""}`}>
-        <span
-          ref={textRef}
-          className={`text-[10px] font-black uppercase tracking-widest text-stone-500 ${
-            shouldMarquee ? "pr-10" : ""
-          }`}
-        >
-          {text}
-        </span>
-        {shouldMarquee && (
-          <span className="pr-10 text-[10px] font-black uppercase tracking-widest text-stone-500">
-            {text}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
+const TRANSCRIPT_FORMATS: ReadonlyArray<readonly [TranscriptVariant, string]> = [
+  ["plain", "Plain text"],
+  ["timestamped", "With timestamps"],
+  ["markdown", "Markdown"],
+];
 
 export const VideoCard = memo(function VideoCard({
   file,
@@ -94,6 +71,9 @@ export const VideoCard = memo(function VideoCard({
   const extracting = useGalleryScrubExtracting(file.path);
   const channelFollow = useChannelFollow(file.youtube?.channelId, file.youtube?.channel);
   const [isHovered, setIsHovered] = useState(false);
+  const [menuAt, setMenuAt] = useState<MenuAt>({ x: 0, y: 0, placement: "anchor" });
+  const [tagsAt, setTagsAt] = useState<MenuAt | null>(null);
+  const tags = useVideoTags(file);
   const [previewActive, setPreviewActive] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewMuted, setPreviewMuted] = useState(true);
@@ -102,13 +82,14 @@ export const VideoCard = memo(function VideoCard({
     return saved ? parseInt(saved) : 0;
   });
   const videoRef = useRef<HTMLVideoElement>(null);
+  const coverRef = useRef<HTMLDivElement>(null);
+  const arriving = useLibraryArrivalFlight(file.path, coverRef);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stillPoster = file.thumbnailPath ?? file.ruforgePosterPath;
   const isAudioItem = isAudioOnlyPath(file.path);
   const title = mediaDisplayTitle(file);
   const youtube = file.youtube;
   const shellOpen = isHovered || menuOpen;
-  const mountMorph = isHovered || menuOpen;
   const optionsVisible = isHovered || menuOpen;
   const titleHot = isHovered || menuOpen;
 
@@ -170,9 +151,10 @@ export const VideoCard = memo(function VideoCard({
     void handlePlayFile(file, undefined, null);
   };
 
-  const setMenuOpen = (next: boolean) => {
+  const setMenuOpen = (next: boolean, at?: MenuAt) => {
     if (next) {
       stopPreview();
+      if (at) setMenuAt(at);
       setGalleryActiveMenu({ path: file.path });
     } else {
       const active = useRuforgeStore.getState().activeMenu;
@@ -182,132 +164,13 @@ export const VideoCard = memo(function VideoCard({
     }
   };
 
-  const menuItems = useMemo((): MorphMenuItem[] => {
-    const iconBox = (node: ReactNode) => (
-      <div className="w-7 h-7 rounded-lg bg-[color-mix(in_srgb,var(--accent),transparent_88%)] flex items-center justify-center shrink-0">
-        {node}
-      </div>
-    );
-    const rows: MorphMenuItem[] = [
-      {
-        id: "play",
-        label: "Play Video",
-        icon: iconBox(<Play size={13} fill="currentColor" />),
-        onSelect: () => {
-          void handlePlayFile(file, undefined, null);
-        },
-      },
-      {
-        id: "watch-later",
-        label: inWatchLater ? "Remove from Watch later" : "Save to Watch later",
-        icon: <Clock size={14} className="shrink-0 ml-1.5" />,
-        onSelect: () => onToggleWatchLater(file),
-      },
-      {
-        id: "save-playlist",
-        label: "Save to playlist",
-        icon: <ListPlus size={14} className="shrink-0 ml-1.5" />,
-        onSelect: () => onSaveToPlaylist(file),
-      },
-    ];
-    if (channelFollow.available) {
-      const channel = file.youtube?.channel?.trim();
-      rows.push({
-        id: "follow-channel",
-        label: channelFollow.following ? `Unfollow ${channel}` : `Follow ${channel}`,
-        icon: channelFollow.following ? (
-          <UserCheck size={14} className="shrink-0 ml-1.5" />
-        ) : (
-          <UserPlus size={14} className="shrink-0 ml-1.5" />
-        ),
-        onSelect: () => void channelFollow.toggle(),
-      });
-    }
-    const channelId = file.youtube?.channelId;
-    const channelName = file.youtube?.channel?.trim();
-    if (channelId && channelName) {
-      rows.push({
-        id: "channel",
-        label: "Go to channel",
-        icon: <CircleUserRound size={14} className="shrink-0 ml-1.5" />,
-        onSelect: () => openCreatorPage(channelId, channelName),
-      });
-    }
-    rows.push(
-      {
-        id: "previews",
-        label: "Previews",
-        icon: <ImageIcon size={14} className="shrink-0 ml-1.5" />,
-        onSelect: () => onExtract(file),
-      },
-      {
-        id: "export",
-        label: "Export",
-        icon: <FolderOutput size={14} className="shrink-0 ml-1.5" />,
-        onSelect: () => openExportPanel({ paths: [file.path], label: file.name }),
-      },
-    );
-    if (file.subtitlePath) {
-      rows.push({
-        id: "transcript",
-        label: "Transcript",
-        icon: <FileText size={14} className="shrink-0 ml-1.5" />,
-        submenu: (
-          <div className="relative space-y-0.5 overflow-hidden">
-            <div className="absolute top-[8px] bottom-[8px] left-4 w-px bg-white/10 pointer-events-none" />
-            {([
-              ["plain", "Plain text"],
-              ["timestamped", "Timestamps"],
-              ["markdown", "Markdown"],
-            ] as const).map(([variant, label]) => (
-              <button
-                key={variant}
-                type="button"
-                className="w-full pl-5 pr-2 py-1.5 rounded-lg text-[10px] font-black text-left text-stone-500 hover:text-white transition-colors"
-                onClick={() => {
-                  void copyTranscriptForFile(file, variant as TranscriptVariant);
-                  setGalleryActiveMenu(null);
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        ),
-      });
-    }
-    rows.push(
-      {
-        id: "folder",
-        label: "Open folder",
-        icon: <FolderOpen size={14} className="shrink-0 ml-1.5" />,
-        onSelect: () => {
-          void openInFileManager(file.path);
-        },
-      },
-      {
-        id: "delete",
-        label: "Delete",
-        icon: <Trash2 size={14} className="shrink-0 ml-1.5" />,
-        danger: true,
-        onSelect: () => onDelete(file),
-      },
-    );
-    return rows;
-  }, [
-    file,
-    channelFollow.available,
-    channelFollow.following,
-    channelFollow.toggle,
-    handlePlayFile,
-    inWatchLater,
-    onDelete,
-    onExtract,
-    onSaveToPlaylist,
-    onToggleWatchLater,
-    openExportPanel,
-    setGalleryActiveMenu,
-  ]);
+  const act = (fn: () => void) => () => {
+    setMenuOpen(false);
+    fn();
+  };
+  const channelId = youtube?.channelId;
+  const channelName = youtube?.channel?.trim();
+  const icon = MUSIC_MENU_ICON_SIZE;
 
   return (
     <div
@@ -318,7 +181,7 @@ export const VideoCard = memo(function VideoCard({
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        setMenuOpen(true);
+        setMenuOpen(true, { x: e.clientX, y: e.clientY, placement: "cursor" });
       }}
     >
       <motion.div
@@ -333,10 +196,17 @@ export const VideoCard = memo(function VideoCard({
       />
 
       <div className="relative z-10 flex flex-col gap-3">
-        <div className="relative aspect-video overflow-hidden rounded-2xl bg-[color:var(--rf-well-raised)]">
+        <div
+          ref={coverRef}
+          data-squish-cover
+          className={cn(
+            "rf-art-clip relative aspect-video bg-[color:var(--rf-well-raised)] transition-transform duration-150 ease-out",
+            arriving && "invisible",
+          )}
+        >
           {stillPoster ? (
             <img
-              src={convertFileSrc(stillPoster)}
+              src={localImageSrc(stillPoster)}
               alt=""
               className="absolute inset-0 w-full h-full object-cover"
             />
@@ -374,6 +244,8 @@ export const VideoCard = memo(function VideoCard({
               {previewMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
             </button>
           )}
+
+          {!menuOpen && !extracting ? <TagBadge tags={tags} expanded={isHovered} /> : null}
 
           {isAudioItem && (
             <div
@@ -416,6 +288,7 @@ export const VideoCard = memo(function VideoCard({
           )}
         </div>
 
+        <div className={cn("transition-opacity duration-300 ease-out", arriving ? "opacity-0" : "opacity-100")}>
         <VideoByline
           channel={youtube?.channel}
           channelId={youtube?.channelId}
@@ -431,42 +304,151 @@ export const VideoCard = memo(function VideoCard({
             </h3>
           }
           meta={<LibraryCardMeta file={file} plays={views} />}
+          active={isHovered}
           action={
             <div
               className={`relative self-start mt-0.5 transition-opacity duration-150 ${
                 optionsVisible ? "opacity-100" : "opacity-0"
               }`}
             >
-              {mountMorph ? (
-                <MorphMenu
-                  open={menuOpen}
-                  onOpenChange={setMenuOpen}
-                  triggerSize={32}
-                  align="end"
-                  paintedRest={false}
-                  aria-label="Video options"
-                  trigger={<MoreVertical size={16} strokeWidth={2.25} />}
-                  items={menuItems}
-                  header={<GalleryMenuTitle text={title} />}
-                />
-              ) : (
-                <button
-                  type="button"
-                  aria-label="Video options"
-                  className="flex h-8 w-8 items-center justify-center text-stone-500 hover:text-stone-200"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsHovered(true);
-                    setMenuOpen(true);
-                  }}
-                >
-                  <MoreVertical size={16} strokeWidth={2.25} />
-                </button>
-              )}
+              <button
+                type="button"
+                aria-label="Video options"
+                data-tooltip="More options"
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+                  menuOpen ? "text-stone-100 bg-white/[0.08]" : "text-stone-500 hover:text-stone-200",
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (menuOpen) {
+                    setMenuOpen(false);
+                    return;
+                  }
+                  setIsHovered(true);
+                  setMenuOpen(true, { ...menuAnchorPoint(e.currentTarget), placement: "anchor" });
+                }}
+              >
+                <MoreVertical size={16} strokeWidth={2.25} />
+              </button>
             </div>
           }
         />
+        </div>
       </div>
+
+      <MusicFloatingMenu
+        open={menuOpen}
+        x={menuAt.x}
+        y={menuAt.y}
+        placement={menuAt.placement}
+        theme="library"
+        onClose={() => setMenuOpen(false)}
+        ariaLabel={`Actions for ${title}`}
+        measureKey={`${inWatchLater}:${channelFollow.following}:${channelFollow.available}`}
+      >
+        <MusicMenuSection label="Playback" tone={MUSIC_MENU_TONES.playback}>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playback}
+            label="Play"
+            icon={<Play size={icon} strokeWidth={2.25} />}
+            onClick={act(() => void handlePlayFile(file, undefined, null))}
+          />
+        </MusicMenuSection>
+        <MusicMenuSection label="Save" tone={MUSIC_MENU_TONES.playlist}>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playlist}
+            label={inWatchLater ? "Remove from Watch later" : "Save to Watch later"}
+            active={inWatchLater}
+            icon={<Clock size={icon} strokeWidth={2.25} />}
+            onClick={act(() => onToggleWatchLater(file))}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playlist}
+            label="Save to playlist"
+            icon={<ListPlus size={icon} strokeWidth={2.25} />}
+            onClick={act(() => onSaveToPlaylist(file))}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playlist}
+            label="Tags…"
+            icon={<Tag size={icon} strokeWidth={2.25} />}
+            onClick={act(() => setTagsAt(menuAt))}
+          />
+        </MusicMenuSection>
+        {(channelFollow.available || (channelId && channelName)) && (
+          <MusicMenuSection label="Channel" tone={MUSIC_MENU_TONES.navigate}>
+            {channelFollow.available && (
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.navigate}
+                label={channelFollow.following ? "Unfollow channel" : "Follow channel"}
+                active={channelFollow.following}
+                icon={channelFollow.following
+                  ? <UserCheck size={icon} strokeWidth={2.25} />
+                  : <UserPlus size={icon} strokeWidth={2.25} />}
+                onClick={act(() => void channelFollow.toggle())}
+              />
+            )}
+            {channelId && channelName && (
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.navigate}
+                label="Go to channel"
+                icon={<CircleUserRound size={icon} strokeWidth={2.25} />}
+                onClick={act(() => openCreatorPage(channelId, channelName))}
+              />
+            )}
+          </MusicMenuSection>
+        )}
+        <MusicMenuSection label="File" tone={MUSIC_MENU_TONES.file}>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.file}
+            label="Previews"
+            icon={<ImageIcon size={icon} strokeWidth={2.25} />}
+            onClick={act(() => onExtract(file))}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.file}
+            label="Export"
+            icon={<FolderOutput size={icon} strokeWidth={2.25} />}
+            onClick={act(() => openExportPanel({ paths: [file.path], label: file.name }))}
+          />
+          {file.subtitlePath && (
+            <MusicMenuFlyoutRow
+              tone={MUSIC_MENU_TONES.file}
+              label="Copy transcript"
+              ariaLabel="Copy transcript"
+              icon={<FileText size={icon} strokeWidth={2.25} />}
+              renderFlyout={() => (
+                <MusicMenuSection label="Format" tone={MUSIC_MENU_TONES.file}>
+                  {TRANSCRIPT_FORMATS.map(([variant, label]) => (
+                    <MusicMenuRow
+                      key={variant}
+                      tone={MUSIC_MENU_TONES.file}
+                      label={label}
+                      icon={<FileText size={icon} strokeWidth={2.25} />}
+                      onClick={act(() => void copyTranscriptForFile(file, variant))}
+                    />
+                  ))}
+                </MusicMenuSection>
+              )}
+            />
+          )}
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.file}
+            label="Open folder"
+            icon={<FolderOpen size={icon} strokeWidth={2.25} />}
+            onClick={act(() => void openInFileManager(file.path))}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.file}
+            label="Delete"
+            variant="danger"
+            icon={<Trash2 size={icon} strokeWidth={2.25} />}
+            onClick={act(() => onDelete(file))}
+          />
+        </MusicMenuSection>
+      </MusicFloatingMenu>
+      <VideoTagsMenu file={file} title={title} at={tagsAt} onClose={() => setTagsAt(null)} />
     </div>
   );
 });

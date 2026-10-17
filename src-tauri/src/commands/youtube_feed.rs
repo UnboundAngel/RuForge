@@ -29,8 +29,6 @@ pub struct YoutubeFeedItem {
     pub view_count: Option<u64>,
     /// Unix seconds parsed from "3 days ago", so only as precise as that text.
     pub timestamp: Option<i64>,
-    /// Vertical Short; the library gives these their own tall shelf instead of the 16:9 grid.
-    pub short: bool,
 }
 
 #[derive(Serialize, Debug)]
@@ -44,12 +42,12 @@ pub(crate) fn is_video_id(id: &str) -> bool {
     id.len() == 11 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
-/// Keeps single videos and Shorts: playlists and mixes have no single file to download, and live
-/// or upcoming streams can't be downloaded as a finished video yet.
+/// Keeps single videos only: RuForge does not support Shorts, playlists and mixes have no single file
+/// to download, and live or upcoming streams can't be downloaded as a finished video yet.
 pub(crate) fn feed_item_from_entry(entry: &Value) -> Option<YoutubeFeedItem> {
     let id = entry.get("id").and_then(Value::as_str)?;
     let url = entry.get("url").and_then(Value::as_str).unwrap_or("");
-    if !is_video_id(id) || url.contains("list=") {
+    if !is_video_id(id) || url.contains("list=") || url.contains("/shorts/") {
         return None;
     }
     let live = entry.get("live_status").and_then(Value::as_str);
@@ -77,7 +75,6 @@ pub(crate) fn feed_item_from_entry(entry: &Value) -> Option<YoutubeFeedItem> {
         duration: entry.get("duration").and_then(Value::as_f64).filter(|d| *d > 0.0),
         view_count: entry.get("view_count").and_then(Value::as_u64),
         timestamp: entry.get("timestamp").and_then(Value::as_i64),
-        short: url.contains("/shorts/"),
     })
 }
 
@@ -248,13 +245,18 @@ pub async fn get_video_stats(video_ids: Vec<String>) -> Result<Vec<VideoStats>, 
     Ok(stats)
 }
 
-/// A progressive stream so a plain `<video>` element can play it: itag 18 is 360p with audio,
-/// small enough to start fast and sharp enough for a card-sized preview.
-const VIDEO_PREVIEW_FORMAT: &str =
-    "18/best[height<=480][vcodec!=none][acodec!=none]/best[vcodec!=none][acodec!=none]";
+/// YouTube stopped serving its combined 360p stream (itag 18) without a PO token, so the card plays a small
+/// video-only stream and an audio stream side by side. Plain https only: the webview can't play HLS.
+const VIDEO_PREVIEW_FORMAT: &str = "bv[height<=480][vcodec^=avc1][protocol=https]+ba[ext=m4a][protocol=https]\
+     /bv[height<=480][protocol=https]+ba[protocol=https]\
+     /best[height<=480][vcodec!=none][acodec!=none][protocol=https]";
 
 fn has_codec(format: &Value, key: &str) -> bool {
     format.get(key).and_then(Value::as_str).map_or(true, |c| c != "none")
+}
+
+fn http_url(format: &Value) -> Option<&str> {
+    format.get("url").and_then(Value::as_str).filter(|u| u.starts_with("http"))
 }
 
 fn url_expire_param(url: &str) -> Option<i64> {
@@ -266,12 +268,21 @@ fn url_expire_param(url: &str) -> Option<i64> {
 }
 
 pub(crate) fn video_preview_stream_from_root(root: &Value) -> Option<MusicPreviewStream> {
-    if !has_codec(root, "vcodec") || !has_codec(root, "acodec") {
-        return None;
-    }
-    let url = root.get("url").and_then(Value::as_str).filter(|u| u.starts_with("http"))?;
+    let (url, audio_url) = match root.get("requested_formats").and_then(Value::as_array) {
+        Some(parts) => {
+            let video = parts.iter().find(|f| has_codec(f, "vcodec")).and_then(http_url)?;
+            let audio = parts
+                .iter()
+                .find(|f| !has_codec(f, "vcodec") && has_codec(f, "acodec"))
+                .and_then(http_url)?;
+            (video, Some(audio.to_string()))
+        }
+        None if has_codec(root, "vcodec") && has_codec(root, "acodec") => (http_url(root)?, None),
+        None => return None,
+    };
     Some(MusicPreviewStream {
         url: url.to_string(),
+        audio_url,
         duration: root.get("duration").and_then(Value::as_f64),
         expires_at: url_expire_param(url),
         hook_start: most_replayed_start(root),
@@ -293,16 +304,35 @@ pub async fn resolve_video_preview_stream(
         "-f".into(),
         VIDEO_PREVIEW_FORMAT.into(),
     ];
-    let root = run_ytdlp_json_with_cookie_fallback(
+    let started = std::time::Instant::now();
+    let result = run_ytdlp_json_with_cookie_fallback(
         &app,
         prefix_args,
-        url,
+        url.clone(),
         browser_cookies.as_deref(),
         cookie_file.as_deref(),
         "video preview",
     )
-    .await?;
-    video_preview_stream_from_root(&root).ok_or_else(|| "No playable stream for this video".to_string())
+    .await
+    .and_then(|root| {
+        let picked = root.get("format_id").and_then(Value::as_str).unwrap_or("?").to_string();
+        video_preview_stream_from_root(&root)
+            .map(|s| (s, picked.clone()))
+            .ok_or_else(|| format!("No playable stream for this video (yt-dlp picked {picked})"))
+    });
+    match &result {
+        Ok((stream, picked)) => log::info!(
+            "video preview {url}: {picked} in {}ms, separate audio: {}",
+            started.elapsed().as_millis(),
+            stream.audio_url.is_some()
+        ),
+        Err(e) => log::warn!(
+            "video preview {url} failed after {}ms: {}",
+            started.elapsed().as_millis(),
+            e.lines().next().unwrap_or(e)
+        ),
+    }
+    result.map(|(stream, _)| stream)
 }
 
 #[cfg(test)]
@@ -311,7 +341,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn keeps_videos_and_shorts_and_drops_playlists_and_live() {
+    fn keeps_videos_and_drops_shorts_playlists_and_live() {
         let root = json!({
             "entries": [
                 {
@@ -347,19 +377,6 @@ mod tests {
                 duration: Some(213.0),
                 view_count: Some(1200),
                 timestamp: Some(1_790_000_000),
-                short: false,
-            }, YoutubeFeedItem {
-                video_id: "abcdefghijk".into(),
-                title: "Short".into(),
-                url: "https://www.youtube.com/watch?v=abcdefghijk".into(),
-                channel: None,
-                channel_id: None,
-                channel_verified: false,
-                thumbnail: Some("https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg".into()),
-                duration: None,
-                view_count: None,
-                timestamp: None,
-                short: true,
             }]
         );
         assert!(page.has_more);
@@ -393,6 +410,23 @@ mod tests {
         assert_eq!(video_preview_stream_from_root(&json!({ "url": "https://v/a", "vcodec": "none" })), None);
         assert_eq!(video_preview_stream_from_root(&json!({ "url": "https://v/v", "acodec": "none" })), None);
         assert_eq!(video_preview_stream_from_root(&json!({ "url": "manifest.mpd" })), None);
+    }
+
+    #[test]
+    fn video_preview_pairs_split_streams() {
+        let root = json!({
+            "duration": 600.0,
+            "requested_formats": [
+                { "url": "https://rr1.googlevideo.com/videoplayback?expire=1790000000&itag=134", "vcodec": "avc1.4D401E", "acodec": "none" },
+                { "url": "https://rr1.googlevideo.com/videoplayback?expire=1790000000&itag=140", "vcodec": "none", "acodec": "mp4a.40.2" },
+            ],
+        });
+        let stream = video_preview_stream_from_root(&root).expect("stream");
+        assert!(stream.url.ends_with("itag=134"));
+        assert!(stream.audio_url.as_deref().is_some_and(|u| u.ends_with("itag=140")));
+        assert_eq!(stream.expires_at, Some(1_790_000_000));
+        let video_only = json!({ "requested_formats": [{ "url": "https://v/v", "vcodec": "avc1", "acodec": "none" }] });
+        assert_eq!(video_preview_stream_from_root(&video_only), None);
     }
 
     #[test]

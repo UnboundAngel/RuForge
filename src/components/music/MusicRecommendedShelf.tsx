@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { useState } from "react";
+import { localImageSrc } from "@/lib/localImageSrc";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, CloudDownload, Music, Plus } from "lucide-react";
+import { Check, CloudDownload, Music, Plus } from "lucide-react";
 import { bestCoverPath } from "@/mediaKind";
 import { cn } from "@/lib/utils";
+import { EdgeSquishScroll } from "@/components/ui/EdgeSquishScroll";
 import type { MediaFile } from "@/types";
 import { trackArtistLabel } from "./musicPlaylists";
 import type { OutsideTrack } from "./musicOutsideRecommend";
@@ -15,9 +16,6 @@ import { downloadOutsideTrackIntoPlaylist, useOutsideDownloadPercent } from "./u
 const EASE = [0.22, 1, 0.36, 1] as const;
 const CARD_W = 168;
 const CARD_GAP = 12;
-const SCROLL_BTN =
-  "rf-music-press w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.07] text-white/80 hover:text-white hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)] disabled:opacity-30 disabled:pointer-events-none";
-
 export function SectionTitle({
   title,
   subtitle,
@@ -73,34 +71,7 @@ export function CardShelf({
   /** Changing it re-deals the cards (Refresh) while the header, and its buttons, stay mounted. */
   listKey?: number;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
   const [menu, setMenu] = useState<RecommendationMenuState | null>(null);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const sync = () =>
-      setEdges({ left: el.scrollLeft > 4, right: el.scrollLeft < el.scrollWidth - el.clientWidth - 4 });
-    sync();
-    el.addEventListener("scroll", sync, { passive: true });
-    const ro = new ResizeObserver(sync);
-    ro.observe(el);
-    // Cards collapse over 240ms when added; re-check once they settle.
-    const t = window.setTimeout(sync, 300);
-    return () => {
-      el.removeEventListener("scroll", sync);
-      ro.disconnect();
-      window.clearTimeout(t);
-    };
-  }, [items, outsideLoading]);
-
-  const page = (dir: 1 | -1) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const step = Math.max(CARD_W + CARD_GAP, Math.floor(el.clientWidth / (CARD_W + CARD_GAP)) * (CARD_W + CARD_GAP));
-    el.scrollBy({ left: dir * step, behavior: "smooth" });
-  };
 
   const menuFor = (item: ShelfItem): CardMenuHandler | undefined =>
     onHide
@@ -111,76 +82,61 @@ export function CardShelf({
       : undefined;
   const menuKey = menu ? shelfKey(menu.item) : null;
 
-  // Fade whichever edge still has cards behind it.
-  const mask = `linear-gradient(to right, ${edges.left ? "transparent, black 48px" : "black"}, ${edges.right ? "black calc(100% - 48px), transparent" : "black"})`;
-
   return (
     <div>
       <div className="flex items-start justify-between gap-4 pr-4">
         <SectionTitle title={title} subtitle={subtitle} action={footer} />
-        <div className="flex items-center gap-3 shrink-0">
-          {actions}
-          {(edges.left || edges.right) && (
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => page(-1)} disabled={!edges.left} className={SCROLL_BTN} aria-label="Scroll left">
-                <ChevronLeft size={18} />
-              </button>
-              <button type="button" onClick={() => page(1)} disabled={!edges.right} className={SCROLL_BTN} aria-label="Scroll right">
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          )}
-        </div>
+        <div className="flex items-center gap-3 shrink-0">{actions}</div>
       </div>
       <motion.div
         key={listKey}
-        ref={scrollRef}
         initial={listKey ? { opacity: 0 } : false}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.15, ease: "easeOut" }}
-        className="mt-4 flex overflow-x-auto scroll-smooth px-1 pb-2"
-        style={{ scrollbarWidth: "none", maskImage: mask, WebkitMaskImage: mask }}
+        className="mt-4"
       >
-        {/* A refresh fades the whole row in once; per-card staggers only on first mount. */}
-        <AnimatePresence initial={!listKey}>
-          {items.map((item, i) => {
-            const key = shelfKey(item);
-            const grow = grownKeys?.has(key) ?? false;
-            const onContextMenu = menuFor(item);
-            const active = menuKey === key;
-            if (item.kind === "local") {
-              const file = item.file;
+        <EdgeSquishScroll arrows wrapItems={false} contentClassName="gap-0 px-1 pb-2">
+          {/* A refresh fades the whole row in once; per-card staggers only on first mount. */}
+          <AnimatePresence initial={!listKey}>
+            {items.map((item, i) => {
+              const key = shelfKey(item);
+              const grow = grownKeys?.has(key) ?? false;
+              const onContextMenu = menuFor(item);
+              const active = menuKey === key;
+              if (item.kind === "local") {
+                const file = item.file;
+                return (
+                  <FinderCard
+                    key={key}
+                    index={i}
+                    grow={grow}
+                    file={file}
+                    active={active}
+                    onContextMenu={onContextMenu}
+                    onAdd={() => onAdd(file)}
+                  />
+                );
+              }
+              if (!playlistId) return null;
+              const track = item.track;
               return (
-                <FinderCard
+                <OutsideCard
                   key={key}
                   index={i}
                   grow={grow}
-                  file={file}
+                  track={track}
+                  playlistId={playlistId}
                   active={active}
                   onContextMenu={onContextMenu}
-                  onAdd={() => onAdd(file)}
+                  onAdded={() => onOutsideAdd?.(track)}
                 />
               );
-            }
-            if (!playlistId) return null;
-            const track = item.track;
-            return (
-              <OutsideCard
-                key={key}
-                index={i}
-                grow={grow}
-                track={track}
-                playlistId={playlistId}
-                active={active}
-                onContextMenu={onContextMenu}
-                onAdded={() => onOutsideAdd?.(track)}
-              />
-            );
-          })}
-          {outsideLoading &&
-            !items.some((i) => i.kind === "outside") &&
-            [0, 1, 2].map((i) => <SkeletonCard key={`skeleton-${i}`} index={items.length + i} />)}
-        </AnimatePresence>
+            })}
+            {outsideLoading &&
+              !items.some((i) => i.kind === "outside") &&
+              [0, 1, 2].map((i) => <SkeletonCard key={`skeleton-${i}`} index={items.length + i} />)}
+          </AnimatePresence>
+        </EdgeSquishScroll>
       </motion.div>
       {onHide && (
         <MusicRecommendationMenu
@@ -258,9 +214,10 @@ function FinderCard({
       style={{ paddingRight: CARD_GAP }}
     >
       <div className={cardSurface(active)} onContextMenu={onContextMenu}>
-        <div className="relative aspect-square w-full overflow-hidden rounded-md bg-white/[0.07] shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+        <div data-squish-cover className="rounded-md shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-150 ease-out">
+        <div className="rf-art-clip relative aspect-square w-full bg-white/[0.07] [--rf-art-r:6px]">
           {cover ? (
-            <img src={convertFileSrc(cover)} alt="" draggable={false} className="h-full w-full object-cover" />
+            <img src={localImageSrc(cover)} alt="" draggable={false} className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-white/30">
               <Music size={40} />
@@ -298,6 +255,7 @@ function FinderCard({
               </motion.span>
             </AnimatePresence>
           </button>
+        </div>
         </div>
         <div className="mt-2 min-w-0">
           <div className="truncate text-sm font-bold text-white">{file.name}</div>
@@ -348,7 +306,8 @@ function OutsideCard({
       style={{ paddingRight: CARD_GAP }}
     >
       <div className={cardSurface(active)} onContextMenu={onContextMenu}>
-        <div className="relative aspect-square w-full overflow-hidden rounded-md bg-white/[0.07] shadow-[0_8px_24px_rgba(0,0,0,0.45)]">
+        <div data-squish-cover className="rounded-md shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition-transform duration-150 ease-out">
+        <div className="rf-art-clip relative aspect-square w-full bg-white/[0.07] [--rf-art-r:6px]">
           <img
             src={thumb}
             alt=""
@@ -425,6 +384,7 @@ function OutsideCard({
               )}
             </AnimatePresence>
           </button>
+        </div>
         </div>
         <div className="mt-2 min-w-0">
           <div

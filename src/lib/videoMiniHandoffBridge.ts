@@ -1,5 +1,6 @@
 import { emit, listen } from "@tauri-apps/api/event";
 import type { PlayInMiniPayload } from "../playerHandoff";
+import { isLocalMediaFilePayload } from "./trustedMediaPath";
 
 type HandoffSink = (payload: PlayInMiniPayload) => void;
 
@@ -8,6 +9,7 @@ let pendingHandoff: PlayInMiniPayload | null = null;
 let readySignaled = false;
 
 void listen<PlayInMiniPayload>("play-in-mini", (event) => {
+  if (!isLocalMediaFilePayload(event.payload?.file)) return;
   pendingHandoff = event.payload;
   sink?.(pendingHandoff);
 }).then(() => {

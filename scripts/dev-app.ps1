@@ -3,7 +3,9 @@
 
 [CmdletBinding()]
 param(
-    [switch]$NoCompanion
+    [switch]$NoCompanion,
+    # Exposes WebView2 over CDP so scripts/dev/shot.mjs can attach. Dev only.
+    [switch]$Cdp
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +52,19 @@ function Clear-PreviousRun {
     Stop-CompanionStragglers
 }
 
+# Cargo never deletes caches for old feature or profile combinations, so prune them before each run.
+function Invoke-StaleCachePrune {
+    try {
+        $log = & (Join-Path $PSScriptRoot 'dev-clean-safe.ps1') -StaleIncremental -Apply *>&1 | Out-String
+        if ($log -match 'Cleanup complete' -and $log -match 'reclaimable now:\s+([\d.,]+ [KMG]B)') {
+            Write-Host "[dev:app] pruned $($Matches[1]) of stale Rust caches" -ForegroundColor DarkGray
+        }
+    }
+    catch {
+        Write-Host "[dev:app] skipped stale cache prune: $($_.Exception.Message)" -ForegroundColor DarkGray
+    }
+}
+
 $npm = Resolve-Npm
 $companion = $null
 $tauri = $null
@@ -58,6 +73,14 @@ $exitCode = 0
 Push-Location $repoRoot
 try {
     Clear-PreviousRun
+    Invoke-StaleCachePrune
+
+    if ($Cdp) {
+        $port = if ($env:RUFORGE_CDP_PORT) { $env:RUFORGE_CDP_PORT } else { '9222' }
+        $flag = "--remote-debugging-port=$port"
+        $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = if ($env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS) { "$($env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS) $flag" } else { $flag }
+        Write-Host "[dev:app] WebView2 CDP on 127.0.0.1:$port" -ForegroundColor Cyan
+    }
 
     if (-not $NoCompanion) {
         Write-Host '[dev:app] starting companion watcher (vite build --watch)' -ForegroundColor Cyan

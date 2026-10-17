@@ -3,8 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Loader2 } from "lucide-react";
 import { releasePlaybackBeforeDelete } from "../releasePlaybackBeforeDelete";
+import { bumpLocalImageGeneration } from "../lib/localImageSrc";
 import { OVERLAY_Z_CLASS } from "../lib/overlayZIndex";
 import { cn } from "../lib/utils";
+import { recordActivity } from "../lib/activityLog";
+import { isAudioOnlyPath } from "../mediaKind";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { youtubeUrlsMatch } from "../youtubeUrl";
 import { askConfirm } from "./ConfirmDialog";
@@ -12,7 +15,7 @@ import { CLEANUP_HEADER_H, CleanupListHeader } from "./CleanupListRow";
 import { CleanupSection } from "./CleanupSection";
 import { cleanupGroupMeta } from "./cleanupCategoryStyle";
 import { CleanupUsageBar } from "./CleanupUsageBar";
-import { SettingsModalBtnPrimary, SettingsModalShell } from "./settings/SettingsModalShell";
+import { SettingsModalBtnDanger, SettingsModalShell } from "./settings/SettingsModalShell";
 import {
   buildCleanupCandidates,
   bytesToFreeForHeadroom,
@@ -69,7 +72,15 @@ export function AuthorizeCleanupModal() {
     [storageStats, limitGB],
   );
 
-  const candidates = useMemo(() => buildCleanupCandidates(entries, LIST_MODE), [entries]);
+  // Always mounted, and entries change on every Library refresh, so a closed modal must not walk
+  // the whole library each time. The last open list stays frozen so the closing fade does not flash empty.
+  const listedEntriesRef = useRef<typeof entries | null>(null);
+  if (open) listedEntriesRef.current = entries;
+  const listedEntries = listedEntriesRef.current;
+  const candidates = useMemo(
+    () => (listedEntries ? buildCleanupCandidates(listedEntries, LIST_MODE) : []),
+    [listedEntries],
+  );
   const [sort, setSort] = useState<CleanupSort | null>(null);
   const groups = useMemo(
     () => groupCleanupCandidates(sortCleanupCandidates(candidates, sort)),
@@ -155,7 +166,7 @@ export function AuthorizeCleanupModal() {
       message: `Remove ${paths.length} selected item${paths.length === 1 ? "" : "s"} from your library?`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
-      itemMeta: `${formatBytes(selectedBytes)} • ${paths.length} items`,
+      item: { title: `${paths.length} items`, detail: formatBytes(selectedBytes) },
     });
     // The confirm's own Esc keydown is still in flight; release on the next tick.
     setTimeout(() => {
@@ -183,7 +194,19 @@ export function AuthorizeCleanupModal() {
 
       await releasePlaybackBeforeDelete(paths);
       const deleted = await invoke<number>("delete_media_batch", { paths });
-      clearPlaybackStateForDeletedPaths(deletedPaths.length > 0 ? deletedPaths : paths);
+      const removed = deletedPaths.length > 0 ? deletedPaths : paths;
+      recordActivity({ kind: "cleanup_run", items: removed.length, bytes: deleted });
+      for (const path of removed) {
+        const cand = selectedCandidates.find((c) => c.file.path === path);
+        const bytes = cand?.file.size ?? 0;
+        recordActivity({
+          kind: "item_deleted",
+          bytes,
+          mediaKind: isAudioOnlyPath(path) ? "audio" : "video",
+        });
+      }
+      bumpLocalImageGeneration();
+      clearPlaybackStateForDeletedPaths(removed);
 
       const removedSet = new Set(deletedPaths);
       const jobIds = new Set<string>();
@@ -243,7 +266,6 @@ export function AuthorizeCleanupModal() {
       zIndexClass={OVERLAY_Z_CLASS.fullscreen}
       maxWidthClass="max-w-[min(90vw,72rem)]"
       maxHeightClass="max-h-[min(88vh,52rem)]"
-      bezel
       bodyScrollInsetTop={candidates.length > 0 ? CLEANUP_HEADER_H : undefined}
       bodyClassName="pt-0 pb-1"
       footerClassName="pb-4 pt-3"
@@ -276,10 +298,10 @@ export function AuthorizeCleanupModal() {
               </span>
             )}
           </div>
-          <SettingsModalBtnPrimary
+          <SettingsModalBtnDanger
             onClick={() => void handleConfirm()}
             disabled={busy || selected.size === 0}
-            className="gap-2 bg-red-500/90 text-stone-100 hover:brightness-110"
+            className="gap-2"
           >
             {busy && <Loader2 size={13} className="animate-spin" />}
             {busy && deleteProgress
@@ -287,7 +309,7 @@ export function AuthorizeCleanupModal() {
               : busy
                 ? "Deleting…"
                 : "Delete selected"}
-          </SettingsModalBtnPrimary>
+          </SettingsModalBtnDanger>
         </>
       }
     >

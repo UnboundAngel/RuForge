@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { Ban, Download, HardDrive, Loader, Loader2, X } from "lucide-react";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import {
   countActivePlaylistDownloads,
@@ -258,12 +259,6 @@ function PlaylistCard({
       ),
     [pl.thumbnail, artistThumbnail],
   );
-  const [thumbIndex, setThumbIndex] = useState(0);
-  useEffect(() => {
-    setThumbIndex(0);
-  }, [thumbCandidates]);
-  const thumbSrc = thumbCandidates[thumbIndex] ?? null;
-
   return (
     <motion.button
       type="button"
@@ -276,22 +271,19 @@ function PlaylistCard({
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "color-mix(in srgb, var(--music-surface-raised) 80%, white 20%)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--music-surface-raised)")}
     >
-      {thumbSrc ? (
-        <img
-          src={thumbSrc}
-          alt=""
-          referrerPolicy="no-referrer"
-          className="w-9 h-9 rounded object-cover shrink-0"
-          style={{ borderRadius: "var(--music-card-radius)" }}
-          onError={() => setThumbIndex((i) => (i + 1 < thumbCandidates.length ? i + 1 : thumbCandidates.length))}
-        />
-      ) : (
-        <div className="w-9 h-9 rounded shrink-0 flex items-center justify-center" style={{ borderRadius: "var(--music-card-radius)", background: "var(--music-surface)", color: "var(--music-text-muted)" }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-          </svg>
-        </div>
-      )}
+      <FallbackImg
+        src={thumbCandidates}
+        referrerPolicy="no-referrer"
+        className="w-9 h-9 rounded object-cover shrink-0"
+        style={{ borderRadius: "var(--music-card-radius)" }}
+        fallback={(
+          <div className="w-9 h-9 rounded shrink-0 flex items-center justify-center" style={{ borderRadius: "var(--music-card-radius)", background: "var(--music-surface)", color: "var(--music-text-muted)" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+            </svg>
+          </div>
+        )}
+      />
       <div className="flex-1 min-w-0">
         <div className="text-[11px] font-medium truncate" style={{ color: "var(--music-text-primary)" }}>{pl.title}</div>
         {pl.trackCount != null && (

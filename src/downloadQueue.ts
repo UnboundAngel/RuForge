@@ -38,6 +38,9 @@ export interface DownloadJobMediaSnapshot {
   playlistItems?: PlaylistItem[];
   uploader?: string | null;
   channel?: string | null;
+  channelId?: string | null;
+  /** Best matching video height for the chosen format, when known. */
+  height?: number | null;
 }
 
 /** Rebuild hero `VideoInfo` from a cached job snapshot (no yt-dlp round-trip). */
@@ -54,6 +57,8 @@ export function downloadJobSnapshotToVideoInfo(snap: DownloadJobMediaSnapshot): 
     playlistItems: snap.playlistItems,
     uploader: snap.uploader ?? null,
     channel: snap.channel ?? null,
+    channelId: snap.channelId ?? null,
+    height: snap.height ?? null,
   };
 }
 
@@ -93,6 +98,8 @@ export function videoInfoToDownloadJobSnapshot(
     playlistItems,
     uploader: info.uploader ?? undefined,
     channel: info.channel ?? undefined,
+    channelId: info.channelId ?? undefined,
+    height: info.height ?? undefined,
   };
 }
 
@@ -178,6 +185,12 @@ export interface DownloadJob {
   downloadingSince?: number;
   /** When true, next start uses yt-dlp `--continue` with stored cookie opts. */
   resumeOnStart?: boolean;
+  /** Bytes already on disk when this run started (resume / `.part` continue). */
+  resumedBytes?: number;
+  /** Highest ~3s rolling average speed seen this run (bytes/sec), after a 2s warm-up. */
+  peakBps?: number;
+  /** Rolling speed samples for peak tracking: `{ tMs, bps }`. */
+  speedSamples?: { tMs: number; bps: number }[];
   enqueueSource?: DownloadEnqueueSource;
   /** Dev replay Mode B only: skip yt-dlp and synthetic-finish through onDownloadJobFinished. */
   devSimulateDownload?: boolean;

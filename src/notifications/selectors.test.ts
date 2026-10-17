@@ -32,6 +32,15 @@ vi.mock("./registry", () => {
   };
 });
 
+const store = vi.hoisted(() => ({ muted: [] as string[] }));
+
+vi.mock("@/store/ruforgeStore", () => ({
+  useRuforgeStore: {
+    getState: () => ({ settings: { notificationMuted: store.muted } }),
+    subscribe: () => () => {},
+  },
+}));
+
 const { allItems, unreadCount } = await import("./selectors");
 
 describe("selectors", () => {
@@ -41,5 +50,12 @@ describe("selectors", () => {
 
   it("sums unread across sources", () => {
     expect(unreadCount()).toBe(3);
+  });
+
+  it("hides a muted group from the feed and the badge", () => {
+    store.muted = ["downloads"];
+    expect(allItems().map((i) => i.id)).toEqual(["watchlist:a", "watchlist:b"]);
+    expect(unreadCount()).toBe(1);
+    store.muted = [];
   });
 });

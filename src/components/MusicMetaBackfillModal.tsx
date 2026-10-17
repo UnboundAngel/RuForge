@@ -167,7 +167,7 @@ export const MusicMetaBackfillModal = ({ open, onClose, roots }: Props) => {
             ) : null}
           </div>
           {progress && progress.total > 0 && (
-            <div className="h-1 w-full overflow-hidden rounded-full bg-[#261d18]">
+            <div className="h-1 w-full overflow-hidden rounded-full bg-[color:var(--rf-field)]">
               <div
                 className="h-full rounded-full bg-[color:var(--accent)] transition-[width] duration-300"
                 style={{ width: `${pct}%` }}

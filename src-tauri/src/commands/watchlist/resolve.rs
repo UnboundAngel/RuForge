@@ -189,13 +189,13 @@ async fn page_lookup(
 
 /// Last resort (consent walls, page layout changes): yt-dlp is rate gated and slow.
 async fn ytdlp_lookup(app: &AppHandle, url: String) -> Result<ResolvedChannel, String> {
-    let args = vec![
+    let mut args = vec![
         "--flat-playlist".into(),
         "--playlist-end".into(),
         "1".into(),
         "-J".into(),
-        url,
     ];
+    media_engine::ytdlp_args::push_url_positionals(&mut args, [url]);
     let root = crate::commands::downloader::run_ytdlp_json(app, args, "watchlist resolve")
         .await
         .map_err(|_| NOT_FOUND.to_string())?;

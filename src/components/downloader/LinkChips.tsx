@@ -21,7 +21,7 @@ function RevealChip({
   return (
     <div
       className={`flex h-9 w-max max-w-full items-center rounded-full transition-[clip-path] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
-        warning ? "bg-[#3A2E14] text-amber-300" : "bg-[#271C18] text-stone-300"
+        warning ? "bg-[#3A2E14] text-amber-300" : "bg-[color:var(--rf-surface)] text-stone-300"
       } ${open ? "[clip-path:inset(0_0_0_0_round_18px)]" : "[clip-path:inset(0_calc(100%-36px)_0_0_round_18px)]"}`}
     >
       {children}

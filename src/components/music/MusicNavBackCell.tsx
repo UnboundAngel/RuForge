@@ -1,5 +1,5 @@
 import { ChevronLeft } from "lucide-react";
-import { modKeyLabel } from "@/lib/shortcutLabels";
+import { useHotkeyLabel } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -12,6 +12,7 @@ type Props = {
 
 /** Bottom-left chrome cell: Back to RuForge, aligned with the Explore boot bar row. */
 export function MusicNavBackCell({ collapsed, shellBlack, inLeftStack = false, onBack }: Props) {
+  const navKey = useHotkeyLabel("music.toggleNav");
   const collapsedPill = collapsed && inLeftStack;
   const bg = collapsedPill
     ? shellBlack
@@ -55,7 +56,9 @@ export function MusicNavBackCell({ collapsed, shellBlack, inLeftStack = false, o
             : undefined
         }
         aria-label="Back to RuForge"
-        data-tooltip={collapsed ? "Back to RuForge" : `Back to RuForge (${modKeyLabel()}+B toggles nav)`}
+        data-tooltip={
+          collapsed || !navKey ? "Back to RuForge" : `Back to RuForge (${navKey} toggles nav)`
+        }
       >
         <ChevronLeft size={16} className="shrink-0" />
         <span

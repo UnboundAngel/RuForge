@@ -180,7 +180,7 @@ export function IslandUpdateExpandedContent({
             if (!canInstall) return;
             onInstallRestart();
           }}
-          className="inline-flex h-9 min-w-0 flex-1 items-center justify-center rounded-[10px] bg-[color:var(--accent)] px-3 text-[10px] font-black uppercase tracking-[0.12em] text-[#1D1613] transition-[filter,transform] duration-150 hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-9 min-w-0 flex-1 items-center justify-center rounded-[10px] bg-[color:var(--accent)] px-3 text-[10px] font-black uppercase tracking-[0.12em] text-[color:var(--rf-on-accent)] transition-[filter,transform] duration-150 hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
           aria-label="Install and restart"
         >
           Install &amp; Restart

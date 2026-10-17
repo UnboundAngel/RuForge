@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { memo, useState, useCallback } from "react";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { MoreHorizontal } from "lucide-react";
 
 import type { MediaFile } from "@/types";
@@ -21,7 +21,7 @@ type Props = {
   onPlay: (file: MediaFile) => void;
 };
 
-export function MusicHistoryTab({ playingFile, entries, onPlay }: Props) {
+export const MusicHistoryTab = memo(function MusicHistoryTab({ playingFile, entries, onPlay }: Props) {
   const [toggle, setToggle] = useState<HistoryToggle>("recent");
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
   const allFiles = useRuforgeStore((s) => s.entries);
@@ -111,7 +111,7 @@ export function MusicHistoryTab({ playingFile, entries, onPlay }: Props) {
       <MusicRowContextMenu menu={menu} onClose={() => setMenu(null)} />
     </>
   );
-}
+});
 
 function ToggleBtn({
   active,
@@ -153,7 +153,7 @@ function HistoryRow({
   onContextMenu: (x: number, y: number) => void;
 }) {
   const coverPath = file ? bestCoverPath(file) : null;
-  const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
+  const coverSrc = coverPath ? localThumbSrc(coverPath) : null;
 
   return (
     <div

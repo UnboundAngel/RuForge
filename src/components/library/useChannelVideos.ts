@@ -14,10 +14,10 @@ type ChannelVideosState = {
 
 export const useChannelVideosStore = create<ChannelVideosState>(() => ({ byChannel: {}, status: {}, history: [] }));
 
-const CHANNEL_KEY = "ruforge-channel-videos-v1:";
+const CHANNEL_KEY = "ruforge-channel-videos-v2:";
 /** Uploads move slowly; a day-old shelf is still right, a fetch per launch is not free. */
 const CHANNEL_TTL_MS = 6 * 60 * 60 * 1000;
-const HISTORY_KEY = "ruforge-youtube-history-v1";
+const HISTORY_KEY = "ruforge-youtube-history-v2";
 const HISTORY_TTL_MS = 30 * 60 * 1000;
 
 type Cached = { at: number; items: FeedVideo[] };

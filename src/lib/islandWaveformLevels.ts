@@ -58,12 +58,14 @@ function springStep(i: number, target: number): boolean {
   return moved;
 }
 
-function decayToIdle() {
+/** Returns whether the bars are still settling. */
+function decayToIdle(): boolean {
   let changed = false;
   for (let i = 0; i < ISLAND_WAVEFORM_BAR_COUNT; i++) {
     if (springStep(i, IDLE_LEVEL)) changed = true;
   }
   if (changed) notify();
+  return changed;
 }
 
 function resetGraphForMediaChange() {
@@ -82,12 +84,13 @@ function ensureGraph(el: HTMLMediaElement) {
   if (!graph || graph.ctx.state === "closed") {
     graph = acquireAnalyserGraph(el);
   }
-  if (graph) void graph.ctx.resume();
+  if (graph?.ctx.state === "suspended") void graph.ctx.resume();
 }
 
 function bindMediaRetryListeners(el: HTMLMediaElement | null) {
   if (!el) return;
   const retry = () => {
+    wakeLoop();
     if (inactive || el.paused) return;
     if (!graph || graph.ctx.state === "closed") {
       resetGraphForMediaChange();
@@ -97,10 +100,12 @@ function bindMediaRetryListeners(el: HTMLMediaElement | null) {
       notify();
     }
   };
+  el.addEventListener("play", retry);
   el.addEventListener("playing", retry);
   el.addEventListener("canplay", retry);
   el.addEventListener("loadeddata", retry);
   return () => {
+    el.removeEventListener("play", retry);
     el.removeEventListener("playing", retry);
     el.removeEventListener("canplay", retry);
     el.removeEventListener("loadeddata", retry);
@@ -110,17 +115,16 @@ function bindMediaRetryListeners(el: HTMLMediaElement | null) {
 let unbindMediaRetry: (() => void) | null = null;
 let bgPumpId: ReturnType<typeof setInterval> | null = null;
 
-function tickOnce() {
+/** Returns whether another frame is needed; false once paused and settled. */
+function tickOnce(): boolean {
   const el = getPlaybackMediaElement();
   if (inactive || !el || el.paused) {
-    decayToIdle();
-    return;
+    return decayToIdle();
   }
 
   ensureGraph(el);
   if (!graph) {
-    decayToIdle();
-    return;
+    return decayToIdle();
   }
 
   const volGain = el.muted ? 0 : el.volume;
@@ -133,16 +137,32 @@ function tickOnce() {
     if (springStep(i, target)) changed = true;
   }
   if (changed) notify();
+  return true;
 }
 
-function tick() {
+let lastTickAt = 0;
+/** A hair under one 60 Hz frame so a 120 Hz display still lands every other frame. */
+const MIN_TICK_MS = SPRING_DT * 1000 - 2;
+
+function tick(now: number) {
+  rafId = null;
+  // High-refresh displays would otherwise run the 1/60 s spring several times per frame
+  // and re-render the island at the monitor rate.
+  if (now - lastTickAt >= MIN_TICK_MS) {
+    lastTickAt = now;
+    // Paused and settled: park until play, a media swap, or reactivation wakes the loop.
+    if (!tickOnce()) return;
+  }
   rafId = requestAnimationFrame(tick);
-  tickOnce();
 }
 
 function startLoop() {
   if (rafId !== null) return;
   rafId = requestAnimationFrame(tick);
+}
+
+function wakeLoop() {
+  if (mediaUnsub != null) startLoop();
 }
 
 function stopLoop() {
@@ -181,23 +201,45 @@ export function setIslandWaveformInactive(nextInactive: boolean) {
   inactive = nextInactive;
   if (inactive) decayToIdle();
   else notify();
+  wakeLoop();
 }
 
 export function getIslandWaveformLevels(): readonly number[] {
   return levelsSnapshot;
 }
 
+/** Compact and expanded island swap waveform leaves; tearing down per swap would rebuild the analyser graph. */
+const TEARDOWN_GRACE_MS = 1000;
+let teardownTimer: ReturnType<typeof setTimeout> | null = null;
+
+function teardown() {
+  teardownTimer = null;
+  if (subscriberCount !== 0) return;
+  mediaUnsub?.();
+  mediaUnsub = null;
+  unbindMediaRetry?.();
+  unbindMediaRetry = null;
+  stopLoop();
+  levelsSnapshot = [...levels];
+}
+
 export function subscribeIslandWaveformLevels(onStoreChange: () => void): () => void {
   listeners.add(onStoreChange);
   subscriberCount += 1;
 
-  if (subscriberCount === 1) {
+  if (teardownTimer != null) {
+    clearTimeout(teardownTimer);
+    teardownTimer = null;
+  }
+
+  if (subscriberCount === 1 && mediaUnsub == null) {
     mediaUnsub = subscribePlaybackMediaElement(() => {
       const nextEl = getPlaybackMediaElement();
       unbindMediaRetry?.();
       unbindMediaRetry = bindMediaRetryListeners(nextEl) ?? null;
       if (nextEl !== graphEl) resetGraphForMediaChange();
       notify();
+      wakeLoop();
     });
     const initialEl = getPlaybackMediaElement();
     unbindMediaRetry = bindMediaRetryListeners(initialEl) ?? null;
@@ -207,13 +249,8 @@ export function subscribeIslandWaveformLevels(onStoreChange: () => void): () => 
   return () => {
     listeners.delete(onStoreChange);
     subscriberCount -= 1;
-    if (subscriberCount === 0) {
-      mediaUnsub?.();
-      mediaUnsub = null;
-      unbindMediaRetry?.();
-      unbindMediaRetry = null;
-      stopLoop();
-      notify();
+    if (subscriberCount === 0 && teardownTimer == null) {
+      teardownTimer = setTimeout(teardown, TEARDOWN_GRACE_MS);
     }
   };
 }

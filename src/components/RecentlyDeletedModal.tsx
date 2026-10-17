@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { ChevronDown, Loader2, Undo2, Video } from "lucide-react";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "../lib/utils";
 import { HoverMarqueeText } from "./music/HoverMarqueeText";
@@ -265,7 +265,6 @@ export function RecentlyDeletedModal({ open, onClose }: Props) {
       zIndexClass="z-[120]"
       maxWidthClass="max-w-[min(90vw,60rem)]"
       maxHeightClass="max-h-[min(88vh,48rem)]"
-      bezel
       bodyScrollInsetTop={entries.length > 0 ? TOOLBAR_H : undefined}
       bodyClassName="pt-0 pb-3"
       footerClassName="pb-4 pt-3"
@@ -347,11 +346,11 @@ function VaultToolbar({
   return (
     <>
       <div ref={sentinelRef} aria-hidden className="h-px -mb-px" />
-      <div className="sticky top-0 z-10 -mx-6 bg-[#1D1613] px-6">
+      <div className="sticky top-0 z-10 -mx-6 bg-[color:var(--rf-surface-deep)] px-6">
         <span
           aria-hidden
           className={cn(
-            "pointer-events-none absolute inset-0 bg-[#271C18] transition-opacity duration-200 motion-reduce:transition-none",
+            "pointer-events-none absolute inset-0 bg-[color:var(--rf-surface)] transition-opacity duration-200 motion-reduce:transition-none",
             stuck ? "opacity-100" : "opacity-0",
           )}
         />
@@ -365,7 +364,7 @@ function VaultToolbar({
               </>
             ) : null}
           </p>
-          <div role="radiogroup" aria-label="Sort" className="flex shrink-0 items-center rounded-lg bg-[#271C18] p-0.5">
+          <div role="radiogroup" aria-label="Sort" className="flex shrink-0 items-center rounded-lg bg-[color:var(--rf-surface)] p-0.5">
             {SORTS.map((s) => {
               const active = s.key === sort;
               return (
@@ -384,7 +383,7 @@ function VaultToolbar({
                     <motion.span
                       layoutId="rf-vault-sort"
                       aria-hidden
-                      className="absolute inset-0 rounded-md bg-[#3a2c25]"
+                      className="absolute inset-0 rounded-md bg-[color:var(--rf-field-hover)]"
                       transition={{ type: "spring", stiffness: 520, damping: 40 }}
                     />
                   ) : null}
@@ -427,7 +426,7 @@ function GoneSection({
           type="button"
           aria-expanded={open}
           onClick={onToggle}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl bg-[#241b17] px-3 py-2.5 text-left transition-colors duration-150 hover:bg-[#2a201b]"
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl bg-[color:var(--rf-field)] px-3 py-2.5 text-left transition-colors duration-150 hover:bg-[color:var(--rf-field-raised)]"
         >
           <motion.span
             aria-hidden
@@ -505,9 +504,7 @@ const VaultCard = memo(function VaultCard({
   onRestore: (entry: RecentlyDeletedEntry) => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const [thumbFailed, setThumbFailed] = useState(false);
   const restoring = busyKind === "restore";
-  const thumb = entry.previewPath && !thumbFailed ? convertFileSrc(entry.previewPath) : null;
   const gone = !entry.recoverable;
 
   return (
@@ -540,29 +537,24 @@ const VaultCard = memo(function VaultCard({
       }}
       className={cn(
         "group flex min-w-0 cursor-pointer flex-col gap-2 rounded-xl p-1.5 outline-none transition-colors duration-150 focus-visible:bg-white/[0.06]",
-        selected ? "bg-[#2e241f]" : "hover:bg-white/[0.04]",
+        selected ? "bg-[color:var(--rf-field-raised)]" : "hover:bg-white/[0.04]",
         locked && "pointer-events-none",
       )}
     >
       <div
         className={cn(
-          "relative aspect-video w-full overflow-hidden rounded-lg bg-[#261d18] transition-opacity duration-150",
+          "relative aspect-video w-full overflow-hidden rounded-lg bg-[color:var(--rf-field)] transition-opacity duration-150",
           restoring && "opacity-60",
         )}
       >
-        {thumb ? (
-          <img
-            src={thumb}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            draggable={false}
-            onError={() => setThumbFailed(true)}
-            className={cn("h-full w-full object-cover", gone && "opacity-40 grayscale")}
-          />
-        ) : (
-          <Video size={20} className="absolute inset-0 m-auto text-stone-600" aria-hidden />
-        )}
+        <FallbackImg
+          src={entry.previewPath}
+          local
+          loading="lazy"
+          decoding="async"
+          className={cn("h-full w-full object-cover", gone && "opacity-40 grayscale")}
+          fallback={<Video size={20} className="absolute inset-0 m-auto text-stone-600" aria-hidden />}
+        />
         {entry.sizeBytes ? (
           <span className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-stone-100">
             {formatStorageSize(entry.sizeBytes)}
@@ -585,7 +577,7 @@ const VaultCard = memo(function VaultCard({
                 onRestore(entry);
               }}
               onDoubleClick={(e) => e.stopPropagation()}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--accent)] text-[#1D1613] transition-transform duration-150 hover:scale-105 active:scale-95"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--accent)] text-[color:var(--rf-on-accent)] transition-transform duration-150 hover:scale-105 active:scale-95"
             >
               {restoring ? (
                 <Loader2 size={15} className="animate-spin" aria-hidden />

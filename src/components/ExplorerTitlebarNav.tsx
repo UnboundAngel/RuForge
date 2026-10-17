@@ -1,9 +1,10 @@
 import { Icon } from "@iconify/react";
 import { TitlebarHoverButton } from "./TitlebarHoverButton";
+import { ExplorerGameScopePill } from "@games";
 
 type ExplorerTitlebarNavProps = {
-  /** Pixel offset from window left — must match sidebar width (80 collapsed / 240 expanded). */
-  left: number;
+  /** Offset from window left; matches the rail width. */
+  left: number | string;
   onBack: () => void;
   onForward: () => void;
   onReload: () => void;
@@ -11,7 +12,7 @@ type ExplorerTitlebarNavProps = {
 
 /**
  * Explorer back / forward / reload in the top title band, flush at the sidebar→content seam.
- * Must stay `fixed` + z-[100] — the embedded explorer webview covers in-tab DOM.
+ * Must stay `fixed` + z-[100]: the embedded explorer webview covers in-tab DOM.
  */
 export function ExplorerTitlebarNav({
   left,
@@ -33,6 +34,7 @@ export function ExplorerTitlebarNav({
       <TitlebarHoverButton tooltip="Reload" onClick={onReload}>
         <Icon icon="material-symbols:refresh" fontSize={16} />
       </TitlebarHoverButton>
+      <ExplorerGameScopePill />
     </div>
   );
 }

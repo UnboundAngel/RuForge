@@ -4,7 +4,7 @@ Cross-cutting landmines with no single feature directory. Root [`AGENTS.md`](../
 
 ## Rust tests on Windows
 
-`cargo test` in `src-tauri` compiles but the test binary crashes on Windows (`STATUS_ENTRYPOINT_NOT_FOUND`). Run pure-logic modules unchanged in a throwaway crate under `%TEMP%` with stubs. Never commit the harness.
+`cargo test` in `src-tauri` compiles but the test binary crashes on Windows (`STATUS_ENTRYPOINT_NOT_FOUND`). Run pure-logic modules through the harness crates in `src-tauri/test-harness/` (see its README); add a crate there when a new module needs one.
 
 ## Title bar drag regions
 

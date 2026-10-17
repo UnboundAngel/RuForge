@@ -5,6 +5,7 @@ import type { Chapter } from "@/types";
 import { sbSegmentColor, SPONSORBLOCK_CATEGORY_COLORS } from "@/sponsorBlockColors";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useMainAudioCurrentTime } from "@/playback/mainAudioPlaybackContext";
+import { Switch } from "@/components/ui/Switch";
 
 type Props = {
   duration: number;
@@ -69,21 +70,12 @@ export function MusicSegmentsTab({
             Auto-seek past non-music SB segments
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onToggleMusicOnlySkip}
-          className="rf-music-toggle shrink-0 w-[36px] h-[20px] rounded-full relative transition-colors duration-200 cursor-pointer border-0 outline-none"
-          style={{
-            background: musicOnlySkip ? "var(--music-accent)" : "rgba(255,255,255,0.16)",
-          }}
-          aria-checked={musicOnlySkip}
-          role="switch"
-        >
-          <span
-            className="absolute top-[2px] left-[2px] w-[16px] h-[16px] rounded-full bg-white transition-transform duration-200 ease-out"
-            style={{ transform: musicOnlySkip ? "translateX(16px)" : "translateX(0px)" }}
-          />
-        </button>
+        <Switch
+          size="sm"
+          checked={musicOnlySkip}
+          onChange={onToggleMusicOnlySkip}
+          label="Skip non-music sections"
+        />
       </div>
 
       {/* Density strip */}

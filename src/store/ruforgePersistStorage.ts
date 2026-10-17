@@ -1,6 +1,7 @@
 import type { PersistStorage, StorageValue } from "zustand/middleware";
 import type { RuforgeSettings } from "./types";
 import { loadMergedSettings } from "./types";
+import { mirrorSettingsToFile } from "./settingsFileSync";
 
 /** Subset of the main store written through `persist` + `partialize`. */
 export type RuforgePersistedSubset = {
@@ -29,6 +30,7 @@ export function createRuforgePersistStorage(): PersistStorage<RuforgePersistedSu
       const settingsStr = JSON.stringify(value.state.settings);
       if (settingsStr !== lastWrittenSettings) {
         localStorage.setItem("ruforge-settings", settingsStr);
+        mirrorSettingsToFile(settingsStr);
         lastWrittenSettings = settingsStr;
       }
     },

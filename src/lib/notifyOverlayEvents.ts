@@ -2,6 +2,7 @@ import type {
   NotificationCenterFilter,
   NotificationCenterTab,
   NotificationItem,
+  NotificationMuteKey,
   NotificationPrefs,
 } from "@/notifications/types";
 import type { NavMode } from "@/store/types";
@@ -20,7 +21,7 @@ export const NOTIFY_OVERLAY_CLOSE_EVENT = "notify-overlay-close";
 
 export const NOTIFY_OVERLAY_PANEL_WIDTH = 480;
 /** Transparent gutter so the panel's float shadow is not clipped at the webview edge. */
-export const NOTIFY_OVERLAY_SHADOW_PAD = 16;
+export const NOTIFY_OVERLAY_SHADOW_PAD = 28;
 
 export type NotifyOverlayState = {
   open: boolean;
@@ -47,7 +48,9 @@ export type NotifyOverlayAction =
   | { type: "checkNow" }
   | { type: "openSettings" }
   | { type: "setAlerts"; enabled: boolean }
-  | { type: "setCheckInterval"; minutes: number };
+  | { type: "setCheckInterval"; minutes: number }
+  | { type: "setMuted"; key: NotificationMuteKey; muted: boolean }
+  | { type: "openCreator"; channelId: string; channel: string };
 
 export type NotifyOverlaySize = { height: number };
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Music, RefreshCw, Search, X } from "lucide-react";
 import { bestCoverPath } from "@/mediaKind";
@@ -26,7 +26,7 @@ import {
   unhideSong,
   useHiddenRecommendations,
 } from "./musicHiddenRecommendations";
-import { showMusicToast } from "./musicToast";
+import { useRuforgeStore } from "@/store/ruforgeStore";
 import { CardShelf, SectionTitle } from "./MusicRecommendedShelf";
 import { MusicHiddenRecommendationsButton } from "./MusicHiddenRecommendationsButton";
 import { useMusicPreviewBridge } from "./MusicPreviewButton";
@@ -283,9 +283,9 @@ export function MusicPlaylistFinder({
     }
 
     if (song) {
-      showMusicToast("Hidden from recommendations", "info", { label: "Undo", run: () => unhideSong(song.id) });
+      useRuforgeStore.getState().notify("Hidden from recommendations", "info", { label: "Undo", run: () => unhideSong(song.id) });
     } else if (artist) {
-      showMusicToast(`Songs by ${artist.name} won't be recommended`, "info", {
+      useRuforgeStore.getState().notify(`Songs by ${artist.name} won't be recommended`, "info", {
         label: "Undo",
         run: () => unhideArtist(artist.key),
       });
@@ -508,7 +508,7 @@ function FinderRow({ file, index, added, onAdd }: { file: MediaFile; index: numb
     >
       <div className="flex items-center gap-3 min-w-0">
         {cover ? (
-          <img src={convertFileSrc(cover)} alt="" className="w-10 h-10 shrink-0 object-cover rounded" />
+          <img src={localThumbSrc(cover)} alt="" className="w-10 h-10 shrink-0 object-cover rounded" />
         ) : (
           <div className="w-10 h-10 shrink-0 flex items-center justify-center rounded bg-white/[0.07] text-white/40">
             <Music size={16} />

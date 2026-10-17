@@ -27,7 +27,9 @@ function sh(cmd, opts = {}) {
 function commitMessageFromDiff() {
   const numstat = parseNumstat(run(['diff', '--cached', '--numstat']));
   if (!numstat.length) return null;
-  const forced = process.env.RUFORGE_COMMIT_MSG || process.argv.slice(2).join(' ').trim();
+  const args = process.argv.slice(2);
+  if (args[0] === '-m' || args[0] === '--message') args.shift();
+  const forced = process.env.RUFORGE_COMMIT_MSG || args.join(' ').trim();
   if (forced) return forced;
   const safe = (args) => {
     try {
@@ -50,6 +52,8 @@ if (!branch) {
   process.exit(1);
 }
 
+// Shrunk files lock in their new size so the baseline only ever goes down.
+execFileSync('node', ['scripts/file-size-check.mjs', '--tighten'], { cwd: root, stdio: 'inherit' });
 run(['add', '-A']);
 const msg = commitMessageFromDiff();
 if (msg) {

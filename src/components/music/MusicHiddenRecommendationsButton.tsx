@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { AnimatePresence, motion } from "framer-motion";
 import { EyeOff, Music, User } from "lucide-react";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import {
   type HiddenArtist,
   type HiddenSong,
@@ -147,23 +148,16 @@ function HiddenGroup({ label, children }: { label: string; children: React.React
 }
 
 function SongCover({ song }: { song: HiddenSong }) {
-  const [broken, setBroken] = useState(false);
-  const src = song.coverPath ? convertFileSrc(song.coverPath) : song.thumbnail;
-  if (!src || broken) {
-    return (
-      <div className="w-9 h-9 rounded bg-white/[0.07] flex items-center justify-center text-white/40">
-        <Music size={16} />
-      </div>
-    );
-  }
   return (
-    <img
-      src={src}
-      alt=""
-      draggable={false}
+    <FallbackImg
+      src={song.coverPath ? localThumbSrc(song.coverPath) : song.thumbnail}
       referrerPolicy="no-referrer"
-      onError={() => setBroken(true)}
       className="w-9 h-9 rounded object-cover"
+      fallback={(
+        <div className="w-9 h-9 rounded bg-white/[0.07] flex items-center justify-center text-white/40">
+          <Music size={16} />
+        </div>
+      )}
     />
   );
 }

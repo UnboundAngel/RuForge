@@ -6,6 +6,8 @@
 param(
     [switch]$Apply,
     [switch]$Incremental,
+    [switch]$StaleIncremental,
+    [int]$StaleDays = 7,
     [switch]$WebsiteDist,
     [switch]$NpmCache,
     [switch]$SelfTest
@@ -79,12 +81,15 @@ function Format-Size {
 }
 
 function Get-BlockingProcesses {
+    param([switch]$CompilerOnly)
+
     $blocking = @()
-    $names = @('cargo', 'rustc', 'rustdoc', 'ruforge', 'link', 'lld-link')
+    $names = if ($CompilerOnly) { @('cargo', 'rustc') } else { @('cargo', 'rustc', 'rustdoc', 'ruforge', 'link', 'lld-link') }
 
     foreach ($proc in (Get-Process -ErrorAction SilentlyContinue)) {
         if ($names -contains $proc.ProcessName) { $blocking += "$($proc.ProcessName) (pid $($proc.Id))" }
     }
+    if ($CompilerOnly) { return $blocking }
 
     $nodes = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -and ($_.CommandLine -like '*vite*' -or $_.CommandLine -like '*tauri*') }
@@ -175,6 +180,30 @@ if ($Incremental) {
     }
 }
 
+if ($StaleIncremental -and -not $Incremental) {
+    $cutoff = (Get-Date).AddDays(-$StaleDays)
+    $stale = @()
+    if (Test-Path -LiteralPath $incrementalDir) {
+        # Every build writes a fresh session dir inside the crate dir it uses, so an old
+        # newest-child time means no current profile or feature set points at it anymore.
+        $stale = @(Get-ChildItem -LiteralPath $incrementalDir -Directory -Force -ErrorAction SilentlyContinue |
+            Where-Object {
+                $newest = $_.LastWriteTime
+                foreach ($child in @(Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue)) {
+                    if ($child.LastWriteTime -gt $newest) { $newest = $child.LastWriteTime }
+                }
+                $newest -lt $cutoff
+            } |
+            ForEach-Object { $_.FullName })
+    }
+    $plan += [pscustomobject]@{
+        Label = "Rust incremental caches unused for $StaleDays days"
+        Paths = $stale
+        Kind  = 'delete'
+        Note  = 'caches the current build still uses are kept'
+    }
+}
+
 if ($WebsiteDist) {
     $children = @()
     if (Test-Path -LiteralPath $websiteDistDir) {
@@ -204,6 +233,7 @@ if ($plan.Count -eq 0) {
     Write-Host 'Nothing selected. Pass one or more switches:' -ForegroundColor Yellow
     Write-Host '  -Incremental   src-tauri/target/debug/incremental   ' -NoNewline
     Write-Host (Format-Size -Bytes (Measure-Path $incrementalDir))
+    Write-Host '  -StaleIncremental  only incremental caches unused for -StaleDays (default 7)'
     Write-Host '  -WebsiteDist   website/dist minus releases/         ' -NoNewline
     Write-Host (Format-Size -Bytes ((Measure-Path $websiteDistDir) - (Measure-Path $websiteReleasesDir)))
     Write-Host '  -NpmCache      npm cache clean --force'
@@ -228,7 +258,7 @@ foreach ($group in $plan) {
         continue
     }
 
-    if ($group.Paths.Count -eq 0) {
+    if (@($group.Paths).Count -eq 0) {
         Write-Host '  nothing present' -ForegroundColor DarkGray
         continue
     }
@@ -255,7 +285,8 @@ if (-not $Apply) {
     exit 0
 }
 
-$blocking = Get-BlockingProcesses
+$compilerOnly = $StaleIncremental -and -not ($Incremental -or $WebsiteDist -or $NpmCache)
+$blocking = @(Get-BlockingProcesses -CompilerOnly:$compilerOnly)
 if ($blocking.Count -gt 0) {
     Write-Host ''
     Write-Host 'Refusing to delete. These processes are active:' -ForegroundColor Red

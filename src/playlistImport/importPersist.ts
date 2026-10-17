@@ -7,6 +7,7 @@ const SAVED_VERSION = 1;
 export type SavedImportSession = {
   phase: "paste" | "review";
   name: string;
+  targetId: string | null;
   rows: ImportRow[];
   notes: string[];
   stopped: string | null;
@@ -19,8 +20,8 @@ export function isEmptySession(s: SavedImportSession): boolean {
 
 export function serializeImportSession(s: SavedImportSession): string | null {
   if (isEmptySession(s)) return null;
-  const { phase, name, rows, notes, stopped, draft } = s;
-  return JSON.stringify({ v: SAVED_VERSION, phase, name, rows, notes, stopped, draft });
+  const { phase, name, targetId, rows, notes, stopped, draft } = s;
+  return JSON.stringify({ v: SAVED_VERSION, phase, name, targetId, rows, notes, stopped, draft });
 }
 
 function validRow(r: unknown): r is ImportRow {
@@ -50,6 +51,7 @@ export function restoreImportSession(raw: string | null): SavedImportSession | n
     const saved: SavedImportSession = {
       phase,
       name: typeof o.name === "string" ? o.name : "",
+      targetId: typeof o.targetId === "string" ? o.targetId : null,
       rows: phase === "review" ? rows : [],
       notes: Array.isArray(o.notes) ? o.notes.filter((n): n is string => typeof n === "string") : [],
       stopped: typeof o.stopped === "string" ? o.stopped : null,

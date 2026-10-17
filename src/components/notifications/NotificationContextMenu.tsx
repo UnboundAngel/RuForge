@@ -1,15 +1,21 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { Check, ClipboardCopy, Link } from "lucide-react";
-import { GalleryMenuTitle } from "@/components/library/LibraryVideoCard";
-import { MORPH_CONTENT_EASE, MORPH_MENU_SHELL } from "@/components/ui/Morph";
-import type { NotificationActionId, NotificationItem } from "@/notifications/types";
+import { BellOff, Check, ClipboardCopy, Link } from "lucide-react";
+import {
+  MUSIC_MENU_ICON_SIZE,
+  MUSIC_MENU_TONES,
+  MUSIC_MENU_WIDTH,
+  MusicMenuPanel,
+  MusicMenuRow,
+  MusicMenuSection,
+} from "@/components/music/musicMenuUi";
+import { muteKeyForKind, muteLabel } from "@/notifications/muteModel";
+import type { NotificationActionId, NotificationItem, NotificationMuteKey } from "@/notifications/types";
 import { ACTION_META } from "./NotificationRowActions";
 
 export type NotificationMenuState = { item: NotificationItem; x: number; y: number };
 
-const MENU_WIDTH = 176;
 const EDGE_PAD = 8;
 
 async function copyText(text: string): Promise<void> {
@@ -20,58 +26,43 @@ async function copyText(text: string): Promise<void> {
   }
 }
 
-/** Same row as the library ⋮ menu (`MorphMenu`): the primary action sits in an accent chip. */
-function MenuRow({
-  icon,
-  label,
-  primary = false,
-  onSelect,
-}: {
-  icon: ReactNode;
-  label: string;
-  primary?: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onSelect}
-      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[11px] font-bold text-stone-300 outline-none transition-colors hover:bg-white/5 hover:text-white focus-visible:bg-white/5 focus-visible:text-white"
-    >
-      {primary ? (
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--accent),transparent_88%)] text-[color:var(--accent)]">
-          {icon}
-        </span>
-      ) : (
-        <span className="ml-1.5 flex shrink-0">{icon}</span>
-      )}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-    </button>
-  );
-}
-
 type Props = {
   menu: NotificationMenuState;
-  /** Panel size: the menu stays inside it so both hosts treat clicks on it as inside the popover. */
-  bounds: { width: number; height: number };
+  /** The menu stays inside the panel so every host treats clicks on it as inside the popover. */
+  containerRef: RefObject<HTMLDivElement | null>;
+  /** Extra panel height the menu needs below the click point; hosts grow to it up to their cap. */
+  onReserve: (px: number) => void;
   onAction: (item: NotificationItem, action: NotificationActionId) => void;
   onMarkRead: (item: NotificationItem) => void;
+  onMute: (key: NotificationMuteKey, muted: boolean) => void;
   onClose: () => void;
 };
 
-export function NotificationContextMenu({ menu, bounds, onAction, onMarkRead, onClose }: Props) {
+/** Music menu kit visuals, but positioned inside the panel instead of portaled to the page. */
+export function NotificationContextMenu({ menu, containerRef, onReserve, onAction, onMarkRead, onMute, onClose }: Props) {
   const { item } = menu;
   const ref = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotion();
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
   useLayoutEffect(() => {
+    const container = containerRef.current;
     const height = ref.current?.offsetHeight ?? 0;
-    const left = Math.max(EDGE_PAD, Math.min(menu.x, bounds.width - MENU_WIDTH - EDGE_PAD));
-    const top = menu.y + height > bounds.height - EDGE_PAD ? Math.max(EDGE_PAD, bounds.height - height - EDGE_PAD) : menu.y;
-    setPos({ left, top });
-  }, [menu, bounds]);
+    if (!container) return;
+    onReserve(Math.max(0, menu.y + height + EDGE_PAD - container.offsetHeight));
+    const place = () => {
+      const left = Math.max(EDGE_PAD, Math.min(menu.x, container.offsetWidth - MUSIC_MENU_WIDTH - EDGE_PAD));
+      const top = Math.max(EDGE_PAD, Math.min(menu.y, container.offsetHeight - height - EDGE_PAD));
+      setPos({ left, top });
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+      onReserve(0);
+    };
+  }, [menu, containerRef, onReserve]);
 
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
@@ -95,44 +86,75 @@ export function NotificationContextMenu({ menu, bounds, onAction, onMarkRead, on
     fn();
     onClose();
   };
+  const icon = MUSIC_MENU_ICON_SIZE;
   const link = item.ref.url;
   const ownFailure = item.kind === "download-failed" || item.kind === "download-timed-out";
   const error = item.ref.error ?? (ownFailure ? item.subtitle : null);
   const errorLabel = ownFailure ? "Copy error" : "Copy failed attempt's error";
+  const hasActions = item.actions.length > 0 || !item.read;
+  const muteKey = muteKeyForKind(item.kind);
 
   return (
     <motion.div
       ref={ref}
-      role="menu"
-      aria-label="Notification options"
       initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
       animate={pos ? { opacity: 1, scale: 1 } : undefined}
-      transition={MORPH_CONTENT_EASE}
-      style={{ left: pos?.left ?? menu.x, top: pos?.top ?? menu.y, width: MENU_WIDTH }}
-      className={`absolute z-50 flex origin-top-left flex-col rounded-2xl p-1 ${MORPH_MENU_SHELL}`}
+      transition={{ duration: 0.1, ease: "easeOut" }}
+      style={{ left: pos?.left ?? menu.x, top: pos?.top ?? menu.y, width: MUSIC_MENU_WIDTH }}
+      className="absolute z-50 origin-top-left"
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className="mb-0.5 px-2.5 py-2">
-        <GalleryMenuTitle text={item.title} />
-      </div>
-      {item.actions.map((action, i) => (
-        <MenuRow
-          key={action}
-          primary={i === 0}
-          icon={ACTION_META[action].icon(i === 0 ? 13 : 14)}
-          label={ACTION_META[action].tooltip}
-          onSelect={select(() => onAction(item, action))}
-        />
-      ))}
-      {!item.read ? (
-        <MenuRow icon={<Check size={14} strokeWidth={2.5} />} label="Mark read" onSelect={select(() => onMarkRead(item))} />
-      ) : null}
-      {error ? (
-        <MenuRow icon={<ClipboardCopy size={14} />} label={errorLabel} onSelect={select(() => void copyText(error))} />
-      ) : null}
-      {link ? (
-        <MenuRow icon={<Link size={14} />} label="Copy link" onSelect={select(() => void copyText(link))} />
-      ) : null}
+      <MusicMenuPanel theme="library" role="menu" aria-label="Notification options">
+        {hasActions ? (
+          <MusicMenuSection label="Actions" tone={MUSIC_MENU_TONES.playback}>
+            {item.actions.map((action) => (
+              <MusicMenuRow
+                key={action}
+                tone={MUSIC_MENU_TONES.playback}
+                icon={ACTION_META[action].icon(icon)}
+                label={ACTION_META[action].tooltip}
+                onClick={select(() => onAction(item, action))}
+              />
+            ))}
+            {!item.read ? (
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.playback}
+                icon={<Check size={icon} strokeWidth={2.25} />}
+                label="Mark read"
+                onClick={select(() => onMarkRead(item))}
+              />
+            ) : null}
+          </MusicMenuSection>
+        ) : null}
+        {error || link ? (
+          <MusicMenuSection label="Copy" tone={MUSIC_MENU_TONES.file}>
+            {error ? (
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.file}
+                icon={<ClipboardCopy size={icon} strokeWidth={2.25} />}
+                label={errorLabel}
+                onClick={select(() => void copyText(error))}
+              />
+            ) : null}
+            {link ? (
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.file}
+                icon={<Link size={icon} strokeWidth={2.25} />}
+                label="Copy link"
+                onClick={select(() => void copyText(link))}
+              />
+            ) : null}
+          </MusicMenuSection>
+        ) : null}
+        <MusicMenuSection label="Notifications" tone={MUSIC_MENU_TONES.file}>
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.file}
+            icon={<BellOff size={icon} strokeWidth={2.25} />}
+            label={`Mute ${muteLabel(muteKey).toLowerCase()}`}
+            onClick={select(() => onMute(muteKey, true))}
+          />
+        </MusicMenuSection>
+      </MusicMenuPanel>
     </motion.div>
   );
 }

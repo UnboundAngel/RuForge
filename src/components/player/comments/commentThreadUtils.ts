@@ -1,7 +1,5 @@
 import type { VideoComment } from "@/lib/videoCommentsTypes";
 
-export const COMMENTS_PANEL_WIDTH = 420;
-
 export function formatCommentLikes(num: number): string {
   if (!Number.isFinite(num)) return "";
   if (num >= 1000) return `${(num / 1000).toFixed(1).replace(/\.0$/, "")}K`;

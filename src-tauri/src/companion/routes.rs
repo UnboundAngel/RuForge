@@ -14,15 +14,27 @@ use tokio::sync::oneshot;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
+use crate::companion::art;
 use crate::companion::auth::{self, SESSION_COOKIE};
 use crate::companion::{now_unix, CompanionStateHandle, ProgressSnapshot};
 use crate::library::{resolver, LibraryState};
+
+const MEDIA_URL_TTL_SECS: i64 = 300;
+/// `last_seen` hits disk at most this often so normal browsing does not rewrite the file.
+const LAST_SEEN_SAVE_SECS: i64 = 3600;
+const STREAM_URL_TTL_SECS: i64 = 6 * 3600;
 
 pub fn build_router(state: CompanionStateHandle) -> Router {
     Router::new()
         .route("/", get(crate::companion::spa::index))
         .route("/paired", get(crate::companion::spa::index))
         .route("/assets/*path", get(crate::companion::spa::asset))
+        .route("/manifest.webmanifest", get(crate::companion::spa::manifest))
+        .route("/sw.js", get(crate::companion::spa::service_worker))
+        .route("/art-cache.js", get(crate::companion::spa::art_cache_script))
+        .route("/apple-touch-icon.png", get(crate::companion::spa::apple_touch_icon))
+        .route("/icon-192.png", get(crate::companion::spa::icon_192))
+        .route("/icon-512.png", get(crate::companion::spa::icon_512))
         .route("/healthz", get(healthz))
         .route("/pair", post(pair))
         .route("/library", get(library))
@@ -30,9 +42,10 @@ pub fn build_router(state: CompanionStateHandle) -> Router {
         .route("/stream-token/:id", post(stream_token))
         .route("/stream/:id", get(stream_media))
         .route("/thumb/:id", get(thumb_media))
+        .route("/art/:id", get(art_media))
         .route("/sprite/:id/:idx", get(sprite_media))
         .route("/progress/:id", get(progress_get).post(progress_post))
-        .layer(middleware::from_fn(same_origin_guard))
+        .layer(middleware::from_fn_with_state(state.clone(), same_origin_guard))
         .with_state(state)
 }
 
@@ -52,23 +65,42 @@ async fn require_app_handle(state: &CompanionStateHandle) -> Result<AppHandle, R
         .ok_or_else(|| error_response(StatusCode::SERVICE_UNAVAILABLE, "companion_not_ready"))
 }
 
-async fn same_origin_guard(req: Request, next: Next) -> Response {
+async fn same_origin_guard(
+    State(state): State<CompanionStateHandle>,
+    req: Request,
+    next: Next,
+) -> Response {
+    let host = req
+        .headers()
+        .get(header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let port = *state.bind_port.read().await;
+    let tailnet_host = state.tailnet_host.read().await.clone();
+    if !auth::host_allowed(host, port, tailnet_host.as_deref()) {
+        return error_response(StatusCode::FORBIDDEN, "host_not_allowed");
+    }
     if let Some(origin) = req
         .headers()
         .get(header::ORIGIN)
         .and_then(|v| v.to_str().ok())
     {
-        let host = req
-            .headers()
-            .get(header::HOST)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
         let origin_host = origin.split_once("://").map(|x| x.1).unwrap_or("");
-        if origin_host != host {
+        if !origin_host.eq_ignore_ascii_case(host) {
             return error_response(StatusCode::FORBIDDEN, "origin_mismatch");
         }
     }
     next.run(req).await
+}
+
+async fn session_id_live(state: &CompanionStateHandle, sid: &str) -> bool {
+    let now = now_unix();
+    state
+        .sessions
+        .read()
+        .await
+        .values()
+        .any(|s| s.id == sid && !auth::session_expired(s.created_at, s.last_seen, now))
 }
 
 async fn require_session(state: &CompanionStateHandle, headers: &HeaderMap) -> Result<String, Response> {
@@ -78,14 +110,27 @@ async fn require_session(state: &CompanionStateHandle, headers: &HeaderMap) -> R
         .unwrap_or("");
     let token = auth::parse_cookie(cookie_header, SESSION_COOKIE)
         .ok_or_else(|| error_response(StatusCode::UNAUTHORIZED, "no_session"))?;
+    let now = now_unix();
     let mut sessions = state.sessions.write().await;
-    match sessions.get_mut(&token) {
+    let before = sessions.len();
+    sessions.retain(|_, s| !auth::session_expired(s.created_at, s.last_seen, now));
+    let pruned = sessions.len() != before;
+    let (result, save) = match sessions.get_mut(&auth::hash_token(&token)) {
         Some(session) => {
-            session.last_seen = now_unix();
-            Ok(session.id.clone())
+            let stale = now - session.last_seen > LAST_SEEN_SAVE_SECS;
+            session.last_seen = now;
+            (Ok(session.id.clone()), stale || pruned)
         }
-        None => Err(error_response(StatusCode::UNAUTHORIZED, "invalid_session")),
+        None => (
+            Err(error_response(StatusCode::UNAUTHORIZED, "invalid_session")),
+            pruned,
+        ),
+    };
+    drop(sessions);
+    if save {
+        state.persist().await;
     }
+    result
 }
 
 async fn healthz() -> Response {
@@ -102,12 +147,19 @@ async fn pair(
     headers: HeaderMap,
     Json(body): Json<PairRequest>,
 ) -> Response {
+    let code = auth::normalize_pairing_code(&body.code);
     let mut pairing = state.pairing.write().await;
     let valid = matches!(
         pairing.as_ref(),
-        Some(p) if !p.used && p.expires_at >= now_unix() && p.code == body.code
+        Some(p) if !p.used
+            && p.failures < crate::companion::PAIRING_MAX_FAILURES
+            && p.expires_at >= now_unix()
+            && auth::constant_time_eq(p.code.as_bytes(), code.as_bytes())
     );
     if !valid {
+        if let Some(p) = pairing.as_mut() {
+            p.failures = p.failures.saturating_add(1);
+        }
         return error_response(StatusCode::UNAUTHORIZED, "invalid_pairing_code");
     }
     if let Some(p) = pairing.as_mut() {
@@ -125,7 +177,7 @@ async fn pair(
     let sid = uuid::Uuid::new_v4().to_string();
     let now = now_unix();
     state.sessions.write().await.insert(
-        token.clone(),
+        auth::hash_token(&token),
         crate::companion::Session {
             id: sid,
             created_at: now,
@@ -133,8 +185,26 @@ async fn pair(
             label: label.clone(),
         },
     );
+    state.persist().await;
 
-    let cookie = format!("{SESSION_COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400");
+    let over_tailnet = {
+        let host = headers
+            .get(header::HOST)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        state
+            .tailnet_host
+            .read()
+            .await
+            .as_deref()
+            .is_some_and(|ts| host == ts || host == format!("{ts}:443"))
+    };
+    let secure = if over_tailnet { "; Secure" } else { "" };
+    let cookie = format!(
+        "{SESSION_COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={}{secure}",
+        auth::SESSION_MAX_AGE_SECS
+    );
     let mut res = Json(json!({ "ok": true, "deviceLabel": label })).into_response();
     if let Ok(cookie_val) = HeaderValue::from_str(&cookie) {
         res.headers_mut().insert(header::SET_COOKIE, cookie_val);
@@ -153,6 +223,22 @@ async fn library(State(state): State<CompanionStateHandle>, headers: HeaderMap) 
     let lib = app.state::<LibraryState>();
     let (version, ready, refreshing, items) = resolver::snapshot(&lib).await;
 
+    // The phone keeps its own copy of the catalog, so a warm revalidate only needs the tag.
+    let etag = format!("\"{version}-{}{}\"", u8::from(ready), u8::from(refreshing));
+    let etag_value = HeaderValue::from_str(&etag).ok();
+    let client_tag = headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if client_tag.split(',').any(|t| t.trim() == etag) {
+        let mut res = StatusCode::NOT_MODIFIED.into_response();
+        res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("private, no-cache"));
+        if let Some(v) = etag_value {
+            res.headers_mut().insert(header::ETAG, v);
+        }
+        return res;
+    }
+
     let payload: Vec<_> = items
         .into_iter()
         .map(|p| {
@@ -169,7 +255,13 @@ async fn library(State(state): State<CompanionStateHandle>, headers: HeaderMap) 
                 "audioCodec": p.audio_codec,
                 "playable": p.playable,
                 "hasThumb": p.has_thumb,
+                "thumbV": p.thumb_v,
                 "sizeBytes": p.size_bytes,
+                "artist": p.artist,
+                "album": p.album,
+                "year": p.year,
+                "trackNo": p.track_no,
+                "addedAt": p.added_at,
             })
         })
         .collect();
@@ -183,10 +275,10 @@ async fn library(State(state): State<CompanionStateHandle>, headers: HeaderMap) 
     .into_response();
     res.headers_mut().insert(
         header::CACHE_CONTROL,
-        HeaderValue::from_static("private, max-age=30"),
+        HeaderValue::from_static("private, no-cache"),
     );
-    if let Ok(etag) = HeaderValue::from_str(&format!("\"{version}\"")) {
-        res.headers_mut().insert(header::ETAG, etag);
+    if let Some(v) = etag_value {
+        res.headers_mut().insert(header::ETAG, v);
     }
     res
 }
@@ -403,7 +495,7 @@ async fn stream_token(
         if resolver::resolve_sprite_sheet_path(&lib, &id, idx).await.is_none() {
             return error_response(StatusCode::NOT_FOUND, "no_sprite");
         }
-        let exp = now_unix() + 300;
+        let exp = now_unix() + MEDIA_URL_TTL_SECS;
         let secret = *state.session_secret.read().await;
         let combined = format!("{id}/{idx}");
         let sig = auth::sign_media(&secret, "sprite", &combined, &sid, exp);
@@ -426,7 +518,11 @@ async fn stream_token(
         return error_response(StatusCode::NOT_FOUND, "no_thumb");
     }
 
-    let exp = now_unix() + 300;
+    // Safari keeps issuing Range requests against the same URL for the whole
+    // playback, so a stream URL has to outlive the media. Revoking the session
+    // still kills it (`session_id_live`).
+    let ttl = if kind == "stream" { STREAM_URL_TTL_SECS } else { MEDIA_URL_TTL_SECS };
+    let exp = now_unix() + ttl;
     let secret = *state.session_secret.read().await;
     let sig = auth::sign_media(&secret, kind, &id, &sid, exp);
     let url = format!("/{kind}/{id}?sid={sid}&exp={exp}&sig={sig}");
@@ -458,6 +554,54 @@ async fn thumb_media(
     serve_signed_media("thumb", state, id, q, req).await
 }
 
+#[derive(Deserialize)]
+struct ArtQuery {
+    v: Option<u64>,
+}
+
+/// Small cover for lists and the lock screen. The session cookie authorizes it (an `<img>` and the
+/// service worker both send it), and the `v` in the URL lets the phone keep it forever.
+async fn art_media(
+    State(state): State<CompanionStateHandle>,
+    Query(q): Query<ArtQuery>,
+    AxumPath(id): AxumPath<String>,
+    headers: HeaderMap,
+) -> Response {
+    if let Err(e) = require_session(&state, &headers).await {
+        return e;
+    }
+    let app = match require_app_handle(&state).await {
+        Ok(a) => a,
+        Err(e) => return e,
+    };
+    let lib = app.state::<LibraryState>();
+    let Some(path) = resolver::resolve_thumb_path(&lib, &id).await else {
+        return error_response(StatusCode::NOT_FOUND, "no_thumb");
+    };
+    let version = q.v.unwrap_or(0);
+    let etag = format!("\"{version}\"");
+    if q.v.is_some()
+        && headers
+            .get(header::IF_NONE_MATCH)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|t| t.split(',').any(|t| t.trim() == etag))
+    {
+        return StatusCode::NOT_MODIFIED.into_response();
+    }
+    let Some(bytes) = art::variant(&app, &id, version, path).await else {
+        return error_response(StatusCode::NOT_FOUND, "no_thumb");
+    };
+    let cache = if q.v.is_some() { "private, max-age=31536000, immutable" } else { "private, no-cache" };
+    let mut res = bytes.into_response();
+    let h = res.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static("image/jpeg"));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
+    if let Ok(v) = HeaderValue::from_str(&etag) {
+        h.insert(header::ETAG, v);
+    }
+    res
+}
+
 async fn serve_signed_media(
     kind: &str,
     state: CompanionStateHandle,
@@ -474,8 +618,7 @@ async fn serve_signed_media(
         return error_response(StatusCode::FORBIDDEN, "bad_signature");
     }
 
-    let sid_live = state.sessions.read().await.values().any(|s| s.id == q.sid);
-    if !sid_live {
+    if !session_id_live(&state, &q.sid).await {
         return error_response(StatusCode::FORBIDDEN, "session_revoked");
     }
 
@@ -526,8 +669,7 @@ async fn sprite_media(
         return error_response(StatusCode::FORBIDDEN, "bad_signature");
     }
 
-    let sid_live = state.sessions.read().await.values().any(|s| s.id == q.sid);
-    if !sid_live {
+    if !session_id_live(&state, &q.sid).await {
         return error_response(StatusCode::FORBIDDEN, "session_revoked");
     }
 

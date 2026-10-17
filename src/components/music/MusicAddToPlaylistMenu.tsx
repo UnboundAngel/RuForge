@@ -128,7 +128,7 @@ function PlaylistPickRow({
       onClick={() => onToggle(record, membership)}
       className="flex items-center gap-2 w-full px-1.5 h-9 rounded-lg text-[12px] text-[#cfcfcf] hover:text-white hover:bg-white/[0.07] border-0 outline-none text-left cursor-pointer transition-colors duration-100"
     >
-      <MusicPlaylistCover files={tracks} className="w-6 h-6 shrink-0" iconSize={12} radius="6px" />
+      <MusicPlaylistCover files={tracks} className="w-6 h-6 shrink-0" iconSize={12} radius="6px" thumb />
       <span className="min-w-0 flex-1 truncate">{record.title}</span>
       <span
         className={cn(

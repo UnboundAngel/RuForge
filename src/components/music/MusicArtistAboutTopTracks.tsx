@@ -1,10 +1,8 @@
-import { useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { motion, useReducedMotion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import type { MediaFile } from "@/types";
-import { bestCoverPath } from "@/mediaKind";
-import { albumCoverPathWithFallback } from "@/albumCoverPath";
+import { coverPathChain } from "@/albumCoverPath";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { cn } from "@/lib/utils";
 
 export type AboutTopTrack = { key: string; title: string; playCount: number; file: MediaFile | null };
@@ -83,27 +81,19 @@ function TopTrackRow({
 }
 
 function TopTrackCover({ file, playable }: { file: MediaFile | null; playable: boolean }) {
-  const paths = file ? albumCoverPathWithFallback(file) : null;
-  const chain = file && paths
-    ? [...new Set([paths.primary, paths.fallback, bestCoverPath(file)])].filter((p): p is string => !!p)
-    : [];
-  const [idx, setIdx] = useState(0);
-  const src = chain[idx] ? convertFileSrc(chain[idx]) : null;
   return (
     <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md bg-white/[0.07]">
-      {src ? (
-        <img
-          src={src}
-          alt=""
-          draggable={false}
-          onError={() => setIdx((i) => i + 1)}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center text-white/30">
-          <Icon icon="solar:music-note-bold" width={16} height={16} aria-hidden />
-        </span>
-      )}
+      <FallbackImg
+        src={file ? coverPathChain(file) : null}
+        local
+        thumb
+        className="h-full w-full object-cover"
+        fallback={(
+          <span className="flex h-full w-full items-center justify-center text-white/30">
+            <Icon icon="solar:music-note-bold" width={16} height={16} aria-hidden />
+          </span>
+        )}
+      />
       {playable && (
         <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-white opacity-0 transition-opacity duration-150 group-hover/top:opacity-100">
           <Icon icon="tabler:player-play-filled" width={14} height={14} aria-hidden />

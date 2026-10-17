@@ -22,18 +22,74 @@ export const ISLAND_WATCHLIST_MAX_FACES = 3;
 export const ISLAND_WATCHLIST_MAX_ROWS = 6;
 const VISIBLE_ROWS = 3;
 
-export const ISLAND_WATCHLIST_EXPANDED_DIMENSIONS = {
-  width: 350,
-  height: 248,
-  borderRadius: 24,
-} as const;
+/*
+ * Expanded panel: 350 wide, height from row count. Max three rows keeps it under the 280px island cap.
+ * Thumb 80x45 is 16:9; the row padding around it makes the row 57px.
+ */
+const EXPANDED_W = 350;
+const EXPANDED_PAD_Y = 12;
+const EXPANDED_HEADER_H = 24;
+const EXPANDED_HEADER_GAP = 10;
+const EXPANDED_ROW_H = 57;
+const EXPANDED_ROW_GAP = 2;
+const EXPANDED_FOOTER_GAP = 8;
+const EXPANDED_FOOTER_H = 16;
 
-export function islandWatchlistCollapsedWidth(count: number): number {
-  return count >= 10 ? 252 : 240;
+export function islandWatchlistExpandedDims(rowCount: number) {
+  const n = Math.max(1, rowCount);
+  return {
+    width: EXPANDED_W,
+    height:
+      EXPANDED_PAD_Y * 2 +
+      EXPANDED_HEADER_H +
+      EXPANDED_HEADER_GAP +
+      n * EXPANDED_ROW_H +
+      (n - 1) * EXPANDED_ROW_GAP +
+      EXPANDED_FOOTER_GAP +
+      EXPANDED_FOOTER_H,
+    borderRadius: 24,
+  };
 }
+
+/** Faces: pl-2 (8) plus each 24px face overlapping the previous by 8px. */
+const PILL_FACES_LEAD = 8;
+const PILL_FACE_STEP = 16;
+/** px-3.5 on both sides, gap-2.5 between the faces and the label. */
+const PILL_PAD_X = 14;
+const PILL_GAP = 10;
+const PILL_MIN_W = 120;
+const PILL_MAX_W = 240;
+const PILL_LABEL_MAX_CHARS = 18;
 
 export function islandWatchlistCountLabel(count: number): string {
   return count === 1 ? "1 new upload" : `${count} new uploads`;
+}
+
+/**
+ * "3 new" reads clearly beside the channel faces and keeps the pill short. A single upload shows
+ * its channel name instead, since that is the more useful word for one video.
+ */
+export function islandWatchlistPillLabel(w: IslandWatchlist): string {
+  if (w.count !== 1) return `${w.count} new`;
+  const channel = w.rows[0]?.channel.trim() ?? "";
+  if (!channel) return "1 new";
+  return channel.length > PILL_LABEL_MAX_CHARS
+    ? `${channel.slice(0, PILL_LABEL_MAX_CHARS - 1)}\u2026`
+    : channel;
+}
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+function pillTextWidth(text: string): number {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx) return text.length * 6.4;
+  measureCtx.font = `500 12px ${getComputedStyle(document.body).fontFamily || "Inter, sans-serif"}`;
+  return measureCtx.measureText(text).width;
+}
+
+export function islandWatchlistCollapsedWidth(w: IslandWatchlist): number {
+  const faces = w.faces.length === 0 ? 0 : PILL_FACES_LEAD + PILL_FACE_STEP * w.faces.length;
+  const natural = PILL_PAD_X * 2 + faces + PILL_GAP + Math.ceil(pillTextWidth(islandWatchlistPillLabel(w)));
+  return Math.min(PILL_MAX_W, Math.max(PILL_MIN_W, natural));
 }
 
 /** Reduced motion: no scale, no delay, instant opacity. */
@@ -61,8 +117,8 @@ export function IslandWatchlistCompactContent({ watchlist }: { watchlist: Island
       role="status"
     >
       <IslandWatchlistFaces faces={watchlist.faces} />
-      <span className="truncate text-[12px] font-medium text-stone-100">
-        {islandWatchlistCountLabel(watchlist.count)}
+      <span className="whitespace-nowrap text-[12px] font-medium text-stone-100">
+        {islandWatchlistPillLabel(watchlist)}
       </span>
     </motion.div>
   );
@@ -84,7 +140,8 @@ export function IslandWatchlistExpandedContent({
   onShowMore: () => void;
 }) {
   const reduceMotion = useReducedMotion();
-  const more = watchlist.count - Math.min(VISIBLE_ROWS, watchlist.rows.length);
+  const shown = watchlist.rows.slice(0, VISIBLE_ROWS);
+  const more = watchlist.count - shown.length;
   const stop = (fn: () => void) => (e: MouseEvent) => {
     e.stopPropagation();
     fn();
@@ -93,37 +150,39 @@ export function IslandWatchlistExpandedContent({
   return (
     <motion.div
       {...contentMotion(reduceMotion, 0.95)}
-      className="pointer-events-auto absolute inset-0 flex min-h-0 flex-col p-3.5"
+      className="pointer-events-auto absolute inset-0 flex min-h-0 flex-col px-3 py-3"
       style={{ "--accent": accentColor } as CSSProperties}
       onClick={(e) => e.stopPropagation()}
     >
-      <header className="flex shrink-0 items-center gap-2.5">
+      <header className="flex h-6 shrink-0 items-center gap-2.5">
         <IslandWatchlistFaces faces={watchlist.faces} />
-        <p className="min-w-0 flex-1 truncate text-[13px] font-bold text-stone-100">
+        <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-stone-100">
           {islandWatchlistCountLabel(watchlist.count)}
         </p>
-        <button
-          type="button"
-          onClick={stop(onMarkAllSeen)}
-          className="shrink-0 text-[11px] font-semibold text-stone-400 transition-colors duration-150 hover:text-[color:var(--accent)] motion-reduce:transition-none"
-        >
-          Mark all seen
-        </button>
       </header>
-      <ul className="mt-2.5 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto scrollbar-none">
-        {watchlist.rows.slice(0, VISIBLE_ROWS).map((row) => (
+      <ul className="mt-2.5 flex min-h-0 flex-col gap-0.5">
+        {shown.map((row) => (
           <IslandWatchlistRow key={row.videoId} row={row} onQueue={onQueue} onOpen={onOpen} />
         ))}
       </ul>
-      {more > 0 ? (
+      <footer className="mt-2 flex h-4 shrink-0 items-center justify-between">
         <button
           type="button"
-          onClick={stop(onShowMore)}
-          className="mt-1.5 shrink-0 self-start text-[11px] font-medium text-stone-500 transition-colors duration-150 hover:text-stone-200 motion-reduce:transition-none"
+          onClick={stop(onMarkAllSeen)}
+          className="text-[11px] font-medium text-stone-400 transition-colors duration-150 hover:text-[color:var(--accent)] motion-reduce:transition-none"
         >
-          +{more} more in RuForge
+          Mark all seen
         </button>
-      ) : null}
+        {more > 0 ? (
+          <button
+            type="button"
+            onClick={stop(onShowMore)}
+            className="text-[11px] font-medium text-stone-400 transition-colors duration-150 hover:text-stone-100 motion-reduce:transition-none"
+          >
+            +{more} more in RuForge
+          </button>
+        ) : null}
+      </footer>
     </motion.div>
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Slider } from "@/components/ui/Slider";
 
 const ICON_SIZE = 16;
 
@@ -98,7 +99,6 @@ export function MusicVolumeControl({
   onMuted,
   interactTick = 0,
 }: Props) {
-  const trackRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const hideHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -142,34 +142,12 @@ export function MusicVolumeControl({
     pulseHint();
   }, [isMuted, onMuted, onVolume, pulseHint]);
 
-  const seekToFraction = useCallback((clientX: number) => {
-    const track = trackRef.current;
-    if (!track) return;
-    const rect = track.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    applyPct(frac * 100);
-  }, [applyPct]);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isDraggingRef.current = true;
-    setIsDragging(true);
-    pulseHint();
-    seekToFraction(e.clientX);
-    const onMove = (ev: MouseEvent) => {
-      if (isDraggingRef.current) seekToFraction(ev.clientX);
-    };
-    const onUp = (ev: MouseEvent) => {
-      isDraggingRef.current = false;
-      setIsDragging(false);
-      seekToFraction(ev.clientX);
-      if (!isHovering) scheduleHideHint();
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }, [isHovering, pulseHint, scheduleHideHint, seekToFraction]);
+  const onDragChange = useCallback((dragging: boolean) => {
+    isDraggingRef.current = dragging;
+    setIsDragging(dragging);
+    if (dragging) pulseHint();
+    else if (!isHovering) scheduleHideHint();
+  }, [isHovering, pulseHint, scheduleHideHint]);
 
   return (
     <div
@@ -221,36 +199,14 @@ export function MusicVolumeControl({
         </button>
       </div>
 
-      <div
-        ref={trackRef}
-        className="relative h-4 min-w-[72px] max-w-[96px] w-[88px] shrink-0 cursor-pointer"
-        onMouseDown={handleMouseDown}
-        role="slider"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={displayPct}
-        aria-label="Volume"
-      >
-        <div
-          className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-sm"
-          style={{ background: "rgba(255,255,255,0.18)" }}
-        />
-        <div
-          className="absolute top-1/2 h-1 -translate-y-1/2 rounded-sm pointer-events-none"
-          style={{
-            width: `${displayPct}%`,
-            background: "var(--music-text-primary)",
-          }}
-        />
-        <div
-          className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-sm border-2 pointer-events-none"
-          style={{
-            left: `${displayPct}%`,
-            borderColor: "var(--music-text-primary)",
-            background: "var(--music-bg)",
-          }}
-        />
-      </div>
+      <Slider
+        label="Volume"
+        level={displayPct / 100}
+        onChange={(v) => applyPct(v * 100)}
+        onDragChange={onDragChange}
+        thumbFill="var(--music-bg)"
+        className="min-w-[72px] max-w-[96px] w-[88px] shrink-0"
+      />
     </div>
   );
 }

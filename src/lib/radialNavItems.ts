@@ -1,10 +1,11 @@
 import type { RadialMenuItem } from "@/components/ui/radial-menu";
 import type { ActiveTab, MusicView, NavMode } from "@/store/types";
+import { GAMES_RAIL_ITEM } from "@games";
 
 export type RadialNavAction =
   | { kind: "tab"; tab: ActiveTab }
   | { kind: "music"; view: MusicView }
-  | { kind: "music-exit-settings" };
+  | { kind: "settings" };
 
 type RadialNavItemDef = RadialMenuItem & { action: RadialNavAction };
 
@@ -13,28 +14,25 @@ const DEFAULT_ITEMS: RadialNavItemDef[] = [
     id: "downloader",
     label: "Download",
     iconId: "download",
-    hintPlacement: "top",
     action: { kind: "tab", tab: "downloader" },
   },
   {
     id: "media",
     label: "Videos",
     iconId: "videos",
-    hintPlacement: "right",
     action: { kind: "tab", tab: "media" },
   },
   {
     id: "explorer",
     label: "YouTube",
     iconId: "explorer",
-    hintPlacement: "bottom",
     action: { kind: "tab", tab: "explorer" },
   },
+  ...(GAMES_RAIL_ITEM ? [GAMES_RAIL_ITEM.radial as RadialNavItemDef] : []),
   {
     id: "settings",
     label: "Settings",
     iconId: "settings",
-    hintPlacement: "left",
     action: { kind: "tab", tab: "settings" },
   },
 ];
@@ -44,29 +42,25 @@ const MUSIC_ITEMS: RadialNavItemDef[] = [
     id: "music-home",
     label: "Home",
     iconId: "music-home",
-    hintPlacement: "top",
     action: { kind: "music", view: "home" },
   },
   {
     id: "music-explore",
     label: "Explore",
     iconId: "music-explore",
-    hintPlacement: "right",
     action: { kind: "music", view: "explore" },
   },
   {
     id: "music-library",
     label: "Library",
     iconId: "music-library",
-    hintPlacement: "bottom",
     action: { kind: "music", view: "library" },
   },
   {
     id: "settings",
     label: "Settings",
     iconId: "music-settings",
-    hintPlacement: "left",
-    action: { kind: "music-exit-settings" },
+    action: { kind: "settings" },
   },
 ];
 

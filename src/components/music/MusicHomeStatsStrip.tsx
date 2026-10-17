@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import {
+  useListenSnapshotReady,
+  useListenSnapshotRevision,
+} from "@/lib/musicListenSnapshot";
+import {
   formatListenDuration,
   getTopArtists,
   getTopTracks,
@@ -13,6 +17,8 @@ type Props = {
 
 export function MusicHomeStatsStrip({ onSeeAll }: Props) {
   const playingPath = useRuforgeStore((s) => s.playingFile?.path);
+  const listenReady = useListenSnapshotReady();
+  const listenRevision = useListenSnapshotRevision();
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -23,6 +29,7 @@ export function MusicHomeStatsStrip({ onSeeAll }: Props) {
   const { topTracks, topArtists, totalLabel } = useMemo(() => {
     void tick;
     void playingPath;
+    void listenRevision;
     const topTracks = getTopTracks(5);
     const topArtists = getTopArtists(5);
     return {
@@ -30,8 +37,9 @@ export function MusicHomeStatsStrip({ onSeeAll }: Props) {
       topArtists,
       totalLabel: `${formatListenDuration(getTotalListenTimeSec())} listened`,
     };
-  }, [playingPath, tick]);
+  }, [playingPath, tick, listenRevision]);
 
+  if (!listenReady) return null;
   if (topTracks.length === 0 && topArtists.length === 0) return null;
 
   return (

@@ -1,6 +1,6 @@
 /** Auto-save for Music Explore: queue only after sustained listen time on one track. */
 import type { DownloadJob } from "@/downloadQueue";
-import { extractYouTubeVideoId } from "@/youtubeUrl";
+import { extractYouTubeVideoId, isYouTubeVideoId } from "@/youtubeUrl";
 
 const AUTO_SAVE_LISTEN_THRESHOLD_MS = 15_000;
 
@@ -53,6 +53,7 @@ export function shouldMusicExploreAutoSave(
   jobs: Pick<DownloadJob, "url" | "status">[],
   inLibrary: boolean,
 ): boolean {
+  if (!isYouTubeVideoId(videoId)) return false;
   if (handledVideoIds.has(videoId)) return false;
   const live = jobs.some(
     (j) =>
@@ -86,8 +87,8 @@ export function scheduleMusicExploreAutoSave(
   payload: MusicExploreAutoSavePayload,
   onSave: (p: MusicExploreAutoSavePayload) => void,
 ): () => void {
-  const videoId = payload.videoId.trim();
-  if (!videoId) return () => {};
+  const videoId = typeof payload.videoId === "string" ? payload.videoId.trim() : "";
+  if (!isYouTubeVideoId(videoId)) return () => {};
 
   if (activeEntry) {
     activeEntry.cancelled = true;

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import {
   getAudioOutputDeviceId,
@@ -23,6 +23,7 @@ import {
   pushDesktopIslandState,
   type DesktopIslandStatePayload,
 } from "@/lib/desktopIslandBridge";
+import { bumpCounter } from "@/lib/activityLog";
 import { takeIslandSkipDirForBridge } from "@/lib/islandSkipDirection";
 import {
   getIslandWaveformLevels,
@@ -37,17 +38,28 @@ import { buildIslandDownload } from "@/lib/islandDownload";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { DESKTOP_ISLAND_NOTICE_EVENT, type DesktopIslandNoticePayload } from "@/systemNotify";
 import { islandAvatarSrc, subscribeIslandAvatars } from "@/watchlist/islandAvatars";
-import { buildIslandWatchlist, ISLAND_WATCHLIST_TAKEOVER_MS } from "@/watchlist/islandWatchlist";
+import { buildIslandWatchlist } from "@/watchlist/islandWatchlist";
+import { createIslandWatchlistHold } from "@/watchlist/islandWatchlistHold";
 import { clearIslandBatch, useWatchlistStore } from "@/watchlist/watchlistStore";
 
 const TELEMETRY_MIN_MS = 100;
 const NOTICE_MS = 4500;
 const FOREGROUND_POLL_MS = 1000;
+/** Matches the overlay's spring-down plus fade in `IslandOverlayApp`. */
+const ISLAND_OVERLAY_EXIT_MS = 520;
 
 type MainWindowState = { away: boolean; focused: boolean };
 
 async function readMainWindowState(): Promise<MainWindowState> {
   const win = getCurrentWindow();
+  // Layout editor hides main on purpose; do not treat that as tray-away or the island pops over it.
+  try {
+    if (await invoke<boolean>("layout_editor_active")) {
+      return { away: false, focused: true };
+    }
+  } catch {
+    /* ignore */
+  }
   let minimized = false;
   let visible = true;
   let focused = true;
@@ -176,6 +188,12 @@ function attachSkipDirForTrackChange(
   return { ...payload, skipDir };
 }
 
+/** Hosts the hook in its own leaf: playback ticks re-render this, not the whole app tree. */
+export function DesktopIslandOverlayDriver({ enabled }: { enabled: boolean }) {
+  useDesktopIslandOverlay(enabled);
+  return null;
+}
+
 /**
  * Drives the top-of-screen desktop island. Music shows while main is minimized or
  * tray-hidden (mini ownership suppresses it). Downloads and background notices show
@@ -200,10 +218,14 @@ export function useDesktopIslandOverlay(enabled: boolean) {
   const settingsAccent = useRuforgeStore((s) =>
     typeof s.settings.accentColor === "string" ? s.settings.accentColor : "#EDCF9B",
   );
+  const navMode: DesktopIslandStatePayload["navMode"] = useRuforgeStore((s) =>
+    s.navMode === "music" ? "music" : "media",
+  );
 
   const windowRef = useRef<MainWindowState>({ away: false, focused: true });
   const noticeRef = useRef<IslandNotice | null>(null);
   const syncRef = useRef<() => void>(() => {});
+  const [watchHold] = useState(() => createIslandWatchlistHold(() => syncRef.current()));
 
   const inputsRef = useRef({
     activity,
@@ -214,6 +236,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     audioOutputDeviceId,
     audioOutputDevices,
     settingsAccent,
+    navMode,
   });
   inputsRef.current = {
     activity,
@@ -224,11 +247,16 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     audioOutputDeviceId,
     audioOutputDevices,
     settingsAccent,
+    navMode,
   };
 
   useEffect(() => {
     if (!enabled) return;
     const unlisten = listenDesktopIslandControl((control) => {
+      if (control.type === "watchlistHold") {
+        watchHold.setHeld(control.held);
+        return;
+      }
       applyDesktopIslandControl(control);
     });
     return () => {
@@ -244,9 +272,26 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     let musicShown = false;
     let pushTimer: ReturnType<typeof setTimeout> | null = null;
     let noticeTimer: ReturnType<typeof setTimeout> | null = null;
-    let takeoverTimer: ReturnType<typeof setTimeout> | null = null;
+    let hideWindowTimer: ReturnType<typeof setTimeout> | null = null;
     let lastPushAt = 0;
     let pending: DesktopIslandStatePayload | null = null;
+    let unsubWave: (() => void) | null = null;
+
+    // Any subscriber keeps the analyser loop running, so only hold one while music is on the desktop pill.
+    const setMusicShown = (next: boolean) => {
+      if (next === musicShown) return;
+      musicShown = next;
+      setIslandWaveformBackgroundPump(next);
+      if (next) {
+        unsubWave = subscribeIslandWaveformLevels(() => {
+          if (musicShown) sync();
+        });
+        void listAudioOutputDevices({ unlock: true });
+      } else {
+        unsubWave?.();
+        unsubWave = null;
+      }
+    };
     const lastPushedTrackKeyRef = { current: null as string | null };
 
     const pushNow = (payload: DesktopIslandStatePayload) => {
@@ -278,12 +323,11 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       }, TELEMETRY_MIN_MS - (now - lastPushAt));
     };
 
-    const hide = () => {
+    const hide = (immediate = false) => {
       if (!shown) return;
       shown = false;
-      musicShown = false;
+      setMusicShown(false);
       pending = null;
-      setIslandWaveformBackgroundPump(false);
       // The overlay keeps its last frame while hidden; blank it so the next show doesn't replay a stale notice.
       void pushDesktopIslandState({
         content: emptyContent(inputsRef.current.settingsAccent),
@@ -293,8 +337,19 @@ export function useDesktopIslandOverlay(enabled: boolean) {
         download: null,
         notice: null,
         watchlist: null,
+        navMode: inputsRef.current.navMode,
       }).catch(() => {});
-      void invoke("hide_island_overlay").catch(() => {});
+      if (hideWindowTimer != null) clearTimeout(hideWindowTimer);
+      if (immediate) {
+        hideWindowTimer = null;
+        void invoke("hide_island_overlay").catch(() => {});
+        return;
+      }
+      // The overlay springs the pill down and fades it out first; hiding the window now would cut that off.
+      hideWindowTimer = setTimeout(() => {
+        hideWindowTimer = null;
+        if (!shown) void invoke("hide_island_overlay").catch(() => {});
+      }, ISLAND_OVERLAY_EXIT_MS);
     };
 
     const sync = () => {
@@ -315,14 +370,9 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       const download = focused ? null : buildIslandDownload(i.downloadJobs);
       const notice = focused ? null : noticeRef.current;
       const batch = useWatchlistStore.getState();
-      const watchlist = focused ? null : buildIslandWatchlist(batch, islandAvatarSrc, Date.now());
-      if (watchlist?.takeover && takeoverTimer == null) {
-        // Nothing else re-syncs when the takeover window lapses, so music would never get the pill back.
-        takeoverTimer = setTimeout(() => {
-          takeoverTimer = null;
-          sync();
-        }, ISLAND_WATCHLIST_TAKEOVER_MS - (Date.now() - batch.islandBatchAt) + 50);
-      }
+      const now = Date.now();
+      const watchlist = focused ? null : buildIslandWatchlist(batch, islandAvatarSrc, now, watchHold.keepUntil());
+      watchHold.schedule(batch.islandBatchAt, now, Boolean(watchlist));
 
       if (!music && !download && !notice && !watchlist) {
         hide();
@@ -338,19 +388,23 @@ export function useDesktopIslandOverlay(enabled: boolean) {
           download,
           notice,
           watchlist,
+          navMode: i.navMode,
         },
         lastPushedTrackKeyRef,
       );
 
-      if (Boolean(music) !== musicShown) {
-        musicShown = Boolean(music);
-        setIslandWaveformBackgroundPump(musicShown);
-        if (musicShown) void listAudioOutputDevices({ unlock: true });
-      }
+      setMusicShown(Boolean(music));
       if (!shown) {
         shown = true;
+        if (hideWindowTimer != null) {
+          clearTimeout(hideWindowTimer);
+          hideWindowTimer = null;
+        }
         void invoke("show_island_overlay")
-          .then(() => pushNow(payload))
+          .then(() => {
+            bumpCounter("feature:island");
+            pushNow(payload);
+          })
           .catch(() => {});
         return;
       }
@@ -396,9 +450,6 @@ export function useDesktopIslandOverlay(enabled: boolean) {
     const unsubBridge = subscribeMainPlaybackBridge(sync);
     const unsubWatchlist = useWatchlistStore.subscribe(sync);
     const unsubAvatars = subscribeIslandAvatars(sync);
-    const unsubWave = subscribeIslandWaveformLevels(() => {
-      if (musicShown) sync();
-    });
     const onVis = () => void refreshWindow();
     document.addEventListener("visibilitychange", onVis);
     // Focus moving from the Explorer webview or an overlay window to another app fires nothing on main.
@@ -413,20 +464,21 @@ export function useDesktopIslandOverlay(enabled: boolean) {
       syncRef.current = () => {};
       if (pushTimer != null) clearTimeout(pushTimer);
       if (noticeTimer != null) clearTimeout(noticeTimer);
-      if (takeoverTimer != null) clearTimeout(takeoverTimer);
+      watchHold.dispose();
       noticeRef.current = null;
       document.removeEventListener("visibilitychange", onVis);
       window.clearInterval(foregroundPoll);
       unsubBridge();
       unsubWatchlist();
       unsubAvatars();
-      unsubWave();
       void unlistenResize.then((fn) => fn());
       void unlistenFocus.then((fn) => fn());
       void unlistenHidden.then((fn) => fn());
       void unlistenTrayShow.then((fn) => fn());
       void unlistenNotice.then((fn) => fn());
-      hide();
+      hide(true);
+      setMusicShown(false);
+      if (hideWindowTimer != null) clearTimeout(hideWindowTimer);
     };
   }, [enabled]);
 
@@ -435,6 +487,7 @@ export function useDesktopIslandOverlay(enabled: boolean) {
   }, [
     activity,
     settingsAccent,
+    navMode,
     volume,
     isMuted,
     loopMode,

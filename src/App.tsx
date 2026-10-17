@@ -1,5 +1,13 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Activity, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { AppTooltipLayer } from "@/components/ui/TooltipLayer";
+import { FindBarHost } from "@/components/FindBar";
+import {
+  GAMES_GO_HOTKEY_ID,
+  GamesView,
+  GlanceHost,
+  useGamesAppShell,
+} from "@games";
+import { formatChord } from "./lib/hotkeys";
 import { flushSync } from "react-dom";
 import {
   motion,
@@ -11,7 +19,7 @@ import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Webview } from "@tauri-apps/api/webview";
 import { appDataDir, dirname, join } from "@tauri-apps/api/path";
-import { syncRuforgeAccentCss } from "./accentCss";
+import { syncRuforgeAccentCss, syncRuforgeDensity, syncRuforgeVideoPalette } from "./accentCss";
 import { hydrateLibraryFromRust, libraryConfigToStoreFields } from "./lib/libraryConfig";
 import { wireScrubSpriteGalleryIndicators } from "./scrubSpriteGallerySync";
 import { touchDownloadJobWatchdog } from "./downloadJobWatchdog";
@@ -32,6 +40,7 @@ import {
   type UpdaterPhase,
 } from "./components/UpdaterLayers";
 import { WhatsNewDialog } from "./components/WhatsNewDialog";
+import { useDebugUpdaterPreview } from "./hooks/useDebugUpdaterPreview";
 import {
   buildPostInstallPayload,
   clearPendingPostInstall,
@@ -52,6 +61,13 @@ import { Icon } from "@iconify/react";
 import MiniPlayer from "./MiniPlayer";
 import MusicMiniPlayer from "./components/music-mini/MusicMiniPlayer";
 import { isAudioOnlyPath } from "./mediaKind";
+import {
+  beginAppActivitySession,
+  endAppActivitySession,
+  noteAppActivityFocus,
+  noteAppActivityInput,
+  tickAppActivityIdle,
+} from "./lib/appActivitySession";
 import { flattenGalleryScanToMediaFiles } from "./galleryScan";
 import { ExplorerWatchQueueButton } from "./components/ExplorerWatchQueueButton";
 import { ExplorerFollowButton } from "./components/watchlist/ExplorerFollowButton";
@@ -81,12 +97,12 @@ import {
 import type { SendToMainPayload, SendToMusicMainPayload } from "./playerHandoff";
 import { loopModeFromHandoff } from "./playerHandoff";
 import { stageHandoffListenEventId } from "./lib/musicListenSession";
-import { pageFadeTransition } from "./lib/overlayMotion";
-import {
-  readResumeSeconds,
-  readStoredPlaybackDuration,
-  RESUME_REWIND_SEC,
-} from "./playbackStorage";
+import { navShellFadeTransition, pageFadeTransition } from "./lib/overlayMotion";
+import type { NavMode } from "./store/types";
+import type { HotkeyActionId } from "./lib/hotkeys";
+import { matchHotkeyEvent } from "./hooks/useHotkeys";
+import { filterTrustedMediaPaths, resolveTrustedMediaFile } from "./lib/trustedMediaFile";
+import { isTrustedExplorerUrl } from "./lib/trustedMediaPath";
 
 function miniKindFromWindowLabel(label: string): "video" | "music" | null {
   if (label === "mini") return "video";
@@ -103,12 +119,14 @@ function initialMiniKind(): "video" | "music" | null {
 }
 import { PlaylistDetailView } from "./components/PlaylistDetailView";
 import { MusicShell } from "./components/music/MusicShell";
-import { MusicToastHost } from "./components/music/MusicToastHost";
 import { AppToastHost } from "./components/notifications/AppToastHost";
 import { startMusicPlaylistsFileSync } from "./musicPlaylistsFileSync";
+import { startLibraryTags } from "./lib/libraryTagSync";
 import { handleAutoReady, handleNewUploads } from "./watchlist/watchlistAlerts";
 import { startWatchlistSync } from "./watchlist/watchlistSync";
 import { startNotificationCenter } from "./notifications/recordNotification";
+import { startStatsMilestoneHost } from "./lib/statsMilestonesHost";
+import { startSecurityTripwires } from "./lib/securityTripwires";
 import { useNotificationCenterStore } from "./notifications/notificationCenterStore";
 import { isNotifyOverlayDocument } from "./lib/notifyOverlayEvents";
 import { storageBlocksNewDownloads as storageBlocksNewDownloadsFor } from "./lib/storageBlocks";
@@ -134,7 +152,7 @@ import {
 } from "lucide-react";
 import {
   CREATOR_TAB_LABELS,
-  closeCreatorPage,
+  closeLibraryPage,
   setCreatorTab,
   useCreatorPage,
 } from "./components/library/creatorPageStore";
@@ -151,7 +169,6 @@ import { WindowResizeEdges } from "./components/window/WindowResizeEdges";
 import type { ActivityHandoffSyncPayload, ActivityMiniTeardownPayload } from "./lib/activityTypes";
 import { MainPlaybackHost } from "./playback/MainPlaybackHost";
 import { AppSidebarRail } from "./components/navigation/AppSidebarRail";
-import { StorageStrip } from "./components/navigation/StorageStrip";
 import { ExplorerBottomBar } from "./components/navigation/ExplorerBottomBar";import { DevCaptureChromeProvider } from "./components/dev-captures/DevCaptureChromeProvider";
 import {
   CrashRecoveryScreen,
@@ -164,9 +181,10 @@ import {
   ensureRadialNavOverlay,
   setRadialNavSurfaceActive,
 } from "./lib/radialNavOverlayHost";
-import { SIDEBAR_RAIL_PX } from "./lib/sidebarLayout";
+import { SIDEBAR_RAIL_W } from "./lib/sidebarLayout";
+import { useAutoHideChrome } from "./lib/useAutoHideChrome";
 import { useAltRadialNav } from "./hooks/useAltRadialNav";
-import { useDesktopIslandOverlay } from "./hooks/useDesktopIslandOverlay";
+import { DesktopIslandOverlayDriver } from "./hooks/useDesktopIslandOverlay";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
 import { clearOnboardingDoneSteps, writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
 import {
@@ -223,6 +241,8 @@ const WindowControls = ({
   showExplorerQueueToolbar,
   storageBlocksNewDownloads,
   onUpdaterStatusClick,
+  settingsOpen,
+  onToggleSettings,
 }: {
   isMaximized: boolean;
   onExportUsbClick: () => void;
@@ -234,11 +254,13 @@ const WindowControls = ({
   showExplorerQueueToolbar: boolean;
   storageBlocksNewDownloads: boolean;
   onUpdaterStatusClick?: () => void;
+  settingsOpen: boolean;
+  onToggleSettings: () => void;
 }) => {
   const appWindow = getCurrentWindow();
 
   return (
-    <div className="fixed top-0 right-0 z-[100] flex h-[var(--rf-titlebar-h)] items-center pr-2 pointer-events-auto">
+    <div className="rf-autohide-chrome fixed top-0 right-0 z-[100] flex h-[var(--rf-titlebar-h)] items-center pr-2 pointer-events-auto">
       <div className="mr-3">
         <UpdaterStatusIndicator 
           phase={updaterPhase} 
@@ -256,6 +278,18 @@ const WindowControls = ({
       )}
 
       <NotificationBellButton />
+
+      {navMode === "music" && (
+        <TitlebarHoverButton
+          tooltip="Settings"
+          aria-label="Settings"
+          aria-pressed={settingsOpen}
+          onClick={onToggleSettings}
+          className={settingsOpen ? "text-[color:var(--music-accent)]" : ""}
+        >
+          <Icon icon="tabler:settings" width={18} height={18} />
+        </TitlebarHoverButton>
+      )}
 
       {showExportButton && navMode !== "music" && (
         <TitlebarHoverButton
@@ -308,18 +342,17 @@ const WindowControls = ({
   );
 };
 
-/** Settings > Debugging What's New preview; mirrors a real `updater.json` body. */
-const MOCK_POST_INSTALL_JSON = JSON.stringify({
-  notes: [
-    "# Follow your channels",
-    "- **Library**: A YouTube-style home with your feed, channel shelves and creator pages.",
-    "- **Follow**: Follow channels, get new uploads in a notification center, and auto-download them if you like.",
-    "- **Music**: Playlists, YouTube Music recommendations with previews, one search bar, and import from screenshots.",
-    "- **Island**: Downloads and notices show at the top of your screen while RuForge is in the background.",
-    "- **Downloads**: Playlists list in seconds, storage is checked before a download starts, and errors say what to fix.",
-    "- **Fixes**: Steadier playback, downloads that clean up after themselves, and yt-dlp and ffmpeg that close with RuForge.",
-  ].join("\n"),
-});
+const APP_HOTKEY_ACTIONS = ["app.openSettings", "app.openShortcuts", "app.switchMode"] as const;
+const LIBRARY_HOTKEY_ACTIONS = [
+  "library.goVideos",
+  "library.goYoutube",
+  "library.toggleDownloader",
+  "library.search",
+  "library.toggleSidebar",
+] as const;
+
+const NAV_SHELL_EXIT_MS = navShellFadeTransition.duration * 1000;
+const navShellEnterTransition = { ...navShellFadeTransition, delay: navShellFadeTransition.duration };
 
 function App() {
   const activeTab = useRuforgeStore((s) => s.activeTab);
@@ -329,6 +362,32 @@ function App() {
   );
   const navMode = useRuforgeStore((s) => s.navMode);
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
+  // The incoming mode shell mounts under the outgoing one while it fades, but native
+  // webviews cannot fade, so they wait out the exit before showing, as they did before.
+  const [navSurfacesMode, setNavSurfacesMode] = useState(navMode);
+  const navSurfacesReady = navSurfacesMode === navMode;
+  useEffect(() => {
+    if (navSurfacesReady) return;
+    const t = window.setTimeout(() => setNavSurfacesMode(navMode), NAV_SHELL_EXIT_MS);
+    return () => window.clearTimeout(t);
+  }, [navMode, navSurfacesReady]);
+  // Each mode shell mounts on its first visit and then stays alive behind <Activity>, so
+  // switching back is a fade instead of a full rebuild of the Library or Music tree.
+  const bootNavModeRef = useRef(navMode);
+  const [musicShellMounted, setMusicShellMounted] = useState(navMode === "music");
+  const [defaultShellMounted, setDefaultShellMounted] = useState(navMode === "default");
+  if (navMode === "music" && !musicShellMounted) setMusicShellMounted(true);
+  if (navMode === "default" && !defaultShellMounted) setDefaultShellMounted(true);
+  const shellMotion = (mode: NavMode) => ({
+    initial: bootNavModeRef.current === mode ? false : { opacity: 0 },
+    animate:
+      navMode === mode
+        ? { opacity: 1, transition: navShellEnterTransition }
+        : { opacity: 0, transition: navShellFadeTransition },
+  });
+  // Stays visible through the outgoing fade; navSurfacesMode lags navMode by exactly that.
+  const shellActivity = (mode: NavMode) =>
+    navMode === mode || navSurfacesMode === mode ? "visible" : "hidden";
   const saveToInternal = useRuforgeStore((s) => s.saveToInternal);
   const internalVault = useRuforgeStore((s) => s.internalVault);
   const settings = useRuforgeStore((s) => s.settings);
@@ -347,24 +406,10 @@ function App() {
       : 0;
   const galleryScrollBulge = galleryScrollChrome > 0.08;
   const creatorOpen = useCreatorPage((s) => s.creator !== null);
+  const tagPageOpen = useCreatorPage((s) => s.tagId !== null);
   const creatorTab = useCreatorPage((s) => s.tab);
   const creatorTabList = useCreatorPage((s) => s.tabs);
   const creatorTabCounts = useCreatorPage((s) => s.counts);
-  const stripTabs = creatorOpen
-    ? creatorTabList.map((t) => ({
-        id: t,
-        label: CREATOR_TAB_LABELS[t],
-        count: creatorTabCounts[t],
-        active: (creatorTabList.includes(creatorTab) ? creatorTab : "home") === t,
-        pick: () => setCreatorTab(t),
-      }))
-    : GALLERY_FILTER_TABS.map(({ id, label }) => ({
-        id,
-        label,
-        count: undefined,
-        active: galleryFilter === id,
-        pick: () => setGalleryFilter(id),
-      }));
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const setFolderAudioPlaylist = useRuforgeStore((s) => s.setFolderAudioPlaylist);
   const selectedPlaylist = useRuforgeStore((s) => s.selectedPlaylist);
@@ -379,12 +424,50 @@ function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [recentlyDeletedOpen, setRecentlyDeletedOpen] = useState(false);
   const mainContentRef = useRef<HTMLElement>(null);
-  const sidebarChromeLeft = SIDEBAR_RAIL_PX;
+  const sidebarChromeLeft = SIDEBAR_RAIL_W;
   const backgroundVideoFile =
     playingFile && !isAudioOnlyPath(playingFile.path) ? playingFile : null;
   const videoPlayerShellVisible =
     Boolean(backgroundVideoFile) && navMode !== "music" && activeTab === "player";
+  const chromeHidden = useAutoHideChrome(
+    settings.autoHideChromeWhilePlaying === true &&
+      videoPlayerShellVisible &&
+      !settingsOpen &&
+      !downloaderOpen,
+  );
   const notify = useRuforgeStore((s) => s.notify);
+  const reportGamesTakenChords = useCallback(
+    (chords: string[]) => {
+      const names = chords.map(formatChord).join(", ");
+      notify(`Another app already uses ${names}, so RuForge can't listen for it system-wide.`, "warning");
+    },
+    [notify],
+  );
+  const { gamesStrip, gamesStripTabs, closeGamePage } = useGamesAppShell({
+    onMain: miniKind === null,
+    settings,
+    notify,
+    activeTab,
+    reportTakenChords: reportGamesTakenChords,
+  });
+  const stripTabs =
+    gamesStrip && gamesStripTabs
+      ? gamesStripTabs
+      : creatorOpen
+        ? creatorTabList.map((t) => ({
+            id: t,
+            label: CREATOR_TAB_LABELS[t],
+            count: creatorTabCounts[t],
+            active: (creatorTabList.includes(creatorTab) ? creatorTab : "home") === t,
+            pick: () => setCreatorTab(t),
+          }))
+        : GALLERY_FILTER_TABS.map(({ id, label }) => ({
+            id,
+            label,
+            count: undefined,
+            active: galleryFilter === id,
+            pick: () => setGalleryFilter(id),
+          }));
   const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
   const { removableDrives, defaultRemovableDest } = useRemovableDrives();
   const hasRemovableDrive = removableDrives.length > 0;
@@ -506,6 +589,7 @@ function App() {
     }
     if (label !== "main") return;
     void startMusicPlaylistsFileSync(() => useRuforgeStore.getState().refreshVirtualPlaylists());
+    void startLibraryTags();
   }, []);
 
   useEffect(() => {
@@ -542,14 +626,26 @@ function App() {
     }
     if (label !== "main" || isNotifyOverlayDocument()) return;
     let stop: (() => void) | null = null;
+    let stopTripwires: (() => void) | null = null;
+    let stopMilestones: (() => void) | null = null;
     let cancelled = false;
     void startNotificationCenter().then((un) => {
       if (cancelled) un();
       else stop = un;
     });
+    void startSecurityTripwires().then((un) => {
+      if (cancelled) un();
+      else stopTripwires = un;
+    });
+    void startStatsMilestoneHost().then((un) => {
+      if (cancelled) un();
+      else stopMilestones = un;
+    });
     return () => {
       cancelled = true;
       stop?.();
+      stopTripwires?.();
+      stopMilestones?.();
     };
   }, []);
   const lastExplorerUrl = useRuforgeStore((s) => s.lastExplorerUrl);
@@ -574,6 +670,16 @@ function App() {
   );
   const [updaterInstallError, setUpdaterInstallError] = useState<string | null>(null);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
+  const debugDraftNotes = useDebugUpdaterPreview({
+    setPostInstall,
+    setUpdaterPhase,
+    setUpdaterIslandCollapsed,
+    setUpdaterVersion,
+    setSelectedUpdateReleaseVersion,
+    setUpdaterNotes,
+    setUpdaterContentLength,
+    setUpdaterDownloaded,
+  });
   // The dialog keeps its last payload through the exit animation.
   const [postInstallShown, setPostInstallShown] = useState<PostInstallPayload | null>(null);
   if (postInstall && postInstall !== postInstallShown) setPostInstallShown(postInstall);
@@ -770,11 +876,13 @@ function App() {
   const islandUpdateNotes = useMemo(() => {
     const pick = selectedUpdateReleaseVersion ?? updaterVersion;
     if (!pick) return "";
+    if (debugDraftNotes && pick === updaterVersion) return debugDraftNotes;
     const fromCatalog = updateReleaseCatalog.find((entry) => entry.version === pick);
     if (fromCatalog) return fromCatalog.notes;
     if (pick === updaterVersion) return availableUpdatePayload?.notes ?? "";
     return "";
   }, [
+    debugDraftNotes,
     selectedUpdateReleaseVersion,
     updaterVersion,
     updateReleaseCatalog,
@@ -810,25 +918,30 @@ function App() {
   }, []);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    void listen("library-changed", () => {
+    const unlisten = listen("library-changed", () => {
       void useRuforgeStore.getState().fetchEntries({
         manageLoadingStart: false,
         skipPosterBackfill: true,
         skipScrubBackfill: true,
         joinColdInFlight: true,
       });
-    }).then((fn) => {
-      unlisten = fn;
     });
     return () => {
-      unlisten?.();
+      void unlisten.then((fn) => fn());
     };
   }, []);
 
   useEffect(() => {
     syncRuforgeAccentCss(typeof settings.accentColor === "string" ? settings.accentColor : "#EDCF9B");
   }, [settings.accentColor]);
+
+  useEffect(() => {
+    syncRuforgeVideoPalette(navMode === "default" && settings.legacyVideoColors === true);
+  }, [navMode, settings.legacyVideoColors]);
+
+  useEffect(() => {
+    syncRuforgeDensity(settings.appDensity === "compact");
+  }, [settings.appDensity]);
 
   useEffect(() => {
     if (!saveToInternal) return;
@@ -902,6 +1015,7 @@ function App() {
                   "Downloads need a small runtime to solve YouTube's n-challenge. Install Deno automatically? (~100 MB, stored in app data, not a system install).",
                 confirmLabel: "Install",
                 cancelLabel: "Later",
+                tone: "accent",
               });
               if (!approved) return;
               const ok = await installDenoAndRetry();
@@ -963,6 +1077,7 @@ function App() {
     const explorerSurfaceActive =
       activeTab === "explorer" &&
       navMode !== "music" &&
+      navSurfacesReady &&
       !downloaderOpen &&
       !settingsOpen &&
       !shellBlocked &&
@@ -1009,7 +1124,7 @@ function App() {
     const reloadExplorerPage = async () => {
       const { explorerNavTarget, setExplorerNavTarget } = useRuforgeStore.getState();
       const url = (explorerNavTarget ?? lastExplorerUrlRef.current).trim();
-      const target = url.startsWith("http") ? url : "https://www.youtube.com";
+      const target = isTrustedExplorerUrl(url) ? url : "https://www.youtube.com";
       try {
         await invoke("eval_in_webview", {
           label: explorerWebviewLabelRef.current,
@@ -1187,7 +1302,7 @@ function App() {
       resizeObserver?.disconnect();
       unlistenWindowResize?.();
     };
-  }, [activeTab, navMode, downloaderOpen, settingsOpen, shellBlocked, isMainMaximized, explorerCoveredByPopover]);
+  }, [activeTab, navMode, navSurfacesReady, downloaderOpen, settingsOpen, shellBlocked, isMainMaximized, explorerCoveredByPopover]);
 
   useEffect(() => {
     if (activeTab !== "explorer") return;
@@ -1294,6 +1409,42 @@ function App() {
     };
   }, []);
 
+  // App activity session: one start per launch, one end on pagehide/quit.
+  // activeMinutes still only counts focused + not idle (5 min); focus changes
+  // pause/resume the slice but do not write new session rows (see plan event table).
+  // Effect cleanup must not end the session: Strict Mode remounts and Vite HMR
+  // would otherwise write a fake quit.
+  useEffect(() => {
+    try {
+      if (getCurrentWindow().label !== "main") return;
+    } catch {
+      return;
+    }
+
+    beginAppActivitySession();
+    const win = getCurrentWindow();
+    void win.isFocused().then(noteAppActivityFocus);
+    let unlisten: (() => void) | undefined;
+    void win.onFocusChanged(({ payload }) => noteAppActivityFocus(payload)).then((u) => {
+      unlisten = u;
+    });
+    const idleTick = window.setInterval(tickAppActivityIdle, 30_000);
+    const onInput = () => noteAppActivityInput();
+    window.addEventListener("pointerdown", onInput, true);
+    window.addEventListener("keydown", onInput, true);
+    window.addEventListener("mousemove", onInput, true);
+    window.addEventListener("pagehide", endAppActivitySession);
+
+    return () => {
+      window.clearInterval(idleTick);
+      unlisten?.();
+      window.removeEventListener("pointerdown", onInput, true);
+      window.removeEventListener("keydown", onInput, true);
+      window.removeEventListener("mousemove", onInput, true);
+      window.removeEventListener("pagehide", endAppActivitySession);
+    };
+  }, []);
+
   useEffect(() => {
     if (isSearchExpanded && searchInputRef.current) {
       searchInputRef.current.focus();
@@ -1310,26 +1461,6 @@ function App() {
 
   // Tauri event listeners
   useEffect(() => {
-    const unlisten = listen<MediaFile>("play-media", (event) => {
-      const file = event.payload;
-      const st = useRuforgeStore.getState();
-      st.setMusicQueueSource(null);
-      const resumeAt = !isAudioOnlyPath(file.path)
-        ? readResumeSeconds(
-            file.path,
-            file.duration > 0 ? file.duration : readStoredPlaybackDuration(file.path),
-            { rewindSeconds: RESUME_REWIND_SEC },
-          )
-        : 0;
-      useRuforgeStore.setState({
-        playerResumeAt: resumeAt > 0 ? resumeAt : null,
-      });
-      st.setPlayingFile(file);
-      void emit("stop-playback", "main-app");
-      st.notify(`Now playing: ${file.name}`);
-      st.setActiveTab("player");
-    });
-
     const unlistenStop = listen<string>("stop-playback", (event) => {
       if (event.payload === "main-app") return;
       const st = useRuforgeStore.getState();
@@ -1338,7 +1469,7 @@ function App() {
         useRuforgeStore.setState((s) => ({
           playingFile: null,
           musicQueueSource: null,
-          activeTab: s.activeTab === "player" ? "media" : s.activeTab,
+          activeTab: s.activeTab === "player" ? s.browseTab : s.activeTab,
         }));
         return;
       }
@@ -1358,7 +1489,9 @@ function App() {
     const unlistenHandoffSync = listen<ActivityHandoffSyncPayload>(
       "activity-handoff-sync",
       (event) => {
-        const { surface, file, startTime, paused } = event.payload;
+        const { surface, file: rawFile, startTime, paused } = event.payload;
+        const file = resolveTrustedMediaFile(rawFile);
+        if (!file) return;
         useRuforgeStore.getState().syncActivityHandoff(surface, {
           file,
           startTime,
@@ -1428,41 +1561,7 @@ function App() {
       if (last) setPostInstall(last);
     });
 
-    const unlistenDebugWhatsNew = listen("debug-preview-whats-new", () => {
-      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
-      void getVersion().then((v) => setPostInstall(buildPostInstallPayload(v, MOCK_POST_INSTALL_JSON)));
-    });
-
-    const unlistenDebugUpdater = listen("debug-cycle-updater", () => {
-      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
-      setUpdaterIslandCollapsed(false);
-      setUpdaterPhase((current) => {
-        if (current === "idle") {
-          setUpdaterVersion("9.9.9");
-          setSelectedUpdateReleaseVersion("9.9.9");
-          setUpdaterNotes("### Mock Release Notes\n- Polished UI & Transitions\n- Enhanced accent color integration\n- Fixed subtitle ghosting bug\n- Improved MiniPlayer sizing logic");
-          return "available";
-        }
-        if (current === "available") {
-          setUpdaterContentLength(1000);
-          setUpdaterDownloaded(450);
-          return "downloading";
-        }
-        if (current === "downloading") {
-          return "installing";
-        }
-        if (current === "installing") {
-          setPostInstall(
-            buildPostInstallPayload("9.9.9", MOCK_POST_INSTALL_JSON),
-          );
-          return "idle";
-        }
-        return "idle";
-      });
-    });
-
     return () => {
-      unlisten.then((f) => f());
       unlistenStop.then((f) => f());
       unlistenMiniTeardown.then((f) => f());
       unlistenHandoffSync.then((f) => f());
@@ -1475,8 +1574,6 @@ function App() {
       unlistenDebugCrashUi.then((f) => f());
       unlistenDebugCrashFatal.then((f) => f());
       unlistenDebugReplayDownloadBatch.then((f) => f());
-      unlistenDebugUpdater.then((f) => f());
-      unlistenDebugWhatsNew.then((f) => f());
       unlistenOpenWhatsNew.then((f) => f());
     };
   }, []);
@@ -1494,6 +1591,7 @@ function App() {
 
   // Send-to-main handoff from video miniplayer
   useEffect(() => {
+    if (initialMiniKind() !== null) return;
     const unlistenHandoff = listen<SendToMainPayload | MediaFile>("send-to-main", async (event) => {
       const raw = event.payload;
       const payload: SendToMainPayload =
@@ -1504,14 +1602,16 @@ function App() {
               currentTime: 0,
               paused: false,
             };
+      const file = resolveTrustedMediaFile(payload.file);
+      if (!file) return;
       const st = useRuforgeStore.getState();
       if (typeof payload.volume === "number") st.setVolume(payload.volume);
       if (typeof payload.muted === "boolean") st.setMuted(payload.muted);
       st.setMusicQueueSource(null);
-      st.setPlayingFile(payload.file);
+      st.setPlayingFile(file);
       st.setActiveTab("player");
-      useRuforgeStore.setState({ playerResumeAt: Math.max(0, payload.currentTime) });
-      st.notify(`Now playing: ${payload.file.name}`);
+      useRuforgeStore.setState({ playerResumeAt: Math.max(0, Number(payload.currentTime) || 0) });
+      st.notify(`Now playing: ${file.name}`);
       const focusMain = async () => {
         const main = await WebviewWindow.getByLabel("main");
         await main?.setFocus().catch(() => {});
@@ -1528,7 +1628,9 @@ function App() {
   useEffect(() => {
     const unlisten = listen<SendToMusicMainPayload>("send-to-music-main", async (event) => {
       const payload = event.payload;
-      if (payload.listenEventId) {
+      const file = resolveTrustedMediaFile(payload?.file);
+      if (!file) return;
+      if (typeof payload.listenEventId === "string") {
         stageHandoffListenEventId(payload.listenEventId);
       }
       const st = useRuforgeStore.getState();
@@ -1539,11 +1641,13 @@ function App() {
       }
       useRuforgeStore.setState({
         musicPlayerResume: {
-          currentTime: Math.max(0, payload.currentTime),
+          currentTime: Math.max(0, Number(payload.currentTime) || 0),
           paused: payload.paused,
           playbackSpeed: payload.playbackSpeed ?? 1,
         },
-        ...(payload.manualQueue !== undefined ? { manualQueue: payload.manualQueue } : {}),
+        ...(payload.manualQueue !== undefined
+          ? { manualQueue: filterTrustedMediaPaths(payload.manualQueue) }
+          : {}),
         ...(payload.playingFromManualQueue !== undefined
           ? { playingFromManualQueue: payload.playingFromManualQueue }
           : {}),
@@ -1551,7 +1655,7 @@ function App() {
           ? { manualQueueContextIndex: payload.manualQueueContextIndex }
           : {}),
       });
-      st.setPlayingFile(payload.file);
+      st.setPlayingFile(file);
       const main = await WebviewWindow.getByLabel("main");
       await main?.setFocus().catch(() => {});
       window.setTimeout(() => void main?.setFocus().catch(() => {}), 120);
@@ -1653,7 +1757,7 @@ function App() {
 
   useEffect(() => {
     const unlisten = listen<string>("explorer-url", (event) => {
-      setLastExplorerUrl(event.payload);
+      if (isTrustedExplorerUrl(event.payload)) setLastExplorerUrl(event.payload);
     });
     return () => { unlisten.then(f => f()); };
   }, [setLastExplorerUrl]);
@@ -1718,28 +1822,70 @@ function App() {
   }, [navMode, shellBlocked]);
 
   useEffect(() => {
-    if (navMode === "music" || shellBlocked) return;
+    if (shellBlocked || miniKind !== null) return;
+    const ids: HotkeyActionId[] =
+      navMode === "music"
+        ? [...APP_HOTKEY_ACTIONS]
+        : [...APP_HOTKEY_ACTIONS, ...LIBRARY_HOTKEY_ACTIONS, ...(GAMES_GO_HOTKEY_ID ? [GAMES_GO_HOTKEY_ID] : [])];
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "d") return;
-      const el = document.activeElement;
-      if (el) {
-        const tag = el.tagName;
-        if (
-          tag === "INPUT" ||
-          tag === "TEXTAREA" ||
-          tag === "SELECT" ||
-          (el as HTMLElement).isContentEditable
-        ) {
-          return;
-        }
-      }
+      const action = matchHotkeyEvent(event, ids);
+      if (!action) return;
       event.preventDefault();
-      if (downloaderOpen) closeDownloader();
-      else openDownloader();
+      const st = useRuforgeStore.getState();
+      switch (action) {
+        case "app.openSettings":
+          if (st.settingsOpen) closeSettings();
+          else openSettings();
+          break;
+        case "app.openShortcuts":
+          if (st.settingsOpen && st.settingsTab === "shortcuts") {
+            closeSettings();
+          } else {
+            st.setSettingsTab("shortcuts");
+            openSettings();
+          }
+          break;
+        case "app.switchMode":
+          cycleNavMode();
+          break;
+        case "library.goVideos":
+          setActiveTab("media");
+          break;
+        case "library.goYoutube":
+          setActiveTab("explorer");
+          break;
+        case "library.toggleDownloader":
+          if (st.downloaderOpen) closeDownloader();
+          else openDownloader();
+          break;
+        case "library.search":
+          if (st.activeTab !== "media" || st.settingsOpen || st.downloaderOpen) {
+            setActiveTab("media");
+          }
+          if (st.isSearchExpanded) searchInputRef.current?.focus();
+          else setIsSearchExpanded(true);
+          break;
+        case "library.toggleSidebar":
+          st.toggleSidebar();
+          break;
+        default:
+          if (action === GAMES_GO_HOTKEY_ID) setActiveTab("games");
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [navMode, shellBlocked, downloaderOpen, openDownloader, closeDownloader]);
+  }, [
+    navMode,
+    shellBlocked,
+    miniKind,
+    openDownloader,
+    closeDownloader,
+    openSettings,
+    closeSettings,
+    cycleNavMode,
+    setActiveTab,
+    setIsSearchExpanded,
+  ]);
 
   useEffect(() => {
     if (activeTab !== "explorer" || shellBlocked) return;
@@ -1760,6 +1906,7 @@ function App() {
       clearInterval(id);
     };
   }, [activeTab, shellBlocked, setLastExplorerUrl]);
+
 
   const showExplorerToolbar =
     activeTab === "explorer" &&
@@ -1798,7 +1945,8 @@ function App() {
 
   const onExplorerReload = useCallback(async () => {
     try {
-      const url = lastExplorerUrlRef.current.trim();
+      const last = lastExplorerUrlRef.current.trim();
+      const url = isTrustedExplorerUrl(last) ? last : "https://www.youtube.com";
       await invoke("eval_in_webview", {
         label: explorerWebviewLabelRef.current,
         script: explorerNavigateOrReloadScript(url),
@@ -1829,14 +1977,21 @@ function App() {
     presentation: radialNavPresentation,
   } = useAltRadialNav(shellBlocked);
 
-  useDesktopIslandOverlay(!shellBlocked && miniKind == null);
-
   const handleRadialCenterClick = useCallback(() => {
     cycleNavMode();
     if (onboardingOpen) notifyOnboardingModeSwap();
   }, [cycleNavMode, onboardingOpen]);
 
-  if (miniKind === "video") return <><RfScrollbarHost /><AppTooltipLayer /><MiniPlayer /></>;
+  if (miniKind === "video") {
+    return (
+      <>
+        <RfScrollbarHost />
+        <AppTooltipLayer />
+        <MiniPlayer />
+        <AppToastHost clearPlayerDock />
+      </>
+    );
+  }
   if (miniKind === "music") return <><RfScrollbarHost /><MusicMiniPlayer /></>;
 
   try {
@@ -1853,16 +2008,19 @@ function App() {
     <CrashRecoveryPreviewContext.Provider value={crashRecoveryPreview}>
     <MainPlaybackHost>
     <div
-      className={`h-screen w-screen text-stone-50 font-sans flex overflow-hidden select-none relative ${
+      className={`h-screen w-screen text-stone-50 font-sans flex overflow-hidden select-none relative rf-main-window-shell ${
         isMainMaximized
           ? "rf-main-window-shell--maximized"
           : "rf-main-window-shell--rounded"
       }`}
-      style={{ background: navMode === "music" ? "var(--music-bg, #0a0a0a)" : "#271C18" }}
+      style={{ backgroundColor: navMode === "music" ? "var(--music-bg, #0a0a0a)" : "var(--rf-bezel)" }}
       data-music-mode={navMode === "music" ? "true" : undefined}
     >
+      <DesktopIslandOverlayDriver enabled={!shellBlocked} />
       <RfScrollbarHost />
       <AppTooltipLayer />
+      <FindBarHost />
+      <GlanceHost />
 
       <RadialNavOverlay
         open={radialNavOpen}
@@ -1905,6 +2063,8 @@ function App() {
         showExplorerQueueToolbar={showExplorerToolbar}
         storageBlocksNewDownloads={storageBlocksNewDownloads}
         onUpdaterStatusClick={undefined}
+        settingsOpen={settingsOpen}
+        onToggleSettings={() => (settingsOpen ? closeSettings() : openSettings())}
       />
       <NotificationCenterPopover />
 
@@ -1938,47 +2098,48 @@ function App() {
         <>
           {/* Music: gaps for the logo (left) and the centered Home + search bar (MusicTopBar). */}
           <div
-            className="fixed top-0 z-[50] h-[var(--rf-titlebar-h)]"
+            className="rf-autohide-chrome fixed top-0 z-[50] h-[var(--rf-titlebar-h)]"
             style={{ left: 60, width: `max(0px, calc(50% - ${MUSIC_TOP_BAR_HALF_WIDTH_PX + 60}px))` }}
             data-tauri-drag-region
           />
           <div
-            className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[400px]" : "right-[280px]"}`}
+            className={`rf-autohide-chrome fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[440px]" : "right-[320px]"}`}
             style={{ left: `calc(50% + ${MUSIC_TOP_BAR_HALF_WIDTH_PX}px)` }}
             data-tauri-drag-region
           />
         </>
       ) : (
         <div
-          className={`fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[400px]" : "right-[280px]"}`}
-          style={{ left: SIDEBAR_RAIL_PX }}
+          className={`rf-autohide-chrome fixed top-0 z-[50] h-[var(--rf-titlebar-h)] ${showExplorerToolbar ? "right-[400px]" : "right-[280px]"}`}
+          style={{ left: SIDEBAR_RAIL_W }}
           data-tauri-drag-region
         />
       )}
 
       <WindowResizeEdges active={!isMainMaximized} />
 
-      <AnimatePresence mode="wait" initial={false}>
-      {navMode === "music" ? (
+      <div className="relative flex min-h-0 min-w-0 flex-1">
+      {musicShellMounted ? (
         <motion.div
-          key="nav-music"
-          className="flex min-h-0 min-w-0 flex-1"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={pageFadeTransition}
+          className="absolute inset-0 flex min-h-0 min-w-0"
+          {...shellMotion("music")}
+          inert={navMode !== "music"}
         >
-        <MusicShell />
+          <Activity mode={shellActivity("music")}>
+            <MusicShell
+              nativeSurfacesReady={navSurfacesReady && navMode === "music"}
+              nativeSurfacesCovered={settingsOpen}
+            />
+          </Activity>
         </motion.div>
-      ) : (
+      ) : null}
+      {defaultShellMounted ? (
       <motion.div
-        key="nav-default"
-        className="flex min-h-0 min-w-0 flex-1"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={pageFadeTransition}
+        className="absolute inset-0 flex min-h-0 min-w-0"
+        {...shellMotion("default")}
+        inert={navMode !== "default"}
       >
+      <Activity mode={shellActivity("default")}>
       <AppSidebarRail
         activeTab={activeTab}
         settingsOpen={settingsOpen}
@@ -2002,13 +2163,13 @@ function App() {
       />
 
       {/* ── Right Column (tab chrome above recessed content field) ─ */}
-      <div className="rf-chrome-column flex-1 flex flex-col min-w-0 min-h-0 pt-[var(--rf-titlebar-h)] relative bg-[#271C18]">
+      <div className="rf-chrome-column flex-1 flex flex-col min-w-0 min-h-0 pt-[var(--rf-titlebar-h)] relative bg-[color:var(--rf-bezel)]">
         
         {/* Gallery tab strip */}
         <AnimatePresence mode="wait">
-          {(activeTab === "media" && !selectedPlaylist && !shellBlocked) ? (
+          {((activeTab === "media" && !selectedPlaylist) || gamesStrip) && !shellBlocked ? (
             <motion.div
-              key="gallery-tabs"
+              key={gamesStrip ? "game-tabs" : "gallery-tabs"}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -2018,7 +2179,7 @@ function App() {
                 {galleryScrollChrome > 0 ? (
                   <>
                     <div
-                      className="pointer-events-none absolute inset-0 bg-[#271C18] rounded-b-[28px] shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+                      className="pointer-events-none absolute inset-0 bg-[color:var(--rf-bezel)] rounded-b-[28px]"
                       style={{
                         opacity: galleryScrollChrome,
                         clipPath: "inset(var(--rf-titlebar-h) -100px -100px -100px)",
@@ -2026,14 +2187,14 @@ function App() {
                       aria-hidden
                     />
                     <div
-                      className="pointer-events-none absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]"
+                      className="pointer-events-none absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[color:var(--rf-bezel)]"
                       style={{ opacity: galleryScrollChrome }}
                       aria-hidden
                     >
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
                     </div>
                     <div
-                      className="pointer-events-none absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]"
+                      className="pointer-events-none absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[color:var(--rf-bezel)]"
                       style={{ opacity: galleryScrollChrome }}
                       aria-hidden
                     >
@@ -2043,12 +2204,12 @@ function App() {
                 ) : null}
 
                 <div className="relative flex items-end pb-1 px-6">
-                  {creatorOpen ? (
+                  {gamesStrip || creatorOpen || tagPageOpen ? (
                     <button
                       type="button"
-                      onClick={closeCreatorPage}
-                      aria-label="Back to Library"
-                      data-tooltip="Back to Library"
+                      onClick={gamesStrip ? closeGamePage : closeLibraryPage}
+                      aria-label={gamesStrip ? "Back to Games" : "Back to Library"}
+                      data-tooltip={gamesStrip ? "Back to Games" : "Back to Library"}
                       className="relative z-10 flex h-[var(--rf-tab-strip-h)] items-end pb-[7px] pl-1 pr-2 text-stone-500 hover:text-stone-200 transition-colors pointer-events-auto"
                     >
                       <ChevronLeft size={16} strokeWidth={2.75} />
@@ -2065,17 +2226,17 @@ function App() {
                           {isActive && !galleryScrollBulge && (
                             <motion.div
                               layoutId="galleryTabShape"
-                              className="absolute inset-0 bg-[#271C18] rounded-b-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.5)] z-0"
+                              className="absolute inset-0 bg-[color:var(--rf-bezel)] rounded-b-[24px] z-0"
                               style={{
                                 clipPath:
                                   "inset(var(--rf-titlebar-h) -100px -100px -100px)",
                               }}
                               transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                             >
-                              <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
+                              <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[color:var(--rf-bezel)]">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
                               </div>
-                              <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18]">
+                              <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[color:var(--rf-bezel)]">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
                               </div>
                             </motion.div>
@@ -2098,15 +2259,15 @@ function App() {
         {(activeTab === "media" && !shellBlocked) && (
           <div className="absolute right-6 top-0 z-20 flex h-[var(--rf-tab-strip-h)] pointer-events-none">
             <div
-              className="relative flex h-[var(--rf-tab-strip-h)] bg-[#271C18] rounded-b-[28px] px-[15px] items-end pb-1 justify-end pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+              className="relative flex h-[var(--rf-tab-strip-h)] bg-[color:var(--rf-bezel)] rounded-b-[28px] px-[15px] items-end pb-1 justify-end pointer-events-auto"
               style={{
                 clipPath: "inset(var(--rf-titlebar-h) -100px -100px -100px)",
               }}
             >
-              <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
+              <div className="absolute left-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[color:var(--rf-bezel)] pointer-events-none">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M16 0H0C8.83656 0 16 7.16344 16 16V0Z" fill="currentColor" /></svg>
               </div>
-              <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[#271C18] pointer-events-none">
+              <div className="absolute right-[-16px] top-[var(--rf-titlebar-h)] w-[16px] h-[16px] text-[color:var(--rf-bezel)] pointer-events-none">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M0 0V16C0 7.16344 7.16344 0 16 0H0Z" fill="currentColor" /></svg>
               </div>
 
@@ -2165,7 +2326,7 @@ function App() {
         )}
 
         {/* ── Main Content ─────────────────────────────── */}
-        <div className="flex-1 relative z-0 bg-[color:var(--rf-well)] rounded-tl-[32px] rounded-bl-2xl overflow-hidden rf-main-content-shell">
+        <div className={`flex-1 relative z-0 mr-1.5 bg-[color:var(--rf-well)] rounded-xl overflow-hidden rf-main-content-shell ${activeTab === "explorer" ? "" : "mb-1.5"}`}>
           <div
             ref={explorerWebviewHostRef}
             className="absolute inset-0 z-[1] pointer-events-none transition-opacity duration-200 ease-out"
@@ -2180,14 +2341,10 @@ function App() {
             }}
             aria-hidden
           />
-          <div
-            className="rf-main-content-vignette pointer-events-none absolute inset-0 z-[15] rounded-tl-[32px] rounded-bl-2xl"
-            aria-hidden
-          />
           {isMainUrlDropHover ? (
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 z-[25] rounded-tl-[32px] rounded-bl-2xl border-2 border-dashed border-[color:color-mix(in_srgb,var(--accent),transparent_55%)] bg-[color:color-mix(in_srgb,var(--accent),transparent_93%)]"
+              className="pointer-events-none absolute inset-0 z-[25] rounded-xl border-2 border-dashed border-[color:color-mix(in_srgb,var(--accent),transparent_55%)] bg-[color:color-mix(in_srgb,var(--accent),transparent_93%)]"
             />
           ) : null}
           <main
@@ -2220,11 +2377,12 @@ function App() {
                   />
                 )
               )}
+              {activeTab === "games" && <GamesView key="games" />}
               {activeTab === "player" && playingFile && isAudioOnlyPath(playingFile.path) && (
                 <PlayerView
                   ref={playerViewRef}
                   key={`player-${playingFile.path}`}
-                  onBack={() => setActiveTab("media")}
+                  onBack={() => setActiveTab(useRuforgeStore.getState().browseTab)}
                 />
               )}
             </AnimatePresence>
@@ -2236,32 +2394,36 @@ function App() {
             onNavigate={(url) => void onExplorerNavigate(url)}
             onReload={() => void onExplorerReload()}
           />
-        ) : (
-          <StorageStrip />
-        )}
+        ) : null}
         </div>
+      </Activity>
       </motion.div>
-      )}
-      </AnimatePresence>
+      ) : null}
+      </div>
 
-      {navMode === "music" && <MusicToastHost />}
-      {navMode !== "music" && activeTab !== "explorer" && (
-        <AppToastHost clearPlayerDock={videoPlayerShellVisible} />
+      {(navMode === "music" || activeTab !== "explorer") && (
+        <AppToastHost clearPlayerDock={navMode === "music" || videoPlayerShellVisible} />
       )}
       {backgroundVideoFile ? (
         <div
           className={
             videoPlayerShellVisible
-              ? "pointer-events-auto fixed z-[40] top-[var(--rf-titlebar-h)] bottom-0 right-0 overflow-hidden bg-[color:var(--rf-well)] rounded-tl-[32px]"
+              ? "pointer-events-auto fixed z-[40] bottom-1.5 right-1.5 overflow-hidden bg-[color:var(--rf-well)] rounded-xl transition-[top,left] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
               : "pointer-events-none fixed left-[-9999px] top-0 h-px w-px overflow-hidden opacity-0"
           }
-          style={videoPlayerShellVisible ? { left: sidebarChromeLeft } : undefined}
+          style={
+            videoPlayerShellVisible
+              ? chromeHidden
+                ? { top: 6, left: 6 }
+                : { top: "var(--rf-titlebar-h)", left: sidebarChromeLeft }
+              : undefined
+          }
           aria-hidden={!videoPlayerShellVisible}
         >
           <PlayerView
             ref={playerViewRef}
             key={`player-${backgroundVideoFile.path}`}
-            onBack={() => setActiveTab("media")}
+            onBack={() => setActiveTab(useRuforgeStore.getState().browseTab)}
           />
         </div>
       ) : null}

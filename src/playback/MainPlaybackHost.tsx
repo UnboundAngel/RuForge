@@ -24,6 +24,10 @@ export function MainPlaybackHost({ children }: { children: React.ReactNode }) {
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const activityOwner = useRuforgeStore((s) => s.activityOwner);
   const entries = useRuforgeStore((s) => s.entries);
+  const galleryDesktopReady = useRuforgeStore((s) => s.galleryDesktopReady);
+  const libraryScanRevision = useRuforgeStore((s) => s.libraryScanRevision);
+  const pausedRef = useRef(playback.paused);
+  pausedRef.current = playback.paused;
 
   const bridgeActive = shouldHostOwnBridge(playingFile, activityOwner);
 
@@ -54,6 +58,17 @@ export function MainPlaybackHost({ children }: { children: React.ReactNode }) {
     });
     useRuforgeStore.getState().setPlayingFile(file);
   }, [entries, playingFile, activityOwner]);
+
+  // Files removed outside the app skip releasePlaybackBeforeDelete. Keyed on scans only so a
+  // track started before its file reaches the library is not dropped.
+  useEffect(() => {
+    if (!galleryDesktopReady || !pausedRef.current) return;
+    const st = useRuforgeStore.getState();
+    const file = st.playingFile;
+    if (!file || !isAudioOnlyPath(file.path)) return;
+    const stillThere = flattenGalleryScanToMediaFiles(st.entries).some((f) => f.path === file.path);
+    if (!stillThere) st.stopPlayback();
+  }, [libraryScanRevision, galleryDesktopReady]);
 
   // Listed field by field so the time ticks don't hand every consumer a new object.
   const playbackValue = useMemo(

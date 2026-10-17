@@ -4,10 +4,10 @@ import { ListVideo, MoreHorizontal } from "lucide-react";
 export function PlaylistEmptyThumb({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`relative w-full h-full flex items-center justify-center bg-[#2c2622] ${className}`}
+      className={`relative w-full h-full flex items-center justify-center bg-[color:var(--rf-field)] ${className}`}
       aria-hidden
     >
-      <div className="w-14 h-11 rounded-lg bg-[#3a332e] border border-white/[0.06] flex items-center justify-center">
+      <div className="w-14 h-11 rounded-lg bg-[color:var(--rf-field-hover)] border border-white/[0.06] flex items-center justify-center">
         <MoreHorizontal size={22} strokeWidth={2} className="text-[#6b635c]" />
       </div>
       <ListVideo

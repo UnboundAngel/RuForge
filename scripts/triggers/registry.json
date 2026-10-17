@@ -11,7 +11,7 @@
         "commit & push"
       ],
       "script": "scripts/triggers/push.mjs",
-      "effect": "Stage all, commit from diff, rebase onto sync/<branch>, push sync only (never public). From another branch, also fast-forwards sync/main, or warns loudly that main did not move."
+      "effect": "Stage all, commit with `-m \"<message>\"` when passed (agents: always pass one that says what changed), else the first new shipped entry, else the most-changed files; rebase onto sync/<branch>, push sync only (never public). From another branch, also fast-forwards sync/main, or warns loudly that main did not move."
     },
     {
       "id": "leave",

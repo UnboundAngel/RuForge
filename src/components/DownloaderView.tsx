@@ -183,7 +183,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
               />
             </motion.div>
           </AnimatePresence>
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#1D1613]/80 via-transparent to-[#1D1613]" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[color:var(--rf-surface-deep)]/80 via-transparent to-[color:var(--rf-surface-deep)]" />
         </div>
       ) : null}
       <div className="relative z-10 flex h-full flex-col p-4 sm:p-10 lg:p-16">
@@ -212,40 +212,47 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                 transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
                 className="absolute inset-x-0 top-0 mb-4 flex flex-col items-center gap-2 sm:mb-8 sm:gap-4"
               >
-                <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
-                  {BROWSER_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => d.handleBrowserChange(opt.value)}
-                      className="flex items-center gap-2 group transition-all duration-300"
-                    >
-                      <div
-                        className={`w-1 h-1 rounded-full transition-all duration-300 ${d.browserContextUi === opt.value ? "bg-[color:var(--accent)] scale-150" : "bg-stone-800 group-hover:bg-stone-600"}`}
-                      />
-                      <span
-                        className={`text-[8px] font-black uppercase tracking-[0.3em] ${
-                          d.browserContextUi === opt.value
-                            ? "text-[color:var(--accent)]"
-                            : "text-stone-700 group-hover:text-stone-500"
+                <div
+                  role="radiogroup"
+                  aria-label="Cookie source"
+                  className="flex flex-wrap justify-center gap-0.5 rounded-full bg-[color:var(--rf-field)] p-1"
+                >
+                  {BROWSER_OPTIONS.map((opt) => {
+                    const active = d.browserContextUi === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        data-tooltip={opt.hint}
+                        onClick={() => d.handleBrowserChange(opt.value)}
+                        className={`relative h-7 rounded-full px-3.5 text-[11px] font-semibold tracking-wide transition-colors duration-150 active:scale-[0.97] ${
+                          active ? "text-[color:var(--rf-on-accent)]" : "text-stone-400 hover:text-stone-100"
                         }`}
                       >
-                        {opt.label}
-                      </span>
-                    </button>
-                  ))}
+                        {active ? (
+                          <motion.span
+                            layoutId="downloader-cookie-source"
+                            className="absolute inset-0 rounded-full bg-[color:var(--accent)]"
+                            transition={{ type: "spring", stiffness: 500, damping: 38 }}
+                          />
+                        ) : null}
+                        <span className="relative">{opt.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
                 <AnimatePresence>
                   {!d.browserContextUi && (
                     <motion.div
-                      initial={{ opacity: 0, y: -5 }}
+                      initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="flex items-center gap-2 px-3 py-1 rounded-full border border-[color-mix(in_srgb,var(--accent),transparent_90%)] bg-[color-mix(in_srgb,var(--accent),transparent_95%)]"
+                      className="flex items-center gap-1.5 text-[11px] text-stone-500"
                     >
-                      <Info size={10} className="text-[color:var(--accent)] opacity-40" />
-                      <span className="text-[7px] font-black text-[color:var(--accent)] opacity-30 uppercase tracking-[0.2em]">
-                        None: public videos. Pick Internal or Firefox for signed-in content.
-                      </span>
+                      <Info size={12} className="shrink-0" />
+                      <span>Public videos only. Pick Internal, Firefox or Zen for signed-in content.</span>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -459,6 +466,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         role="presentation"
                       >
                         <input
+                          ref={d.urlInputRef}
                           type="text"
                           value={d.url}
                           onChange={(e) => d.handleUrlChange(e.target.value)}
@@ -675,7 +683,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           <motion.div
                             initial={{ opacity: 0, y: 8 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="rf-duplicate-banner mx-auto max-w-lg rounded-2xl border border-white/5 bg-[#271C18]/60 px-6 py-4 text-center backdrop-blur-md"
+                            className="rf-duplicate-banner mx-auto max-w-lg rounded-2xl border border-white/5 bg-[color:var(--rf-surface)]/60 px-6 py-4 text-center backdrop-blur-md"
                             role="status"
                           >
                             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#EDD79C]">

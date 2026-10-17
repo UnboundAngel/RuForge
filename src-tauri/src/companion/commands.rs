@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use crate::companion::{browser_base_url, CompanionState};
+use crate::companion::{browser_base_url, tailnet_base_url, CompanionState};
 use crate::dev_gate;
 
 fn require_dev_gate(app: &AppHandle) -> Result<(), String> {
@@ -24,6 +24,8 @@ pub struct CompanionStatus {
     /// Reserved for future LAN mode; not used by V1 Browser Companion UI.
     pub lan_ip: Option<String>,
     pub lan_reachable: bool,
+    /// `https://<machine>.<tailnet>.ts.net` when Tailscale is running on this PC.
+    pub phone_url: Option<String>,
     pub session_count: u32,
 }
 
@@ -31,6 +33,8 @@ pub struct CompanionStatus {
 #[serde(rename_all = "camelCase")]
 pub struct QrPayload {
     pub url: String,
+    /// Carries no code: the iPhone home screen app has its own cookies, so pairing happens there by typing the code.
+    pub phone_url: Option<String>,
     pub ip: String,
     pub port: u16,
     pub code: String,
@@ -68,12 +72,16 @@ pub async fn companion_status(state: State<'_, CompanionState>) -> Result<Compan
     let running = inner.running.load(Ordering::SeqCst);
     let port = *inner.bind_port.read().await;
     let lan_ip = inner.lan_ip.read().await.clone();
+    let tailnet_host = inner.tailnet_host.read().await.clone();
     Ok(CompanionStatus {
         running,
         port,
         browser_url: running.then(|| browser_base_url(port)),
         lan_reachable: lan_ip.is_some(),
         lan_ip,
+        phone_url: tailnet_host
+            .filter(|_| running)
+            .map(|h| tailnet_base_url(&h)),
         session_count: inner.sessions.read().await.len() as u32,
     })
 }
@@ -88,12 +96,14 @@ pub async fn companion_qr_payload(
         return Err("companion_not_running".to_string());
     }
     let inner = &state.inner;
+    let tailnet_host = state.refresh_tailnet_host().await;
     let pairing = state.mint_pairing_code().await;
     let port = *inner.bind_port.read().await;
     let base = browser_base_url(port);
     let url = format!("{base}/?c={}", pairing.code);
     Ok(QrPayload {
         url,
+        phone_url: tailnet_host.map(|h| tailnet_base_url(&h)),
         ip: "localhost".to_string(),
         port,
         code: pairing.code,

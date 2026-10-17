@@ -8,5 +8,6 @@ import { useWatchlistStore } from "@/watchlist/watchlistStore";
 export function useNotificationPrefs(): NotificationPrefs {
   const alerts = useRuforgeStore((s) => s.settings.watchlistAlerts !== false);
   const checkIntervalMin = useWatchlistStore((s) => s.snapshot?.checkIntervalMin ?? DEFAULT_CHECK_INTERVAL_MIN);
-  return useMemo(() => ({ alerts, checkIntervalMin }), [alerts, checkIntervalMin]);
+  const muted = useRuforgeStore((s) => s.settings.notificationMuted);
+  return useMemo(() => ({ alerts, checkIntervalMin, muted }), [alerts, checkIntervalMin, muted]);
 }

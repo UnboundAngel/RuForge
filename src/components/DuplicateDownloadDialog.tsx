@@ -44,7 +44,7 @@ export function DuplicateDownloadDialog({
             initial={{ opacity: 0, y: 30, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.98 }}
-            className="relative w-full max-w-sm overflow-hidden rounded-[24px] border border-white/5 bg-[#271C18] p-8 shadow-[0_40px_80px_rgba(0,0,0,0.7)]"
+            className="relative w-full max-w-sm overflow-hidden rounded-[24px] border border-white/5 bg-[color:var(--rf-surface)] p-8 shadow-[0_40px_80px_rgba(0,0,0,0.7)]"
           >
             {/* Glossy top edge highlight */}
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
@@ -79,7 +79,7 @@ export function DuplicateDownloadDialog({
               <button
                 type="button"
                 onClick={() => onChoose("replace")}
-                className="w-full rounded-full bg-[color:var(--accent)] py-3 text-[10px] font-black uppercase tracking-[0.2em] text-[#1D1613] transition-all hover:brightness-110 active:scale-[0.98] shadow-lg"
+                className="w-full rounded-full bg-[color:var(--accent)] py-3 text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--rf-on-accent)] transition-all hover:brightness-110 active:scale-[0.98] shadow-lg"
               >
                 Replace
               </button>

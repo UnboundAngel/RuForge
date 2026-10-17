@@ -7,6 +7,7 @@ export type RadialNavIconId =
   | "download"
   | "videos"
   | "explorer"
+  | "games"
   | "settings"
   | "music-home"
   | "music-explore"
@@ -25,6 +26,7 @@ const ICON: Record<RadialNavIconId, IconSpec> = {
   download: { kind: "iconify", icon: "material-symbols:download-rounded" },
   videos: { kind: "iconify", icon: "material-symbols:play-circle-rounded" },
   explorer: { kind: "iconify", icon: "material-symbols:youtube-searched-for-rounded" },
+  games: { kind: "iconify", icon: "material-symbols:sports-esports-rounded" },
   settings: { kind: "iconify", icon: "material-symbols:settings-rounded" },
   "music-home": { kind: "lucide", lucide: Home },
   "music-explore": { kind: "lucide", lucide: Compass },

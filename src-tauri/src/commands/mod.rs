@@ -1,3 +1,5 @@
+pub mod activity_log;
+pub mod activity_stats;
 pub mod media_engine_cmd;
 pub mod dev_captures;
 pub mod disk_space;
@@ -9,6 +11,8 @@ pub mod export_copy;
 pub mod explorer_embed;
 pub mod ffprobe;
 pub mod gallery;
+pub mod library_tags;
+pub mod settings_file;
 pub mod media;
 pub mod lyrics;
 pub mod musicmeta;

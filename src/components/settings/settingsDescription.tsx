@@ -28,7 +28,7 @@ export const SettingsDescription: React.FC<SettingsDescriptionProps> = ({
   if (!isLongSettingsDescription(trimmed)) {
     return (
       <p
-        className={`text-[11px] text-stone-500 leading-relaxed max-w-md ${className}`}
+        className={`text-[12px] text-stone-500 leading-snug max-w-md ${className}`}
       >
         {trimmed}
       </p>

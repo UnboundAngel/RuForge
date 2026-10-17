@@ -32,3 +32,17 @@ export const IMPORT_PROMPT = [
   '- If a title or artist is cut off or hard to read, write what you can see and set "unclear": true.',
   "- Skip anything that isn't a song (ads, headers, \"recommended\" sections below the playlist).",
 ].join("\n");
+
+export type ImportPromptSong = { title: string; artist: string };
+
+/** The prompt for adding to a playlist the user already has: the chatbot leaves out what's on it. */
+export function importPromptFor(existing: ImportPromptSong[]): string {
+  if (!existing.length) return IMPORT_PROMPT;
+  return [
+    IMPORT_PROMPT,
+    "",
+    "My playlist already has the songs below. Leave them out of your reply and only list songs that aren't on it yet. Keep the same order as the screenshots for the rest.",
+    "",
+    ...existing.map((s) => `- ${s.artist ? `${s.title} - ${s.artist}` : s.title}`),
+  ].join("\n");
+}

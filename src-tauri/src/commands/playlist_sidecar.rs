@@ -96,7 +96,32 @@ pub fn playlist_cover_path_for(output_dir: &str, folder_name: &str) -> PathBuf {
         .join(PLAYLIST_COVER_FILENAME)
 }
 
+/// Output folder and playlist folder from the frontend: an allowed absolute folder plus one
+/// plain path segment, so the sidecar cannot land outside `<output>/Playlists/`.
+fn checked_target(app: &tauri::AppHandle, output_dir: &str, folder_name: &str) -> Result<(String, String), String> {
+    let output = output_dir.trim();
+    crate::library::path_access::allow_path(app, output)?;
+    let folder = crate::library::path_access::check_folder_segment(folder_name)?;
+    Ok((output.to_string(), folder.to_string()))
+}
+
+/// Cover art comes from YouTube's image CDNs over https; anything else (http, an IP, localhost)
+/// would let page-supplied metadata make RuForge fetch internal addresses.
+fn is_fetchable_cover_url(raw: &str) -> bool {
+    let Ok(url) = tauri::Url::parse(raw) else {
+        return false;
+    };
+    url.scheme() == "https"
+        && url.port().is_none()
+        && url
+            .domain()
+            .is_some_and(|h| h.contains('.') && !h.eq_ignore_ascii_case("localhost") && !h.to_ascii_lowercase().ends_with(".localhost"))
+}
+
 fn schedule_playlist_cover_persist(cover_url: String, output_dir: String, folder_name: String) {
+    if !is_fetchable_cover_url(&cover_url) {
+        return;
+    }
     tauri::async_runtime::spawn(async move {
         let dest = playlist_cover_path_for(&output_dir, &folder_name);
         if dest.is_file() {
@@ -315,6 +340,7 @@ fn apply_metadata_patch(dto: &mut PlaylistSidecarDto, patch: &PlaylistSidecarMet
 
 #[tauri::command]
 pub fn kickoff_playlist_download_sidecar(
+    app: tauri::AppHandle,
     output_dir: String,
     folder_name: String,
     list_url: String,
@@ -322,10 +348,11 @@ pub fn kickoff_playlist_download_sidecar(
     tracks: Vec<PlaylistSidecarTrackInput>,
     metadata: Option<PlaylistSidecarMetadataInput>,
 ) -> Result<(), String> {
-    let folder = folder_name.trim();
-    if folder.is_empty() {
+    if folder_name.trim().is_empty() {
         return Err("Playlist folder name is empty.".into());
     }
+    let (output_dir, folder) = checked_target(&app, &output_dir, &folder_name)?;
+    let folder = folder.as_str();
     let list_url = list_url.trim();
     if list_url.is_empty() {
         return Err("Playlist list URL is empty.".into());
@@ -386,27 +413,34 @@ pub fn kickoff_playlist_download_sidecar(
 
 #[tauri::command]
 pub fn read_playlist_download_sidecar(
+    app: tauri::AppHandle,
     output_dir: String,
     folder_name: String,
 ) -> Result<Option<PlaylistSidecarDto>, String> {
-    let folder = folder_name.trim();
-    if folder.is_empty() {
+    if folder_name.trim().is_empty() {
         return Err("Playlist folder name is empty.".into());
     }
-    let path = sidecar_path_for(output_dir.trim(), folder);
-    Ok(read_sidecar(&path))
+    let (output_dir, folder) = checked_target(&app, &output_dir, &folder_name)?;
+    Ok(read_sidecar(&sidecar_path_for(&output_dir, &folder)))
 }
 
 #[tauri::command]
 pub fn find_playlist_sidecar_by_list_url(
+    app: tauri::AppHandle,
     scan_roots: Vec<String>,
     list_url: String,
 ) -> Result<Option<PlaylistSidecarLookupDto>, String> {
+    let roots = crate::library::path_access::allowed_roots(&app, &scan_roots);
+    Ok(find_sidecar_in_roots(&roots, &list_url))
+}
+
+// Split out so tests can run without an AppHandle.
+fn find_sidecar_in_roots(roots: &[String], list_url: &str) -> Option<PlaylistSidecarLookupDto> {
     let want = list_url.trim();
     if want.is_empty() {
-        return Ok(None);
+        return None;
     }
-    for root in scan_roots {
+    for root in roots {
         let root = root.trim();
         if root.is_empty() {
             continue;
@@ -429,29 +463,31 @@ pub fn find_playlist_sidecar_by_list_url(
                 if folder_name.is_empty() {
                     continue;
                 }
-                return Ok(Some(PlaylistSidecarLookupDto {
+                return Some(PlaylistSidecarLookupDto {
                     output_dir: root.to_string(),
                     folder_name,
                     sidecar: dto,
-                }));
+                });
             }
         }
     }
-    Ok(None)
+    None
 }
 
 #[tauri::command]
 pub fn update_playlist_download_sidecar_metadata(
+    app: tauri::AppHandle,
     output_dir: String,
     folder_name: String,
     metadata: PlaylistSidecarMetadataInput,
 ) -> Result<(), String> {
-    let folder = folder_name.trim();
-    if folder.is_empty() {
+    if folder_name.trim().is_empty() {
         return Err("Playlist folder name is empty.".into());
     }
+    let (output_dir, folder) = checked_target(&app, &output_dir, &folder_name)?;
+    let folder = folder.as_str();
 
-    let path = sidecar_path_for(output_dir.trim(), folder);
+    let path = sidecar_path_for(&output_dir, folder);
     let mut dto = read_sidecar(&path).ok_or_else(|| "Playlist sidecar not found.".to_string())?;
     dto.schema_version = SIDECAR_SCHEMA_VERSION;
     apply_metadata_patch(&mut dto, &metadata);
@@ -468,6 +504,7 @@ pub fn update_playlist_download_sidecar_metadata(
 
 #[tauri::command]
 pub fn update_playlist_download_sidecar_track(
+    app: tauri::AppHandle,
     output_dir: String,
     folder_name: String,
     track_url: Option<String>,
@@ -479,12 +516,12 @@ pub fn update_playlist_download_sidecar_track(
     if terminal != "done" && terminal != "failed" {
         return Err(format!("Invalid track status: {status}"));
     }
-    let folder = folder_name.trim();
-    if folder.is_empty() {
+    if folder_name.trim().is_empty() {
         return Err("Playlist folder name is empty.".into());
     }
+    let (output_dir, folder) = checked_target(&app, &output_dir, &folder_name)?;
 
-    let path = sidecar_path_for(output_dir.trim(), folder);
+    let path = sidecar_path_for(&output_dir, &folder);
     let mut dto = read_sidecar(&path).ok_or_else(|| "Playlist sidecar not found.".to_string())?;
     dto.schema_version = SIDECAR_SCHEMA_VERSION;
 
@@ -502,8 +539,17 @@ pub fn update_playlist_download_sidecar_track(
         return Err("Track not found in playlist sidecar.".into());
     }
 
+    let prev_status = dto.status.clone();
     dto.status = derive_playlist_status(&dto.tracks, batch_idle);
-    write_json_sidecar(&path, &dto)
+    write_json_sidecar(&path, &dto)?;
+    if prev_status != "complete" && dto.status == "complete" {
+        let item_count = dto.tracks.len() as u32;
+        crate::commands::activity_log::record(
+            &app,
+            crate::commands::activity_log::ActivityBody::PlaylistDownloaded { item_count },
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -584,12 +630,11 @@ mod tests {
             "status": "complete"
         }"#;
         std::fs::write(&sidecar, json).unwrap();
-        let found = find_playlist_sidecar_by_list_url(
-            vec![root.to_string_lossy().to_string()],
-            "https://www.youtube.com/playlist?list=OLAK5uy_testid".to_string(),
+        let lookup = find_sidecar_in_roots(
+            &[root.to_string_lossy().to_string()],
+            "https://www.youtube.com/playlist?list=OLAK5uy_testid",
         )
-        .unwrap();
-        let lookup = found.expect("lookup");
+        .expect("lookup");
         assert_eq!(lookup.folder_name, "Test Album");
         assert_eq!(lookup.sidecar.status, "complete");
     }
@@ -609,12 +654,8 @@ mod tests {
             "status": "downloading"
         }"#;
         std::fs::write(&sidecar, json).unwrap();
-        let dto = read_playlist_download_sidecar(
-            root.to_string_lossy().to_string(),
-            "Disk Read".to_string(),
-        )
-        .unwrap()
-        .expect("dto");
+        let dto = read_sidecar(&sidecar_path_for(&root.to_string_lossy(), "Disk Read"))
+            .expect("dto");
         assert_eq!(dto.title, "Disk Read");
         assert_eq!(dto.status, "downloading");
     }

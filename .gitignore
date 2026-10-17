@@ -72,3 +72,6 @@ src-tauri/binaries/ffprobe*.exe
 
 # Agent screenshots shared in chat
 .screenshots/
+
+# Playwright MCP console logs
+.playwright-mcp/

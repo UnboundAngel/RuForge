@@ -21,6 +21,11 @@ type CompanionProgressQueryPayload = {
 export function wireCompanionProgressSync(): () => void {
   let disposed = false;
   const unsubs: Array<() => void> = [];
+  // A listener that registers after dispose would otherwise never be removed.
+  const keep = (un: () => void) => {
+    if (disposed) un();
+    else unsubs.push(un);
+  };
 
   void listen<CompanionProgressWritePayload>("companion-playback-progress", (ev) => {
     if (disposed) return;
@@ -29,7 +34,7 @@ export function wireCompanionProgressSync(): () => void {
     const dur =
       Number.isFinite(durationSecs) && durationSecs > 0 ? durationSecs : undefined;
     writePlaybackPos(videoPath, positionSecs, dur);
-  }).then((un) => unsubs.push(un));
+  }).then(keep);
 
   void listen<CompanionProgressQueryPayload>("companion-progress-query", (ev) => {
     if (disposed) return;
@@ -42,7 +47,7 @@ export function wireCompanionProgressSync(): () => void {
       positionSecs,
       durationSecs: storedDur,
     });
-  }).then((un) => unsubs.push(un));
+  }).then(keep);
 
   return () => {
     disposed = true;

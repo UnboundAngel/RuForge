@@ -1,0 +1,33 @@
+# Paths that belong to Games (paid extra). publish-snapshot.mjs aborts if any of
+# these remain in the snapshot tree after private-only removal.
+# One pattern per line. Trailing / = directory prefix. * = basename glob.
+# Matching is case-insensitive. Never matches src/games-stub/.
+
+# Boundary directories
+src/games/
+src-tauri/src/games/
+src-tauri/test-harness/game-match/
+infra/guides/
+
+# Capability files (Games-only windows / system hotkeys)
+src-tauri/capabilities/glance-popout.json
+src-tauri/capabilities/games-windows.json
+src-tauri/capabilities/games-system-hotkeys.json
+
+# Agent / plan docs
+docs/agents/GAMES.md
+docs/ruforge/plans/game-guides.plan.md
+docs/ruforge/plans/g5-g6-spec.md
+docs/ruforge/plans/games-monetization.md
+
+# Basename globs: catch Games .rs that have not yet moved under src-tauri/src/games/
+game_*.rs
+glance*.rs
+glance_popout*
+layout_editor*
+
+# File-size baseline for Games files (names private paths)
+scripts/file-size-baseline.games.json
+docs/agents/release/shipped-games.jsonl
+docs/ruforge/plans/game-detection.plan.md
+docs/ruforge/plans/gamer-update.plan.md

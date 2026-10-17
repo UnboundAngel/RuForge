@@ -18,6 +18,23 @@ pub fn validate_http_url(raw: &str) -> Result<String, EngineError> {
     Ok(trimmed.to_string())
 }
 
+/// yt-dlp's own YouTube search, `ytsearchN:query`. Only the bare `ytsearch` prefix with a count
+/// and a printable query passes, so this cannot name another extractor or a local file.
+pub fn validate_ytdlp_search(raw: &str) -> Result<String, EngineError> {
+    let invalid = || EngineError::new(EngineErrorCode::UnsupportedUrl, "Not a YouTube search");
+    let trimmed = raw.trim();
+    let rest = trimmed.strip_prefix("ytsearch").ok_or_else(invalid)?;
+    let (count, query) = rest.split_once(':').ok_or_else(invalid)?;
+    let count_ok = (1..=3).contains(&count.len())
+        && count.bytes().all(|b| b.is_ascii_digit())
+        && count.parse::<u32>().is_ok_and(|n| (1..=100).contains(&n));
+    let query_ok = !query.trim().is_empty() && query.len() <= 500 && !query.chars().any(char::is_control);
+    if !count_ok || !query_ok {
+        return Err(invalid());
+    }
+    Ok(trimmed.to_string())
+}
+
 pub fn is_youtube_playlist_url(url: &str) -> bool {
     let lower = url.to_ascii_lowercase();
     let Some((before_query, query)) = lower.split_once('?') else {
@@ -77,7 +94,27 @@ pub fn validate_output_dir(path: &str) -> Result<String, EngineError> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_youtube_playlist_url;
+    use super::{is_youtube_playlist_url, validate_ytdlp_search};
+
+    #[test]
+    fn youtube_search_accepts_only_counted_ytsearch() {
+        assert!(validate_ytdlp_search("ytsearch8:Daft Punk One More Time").is_ok());
+        assert!(validate_ytdlp_search("ytsearch100:-leading dash is fine after --").is_ok());
+        for bad in [
+            "ytsearch:no count",
+            "ytsearch0:zero",
+            "ytsearch101:too many",
+            "ytsearchall:x",
+            "ytsearch8:",
+            "ytsearch8:   ",
+            "ytsearch8:line\nbreak",
+            "scsearch8:other extractor",
+            "file:///C:/x",
+            "--exec=calc",
+        ] {
+            assert!(validate_ytdlp_search(bad).is_err(), "{bad}");
+        }
+    }
 
     #[test]
     fn detects_youtube_playlist_links() {

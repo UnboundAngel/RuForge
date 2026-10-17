@@ -8,5 +8,5 @@ const sections = await featureSectionsWithImages(page);
 ---
 
 <BaseLayout title={page.metaTitle} description={page.metaDescription}>
-  <FeaturePageTemplate title={page.title} description={page.description} sections={sections} />
+  <FeaturePageTemplate title={page.title} heading={page.pageHeading} description={page.description} sections={sections} />
 </BaseLayout>

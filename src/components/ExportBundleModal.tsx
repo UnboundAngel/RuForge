@@ -78,7 +78,7 @@ function ExportConfigureBody({
       <div className="space-y-2">
         <SettingsModalEyebrow>Destination folder</SettingsModalEyebrow>
         <div className="flex gap-2">
-          <div className="min-w-0 flex-1 truncate rounded-[var(--radius-input)] bg-[#261d18] px-3 py-2.5 text-[12px] text-stone-300">
+          <div className="min-w-0 flex-1 truncate rounded-[var(--radius-input)] bg-[color:var(--rf-field)] px-3 py-2.5 text-[12px] text-stone-300">
             {destDir || "Pick a folder…"}
           </div>
           <SettingsModalBtnGhost onClick={onBrowse} className="shrink-0 px-4">
@@ -90,7 +90,7 @@ function ExportConfigureBody({
         </p>
       </div>
 
-      <label className="flex cursor-pointer items-center gap-3 rounded-[var(--radius-input)] bg-[#261d18] px-3 py-2.5">
+      <label className="flex cursor-pointer items-center gap-3 rounded-[var(--radius-input)] bg-[color:var(--rf-field)] px-3 py-2.5">
         <input
           type="checkbox"
           checked={includeManifest}
@@ -154,7 +154,7 @@ function ExportRunningBody({
           ) : null}
         </div>
       </div>
-      <div className="h-1 overflow-hidden rounded-full bg-[#261d18]">
+      <div className="h-1 overflow-hidden rounded-full bg-[color:var(--rf-field)]">
         <div
           className="h-full bg-[color:var(--accent)] transition-[width] duration-300"
           style={{ width: `${barPct}%` }}

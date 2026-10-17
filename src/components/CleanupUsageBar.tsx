@@ -24,7 +24,7 @@ export function CleanupUsageBar({ groups, selected }: Props) {
     })
     .filter((s) => s.bytes > 0);
 
-  if (segments.length === 0) return <div className="h-1.5 min-w-0 flex-1 rounded-full bg-[#261d18]" />;
+  if (segments.length === 0) return <div className="h-1.5 min-w-0 flex-1 rounded-full bg-[color:var(--rf-field)]" />;
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-[3px]">

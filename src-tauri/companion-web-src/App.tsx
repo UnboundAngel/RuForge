@@ -1,37 +1,87 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  startTransition,
+  useState,
+  type CSSProperties,
+  type RefObject,
+  type SyntheticEvent,
+} from "react";
 import "./styles.css";
 import { GateCard } from "./components/GateCard";
-import { LibraryView } from "./components/LibraryView";
+import { setClock, useClockSelector } from "./playbackClock";
+import { Intros } from "./components/IntroSheet";
+import { requestIntro } from "./intro";
+import { listOffline, offlineUrl } from "./offline";
+import { readCatalog, touchCatalog, writeCatalog } from "./catalogCache";
+import {
+  clearSideData,
+  flushProgressQueue,
+  pickResume,
+  readLocalProgress,
+  readSidecar,
+  recordProgress,
+  writeSidecar,
+} from "./sideData";
+import { isSaved, isSaving, onNotice, runSaveQueue, setReachable, startSave, useOfflineState } from "./offlineStore";
+import { ago, askPersistentStorage, wipeCachedData } from "./storage";
+import { openIntro } from "./intro";
+import { readSettings } from "./settings";
+import { HomeTab } from "./components/HomeTab";
+import { LibraryTab } from "./components/LibraryTab";
+import { SearchView } from "./components/SearchView";
+import { AnimatePresence, m } from "motion/react";
+import { DetailLayer, DetailPage } from "./components/DetailPage";
+import { pageFadeTransition } from "./motion";
 import { NowPlayingBar } from "./components/NowPlayingBar";
-import { QueueSidebar } from "./components/QueueSidebar";
-import { LazyThumb } from "./components/LazyThumb";
+import { PlayerSheet } from "./components/PlayerSheet";
+import { QueueSheet } from "./components/QueueSheet";
+import { TabBar } from "./components/TabBar";
+import { PullRing, usePullToRefresh } from "./components/PullToRefresh";
+import { useAppViewport } from "./viewport";
+import { artUrl } from "./components/LazyThumb";
+import { useArtTint } from "./artColor";
+import { pushRecent, readRecent } from "./history";
+import { artistGroups, artistKeyOf, isAudio, type Group } from "./library";
 import {
   checkHealth,
   fetchLibrary,
-  pairWithCode,
+  fetchProgress,
   fetchSidecar,
   fetchStreamToken,
+  fetchMediaUrl,
+  pairWithCode,
   postProgress,
 } from "./api";
+import { playsHere } from "./playback";
 import {
-  fmtDuration,
   itemMediaType,
   type CompanionItem,
+  type HomeChip,
+  type LibraryChip,
+  type LibrarySort,
   type MediaMode,
   type SessionState,
   type SponsorSegment,
+  type Tab,
 } from "./types";
 
 const PROGRESS_DEBOUNCE_MS = 8000;
 const RECONNECT_BASE_MS = 5000;
 const RECONNECT_MAX_MS = 30000;
 const CATALOG_REFRESH_MAX_POLLS = 60;
+const RESUME_MIN_SECS = 5;
+const RESUME_TAIL_SECS = 10;
+const PLAYBACK_SPEEDS = [0.75, 1, 1.25, 1.5, 2] as const;
 
-const PLAYER_VOLUME_KEY = "rf_companion_player_volume";
-const PLAYER_MUTED_KEY = "rf_companion_player_muted";
+const NOT_SAVED_OFFLINE = "Not saved on this phone. Save it next time you're connected.";
+
 const PLAYER_SPEED_KEY = "rf_companion_player_speed";
 const PLAYER_LOOP_KEY = "rf_companion_player_loop";
 const PLAYER_SB_KEY = "rf_companion_sb_enabled";
+const LIB_SORT_KEY = "rf_companion_lib_sort";
 
 const SESSION_ERRORS = new Set(["no_session", "invalid_session", "session_revoked", "expired"]);
 const SESSION_GATE_CODES = new Set(["session-lost", "expired", "unpaired"]);
@@ -60,13 +110,6 @@ function sessionStateForAuthCode(code: string): SessionState {
   return "session-lost";
 }
 
-function readStoredVolume() {
-  const v = parseFloat(readLS(PLAYER_VOLUME_KEY, "1"));
-  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
-}
-function readStoredMuted() {
-  return readLS(PLAYER_MUTED_KEY, "false") === "true";
-}
 function readStoredSpeed() {
   const v = parseFloat(readLS(PLAYER_SPEED_KEY, "1"));
   return Number.isFinite(v) && v > 0 ? v : 1;
@@ -80,36 +123,61 @@ function readStoredSbEnabled() {
   return r !== "0" && r !== "false";
 }
 
+function shuffled<T>(list: T[]): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
 export default function App() {
-  // Session + library state
   const [session, setSession] = useState<SessionState>("loading");
   const [items, setItems] = useState<CompanionItem[]>([]);
-  const [catalogRefreshing, setCatalogRefreshing] = useState(false);
-  const [mode, setMode] = useState<MediaMode>("audio");
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [catalogAt, setCatalogAt] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flash = useCallback((message: string) => {
+    setNotice(message);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 3500);
+  }, []);
+  const [tab, setTab] = useState<Tab>("home");
+  const [homeChip, setHomeChip] = useState<HomeChip>("all");
+  const [libChip, setLibChip] = useState<LibraryChip>("songs");
+  const [libSort, setLibSortState] = useState<LibrarySort>(() => {
+    const v = readLS(LIB_SORT_KEY, "recent");
+    return v === "title" || v === "artist" ? v : "recent";
+  });
+  const [stack, setStack] = useState<Group[]>([]);
+  const [recentIds, setRecentIds] = useState<string[]>(readRecent);
+  const [query, setQuery] = useState("");
+  const [playerOpen, setPlayerOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [playContext, setPlayContext] = useState("Your library");
+  const [shuffle, setShuffleState] = useState(false);
+  const unshuffledRef = useRef<CompanionItem[] | null>(null);
+  const shuffleRef = useRef(false);
+  const [trackDir, setTrackDir] = useState(1);
 
-  // Playback state
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const miniRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeKind, setActiveKind] = useState<MediaMode>("audio");
   const [playlist, setPlaylist] = useState<CompanionItem[]>([]);
   const [paused, setPaused] = useState(true);
-  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolumeState] = useState(readStoredVolume);
-  const [muted, setMutedState] = useState(readStoredMuted);
   const [loop, setLoopState] = useState(readStoredLoop);
   const [speed, setSpeedState] = useState(readStoredSpeed);
   const [sbEnabled, setSbEnabledState] = useState(readStoredSbEnabled);
   const [sbSegments, setSbSegments] = useState<SponsorSegment[]>([]);
   const [spriteCount, setSpriteCount] = useState(0);
-  const [activeSbSegment, setActiveSbSegment] = useState<SponsorSegment | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
 
-  // Reconnect/catalog refs
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectDelay = useRef(RECONNECT_BASE_MS);
   const reconnectInFlight = useRef(false);
@@ -120,53 +188,124 @@ export default function App() {
   const activeIdRef = useRef<string | null>(null);
   const activeKindRef = useRef<MediaMode>("audio");
   const playbackRequestRef = useRef(0);
+  const retriedRef = useRef<string | null>(null);
+  const sessionRef = useRef<SessionState>("loading");
+  const localUrlRef = useRef<string | null>(null);
+  const scrollRefs = useRef<Record<Tab, HTMLDivElement | null>>({ home: null, search: null, library: null });
 
-  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
-  useEffect(() => { activeKindRef.current = activeKind; }, [activeKind]);
+  const offlineModeRef = useRef(false);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+  useEffect(() => {
+    offlineModeRef.current = offlineMode;
+    setReachable(!offlineMode);
+    document.documentElement.classList.toggle("rf-offline", offlineMode);
+    if (offlineMode) requestIntro("offline");
+  }, [offlineMode]);
 
-  // Load library on mount + handle session state
+  useEffect(() => onNotice(flash), [flash]);
+
+  useEffect(() => {
+    askPersistentStorage();
+    const flush = () => void flushProgressQueue(postProgress);
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, []);
+
+  const etagRef = useRef<string | null>(null);
+  const hasCatalogRef = useRef(false);
+
+  const applyRefreshing = (on: boolean) => {
+    if (on) {
+      setRefreshing(true);
+      scheduleCatalogPoll();
+    } else {
+      setRefreshing(false);
+      catalogPollCount.current = 0;
+    }
+  };
+
   const loadLibrary = useCallback(async (silent = false) => {
-    if (!silent) setSession("loading");
-    let result = await fetchLibrary();
-    if (!result.ok) {
-      const code = result.error.code ?? "";
+    if (!silent && !hasCatalogRef.current) setSession("loading");
+    let result = await fetchLibrary(etagRef.current);
+    if (!result.ok && result.error.kind === "session") {
       const pairingCode = readPairingCode();
-      if (pairingCode && result.error.kind === "session") {
+      if (pairingCode) {
         const paired = await pairWithCode(pairingCode);
-        if (!paired.ok) {
-          const pairCode = paired.error.code ?? "invalid_pairing_code";
-          if (paired.error.kind === "network") {
-            setSession("disconnected");
-            scheduleReconnect();
-          } else {
-            setSession(sessionStateForAuthCode(pairCode));
-          }
+        if (!paired.ok && paired.error.kind !== "network") {
+          await dropCatalog();
+          setSession(sessionStateForAuthCode(paired.error.code ?? "invalid_pairing_code"));
           return;
         }
-        result = await fetchLibrary();
+        if (paired.ok) {
+          etagRef.current = null;
+          result = await fetchLibrary();
+        } else {
+          result = { ok: false, error: { kind: "network" } };
+        }
       }
     }
     if (!result.ok) {
       const code = result.error.code ?? "";
       if (result.error.kind === "session" || SESSION_ERRORS.has(code) || SESSION_GATE_CODES.has(code)) {
+        await dropCatalog();
         setSession(sessionStateForAuthCode(code));
-      } else {
-        setSession("disconnected");
-        scheduleReconnect();
+        return;
       }
+      if (hasCatalogRef.current) {
+        // Saves outlive their PC entry, so a copy removed on the PC still plays here.
+        const saved = await listOffline();
+        setItems((cur) => {
+          const known = new Set(cur.map((i) => i.id));
+          const extra = saved.filter((e) => !known.has(e.id));
+          return extra.length ? [...cur, ...extra] : cur;
+        });
+        setOfflineMode(true);
+        setSession("paired");
+      } else if (!silent || sessionRef.current !== "paired") {
+        const saved = await listOffline();
+        if (saved.length > 0) {
+          setItems(saved);
+          setOfflineMode(true);
+          setSession("paired");
+        } else {
+          setSession("disconnected");
+        }
+      }
+      scheduleReconnect();
       return;
     }
     reconnectDelay.current = RECONNECT_BASE_MS;
-    setItems(result.data.items ?? []);
-    setSession("paired");
-    if (result.data.catalogRefreshing) {
-      setCatalogRefreshing(true);
-      scheduleCatalogPoll();
-    } else {
-      setCatalogRefreshing(false);
-      catalogPollCount.current = 0;
+    if (offlineModeRef.current) {
+      flash("Back online");
+      void flushProgressQueue(postProgress);
+      setReachable(true);
+      void runSaveQueue();
     }
+    setOfflineMode(false);
+    setSession("paired");
+    etagRef.current = result.etag;
+    const now = Date.now();
+    setCatalogAt(now);
+    if (result.notModified) {
+      void touchCatalog(now);
+      return;
+    }
+    const nextItems = result.data.items ?? [];
+    const busy = !!result.data.refreshing;
+    hasCatalogRef.current = true;
+    setItems(nextItems);
+    void writeCatalog({ items: nextItems, etag: result.etag, refreshing: busy, fetchedAt: now });
+    applyRefreshing(busy);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function dropCatalog() {
+    hasCatalogRef.current = false;
+    etagRef.current = null;
+    setItems([]);
+    setOfflineMode(false);
+    setCatalogAt(null);
+    await wipeCachedData();
+  }
 
   function scheduleReconnect() {
     if (reconnectInFlight.current) return;
@@ -178,10 +317,7 @@ export default function App() {
       if (alive) {
         await loadLibrary(true);
       } else {
-        reconnectDelay.current = Math.min(
-          reconnectDelay.current * 1.5,
-          RECONNECT_MAX_MS,
-        );
+        reconnectDelay.current = Math.min(reconnectDelay.current * 1.5, RECONNECT_MAX_MS);
         scheduleReconnect();
       }
     }, reconnectDelay.current);
@@ -191,46 +327,90 @@ export default function App() {
     if (catalogPollTimer.current) clearTimeout(catalogPollTimer.current);
     catalogPollCount.current += 1;
     if (catalogPollCount.current > CATALOG_REFRESH_MAX_POLLS) {
-      setCatalogRefreshing(false);
+      setRefreshing(false);
       return;
     }
     catalogPollTimer.current = setTimeout(async () => {
-      const result = await fetchLibrary();
-      if (result.ok) {
-        setItems(result.data.items ?? []);
-        if (result.data.catalogRefreshing) {
-          scheduleCatalogPoll();
-        } else {
-          setCatalogRefreshing(false);
-          catalogPollCount.current = 0;
-        }
+      const result = await fetchLibrary(etagRef.current);
+      if (!result.ok) return;
+      if (result.notModified) {
+        scheduleCatalogPoll();
+        return;
+      }
+      const nextItems = result.data.items ?? [];
+      const busy = !!result.data.refreshing;
+      etagRef.current = result.etag;
+      setItems(nextItems);
+      void writeCatalog({ items: nextItems, etag: result.etag, refreshing: busy, fetchedAt: Date.now() });
+      if (busy) {
+        scheduleCatalogPoll();
+      } else {
+        setRefreshing(false);
+        catalogPollCount.current = 0;
       }
     }, 3000);
   }
 
+  // Paint from the stored catalog first; the PC only confirms or replaces it.
   useEffect(() => {
-    void loadLibrary();
+    let cancelled = false;
+    void (async () => {
+      const cached = await readCatalog();
+      if (cancelled) return;
+      if (cached) {
+        hasCatalogRef.current = true;
+        setCatalogAt(cached.fetchedAt);
+        etagRef.current = cached.etag;
+        setItems(cached.items);
+        setRefreshing(cached.refreshing);
+        setSession("paired");
+      }
+      await loadLibrary(!!cached);
+      if (!cancelled && cached?.refreshing && !catalogPollTimer.current) scheduleCatalogPoll();
+    })();
     return () => {
+      cancelled = true;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       if (catalogPollTimer.current) clearTimeout(catalogPollTimer.current);
       if (progressFlushTimer.current) clearTimeout(progressFlushTimer.current);
     };
   }, [loadLibrary]);
 
-  // Normalize URL to /paired after first successful session (SPA fallback)
+  const pullRefresh = useCallback(async () => {
+    await loadLibrary(true);
+    // The offline flag lands on the next render.
+    await new Promise((r) => window.setTimeout(r, 60));
+    flash(offlineModeRef.current ? "Still can't reach your PC." : "Connected to your PC.");
+  }, [loadLibrary, flash]);
+  const pull = usePullToRefresh({
+    scrollers: scrollRefs as RefObject<Record<string, HTMLElement | null>>,
+    enabled: session === "paired",
+    onRefresh: pullRefresh,
+  });
+
+  // Home screen apps resume from a frozen state; RuForge may have restarted meanwhile.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && sessionRef.current === "paired") void loadLibrary(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [loadLibrary]);
+
   useEffect(() => {
     if (session === "paired" && window.location.pathname !== "/paired") {
       window.history.replaceState(null, "", "/paired");
     }
   }, [session]);
 
-  // Flush progress
   const flushProgress = useCallback(() => {
     const id = activeIdRef.current;
     const p = progressPending.current;
     if (!id || !p) return;
     progressPending.current = null;
-    void postProgress(id, p);
+    void recordProgress(id, p, true).then(() =>
+      postProgress(id, p).then((ok) => (ok ? recordProgress(id, p, false) : undefined)),
+    );
   }, []);
 
   const scheduleProgressFlush = useCallback(
@@ -245,761 +425,671 @@ export default function App() {
     [flushProgress],
   );
 
-  // Wire audio element events
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onPlay = () => { if (activeKindRef.current === "audio") setPaused(false); };
-    const onPause = () => { if (activeKindRef.current === "audio") setPaused(true); };
-    const onTimeUpdate = () => {
-      if (activeKindRef.current !== "audio") return;
-      const ct = audio.currentTime;
-      const dur = audio.duration;
-      setCurrentTime(ct);
-      if (Number.isFinite(dur)) setDuration(dur);
-      scheduleProgressFlush(ct, Number.isFinite(dur) ? dur : 0, audio.paused ? "paused" : "playing");
-    };
-    const onDurationChange = () => {
-      if (activeKindRef.current !== "audio") return;
-      if (Number.isFinite(audio.duration)) setDuration(audio.duration);
-    };
-    const onVolumeChange = () => {
-      writeLS(PLAYER_VOLUME_KEY, String(audio.volume));
-      writeLS(PLAYER_MUTED_KEY, audio.muted ? "true" : "false");
-    };
-    const onEnded = () => {
-      if (activeKindRef.current !== "audio") return;
-      scheduleProgressFlush(audio.currentTime, Number.isFinite(audio.duration) ? audio.duration : 0, "ended");
-      if (!audio.loop) skipNext();
-    };
-
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("durationchange", onDurationChange);
-    audio.addEventListener("loadedmetadata", onDurationChange);
-    audio.addEventListener("volumechange", onVolumeChange);
-    audio.addEventListener("ended", onEnded);
-
-    // Restore stored output
-    audio.volume = readStoredVolume();
-    audio.muted = readStoredMuted();
-
-    return () => {
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("durationchange", onDurationChange);
-      audio.removeEventListener("loadedmetadata", onDurationChange);
-      audio.removeEventListener("volumechange", onVolumeChange);
-      audio.removeEventListener("ended", onEnded);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Wire video element events
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const onPlay = () => { if (activeKindRef.current === "video") setPaused(false); };
-    const onPause = () => { if (activeKindRef.current === "video") setPaused(true); };
-    const onTimeUpdate = () => {
-      if (activeKindRef.current !== "video") return;
-      const ct = video.currentTime;
-      const dur = video.duration;
-      setCurrentTime(ct);
-      if (Number.isFinite(dur)) setDuration(dur);
-      scheduleProgressFlush(ct, Number.isFinite(dur) ? dur : 0, video.paused ? "paused" : "playing");
-    };
-    const onDurationChange = () => {
-      if (activeKindRef.current !== "video") return;
-      if (Number.isFinite(video.duration)) setDuration(video.duration);
-    };
-    const onEnded = () => {
-      if (activeKindRef.current !== "video") return;
-      scheduleProgressFlush(video.currentTime, Number.isFinite(video.duration) ? video.duration : 0, "ended");
-      if (!video.loop) skipNext();
-    };
-
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
-    video.addEventListener("timeupdate", onTimeUpdate);
-    video.addEventListener("durationchange", onDurationChange);
-    video.addEventListener("loadedmetadata", onDurationChange);
-    video.addEventListener("ended", onEnded);
-
-    return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-      video.removeEventListener("timeupdate", onTimeUpdate);
-      video.removeEventListener("durationchange", onDurationChange);
-      video.removeEventListener("loadedmetadata", onDurationChange);
-      video.removeEventListener("ended", onEnded);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Track active SB segment
-  useEffect(() => {
-    if (!sbEnabled || sbSegments.length === 0) {
-      setActiveSbSegment(null);
-      return;
-    }
-    const active = sbSegments.find(
-      (s) =>
-        s.actionType === "skip" &&
-        currentTime >= s.segment[0] &&
-        currentTime < s.segment[1] - 0.25,
-    );
-    setActiveSbSegment(active ?? null);
-  }, [currentTime, sbSegments, sbEnabled]);
-
-  // Auto-skip SB segments
-  const sbSkippedRef = useRef(new Set<string>());
-  useEffect(() => {
-    if (!sbEnabled || !activeSbSegment) return;
-    const key = activeSbSegment.UUID ?? `${activeSbSegment.segment[0]}-${activeSbSegment.segment[1]}`;
-    if (sbSkippedRef.current.has(key)) return;
-    sbSkippedRef.current.add(key);
-    const el = getMediaElement();
-    if (el) el.currentTime = activeSbSegment.segment[1];
-  }, [sbEnabled, activeSbSegment]);
-
-  // Reset SB skip set on track change
-  useEffect(() => {
-    sbSkippedRef.current.clear();
-  }, [activeId]);
-
-  function getMediaElement(): HTMLAudioElement | HTMLVideoElement | null {
+  const getMediaElement = useCallback((): HTMLAudioElement | HTMLVideoElement | null => {
     return activeKindRef.current === "audio" ? audioRef.current : videoRef.current;
-  }
+  }, []);
 
-  function stopElement(el: HTMLAudioElement | HTMLVideoElement | null) {
-    if (!el) return;
-    el.pause();
-    el.removeAttribute("src");
-    el.load();
-  }
+  const playsHereCb = useCallback((item: CompanionItem) => playsHere(item), []);
+
+  const startStream = useCallback(
+    async (item: CompanionItem, requestId: number, resumeAt: Promise<number> | number) => {
+      const kind = itemMediaType(item);
+      const el = kind === "audio" ? audioRef.current : videoRef.current;
+      if (!el) return;
+      const local = await offlineUrl(item.id);
+      if (local && requestId !== playbackRequestRef.current) {
+        URL.revokeObjectURL(local);
+        return;
+      }
+      if (local) localUrlRef.current = local;
+      if (!local && offlineModeRef.current) {
+        setPlaybackError(NOT_SAVED_OFFLINE);
+        return;
+      }
+      const url = local ?? (await fetchMediaUrl(item.id));
+      if (requestId !== playbackRequestRef.current) return;
+      if (!url) {
+        setPlaybackError("Couldn't start this one. Check that RuForge is still open on your PC.");
+        return;
+      }
+      el.src = url;
+      el.playbackRate = readStoredSpeed();
+      el.loop = readStoredLoop();
+      void Promise.resolve(resumeAt).then((at) => {
+        if (requestId !== playbackRequestRef.current || at <= 0) return;
+        const seekTo = () => { el.currentTime = at; };
+        if (el.readyState >= 1) seekTo();
+        else el.addEventListener("loadedmetadata", seekTo, { once: true });
+      });
+      try {
+        await el.play();
+      } catch {
+        if (requestId === playbackRequestRef.current) setPaused(true);
+      }
+    },
+    [],
+  );
 
   const playItem = useCallback(
-    async (item: CompanionItem, nextPlaylist: CompanionItem[]) => {
-      if (!item.playable) return;
-
+    async (item: CompanionItem, list: CompanionItem[], context?: string) => {
+      if (!playsHere(item)) return;
+      if (offlineModeRef.current && !isSaved(item.id)) {
+        setPlaybackError(NOT_SAVED_OFFLINE);
+        return;
+      }
+      let nextPlaylist = list;
+      if (context !== undefined) {
+        setPlayContext(context);
+        if (shuffleRef.current) {
+          unshuffledRef.current = list;
+          nextPlaylist = [item, ...shuffled(list.filter((i) => i.id !== item.id))];
+        } else {
+          unshuffledRef.current = null;
+        }
+      }
       const kind = itemMediaType(item);
-      const requestId = playbackRequestRef.current + 1;
-      playbackRequestRef.current = requestId;
-
       const currentEl = kind === "audio" ? audioRef.current : videoRef.current;
-      if (activeIdRef.current === item.id && activeKindRef.current === kind && currentEl?.currentSrc) {
+      if (activeIdRef.current === item.id && currentEl?.currentSrc) {
         setPlaylist(nextPlaylist);
         if (currentEl.paused) void currentEl.play().catch(() => setPaused(true));
+        else setPlayerOpen(true);
         return;
       }
 
+      const requestId = playbackRequestRef.current + 1;
+      playbackRequestRef.current = requestId;
       flushProgress();
-      stopElement(audioRef.current);
-      stopElement(videoRef.current);
+      // load() runs inside the tap so iOS lets the later async play() through.
+      for (const el of [audioRef.current, videoRef.current]) {
+        if (!el) continue;
+        el.pause();
+        el.removeAttribute("src");
+        el.load();
+      }
+      if (localUrlRef.current) {
+        URL.revokeObjectURL(localUrlRef.current);
+        localUrlRef.current = null;
+      }
 
       activeIdRef.current = item.id;
       activeKindRef.current = kind;
+      retriedRef.current = null;
       setPlaybackError(null);
-      setCurrentTime(0);
+      setClock(0);
       setDuration(0);
       setPaused(true);
       setSbSegments([]);
       setSpriteCount(0);
-      setActiveSbSegment(null);
       setActiveId(item.id);
       setActiveKind(kind);
-      setMode(kind);
       setPlaylist(nextPlaylist);
+      setRecentIds(pushRecent(item.id));
+      if (kind === "video") setPlayerOpen(true);
 
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (requestId !== playbackRequestRef.current) return;
+      const resumeAt =
+        kind === "video"
+          ? Promise.all([fetchProgress(item.id), readLocalProgress(item.id)]).then(([remote, local]) => {
+              const p = pickResume(local, remote);
+              if (!p || p.positionSecs < RESUME_MIN_SECS) return 0;
+              const dur = p.durationSecs || item.durationSecs || 0;
+              return dur > 0 && p.positionSecs > dur - RESUME_TAIL_SECS ? 0 : p.positionSecs;
+            })
+          : 0;
 
-      const el = kind === "audio" ? audioRef.current : videoRef.current;
-      if (!el) {
-        setPlaybackError("Playback target was not ready. Try selecting the item again.");
-        return;
+      await startStream(item, requestId, resumeAt);
+
+      if (readSettings().autosave && !isSaved(item.id) && !isSaving(item.id)) void startSave(item);
+
+      const standalone =
+        (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+        window.matchMedia("(display-mode: standalone)").matches;
+      if (!standalone) {
+        // Waits out the first seconds of playback and never lands over fullscreen video.
+        window.setTimeout(() => {
+          if (!document.querySelector(".ph-player--fs")) requestIntro("install");
+        }, 8000);
       }
 
-      const result = await fetchStreamToken(item.id);
-      if (requestId !== playbackRequestRef.current) return;
-      if (!result) {
-        setPlaybackError("Could not get stream token. Try again.");
-        return;
-      }
-
-      el.src = result;
-      el.playbackRate = readStoredSpeed();
-      el.loop = readStoredLoop();
-      el.volume = readStoredVolume();
-      el.muted = readStoredMuted();
-
-      el.onerror = () => {
-        if (requestId !== playbackRequestRef.current) return;
-        const code =
-          el.error?.message?.toLowerCase().includes("session")
-            ? "session"
-            : "stream";
-        if (code === "session") {
-          setSession("session-lost");
-        } else {
-          setPlaybackError("Playback failed. The stream may have expired. Try selecting the item again.");
-        }
-      };
-
-      try {
-        await el.play();
-        if (requestId === playbackRequestRef.current) setPaused(false);
-      } catch {
-        if (requestId === playbackRequestRef.current) setPaused(true);
-      }
-
-      void fetchSidecar(item.id).then((sidecar) => {
+      void fetchSidecar(item.id).then(async (fresh) => {
+        if (fresh && isSaved(item.id)) void writeSidecar(item.id, fresh);
+        const sidecar = fresh ?? (await readSidecar(item.id));
         if (requestId !== playbackRequestRef.current || !sidecar) return;
-        setSbSegments(sidecar.sbSegments ?? []);
+        setSbSegments(sidecar.sponsorSegments ?? []);
         setSpriteCount(sidecar.scrubSpriteCount ?? 0);
       });
     },
-    [flushProgress],
+    [flushProgress, startStream],
   );
+
+  const setShuffle = useCallback((on: boolean) => {
+    shuffleRef.current = on;
+    setShuffleState(on);
+    const id = activeIdRef.current;
+    if (on) {
+      unshuffledRef.current = playlist;
+      const current = playlist.find((i) => i.id === id);
+      const rest = shuffled(playlist.filter((i) => i.id !== id));
+      setPlaylist(current ? [current, ...rest] : rest);
+    } else {
+      const original = unshuffledRef.current;
+      unshuffledRef.current = null;
+      if (original) setPlaylist(original);
+    }
+  }, [playlist]);
+
+  const playlistIndex = playlist.findIndex((i) => i.id === activeId);
+  const hasNext = playlistIndex >= 0 && playlistIndex < playlist.length - 1;
+  const pastIntro = useClockSelector((t) => t > 3);
+  const hasPrev = playlistIndex > 0 || pastIntro;
+  const upNext = useMemo(
+    () => (playlistIndex >= 0 ? playlist.slice(playlistIndex + 1, playlistIndex + 31) : []),
+    [playlist, playlistIndex],
+  );
+
+  // Waits so the token calls don't compete with the current item's first bytes.
+  useEffect(() => {
+    if (playlistIndex < 0) return;
+    const id = window.setTimeout(() => {
+      for (const near of [playlist[playlistIndex + 1], playlist[playlistIndex - 1]]) {
+        if (near && playsHere(near)) void fetchMediaUrl(near.id);
+      }
+    }, 2500);
+    return () => window.clearTimeout(id);
+  }, [playlist, playlistIndex]);
+
+  const skipNext = useCallback(() => {
+    if (!hasNext) return;
+    let at = playlistIndex + 1;
+    if (offlineModeRef.current) {
+      while (at < playlist.length && !isSaved(playlist[at]!.id)) at++;
+      if (at >= playlist.length) {
+        flash("No more saved songs in this list.");
+        return;
+      }
+      if (at > playlistIndex + 1) flash(`Skipped ${at - playlistIndex - 1} not saved.`);
+    }
+    setTrackDir(1);
+    void playItem(playlist[at]!, playlist);
+  }, [flash, hasNext, playItem, playlist, playlistIndex]);
+
+  const skipPrev = useCallback(() => {
+    const el = getMediaElement();
+    if (el && (el.currentTime > 3 || playlistIndex <= 0)) {
+      el.currentTime = 0;
+      return;
+    }
+    if (playlistIndex > 0) {
+      setTrackDir(-1);
+      void playItem(playlist[playlistIndex - 1]!, playlist);
+    }
+  }, [getMediaElement, playItem, playlist, playlistIndex]);
+
+  const skipNextRef = useRef(skipNext);
+  const skipPrevRef = useRef(skipPrev);
+  useEffect(() => { skipNextRef.current = skipNext; }, [skipNext]);
+  useEffect(() => { skipPrevRef.current = skipPrev; }, [skipPrev]);
 
   const togglePlay = useCallback(() => {
     const el = getMediaElement();
-    if (!el) return;
-    if (el.paused) {
-      void el.play().catch(() => {});
-    } else {
-      el.pause();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!el || !el.currentSrc) return;
+    if (el.paused) void el.play().catch(() => {});
+    else el.pause();
+  }, [getMediaElement]);
 
   const seek = useCallback((t: number) => {
     const el = getMediaElement();
     if (el) el.currentTime = t;
-    setCurrentTime(t);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    setClock(t);
+  }, [getMediaElement]);
 
-  const seekStart = useCallback(() => {
-    getMediaElement()?.pause();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const skipNext = useCallback(() => {
-    if (!activeId || playlist.length === 0) return;
-    const idx = playlist.findIndex((i) => i.id === activeId);
-    if (idx < 0 || idx >= playlist.length - 1) return;
-    const next = playlist[idx + 1]!;
-    void playItem(next, playlist);
-  }, [activeId, playlist, playItem]);
-
-  const skipPrev = useCallback(() => {
-    const el = getMediaElement();
-    if (!activeId || playlist.length === 0) {
-      if (el) el.currentTime = 0;
+  const handleMediaError = useCallback(async (el: HTMLMediaElement) => {
+    const id = activeIdRef.current;
+    const item = items.find((i) => i.id === id);
+    if (!id || !item) return;
+    const requestId = playbackRequestRef.current;
+    if (localUrlRef.current && el.currentSrc === localUrlRef.current) {
+      setPaused(true);
+      setPlaybackError("This saved copy won't play. Remove it and save it again.");
       return;
     }
-    const idx = playlist.findIndex((i) => i.id === activeId);
-    if (idx > 0 && el && el.currentTime <= 3) {
-      void playItem(playlist[idx - 1]!, playlist);
-    } else if (el) {
-      el.currentTime = 0;
+    const lib = await fetchLibrary(etagRef.current);
+    if (requestId !== playbackRequestRef.current) return;
+    if (!lib.ok && lib.error.kind === "session") {
+      setSession(sessionStateForAuthCode(lib.error.code ?? ""));
+      return;
     }
-  }, [activeId, playlist, playItem, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!lib.ok) {
+      setPlaybackError("Lost the connection to your PC. Check that RuForge is open and Tailscale is on.");
+      setPaused(true);
+      return;
+    }
+    // Media errors hide the HTTP status, so ask the server directly.
+    const status = await fetch(el.currentSrc, { headers: { Range: "bytes=0-0" }, cache: "no-store" })
+      .then((r) => r.status)
+      .catch(() => 0);
+    if (requestId !== playbackRequestRef.current) return;
+    const at = el.currentTime;
+    if ((status === 403 || status === 410 || at > 0) && retriedRef.current !== id) {
+      retriedRef.current = id;
+      await startStream(item, requestId, at);
+      return;
+    }
+    setPaused(true);
+    if (status === 404) {
+      setPlaybackError("This file is gone from your PC. It may have been moved or deleted.");
+    } else if (status === 200 || status === 206) {
+      setPlaybackError("This file won't play on this device.");
+    } else {
+      setPlaybackError("Playback stopped. Try it again.");
+    }
+  }, [items, startStream]);
 
-  const setVolume = useCallback((v: number) => {
-    setVolumeState(v);
-    const el = getMediaElement();
-    if (el) el.volume = v;
-    writeLS(PLAYER_VOLUME_KEY, String(v));
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const setMuted = useCallback((m: boolean) => {
-    setMutedState(m);
-    const el = getMediaElement();
-    if (el) el.muted = m;
-    writeLS(PLAYER_MUTED_KEY, m ? "true" : "false");
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mediaProps = useCallback(
+    (kind: MediaMode) => {
+      const mine = () => activeKindRef.current === kind;
+      return {
+        onPlay: () => { if (mine()) setPaused(false); },
+        onPause: () => { if (mine()) setPaused(true); },
+        onTimeUpdate: (e: SyntheticEvent<HTMLMediaElement>) => {
+          if (!mine()) return;
+          const el = e.currentTarget;
+          const dur = Number.isFinite(el.duration) ? el.duration : 0;
+          setClock(el.currentTime);
+          if (dur) setDuration(dur);
+          scheduleProgressFlush(el.currentTime, dur, el.paused ? "paused" : "playing");
+        },
+        onDurationChange: (e: SyntheticEvent<HTMLMediaElement>) => {
+          if (mine() && Number.isFinite(e.currentTarget.duration)) setDuration(e.currentTarget.duration);
+        },
+        onEnded: (e: SyntheticEvent<HTMLMediaElement>) => {
+          if (!mine()) return;
+          const el = e.currentTarget;
+          scheduleProgressFlush(el.currentTime, Number.isFinite(el.duration) ? el.duration : 0, "ended");
+          if (!el.loop && readSettings().autoplay) skipNextRef.current();
+        },
+        onError: (e: SyntheticEvent<HTMLMediaElement>) => {
+          const el = e.currentTarget;
+          if (!mine() || !el.getAttribute("src")) return;
+          void handleMediaError(el);
+        },
+      };
+    },
+    [handleMediaError, scheduleProgressFlush],
+  );
 
   const setLoop = useCallback((l: boolean) => {
     setLoopState(l);
     const el = getMediaElement();
     if (el) el.loop = l;
     writeLS(PLAYER_LOOP_KEY, l ? "1" : "0");
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [getMediaElement]);
 
-  const setSpeed = useCallback((s: number) => {
-    setSpeedState(s);
+  const changeSpeed = useCallback((next: number) => {
+    setSpeedState(next);
     const el = getMediaElement();
-    if (el) el.playbackRate = s;
-    writeLS(PLAYER_SPEED_KEY, String(s));
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (el) el.playbackRate = next;
+    writeLS(PLAYER_SPEED_KEY, String(next));
+  }, [getMediaElement]);
 
   const setSbEnabled = useCallback((e: boolean) => {
     setSbEnabledState(e);
     writeLS(PLAYER_SB_KEY, e ? "1" : "0");
   }, []);
 
+  const activeSbSegment = useClockSelector((t) => {
+    if (!sbEnabled) return null;
+    return (
+      sbSegments.find((s) => s.actionType === "skip" && t >= s.segment[0] && t < s.segment[1] - 0.25) ?? null
+    );
+  });
+
+  const sbSkippedRef = useRef(new Set<string>());
+  useEffect(() => { sbSkippedRef.current.clear(); }, [activeId]);
+  useEffect(() => {
+    if (!activeSbSegment) return;
+    const key = activeSbSegment.UUID ?? `${activeSbSegment.segment[0]}-${activeSbSegment.segment[1]}`;
+    if (sbSkippedRef.current.has(key)) return;
+    sbSkippedRef.current.add(key);
+    const el = getMediaElement();
+    if (el) el.currentTime = activeSbSegment.segment[1];
+  }, [activeSbSegment, getMediaElement]);
+
   const skipSbSegment = useCallback(() => {
     if (!activeSbSegment) return;
     const el = getMediaElement();
     if (el) el.currentTime = activeSbSegment.segment[1];
-    setActiveSbSegment(null);
-  }, [activeSbSegment, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSbSegment, getMediaElement]);
 
   const activeItem = items.find((i) => i.id === activeId) ?? null;
-  const playlistIndex = playlist.findIndex((i) => i.id === activeId);
-  const hasPrev = playlistIndex > 0 || currentTime > 3;
-  const hasNext = playlistIndex >= 0 && playlistIndex < playlist.length - 1;
 
-  // Search filter
-  const searchLower = searchQuery.toLowerCase();
-  const searchResults = searchQuery.length >= 2
-    ? items.filter(
-        (i) =>
-          i.title.toLowerCase().includes(searchLower) ||
-          (i.artist ?? "").toLowerCase().includes(searchLower) ||
-          (i.album ?? "").toLowerCase().includes(searchLower),
-      )
-    : [];
+  // Lock screen and Control Center controls.
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    const set = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+      try { ms.setActionHandler(action, handler); } catch {}
+    };
+    set("play", () => { void getMediaElement()?.play().catch(() => {}); });
+    set("pause", () => { getMediaElement()?.pause(); });
+    set("previoustrack", () => skipPrevRef.current());
+    set("nexttrack", () => skipNextRef.current());
+    set("seekto", (d) => { if (d.seekTime != null) seek(d.seekTime); });
+  }, [getMediaElement, seek]);
 
-  const audioItems = items.filter((i) => itemMediaType(i) === "audio");
-  const videoItems = items.filter((i) => itemMediaType(i) === "video");
+  const { saved: savedIds, pending: pendingSaves, failed: failedSaves } = useOfflineState();
+  useEffect(() => {
+    const urls = items.filter((i) => i.hasThumb && savedIds.has(i.id)).map((i) => artUrl(i.id, i.thumbV));
+    navigator.serviceWorker?.controller?.postMessage({ type: "art-pins", urls });
+  }, [items, savedIds]);
 
-  // Keyboard shortcuts
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    if (!activeItem) {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+    const base = { title: activeItem.title, artist: activeItem.artist ?? "RuForge", album: activeItem.album ?? "" };
+    navigator.mediaSession.metadata = new MediaMetadata(base);
+    if (!activeItem.hasThumb) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      ...base,
+      artwork: [{
+        src: new URL(artUrl(activeItem.id, activeItem.thumbV), window.location.origin).href,
+        sizes: "256x256",
+        type: "image/jpeg",
+      }],
+    });
+  }, [activeItem?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.playbackState = activeItem ? (paused ? "paused" : "playing") : "none";
+    if (!activeItem || duration <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: speed,
+        position: Math.min(getMediaElement()?.currentTime ?? 0, duration),
+      });
+    } catch {}
+  }, [activeItem, paused, duration, speed, getMediaElement]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const el = e.target as Element;
       if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return;
-
       if (e.code === "Space" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         togglePlay();
-      }
-      if (e.key === "f" && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        setSearchOpen((o) => !o);
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [togglePlay]);
 
+  const tint = useArtTint(activeItem);
+  // Whatever shows above the sheet (the status bar strip) takes the cover tint while the sheet is up.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (tint) root.style.setProperty("--sheet-tint", tint.deep);
+    else root.style.removeProperty("--sheet-tint");
+  }, [tint]);
+
+  const onTab = (next: Tab) => {
+    if (next === tab && stack.length === 0) scrollRefs.current[next]?.scrollTo({ top: 0, behavior: "smooth" });
+    // Marked non-urgent so the tab bar answers the finger before the page behind it re-renders.
+    startTransition(() => {
+      setStack([]);
+      setTab(next);
+    });
+  };
+
+  const openGroup = useCallback((group: Group) => setStack((s) => [...s, group]), []);
+  const popPage = useCallback(() => setStack((s) => s.slice(0, -1)), []);
+  const browseChip = useCallback((chip: LibraryChip) => {
+    setLibChip(chip);
+    setStack([]);
+    setTab("library");
+  }, []);
+  const changeLibSort = useCallback((s: LibrarySort) => {
+    setLibSortState(s);
+    writeLS(LIB_SORT_KEY, s);
+  }, []);
+  const openSearch = useCallback(() => {
+    setStack([]);
+    setTab("search");
+  }, []);
+  const openArtistOf = useCallback(
+    (item: CompanionItem) => {
+      const key = artistKeyOf(item);
+      const group = artistGroups(items.filter((i) => isAudio(i) && playsHere(i))).find((g) => g.key === `artist:${key}`);
+      if (group) openGroup(group);
+    },
+    [items, openGroup],
+  );
+
+  const dockRef = useRef<HTMLElement>(null);
+  const [dockH, setDockH] = useState(0);
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setDockH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [session]);
+
+  const appHeight = useAppViewport();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("ph-locked", session === "paired");
+    return () => root.classList.remove("ph-locked");
+  }, [session]);
+
+  const playFrom = useCallback(
+    (item: CompanionItem, list: CompanionItem[], context: string) => {
+      setTrackDir(1);
+      void playItem(item, list, context);
+    },
+    [playItem],
+  );
+
+  const shuffleFrom = useCallback(
+    (list: CompanionItem[], context: string) => {
+      const pick = list[Math.floor(Math.random() * list.length)];
+      if (!pick) return;
+      if (!shuffleRef.current) setShuffle(true);
+      shuffleRef.current = true;
+      void playItem(pick, list, context);
+    },
+    [playItem, setShuffle],
+  );
+
   if (session !== "paired") {
     return (
       <GateCard
         session={session}
         onRetry={() => { void loadLibrary(); }}
+        onPair={async (code) => {
+          const paired = await pairWithCode(code);
+          if (!paired.ok) return paired.error.kind === "network" ? "network" : "invalid";
+          await loadLibrary();
+          return null;
+        }}
       />
     );
   }
 
-  return (
-    <div className="shell">
-      {/* Hidden audio + video elements */}
-      <audio ref={audioRef} style={{ display: "none" }} />
+  const view = (t: Tab) => ({
+    ref: (el: HTMLDivElement | null) => { scrollRefs.current[t] = el; },
+    className: "ph-scroll",
+    hidden: tab !== t,
+    initial: false,
+    animate: tab === t ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 },
+    transition: pageFadeTransition,
+  });
 
-      {/* Search overlay */}
-      {searchOpen && (
-        <div className="search-overlay" onClick={() => setSearchOpen(false)}>
-          <div className="search-box" onClick={(e) => e.stopPropagation()}>
-            <div className="search-input-wrap">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--music-text-muted)", flexShrink: 0 }}>
-                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-              </svg>
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Search songs, artists, albums..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
+  const videoMode = (tab === "home" && homeChip === "videos") || (tab === "library" && libChip === "videos");
+  const shellStyle = {
+    "--app-h": appHeight ? `${appHeight}px` : undefined,
+    "--dock-h": `${dockH}px`,
+    ...(tint ? { "--art-deep": tint.deep, "--art-mini": tint.mini } : {}),
+  } as CSSProperties;
+
+  return (
+    <div className="ph-shell" data-mode={videoMode ? "videos" : "music"} style={shellStyle}>
+      <audio ref={audioRef} preload="metadata" {...mediaProps("audio")} />
+
+      <main className="ph-main">
+        <m.div {...view("home")}>
+          <HomeTab
+            items={items}
+            recentIds={recentIds}
+            chip={homeChip}
+            activeId={activeId}
+            refreshing={refreshing}
+            playsHere={playsHereCb}
+            onChip={setHomeChip}
+            onPlay={playFrom}
+            onOpen={openGroup}
+          />
+        </m.div>
+        <m.div {...view("search")}>
+          <SearchView
+            items={items}
+            query={query}
+            activeId={activeId}
+            playsHere={playsHereCb}
+            onQuery={setQuery}
+            onPlay={playFrom}
+            onOpen={openGroup}
+            onBrowse={browseChip}
+          />
+        </m.div>
+        <m.div {...view("library")}>
+          <LibraryTab
+            items={items}
+            chip={libChip}
+            sort={libSort}
+            activeId={activeId}
+            playsHere={playsHereCb}
+            onChip={setLibChip}
+            onSort={changeLibSort}
+            onSearch={openSearch}
+            onPlay={playFrom}
+            onOpen={openGroup}
+          />
+        </m.div>
+        <AnimatePresence initial={false}>
+          {stack.map((group, depth) => (
+            <DetailLayer key={`${depth}:${group.key}`} onBack={popPage}>
+              <DetailPage
+                group={group}
+                allItems={items}
+                activeId={activeId}
+                paused={paused}
+                playsHere={playsHereCb}
+                onBack={popPage}
+                onOpen={openGroup}
+                onOpenArtist={openArtistOf}
+                onPlay={playFrom}
+                onShuffle={shuffleFrom}
+                onTogglePlay={togglePlay}
               />
-              <button type="button" onClick={() => { setSearchOpen(false); setSearchQuery(""); }} style={{ color: "var(--music-text-muted)", flexShrink: 0 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="search-results">
-              {searchQuery.length < 2 && (
-                <div style={{ padding: "16px", fontSize: 13, color: "var(--music-text-muted)", textAlign: "center" }}>
-                  Type to search...
-                </div>
-              )}
-              {searchResults.map((item, i) => (
-                <div
-                  key={item.id}
-                  className={`song-row ${item.id === activeId ? "active" : ""}`}
-                  style={{ padding: "8px 16px" }}
-                  onClick={() => {
-                    if (item.playable) {
-                      void playItem(item, searchResults);
-                      setSearchOpen(false);
-                      setSearchQuery("");
-                    }
-                  }}
-                >
-                  <div className="song-index" />
-                  <LazyThumb id={item.id} hasThumb={item.hasThumb} className="song-thumb">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ color: "var(--music-text-muted)" }}>
-                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                    </svg>
-                  </LazyThumb>
-                  <div className="song-text">
-                    <div className="song-title">{item.title}</div>
-                    {item.artist && <div className="song-artist">{item.artist}</div>}
-                  </div>
-                  <div className="song-duration" style={{ color: "var(--music-text-muted)", fontSize: 11 }}>
-                    {itemMediaType(item) === "audio" ? "Song" : "Video"}
-                  </div>
-                </div>
-              ))}
-              {searchQuery.length >= 2 && searchResults.length === 0 && (
-                <div style={{ padding: "16px", fontSize: 13, color: "var(--music-text-muted)", textAlign: "center" }}>
-                  No results for "{searchQuery}"
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="shell-body">
-        {/* Sidebar */}
-        <div className="shell-sidebar">
-          <SideNav
-            mode={mode}
-            onModeChange={setMode}
-            onSearchOpen={() => setSearchOpen(true)}
-            audioCount={audioItems.length}
-            videoCount={videoItems.length}
-          />
-        </div>
-
-        {/* Main content */}
-        <div className="shell-main">
-          {playbackError && (
-            <div className="playback-error">{playbackError}</div>
-          )}
-          {catalogRefreshing && (
-            <div className="catalog-notice">Refreshing library...</div>
-          )}
-
-          {mode === "audio" ? (
-            <LibraryView
-              items={audioItems}
-              activeId={activeId}
-              onPlay={(item, list) => void playItem(item, list)}
-            />
-          ) : (
-            <VideoView
-              items={videoItems}
-              activeId={activeId}
-              videoRef={videoRef}
-              paused={paused}
-              currentTime={currentTime}
-              duration={duration}
-              sbSegments={sbSegments}
-              spriteCount={spriteCount}
-              activeSbSegment={activeSbSegment}
-              hasPrev={hasPrev}
-              hasNext={hasNext}
-              onPlay={(item) => void playItem(item, videoItems)}
-              onTogglePlay={togglePlay}
-              onSkipPrev={skipPrev}
-              onSkipNext={skipNext}
-              onSeekStart={seekStart}
-              onSeek={seek}
-              onSkipSegment={skipSbSegment}
-            />
-          )}
-        </div>
-
-        {/* Right panel (queue) */}
-        <div className={`shell-right-panel ${rightPanelOpen ? "" : "closed"}`}>
-          {rightPanelOpen && (
-            <QueueSidebar
-              items={mode === "audio" ? audioItems : videoItems}
-              activeId={activeId}
-              onPlay={(item) => void playItem(item, mode === "audio" ? audioItems : videoItems)}
-              onClose={() => setRightPanelOpen(false)}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Now playing bar */}
-      {activeItem && (
-        <NowPlayingBar
-          item={activeItem}
-          paused={paused}
-          currentTime={currentTime}
-          duration={duration}
-          volume={volume}
-          muted={muted}
-          loop={loop}
-          speed={speed}
-          sbEnabled={sbEnabled}
-          sbSegments={sbSegments}
-          spriteCount={spriteCount}
-          activeSbSegment={activeSbSegment}
-          hasPrev={hasPrev}
-          hasNext={hasNext}
-          rightPanelOpen={rightPanelOpen}
-          onTogglePlay={togglePlay}
-          onSkipPrev={skipPrev}
-          onSkipNext={skipNext}
-          onSeekStart={seekStart}
-          onSeek={seek}
-          onVolume={setVolume}
-          onMuted={setMuted}
-          onLoop={setLoop}
-          onSpeed={setSpeed}
-          onSbEnabled={setSbEnabled}
-          onSkipSegment={skipSbSegment}
-          onToggleQueue={() => setRightPanelOpen((o) => !o)}
-        />
-      )}
-    </div>
-  );
-}
-
-// Sidebar navigation component
-function SideNav({
-  mode,
-  onModeChange,
-  onSearchOpen,
-  audioCount,
-  videoCount,
-}: {
-  mode: MediaMode;
-  onModeChange: (m: MediaMode) => void;
-  onSearchOpen: () => void;
-  audioCount: number;
-  videoCount: number;
-}) {
-  return (
-    <nav className="sidebar-nav">
-      <div className="nav-brand">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M8 5v14l11-7z" />
-        </svg>
-        <span>RuForge</span>
-      </div>
-
-      <button
-        type="button"
-        className={`nav-item ${mode === "audio" ? "active" : ""}`}
-        onClick={() => onModeChange("audio")}
-      >
-        <span className="nav-dot" />
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
-          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-        </svg>
-        <span>Songs</span>
-        {audioCount > 0 && (
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--music-text-muted)" }}>
-            {audioCount}
-          </span>
-        )}
-      </button>
-
-      <button
-        type="button"
-        className={`nav-item ${mode === "video" ? "active" : ""}`}
-        onClick={() => onModeChange("video")}
-      >
-        <span className="nav-dot" />
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
-          <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
-        </svg>
-        <span>Videos</span>
-        {videoCount > 0 && (
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--music-text-muted)" }}>
-            {videoCount}
-          </span>
-        )}
-      </button>
-
-      <button
-        type="button"
-        className="sidebar-search-btn"
-        onClick={onSearchOpen}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-        </svg>
-        <span>Search</span>
-        <span style={{ marginLeft: "auto", fontSize: 11, opacity: 0.5 }}>f</span>
-      </button>
-    </nav>
-  );
-}
-
-// Video view: grid of cards + inline video player
-function VideoView({
-  items,
-  activeId,
-  videoRef,
-  paused,
-  currentTime,
-  duration,
-  sbSegments,
-  spriteCount,
-  activeSbSegment,
-  hasPrev,
-  hasNext,
-  onPlay,
-  onTogglePlay,
-  onSkipPrev,
-  onSkipNext,
-  onSeekStart,
-  onSeek,
-  onSkipSegment,
-}: {
-  items: CompanionItem[];
-  activeId: string | null;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-  paused: boolean;
-  currentTime: number;
-  duration: number;
-  sbSegments: SponsorSegment[];
-  spriteCount: number;
-  activeSbSegment: SponsorSegment | null;
-  hasPrev: boolean;
-  hasNext: boolean;
-  onPlay: (item: CompanionItem) => void;
-  onTogglePlay: () => void;
-  onSkipPrev: () => void;
-  onSkipNext: () => void;
-  onSeekStart: () => void;
-  onSeek: (t: number) => void;
-  onSkipSegment: () => void;
-}) {
-  const activeItem = items.find((i) => i.id === activeId) ?? null;
-
-  return (
-    <div className="video-shell">
-      {activeItem && (
-        <div className="video-wrap" style={{ flex: "0 0 auto", maxHeight: "50vh" }}>
-          <video
-            ref={videoRef}
-            style={{ maxHeight: "50vh", width: "100%", display: "block", background: "#000" }}
-          />
-        </div>
-      )}
-      {!activeItem && (
-        <video ref={videoRef} style={{ display: "none" }} />
-      )}
-
-      {activeItem && (
-        <div style={{ padding: "8px 16px 0", flexShrink: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--music-text-primary)", marginBottom: 2 }}>
-            {activeItem.title}
-          </div>
-          {activeSbSegment && (
-            <button
-              type="button"
-              className="skip-segment-btn"
-              onClick={onSkipSegment}
-              style={{ position: "static", margin: "6px 0" }}
-            >
-              Skip
-            </button>
-          )}
-          <div style={{ marginTop: 8 }}>
-            <ScrubBarWrap
-              duration={duration}
-              currentTime={currentTime}
-              activeId={activeId}
-              spriteCount={spriteCount}
-              sbSegments={sbSegments}
-              onSeekStart={onSeekStart}
-              onSeek={onSeek}
-            />
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-            <button type="button" onClick={onSkipPrev} disabled={!hasPrev && currentTime <= 3} style={{ color: "var(--music-text-secondary)", opacity: (!hasPrev && currentTime <= 3) ? 0.3 : 0.7 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
-            </button>
-            <button
-              type="button"
-              onClick={onTogglePlay}
-              style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--music-text-primary)", color: "var(--music-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}
-            >
-              {paused
-                ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                : <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
-              }
-            </button>
-            <button type="button" onClick={onSkipNext} disabled={!hasNext} style={{ color: "var(--music-text-secondary)", opacity: !hasNext ? 0.3 : 0.7 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" /></svg>
-            </button>
-            <span style={{ fontSize: 12, color: "var(--music-text-muted)", marginLeft: 4, fontVariantNumeric: "tabular-nums" }}>
-              {fmtDuration(currentTime)} / {duration > 0 ? fmtDuration(duration) : "0:00"}
-            </span>
-          </div>
-        </div>
-      )}
-
-      <div className="content-scroll" style={{ paddingTop: 8 }}>
-        {items.length === 0 && (
-          <div className="empty-state">No videos found</div>
-        )}
-        <div className="video-grid">
-          {items.map((item) => (
-            <VideoCard
-              key={item.id}
-              item={item}
-              active={item.id === activeId}
-              onClick={() => { if (item.playable) onPlay(item); }}
-            />
+            </DetailLayer>
           ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+        </AnimatePresence>
+      </main>
 
-// Minimal ScrubBar wrapper for the video view (avoids importing full ScrubBar cycle)
-import { ScrubBar } from "./components/ScrubBar";
-function ScrubBarWrap(props: {
-  duration: number; currentTime: number; activeId: string | null;
-  spriteCount: number; sbSegments: SponsorSegment[];
-  onSeekStart: () => void; onSeek: (t: number) => void;
-}) {
-  const [dragging, setDragging] = useState(false);
-  return (
-    <ScrubBar
-      duration={props.duration}
-      currentTime={props.currentTime}
-      activeId={props.activeId}
-      spriteCount={props.spriteCount}
-      sbSegments={props.sbSegments}
-      dragging={dragging}
-      onSeekStart={() => { setDragging(true); props.onSeekStart(); }}
-      onSeek={(t) => { setDragging(false); props.onSeek(t); }}
-    />
-  );
-}
+      <span className="ph-statusfade" aria-hidden />
+      <PullRing ringRef={pull.ringRef} phase={pull.phase} />
+      <span className="ph-scrim" aria-hidden />
 
-function VideoCard({ item, active, onClick }: { item: CompanionItem; active: boolean; onClick: () => void }) {
-  return (
-    <div
-      className={`video-card ${active ? "active" : ""} ${!item.playable ? "unsupported" : ""}`}
-      onClick={onClick}
-      style={{ cursor: item.playable ? "pointer" : "not-allowed" }}
-    >
-      <LazyThumb id={item.id} hasThumb={item.hasThumb} className="video-card-art">
-        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--music-text-muted)" }}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
-          </svg>
-        </div>
-      </LazyThumb>
-      <div className="video-card-title">{item.title}</div>
-      {item.durationSecs != null && item.durationSecs > 0 && (
-        <div className="video-card-meta">{fmtDuration(item.durationSecs)}</div>
-      )}
+      <footer className="ph-dock" ref={dockRef}>
+        {offlineMode ? (
+          <button type="button" className="ph-offline-note" onClick={() => openIntro("offline")}>
+            Offline. {catalogAt ? `Library from ${ago(catalogAt)}. ` : ""}
+            {savedIds.size} saved.
+          </button>
+        ) : notice ? (
+          <p className="ph-offline-note" role="status">{notice}</p>
+        ) : null}
+        {pendingSaves > 0 || failedSaves.size > 0 ? (
+          <button type="button" className="ph-offline-note ph-dl-chip" onClick={() => openIntro("storage")}>
+            {pendingSaves > 0 ? `Downloading ${pendingSaves} ${pendingSaves === 1 ? "item" : "items"}` : `${failedSaves.size} failed`}
+          </button>
+        ) : null}
+        {playbackError && !playerOpen ? (
+          <p className="ph-dock-error" role="alert">{playbackError}</p>
+        ) : null}
+        <AnimatePresence initial={false}>
+          {activeItem ? (
+            <NowPlayingBar
+              key="mini"
+              item={activeItem}
+              paused={paused}
+              duration={duration}
+              hasNext={hasNext}
+              direction={trackDir}
+              onOpen={() => setPlayerOpen(true)}
+              onTogglePlay={togglePlay}
+              onNext={skipNext}
+              onPrev={skipPrev}
+              cardRef={miniRef}
+            />
+          ) : null}
+        </AnimatePresence>
+        <TabBar tab={tab} onTab={onTab} />
+      </footer>
+
+      <PlayerSheet
+        open={playerOpen && activeItem !== null}
+        item={activeItem}
+        kind={activeKind}
+        context={playContext}
+        direction={trackDir}
+        videoRef={videoRef}
+        originRef={miniRef}
+        videoProps={mediaProps("video")}
+        paused={paused}
+        duration={duration}
+        loop={loop}
+        shuffle={shuffle}
+        speed={speed}
+        speeds={PLAYBACK_SPEEDS}
+        sbEnabled={sbEnabled}
+        sbSegments={sbSegments}
+        spriteCount={spriteCount}
+        activeSbSegment={activeSbSegment}
+        hasPrev={hasPrev}
+        hasNext={hasNext}
+        upNext={upNext}
+        error={playbackError}
+        onClose={() => setPlayerOpen(false)}
+        onTogglePlay={togglePlay}
+        onPrev={skipPrev}
+        onNext={skipNext}
+        onSeek={seek}
+        onLoop={setLoop}
+        onShuffle={setShuffle}
+        onSpeed={changeSpeed}
+        onSbEnabled={setSbEnabled}
+        onSkipSegment={skipSbSegment}
+        onOpenQueue={() => setQueueOpen(true)}
+        onPlayQueued={(next) => {
+          setTrackDir(1);
+          void playItem(next, playlist);
+        }}
+      />
+
+      <Intros />
+      <QueueSheet
+        open={queueOpen}
+        playlist={playlist}
+        activeId={activeId}
+        onPlay={(item) => void playItem(item, playlist)}
+        onClose={() => setQueueOpen(false)}
+      />
     </div>
   );
 }

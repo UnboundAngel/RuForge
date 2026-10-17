@@ -70,7 +70,7 @@ export function MusicMiniScalesMixer({ isPlaying }: { isPlaying: boolean }) {
         circle.style.transform = `translateY(${ty}px) scale(${s * scaleGain})`;
       }
     }
-  });
+  }, isPlaying);
 
   return (
     <svg

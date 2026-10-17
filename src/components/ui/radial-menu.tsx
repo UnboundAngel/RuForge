@@ -1,30 +1,26 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { navIconHoverAllowed } from "@/lib/navIconHoverGate";
 import { motion, AnimatePresence, type Transition } from "motion/react";
 import { RadialNavIcon, type RadialNavIconId } from "@/components/navigation/RadialNavIcon";
 import { nextNavMode, type NavMode } from "@/store/types";
 import { NAV_MODE_ENTER_LABEL, RADIAL_PALETTE } from "@/lib/radialNavTheme";
+import { RADIAL_MENU_FRAME_PADDING, RADIAL_MENU_SIZE_DEFAULT } from "@/lib/radialMenuAnchor";
 import logo from "@/assets/ruforgeAppIcon.png";
-
-export type RadialHintPlacement = "top" | "right" | "bottom" | "left";
 
 export type RadialMenuItem = {
   id: string;
   label: string;
   iconId: RadialNavIconId;
-  hintPlacement: RadialHintPlacement;
 };
 
 type RadialMenuProps = {
   open: boolean;
   navMode: NavMode;
+  /** Library accent (hex). Ignored in Music, which is always red. */
+  accent?: string;
   menuItems: RadialMenuItem[];
   size?: number;
   iconSize?: number;
-  bandWidth?: number;
-  innerGap?: number;
-  outerGap?: number;
-  outerRingWidth?: number;
   onSelect?: (item: RadialMenuItem) => void;
   onCenterClick?: () => void;
   /** Called whenever the hovered wedge id changes (null = none). */
@@ -38,107 +34,102 @@ const menuTransition: Transition = {
   mass: 0.82,
 };
 
-const FULL_CIRCLE = 360;
+const indicatorTransition: Transition = {
+  type: "spring",
+  stiffness: 520,
+  damping: 38,
+  mass: 0.7,
+};
+
 const START_ANGLE = -90;
-
-/** Gap between ring outer edge and hint label. */
-const HINT_GAP = 10;
-
+const RIM_W = 10;
+const WELL_PAD = 5;
+const HUB_R = 36;
+const HUB_GAP = 6;
+const TILE_GAP = 6;
+const TILE_CORNER = 8;
+const INDICATOR_SPAN_DEG = 20;
+const INDICATOR_W = 3;
 const MODE_FLASH_MS = 1400;
 
-function degToRad(deg: number) {
-  return (deg * Math.PI) / 180;
+function polar(radius: number, angleDeg: number) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { x: Math.cos(rad) * radius, y: Math.sin(rad) * radius };
 }
 
-function polarToCartesian(radius: number, angleDeg: number) {
-  const rad = degToRad(angleDeg);
-  return {
-    x: Math.cos(rad) * radius,
-    y: Math.sin(rad) * radius,
-  };
+const toDeg = (rad: number) => (rad * 180) / Math.PI;
+
+/** Hit area: the full slice from the hub to the disc edge, so the gaps between tiles never drop hover. */
+function slicePath(midDeg: number, spanDeg: number, outer: number, inner: number) {
+  const a0 = midDeg - spanDeg / 2;
+  const a1 = midDeg + spanDeg / 2;
+  const large = spanDeg > 180 ? 1 : 0;
+  const o0 = polar(outer, a0);
+  const o1 = polar(outer, a1);
+  const i0 = polar(inner, a0);
+  const i1 = polar(inner, a1);
+  return `M ${o0.x} ${o0.y} A ${outer} ${outer} 0 ${large} 1 ${o1.x} ${o1.y} L ${i1.x} ${i1.y} A ${inner} ${inner} 0 ${large} 0 ${i0.x} ${i0.y} Z`;
 }
 
-function slicePath(
-  index: number,
-  total: number,
-  wedgeRadius: number,
-  innerRadius: number,
-) {
-  if (total <= 0) return "";
-  if (total === 1) {
-    return `M ${wedgeRadius} 0 A ${wedgeRadius} ${wedgeRadius} 0 1 1 ${-wedgeRadius} 0 A ${wedgeRadius} ${wedgeRadius} 0 1 1 ${wedgeRadius} 0 M ${innerRadius} 0 A ${innerRadius} ${innerRadius} 0 1 0 ${-innerRadius} 0 A ${innerRadius} ${innerRadius} 0 1 0 ${innerRadius} 0`;
-  }
-  const anglePerSlice = FULL_CIRCLE / total;
-  const midDeg = START_ANGLE + anglePerSlice * index;
-  const halfSlice = anglePerSlice / 2;
-  const startDeg = midDeg - halfSlice;
-  const endDeg = midDeg + halfSlice;
-  const outerStart = polarToCartesian(wedgeRadius, startDeg);
-  const outerEnd = polarToCartesian(wedgeRadius, endDeg);
-  const innerStart = polarToCartesian(innerRadius, startDeg);
-  const innerEnd = polarToCartesian(innerRadius, endDeg);
-  const largeArcFlag = anglePerSlice > 180 ? 1 : 0;
-  return `M ${outerStart.x} ${outerStart.y} A ${wedgeRadius} ${wedgeRadius} 0 ${largeArcFlag} 1 ${outerEnd.x} ${outerEnd.y} L ${innerEnd.x} ${innerEnd.y} A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x} ${innerStart.y} Z`;
+/**
+ * Annular tile with parallel gaps. Inset by the corner radius and stroked at twice that
+ * with round joins in the fill color, which rounds all four corners.
+ */
+function tilePath(midDeg: number, spanDeg: number, outer: number, inner: number) {
+  const ro = outer - TILE_CORNER;
+  const ri = inner + TILE_CORNER;
+  const pad = TILE_GAP / 2 + TILE_CORNER;
+  const half = spanDeg / 2;
+  const oa0 = midDeg - half + toDeg(pad / ro);
+  const oa1 = midDeg + half - toDeg(pad / ro);
+  const ia0 = midDeg - half + toDeg(pad / ri);
+  const ia1 = midDeg + half - toDeg(pad / ri);
+  const o0 = polar(ro, oa0);
+  const o1 = polar(ro, oa1);
+  const i0 = polar(ri, ia0);
+  const i1 = polar(ri, ia1);
+  return `M ${o0.x} ${o0.y} A ${ro} ${ro} 0 0 1 ${o1.x} ${o1.y} L ${i1.x} ${i1.y} A ${ri} ${ri} 0 0 0 ${i0.x} ${i0.y} Z`;
 }
 
-function hintStyle(
-  placement: RadialHintPlacement,
-  menuRadius: number,
-): CSSProperties {
-  const r = menuRadius + HINT_GAP;
-  switch (placement) {
-    case "top":
-      return {
-        left: "50%",
-        top: `calc(50% - ${r}px)`,
-        transform: "translate(-50%, -100%)",
-      };
-    case "right":
-      return {
-        left: `calc(50% + ${r}px)`,
-        top: "50%",
-        transform: "translate(0, -50%)",
-      };
-    case "bottom":
-      return {
-        left: "50%",
-        top: `calc(50% + ${r}px)`,
-        transform: "translate(-50%, 0)",
-      };
-    case "left":
-      return {
-        left: `calc(50% - ${r}px)`,
-        top: "50%",
-        transform: "translate(-100%, -50%)",
-      };
-  }
+function topArcPath(radius: number, spanDeg: number) {
+  const a = polar(radius, START_ANGLE - spanDeg / 2);
+  const b = polar(radius, START_ANGLE + spanDeg / 2);
+  return `M ${a.x} ${a.y} A ${radius} ${radius} 0 0 1 ${b.x} ${b.y}`;
 }
 
 export function RadialMenu({
   open,
   navMode,
+  accent,
   menuItems,
-  size = 280,
-  iconSize = 22,
-  bandWidth = 54,
-  innerGap = 4,
-  outerGap = 8,
-  outerRingWidth = 12,
+  size = RADIAL_MENU_SIZE_DEFAULT,
+  iconSize = 20,
   onSelect,
   onCenterClick,
   onHoveredItemChange,
 }: RadialMenuProps) {
-  const palette = RADIAL_PALETTE[navMode];
+  const basePalette = RADIAL_PALETTE[navMode];
+  const palette =
+    navMode === "default" && accent
+      ? {
+          ...basePalette,
+          accent,
+          tileActive: `color-mix(in srgb, ${accent} 16%, ${basePalette.tile})`,
+        }
+      : basePalette;
   const radius = size / 2;
-  const outerRingOuterRadius = radius;
-  const outerRingInnerRadius = outerRingOuterRadius - outerRingWidth;
-  const wedgeOuterRadius = outerRingInnerRadius - outerGap;
-  const wedgeInnerRadius = wedgeOuterRadius - bandWidth;
-  const iconRingRadius = (wedgeOuterRadius + wedgeInnerRadius) / 2;
-  const centerRadius = Math.max(wedgeInnerRadius - innerGap, 0);
+  const wellR = radius - RIM_W;
+  const tileOuter = wellR - WELL_PAD;
+  const tileInner = HUB_R + HUB_GAP;
+  const contentRing = (tileOuter + tileInner) / 2;
+  const indicatorR = wellR + RIM_W / 2;
   const slice = menuItems.length > 0 ? 360 / menuItems.length : 360;
+  const contentW = Math.min(2 * contentRing * Math.sin(((slice / 2) * Math.PI) / 180) - 2 * TILE_GAP, 104);
+  const contentH = tileOuter - tileInner;
+  const logoSize = Math.round(HUB_R * 1.3);
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [rotation, setRotation] = useState(0);
   const [modeFlashLabel, setModeFlashLabel] = useState<string | null>(null);
   const openedAtRef = useRef(0);
   const onHoveredItemChangeRef = useRef(onHoveredItemChange);
@@ -150,6 +141,13 @@ export function RadialMenu({
   const setHovered = (index: number | null) => {
     setHoveredIndex(index);
     hoveredIndexRef.current = index;
+    if (index !== null) {
+      // Shortest way round, so the last slot to the first does not spin the long way.
+      setRotation((prev) => {
+        const delta = ((((slice * index - prev) % 360) + 540) % 360) - 180;
+        return prev + delta;
+      });
+    }
     const id = index !== null ? (menuItems[index]?.id ?? null) : null;
     onHoveredItemChangeRef.current?.(id);
   };
@@ -181,16 +179,12 @@ export function RadialMenu({
     return () => window.clearTimeout(t);
   }, [modeFlashLabel]);
 
-  const activeItem =
-    hoveredIndex !== null && hoveredIndex >= 0
-      ? menuItems[hoveredIndex]
-      : null;
-
-  const frame = size + 32;
+  const frame = size + RADIAL_MENU_FRAME_PADDING;
+  const viewBox = `${-radius} ${-radius} ${size} ${size}`;
+  const nextModeLabel = NAV_MODE_ENTER_LABEL[nextNavMode(navMode)];
 
   const handleCenterClick = () => {
-    const entering = nextNavMode(navMode);
-    setModeFlashLabel(NAV_MODE_ENTER_LABEL[entering]);
+    setModeFlashLabel(nextModeLabel);
     onCenterClick?.();
   };
 
@@ -201,37 +195,54 @@ export function RadialMenu({
           className="relative flex items-center justify-center"
           style={{ width: frame, height: frame }}
         >
-          {activeItem ? (
-            <div
-              className="rf-radial-hint pointer-events-none absolute z-20"
-              style={hintStyle(activeItem.hintPlacement, radius)}
-            >
-              {activeItem.label}
-            </div>
-          ) : null}
-
           <motion.div
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_24px_64px_rgba(0,0,0,0.55)] outline-none"
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_14px_36px_rgba(0,0,0,0.5)]"
             style={{ width: size, height: size }}
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.92 }}
             transition={menuTransition}
           >
-            <svg
-              className="absolute inset-0 size-full"
-              viewBox={`${-radius} ${-radius} ${radius * 2} ${radius * 2}`}
+            <svg className="absolute inset-0 size-full" viewBox={viewBox} aria-hidden>
+              <circle r={radius} style={{ fill: palette.rim }} />
+              <circle r={wellR} style={{ fill: palette.well }} />
+              {menuItems.map((item, index) => {
+                const fill = hoveredIndex === index ? palette.tileActive : palette.tile;
+                return (
+                  <path
+                    key={item.id}
+                    d={tilePath(START_ANGLE + slice * index, slice, tileOuter, tileInner)}
+                    strokeWidth={TILE_CORNER * 2}
+                    strokeLinejoin="round"
+                    style={{ fill, stroke: fill, transition: "fill 150ms ease-out, stroke 150ms ease-out" }}
+                  />
+                );
+              })}
+            </svg>
+
+            <motion.div
+              className="pointer-events-none absolute inset-0"
+              initial={false}
+              animate={{ rotate: rotation, opacity: hoveredIndex !== null ? 1 : 0 }}
+              transition={indicatorTransition}
+              aria-hidden
             >
+              <svg className="size-full" viewBox={viewBox}>
+                <path
+                  d={topArcPath(indicatorR, INDICATOR_SPAN_DEG)}
+                  fill="none"
+                  stroke={palette.accent}
+                  strokeWidth={INDICATOR_W}
+                  strokeLinecap="round"
+                />
+              </svg>
+            </motion.div>
+
+            <svg className="absolute inset-0 size-full" viewBox={viewBox}>
               {menuItems.map((item, index) => {
                 const midDeg = START_ANGLE + slice * index;
-                const { x: iconX, y: iconY } = polarToCartesian(
-                  iconRingRadius,
-                  midDeg,
-                );
-                const iconBox = iconSize * 2.4;
-                const wedgeHovered = hoveredIndex === index;
-                const isActive = wedgeHovered;
-
+                const { x, y } = polar(contentRing, midDeg);
+                const isActive = hoveredIndex === index;
                 return (
                   <g
                     key={item.id}
@@ -242,59 +253,38 @@ export function RadialMenu({
                       setHovered(index);
                     }}
                     onPointerLeave={() => {
-                      if (hoveredIndex === index) setHovered(null);
+                      if (hoveredIndexRef.current === index) setHovered(null);
                     }}
                   >
-                    <path
-                      d={slicePath(
-                        index,
-                        menuItems.length,
-                        outerRingOuterRadius,
-                        outerRingInnerRadius,
-                      )}
-                      fill={isActive ? palette.wedgeActive : palette.outerRing}
-                    />
-                    <path
-                      d={slicePath(
-                        index,
-                        menuItems.length,
-                        wedgeOuterRadius,
-                        wedgeInnerRadius,
-                      )}
-                      fill={isActive ? palette.wedgeActive : palette.wedge}
-                      stroke={
-                        isActive ? palette.wedgeActiveStroke : palette.wedgeStroke
-                      }
-                      strokeWidth={1}
-                    />
+                    <path d={slicePath(midDeg, slice, radius, HUB_R)} fill="transparent" />
                     <foreignObject
-                      x={iconX - iconBox / 2}
-                      y={iconY - iconBox / 2}
-                      width={iconBox}
-                      height={iconBox}
+                      x={x - contentW / 2}
+                      y={y - contentH / 2}
+                      width={contentW}
+                      height={contentH}
+                      className="pointer-events-none"
                     >
-                      <div
-                        className="flex size-full items-center justify-center outline-none"
-                        style={{ color: isActive ? palette.accent : palette.iconIdle }}
-                      >
-                        <RadialNavIcon
-                          id={item.iconId}
-                          size={iconSize}
-                        />
+                      <div className="flex size-full flex-col items-center justify-center gap-1.5">
+                        <span
+                          className="flex transition-[color,transform] duration-150 ease-out"
+                          style={{
+                            color: isActive ? palette.accent : palette.iconIdle,
+                            transform: isActive ? "translateY(-1px)" : undefined,
+                          }}
+                        >
+                          <RadialNavIcon id={item.iconId} size={iconSize} />
+                        </span>
+                        <span
+                          className="text-[9px] font-black uppercase leading-none tracking-[0.12em] transition-colors duration-150 ease-out"
+                          style={{ color: isActive ? palette.accent : palette.labelIdle }}
+                        >
+                          {item.label}
+                        </span>
                       </div>
                     </foreignObject>
                   </g>
                 );
               })}
-
-              <circle
-                cx={0}
-                cy={0}
-                r={centerRadius}
-                fill={palette.centerFill}
-                stroke={palette.centerStroke}
-                strokeWidth={1}
-              />
             </svg>
 
             <button
@@ -303,40 +293,46 @@ export function RadialMenu({
                 e.stopPropagation();
                 handleCenterClick();
               }}
-              className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full outline-none transition-transform hover:scale-[1.03] active:scale-[0.97] focus-visible:ring-2"
+              onPointerEnter={() => setHovered(null)}
+              className="group/hub absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full outline-none focus-visible:ring-2"
               style={{
-                width: centerRadius * 2,
-                height: centerRadius * 2,
-                backgroundColor: palette.centerFill,
+                width: HUB_R * 2,
+                height: HUB_R * 2,
+                backgroundColor: palette.hub,
                 ["--tw-ring-color" as string]: palette.accent,
               }}
-              aria-label="Switch mode"
+              aria-label={`Switch to ${nextModeLabel}`}
             >
-              <AnimatePresence mode="wait">
-                {modeFlashLabel ? (
-                  <motion.span
-                    key={modeFlashLabel}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.2 }}
-                    className="px-2 text-center text-[11px] font-black uppercase leading-tight tracking-[0.12em]"
-                    style={{ color: palette.accent }}
-                  >
-                    {modeFlashLabel}
-                  </motion.span>
-                ) : (
-                  <motion.img
-                    key="logo"
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    src={logo}
-                    alt=""
-                    className="size-full scale-[1.35] object-cover object-center"
-                  />
-                )}
+              <AnimatePresence initial={false}>
+                <motion.span
+                  key={modeFlashLabel ?? "logo"}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  {modeFlashLabel ? (
+                    <span
+                      className="text-[10px] font-black uppercase leading-none tracking-[0.18em]"
+                      style={{ color: palette.accent }}
+                    >
+                      {modeFlashLabel}
+                    </span>
+                  ) : (
+                    <span
+                      className="block overflow-hidden rounded-full transition-transform duration-150 ease-out group-hover/hub:scale-[1.06] group-active/hub:scale-[0.96]"
+                      style={{ width: logoSize, height: logoSize }}
+                    >
+                      <img
+                        src={logo}
+                        alt=""
+                        draggable={false}
+                        className="block size-full scale-[1.35] object-cover object-center"
+                      />
+                    </span>
+                  )}
+                </motion.span>
               </AnimatePresence>
             </button>
           </motion.div>

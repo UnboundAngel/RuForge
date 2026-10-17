@@ -1,3 +1,4 @@
+import { useMiniAutoGhost, useMiniArrange } from "@games";
 import { memo, useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Icon } from "@iconify/react";
@@ -11,12 +12,24 @@ import {
 } from "./lib/mainPlaybackClaim";
 import { emitActivityHandoffSync } from "./lib/activityHandoffSync";
 import { registerVideoMiniHandoffSink } from "./lib/videoMiniHandoffBridge";
-import { usePlayerKeyboardShortcuts } from "./hooks/usePlayerKeyboardShortcuts";
+import {
+  runPlayerHotkeyAction,
+  usePlayerKeyboardShortcuts,
+  type PlayerKeyboardShortcutHandlers,
+} from "./hooks/usePlayerKeyboardShortcuts";
+import { installHotkeyStorageSync } from "./hooks/useHotkeys";
+import { useSystemShortcuts, type SystemShortcut } from "./hooks/useSystemShortcuts";
+import { formatChord, GHOST_PLAYBACK_ACTIONS, resolveBindings } from "./lib/hotkeys";
+import type { DesktopIslandControl } from "./lib/desktopIslandBridge";
+import { listenPrivateQueue } from "./lib/privateMailbox";
+import { useRuforgeStore } from "./store/ruforgeStore";
 import {
   PlayerCenterFeedback,
   usePlayerCenterFeedback,
 } from "./components/player/PlayerCenterFeedback";
 import { PlayerSkipFlash, useSkipFlash } from "./components/player/PlayerSkipFlash";
+import { FreezeZoomPill } from "./components/player/FreezeZoomPill";
+import { useFreezeFrameZoom } from "./hooks/useFreezeFrameZoom";
 import { HoverMarqueeText } from "./components/music/HoverMarqueeText";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import logo from "./assets/ruforgeAppIcon.png";
@@ -29,7 +42,12 @@ import {
   ExternalLink,
   Speaker,
   Layers,
+  Ghost,
+  ScrollText,
 } from "lucide-react";
+import { DescriptionText } from "./components/player/DescriptionText";
+import { useVideoDescription } from "./hooks/useVideoDescription";
+import { chaptersFromDescription } from "./lib/videoDescription";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
 import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "./types";
@@ -60,6 +78,11 @@ import { useVideoAmbientBackdrop } from "./useVideoAmbientBackdrop";
 import type { PlayInMiniPayload, SendToMainPayload } from "./playerHandoff";
 import { ensurePostersForFiles, filesMissingPoster } from "./posterBackfill";
 import { isAudioOnlyPath } from "./mediaKind";
+import {
+  closeVideoWatchSession,
+  onVideoWatchTick,
+  syncVideoWatchSession,
+} from "./lib/videoWatchActivity";
 import { filterMainLibraryEntries } from "./mainLibraryFilter";
 import {
   readAudioAutoAdvanceFolder,
@@ -76,14 +99,29 @@ import {
 } from "./videoEndScreenSuggestions";
 import { VideoEndScreen, type VideoEndScreenPhase } from "./components/VideoEndScreen";
 import { applyMediaOutputState } from "./applyMediaOutputState";
-import { chapterAtTime, normalizeChapters, timeForScrubberClientX, timeForScrubberPercent } from "./chapters";
+import {
+  chapterAtTime,
+  nextChapterIndex,
+  normalizeChapters,
+  prevChapterIndex,
+  timeForScrubberClientX,
+  timeForScrubberPercent,
+  type NormalizedChapter,
+} from "./chapters";
 import { ChapterScrubber } from "./components/player/ChapterScrubber";
+import { GhostChapterEdge, GhostChapterReadout } from "./components/player/GhostChapterHud";
+import {
+  crossedChapterEnd,
+  ghostChapterDoneReadout,
+  ghostChapterReadout,
+  ghostEdgeLayout,
+} from "./lib/ghostHud";
 import { SponsorBlockScrubOverlay } from "./components/player/SponsorBlockScrubOverlay";
 import { SponsorBlockSkipButton } from "./components/player/SponsorBlockSkipButton";
 import { useSponsorBlockPlayback } from "./hooks/useSponsorBlockPlayback";
 import type { SponsorBlockSkipCategory } from "./sponsorBlock";
 import { loadMergedSettings, type RuforgeSettings } from "./store/types";
-import { syncRuforgeAccentCss } from "./accentCss";
+import { syncRuforgeAccentCss, syncRuforgeVideoPalette } from "./accentCss";
 import {
   fetchSubtitleTracks,
   readSubtitlePreferredLang,
@@ -95,6 +133,8 @@ import {
 } from "./localVideoSubtitles";
 import { useSubtitleCueOverlay } from "./useSubtitleCueOverlay";
 import { formatDuration } from "./components/downloader/downloaderFormat";
+import { EdgeSquishScroll } from "./components/ui/EdgeSquishScroll";
+import { Slider } from "./components/ui/Slider";
 
 const SPONSORBLOCK_STUB_FILE: MediaFile = {
   name: "",
@@ -312,7 +352,8 @@ const MediaStripCard = memo(function MediaStripCard({
       className={`group flex shrink-0 flex-col gap-1.5 rounded-xl p-1 text-left transition-colors duration-150 hover:bg-white/[0.05] ${fluid ? "w-full min-w-0" : "w-32"}`}
     >
       <span
-        className={`relative block aspect-video w-full overflow-hidden rounded-lg bg-[#261d18] transition-opacity duration-150 ${
+        data-squish-cover
+        className={`rf-art-clip relative block aspect-video w-full bg-[color:var(--rf-field)] transition-[opacity,transform] duration-150 [--rf-art-r:8px] ${
           active || fluid ? "" : "opacity-70 group-hover:opacity-100"
         }`}
       >
@@ -369,6 +410,7 @@ export default function MiniPlayer() {
   const [settings, setSettings] = useState<RuforgeSettings>(() => loadMergedSettings());
 
   useEffect(() => {
+    installHotkeyStorageSync();
     const refresh = () => setSettings(loadMergedSettings());
     const onStorage = (e: StorageEvent) => {
       if (e.key === "ruforge-settings") refresh();
@@ -389,16 +431,11 @@ export default function MiniPlayer() {
   }, [settings.accentColor]);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    void getCurrentWindow()
-      .onCloseRequested(() => {
-        emitVideoMiniTeardown();
-      })
-      .then((fn) => {
-        unlisten = fn;
-      });
+    const unlisten = getCurrentWindow().onCloseRequested(() => {
+      emitVideoMiniTeardown();
+    });
     return () => {
-      unlisten?.();
+      void unlisten.then((fn) => fn());
     };
   }, []);
 
@@ -434,6 +471,7 @@ export default function MiniPlayer() {
   } | null>(null);
   const [endDimOpacity, setEndDimOpacity] = useState(0);
   const [endCardHovered, setEndCardHovered] = useState(false);
+  const [endCardsHidden, setEndCardsHidden] = useState(false);
   const endFadeGainRef = useRef(1);
   const endSuggestionsForPathRef = useRef<{
     path: string;
@@ -529,9 +567,31 @@ export default function MiniPlayer() {
   }, []);
 
   const [isPinned, setIsPinned] = useState(() => localStorage.getItem("miniplayer-pinned") === "true");
+  /** Click-through overlay; never persisted, so every launch starts off. */
+  const [ghostMode, setGhostMode] = useState(false);
+  const ghostModeRef = useRef(false);
+  ghostModeRef.current = ghostMode;
+  const [videoDims, setVideoDims] = useState<{ w: number; h: number } | null>(null);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
+  const [controlsStackHeight, setControlsStackHeight] = useState(0);
+  const controlsStackRoRef = useRef<ResizeObserver | null>(null);
+  const attachControlsStack = useCallback((el: HTMLDivElement | null) => {
+    controlsStackRoRef.current?.disconnect();
+    controlsStackRoRef.current = null;
+    if (!el) return;
+    const measure = () => setControlsStackHeight(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    controlsStackRoRef.current = ro;
+  }, []);
+  const { text: descriptionText, loading: descriptionLoading, viewCount: descriptionViews, uploadDate: descriptionDate } = useVideoDescription(playingFile?.path);
   const [miniNavMode, setMiniNavMode] = useState<string>(
     () => localStorage.getItem("ruforge-nav-mode") ?? "default",
   );
+  useEffect(() => {
+    syncRuforgeVideoPalette(miniNavMode !== "music" && settings.legacyVideoColors === true);
+  }, [miniNavMode, settings.legacyVideoColors]);
   const [library, setLibrary] = useState<GalleryEntry[]>([]);
   const libraryPosterBackfillEpochRef = useRef(0);
   const [isGalleryHovered, setIsGalleryHovered] = useState(false);
@@ -572,6 +632,11 @@ export default function MiniPlayer() {
   const videoPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blockClickRef = useRef(false);
   const videoSurfaceRef = useRef<HTMLDivElement>(null);
+  const freezeZoom = useFreezeFrameZoom({
+    viewportRef: videoSurfaceRef,
+    mediaRef,
+    enabled: isLargeMode && !playingAudioOnly && isPaused,
+  });
   const [mediaBlendOpacity, setMediaBlendOpacity] = useState(1);
   const prevVideoPathRef = useRef<string | null>(null);
 
@@ -587,8 +652,18 @@ export default function MiniPlayer() {
 
   useEffect(() => {
     const win = getCurrentWindow();
-    win.setAlwaysOnTop(isPinned).catch(console.error);
-  }, [isPinned]);
+    win.setAlwaysOnTop(ghostMode || isPinned).catch(console.error);
+  }, [isPinned, ghostMode]);
+
+  useEffect(() => {
+    getCurrentWindow().setIgnoreCursorEvents(ghostMode).catch(console.error);
+    if (!ghostMode) return;
+    // Mouse events stop arriving, so hover state from the click that turned ghost on would stick.
+    setIsHovering(false);
+    setIsGalleryHovered(false);
+    setIsMediaSelectorOpen(false);
+    setShowSubtitleMenu(false);
+  }, [ghostMode]);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -718,7 +793,9 @@ export default function MiniPlayer() {
         subtitleBlobTracksRef.current = tracks;
         setSubtitleTracks(tracks);
         const pref = readSubtitlePreferredLang()?.trim() || null;
-        const found = pref ? tracks.find((t) => t.lang === pref) : undefined;
+        const found = pref
+          ? (tracks.find((t) => t.lang === pref) ?? tracks.find((t) => t.lang === `${pref}-orig`))
+          : undefined;
         if (pref && found) {
           setSelectedSubtitleLang(found.lang);
           setIsSubtitlesEnabled(true);
@@ -794,14 +871,11 @@ export default function MiniPlayer() {
       }
     };
     void run();
-    let unlisten: (() => void) | undefined;
-    void listen("library-changed", () => {
+    const unlisten = listen("library-changed", () => {
       void run();
-    }).then((fn) => {
-      unlisten = fn;
     });
     return () => {
-      unlisten?.();
+      void unlisten.then((fn) => fn());
     };
   }, []);
 
@@ -895,7 +969,7 @@ export default function MiniPlayer() {
   const handleMouseLeave = () => {
     setIsHovering(false);
     // Restore to the user's explicit pin preference when the mouse exits.
-    getCurrentWindow().setAlwaysOnTop(isPinned).catch(console.error);
+    getCurrentWindow().setAlwaysOnTop(ghostModeRef.current || isPinned).catch(console.error);
   };
 
   const applyMiniHandoff = (payload: PlayInMiniPayload) => {
@@ -1081,16 +1155,6 @@ export default function MiniPlayer() {
     let disposed = false;
     const cleanups: Array<() => void> = [];
 
-    void listen<MediaFile>("play-media", (_event) => {
-      setPlayingFile(null);
-    }).then((fn) => {
-      if (disposed) {
-        fn();
-        return;
-      }
-      cleanups.push(fn);
-    });
-
     void listen<string>("stop-playback", (event) => {
       if (event.payload !== "mini-player") {
         const v = mediaRef.current;
@@ -1136,7 +1200,7 @@ export default function MiniPlayer() {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    if (!mediaRef.current) return;
+    if (!mediaRef.current || e.ctrlKey) return;
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
     if (e.deltaY === 0) return;
     
@@ -1153,6 +1217,34 @@ export default function MiniPlayer() {
     adjustVolume(delta);
   };
 
+  /** Last natural-playback time; cleared on every seek so a jump never reads as playing through a chapter end. */
+  const ghostPrevTimeRef = useRef<number | null>(null);
+  const ghostChapterPauseRef = useRef<{
+    enabled: boolean;
+    chapters: NormalizedChapter[] | null;
+    seek: (t: number) => void;
+  }>({ enabled: false, chapters: null, seek: () => {} });
+  const [chapterDone, setChapterDone] = useState<{ next: number; total: number; nonce: number } | null>(null);
+
+  const checkGhostChapterPause = (v: HTMLMediaElement, t: number) => {
+    const prev = ghostPrevTimeRef.current;
+    ghostPrevTimeRef.current = t;
+    const { enabled, chapters: chs, seek } = ghostChapterPauseRef.current;
+    if (!enabled || !chs || v.paused) return;
+    // timeupdate fires about 4x a second; anything well past that is a seek, not playback.
+    const done = crossedChapterEnd(chs, prev, t, 1.5 * Math.max(1, v.playbackRate));
+    if (done === null) return;
+    v.pause();
+    seek(chs[done + 1]!.start_time);
+    setChapterDone((d) => ({ next: done + 1, total: chs.length, nonce: (d?.nonce ?? 0) + 1 }));
+  };
+
+  useEffect(() => {
+    if (playingFile && !isAudioOnlyPath(playingFile.path)) {
+      syncVideoWatchSession(playingFile, "mini", "switched");
+    }
+  }, [playingFile?.path]);
+
   const handleTimeUpdate = () => {
     if (isUserSeekingRef.current) return;
     if (progressRafRef.current != null) return;
@@ -1161,10 +1253,14 @@ export default function MiniPlayer() {
       if (isUserSeekingRef.current) return;
       const v = mediaRef.current;
       if (!v || !isFinite(v.duration)) return;
+      if (playingFile && !isAudioOnlyPath(playingFile.path)) {
+        onVideoWatchTick(playbackSpeed, !v.paused);
+      }
       const { currentTime, duration } = v;
       setCurrentTime(currentTime);
       setDuration(duration);
       setProgress((currentTime / duration) * 100);
+      checkGhostChapterPause(v, currentTime);
       if (v.buffered.length > 0) {
         setBuffered((v.buffered.end(v.buffered.length - 1) / duration) * 100);
       }
@@ -1186,19 +1282,32 @@ export default function MiniPlayer() {
         : playingFile.duration > 0
           ? playingFile.duration
           : 0;
-    return normalizeChapters(playingFile.chapters, dur);
-  }, [playingFile?.chapters, playingFile?.duration, duration]);
+    return (
+      normalizeChapters(playingFile.chapters, dur) ??
+      normalizeChapters(chaptersFromDescription(descriptionText, dur), dur)
+    );
+  }, [playingFile?.chapters, playingFile?.duration, duration, descriptionText]);
 
   const [scrubberBarWidthPx, setScrubberBarWidthPx] = useState(0);
+  // The scrub strip unmounts whenever the controls hide: measure each element it mounts as, and drop hover
+  // state on unmount since no mouseleave fires for a removed element.
+  const [scrubStripEl, setScrubStripEl] = useState<HTMLDivElement | null>(null);
+  const attachScrubStrip = useCallback(
+    (el: HTMLDivElement | null) => {
+      subtitleLayoutLimitRef.current = el;
+      setScrubStripEl(el);
+      if (!el) onScrubberMouseLeave();
+    },
+    [onScrubberMouseLeave],
+  );
   useEffect(() => {
-    const el = subtitleLayoutLimitRef.current;
-    if (!el) return;
-    const sync = () => setScrubberBarWidthPx(el.getBoundingClientRect().width);
+    if (!scrubStripEl) return;
+    const sync = () => setScrubberBarWidthPx(scrubStripEl.getBoundingClientRect().width);
     sync();
     const ro = new ResizeObserver(sync);
-    ro.observe(el);
+    ro.observe(scrubStripEl);
     return () => ro.disconnect();
-  }, [playingFile?.path, isLargeMode, isSmallMode, isCompactMode]);
+  }, [scrubStripEl]);
 
   const spriteHover = useMemo(() => {
     if (!isScrubHovering) return null;
@@ -1582,10 +1691,27 @@ export default function MiniPlayer() {
     });
   }, [playingFile]);
 
-  usePlayerKeyboardShortcuts({
+  const [ghostHudStep, setGhostHudStep] = useState(0);
+
+  const jumpPrevChapter = useCallback(() => {
+    if (!chapters) return;
+    const prev = prevChapterIndex(chapters, activeChapter?.index ?? 0);
+    seekToTimeSeconds(prev !== null ? chapters[prev]!.start_time : 0);
+    setGhostHudStep((n) => n + 1);
+  }, [chapters, activeChapter?.index, seekToTimeSeconds]);
+
+  const jumpNextChapter = useCallback(() => {
+    if (!chapters) return;
+    const next = nextChapterIndex(chapters, activeChapter?.index ?? 0);
+    if (next !== null) seekToTimeSeconds(chapters[next]!.start_time);
+    setGhostHudStep((n) => n + 1);
+  }, [chapters, activeChapter?.index, seekToTimeSeconds]);
+
+  const playerHotkeyHandlers: PlayerKeyboardShortcutHandlers = {
     enabled: Boolean(playingFile),
     volume: volumeLabel / 100,
     playbackSpeed,
+    hasChapters: chapters != null && chapters.length > 0,
     togglePlay,
     skip: seek,
     changeVolume,
@@ -1609,7 +1735,102 @@ export default function MiniPlayer() {
     toggleSubtitles,
     setPlaybackSpeed,
     seekToPercent: scrubDuration > 0 ? seekToPercent : undefined,
+    jumpPrevChapter: chapters ? jumpPrevChapter : undefined,
+    jumpNextChapter: chapters ? jumpNextChapter : undefined,
+  };
+  usePlayerKeyboardShortcuts(playerHotkeyHandlers);
+  const playerHotkeyHandlersRef = useRef(playerHotkeyHandlers);
+  playerHotkeyHandlersRef.current = playerHotkeyHandlers;
+
+  const canGhost = isLargeMode && Boolean(playingFile);
+  const canGhostRef = useRef(canGhost);
+  canGhostRef.current = canGhost;
+
+  useEffect(() => {
+    if (!canGhost) setGhostMode(false);
+  }, [canGhost]);
+
+  const { ghostOpacity, noteManualToggle } = useMiniAutoGhost({
+    settings,
+    canGhost,
+    ghostMode,
+    setGhostMode,
   });
+
+  useMiniArrange({
+    ghostModeRef,
+    setGhostMode,
+    ghostOpacity,
+  });
+
+  useEffect(() => {
+    const unlisten = listenPrivateQueue<DesktopIslandControl>(
+      "playback-surface-control",
+      "playback-surface-control",
+      (control) => {
+        if (!control || typeof control !== "object") return;
+        const handlers = playerHotkeyHandlersRef.current;
+        if (control.type === "togglePlay") {
+          runPlayerHotkeyAction("player.playPause", handlers);
+          return;
+        }
+        if (control.type === "skipNext") {
+          runPlayerHotkeyAction("player.nextChapter", handlers);
+          return;
+        }
+        if (control.type === "skipBy" && typeof control.delta === "number") {
+          handlers.skip(control.delta);
+        }
+      },
+    );
+    return () => void unlisten.then((u) => u());
+  }, []);
+
+  ghostChapterPauseRef.current = {
+    enabled: ghostMode && settings.ghostPauseAtChapterEnd && loopMode !== "one" && !playingAudioOnly,
+    chapters,
+    seek: seekToTimeSeconds,
+  };
+
+  const ghostHudIndex = activeChapter?.index ?? -1;
+  useEffect(() => {
+    setChapterDone((d) => (d && d.next === ghostHudIndex ? d : null));
+  }, [ghostHudIndex]);
+  useEffect(() => {
+    setChapterDone(null);
+  }, [loopMode, ghostOpacity, ghostHudStep, ghostMode]);
+
+  const notify = useRuforgeStore((s) => s.notify);
+  const reportTakenChords = useCallback(
+    (chords: string[]) => {
+      const names = chords.map(formatChord).join(", ");
+      notify(`Another app already uses ${names}, so RuForge can't listen for it system-wide.`, "warning");
+    },
+    [notify],
+  );
+
+  const ghostToggleChords = resolveBindings("player.ghostMode", settings.hotkeyBindings);
+  const ghostToggleLabel = ghostToggleChords[0] ? formatChord(ghostToggleChords[0]) : null;
+  const ghostToggleShortcuts: SystemShortcut[] = ghostToggleChords.map((chord) => ({
+    chord,
+    run: () => {
+      if (!canGhostRef.current) return;
+      noteManualToggle();
+      setGhostMode((on) => !on);
+    },
+  }));
+  useSystemShortcuts(canGhost, ghostToggleShortcuts, reportTakenChords);
+
+  const ghostPlaybackShortcuts: SystemShortcut[] = GHOST_PLAYBACK_ACTIONS.flatMap(({ id, runs }) =>
+    resolveBindings(id, settings.hotkeyBindings).map((chord) => ({
+      chord,
+      run: () => {
+        if (!ghostModeRef.current || !canGhostRef.current) return;
+        runPlayerHotkeyAction(runs, playerHotkeyHandlersRef.current);
+      },
+    })),
+  );
+  useSystemShortcuts(ghostMode, ghostPlaybackShortcuts, reportTakenChords);
 
   const incrementViewCount = (file: MediaFile) => {
     const saved = localStorage.getItem(`views-${file.path}`);
@@ -1682,6 +1903,7 @@ export default function MiniPlayer() {
   const handleVideoPlaybackEnded = () => {
     if (!playingFile || playingAudioOnly) return;
     if (loopMode === "one") return;
+    closeVideoWatchSession("completed");
     if (loopMode === "all") {
       const next = wrapFolderNext();
       if (next) {
@@ -1733,10 +1955,17 @@ export default function MiniPlayer() {
     setEndCardHovered(hovered);
   };
 
+  const handleEndCardsHide = () => {
+    setEndCardsHidden(true);
+    setEndCardHovered(false);
+    setEndScreen((prev) => (prev?.phase === "cards" ? null : prev));
+  };
+
   useEffect(() => {
     setEndScreen(null);
     setEndDimOpacity(0);
     setEndCardHovered(false);
+    setEndCardsHidden(false);
     endFadeGainRef.current = 1;
     endSuggestionsForPathRef.current = null;
   }, [playingFile?.path]);
@@ -1780,7 +2009,7 @@ export default function MiniPlayer() {
     }
 
     if (remaining <= leadSec) {
-      const suggestions = ensureEndSuggestions();
+      const suggestions = endCardsHidden ? [] : ensureEndSuggestions();
       if (suggestions.length === 0) {
         if (endScreen) setEndScreen(null);
         const dim = fadeProgress;
@@ -1815,6 +2044,7 @@ export default function MiniPlayer() {
     currentTime,
     endScreen,
     endCardHovered,
+    endCardsHidden,
     endDimOpacity,
     ensureEndSuggestions,
     applyVideoOutputWithFade,
@@ -1885,15 +2115,71 @@ export default function MiniPlayer() {
     }
   };
 
-  const controlsVisible = !isSmallMode && ((isCursorVisible && isHovering) || isPaused || isGalleryHovered);
+  const controlsVisible =
+    !ghostMode && !isSmallMode && ((isCursorVisible && isHovering) || isPaused || isGalleryHovered);
+
+  // Ghost paints only the video frame, so the badge pins to that frame's corner, not the window's.
+  const ghostFrameInset = (() => {
+    if (!videoDims || playingAudioOnly) return { top: 0, right: 0 };
+    const scale = Math.min(winSize.width / videoDims.w, winSize.height / videoDims.h);
+    return {
+      top: Math.max(0, (winSize.height - videoDims.h * scale) / 2),
+      right: Math.max(0, (winSize.width - videoDims.w * scale) / 2),
+    };
+  })();
+
+  const showGhostHud = ghostMode && Boolean(playingFile) && !playingAudioOnly;
+  const ghostReadoutText = chapterDone
+    ? ghostChapterDoneReadout(chapterDone.next, chapterDone.total)
+    : ghostChapterReadout(chapters, ghostHudIndex, loopMode !== "off");
+  const ghostEdgeDuration = duration > 0 ? duration : (playingFile?.duration ?? 0);
+
   return (
     <div 
-      className={`h-screen w-screen bg-[#121212] overflow-hidden rounded-3xl select-none relative group/mini shadow-2xl outline-none ring-0 [clip-path:inset(0_round_1.5rem)] ${!isCursorVisible && !isPaused ? 'cursor-none' : ''} ${!controlsVisible ? 'controls-hidden' : ''}`}
+      className={`h-screen w-screen overflow-hidden select-none relative group/mini outline-none ring-0 transition-opacity duration-200 ${ghostMode ? '' : 'bg-[#121212] rounded-3xl shadow-2xl [clip-path:inset(0_round_1.5rem)]'} ${!isCursorVisible && !isPaused ? 'cursor-none' : ''} ${!controlsVisible ? 'controls-hidden' : ''}`}
+      style={ghostMode ? { opacity: ghostOpacity } : undefined}
       data-music-mode={miniNavMode === "music" ? "true" : undefined}
+      data-ghost={ghostMode ? "true" : undefined}
       onWheel={handleWheel}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
+
+      {ghostMode ? (
+        <div
+          className="pointer-events-none absolute z-[160] flex items-center gap-1.5 rounded-full bg-black/60 py-1 pl-2 pr-2.5 text-white/85 backdrop-blur-md"
+          style={{ top: ghostFrameInset.top + 8, right: ghostFrameInset.right + 8 }}
+          aria-live="polite"
+        >
+          <Ghost size={13} strokeWidth={2.5} aria-hidden />
+          <span className="text-[10px] font-black uppercase tracking-widest">Ghost</span>
+          {loopMode !== "off" ? (
+            <LoopModeSwapIcon mode={loopMode} size={12} className="text-[color:var(--accent)]" />
+          ) : null}
+          {ghostToggleLabel ? (
+            <span className="text-[10px] font-semibold tracking-wide text-white/50">{ghostToggleLabel}</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showGhostHud ? (
+        <>
+          <GhostChapterReadout
+            text={ghostReadoutText}
+            flashKey={`${ghostHudIndex}|${loopMode}|${ghostOpacity}|${ghostHudStep}|${chapterDone?.nonce ?? 0}`}
+            style={{
+              top: ghostFrameInset.top + 10,
+              left: ghostFrameInset.right + 12,
+              right: ghostFrameInset.right + 150,
+            }}
+          />
+          <GhostChapterEdge
+            layout={ghostEdgeLayout(chapters, ghostEdgeDuration, currentTime)}
+            visible={!isPaused}
+            style={{ left: ghostFrameInset.right, right: ghostFrameInset.right, bottom: ghostFrameInset.top }}
+          />
+        </>
+      ) : null}
 
       <AnimatePresence>
         {miniSbScrubBar && sponsorBlock.skipPrompt && (
@@ -1905,7 +2191,7 @@ export default function MiniPlayer() {
         )}
       </AnimatePresence>
 
-      {playingFile && !playingAudioOnly && endDimOpacity > 0 && (
+      {playingFile && !playingAudioOnly && endDimOpacity > 0 && !ghostMode && (
         <div
           className="absolute inset-0 z-[53] pointer-events-none bg-black transition-opacity duration-150"
           style={{ opacity: endDimOpacity }}
@@ -1925,6 +2211,7 @@ export default function MiniPlayer() {
             onCancelTimer={handleEndScreenCancelTimer}
             onPlayNow={handleEndScreenPlayNow}
             onCardHoverChange={handleEndCardHoverChange}
+            onHide={handleEndCardsHide}
           />
         )}
       </AnimatePresence>
@@ -1933,7 +2220,7 @@ export default function MiniPlayer() {
       <PlayerSkipFlash flash={skipFlash} compact={!isLargeMode} />
 
       {/* Top Controls Strip */}
-      <div className={`absolute top-0 left-0 right-0 h-12 z-[100] flex items-center justify-between px-3 pointer-events-none group-hover/mini:opacity-100 opacity-0 transition-opacity duration-300 ${(isMicroMode || isTinyMode) ? 'hidden' : ''}`}>
+      <div className={`absolute top-0 left-0 right-0 h-12 z-[100] flex items-center justify-between px-3 pointer-events-none group-hover/mini:opacity-100 opacity-0 transition-opacity duration-300 ${(isMicroMode || isTinyMode || ghostMode) ? 'hidden' : ''}`}>
         {!isCompactMode && playingFile ? (
           <Tooltip text="Toggle Media Selector" disabled={isSmallMode}>
             <button 
@@ -2005,6 +2292,23 @@ export default function MiniPlayer() {
               </button>
             </Tooltip>
           )}
+          {canGhost && (
+            <Tooltip text={ghostToggleLabel ? `Ghost mode (${ghostToggleLabel})` : "Ghost mode"}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canGhostRef.current) return;
+                  noteManualToggle();
+                  setGhostMode(true);
+                }}
+                className="p-1.5 text-stone-400 hover:text-white transition-colors"
+                aria-label="Ghost mode: clicks pass through to the window behind"
+              >
+                <Ghost size={16} strokeWidth={2.5} aria-hidden />
+              </button>
+            </Tooltip>
+          )}
           <Tooltip text={isPinned ? "Unpin Window" : "Pin Window"} disabled={isSmallMode || isCompactMode}>
             <button 
               onClick={async () => {
@@ -2037,7 +2341,7 @@ export default function MiniPlayer() {
       <motion.div 
         animate={{ bottom: showGallery ? 112 : 0 }}
         transition={{ type: "spring", damping: 30, stiffness: 200 }}
-        className={`absolute inset-0 z-10 pointer-events-none flex flex-col items-center justify-center ${miniNavMode === "music" ? "bg-[var(--music-bg)]" : "bg-black"}`}
+        className={`absolute inset-0 z-10 pointer-events-none flex flex-col items-center justify-center ${ghostMode ? "" : miniNavMode === "music" ? "bg-[var(--music-bg)]" : "bg-black"}`}
       >
         {/* Cover art backdrop: audio-only and layouts where video is not shown (not large-mode video). */}
         {playingFile && coverArtSrc && (playingAudioOnly || isSmallMode || isCompactMode) && (
@@ -2153,13 +2457,14 @@ export default function MiniPlayer() {
               ) : (
                 <div
                   ref={videoSurfaceRef}
-                  className="relative z-10 flex h-full w-full min-h-0 items-center justify-center transition-opacity duration-200"
+                  data-zoom={freezeZoom.dataZoom}
+                  className="freeze-zoom-viewport relative z-10 flex h-full w-full min-h-0 items-center justify-center transition-opacity duration-200"
                   style={{ opacity: mediaBlendOpacity }}
-                  onMouseDown={isLargeMode ? handleMiniVideoMouseDown : undefined}
+                  onMouseDown={isLargeMode && !freezeZoom.zoomed ? handleMiniVideoMouseDown : undefined}
                   onMouseUp={isLargeMode ? handleMiniVideoMouseUpLeave : undefined}
                   onMouseLeave={isLargeMode ? handleMiniVideoMouseUpLeave : undefined}
                 >
-                  {isLargeMode && isPaused && (
+                  {isLargeMode && isPaused && !ghostMode && (
                     <canvas
                       ref={ambientCanvasRef}
                       className="pointer-events-none absolute inset-[-15%] z-0 h-[130%] w-[130%] opacity-50 blur-[100px]"
@@ -2172,7 +2477,9 @@ export default function MiniPlayer() {
                     playsInline
                     preload="metadata"
                     poster={coverArtSrc ? convertFileSrc(coverArtSrc) : undefined}
-                    className={`${!isLargeMode ? "hidden" : "h-full w-full object-contain"} cursor-pointer pointer-events-auto transition-all duration-500`}
+                    data-zoom={freezeZoom.dataZoom}
+                    className={`${!isLargeMode ? "hidden" : "h-full w-full object-contain"} freeze-zoom-media cursor-pointer pointer-events-auto`}
+                    style={freezeZoom.mediaStyle}
                     src={convertFileSrc(playingFile.path)}
                     onPause={() => setIsPaused(true)}
                     onPlay={() => {
@@ -2200,13 +2507,21 @@ export default function MiniPlayer() {
                         isMuted,
                       )
                     }
-                    onLoadedMetadata={(e) => applyInitialMediaSeek(e.currentTarget)}
+                    onLoadedMetadata={(e) => {
+                      const v = e.currentTarget as HTMLVideoElement;
+                      setVideoDims(v.videoWidth > 0 && v.videoHeight > 0 ? { w: v.videoWidth, h: v.videoHeight } : null);
+                      applyInitialMediaSeek(v);
+                    }}
                     onEnded={() => {
                       handleVideoPlaybackEnded();
                     }}
                     onTimeUpdate={handleTimeUpdate}
+                    onSeeking={() => {
+                      ghostPrevTimeRef.current = null;
+                    }}
                     onSeeked={handleSeeked}
-                    onClick={togglePlay}
+                    onClick={() => freezeZoom.handleClick(togglePlay)}
+                    onDoubleClick={() => freezeZoom.handleDoubleClick(() => {})}
                     onAuxClick={(e) => {
                       if (e.button === 1 && mediaRef.current) {
                         getCurrentWindow().setFocus();
@@ -2248,6 +2563,13 @@ export default function MiniPlayer() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+                  {isLargeMode && (
+                    <FreezeZoomPill
+                      scale={freezeZoom.scale}
+                      onReset={freezeZoom.reset}
+                      className="right-4 top-14"
+                    />
+                  )}
                   <div className="subtitle-overlay-host">
                     <div
                       ref={subtitleDragRowRef}
@@ -2292,9 +2614,40 @@ export default function MiniPlayer() {
                     className="absolute inset-0 pointer-events-none"
                   >
                     <AnimatePresence>
+                      {descriptionOpen && !ghostMode && !playingAudioOnly && (
+                        <motion.div
+                          key="mini-description"
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 12 }}
+                          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                          className={`absolute inset-x-0 top-0 z-[15] flex flex-col bg-black/80 backdrop-blur-xl pointer-events-auto ${isMini ? "pt-11" : "pt-12"}`}
+                          // Runs 24px under the stack so its rounded top corners sit over this fill, not the window behind.
+                          style={{ bottom: Math.max(0, controlsStackHeight - 24) }}
+                          // The window wheel handler turns scrolling into volume.
+                          onWheel={(e) => e.stopPropagation()}
+                        >
+                          <div
+                            className={`rf-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto [mask-image:linear-gradient(to_bottom,transparent,black_10px,black_calc(100%-28px),transparent)] ${isMini ? "px-4" : "px-6"} mb-6 pb-8 pt-3`}
+                          >
+                            <DescriptionText
+                              text={descriptionText}
+                              loading={descriptionLoading}
+                              viewCount={descriptionViews}
+                              uploadDate={descriptionDate}
+                              durationSec={scrubDuration}
+                              onSeek={seekToTimeSeconds}
+                              compact
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    <AnimatePresence>
                       {controlsVisible && (
                     <motion.div
                       key="large-controls"
+                      ref={attachControlsStack}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
@@ -2307,7 +2660,7 @@ export default function MiniPlayer() {
                     >
                       {/* True Squiggly Line Progress Area */}
                       <div 
-                        ref={subtitleLayoutLimitRef}
+                        ref={attachScrubStrip}
                         className={`w-full ${isMini ? 'h-5' : 'h-8'} cursor-pointer relative group flex items-center`}
                         onMouseDown={handleScrubberBarMouseDown}
                         onMouseMove={handleMouseMoveScrubber}
@@ -2352,7 +2705,7 @@ export default function MiniPlayer() {
                         ) : (
                           <div className="relative w-full overflow-visible">
                             <div
-                              className={`w-full rounded-full relative overflow-hidden transition-all duration-300 ${isMini ? (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-3' : 'h-1.5') : (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-4' : 'h-2')} bg-white/15`}
+                              className={`w-full rounded-full relative overflow-hidden transition-all duration-300 ${isMini ? (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-3' : 'h-1.5') : (hoverProgress !== null || scrubPreviewRatio !== null ? 'h-4' : 'h-2')} rf-scrub-groove`}
                             >
                               {sbOverlayActive && (
                                 <SponsorBlockScrubOverlay
@@ -2360,15 +2713,18 @@ export default function MiniPlayer() {
                                   overlay={sponsorBlock.scrubOverlay}
                                 />
                               )}
-                              <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
-                              <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${scrubBarProgressPct}%` }} />
+                              <div className="rf-scrub-buffered absolute top-0 left-0 h-full rounded-full" style={{ width: `${buffered}%` }} />
                               {hoverProgress !== null && (
-                                <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${hoverProgress * 100}%` }} />
+                                <div className="rf-scrub-hover absolute top-0 left-0 h-full rounded-full pointer-events-none" style={{ width: `${hoverProgress * 100}%` }} />
                               )}
+                              <div className="rf-scrub-played absolute top-0 left-0 h-full rounded-full" style={{ width: `${scrubBarProgressPct}%` }} />
                             </div>
                             <div
-                              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 ${isMini ? 'w-3 h-3' : 'w-4 h-4'} bg-white rounded-full border-2 border-[#271C18] shadow-lg pointer-events-none z-20 transition-opacity ${hoverProgress !== null || scrubPreviewRatio !== null ? "opacity-100" : "opacity-0"}`}
-                              style={{ left: `${scrubBarProgressPct}%` }}
+                              className={`rf-scrub-knob absolute top-1/2 ${isMini ? 'w-3 h-3' : 'w-3.5 h-3.5'} rounded-full pointer-events-none z-20`}
+                              style={{
+                                left: `${scrubBarProgressPct}%`,
+                                transform: `translate(-50%, -50%) scale(${hoverProgress !== null || scrubPreviewRatio !== null ? 1 : 0})`,
+                              }}
                             />
                           </div>
                         )}
@@ -2439,7 +2795,7 @@ export default function MiniPlayer() {
                                         setIsSubtitlesEnabled(false);
                                         setShowSubtitleMenu(false);
                                       }}
-                                      className={`w-full px-3 py-1.5 text-left text-[9px] font-black tracking-widest transition-colors rounded-xl flex items-center justify-between ${!isSubtitlesEnabled ? "bg-[color:var(--accent)] text-[#1d1613]" : "text-stone-400 hover:bg-white/5 hover:text-white"}`}
+                                      className={`w-full px-3 py-1.5 text-left text-[9px] font-black tracking-widest transition-colors rounded-xl flex items-center justify-between ${!isSubtitlesEnabled ? "bg-[color:var(--accent)] text-[color:var(--rf-on-accent)]" : "text-stone-400 hover:bg-white/5 hover:text-white"}`}
                                     >
                                       <span>OFF</span>
                                       {!isSubtitlesEnabled && <Icon icon="tabler:check" width={10} />}
@@ -2454,7 +2810,7 @@ export default function MiniPlayer() {
                                           writeSubtitlePreferredLang(track.lang);
                                           setShowSubtitleMenu(false);
                                         }}
-                                        className={`w-full px-3 py-1.5 text-left text-[9px] font-black tracking-widest transition-colors rounded-xl flex items-center justify-between ${isSubtitlesEnabled && selectedSubtitleLang === track.lang ? "bg-[color:var(--accent)] text-[#1d1613]" : "text-stone-400 hover:bg-white/5 hover:text-white"}`}
+                                        className={`w-full px-3 py-1.5 text-left text-[9px] font-black tracking-widest transition-colors rounded-xl flex items-center justify-between ${isSubtitlesEnabled && selectedSubtitleLang === track.lang ? "bg-[color:var(--accent)] text-[color:var(--rf-on-accent)]" : "text-stone-400 hover:bg-white/5 hover:text-white"}`}
                                       >
                                         <span className="truncate mr-2">{track.label.toUpperCase()}</span>
                                         {isSubtitlesEnabled && selectedSubtitleLang === track.lang && <Icon icon="tabler:check" width={10} />}
@@ -2464,6 +2820,19 @@ export default function MiniPlayer() {
                                 )}
                               </AnimatePresence>
                             </div>
+                          )}
+
+                          {!playingAudioOnly && (
+                            <Tooltip text="Description" disabled={isSmallMode}>
+                              <button
+                                type="button"
+                                onClick={() => setDescriptionOpen((open) => !open)}
+                                className={`transition-all p-1 rounded-lg active:scale-90 ${descriptionOpen ? 'text-[color:var(--accent)] bg-[color:var(--accent)]/10' : 'text-stone-400 hover:text-white'}`}
+                                aria-label="Description"
+                              >
+                                <ScrollText size={isMini ? 16 : 20} strokeWidth={2} />
+                              </button>
+                            </Tooltip>
                           )}
                         </div>
                         <div className={`${isMini ? "text-[8px]" : "text-[10px]"} font-bold text-stone-500 tracking-wider tabular-nums`}>
@@ -2606,13 +2975,11 @@ export default function MiniPlayer() {
                           </button>
                           {/* Sliding range input overlays sibling buttons */}
                           <div className={`absolute ${isUltraCompact ? "left-6" : "left-8"} top-1/2 -translate-y-1/2 w-0 overflow-hidden group-hover/vol:w-20 transition-all duration-300 ease-out flex items-center h-8 pl-2 z-20 pointer-events-none group-hover/vol:pointer-events-auto`}>
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={isMuted ? 0 : volumeLabel}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value);
+                            <Slider
+                              label="Volume"
+                              level={isMuted ? 0 : volumeLabel / 100}
+                              onChange={(level) => {
+                                const val = Math.round(level * 100);
                                 if (mediaRef.current) {
                                   setIsMuted(false);
                                   setVolumeLabel(val);
@@ -2624,7 +2991,8 @@ export default function MiniPlayer() {
                                   );
                                 }
                               }}
-                              className="w-16 h-1 bg-white/25 rounded-full appearance-none cursor-pointer accent-[color:var(--accent)] hover:bg-white/35 transition-all [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-white"
+                              thumbFill="#1D1613"
+                              className="w-16 shrink-0"
                             />
                           </div>
                         </div>
@@ -3021,14 +3389,13 @@ export default function MiniPlayer() {
              opacity: showGallery ? 1 : 0
            }}
            transition={{ type: "spring", damping: 30, stiffness: 200 }}
-           className="w-full h-28 bg-[#1D1613] flex flex-col overflow-hidden pointer-events-auto relative z-10"
+           className="w-full h-28 bg-[color:var(--rf-surface-deep)] flex flex-col overflow-hidden pointer-events-auto relative z-10"
         >
-           <div
-             className="h-28 overflow-x-auto overflow-y-hidden scrollbar-none px-3 flex items-center gap-2 pointer-events-auto"
-             onWheel={(e) => {
-               if (e.deltaY === 0 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-               e.currentTarget.scrollLeft += e.deltaY;
-             }}
+           <EdgeSquishScroll
+             wrapItems={false}
+             wheelScroll
+             className="pointer-events-auto"
+             contentClassName="h-28 items-center gap-2 px-3 pb-0"
            >
             {stripEntries.map((entry) => {
               const isPlaylist = entry.kind === 'playlist';
@@ -3053,13 +3420,13 @@ export default function MiniPlayer() {
             {videoLibraryEntries.length === 0 && (
               <p className="w-full text-center text-[12px] text-stone-500">nothing in your video library yet.</p>
             )}
-         </div>
+         </EdgeSquishScroll>
       </motion.div>
       </div>
 
       {/* Resize Handle (Spotify Style) — hidden in full Video Library browse (fixed size) */}
       <AnimatePresence>
-        {playingFile && isHovering && (
+        {playingFile && isHovering && !ghostMode && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.4 }}

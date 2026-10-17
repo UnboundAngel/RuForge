@@ -1,15 +1,14 @@
 import { useMemo, useState } from "react";
 import { Clock, Play } from "lucide-react";
 import type { MediaFile } from "@/types";
-import { albumCoverPathWithFallback } from "@/albumCoverPath";
+import { coverPathChain } from "@/albumCoverPath";
 import { buildRecentAddedFeed, buildRecentAddedGroups } from "@/lib/musicRecentGroups";
-import { MUSIC_ALBUM_SHELF_GAP_RECENT_PX } from "@/lib/musicAlbumShelfLayout";
+import { MUSIC_SHELF_GAP_RECENT_PX, MusicShelf } from "./MusicShelf";
 import { formatRelativePlayed } from "@/lib/musicRelativeTime";
 import { musicTrackIdentityKey } from "./musicShelfDedup";
 import { primaryArtist } from "./musicArtist";
 import type { PlayHistoryEntry } from "./musicPlayHistory";
 import { MusicAlbumCard } from "./MusicAlbumCard";
-import { MusicAlbumShelf } from "./MusicAlbumShelf";
 import { MusicQuickPickRow } from "./MusicQuickPickRow";
 import { MusicRecentPlaylistCard } from "./MusicRecentPlaylistCard";
 import type { MusicRowContextMenuState } from "./MusicRowContextMenu";
@@ -217,18 +216,14 @@ export function MusicHomeRecentSection({
                       style={{ background: "rgba(255, 255, 255, 0.06)" }}
                     />
                   </div>
-                  <MusicAlbumShelf
-                    items={added.albums}
-                    gap={MUSIC_ALBUM_SHELF_GAP_RECENT_PX}
-                    keyFn={(a) => `${a.artistKey}::${a.albumKey}`}
-                    renderItem={(a) => {
-                      const paths = albumCoverPathWithFallback(a.tracks[0]!);
+                  <MusicShelf gap={MUSIC_SHELF_GAP_RECENT_PX}>
+                    {added.albums.map((a) => {
                       return (
                       <MusicAlbumCard
+                        key={`${a.artistKey}::${a.albumKey}`}
                         title={a.album}
                         subtitle={a.artist}
-                        cover={paths.primary}
-                        coverFallback={paths.fallback}
+                        covers={coverPathChain(a.tracks[0]!)}
                         onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
                         onContextMenu={(e) =>
                           setMenu({
@@ -253,8 +248,8 @@ export function MusicHomeRecentSection({
                         }
                       />
                       );
-                    }}
-                  />
+                    })}
+                  </MusicShelf>
                 </div>
               )}
             </div>

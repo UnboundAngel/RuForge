@@ -1,4 +1,4 @@
-import type { RuforgeSettings, YoutubeSessionStatus } from "@/store/types";
+import { normalizeBrowserContext, type RuforgeSettings, type YoutubeSessionStatus } from "@/store/types";
 
 /** One not-yet-downloaded video from the user's YouTube home feed. */
 export type FeedVideo = {
@@ -13,8 +13,6 @@ export type FeedVideo = {
   viewCount: number | null;
   /** Unix seconds, approximate: parsed from YouTube's "3 days ago". */
   timestamp: number | null;
-  /** Vertical Short; optional because feeds cached before Shorts were kept lack it. */
-  short?: boolean;
 };
 
 export type FeedPage = { items: FeedVideo[]; hasMore: boolean };
@@ -81,8 +79,8 @@ export function feedCookieSource(
 ): FeedCookieSource | null {
   const cookieFile = settings.cookieFile?.trim();
   if (cookieFile) return { browserCookies: null, cookieFile };
-  const browser = settings.browserContext?.trim();
-  if (browser && browser !== "chrome") return { browserCookies: browser, cookieFile: null };
+  const browser = normalizeBrowserContext(settings.browserContext);
+  if (browser) return { browserCookies: browser, cookieFile: null };
   if (session === "signed-in") return { browserCookies: "ruforge", cookieFile: null };
   return null;
 }
@@ -150,7 +148,7 @@ export function videoPreviewStartSec(duration: number | null, hookStart: number 
 }
 
 /** Versioned: v2 keeps Shorts, which v1 pages had already dropped. */
-const CACHE_KEY = "ruforge-youtube-feed-cache-v2";
+const CACHE_KEY = "ruforge-youtube-feed-cache-v3";
 /** Long enough that tab switches and restarts reuse it, short enough that the feed feels alive. */
 export const FEED_CACHE_TTL_MS = 30 * 60 * 1000;
 const BACKOFF_KEY = "ruforge-youtube-feed-backoff";

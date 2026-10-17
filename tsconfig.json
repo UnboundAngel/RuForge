@@ -22,7 +22,8 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@games": ["./src/games/index.ts", "./src/games-stub/index.ts"]
     }
   },
   "include": ["src"],

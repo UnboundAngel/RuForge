@@ -20,7 +20,7 @@ import { cn } from "../lib/utils";
 
 /** Bezel plate face — soft accent bloom through RuForge brown (no conic rays). */
 const BEZEL_SWIRL = {
-  backgroundColor: "#271C18",
+  backgroundColor: "var(--rf-surface)",
   backgroundImage: `
     radial-gradient(
       ellipse 95% 70% at 12% 8%,
@@ -39,9 +39,9 @@ const BEZEL_SWIRL = {
     ),
     linear-gradient(
       148deg,
-      #2c211c 0%,
-      #271C18 48%,
-      #1e1612 100%
+      color-mix(in srgb, var(--rf-surface), white 3%) 0%,
+      var(--rf-surface) 48%,
+      color-mix(in srgb, var(--rf-surface), black 22%) 100%
     )
   `,
 } as const;
@@ -222,7 +222,7 @@ export function SaveToPlaylistModal({
             */}
             <div className="px-2.5 pb-2.5 pt-3">
               <motion.div
-                className="overflow-hidden rounded-[16px] bg-[#1D1613]"
+                className="overflow-hidden rounded-[16px] bg-[color:var(--rf-surface-deep)]"
                 initial={false}
                 animate={drawerH > 0 ? { height: drawerH } : undefined}
                 transition={spring}
@@ -239,7 +239,7 @@ export function SaveToPlaylistModal({
                         onKeyDown={(e) => {
                           if (e.key === "Enter") handleCreate();
                         }}
-                        className="w-full rounded-xl bg-[#261d18] px-3.5 py-2.5 text-[15px] font-medium text-stone-100 outline-none placeholder:text-stone-600 placeholder:font-normal focus:bg-[#2c221d] transition-colors"
+                        className="w-full rounded-xl bg-[color:var(--rf-field)] px-3.5 py-2.5 text-[15px] font-medium text-stone-100 outline-none placeholder:text-stone-600 placeholder:font-normal focus:bg-[color:var(--rf-field-raised)] transition-colors"
                       />
                       <div className="flex items-center justify-end gap-1">
                         <button
@@ -252,7 +252,7 @@ export function SaveToPlaylistModal({
                         <button
                           type="button"
                           onClick={handleCreate}
-                          className="px-4 py-2 rounded-xl bg-[color:var(--accent)] text-[10px] font-black uppercase tracking-[0.18em] text-[#1D1613] hover:brightness-105 transition-[filter,transform] active:scale-[0.98]"
+                          className="px-4 py-2 rounded-xl bg-[color:var(--accent)] text-[10px] font-black uppercase tracking-[0.18em] text-[color:var(--rf-on-accent)] hover:brightness-105 transition-[filter,transform] active:scale-[0.98]"
                         >
                           Create
                         </button>
@@ -290,7 +290,7 @@ export function SaveToPlaylistModal({
                               onClick={() => handlePick(record.id)}
                               className="group w-full flex items-center gap-3 px-2 py-2 rounded-xl text-left transition-[background-color,transform,opacity] duration-150 hover:bg-white/[0.06] active:scale-[0.99] disabled:opacity-40 disabled:hover:bg-transparent disabled:active:scale-100"
                             >
-                              <div className="w-9 h-9 rounded-lg bg-[#261d18] flex items-center justify-center shrink-0 transition-transform duration-150 group-hover:scale-105 group-disabled:group-hover:scale-100">
+                              <div className="w-9 h-9 rounded-lg bg-[color:var(--rf-field)] flex items-center justify-center shrink-0 transition-transform duration-150 group-hover:scale-105 group-disabled:group-hover:scale-100">
                                 {isWatchLater ? (
                                   <Clock size={15} className="text-stone-400" strokeWidth={1.75} />
                                 ) : (

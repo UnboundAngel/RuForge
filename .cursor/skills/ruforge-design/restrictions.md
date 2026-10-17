@@ -28,9 +28,9 @@ The lighter surround is the **bezel** (app chrome). The darker inset pocket is t
 
 Do:
 
-- Default: bezel is `#271C18` and includes the left sidebar plus the title band. Well is `var(--rf-well)` (`#151211`, near-neutral so thumbnails carry the color) in the main column, `rounded-tl-[32px]`, reads as carved into the bezel. Cards, hover shells and placeholders inside it use `var(--rf-well-raised)` (`#201c1a`).
+- Default: bezel is `#271C18` and includes the left sidebar plus the title band. Well is `var(--rf-well)` (`#151211`, near-neutral so thumbnails carry the color) in the main column, inset 6px from the right and bottom window edges (Brave-style even rim, no bottom strip), `rounded-xl` on all corners. Storage lives at the foot of the rail (`StorageRailMeter`). Cards, hover shells and placeholders inside it use `var(--rf-well-raised)` (`#201c1a`).
 - Music: bezel wraps the whole window (`var(--music-bg, #0a0a0a)` on the shell). Sidebar and main are sibling wells with a gap, thin light stroke, matching corner radius.
-- Keep the well darker than the bezel. Keep the well's top-left (or all-around, in Music) radius large.
+- Keep the well darker than the bezel. Keep the well's radius even on all corners.
 - Depth between bezel and well is **fill contrast** (lighter surround, darker pocket). Do not fake that nest with engraved inset lips on every nested control.
 
 Don't:
@@ -44,7 +44,7 @@ Tokens / classes:
 
 - Bezel fill Default: `#271C18` (`rf-chrome-column`, window shell when not Music)
 - Well fill: `var(--rf-well)` `#151211` (`rf-main-content-shell`); raised surfaces in the well: `var(--rf-well-raised)` `#201c1a`. Both live in `:root` in `src/index.css`. Do not hardcode the hex.
-- Well radius Default: `rounded-tl-[32px]`
+- Well radius Default: `rounded-xl`, `mr-1.5 mb-1.5`. No inset vignette.
 - Window outer: `rf-main-window-shell--rounded` / `--maximized` (`src/index.css`)
 
 Code: `src/App.tsx` (shell, chrome column, `rf-main-content-shell`). `src/index.css` (`.rf-main-window-shell--rounded`).
@@ -98,7 +98,7 @@ Don't:
 
 Tokens / classes:
 
-- `--rf-titlebar-h` 48px, `--rf-tab-chrome-h` 40px, `--rf-tab-strip-h`, bezel `#271C18`
+- `--rf-titlebar-h` 42px, `--rf-tab-chrome-h` 40px, `--rf-tab-strip-h`, bezel `#271C18`
 
 Code: `src/App.tsx` (gallery tab strip + search/settings bulge)
 
@@ -143,7 +143,7 @@ Do:
 - Close X is a bare icon, `text-stone-500`, lightens on hover (`hover:text-stone-200`). No circle, no fill, no border.
 - Enter: overlay fades 0.2s, panel opacity + `y: 12` + scale `0.98 → 1` in 0.22s, ease `[0.16, 1, 0.3, 1]`. Exit is the reverse, slightly less Y. No snap. Honor reduced motion (duration 0).
 - Ghost / secondary footer actions are text-only. No engraved inset plate behind Back/Cancel.
-- Page-sized surfaces (Settings, downloader, Free internal space) nest a well inside a bezel rim: outer `#271C18`, radius 24px, 7px padding; inner well `#1D1613`, radius 18px; scrim `bg-black/65`. `SettingsModalShell` gets this with `bezel`. Small confirms stay flat.
+- Page-sized surfaces (Settings, downloader, Free internal space) nest a well inside a bezel rim: outer `#271C18`, radius 24px, 7px padding; inner well `#1D1613`, radius 18px; scrim `bg-black/65`. Every app-theme `SettingsModalShell` (confirms included) wears it automatically, so every dialog matches Settings; Music dialogs stay flat.
 
 Don't:
 
@@ -180,8 +180,9 @@ Don't:
 
 Tokens / classes:
 
-- Danger primary: `bg-red-500/90 text-stone-100 hover:brightness-110`
-- Meta: `SettingsModalSurface`, `text-[11px] text-stone-500`
+- Danger primary: `SettingsModalBtnDanger` (`bg-red-500/90 text-stone-100 hover:brightness-110`)
+- Meta: `SettingsModalSurface`, `text-[11px] text-stone-500`, built from `item.detail • item.title`
+- Non-destructive questions pass `tone: "accent"` for the gold primary
 
 Code: `src/components/ConfirmDialog.tsx`, `src/components/MediaView.tsx` (`handleDelete`)
 
@@ -207,7 +208,7 @@ Don't:
 
 Tokens / classes:
 
-- `.rf-music-tooltip` (`#282828`, 0.5rem radius, 13px / 600, white 95%), `.rf-music-tooltip-kbd`, `--wrap` past 36 chars. Radial wedge hint `.rf-radial-hint` uses the same surface.
+- `.rf-music-tooltip` (`#282828`, 0.5rem radius, 13px / 600, white 95%), `.rf-music-tooltip-kbd`, `--wrap` past 36 chars. The Alt radial shows its hovered label inside the hub, not as a tooltip.
 
 Code: `src/components/ui/TooltipLayer.tsx` (`AppTooltipLayer`, `MusicTooltipLayer` for `.rf-music-tooltip-anchor` so Music can hide tips under Explore). Mounted in `src/App.tsx`.
 

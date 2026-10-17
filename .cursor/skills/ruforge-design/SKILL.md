@@ -17,7 +17,7 @@ Live code wins if this file and the app disagree. Fix the restriction forward.
 
 ## When working
 
-1. Read [restrictions.md](restrictions.md) for locked patterns that match the surface.
+1. Read [restrictions.md](restrictions.md) for locked patterns that match the surface. Read [design-reference.html](design-reference.html): Part 1 lists every shared visual helper in `src/` (reuse before writing new visuals), Part 2 pairs each banned pattern with its approved replacement. When a banned thing is unavoidable (a divider, a shadow), copy the approved variant from there. Skip `design-reference.css` / `.js`; they only style the demos.
 2. If the surface is not listed, copy the template in that file, fill it from the live UI (screenshot or DOM), mark `draft`. Do not invent a second language. Do not restyle the live app to "match" a restriction you are writing. Capture first. Implement elsewhere only when Angel asks.
 3. Do not log docs-only restriction edits to Unreleased.
 

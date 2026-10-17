@@ -79,10 +79,28 @@ fn disk_space_for(dir: &str) -> DiskSpace {
 
 /// Free space for each download target, probed at the nearest existing ancestor.
 #[tauri::command]
-pub async fn get_disk_space(dirs: Vec<String>) -> Vec<DiskSpace> {
-    tauri::async_runtime::spawn_blocking(move || dirs.iter().map(|d| disk_space_for(d)).collect())
-        .await
-        .unwrap_or_default()
+pub async fn get_disk_space(app: tauri::AppHandle, dirs: Vec<String>) -> Vec<DiskSpace> {
+    let checked: Vec<(String, bool)> = dirs
+        .into_iter()
+        .map(|d| {
+            let ok = crate::library::path_access::allow_path(&app, d.trim()).is_ok();
+            (d, ok)
+        })
+        .collect();
+    tauri::async_runtime::spawn_blocking(move || {
+        checked
+            .iter()
+            .map(|(d, ok)| {
+                if *ok {
+                    disk_space_for(d)
+                } else {
+                    DiskSpace { dir: d.clone(), volume: None, free_bytes: None }
+                }
+            })
+            .collect()
+    })
+    .await
+    .unwrap_or_default()
 }
 
 #[cfg(test)]

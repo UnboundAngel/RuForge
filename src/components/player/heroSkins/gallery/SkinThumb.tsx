@@ -28,7 +28,7 @@ export function SkinThumb({
         selected ? "-translate-y-1 opacity-100" : "opacity-40 hover:opacity-75 focus-visible:opacity-75",
       )}
     >
-      <div className="relative w-full flex-1">
+      <div data-squish-cover className="relative w-full flex-1 transition-transform duration-150 ease-out">
         <SkinPreview skin={entry.skin} coverSrc={coverSrc} locked={!known} bare />
       </div>
       <div className="flex flex-col items-center gap-1.5">

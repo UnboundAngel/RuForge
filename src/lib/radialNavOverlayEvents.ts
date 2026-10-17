@@ -14,7 +14,8 @@ export const RADIAL_NAV_READY_EVENT = "radial-nav:ready";
 export const RADIAL_NAV_FOCUSED_EVENT = "radial-nav:focused";
 
 export type RadialNavAltPayload = { down: boolean };
-export type RadialNavStatePayload = { open: boolean; navMode: NavMode };
+/** `accent` is the Library accent; the overlay webview cannot read main's CSS. */
+export type RadialNavStatePayload = { open: boolean; navMode: NavMode; accent?: string };
 export type RadialNavSelectPayload = { itemId: string };
 
 export function isRadialNavOverlayDocument(): boolean {

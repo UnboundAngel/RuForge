@@ -9,6 +9,7 @@ use crate::commands::musicmeta::{
     read_sidecar as read_musicmeta_sidecar, sidecar_path_for as musicmeta_sidecar_path,
     MusicMetaSidecarDto,
 };
+use crate::library::path_access::{allow_path, allowed_roots};
 use crate::utils::{duration_from_ytdlp_info_json, is_audio_only_ext, resolve_info_json_path};
 
 const LRCLIB_API_BASE: &str = "https://lrclib.net";
@@ -594,17 +595,31 @@ fn push_artist_title_variants(
     }
 
     if let Some((split_artist, split_title)) = split_title_artist_pair(title) {
+        let split_primary = primary_query_artist(&split_artist);
         push_unique_query(
             out,
             LyricsQuery {
-                artist: split_artist,
-                title: split_title,
+                artist: split_artist.clone(),
+                title: split_title.clone(),
                 album: album.clone(),
                 duration,
                 identity,
                 candidate_index: 0,
             },
         );
+        if !split_primary.is_empty() && !split_primary.eq_ignore_ascii_case(&split_artist) {
+            push_unique_query(
+                out,
+                LyricsQuery {
+                    artist: split_primary,
+                    title: split_title,
+                    album: album.clone(),
+                    duration,
+                    identity,
+                    candidate_index: 0,
+                },
+            );
+        }
     }
 }
 
@@ -1094,20 +1109,24 @@ pub async fn ensure_lyrics_after_download(media: &Path) {
 
 #[tauri::command]
 pub async fn ensure_lyrics(
+    app: AppHandle,
     media_path: String,
     force: Option<bool>,
 ) -> Option<LyricsEnsureResult> {
-    ensure_lyrics_for_path(Path::new(&media_path), force.unwrap_or(false)).await
+    let media = allow_path(&app, &media_path).ok()?;
+    ensure_lyrics_for_path(&media, force.unwrap_or(false)).await
 }
 
 /// Manual lookup with caller-supplied artist/title, written next to `media_path`.
 #[tauri::command]
 pub async fn lookup_lyrics(
+    app: AppHandle,
     media_path: String,
     artist: String,
     title: String,
 ) -> Option<LyricsEnsureResult> {
-    let media = Path::new(&media_path);
+    let media = allow_path(&app, &media_path).ok()?;
+    let media = media.as_path();
     let parent = media.parent()?;
     let stem = media.file_stem()?.to_str()?;
     let sidecar_path = sidecar_path_for(parent, stem);
@@ -1141,8 +1160,8 @@ pub async fn lookup_lyrics(
 }
 
 #[tauri::command]
-pub async fn read_lyrics(media_path: String) -> Option<LyricsSidecarDto> {
-    let media = PathBuf::from(&media_path);
+pub async fn read_lyrics(app: AppHandle, media_path: String) -> Option<LyricsSidecarDto> {
+    let media = allow_path(&app, &media_path).ok()?;
     let parent = media.parent()?;
     let stem = media.file_stem()?.to_str()?;
     read_sidecar(&sidecar_path_for(parent, stem))
@@ -1155,7 +1174,7 @@ pub async fn backfill_lyrics(
     force: Option<bool>,
 ) -> Result<u32, String> {
     let force = force.unwrap_or(false);
-    let all = library_audio_files(&roots);
+    let all = library_audio_files(&allowed_roots(&app, &roots));
     let targets: Vec<PathBuf> = all
         .into_iter()
         .filter(|p| needs_fetch(p, force))
@@ -1318,6 +1337,21 @@ mod tests {
         assert_eq!(qs[1].artist, "King Von");
         assert_eq!(qs[1].title, "My Fault");
         assert_eq!(qs[1].candidate_index, 1);
+    }
+
+    #[test]
+    fn expand_adds_primary_of_title_split_artist() {
+        let qs = expand_query_candidates(
+            "NoCopyrightSounds".into(),
+            "Cartoon, Jéja - On & On (feat. Daniel Levi)".into(),
+            None,
+            None,
+            "test",
+            0,
+        );
+        assert!(qs
+            .iter()
+            .any(|q| q.artist == "Cartoon" && q.title == "On & On (feat. Daniel Levi)"));
     }
 
     #[test]

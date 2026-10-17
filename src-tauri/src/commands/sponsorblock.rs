@@ -238,11 +238,17 @@ fn write_sidecar(path: &Path, sidecar: &SponsorBlockSidecarDto) -> bool {
 /// Load or fetch SponsorBlock segments for a library file. Failures are silent; returns cache when possible.
 #[tauri::command]
 pub async fn ensure_sponsorblock_segments(
+    app: tauri::AppHandle,
     media_path: String,
     force: Option<bool>,
 ) -> EnsureSponsorBlockResult {
     let force = force.unwrap_or(false);
-    let media = PathBuf::from(&media_path);
+    let Ok(media) = crate::library::path_access::allow_path(&app, &media_path) else {
+        return EnsureSponsorBlockResult {
+            segments: vec![],
+            from_cache: true,
+        };
+    };
     let parent = match media.parent() {
         Some(p) => p,
         None => {

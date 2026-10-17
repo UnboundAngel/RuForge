@@ -11,6 +11,7 @@ These are real failures pulled from generated UI Angel rejected. If your output 
 ## 1. The divider-heavy list (the #1 generic-AI tell)
 Stacking list items with a `border-bottom` or `divide-y` line between each. Looks like a settings menu from 2014.
 - **Instead:** spacing rhythm → tonal surface per item → highlight block for the active row only.
+- **Allowed:** the column header line on sortable tables (`MusicPlaylistColumnHeader`, `useStuckHeader`): full width under the header at rest, fades to transparent as the header sticks and gains a raised fill. Rows under it stay line-free.
 
 ## 2. The letterboxed media blob (RuForge Music album row)
 A square album cover crammed into the wrong aspect ratio, padded with black side-bars, sitting on a black card. It reads as a muddy dark smear. Worst offender.
@@ -65,9 +66,22 @@ Small colored circles used as status, unread, priority, or category markers (in 
 - **Instead:** say it in text, or use the element's own icon or color. Dot-separated metadata text (`·`) is fine; a drawn dot is not.
 
 ## 15. Fake "chips"
-A text capsule (pill) or an icon in a padded tile is not a chip. When Angel asks for a chip on a card, he means a shape docked into a card corner that fits tight to the edges: a notched corner tab with concave fillet curves where it meets the card (reference: `RoadmapReadySection.tsx`, `.rf-roadmap-ready-notch`).
-- **Instead:** cut the corner with a notch in the background color, fillet both joins with radial-gradient curves, and seat the chip in the notch. Default to the top-right corner and float it, so the text starts at the left edge, runs up to the chip, and the next line wraps under it (the eye barely moves). Size the card to its content. No big empty zones reserved for the chip.
+A static text tag pill parked inside a card is not a chip, in the app or on the website. The two surfaces use different chips (live demos: `design-reference.html` Part 2, pattern 9).
+- **App:** four chip types, not interchangeable. Info (one value to read or act on, like the pasted link): `RevealChip` (`LinkChips.tsx`), but not its amber "Slower download" warning variant. Rows of filters: `HomeFilterPill` (`MusicHomeView.tsx`), folds to icons when compact. Downloads (any collapsed progress indicator): `VideoDownloadRailButton` (`VideoDownloadDockChip.tsx`). The signed-in account: `YouTubeProfileChip`. Never the notched corner chip.
+- **Website only:** when Angel asks for a chip on a website card, he means a shape docked into a card corner: a notched corner tab with concave fillet curves (`RoadmapReadySection.tsx`, `.rf-roadmap-ready-notch`). Cut the corner with a notch in the background color, fillet both joins with radial-gradient curves, seat the chip in the notch. Default to the top-right corner and float it so text wraps under it. Size the card to its content.
 
 ## 16. Glassy / translucent cards
 Cards filled with low-alpha tints (`rgb(... / 0.06)`) over a tinted panel read fuzzy and glassy. So does a panel wrapping a card grid (an inner well).
 - **Instead:** solid opaque tonal fills, and cards sitting straight on the page background.
+
+## 17. Flat context menus
+A right-click or "..." menu as one long list of same-weight rows (the old Library card menu: ten rows, the item title as the header, Delete one row under Open folder). Forces reading every label.
+- **Instead:** the Music menu (`musicMenuUi.tsx`). Section cards grouped by intent, 9px uppercase label per group, primary group first with an accent wash, destructive last with `variant="danger"`. No hairlines between groups.
+
+## 18. Morph menus
+A chip that grows into a menu (the removed `MorphMenu` / `MorphLabelMenu`). The motion is fine; the menu itself is not the house style, even for a short pick-one list.
+- **Instead:** the Music menu kit anchored under a plain button. Keep `MORPH_SPRING` for motion only.
+
+## 19. Drawn-underline hero headings in the app
+`AnimatedText` (heading drops in, hand-drawn underline that bends on hover) is a website flourish.
+- **Instead:** website only (`website/src/components/ui/animated-underline-text-one`). App headings use `.font-display` or the settings type classes, with no underline.

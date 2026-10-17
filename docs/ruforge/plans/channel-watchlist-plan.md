@@ -66,7 +66,7 @@ Repo rules that bite (full list in `AGENTS.md`):
 - Extract components before ~120 JSX lines. `App.tsx`, `SettingsView.tsx`, `useDesktopIslandOverlay.ts`, `downloadQueueSlice.ts` are already huge: add a few lines there, put logic in new files.
 - Tailwind + tokens (`src/index.css`). `style={}` only for dynamic values. No css-in-js.
 - Hover labels via `data-tooltip` (`TooltipLayer`). Never the `title` attribute. Any new webview that renders `data-tooltip` mounts `AppTooltipLayer`.
-- Custom widgets, never native (`CustomSelect` and `ToggleSlot` in `SettingsView.tsx`; `rf-scrollbar` class for scrollers).
+- Custom widgets, never native (`CustomSelect` in `SettingsView.tsx`, `Switch` in `src/components/ui/Switch.tsx`; `rf-scrollbar` class for scrollers).
 - Palette follows the mode. Library: `var(--accent)` (sand gold, user-pickable) on warm brown. Music: `[data-music-mode="true"]` redefines `--accent` to red and uses black surfaces. Anything portaled to `document.body` escapes that attribute, so it must set `data-music-mode="true"` itself in Music mode (pattern: `SettingsModalShell.tsx`, `musicMenuUi.tsx`). Never hardcode `#EDCF9B` or `#ff0033`.
 - Design: read `.cursor/rules/design-style-anti-patterns.mdc` and `.cursor/skills/ruforge-design/restrictions.md` (Tooltips, Popups, Scrollbars, Motion) before UI phases. No divider lines between rows, no glow, no accent-bar section labels, 16:9 thumbnails `object-cover` with no letterboxing.
 - RuForge does not support Shorts. No Shorts anywhere in this feature.
@@ -519,7 +519,7 @@ Goal: follow by pasted link and manage followed channels from the notification c
 Files (all props-only so both hosts render them):
 
 - New `src/components/notifications/channels/ChannelAddField.tsx`: input `rounded-[var(--radius-input)] bg-[color:var(--rf-popover-raised)]`, placeholder "Paste a channel or video link", Enter or "Follow" button runs `onFollowInput(input)` (Host A: `followFromInput`; Host B: an overlay action). Pending spinner; errors under the field in `text-[11px] text-amber-300/90` using the Rust error string.
-- New `src/components/notifications/channels/ChannelRow.tsx`: `ChannelAvatar` (`src/components/library/VideoByline.tsx`, `h-9 w-9`; in the overlay it fetches its own avatar through `get_channel_avatar`, which is fine because that command is cookie-free and cached), title + handle, "Checked 12 minutes ago" (`formatAge`) or `lastError` in amber. "Auto-download" toggle (copy the `ToggleSlot` look from `SettingsView.tsx` into `src/components/notifications/channels/MiniToggle.tsx` if it is not exported; accent from `--accent`). Unfollow as text-only hover action.
+- New `src/components/notifications/channels/ChannelRow.tsx`: `ChannelAvatar` (`src/components/library/VideoByline.tsx`, `h-9 w-9`; in the overlay it fetches its own avatar through `get_channel_avatar`, which is fine because that command is cookie-free and cached), title + handle, "Checked 12 minutes ago" (`formatAge`) or `lastError` in amber. "Auto-download" toggle (`Switch size="sm"` from `src/components/ui/Switch.tsx`). Unfollow as text-only hover action.
 - New `src/components/notifications/channels/ChannelsPanel.tsx`: field, channels sorted by title, footer text button "Check now" (`refresh_watchlist_now`, disabled for 120 s after use). Empty copy: "Not following anyone yet."
 - `NotificationCenterPanel.tsx`: render `ChannelsPanel` in the Channels tab. Extend the overlay action union for follow input, auto-download toggle, unfollow and check now.
 
@@ -621,7 +621,7 @@ Goal: settings, a polish pass, changelog entries.
 Files:
 
 - `src/components/SettingsView.tsx`: new `<SettingsSection title="Notifications" keywords="follow subscribe channel watchlist new uploads bell">` after the section containing "YouTube feed in Video Library" (~1792):
-  - "New upload alerts": `ToggleSlot` bound to `watchlistAlerts`. Description: "Shows a notice when a channel you follow posts. In the background it appears on the desktop island."
+  - "New upload alerts": `Switch` bound to `watchlistAlerts`. Description: "Shows a notice when a channel you follow posts. In the background it appears on the desktop island."
   - "Check followed channels": `CustomSelect` "Every 15 minutes" / "Every 30 minutes" / "Every hour" / "Every 3 hours" mapped to 15 / 30 / 60 / 180, via `set_watchlist_check_interval`, value from the snapshot.
   - "Followed channels": button "Manage" that closes Settings and opens the popover on the Channels tab.
   If the block passes ~40 JSX lines, extract `src/components/settings/NotificationsSettingsSection.tsx` like `CompanionSettingsSection.tsx`.

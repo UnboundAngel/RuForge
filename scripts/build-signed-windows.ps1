@@ -66,6 +66,15 @@ else {
   }
 }
 
+if ($WithGames) {
+  Remove-Item Env:RUFORGE_PUBLIC_BUILD -ErrorAction SilentlyContinue
+  Write-Host "Games included (-WithGames). Do not publish this installer." -ForegroundColor Yellow
+}
+else {
+  $env:RUFORGE_PUBLIC_BUILD = "1"
+  Write-Host "Public build: Games stub, no Games capabilities (RUFORGE_PUBLIC_BUILD=1)." -ForegroundColor Cyan
+}
+
 Write-Host "`nRunning npm run tauri build (frontend + signed bundles)...`n" -ForegroundColor Cyan
 npm run tauri build
 if ($LASTEXITCODE -ne 0) {

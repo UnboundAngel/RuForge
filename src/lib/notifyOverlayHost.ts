@@ -109,11 +109,16 @@ async function createOverlay(): Promise<Webview> {
       focus: false,
       ...(additionalBrowserArgs ? { additionalBrowserArgs } : {}),
     });
-    webview.once("tauri://created", () => {
+    // Only one of these fires; drop the other so each recreation does not strand a listener.
+    const onCreated = webview.once("tauri://created", () => {
+      void onError.then((un) => un());
       void webview.hide().catch(() => {});
       resolve(webview);
     });
-    webview.once("tauri://error", (e) => reject(e.payload));
+    const onError = webview.once("tauri://error", (e) => {
+      void onCreated.then((un) => un());
+      reject(e.payload);
+    });
   });
 }
 

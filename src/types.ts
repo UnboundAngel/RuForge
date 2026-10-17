@@ -101,6 +101,9 @@ export interface VideoInfo {
   playlistItems?: PlaylistItem[];
   uploader?: string | null;
   channel?: string | null;
+  channelId?: string | null;
+  /** Best matching video height for the chosen format cap, when known. */
+  height?: number | null;
 }
 
 /** Live yt-dlp phase on `download-progress` IPC; `DownloadJob.status` stays `downloading` until finished. */

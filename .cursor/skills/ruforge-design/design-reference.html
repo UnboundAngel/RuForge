@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RuForge design reference: helpers and patterns</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!--
+  FOR AGENTS. Read this file only. design-reference.css and design-reference.js are demo styling; skip them.
+
+  Part 1, Helpers: every shared visual helper in src/. Before writing any visual, find it here and reuse it.
+    Each entry: name, path, when to use it, usage. <code> blocks are real app code.
+  Part 2, Patterns: banned pattern (tag "Not") next to the approved one (tag "Use"). When a banned thing is
+    unavoidable (a divider, a shadow), copy the "Use" or "If you must" variant exactly. Never a third style.
+  "Avoid" at the end of Part 1 lists dead, duplicate and rule-breaking code. Do not copy from it.
+
+  src/ wins if this file disagrees. Rules: .cursor/rules/design-style*.mdc. Locked chrome: restrictions.md.
+-->
+<link rel="stylesheet" href="design-reference.css" />
+</head>
+<body>
+<div class="page">
+  <nav class="toc">
+    <a href="#h-text">Text</a><a href="#h-menus">Menus</a><a href="#h-tooltips">Tooltips</a><a href="#h-scroll">Scroll</a>
+    <a href="#h-motion">Motion</a><a href="#h-icons">Icons</a><a href="#h-controls">Controls</a><a href="#h-feedback">Feedback</a>
+    <a href="#h-media">Media</a><a href="#h-tokens">Tokens</a><a href="#h-other">Other</a><a href="#h-avoid">Avoid</a>
+    <a href="#patterns">Part 2: Patterns</a>
+  </nav>
+
+  <header class="part-head"><h1>Part 1. Helpers</h1>
+    <p>Reuse these before writing new visuals. Every helper that draws something has a live demo. Plain lists hold only non-visual utilities.</p></header>
+
+  <section class="group" id="h-text">
+    <h2>Text</h2>
+    <div class="hgrid">
+      <div class="hcard"><h3>HoverMarqueeText</h3><span class="path">src/components/music/HoverMarqueeText.tsx</span>
+        <p>Any single-line label that can truncate. Truncates at rest, marquees on hover with the soft edge fade.</p>
+        <div class="demo"><div class="label-box"><div class="marquee"><div class="track"><span>Someone Was Stalking Me At My Apartment Complex</span><span>Someone Was Stalking Me At My Apartment Complex</span></div></div></div></div>
+        <code>&lt;HoverMarqueeText text={title} /&gt;
+row hover: active={rowHovered}   dense menus: slow</code></div>
+      <div class="hcard"><h3>RollText</h3><span class="path">src/components/downloader/RollText.tsx</span>
+        <p>A short label that changes value in place (status words). Letters flip in one by one.</p>
+        <div class="demo" style="flex-direction:column;gap:6px"><span class="roll" id="roll">Queued</span><button type="button" class="roll-btn" id="roll-btn">Change</button></div>
+        <code>&lt;RollText id={status}&gt;{label}&lt;/RollText&gt;
+rotateX -90 to 0, 0.32s in, 0.03s stagger</code></div>
+      <div class="hcard"><h3>Type classes</h3><span class="path">src/index.css, notifications/panelStyles.ts</span>
+        <p>Settings and panel type. Do not restyle per screen.</p>
+        <div class="demo" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <span style="font:400 22px Georgia,serif;letter-spacing:-0.02em;color:var(--text-strong)">Downloads</span>
+          <span style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#d6d3d1">Section header</span>
+          <span style="font-size:10px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#a8a29e">Control label</span></div>
+        <code>.rf-settings-page-title   .rf-settings-section-header
+panelLabelClass  controlLabelClass  panelRowTitleClass  panelRowDetailClass</code></div>
+      <div class="hcard"><h3>MarqueeText</h3><span class="path">src/components/downloader/DownloadJobQueuePanel.tsx</span>
+        <p>Always-on loop for a strip where the title is the focus (now playing, island). Loops only when the text overflows; short text sits still. Menus and grids use HoverMarqueeText instead.</p>
+        <div class="demo demo--col" style="align-items:center;gap:10px"><div class="mq-auto"><div class="track"><span>Lucid Dreams (Forget Me) Juice WRLD</span><span>Lucid Dreams (Forget Me) Juice WRLD</span></div></div><div class="mq-still">Robbery</div></div>
+        <code>&lt;MarqueeText text={t} fadeLeadingEdge marqueeClassName="animate-marquee" /&gt;
+15s loop (animate-marquee), 22s (animate-marquee-slow). Never faster.</code></div>
+      <div class="hcard"><h3>MetaParts</h3><span class="path">src/components/library/VideoByline.tsx</span>
+        <p>Every dot-separated metadata line. Joins parts with a typed separator and drops empty ones. Live in the ChannelAvatar card under Media.</p>
+        <div class="demo"><p class="byline" style="margin:0;display:block;font-size:13px;color:#a8a29e">1.2M views<span class="sep" style="margin:0 6px;color:#57534e">·</span>3 days ago<span class="sep" style="margin:0 6px;color:#57534e">·</span>12:04</p></div>
+        <code>&lt;MetaParts parts={[views, age, duration]} /&gt;
+separator: mx-1.5 text-stone-600   line: text-[13px] text-stone-400</code></div>
+      <div class="hcard"><h3>SettingsDescription</h3><span class="path">src/components/settings/settingsDescription.tsx</span>
+        <p>Settings row help text. Up to 88 characters shows inline; longer becomes a "More info" button with the text in a tooltip. Hover it.</p>
+        <div class="demo demo--col" style="align-items:flex-start;gap:12px"><p class="sdesc-short" style="margin:0">Pick where finished videos are saved.</p>
+          <span class="tip-host"><span class="sdesc" tabindex="0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><small>More info</small></span><span class="tip-pop" style="white-space:normal;width:220px">Downloads keep going in the background and pick up where they stopped after a restart.</span></span></div>
+        <code>&lt;SettingsDescription text={help} /&gt;   (88 char cutoff)</code></div>
+      <div class="hcard"><h3>.font-display / .font-hand</h3><span class="path">src/index.css</span>
+        <p>Cabinet Grotesk display face for big headings; Patrick Hand for handwritten accents.</p>
+        <div class="demo"><div class="fonts-demo"><span class="d">Your library</span><span class="h">drop a link here</span></div></div>
+        <code>className="font-display"   className="font-hand"</code></div>
+    </div>
+  </section>
+
+  <section class="group" id="h-menus">
+    <h2>Menus</h2>
+    <div class="hgrid">
+      <div class="hcard" style="grid-column:span 2"><h3>Music menu kit</h3><span class="path">src/components/music/musicMenuUi.tsx</span>
+        <p>The one menu, in every mode: right-click, "...", and pick-one lists (sort, quality, audio output). Grouped section cards, 9px uppercase labels, destructive last. theme="music" (red on black) or theme="library" (reads the mode tokens: sand gold on brown, or Music colors when rendered inside a Music surface). Pick-one lists open under a plain button via menuAnchorPoint(); right-click passes the cursor with placement="cursor". Inside the island or a popover that must own its clicks, render MusicMenuPanel in place instead of the portaled MusicFloatingMenu. Submenus: MusicMenuFlyoutRow. Labels marquee on hover. Live demo and anatomy: Part 2, pattern 16.</p>
+        <code>&lt;MusicFloatingMenu open x y onClose placement="cursor"&gt;
+  &lt;MusicMenuSection label="Playback" tone={MUSIC_MENU_TONES.playback}&gt;
+    &lt;MusicMenuRow icon={Play} label="Play" onClick /&gt;
+  &lt;MusicMenuSection label="File" tone={MUSIC_MENU_TONES.file}&gt;
+    &lt;MusicMenuRow icon={Trash2} label="Delete" variant="danger" /&gt;
+&lt;MusicFloatingMenu theme="library" x y placement onClose ariaLabel&gt;   (Library, feed, playlist menus)
+open from a button: onOpen({ ...menuAnchorPoint(e.currentTarget), placement: "anchor" })
+submenus: MusicMenuFlyoutRow renderFlyout={() =&gt; …}
+in place: &lt;MusicMenuPanel theme="library"&gt; + useMusicMenuEscape, useMusicMenuOutsideDismiss</code></div>
+      <div class="hcard"><h3>MusicRowContextMenu</h3><span class="path">src/components/music/MusicRowContextMenu.tsx</span>
+        <p>The finished track right-click menu, built on the Music menu kit. Reuse it for any track row instead of building a new one. Full live menu: Part 2, pattern 16.</p>
+        <code>&lt;MusicRowContextMenu track={t} x y onClose /&gt;</code></div>
+    </div>
+  </section>
+
+  <section class="group" id="h-tooltips">
+    <h2>Tooltips</h2>
+    <div class="hgrid">
+      <div class="hcard"><h3>data-tooltip (Library)</h3><span class="path">src/components/ui/TooltipLayer.tsx</span>
+        <p>The only tooltip. Put the attribute on the element; TooltipLayer renders it. Never title=, never a per-component hover pill. Hover the icons.</p>
+        <div class="demo tip-demo"><div class="demo-row">
+          <span class="tip-host"><button type="button" class="tb-btn" aria-label="Notifications"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button><span class="tip-pop" style="background:#322620">Notifications</span></span>
+          <span class="tip-host"><button type="button" class="tb-btn" aria-label="Downloads"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 15V3M7 10l5 5 5-5M5 21h14"/></svg></button><span class="tip-pop" style="background:#322620">Downloads <kbd>Ctrl+D</kbd></span></span>
+        </div></div>
+        <code>data-tooltip="Play"   data-tooltip-shortcut="Space"   data-tooltip-side="right" (sidebar rail)
+"Label (Ctrl+X)" also renders a key chip. Over 36 characters wraps.</code></div>
+      <div class="hcard"><h3>.rf-music-tooltip-anchor</h3><span class="path">src/index.css</span>
+        <p>Add next to data-tooltip on Music surfaces so the Music tooltip layer owns it (#282828 card, hidden while Explore is open). Hover.</p>
+        <div class="demo demo--music tip-demo"><div class="demo-row">
+          <span class="tip-host"><button type="button" class="shuf" aria-label="Shuffle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg></button><span class="tip-pop">Shuffle <kbd>S</kbd></span></span>
+        </div></div>
+        <code>data-tooltip="Shuffle" className="rf-music-tooltip-anchor"</code></div>
+    </div>
+    <dl class="hlist">
+      <dt><b>shortcutLabels</b><span class="path">src/lib/shortcutLabels.ts</span></dt>
+      <dd>modKeyLabel(), altKeyLabel(), downloadShortcutLabel(). Use for shortcut text so Mac shows the right symbols.</dd>
+    </dl>
+  </section>
+
+  <section class="group" id="h-scroll">
+    <h2>Scroll</h2>
+    <div class="hgrid">
+      <div class="hcard"><h3>useScrollEdgeState</h3><span class="path">src/hooks/useScrollEdgeState.ts</span>
+        <p>A scrolling panel where content runs off the top or bottom. A soft shadow shows only at an edge that has more content. Scroll it.</p>
+        <div class="demo" style="padding:0;overflow:hidden"><div class="edge-wrap" id="edge-wrap" data-scroll-bottom="true"><div class="edge-scroll" id="edge-scroll">
+          <div>Robbery</div><div>Lean Wit Me</div><div>Lucid Dreams</div><div>Wishing Well</div><div>Empty</div><div>Legends</div><div>Righteous</div><div>Conversations</div></div></div></div>
+        <code>const { scrollRef, edges, onScroll } = useScrollEdgeState(deps);
+wrapper: rf-scroll-edge-wrap data-scroll-top={edges.top} data-scroll-bottom={edges.bottom}</code></div>
+      <div class="hcard"><h3>.rf-scrollbar</h3><span class="path">src/components/ui/RfScrollbarHost.tsx</span>
+        <p>Every scroller. Hides the native bar; the host paints a 5px accent thumb that brightens on hover. Scroll it.</p>
+        <div class="demo" style="padding:10px"><div class="sb-box" id="sb-box"><div class="sb-scroll" id="sb-scroll">
+          <div>Wishing Well</div><div>Righteous</div><div>Legends</div><div>Robbery</div><div>Lean Wit Me</div><div>Empty</div><div>Conversations</div><div>Fast</div><div>Bandit</div><div>Hate Me</div></div><span class="sb-thumb" id="sb-thumb"></span></div></div>
+        <code>className="rf-scrollbar"
+thumb only on hover: rf-scrollbar rf-scrollbar-hover
+no bar at all: scrollbar-none
+below a sticky header: data-rf-scrollbar-inset-top="48"</code></div>
+      <div class="hcard"><h3>useStuckHeader</h3><span class="path">src/hooks/useStuckHeader.ts</span>
+        <p>A sticky header that gets a raised fill and thin shadow once content scrolls under it. Scroll it.</p>
+        <div class="demo demo--music" style="padding:10px"><div class="stuck-box" id="stuck-box"><div class="stuck-head" id="stuck-head"><span>#  Title</span><span>3:12</span></div>
+          <div class="r">Lucid Dreams</div><div class="r">Robbery</div><div class="r">Legends</div><div class="r">Righteous</div><div class="r">Wishing Well</div><div class="r">Empty</div></div></div>
+        <code>const { sentinelRef, stuck } = useStuckHeader();
+&lt;div ref={sentinelRef} className="h-px" /&gt;
+&lt;header className={stuck ? "bg-…raised shadow-[0_3px_6px_-4px_…]" : "…"} /&gt;</code></div>
+      <div class="hcard" style="grid-column:span 2"><h3>EdgeSquishScroll</h3><span class="path">src/components/ui/EdgeSquishScroll.tsx</span>
+        <p>The one horizontal card scroller, every mode: Library creator shelves, Music home, stats, profile, recommendations, Now Playing, the skin gallery and the mini player strip. Covers marked <code>data-squish-cover</code> squish toward whichever edge clips them, and that edge fades. Pass <code>arrows</code> for the hover edge arrows that page by one screen. Scroll sideways.</p>
+        <div class="demo demo--music" style="padding:14px"><div class="sq-clip" id="sq-clip" data-fade-right="true"><div class="sq-row" id="sq-row">
+          <div><div class="sq-cover cv1"></div><div class="sq-name">Legends</div></div><div><div class="sq-cover cv2"></div><div class="sq-name">Righteous</div></div>
+          <div><div class="sq-cover cv3"></div><div class="sq-name">Wishing Well</div></div><div><div class="sq-cover cv4"></div><div class="sq-name">Robbery</div></div>
+          <div><div class="sq-cover cv5"></div><div class="sq-name">Bandit</div></div><div><div class="sq-cover cv6"></div><div class="sq-name">Empty</div></div>
+          <div><div class="sq-cover cv1"></div><div class="sq-name">Fast</div></div><div><div class="sq-cover cv3"></div><div class="sq-name">Hate Me</div></div></div></div></div>
+        <code>&lt;EdgeSquishScroll arrows&gt;{cards}&lt;/EdgeSquishScroll&gt;
+gap 12px; scale 0.88 + visibleRatio * 0.12, origin at the clipped side; .rf-squish-scroll-clip 32px fades
+wrapItems={false} for AnimatePresence lists or a column-flow grid; wheelScroll for standalone rails</code></div>
+      <div class="hcard"><h3>MusicShelf</h3><span class="path">src/components/music/MusicShelf.tsx</span>
+        <p>Titled Music row (Home artists and albums, Recently added albums): an EdgeSquishScroll with <code>arrows</code>. Arrows are a chevron on a radial shade in the page's hue, shown on row hover, centered on the first cover. No header arrow circles, no borders, no blur.</p>
+        <code>&lt;MusicShelf title="Albums" gap={MUSIC_SHELF_GAP_HOME_PX}&gt;{cards}&lt;/MusicShelf&gt;
+gap 20 (Home) / 40 (Recently added); arrow h-24 w-16, .rf-shelf-arrow + .rf-shelf-arrow-shade</code></div>
+      <div class="hcard"><h3>galleryScrollChromeAmount</h3><span class="path">src/lib/galleryScrollChrome.ts</span>
+        <p>Maps the first 64px of scroll to 0..1. The big header fades and lifts; the compact tab strip plate fades in behind the tabs. Scroll it.</p>
+        <div class="demo" style="padding:10px"><div class="gc-box"><div class="gc-strip"><span class="gc-plate" id="gc-plate"></span><span style="color:var(--accent)">Videos</span><span>Playlists</span><span>Channels</span></div>
+          <div class="gc-scroll" id="gc-scroll"><div class="gc-title" id="gc-title">Library</div><div class="gc-grid"><div class="cv1"></div><div class="cv2"></div><div class="cv3"></div><div class="cv4"></div><div class="cv5"></div><div class="cv6"></div><div class="cv2"></div><div class="cv4"></div><div class="cv1"></div><div class="cv3"></div><div class="cv6"></div><div class="cv5"></div></div></div></div></div>
+        <code>const a = galleryScrollChromeAmount(scrollTop)
+header: opacity 1 - a, translateY(-a * 12)   plate: opacity a</code></div>
+      <div class="hcard"><h3>[data-scrolled] headers</h3><span class="path">src/index.css</span>
+        <p>.rf-comments-header and .rf-music-queue-sticky gain a scroll shadow once data-scrolled is set. Scroll it.</p>
+        <div class="demo demo--music" style="padding:10px"><div class="stuck-box" id="ds-box"><div class="stuck-head" id="ds-head"><span>Next in queue</span></div>
+          <div class="r">Lucid Dreams</div><div class="r">Robbery</div><div class="r">Legends</div><div class="r">Righteous</div><div class="r">Wishing Well</div><div class="r">Empty</div></div></div>
+        <code>&lt;div className="rf-music-queue-sticky" data-scrolled={scrolled || undefined}&gt;
+queue: box-shadow 0 6px 12px rgba(0,0,0,.45)   comments: 6px black .72 gradient ::after</code></div>
+    </div>
+  </section>
+
+  <section class="group" id="h-motion">
+    <h2>Motion</h2>
+    <div class="hgrid">
+      <div class="hcard"><h3>Press feedback</h3><span class="path">src/index.css</span>
+        <p>Every pressable gets a small give. Hold the button.</p>
+        <div class="demo"><button type="button" class="h-press">Press me</button></div>
+        <code>Music: rf-music-press (scale .96, 150ms)   rf-music-press-soft (.97)
+elsewhere: active:scale-[0.97] transition-transform</code></div>
+      <div class="hcard" style="grid-column:span 2"><h3>overlayMotion</h3><span class="path">src/lib/overlayMotion.ts</span>
+        <p>Timing for every panel, page and overlay. Import these instead of typing durations.</p>
+        <code>OVERLAY_EASE = [0.16, 1, 0.3, 1]
+overlayFadeTransition 0.2s   overlayPanelTransition 0.22s   pageTransition 0.22s   pageFadeTransition 0.18s
+notifyPanelMotion: in {opacity 0, y -8, scale .97} 0.22s, out {y -6, scale .98} 0.14s
+motionDuration(reduce, t) returns {duration: 0} under reduced motion</code></div>
+      <div class="hcard"><h3>MORPH_SPRING / MORPH_CONTENT_EASE</h3><span class="path">src/components/ui/Morph.tsx</span>
+        <p>The spring for a surface that grows out of the thing you pressed (380/34/0.85); content fades in at 0.16s [0.22,1,0.36,1]. Motion only: import the constants, not the MorphMenu component. Used by SettingsView and SaveToPlaylistModal.</p>
+        <code>transition={MORPH_SPRING}   content: transition={MORPH_CONTENT_EASE}</code></div>
+      <div class="hcard"><h3>PanelScreenTransition</h3><span class="path">src/components/notifications/PanelScreenTransition.tsx</span>
+        <p>Switch between screens inside one panel (list to detail). Slides 24px toward the direction of travel. Click.</p>
+        <div class="demo demo--col" style="gap:10px"><div class="pst">
+          <div class="pst-screen" id="pst-a"><h4>Channels</h4><div class="ln" style="width:80%"></div><div class="ln" style="width:62%"></div><div class="ln" style="width:70%"></div></div>
+          <div class="pst-screen off-r" id="pst-b"><h4>Channel settings</h4><div class="ln" style="width:55%"></div><div class="ln" style="width:75%"></div></div></div>
+          <div class="demo-row"><button type="button" class="demo-btn" id="pst-btn">Open detail</button></div></div>
+        <code>&lt;PanelScreenTransition screenKey={screen} direction={1 | -1}&gt;
+x ±24, 0.2s in, 0.12s out</code></div>
+      <div class="hcard"><h3>islandSkipMotion</h3><span class="path">src/components/island/islandSkipMotion.ts</span>
+        <p>Skip slide for the island now-playing strip. The old track leaves the way you skipped, the new one springs in. Click prev / next.</p>
+        <div class="demo demo--col" style="gap:10px"><div class="isl" id="isl"></div>
+          <div class="demo-row"><button type="button" class="demo-btn" id="isl-prev">Prev</button><button type="button" class="demo-btn" id="isl-next">Next</button></div></div>
+        <code>variants={islandSkipVariants(compact)} custom={dir}
+expanded x 28 / -24, scale .92 / .94; compact x ±14, scale .72; spring 420/32/0.7</code></div>
+      <div class="hcard"><h3>ProgressBarStreak</h3><span class="path">src/components/downloader/ProgressBarStreak.tsx</span>
+        <p>White streak that runs along a progress fill while a download moves. Mount inside the track.</p>
+        <div class="demo"><div class="streak-track"><span class="streak-fill"></span><span class="streak" id="streak"></span></div></div>
+        <code>const streak = useProgressStreak(progress);   &lt;ProgressBarStreak {...streak} /&gt;
+travel 1.1 + 1.4 * end s, easeInOutSine, rest 0.8s</code></div>
+    </div>
+  </section>
+
+  <section class="group" id="h-icons">
+    <h2>Icons</h2>
+    <div class="hgrid">
+      <div class="hcard"><h3>PlayPauseMorphIcon</h3><span class="path">src/components/ui/PlayPauseMorphIcon.tsx</span>
+        <p>Every play/pause toggle. The shape morphs; never swap two icons. Click it.</p>
+        <div class="demo"><button type="button" class="pp-btn" id="pp-btn" aria-label="Play"><svg width="20" height="20" viewBox="0 0 100 100" style="overflow:visible"><path id="pp-a" fill="currentColor" stroke="currentColor" stroke-width="6" stroke-linejoin="round" style="d:path('M30 20 L76 46 L78 50 L30 50 Z')"/><path id="pp-b" fill="currentColor" stroke="currentColor" stroke-width="6" stroke-linejoin="round" style="d:path('M30 50 L78 50 L76 54 L30 80 Z')"/></svg></button></div>
+        <code>&lt;PlayPauseMorphIcon playing={playing} size={20} /&gt;</code></div>
+      <div class="hcard"><h3>MusicTrackIndexPlay</h3><span class="path">src/components/music/MusicTrackIndexPlay.tsx</span>
+        <p>Track number that turns into play on row hover. Hover the row.</p>
+        <div class="demo demo--music"><div class="ix-row"><span class="ix-cell"><span>3</span><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg></span>Lucid Dreams</div></div>
+        <code>parent: group/row
+&lt;MusicTrackIndexPlay indexLabel="3" isPlaying showPause /&gt;</code></div>
+      <div class="hcard"><h3>Spinner</h3><span class="path">lucide-react Loader2</span>
+        <p>The one loading spinner. No custom rings for generic loading.</p>
+        <div class="demo"><svg class="spin" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div>
+        <code>&lt;Loader2 className="animate-spin" size={16} /&gt;</code></div>
+      <div class="hcard"><h3>LoopModeSwapIcon</h3><span class="path">src/components/ui/LoopModeSwapIcon.tsx</span>
+        <p>Loop mode toggle: off, all, one. The icon twists out and the next twists in. Click it.</p>
+        <div class="demo demo--music"><button type="button" class="loop-btn" id="loop-btn" aria-label="Loop"></button></div>
+        <code>&lt;LoopModeSwapIcon mode={loop} /&gt;
+enter rotate -20 scale .8, exit rotate 20, 0.15s, AnimatePresence mode="wait"</code></div>
+      <div class="hcard"><h3>RadialNavIcon</h3><span class="path">src/components/navigation/RadialNavIcon.tsx</span>
+        <p>Navigation icons for the rail and the radial menu. Hover animation is held off 120ms so a passing cursor does not trigger it. Live in RadialMenu under Other.</p>
+        <code>&lt;RadialNavIcon id="downloads" hovered={h} /&gt;</code></div>
+    </div>
+    <dl class="hlist">
+      <dt><b>Icon sets</b><span class="path">lucide-react, @iconify/react</span></dt>
+      <dd>Use these. One-off brand icons live in src/components/icons/ and library/ (YoutubeMark, SponsorBlockIcon, RecycleBinIcon, VerifiedMark).</dd>
+    </dl>
+  </section>
+
+  <section class="group" id="h-controls">
+    <h2>Controls</h2>
+    <div class="hgrid">
+      <div class="hcard"><h3>Switch</h3><span class="path">src/components/ui/Switch.tsx</span>
+        <p>The one on/off switch. md for Settings rows, sm for popovers and dense panels. Tonal fills only. Library: accent tint track with accent knob. Music: solid red track with white knob (.rf-switch in index.css). Click it.</p>
+        <div class="demo"><button type="button" class="tslot on" data-toggle aria-label="Toggle"><i></i></button> <button type="button" class="tslot sm on" data-toggle aria-label="Toggle"><i></i></button></div>
+        <code>&lt;Switch checked onChange label size="md|sm" disabled muted tooltip /&gt;
+md 48x24 knob 16, sm 36x20 knob 14, spring 600/35</code></div>
+      <div class="hcard"><h3>HeroFormatSwitch</h3><span class="path">src/components/downloader/HeroFormatSwitch.tsx</span>
+        <p>Two-option segmented switch. The active pill slides. Click the other side.</p>
+        <div class="demo"><div class="fmt" id="fmt"><span class="fmt-pill"></span><button type="button" class="on">Video</button><button type="button">Audio</button></div></div>
+        <code>h-10 rounded-full bg-[color:var(--rf-well-raised)] p-1
+pill bg-[#3e2f27], label text-[9px] font-black tracking-[0.25em]</code></div>
+      <div class="hcard"><h3>TitlebarHoverButton + NotificationBadge</h3><span class="path">src/components/TitlebarHoverButton.tsx, notifications/NotificationBadge.tsx</span>
+        <p>Title bar icon buttons, and the unread count on them. Hover it.</p>
+        <div class="demo"><button type="button" class="tb-btn" aria-label="Notifications"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="nbadge">4</span></button></div>
+        <code>&lt;TitlebarHoverButton tooltip="Notifications"&gt;
+&lt;NotificationBadge count={n} /&gt;   (accent pill, 9px black, ring-2 ring-[#1a1411])</code></div>
+      <div class="hcard" style="grid-column:span 2"><h3>Chips</h3><span class="path">see Part 2, pattern 9</span>
+        <p>Four app chips by job: RevealChip for one piece of info, HomeFilterPill for a row of filters, the dock orb for downloads, YouTubeProfileChip for the signed-in account.</p></div>
+      <div class="hcard"><h3>SettingsModalBtnPrimary / Danger / Secondary / Ghost, MusicModalBtn</h3><span class="path">src/components/settings/SettingsModalShell.tsx</span>
+        <p>Buttons for dialogs and settings. Primary for the one main action, Danger (red) when it destroys something, Secondary for cancel, Ghost for a soft accent action. Music dialogs use MusicModalBtn (primary red pill, secondary text pill). Also SettingsModalTextInput.</p>
+        <div class="demo"><div class="demo-row"><button type="button" class="mbtn mbtn-sec">Cancel</button><button type="button" class="mbtn mbtn-ghost">Reset</button><button type="button" class="mbtn mbtn-pri">Save</button></div></div>
+        <code>text-[10px] font-black uppercase tracking-[0.2em] px-5 py-2.5 active:scale-[0.98]
+primary: accent bg, text #1D1613, rounded-xl</code></div>
+      <div class="hcard"><h3>MusicSourcePlayControls</h3><span class="path">src/components/music/MusicSourcePlayControls.tsx</span>
+        <p>Album, playlist and artist hero controls. The red play circle widens into a Pause pill; shuffle turns red with a dot when on. Click both.</p>
+        <div class="demo demo--music"><div class="demo-row" style="gap:14px">
+          <button type="button" class="srcplay" id="srcplay" aria-label="Play"><span class="ic" id="srcplay-ic"></span><span class="lbl">Pause</span></button>
+          <button type="button" class="shuf" data-toggle aria-label="Shuffle"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></svg></button></div></div>
+        <code>&lt;MusicSourcePlayControls playing onPlay shuffle onShuffle /&gt;
+h-14, 56 to pill, 200ms cubic-bezier(.16,1,.3,1); MUSIC_SOURCE_ICON_BTN for round icon buttons</code></div>
+      <div class="hcard"><h3>AccentColorPicker</h3><span class="path">src/components/settings/AccentColorPicker.tsx</span>
+        <p>The accent picker in Settings: saturation square, hue strip, eyedropper, hex field and presets. Click a preset.</p>
+        <div class="demo"><div class="acp">
+          <div class="acp-sv" id="acp-sv"><i></i></div><div class="acp-hue"><i id="acp-knob"></i></div>
+          <div class="acp-row"><span class="acp-sq"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></span><span class="acp-field"><span>#</span><b id="acp-hex" style="font-weight:600">EDCF9B</b></span></div>
+          <div class="acp-presets" id="acp-presets"></div></div></div>
+        <code>&lt;AccentColorPicker value={accent} onChange /&gt;
+panel 248px rounded-[20px] bg-[#271C18]; presets 28px, selected border-stone-100 scale-105</code></div>
+    </div>
+  </section>
+
+  <section class="group" id="h-feedback">
+    <h2>Feedback: dialogs, toasts, empty, loading</h2>
+    <div class="hgrid">
+      <div class="hcard"><h3>SettingsModalShell</h3><span class="path">src/components/settings/SettingsModalShell.tsx</span>
+        <p>Every modal. App theme always wears the Settings bezel: 24px #271C18 rim around an 18px #1D1613 well; Music theme stays flat. For yes/no questions call askConfirm() instead of building a dialog.</p>
+        <div class="demo"><div class="modal-bezel"><div class="modal-well"><div class="modal-eyebrow">Library</div><div class="modal-title">Delete 3 videos?</div><div class="modal-btns"><span class="mb-sec">Cancel</span><span class="mb-pri">Delete</span></div></div></div></div>
+        <code>&lt;SettingsModalShell open onClose title eyebrow theme footer={…} /&gt;
+const ok = await askConfirm({ title, message, confirmLabel, item: { preview, title, detail }, tone, theme })   (ConfirmDialog.tsx; tone defaults to danger)</code></div>
+      <div class="hcard"><h3>Toasts</h3><span class="path">notifications/AppToastHost.tsx</span>
+        <p>Short confirmations and errors in every mode: <code>useRuforgeStore.getState().notify(message, type, action)</code>. One host; .rf-toast gives Library the warm pill and Music Spotify's grey pill above the player bar. Toasts with an action stay 6s.</p>
+        <div class="demo" style="flex-direction:column;align-items:flex-start"><div class="toasts">
+          <div class="toast"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Saved to library<span class="toast-act">Open</span></div>
+          <div class="toast"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>Download failed</div>
+        </div></div>
+        <code>types: info (accent check), progress (spinner), warning (amber), error (red)
+notify(msg, type, action?)   4s, 6s with an action, errors 10s, progress sticky</code></div>
+      <div class="hcard"><h3>PanelEmptyState</h3><span class="path">src/components/notifications/PanelEmptyState.tsx</span>
+        <p>Empty state inside a popover or side panel. Full-page empty states follow Part 2, pattern 13.</p>
+        <div class="demo"><div class="pempty"><span class="pempty-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span><p class="pempty-t">all quiet</p><p class="pempty-b">new uploads from channels you follow land here.</p><span class="pempty-btn">Follow channels</span></div></div>
+        <code>&lt;PanelEmptyState icon="lucide:bell" title body action={{ label, onClick }} /&gt;</code></div>
+      <div class="hcard"><h3>Loading surfaces</h3><span class="path">src/index.css</span>
+        <p>Download card shimmer while metadata loads, and the indeterminate bar when progress is unknown.</p>
+        <div class="demo" style="flex-direction:column;gap:14px"><div class="shim-card"></div><div class="ind-track"><span class="ind-bar"></span></div></div>
+        <code>rf-download-card-shimmer   (2.8s sweep)
+rf-download-progress-indeterminate   (38% bar, 1.15s)
+skeleton blocks: animate-pulse bg-white/[0.08]   (MusicHomeSkeleton)</code></div>
+      <div class="hcard" style="grid-column:span 2"><h3>AnimatedEmptyStage</h3><span class="path">src/components/ui/page-not-found.tsx</span>
+        <p>Animated black stage behind Music search empty states: circles rush in from the right while figures walk left. Content fades in after 1.2s.</p>
+        <div class="demo" style="padding:10px"><div class="aes"><canvas id="aes-canvas"></canvas><div class="aes-copy" id="aes-copy"><b>No results</b><span>Try another search</span></div></div></div>
+        <code>&lt;AnimatedEmptyStage color={accent}&gt;{content}&lt;/AnimatedEmptyStage&gt;
+Music passes the accent at 72% mix; default circles #fff</code></div>
+      <div class="hcard"><h3>PlayerCenterFeedback / PlayerSkipFlash</h3><span class="path">src/components/player/</span>
+        <p>Center flash for play, pause, volume and captions, and the side flash for skips. compact variant for small windows. Click the buttons.</p>
+        <div class="demo demo--col" style="gap:10px"><div class="pcf">
+          <div class="pcf-center" id="pcf-center"></div>
+          <span class="pcf-skip l" id="pcf-l">-15s</span><span class="pcf-skip r" id="pcf-r">+30s</span></div>
+          <div class="demo-row"><button type="button" class="demo-btn" data-pcf="pause">Pause</button><button type="button" class="demo-btn" data-pcf="vol">Volume</button><button type="button" class="demo-btn" data-pcf="l">Back</button><button type="button" class="demo-btn" data-pcf="r">Forward</button></div></div>
+        <code>&lt;PlayerCenterFeedback kind="pause" /&gt;   &lt;PlayerSkipFlash side="right" label="+30s" /&gt;
+disc 52px bg-black/60, enter scale .85 0.18s, shown 700ms; skip x ±20 to 0 to ∓40, 0.4s</code></div>
+      <div class="hcard"><h3>YouTubeProfileAuthSpinner</h3><span class="path">src/components/music/YouTubeProfileChip.tsx</span>
+        <p>Spinner inside the avatar slot while signing in. Keeps the chip shape; never swaps in a generic loader.</p>
+        <div class="demo demo--music"><span class="ytspin-pill"><span class="ytspin"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff0033" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span></span></div>
+        <code>&lt;YouTubeProfileAuthSpinner /&gt;   Loader2 16 red in a 32px white/.06 circle</code></div>
+      <div class="hcard"><h3>Dock orb states</h3><span class="path">music/MusicExploreDownloadCollapsed.tsx</span>
+        <p>Fetching, progress, done, timed out and cancelled for collapsed downloads. Full live board: Part 2, pattern 9.</p>
+        <div class="demo"><span class="orb s-live" data-live></span></div>
+        <code>see Part 2, pattern 9</code></div>
+    </div>
+    <dl class="hlist">
+      <dt><b>OVERLAY_Z_CLASS</b><span class="path">src/lib/overlayZIndex.ts</span></dt>
+      <dd>Z levels for overlays: settings/downloader 300, fullscreen 400, confirm 450, updater 600, menus 9999, crash 100000. Never type a z-index for an overlay.</dd>
+    </dl>
+  </section>
+
+  <section class="group" id="h-media">
+    <h2>Media and thumbnails</h2>
+    <div class="hgrid">
+      <div class="hcard" style="grid-column:span 2"><h3>FallbackImg / useImageFallback / coverPathChain</h3><span class="path">src/components/ui/FallbackImg.tsx, src/albumCoverPath.ts</span>
+        <p>The one img with a fallback. Pass one URL or a list; on a load error it tries the next, then renders <code>fallback</code>. A new list starts over. <code>local</code> serves file paths through the asset protocol. Use the hook when two imgs share one source (blurred backdrop plus cover) or you need the winning path. coverPathChain(file) lists every local cover for a track: playlist sidecar, embedded, thumbnail, poster.</p>
+        <code>&lt;FallbackImg src={coverPathChain(file)} local className="h-full w-full object-cover" fallback={&lt;Music /&gt;} /&gt;
+const { src, path, onError } = useImageFallback([cover, coverFallback], { local: true })</code></div>
+      <div class="hcard" style="grid-column:span 2"><h3>LikedSongsCover / MusicPlaylistCover</h3><span class="path">src/components/music/LikedSongsCover.tsx, MusicPlaylistCover.tsx</span>
+        <p>Collection art with built-in fallbacks: empty gets the gradient plate (heart for Liked Songs, list icon for playlists), two covers split, three or more make a 2x2 mosaic. Use instead of a raw img with onError.</p>
+        <div class="demo demo--music"><div class="demo-row" style="gap:18px;align-items:flex-start">
+          <div><div class="lsc lsc-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="#ff0033"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></div><div class="lsc-cap">Liked, empty</div></div>
+          <div><div class="lsc lsc-empty"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgb(255 255 255 / 0.35)" stroke-width="2" stroke-linecap="round"><path d="M21 15V6M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM12 12H3M16 6H3M12 18H3"/></svg></div><div class="lsc-cap">Playlist, empty</div></div>
+          <div><div class="lsc lsc-2"><div class="cv1"></div><div class="cv2"></div></div><div class="lsc-cap">2 covers</div></div>
+          <div><div class="lsc lsc-4"><div class="cv3"></div><div class="cv4"></div><div class="cv5"></div><div style="background:linear-gradient(135deg,#2a0408,#141414)"></div></div><div class="lsc-cap">3 covers</div></div></div></div>
+        <code>&lt;LikedSongsCover covers={urls} /&gt;   &lt;MusicPlaylistCover src={url} fallbackCovers={urls} /&gt;
+empty: linear-gradient(135deg, #3a0810, #1a1012 45%, #121212)</code></div>
+      <div class="hcard"><h3>ChannelAvatar + VerifiedMark</h3><span class="path">src/components/library/VideoByline.tsx</span>
+        <p>Round channel face with a first-letter fallback; VideoByline renders the whole byline with MetaParts.</p>
+        <div class="demo"><div class="byline"><span class="cavatar">J</span><div><b>Lucid Dreams (Official Video)</b><p>Juice WRLD<svg width="12" height="12" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#a8a29e"/><path d="m7 12 3.5 3.5L17 9" fill="none" stroke="#1c1917" stroke-width="3" stroke-linecap="round"/></svg><span class="sep">·</span>2.1M views</p></div></div></div>
+        <code>&lt;ChannelAvatar name={channel} src={avatar} /&gt;   &lt;VideoByline video={v} /&gt;
+36px rounded-full bg-white/[0.08] text-[13px] font-bold text-stone-300</code></div>
+      <div class="hcard"><h3>PlaylistEmptyThumb</h3><span class="path">src/components/PlaylistEmptyThumb.tsx</span>
+        <p>Placeholder plate for an empty Library playlist.</p>
+        <div class="demo"><div class="pet"><span class="pet-plate"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span><svg class="pet-mark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 12H3M16 6H3M10 18H3M21 6v12l-5-3"/></svg></div></div>
+        <code>&lt;PlaylistEmptyThumb /&gt;   bg #2c2622, plate 56x44 #3a332e</code></div>
+      <div class="hcard"><h3>MusicPreviewButton / MusicPreviewProgress</h3><span class="path">src/components/music/MusicPreviewButton.tsx</span>
+        <p>Play button that rises in on cover hover, and the 4px preview line while a preview plays. Hover, then click.</p>
+        <div class="demo demo--music"><div class="pv-card cv5" id="pv-card"><button type="button" class="pv-btn" id="pv-btn" aria-label="Preview"></button><div class="pv-track"><div class="pv-fill"></div></div></div></div>
+        <code>parent: group/card
+&lt;MusicPreviewButton playing onToggle /&gt;   &lt;MusicPreviewProgress progress={p} /&gt;</code></div>
+      <div class="hcard"><h3>MusicLikeButton</h3><span class="path">src/components/music/MusicLikeButton.tsx</span>
+        <p>Every like action. Fills red with a glow and a five-particle burst on like; unlike just empties. Click it.</p>
+        <div class="demo demo--music"><button type="button" class="like" id="like" aria-label="Like"><span class="like-glow"></span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="heart-fill" d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button></div>
+        <code>&lt;MusicLikeButton liked={liked} onToggle size={20} /&gt;
+tap scale .85 rotate -10, spring 300/15; glow size*2.6, 0.7s</code></div>
+      <div class="hcard"><h3>ScrubberHoverThumb / useScrubberHover</h3><span class="path">src/scrubSpritePreview.tsx, src/hooks/useScrubberHover.ts</span>
+        <p>Seek bar hover preview: a frame from the sprite sheet (160x90 cells) over the time. Move along the bar.</p>
+        <div class="demo"><div class="scrub-wrap" id="scrub-wrap"><div class="scrub-pop" id="scrub-pop"><div class="scrub-card"><div id="scrub-frame" class="cv6"></div></div><span class="scrub-time"><b id="scrub-t">4:12</b><i></i><span>Chapter 2</span></span></div><div class="scrub-bar" id="scrub-bar"></div></div></div>
+        <code>const hover = useScrubberHover(barRef, duration);   &lt;ScrubberHoverThumb {...hover} /&gt;
+card 208px rounded-2xl bg-black/70 p-2, thumb 192x108</code></div>
+      <div class="hcard"><h3>prominentColor</h3><span class="path">src/prominentColor.ts</span>
+        <p>Pulls a color from cover art. buildCoverAmbienceTheme(hex) returns canvas, scrim, text, row hover and chip colors for a hero.</p>
+        <div class="demo demo--col" style="gap:10px">
+          <div class="amb"><span class="amb-cover cv1"></span><span class="amb-canvas" style="background:linear-gradient(180deg,#5a2338,#1d0f1a)"><span><b style="color:#fff">Legends</b><small style="color:rgb(255 255 255 / 0.65)">from #c84a3c</small></span></span></div>
+          <div class="amb"><span class="amb-cover cv2"></span><span class="amb-canvas" style="background:linear-gradient(180deg,#24485c,#0f1c25)"><span><b style="color:#fff">Righteous</b><small style="color:rgb(255 255 255 / 0.65)">from #2f6f8f</small></span></span></div></div>
+        <code>const hex = await prominentColor(coverUrl);   const theme = buildCoverAmbienceTheme(hex)</code></div>
+      <div class="hcard"><h3>useVideoAmbientBackdrop</h3><span class="path">src/useVideoAmbientBackdrop.ts</span>
+        <p>Paints the current video frame, blurred, on a canvas behind the player for ambient color.</p>
+        <div class="demo" style="padding:10px"><div class="ambv"><span class="ambv-glow"></span><span class="ambv-frame"></span></div></div>
+        <code>const canvasRef = useVideoAmbientBackdrop(videoRef)</code></div>
+    </div>
+    <dl class="hlist">
+      <dt><b>DOWNLOAD_CARD_SIZE_CLASS</b><span class="path">src/components/downloader/DownloadJobQueuePanel.tsx</span></dt>
+      <dd>Download card size: aspect-video w-80 sm:w-96 lg:w-[26rem].</dd>
+    </dl>
+  </section>
+
+  <section class="group" id="h-tokens">
+    <h2>Tokens</h2>
+    <div class="hgrid">
+      <div class="hcard" style="grid-column:span 2"><h3>Library mode</h3><span class="path">src/index.css :root</span>
+        <div class="demo"><div class="swatches">
+          <div class="sw" style="background:#1c1512">--bg</div><div class="sw" style="background:#151211">--rf-well</div><div class="sw" style="background:#201c1a">--rf-well-raised</div><div class="sw" style="background:#271c18">bezel #271C18</div>
+          <div class="sw" style="background:#322620">--rf-popover-bg</div><div class="sw" style="background:#1d1613">modal well #1D1613</div><div class="sw" style="background:#3e2f27">raised pill #3e2f27</div><div class="sw light" style="background:#edcf9b">--accent</div>
+        </div></div>
+        <code>radius: --radius-input 12px   --radius-card 20px   --radius-modal 24px   --radius-pill 999px
+layout: --rf-titlebar-h 48px   --rf-window-outer-radius 12px   SIDEBAR_RAIL_PX 56</code></div>
+      <div class="hcard"><h3>Music mode</h3><span class="path">[data-music-mode="true"]</span>
+        <div class="demo demo--music"><div class="swatches" style="grid-template-columns:1fr 1fr">
+          <div class="sw" style="background:#0a0a0a;outline:1px solid #222">--music-bg</div><div class="sw" style="background:#121212">--music-surface</div>
+          <div class="sw" style="background:#1a1a1a">--music-surface-raised</div><div class="sw" style="background:#ff0033">--music-accent</div>
+        </div></div>
+        <code>text: --music-text-primary #fff, -secondary .6, -muted .35
+--music-panel-radius 12px   --music-shell-gap 8px</code></div>
+    </div>
+  </section>
+
+  <section class="group" id="h-other">
+    <h2>Other</h2>
+    <div class="hgrid">
+      <div class="hcard"><h3>setMusicTrackDragImage / musicTrackDragProps</h3><span class="path">src/components/music/musicDragImage.ts</span>
+        <p>Drag preview card for dragging tracks. Never the browser default ghost.</p>
+        <div class="demo demo--music"><div class="ghost"><span class="sq-cover cv3"></span><span><b>Wishing Well</b><small>Juice WRLD</small></span></div></div>
+        <code>&lt;div {...musicTrackDragProps(track)} /&gt;   .rf-music-drag-ghost</code></div>
+      <div class="hcard"><h3>CLEANUP_CATEGORY_STYLE</h3><span class="path">src/components/cleanupCategoryStyle.ts</span>
+        <p>Fixed colors per cleanup category (coded color mode). Reuse; never pick new category colors.</p>
+        <div class="demo"><div class="cat-rows">
+          <div class="cat-row"><span style="color:#ff0033">Music</span><span class="cat-bar"><i style="width:72%;background:#ff0033"></i></span><small>14 GB</small></div>
+          <div class="cat-row"><span style="color:var(--accent)">Videos</span><span class="cat-bar"><i style="width:48%;background:var(--accent)"></i></span><small>9 GB</small></div>
+          <div class="cat-row"><span style="color:#c4b5fd">Livestreams</span><span class="cat-bar"><i style="width:22%;background:#c4b5fd"></i></span><small>4 GB</small></div></div></div>
+        <code>CLEANUP_CATEGORY_STYLE[cat].text / .bar</code></div>
+      <div class="hcard"><h3>CodeSnippetPanel</h3><span class="path">src/components/ui/CodeSnippetPanel.tsx</span>
+        <p>Collapsible code drawer with a copy button (crash screen). Collapsed shows a faded peek. Click the header.</p>
+        <div class="demo"><div class="codep" id="codep"><button type="button" class="codep-head"><span class="codep-path"><span class="d">src/components/</span><span class="n">SettingsView</span><span class="e">.tsx</span></span><span class="codep-hint">line 477</span><svg class="codep-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="codep-drawer"><pre>TypeError: Cannot read properties of undefined (reading 'id')
+    at ToggleSlot (SettingsView.tsx:477:18)
+    at renderWithHooks (react-dom.js:15486:18)</pre></div></div></div>
+        <code>&lt;CodeSnippetPanel path={file} hint="line 477" code={stack} /&gt;   .rf-code-panel*</code></div>
+      <div class="hcard"><h3>RadialMenu</h3><span class="path">src/components/ui/radial-menu.tsx</span>
+        <p>The Alt radial menu. Colors from RADIAL_PALETTE in src/lib/radialNavTheme.ts (Music has its own palette). Hover the wedges.</p>
+        <div class="demo"><svg class="radial" id="radial" viewBox="-140 -140 280 280"></svg></div>
+        <code>&lt;RadialMenu items={items} palette={RADIAL_PALETTE[mode]} /&gt;
+size 280, ring r 140 to 128, wedges r 120 to 66, center r 62</code></div>
+    </div>
+    <dl class="hlist">
+      <dt><b>cn()</b><span class="path">src/lib/utils.ts</span></dt>
+      <dd>Merge class names (clsx + tailwind-merge). Use for every conditional className.</dd>
+    </dl>
+  </section>
+
+  <section class="group" id="h-avoid">
+    <h2>Avoid</h2>
+    <div class="panel"><ul class="avoid-list">
+      <li><b>Morph menus</b> (a chip that grows into a menu): removed from the app. Never rebuild one; use the Music menu kit. Morph.tsx now only holds MORPH_SPRING.</li>
+      <li><b>Drawn-underline headings</b>: website only (website/src/components/ui/animated-underline-text-one). The app copy was removed; app headings use .font-display.</li>
+      <li><b>Hand-rolled horizontal scrollers</b> (<code>overflow-x-auto</code> plus a local mask): use EdgeSquishScroll.</li>
+      <li><b>See-through blurred fills</b> (the old .glass classes, now deleted): against the solid-surface rule.</li>
+      <li><b>Raw img with a hand-written onError</b>: use FallbackImg (or useImageFallback when two imgs share one source), or the collection helpers MusicPlaylistCover, ChannelAvatar and LikedSongsCover.</li>
+      <li><b>title="…"</b>: use data-tooltip.</li>
+      <li><b>--music-card-radius</b>: read in two files but never defined.</li>
+      <li><b>motion/react vs framer-motion</b>: both are installed (76 vs 38 files). Morph and overlays use motion/react.</li>
+    </ul></div>
+    <h3 class="sub">Consolidate later</h3>
+    <p>Places where one job has several separate implementations instead of one shared helper. Until each is merged, build new work on the target and never add another variant.</p>
+    <div class="panel"><ul class="avoid-list">
+      <li><b>Marquee</b>: MarqueeText lives inside DownloadJobQueuePanel.tsx beside HoverMarqueeText. Target: both in one shared ui file.</li>
+      <li><b>Animation library</b>: motion/react and framer-motion. Target: motion/react only.</li>
+    </ul></div>
+  </section>
+
+  <header class="part-head" id="patterns"><h1>Part 2. Patterns</h1>
+    <p>Banned pattern next to the approved one. Copy the approved class strings exactly.</p></header>
+
+  <!-- 1 -->
+  <section>
+    <h2>1. Divider lines</h2>
+    <p class="rule">No border-bottom, hr, or divide-y between rows. Separate with spacing, then tonal surfaces, then a highlight block for the active row only.</p>
+    <div class="pair">
+      <div class="panel">
+        <p class="tag not">Not</p>
+        <div class="bad-list">
+          <div class="row">Downloads<small>3 active</small></div>
+          <div class="row">Library<small>412 videos</small></div>
+          <div class="row">Music<small>88 songs</small></div>
+        </div>
+        <code>divide-y divide-white/10 on a plain nav or card list</code>
+      </div>
+      <div class="panel">
+        <p class="tag use">Use</p>
+        <div class="good-list">
+          <div class="row active">Downloads<small>3 active</small></div>
+          <div class="row">Library<small>412 videos</small></div>
+          <div class="row">Music<small>88 songs</small></div>
+        </div>
+        <code>flex flex-col gap-1.5
+row: rounded-xl bg-[color:var(--rf-well-raised)]
+active only: a lighter tonal fill</code>
+      </div>
+    </div>
+    <div class="pair" style="margin-top:16px">
+      <div class="panel">
+        <p class="tag not">Not in menus</p>
+        <div class="menu">
+          <div class="item">Play all</div>
+          <div class="item">Shuffle</div>
+          <div class="menu-sep"></div>
+          <div class="item">Export</div>
+          <div class="item">Delete</div>
+        </div>
+        <code>&lt;div className="h-px bg-white/5 my-1 mx-2" /&gt;   (MediaView.tsx, MiniPlayer.tsx)</code>
+        <p class="note">Menus group with labeled section cards, not hairlines. See section 16.</p>
+      </div>
+      <div class="panel">
+        <p class="tag ok">If you must: toolbar cluster break</p>
+        <div class="titlebar">
+          <span class="ic">&#9881;</span><span class="ic">&#9776;</span><span class="ic">&#9673;</span>
+          <span class="tb-sep"></span>
+          <span class="ic">&#8212;</span><span class="ic">&#9633;</span><span class="ic">&#10005;</span>
+        </div>
+        <code>&lt;div className="w-px h-4 bg-stone-500/20 mx-1" /&gt;</code>
+        <p class="note">Short vertical hairline, centered, splits one control cluster from another (app controls vs window controls). Never full height. Source: App.tsx title bar.</p>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <p class="tag ok">Approved: sortable table column header</p>
+      <div class="pair">
+        <div>
+          <p class="note" style="margin:0 0 8px">At rest</p>
+          <div class="tbl">
+            <div class="tbl-head"><span>#</span><span>Title</span><span>Album</span><span>Date added</span></div>
+            <div class="tbl-row"><span>1</span><span>Juice WRLD - Robbery</span><span></span><span>5 days ago</span></div>
+            <div class="tbl-row"><span>2</span><span>Lean Wit Me</span><span></span><span>5 days ago</span></div>
+          </div>
+        </div>
+        <div>
+          <p class="note" style="margin:0 0 8px">Stuck (content scrolled under)</p>
+          <div class="tbl">
+            <div class="tbl-head stuck"><span>#</span><span>Title</span><span>Album</span><span>Date added</span></div>
+            <div class="tbl-row"><span>4</span><span>Robbery 6</span><span>Robbery 6</span><span>5 days ago</span></div>
+            <div class="tbl-row"><span>5</span><span>I Love Tee</span><span></span><span>5 days ago</span></div>
+          </div>
+        </div>
+      </div>
+      <code>sentinel + useStuckHeader()   (src/hooks/useStuckHeader.ts)
+wrapper: sticky top-0 z-20 transition-[background-color,box-shadow] duration-200
+  rest:  bg-[var(--music-surface)]
+  stuck: bg-[var(--music-surface-raised)] shadow-[0_3px_6px_-4px_rgb(0_0_0_/_0.35)]
+row:   h-9 text-sm text-white/60 border-b transition-colors duration-200
+  rest:  border-white/10     stuck: border-transparent</code>
+      <p class="note">Full-width line under the column header of a sortable table (Spotify playlist style). It anchors the sort columns. When the header sticks, the line hands off to a raised fill plus a thin scroll shadow. Rows below still have no lines. Source: MusicPlaylistColumnHeader in MusicPlaylistTrackRow.tsx; reused in RecentlyDeletedModal, CleanupSection, CleanupListRow, MusicPlaylistImport. Copy this, do not restyle it.</p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <h2>2. Glow</h2>
+    <p class="rule">No colored box-shadow halos, no drop-shadow glow, no neon edges. Emphasis comes from fill, weight, and press motion.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p><span class="glow-btn">Download</span>
+        <code>shadow-[0_0_24px_rgba(237,207,155,0.6)]</code></div>
+      <div class="panel"><p class="tag use">Use</p><span class="cta">Download</span>
+        <code>rounded-[12px] bg-[color:var(--accent)] text-stone-900
+hover:brightness-110 active:scale-[0.97]</code></div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <h2>3. Shadow on every card</h2>
+    <p class="rule">Normal depth is tonal. A shadow is a signal: this floats (menu, dialog), or content scrolled under a sticky header.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="card-grid"><div class="shadow-card"></div><div class="shadow-card"></div><div class="shadow-card"></div><div class="shadow-card"></div></div>
+        <code>shadow-xl on every card</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div class="card-grid"><div class="tonal-card"></div><div class="tonal-card"></div><div class="tonal-card"></div><div class="tonal-card"></div></div>
+        <code>bg-[color:var(--rf-well-raised)]   (no shadow)
+floating menus only: shadow-[0_8px_24px_rgba(0,0,0,0.35)]</code></div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section>
+    <h2>4. Letterboxed media</h2>
+    <p class="rule">Art fills its frame. Crop with object-fit: cover. If the whole image must show, the frame matches the art's aspect. Never bars.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="letterbox"><div class="sq"><div class="sq-art"></div></div></div>
+        <code>object-contain bg-black</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div class="cover-sq"><div class="sq-art"></div></div>
+        <code>aspect-square rounded-2xl overflow-hidden
+img: absolute inset-0 w-full h-full object-cover</code></div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section>
+    <h2>5. Engraved controls</h2>
+    <p class="rule">No dual-lip inset shadows on chips, buttons, badges, or media frames. Resting controls are flat tonal fills.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="chips"><span class="chip-engraved">All</span><span class="chip-engraved">Watched</span><span class="chip-engraved">In progress</span></div>
+        <code>shadow-[inset_0_1px_0_rgba(255,255,255,.12),inset_0_-2px_3px_rgba(0,0,0,.6)]</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div class="chips"><span class="chip-tonal on">All</span><span class="chip-tonal">Watched</span><span class="chip-tonal">In progress</span></div>
+        <code>rounded-full, solid fill one step above its surface, no shadow
+active: bg-[color:var(--accent)] text-stone-900</code></div>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section>
+    <h2>6. Hard truncate</h2>
+    <p class="rule">Rest state may truncate. Hovering the text or its row must marquee the full string. No tooltip for this. Hover the right box.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="label-box"><div class="trunc">Someone Was Stalking Me At My Apartment Complex</div></div>
+        <code>&lt;div className="truncate"&gt;{title}&lt;/div&gt;</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div class="label-box"><div class="marquee"><div class="track"><span>Someone Was Stalking Me At My Apartment Complex</span><span>Someone Was Stalking Me At My Apartment Complex</span></div></div></div>
+        <code>&lt;HoverMarqueeText text={title} className="..." /&gt;
+row-driven: &lt;HoverMarqueeText text={title} active={rowHovered} /&gt;
+dense menus: slow   (src/components/music/HoverMarqueeText.tsx)
+speed: animate-marquee 15s linear, animate-marquee-slow 22s. Never faster.
+edges: rf-marquee-fade-left mask (0.85rem left, 0.5rem right), soft clip, no painted overlay</code></div>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section>
+    <h2>7. Accent-bar section label</h2>
+    <p class="rule">No vertical slit beside section titles. Hierarchy is type only: size, weight, tracking, spacing.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p><div class="bar-head">All-time top tracks</div>
+        <code>before:w-1 before:h-5 before:rounded before:bg-red-500</code></div>
+      <div class="panel"><p class="tag use">Use</p><div class="eyebrow">Your library</div><div class="type-head">All-time top tracks</div>
+        <code>text-2xl font-bold tracking-tight   (Music Home section heads)
+optional eyebrow: text-[10px] font-black uppercase tracking-widest text-stone-500</code></div>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section>
+    <h2>8. Indicator dots</h2>
+    <p class="rule">No drawn circles for status, unread, priority, or category. Say it in text or use the element's own icon or color. A typed middle dot in metadata is fine.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="dot-row"><span class="dot"></span><span>Storage limit reached</span></div>
+        <code>&lt;span className="h-2 w-2 rounded-full bg-green-400" /&gt;</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div><span class="held">Held</span> <span style="color:var(--text-muted);font-size:12px">· 15 hours ago</span></div>
+        <div style="color:var(--text-strong);font-weight:600">Storage limit reached</div>
+        <code>kicker text in the tone color, then " · " metadata</code></div>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section>
+    <h2>9. Chips</h2>
+    <p class="rule">The app has four chip types and they are not interchangeable. Pick by what the chip is for: a piece of info, a row of filters, download status, or the signed-in account. The notched corner chip is website only. All four below are live.</p>
+    <div class="chip-grid">
+      <div class="panel"><p class="tag use">App: reveal chip, for info</p>
+        <p class="chip-when">Use for one piece of info the user may want to read or act on, like the pasted link: icon at rest, the full value opens on hover. Not for filters, status or anything that changes every second.</p>
+        <div class="chip-stage">
+          <div class="reveal-host"><div class="reveal-chip">
+            <span class="reveal-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>
+            <span class="reveal-url">youtu.be/dQw4w9WgXcQ</span>
+            <span class="reveal-x"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+          </div></div>
+        </div>
+        <code>RevealChip in src/components/downloader/LinkChips.tsx
+h-9 rounded-full bg-[#271C18], clip-path opens it, never width
+[clip-path:inset(0_calc(100%-36px)_0_0_round_18px)] -> inset(0_0_0_0_round_18px)
+Do not copy the amber "Slower download" warning variant.</code></div>
+
+      <div class="panel"><p class="tag use">App: filter pill, for rows</p>
+        <p class="chip-when">Use for a row of options that filter what is below (Music Home All / Relax / Focus). Each option keeps its own color, and when the header goes compact the inactive ones fold to their icon. Not for a single standalone label.</p>
+        <div class="chip-stage chip-stage--music" id="filter-stage">
+          <button type="button" class="filter-pill filter-pill--text on" data-f="all">All</button>
+          <button type="button" class="filter-pill" data-f="relax" style="--lw:54px">
+            <span class="fi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/></svg></span><span class="fl">Relax</span>
+          </button>
+          <button type="button" class="filter-pill" data-f="focus" style="--lw:50px">
+            <span class="fi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span><span class="fl">Focus</span>
+          </button>
+          <button type="button" class="compact-toggle" id="compact-toggle">Compact</button>
+        </div>
+        <code>HomeFilterPill in src/components/music/MusicHomeView.tsx
+h-8 rounded-full text-xs font-bold uppercase tracking-wider
+active: accentBg + white text ("All" active: white with black text)</code></div>
+
+      <div class="panel"><p class="tag use">App: profile chip, for the account</p>
+        <p class="chip-when">Use only for the signed-in account, same as most apps: avatar at rest, name slides out on hover, click opens the profile. Not for channels, artists or other people.</p>
+        <div class="chip-stage chip-stage--music">
+          <button type="button" class="yt-pill"><span class="yt-avatar"></span><span class="yt-label-wrap"><span class="yt-label">Signed in as Angel</span></span></button>
+        </div>
+        <code>YouTubeProfileChip / MusicProfileChip
+.rf-yt-profile-pill .rf-yt-profile-pill--md   (index.css)
+label: max-width 0 -> 11rem on :hover / :focus-visible</code></div>
+
+      <div class="panel chip-wide"><p class="tag use">App: dock chip, for downloads</p>
+        <p class="chip-when">Use wherever download progress shows up collapsed. Any new download indicator copies this one and covers every state below, not just the progress ring. Not for general info.</p>
+        <div class="orb-states">
+          <div class="orb-tile">
+            <div class="orb s-live" id="orb-live"></div>
+            <span class="orb-live-label" id="orb-live-label">Fetching</span>
+            <span class="orb-name">Full run</span>
+            <span class="orb-sub">Fetching, then progress, then done, held 2.1s, then the chip fades out (320ms).</span>
+          </div>
+          <div class="orb-tile">
+            <div class="orb s-spin"></div>
+            <span class="orb-name">Fetching / queued / paused</span>
+            <span class="orb-sub">No bytes moving yet. A 28% arc spins (1s linear). Paused uses the same spin.</span>
+          </div>
+          <div class="orb-tile">
+            <div class="orb s-progress"></div>
+            <span class="orb-name">Downloading</span>
+            <span class="orb-sub">Accent arc follows the percentage, eased 480ms per update. Capped at 99% until it finishes.</span>
+          </div>
+          <div class="orb-tile">
+            <div class="orb" data-p="42" data-count="3"></div>
+            <span class="orb-name">Several at once</span>
+            <span class="orb-sub">Ring shows the active job. Count on a black/42 scrim over the thumb, 99+ past 99.</span>
+          </div>
+          <div class="orb-tile">
+            <div class="orb s-done" data-icon="check"></div>
+            <span class="orb-name">Done</span>
+            <span class="orb-sub">Ring fills to 100% and turns green, check scales in on a black/50 scrim (520ms).</span>
+          </div>
+          <div class="orb-tile">
+            <div class="orb s-warn" data-icon="warn"></div>
+            <span class="orb-name">Done, timed out</span>
+            <span class="orb-sub">Same fill, amber ring and a warning triangle instead of the check.</span>
+          </div>
+          <div class="orb-tile">
+            <div class="orb s-cancel" data-burst></div>
+            <span class="orb-name">Cancelled</span>
+            <span class="orb-sub">Track turns red/20, ring fills, then the orb pops to scale 0 (450ms) with a 10-particle burst.</span>
+          </div>
+          <div class="orb-tile">
+            <div class="orb s-spin" data-empty></div>
+            <span class="orb-name">No thumbnail yet</span>
+            <span class="orb-sub">Download icon on #1D1613 (Music uses its note icon). Ring states stay the same.</span>
+          </div>
+        </div>
+        <code>Full states: TrackOrb / OrbRing in src/components/music/MusicExploreDownloadCollapsed.tsx
+Video rail: VideoDownloadRailButton in src/components/downloader/VideoDownloadDockChip.tsx
+  (currently only fills to 100% on done/cancel; copy the Music orb for done, timed out, cancelled)
+Celebrations: src/hooks/useMusicDownloadCelebrations.ts, hold 2100ms
+Strokes: .rf-dock-chip-progress-stroke, .rf-orb-complete-stroke, .rf-orb-cancel-stroke, .rf-cancel-pop-particle</code></div>
+    </div>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not, anywhere</p>
+        <div class="fake-chip-card"><span class="fake-pill">DOWNLOADS</span><div class="notch-title">Resume interrupted downloads after restart</div></div>
+        <code>rounded-full px-2.5 bg-amber-400/20   (static tag pill parked in a card)</code></div>
+      <div class="panel"><p class="tag ok">Website only</p>
+        <div class="notch-card"><span class="notch"><span class="notch-chip">DOWNLOADS</span></span><span class="notch-title">Resume interrupted downloads after restart</span></div>
+        <code>.rf-roadmap-ready-notch / .rf-roadmap-ready-chip
+website/src/components/RoadmapReadySection.tsx
+--rf-ready-cut must equal the color behind the card. Never in the app.</code></div>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section>
+    <h2>10. Glassy cards and inner wells</h2>
+    <p class="rule">No low-alpha tinted cards, no panel wrapping a card grid. Solid opaque fills, cards straight on the page.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="tint-panel"><div class="card-grid"><div class="glass-card"></div><div class="glass-card"></div></div></div>
+        <code>bg-white/[0.06] backdrop-blur inside a bg-amber-200/[0.06] panel</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div class="solid-grid"><div class="solid-card"></div><div class="solid-card"></div></div>
+        <code>bg-[color:var(--rf-well-raised)] directly in the well</code></div>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section>
+    <h2>11. Native tooltips</h2>
+    <p class="rule">No title attribute, no per-component hover pills. One house tooltip via data-tooltip.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="tip-wrap"><span class="icon-btn">&#9654;</span><span class="native-tip">Play</span></div>
+        <code>&lt;button title="Play"&gt;</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div class="tip-wrap"><span class="house-tip">Play<span class="kbd">Space</span></span><span class="icon-btn">&#9654;</span></div>
+        <code>&lt;button data-tooltip="Play" data-tooltip-shortcut="Space"&gt;
+(TooltipLayer renders .rf-music-tooltip)</code></div>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section>
+    <h2>12. Reinvented info placement</h2>
+    <p class="rule">Duration bottom-right. Rank top-left. Metadata in a muted dot-separated line under the card.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="thumb"><div class="art"></div><span class="badge" style="top:10px;left:10px">1:31:36</span><span class="badge" style="bottom:10px;right:10px">25K views</span></div>
+        <code>duration top-left, stats on the art</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div class="thumb"><div class="art"></div><span class="badge" style="bottom:10px;right:10px">1:31:36</span></div>
+        <div class="meta-line"><b>Someone Was Stalking Me</b>CaseOh · 25K views · 5 days ago</div>
+        <code>absolute bottom-2.5 right-2.5 rounded-md bg-black/75 text-[11px] font-bold</code></div>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section>
+    <h2>13. Empty states</h2>
+    <p class="rule">An empty state is a moment, not a void. It has personality, says something specific to this screen, and hands over the next action. Two ways to get it wrong: corporate cheer, and bland. Bland is worse, it reads like an error. Settings and forms are the exception: plain and precise.</p>
+    <div class="pair three">
+      <div class="panel"><p class="tag not">Not: corporate cheer</p>
+        <div class="empty-bad"><div class="big">&#127881;</div><div class="eb-title">Oops! Looks like there's nothing here yet!</div><div class="eb-body">Get started by adding some content.</div></div>
+        <p class="note">Has energy, but it's generic. Could be any app. Says nothing about this screen.</p></div>
+      <div class="panel"><p class="tag not">Not: bland</p>
+        <div class="empty-bland">No items found.</div>
+        <p class="note">Gray line, no art, no action. Reads like something broke. The worse of the two.</p></div>
+      <div class="panel"><p class="tag use">Use (summary)</p>
+        <p class="note" style="margin:0">Art from the screen's own shapes, a line with a voice, a body that says what happens next, one primary action, one quiet secondary. Full build below. Copy that one, not a stripped version.</p></div>
+    </div>
+
+    <div class="panel es-stage-panel" style="margin-top:16px">
+      <p class="tag use">Use: full build (Library, empty)</p>
+      <div class="es-well play" id="es-well">
+        <div class="es-tabs" aria-hidden><span class="on">All</span><span>In progress</span><span>Watched</span></div>
+        <div class="es">
+          <div class="es-art" aria-hidden>
+            <div class="es-target">
+              <span class="es-shell"></span>
+              <div class="es-slot">
+                <span class="es-idle">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+                </span>
+                <span class="es-shim"></span>
+                <span class="es-thumb es-thumb--gray"></span>
+                <span class="es-thumb es-thumb--color"></span>
+                <span class="es-speed">4.2 MB/s</span>
+                <span class="es-badge">4:34</span>
+              </div>
+            </div>
+            <div class="es-drag">
+              <div class="es-arc">
+                <div class="es-link">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  <span>youtu.be/dQw4w9…</span>
+                </div>
+                <svg class="es-cursor" width="16" height="16" viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z" fill="#f5ede4" stroke="#151211" stroke-width="1.5" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+          </div>
+          <h3 class="es-title">dang.. library's empty</h3>
+          <div class="es-actions">
+            <button type="button" class="es-cta"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M16 4h2a2 2 0 0 1 2 2v4"/><path d="M21 14H11"/><path d="m15 10-4 4 4 4"/></svg>Paste a link</button>
+            <button type="button" class="es-ghost">or use a folder you already have</button>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="es-replay" onclick="var w=document.getElementById('es-well');w.classList.remove('play');void w.offsetWidth;w.classList.add('play');">Replay entrance</button>
+
+      <div class="pair" style="margin-top:16px">
+        <code>COMPOSITION
+art      tells the screen's story: link goes in, video lands here
+         one row, 500x90, card centered on the copy: link pill
+         parked in the left half (surface-3, accent chain icon,
+         mono url), empty 16:9 slot (rf-well-raised, 16px radius,
+         stone-600 tray-download icon centered)
+         target: library card hover shell (inset -12px, 22px,
+         rf-well-raised, scale .92 to 1) lights while the link is
+         over it; tray icon turns accent and dips 2px
+         then the real download card language, no progress bar:
+         rf-download-card-shimmer (metadata) > grayscale thumb at
+         .2 + color thumb wiping in by clip-path inset(0 X% 0 0)
+         + speed pill top-right (bg-black/55 text-[10px] bold)
+         done: speed pill out, duration badge in (library card)
+         keep it short; the art never towers over the copy
+         per screen: swap the story (search: magnifier over an
+         empty row; notifications: bell with nothing under it)
+type     title only: text-[22px] font-bold tracking-tight stone-50,
+         lowercase. no body line when the art already shows how
+actions  one row: primary 12px soft rect (accent, icon + label),
+         secondary text-only beside it, muted, hover lightens
+space    art mb-6, title, actions mt-[18px]. three stacked things max
+shadow   the card only (it floats): 0 10px 24px rgb(0 0 0/.35)</code>
+        <code>MOTION (transform + opacity only)
+enter    card, title, actions fade up y 8, stagger 60ms,
+         0.42s, ease [0.16, 1, 0.3, 1]
+idle     one 5.6s loop, one thing moving at a time:
+         cursor grabs the link, it shrinks toward the cursor
+         (scale .78, origin at the grab point, float shadow),
+         arcs over (up 30px, tilt -7deg, settles) onto the card,
+         card lights its hover shell, link drops in (scale .4,
+         fade), shimmer, color wipe with speed pill, becomes a
+         library card (thumbnail + 4:34 badge), then resets
+hover    nothing extra. the CTA has its own press: scale .97
+reduce   prefers-reduced-motion: static frame, link parked, empty slot
+never    bounce/spring here (spring is for signature moments),
+         confetti, looping attention shakes</code>
+      </div>
+      <code>// React shape (framer-motion), tokens from src/index.css
+const ease = [0.16, 1, 0.3, 1] as const;
+const reduce = useReducedMotion();
+&lt;motion.div initial={reduce ? false : "hidden"} animate="shown"
+  variants={{ shown: { transition: { staggerChildren: 0.06 } } }}
+  className="flex flex-col items-center py-24 text-center"&gt;
+  &lt;LinkLandsArt /&gt;                            {/* link arcs into card, card downloads, see composition */}
+  &lt;motion.h3 variants={fadeUp} className="mt-6 text-[22px] font-bold tracking-tight text-stone-50"&gt;
+    dang.. library's empty
+  &lt;/motion.h3&gt;
+  &lt;motion.div variants={fadeUp} className="mt-[18px] flex items-center gap-4"&gt;
+    &lt;button className="flex items-center gap-2 rounded-[12px] bg-[color:var(--accent)] px-4 py-2.5 text-[13px] font-bold text-stone-900 transition-transform active:scale-[0.97]"&gt;
+      &lt;ClipboardPaste size={14} /&gt; Paste a link
+    &lt;/button&gt;
+    &lt;button className="text-[12px] text-stone-500 transition-colors hover:text-stone-200"&gt;
+      or use a folder you already have
+    &lt;/button&gt;
+  &lt;/motion.div&gt;
+&lt;/motion.div&gt;
+// fadeUp = { hidden: { opacity: 0, y: 8 }, shown: { opacity: 1, y: 0, transition: { duration: 0.42, ease } } }</code>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <p class="tag ok">Voice sheet</p>
+      <div class="voice">
+        <div><span class="v-where">Library, empty</span><span class="v-line">dang.. library's empty</span></div>
+        <div><span class="v-where">Search, no hits</span><span class="v-line">nothing matched that. try fewer words?</span></div>
+        <div><span class="v-where">Recently deleted</span><span class="v-line">nothing here. deleted videos show up until you restore or forget them.</span></div>
+        <div><span class="v-where">Watched, none yet</span><span class="v-line">nothing finished yet. go watch something</span></div>
+        <div><span class="v-where">Notifications</span><span class="v-line">all quiet. new uploads from channels you follow land here.</span></div>
+        <div><span class="v-where">Settings (plain)</span><span class="v-line v-plain">No download folder selected. Choose a folder to continue.</span></div>
+      </div>
+      <code>lowercase, contractions, talks like a friend
+say what this screen holds and how it fills up
+always one next action (primary CTA, 12px soft rect)
+no emoji confetti, no "Oops!", no "Get started", no exclamation stacks
+art: small, from the screen's own shapes (cards, rows, bell), tonal fills, one accent touch
+on functional screens keep the art small; never a full-screen illustration</code>
+    </div>
+  </section>
+
+  <!-- 14 -->
+  <section>
+    <h2>14. One radius everywhere</h2>
+    <p class="rule">Radius is tiered: outer 20 to 24px, nested card 14 to 16px, media 16 to 20px, chips full pill, primary CTA 12px.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="flat-r"><span class="pill">Tag</span><div></div></div>
+        <code>rounded-md on everything</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div class="tier-r"><span class="pill">Tag</span><div></div></div>
+        <code>outer rounded-[22px] &gt; inner rounded-[14px] &gt; chip rounded-full</code></div>
+    </div>
+  </section>
+
+  <!-- 15 -->
+  <section>
+    <h2>15. Native scrollbars</h2>
+    <p class="rule">No OS scrollbars, no ::-webkit-scrollbar styling. One slim accent thumb overlay, no track, no arrows.</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <div class="scroll-native">Row one<br>Row two<br>Row three<br>Row four<br>Row five<br>Row six<br>Row seven<br>Row eight</div>
+        <code>overflow-y-auto   (native bar shows on Windows)</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <div class="scroll-house">Row one<br>Row two<br>Row three<br>Row four<br>Row five<span class="thumb-bar"></span></div>
+        <code>className="rf-scrollbar"   (RfScrollbarHost paints .rf-scrollbar-thumb)</code></div>
+    </div>
+  </section>
+
+  <!-- 17 -->
+  <section>
+    <h2>16. Right-click and overflow menus</h2>
+    <p class="rule">Every context or "..." menu follows the Music menu. Actions are grouped by intent into section cards, each with a tiny uppercase label. The primary group carries a faint accent wash. No flat list, no hairlines, no item title as the header.</p>
+    <div class="pair">
+      <div class="panel">
+        <p class="tag not">Not (current Library card menu)</p>
+        <div class="lib-menu">
+          <div class="lib-title">It's just annoying</div>
+          <div class="lib-item lib-play"><span class="lib-play-ic">&#9654;</span>Play Video</div>
+          <div class="lib-item">Save to Watch later</div>
+          <div class="lib-item">Save to playlist</div>
+          <div class="lib-item">Unfollow penguinz0</div>
+          <div class="lib-item">Go to channel</div>
+          <div class="lib-item">Previews</div>
+          <div class="lib-item">Export</div>
+          <div class="lib-item">Transcript</div>
+          <div class="lib-item">Open folder</div>
+          <div class="lib-item">Delete</div>
+        </div>
+        <code>MorphMenu items={[...10 flat rows]} header={&lt;GalleryMenuTitle text={title} /&gt;}
+(LibraryVideoCard.tsx)</code>
+        <p class="note">Ten same-weight rows, no grouping, so the eye has to read every label. The header repeats the video title (truncated) instead of saying anything. Delete sits one row from Open folder with nothing between them.</p>
+      </div>
+      <div class="panel">
+        <p class="tag use">Use (Music menu)</p>
+        <div class="mm">
+          <section class="mm-sec mm-primary"><div class="mm-lbl">Playback</div>
+            <div class="mm-row"><span class="mm-ic acc">&#9655;</span>Play</div>
+            <div class="mm-row"><span class="mm-ic acc">&#9825;</span>Like</div></section>
+          <section class="mm-sec"><div class="mm-lbl">Queue</div>
+            <div class="mm-row"><span class="mm-ic">&#8801;</span>Add to queue</div></section>
+          <section class="mm-sec"><div class="mm-lbl">Playlist</div>
+            <div class="mm-row"><span class="mm-ic">&#8801;</span>Add to playlist<span class="mm-chev">&#8250;</span></div></section>
+          <section class="mm-sec"><div class="mm-lbl">Go to</div>
+            <div class="mm-row"><span class="mm-ic">&#9835;</span>Song</div>
+            <div class="mm-row"><span class="mm-ic">&#9786;</span>Artist</div></section>
+          <section class="mm-sec"><div class="mm-lbl">File</div>
+            <div class="mm-row"><span class="mm-ic">&#128448;</span>Show in folder</div>
+            <div class="mm-row mm-danger"><span class="mm-ic">&#128465;</span>Delete song</div></section>
+        </div>
+        <code>MusicFloatingMenu placement="cursor"
+  MusicMenuSection label="Playback" tone={MUSIC_MENU_TONES.playback}
+    MusicMenuRow icon label onClick
+  MusicMenuSection label="File" tone={MUSIC_MENU_TONES.file}
+    MusicMenuRow variant="danger" (delete)
+(src/components/music/musicMenuUi.tsx, MusicRowContextMenu.tsx)</code>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <p class="tag ok">Anatomy</p>
+      <code>panel:    208px wide, bg #0f0f0f, border white/10, rounded-[16px], p-1.5, flex-col gap-1, shadow-2xl (it floats)
+section:  rounded-[11px] px-1 py-1, bg white/3.5%; primary group: accent 10% wash
+label:    text-[9px] font-semibold uppercase tracking-[0.14em], accent 70% mixed with white
+row:      h-8 px-1.5 rounded-lg text-[12px] #cfcfcf, icon 13px; hover bg-white/[0.07] text-white
+danger:   hover turns accent (text + 14% wash), only for destructive rows, always last group
+submenu:  trailing chevron, MusicMenuFlyout opens beside the panel, flips left at the edge
+motion:   opacity + scale 0.96 to 1, 100ms ease-out; cursor placement slides up to fit</code>
+      <p class="note">Group order: primary action (Playback) first, then queue/save, then navigation (Go to), then File with destructive last. In other modes keep the structure and swap the tones to that mode's accent (Library sand gold on brown). Do not ship a second menu language.</p>
+    </div>
+  </section>
+
+  <!-- 16 -->
+  <section>
+    <h2>17. Animating layout</h2>
+    <p class="rule">Animate transform and opacity only. Locked exception: the Music sidebar width transition (restrictions.md, Motion).</p>
+    <div class="pair">
+      <div class="panel"><p class="tag not">Not</p>
+        <code>transition-[height] / animate={{ height: open ? 240 : 0 }}
+transition: left 200ms, margin 200ms</code></div>
+      <div class="panel"><p class="tag use">Use</p>
+        <code>animate={{ opacity: 1, y: 0, scale: 1 }} initial={{ opacity: 0, y: 12, scale: 0.98 }}
+transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+press: active:scale-[0.97]</code></div>
+    </div>
+  </section>
+</div>
+<script src="design-reference.js"></script>
+</body>
+</html>

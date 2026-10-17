@@ -174,6 +174,9 @@ function writeExpandedIds(ids: Set<string>) {
   }
 }
 
+export const DEBUG_LOG_INTRO =
+  "Per-feature debug output for the terminal (Rust) and DevTools (frontend). All categories off by default. Enable only what you are working on. Parent rows toggle every child.";
+
 export const DebugLogCategoryTree: React.FC = () => {
   const settings = useRuforgeStore((s) => s.settings);
   const updateSetting = useRuforgeStore((s) => s.updateSetting);
@@ -227,28 +230,24 @@ export const DebugLogCategoryTree: React.FC = () => {
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-stone-500 leading-relaxed max-w-lg">
-        Per-feature debug output for the terminal (Rust) and DevTools (frontend). All categories
-        off by default. Enable only what you are working on. Parent rows toggle every child.
-      </p>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => applyEnabled([])}
-          className="px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest text-stone-500 border border-white/10 hover:text-stone-300 transition-colors"
+          className="rf-settings-btn"
         >
-          CLEAR ALL
+          Clear all
         </button>
         <button
           type="button"
           onClick={() => applyEnabled(allDebugCategoryIds())}
-          className="px-3 py-1.5 rounded-lg text-[9px] font-black tracking-widest text-stone-500 border border-white/10 hover:text-stone-300 transition-colors"
+          className="rf-settings-btn"
         >
-          ENABLE ALL
+          Enable all
         </button>
       </div>
       <div
-        className="rounded-xl border border-white/[0.04] bg-[#1a1411]/40 py-1"
+        className="mt-1"
         role="tree"
         aria-label="Debug log categories"
       >

@@ -13,6 +13,7 @@ import {
   MicVocal,
   MoreHorizontal,
   Pencil,
+  ScanText,
   Search,
   Timer,
   Trash2,
@@ -47,6 +48,7 @@ type Props = {
   onToggleShuffle: () => void;
   onAddToQueue: () => void;
   onEditDetails: () => void;
+  onImportScreenshots: () => void;
   onExport: () => void;
   onDelete: () => void;
   onPrefsChange: (prefs: PlaylistViewPrefs) => void;
@@ -86,6 +88,7 @@ export function MusicPlaylistActionBar({
   onToggleShuffle,
   onAddToQueue,
   onEditDetails,
+  onImportScreenshots,
   onExport,
   onDelete,
   onPrefsChange,
@@ -233,6 +236,12 @@ export function MusicPlaylistActionBar({
             icon={<Pencil size={MUSIC_MENU_ICON_SIZE} />}
             label="Edit details"
             onClick={pick(onEditDetails)}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playlist}
+            icon={<ScanText size={MUSIC_MENU_ICON_SIZE} />}
+            label="Add from screenshots"
+            onClick={pick(onImportScreenshots)}
           />
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.file}

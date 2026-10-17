@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { Heart } from "lucide-react";
+import { localImageSrc } from "@/lib/localImageSrc";
 import { bestCoverPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,8 @@ type CoverProps = {
   /** Shown when no track has art; defaults to the Liked Songs heart. */
   emptyIcon?: ReactNode;
   radius?: string;
+  /** Rendered at 128 px or less: use cached thumbnails. */
+  thumb?: boolean;
 };
 
 export function LikedSongsCover({
@@ -29,8 +31,10 @@ export function LikedSongsCover({
   className,
   emptyIcon,
   radius = "var(--music-card-radius, 14px)",
+  thumb,
 }: CoverProps) {
   const covers = useMemo(() => collectLikedCoverPaths(files), [files]);
+  const src = (path: string) => localImageSrc(path, { thumb });
 
   if (covers.length === 0) {
     return (
@@ -51,7 +55,7 @@ export function LikedSongsCover({
   if (covers.length === 1) {
     return (
       <img
-        src={convertFileSrc(covers[0]!)}
+        src={src(covers[0]!)}
         alt=""
         className={cn("object-cover", className)}
         style={{ borderRadius: radius }}
@@ -63,7 +67,7 @@ export function LikedSongsCover({
     return (
       <div className={cn("grid grid-cols-2 overflow-hidden", className)} style={{ borderRadius: radius }}>
         {covers.map((path) => (
-          <img key={path} src={convertFileSrc(path)} alt="" className="w-full h-full object-cover" />
+          <img key={path} src={src(path)} alt="" className="w-full h-full object-cover" />
         ))}
       </div>
     );
@@ -77,7 +81,7 @@ export function LikedSongsCover({
       {Array.from({ length: 4 }, (_, i) => {
         const path = covers[i];
         if (path) {
-          return <img key={path} src={convertFileSrc(path)} alt="" className="w-full h-full object-cover" />;
+          return <img key={path} src={src(path)} alt="" className="w-full h-full object-cover" />;
         }
         return (
           <div

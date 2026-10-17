@@ -200,7 +200,7 @@ function PlainLyrics({
 
   return (
     <div className="rf-scrollbar absolute inset-0 overflow-y-auto overflow-x-hidden">
-      <div className="mx-auto w-full max-w-2xl px-8 pb-16 pt-28 sm:px-12 md:px-16">
+      <div className="mx-auto w-full max-w-2xl px-8 pb-16 pt-12 sm:px-12 md:px-16">
         <div
           className="whitespace-pre-wrap text-[clamp(1.05rem,1.8vw,1.35rem)] font-medium leading-relaxed"
           style={{ color: "var(--music-text-secondary)" }}
@@ -530,33 +530,37 @@ export function MusicLyricsView({
             "linear-gradient(180deg, rgb(0 0 0 / 0.55) 0%, rgb(0 0 0 / 0.72) 40%, rgb(0 0 0 / 0.82) 100%)",
         }}
       />
-      <div className="absolute left-0 right-0 top-0 z-10 px-8 pt-8 sm:px-12 md:px-16">
-        <div className="mx-auto w-full max-w-2xl">
-          <p
-            className="truncate text-sm font-semibold"
-            style={{ color: "var(--music-text-primary)" }}
-          >
-            {title}
-          </p>
-          {artist ? (
+      <div className="relative flex h-full flex-col">
+        <div className="shrink-0 px-8 pb-2 pt-8 sm:px-12 md:px-16">
+          <div className="mx-auto w-full max-w-2xl">
             <p
-              className="mt-0.5 truncate text-xs"
-              style={{ color: "var(--music-text-secondary)" }}
+              className="truncate text-sm font-semibold"
+              style={{ color: "var(--music-text-primary)" }}
             >
-              {artist}
+              {title}
             </p>
-          ) : null}
-          {payload?.kind === "plain" ? (
-            <p
-              className="mt-2 text-[11px] font-medium uppercase tracking-[0.14em]"
-              style={{ color: "var(--music-text-muted)" }}
-            >
-              Lyrics · not synced
-            </p>
-          ) : null}
+            {artist ? (
+              <p
+                className="mt-0.5 truncate text-xs"
+                style={{ color: "var(--music-text-secondary)" }}
+              >
+                {artist}
+              </p>
+            ) : null}
+            {payload?.kind === "plain" ? (
+              <p
+                className="mt-2 text-[11px] font-medium uppercase tracking-[0.14em]"
+                style={{ color: "var(--music-text-muted)" }}
+              >
+                Lyrics · not synced
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <div className="relative min-h-0 flex-1 [mask-image:linear-gradient(to_bottom,transparent_0,black_96px)]">
+          {body}
         </div>
       </div>
-      {body}
     </div>
   );
 }

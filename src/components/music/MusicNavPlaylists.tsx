@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { ArrowDownAZ, Check, Clock, List, ListOrdered, Mic2, Pin, Search, Volume2, X, type LucideIcon } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { VirtualPlaylistRecord } from "@/virtualPlaylists";
@@ -123,7 +123,7 @@ export function MusicNavPlaylists({ collapsed = false }: { collapsed?: boolean }
       pinned
       active={musicDetail?.kind === "liked"}
       playing={queueSource?.kind === "liked"}
-      cover={<LikedSongsCover files={likedTracks} className="w-12 h-12" radius="6px" />}
+      cover={<LikedSongsCover files={likedTracks} className="w-12 h-12" radius="6px" thumb />}
       onClick={() => openMusicLiked()}
       onContextMenu={(e) => e.preventDefault()}
     />
@@ -360,7 +360,7 @@ function PlaylistItem({
       playing={playing}
       dropping={dropping}
       menuOpen={menuOpen}
-      cover={<MusicPlaylistCover files={tracks} coverFile={coverFile} className="w-12 h-12" iconSize={20} radius="6px" />}
+      cover={<MusicPlaylistCover files={tracks} coverFile={coverFile} className="w-12 h-12" iconSize={20} radius="6px" thumb />}
       onClick={onOpen}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -400,7 +400,7 @@ function ArtistRow({ artist, active, onClick }: { artist: SidebarArtist; active:
     >
       {artist.cover ? (
         <img
-          src={convertFileSrc(artist.cover)}
+          src={localThumbSrc(artist.cover)}
           alt=""
           loading="lazy"
           draggable={false}

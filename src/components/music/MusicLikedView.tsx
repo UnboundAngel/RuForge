@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { Shuffle, Play, ChevronLeft, MoreHorizontal } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
@@ -29,7 +29,7 @@ type TrackRowProps = {
 
 function TrackRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: TrackRowProps) {
   const cover = bestCoverPath(file);
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localThumbSrc(cover) : null;
   const artist = file.artist ?? file.albumArtist ?? "";
   const playback = useOptionalMainAudioPlayback();
   const showPauseOnHover = isPlaying && playback != null && !playback.paused;

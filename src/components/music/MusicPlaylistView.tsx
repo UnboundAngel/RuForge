@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { DEFAULT_MUSIC_PLAYLIST_TITLE } from "@/virtualPlaylists";
+import { openPlaylistImportInto } from "@/playlistImport/importSession";
 import type { MediaFile } from "@/types";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { useQueueSourcePlayback } from "./useActiveQueueSource";
@@ -178,6 +179,7 @@ export function MusicPlaylistView({ playlistId, onPlayFile, onBack }: Props) {
           onToggleShuffle={sourcePlayback.toggleShuffle}
           onAddToQueue={() => shown.forEach((t) => enqueueManualQueue(t.path))}
           onEditDetails={() => setEditFocus("title")}
+          onImportScreenshots={() => void openPlaylistImportInto(record.id)}
           onExport={() => void exportM3u8(record.title, tracks)}
           onDelete={() => void handleDelete()}
           onPrefsChange={setPrefs}

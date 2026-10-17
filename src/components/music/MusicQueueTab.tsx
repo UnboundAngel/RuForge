@@ -1,5 +1,5 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { memo, useMemo, useState, useCallback, useRef, useEffect } from "react";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { Reorder, useDragControls } from "framer-motion";
 import { GripVertical, MoreHorizontal } from "lucide-react";
 
@@ -24,7 +24,8 @@ type Props = {
   onPlay: (file: MediaFile) => void;
 };
 
-export function MusicQueueTab({
+/** Memo: each re-render re-measures every Reorder row for layout, which the panel's width ease cannot afford. */
+export const MusicQueueTab = memo(function MusicQueueTab({
   playingFile,
   effectivePlaylist,
   playlistIndex,
@@ -191,7 +192,7 @@ export function MusicQueueTab({
       <MusicRowContextMenu menu={menu} onClose={() => setMenu(null)} />
     </>
   );
-}
+});
 
 function QueueReorderRow({
   path,
@@ -290,7 +291,7 @@ function TrackRow({
   onRowPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   const coverPath = bestCoverPath(file);
-  const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
+  const coverSrc = coverPath ? localThumbSrc(coverPath) : null;
 
   return (
     <div

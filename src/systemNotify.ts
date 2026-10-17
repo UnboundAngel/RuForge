@@ -2,6 +2,8 @@ import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { isRuforgeAppInForeground } from "./appWindowFocus";
+import { isMuted } from "./notifications/mute";
+import type { NotificationMuteKey } from "./notifications/types";
 import type { RuforgeNotification, RuforgeNotificationAction } from "./store/ruforgeStore";
 
 export type BackgroundNotifyKind = "info" | "warning" | "error";
@@ -54,6 +56,15 @@ export async function isAnyRuforgeWindowFocused(): Promise<boolean> {
   return false;
 }
 
+/** Download notices carry their kind in the dedupe key, so muting needs no flag at each call site. */
+function muteGroupForDedupeKey(key: string): NotificationMuteKey | null {
+  if (key.startsWith("download-finished:")) return "downloads";
+  if (/^(download-failed:|download-timed-out:|download-storage-block:|storage-full$|watchlist-storage-full$)/.test(key)) {
+    return "problems";
+  }
+  return null;
+}
+
 export type DeliverUserNotificationOptions = {
   /** Stable key for dedupe (e.g. `download-finished:${jobId}`). Defaults to `body`. */
   dedupeKey?: string;
@@ -80,6 +91,8 @@ export async function deliverUserNotification(
   ) => void,
 ): Promise<void> {
   const dedupeKey = options.dedupeKey ?? options.body;
+  const group = muteGroupForDedupeKey(dedupeKey);
+  if (group && isMuted(group)) return;
   if (!claimUserNotification(dedupeKey)) return;
 
   const kind = options.kind ?? "info";

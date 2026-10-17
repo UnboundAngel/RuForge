@@ -97,6 +97,14 @@ const GLOW_RGB: Record<HeroSkin, string> = {
 /** Skins whose CSS reads the per-frame --hero-energy var. */
 const ENERGY_VAR_SKINS: ReadonlySet<HeroSkin> = new Set(["electro"]);
 
+/**
+ * The var goes on the nearest `[data-audio-hero-scope]` (the element holding every hero layer).
+ * Written on :root it restyles the whole document each frame (~2900 elements, ~16ms in WebView2).
+ */
+function energyVarTarget(from: Element | null): HTMLElement {
+  return from?.closest<HTMLElement>("[data-audio-hero-scope]") ?? document.documentElement;
+}
+
 function CoverFace({
   coverSrc,
   isPaused,
@@ -196,11 +204,13 @@ function HeroForeground({
   glowRgbRef.current = GLOW_RGB[skin];
   const energyVarRef = useRef(false);
   energyVarRef.current = ENERGY_VAR_SKINS.has(skin);
+  const energyTargetRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!ENERGY_VAR_SKINS.has(skin)) return;
     return () => {
-      document.documentElement.style.removeProperty("--hero-energy");
+      energyTargetRef.current?.style.removeProperty("--hero-energy");
+      energyTargetRef.current = null;
     };
   }, [skin]);
   const prevKeyRef = useRef(connectKey);
@@ -292,9 +302,12 @@ function HeroForeground({
   useEffect(() => {
     let alive = true;
 
-    // On :root because Music mode renders the background layer as a separate hero instance.
+    // On the shared scope because Music mode renders the background layer as a separate hero instance.
     const writeEnergyVar = (v: number) => {
-      if (energyVarRef.current) document.documentElement.style.setProperty("--hero-energy", v.toFixed(3));
+      if (!energyVarRef.current) return;
+      const target = energyTargetRef.current ?? energyVarTarget(glowRef.current);
+      energyTargetRef.current = target;
+      target.style.setProperty("--hero-energy", v.toFixed(3));
     };
 
     const tick = () => {
@@ -464,7 +477,10 @@ export function AudioHeroStage({
   const fadeOnly = Boolean(reduceMotion);
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div
+      className="absolute inset-0 overflow-hidden pointer-events-none"
+      data-audio-hero-scope={layer === "full" ? "" : undefined}
+    >
       {showBackground && (
         <div className="absolute inset-0">
           <AnimatePresence initial={false} mode="sync">

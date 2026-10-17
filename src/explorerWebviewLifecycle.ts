@@ -7,7 +7,9 @@ export const EMBEDDED_EXPLORER_WEBVIEW_LABEL = "explorer-view";
 /** Pause HTML5 / YouTube player media when leaving the Explorer tab. */
 export const EXPLORER_PAUSE_MEDIA_SCRIPT = `(function(){try{document.querySelectorAll("video,audio").forEach(function(m){try{m.pause();}catch(e){}});var p=document.getElementById("movie_player");if(p&&typeof p.pauseVideo==="function")p.pauseVideo();}catch(e){}})();`;
 
+/** Non-https targets (javascript:, file:) can arrive from a page via `explorer-url`; reload in place instead. */
 export function explorerNavigateOrReloadScript(url: string): string {
+  if (!/^https:\/\//i.test(url.trim())) return MUSIC_EXPLORE_RELOAD_IN_PLACE_SCRIPT;
   const encoded = JSON.stringify(url);
   return `(function(){try{var t=${encoded};if(location.href!==t)location.href=t;else location.reload();}catch(e){}})();`;
 }
@@ -77,11 +79,14 @@ export function ensureEmbeddedExplorerWebview(
           : {}),
       });
 
-      webview.once("tauri://created", () => {
+      // Only one of these fires; drop the other so each recreation does not strand a listener.
+      const onCreated = webview.once("tauri://created", () => {
+        void onError.then((un) => un());
         resolve(webview);
       });
 
-      webview.once("tauri://error", (e) => {
+      const onError = webview.once("tauri://error", (e) => {
+        void onCreated.then((un) => un());
         void (async () => {
           if (explorerAlreadyExistsError(e.payload)) {
             const recovered = await getEmbeddedExplorerWebview(opts.label);

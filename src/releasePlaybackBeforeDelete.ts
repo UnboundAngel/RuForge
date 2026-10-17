@@ -12,7 +12,7 @@ export async function releasePlaybackBeforeDelete(paths: string[]): Promise<void
   if (playingMatches || handoffMatches) {
     st.stopPlayback();
     if (st.activeTab === "player") {
-      st.setActiveTab("media");
+      st.setActiveTab(st.browseTab);
     }
   }
 

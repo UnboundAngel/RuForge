@@ -1,10 +1,19 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import {
+  memo,
+  useMemo,
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { Play, ChevronLeft, ChevronRight, Waves, Brain } from "lucide-react";
+import { localThumbSrc } from "@/lib/localImageSrc";
+import { Play, Waves, Brain } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath, hasSquareCover } from "@/mediaKind";
-import { albumCoverPathWithFallback } from "@/albumCoverPath";
+import { coverPathChain } from "@/albumCoverPath";
 import { readFurthestPlaybackSec } from "@/playbackStorage";
 import type { MediaFile } from "@/types";
 import { MusicHomeSkeleton } from "./MusicHomeSkeleton";
@@ -21,8 +30,7 @@ import { resolveLikedFiles } from "./musicLikedTracks";
 import { LikedSongsCard } from "./LikedSongsCover";
 import { MusicQuickPicksGrid, QUICK_PICKS_POOL_CAP } from "./MusicQuickPicksGrid";
 import { MusicAlbumCard } from "./MusicAlbumCard";
-import { MusicAlbumShelf } from "./MusicAlbumShelf";
-import { MUSIC_ALBUM_SHELF_GAP_HOME_PX } from "@/lib/musicAlbumShelfLayout";
+import { MUSIC_SHELF_GAP_HOME_PX, MusicShelf } from "./MusicShelf";
 import { MusicHomeRecentSection } from "./MusicHomeRecentSection";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
 import { cn } from "@/lib/utils";
@@ -203,7 +211,7 @@ type ArtistPillProps = {
 
 /** Circular artist avatars — profile-style, subtle hover only. */
 function ArtistPill({ artist, trackCount, cover, onClick, onContextMenu }: ArtistPillProps) {
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localThumbSrc(cover) : null;
   return (
     <button
       type="button"
@@ -212,7 +220,7 @@ function ArtistPill({ artist, trackCount, cover, onClick, onContextMenu }: Artis
       className="flex flex-col items-center gap-3 p-1.5 rounded-xl text-center shrink-0 w-24 md:w-28 group/artist"
     >
       <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full shrink-0 transition-transform duration-200 group-hover/artist:scale-105">
-        <div className="relative w-full h-full rounded-full overflow-hidden shadow bg-transparent border border-white/10">
+        <div data-squish-cover className="relative w-full h-full rounded-full overflow-hidden shadow bg-transparent border border-white/10 transition-transform duration-150 ease-out">
           {coverSrc ? (
             <img
               src={coverSrc}
@@ -244,98 +252,6 @@ function ArtistPill({ artist, trackCount, cover, onClick, onContextMenu }: Artis
   );
 }
 
-interface ScrollShelfProps {
-  title: string;
-  children: React.ReactNode;
-}
-
-/** Premium horizontal scroll shelf with YTM-style paginating navigation arrows that dynamically calculate layout scroll boundaries */
-function ScrollShelf({ title, children }: ScrollShelfProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-  const [hasOverflow, setHasOverflow] = useState(false);
-
-  const updateScrollState = () => {
-    const el = containerRef.current;
-    if (el) {
-      setCanScrollLeft(el.scrollLeft > 5);
-      setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 5);
-      setHasOverflow(el.scrollWidth > el.clientWidth);
-    }
-  };
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (el) {
-      updateScrollState();
-      el.addEventListener("scroll", updateScrollState, { passive: true });
-      window.addEventListener("resize", updateScrollState);
-
-      const observer = new MutationObserver(updateScrollState);
-      observer.observe(el, { childList: true, subtree: true });
-
-      return () => {
-        el.removeEventListener("scroll", updateScrollState);
-        window.removeEventListener("resize", updateScrollState);
-        observer.disconnect();
-      };
-    }
-  }, [children]);
-
-  const scroll = (direction: "left" | "right") => {
-    if (containerRef.current) {
-      const amt = direction === "left" ? -450 : 450;
-      containerRef.current.scrollBy({ left: amt, behavior: "smooth" });
-    }
-  };
-
-  return (
-    <section className="relative w-full">
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-2xl font-bold tracking-tight text-white">{title}</h2>
-        {hasOverflow && (
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => scroll("left")}
-              disabled={!canScrollLeft}
-              className="w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
-              style={{
-                borderColor: canScrollLeft ? "rgba(255, 255, 255, 0.25)" : "rgba(255, 255, 255, 0.05)",
-                background: canScrollLeft ? "rgba(255, 255, 255, 0.08)" : "transparent",
-                color: canScrollLeft ? "rgba(255, 255, 255, 0.9)" : "rgba(255, 255, 255, 0.25)",
-              }}
-            >
-              <ChevronLeft size={16} strokeWidth={2.5} />
-            </button>
-            <button
-              type="button"
-              onClick={() => scroll("right")}
-              disabled={!canScrollRight}
-              className="w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-200 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
-              style={{
-                borderColor: canScrollRight ? "rgba(255, 255, 255, 0.25)" : "rgba(255, 255, 255, 0.05)",
-                background: canScrollRight ? "rgba(255, 255, 255, 0.08)" : "transparent",
-                color: canScrollRight ? "rgba(255, 255, 255, 0.9)" : "rgba(255, 255, 255, 0.25)",
-              }}
-            >
-              <ChevronRight size={16} strokeWidth={2.5} />
-            </button>
-          </div>
-        )}
-      </div>
-      <div
-        ref={containerRef}
-        className="flex gap-5 overflow-x-auto pb-1 scroll-smooth"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-      >
-        {children}
-      </div>
-    </section>
-  );
-}
-
 export function MusicHomeView({
   onPlayFile,
   onOpenArtist,
@@ -354,7 +270,7 @@ export function MusicHomeView({
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const compactSentinelRef = useRef<HTMLDivElement>(null);
-  const quickPicksSource = musicQueueSource("quick_picks", "Quick picks");
+  const quickPicksSource = useMemo(() => musicQueueSource("quick_picks", "Quick picks"), []);
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
 
   const syncHeaderCompact = useCallback(() => {
@@ -374,14 +290,6 @@ export function MusicHomeView({
     });
   }, []);
 
-  const assignScrollRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      scrollRef.current = node;
-      if (node) syncHeaderCompact();
-    },
-    [syncHeaderCompact],
-  );
-
   const tracks = useMusicLibraryTracks();
   const homeScrollReady = tracks.length > 0;
 
@@ -390,10 +298,17 @@ export function MusicHomeView({
       setHeaderCompact(false);
       return;
     }
-    syncHeaderCompact();
-    document.addEventListener("scroll", syncHeaderCompact, { passive: true, capture: true });
+    // Measuring inside the mount commit forces layout of the whole home view before its first
+    // paint; a frame later the layout is already done.
+    const firstSync = requestAnimationFrame(syncHeaderCompact);
+    // Captured scrolls include every shelf, panel and nav list; only the home scroller moves the header.
+    const onDocScroll = (e: Event) => {
+      if (e.target === scrollRef.current) syncHeaderCompact();
+    };
+    document.addEventListener("scroll", onDocScroll, { passive: true, capture: true });
     return () => {
-      document.removeEventListener("scroll", syncHeaderCompact, true);
+      cancelAnimationFrame(firstSync);
+      document.removeEventListener("scroll", onDocScroll, true);
     };
   }, [homeScrollReady, syncHeaderCompact]);
 
@@ -464,14 +379,12 @@ export function MusicHomeView({
     return buildMultiTrackAlbumGroups(filteredTracks, primaryArtist)
       .slice(0, 12)
       .map((g) => {
-        const paths = albumCoverPathWithFallback(g.tracks[0]!);
         return {
           albumKey: g.albumKey,
           artistKey: g.artistKey,
           album: g.album,
           artist: g.artist,
-          cover: paths.primary,
-          coverFallback: paths.fallback,
+          covers: coverPathChain(g.tracks[0]!),
           isSquare: hasSquareCover(g.tracks[0]!),
           tracks: g.tracks,
         };
@@ -515,7 +428,7 @@ export function MusicHomeView({
 
   return (
     <div
-      ref={assignScrollRef}
+      ref={scrollRef}
       onScroll={syncHeaderCompact}
       className="@container/home absolute inset-0 overflow-y-auto overflow-x-hidden rf-scrollbar min-h-0"
       style={{ background: "var(--music-surface)" }}
@@ -548,7 +461,79 @@ export function MusicHomeView({
       </header>
       <div ref={compactSentinelRef} className="h-0 w-full overflow-hidden pointer-events-none" aria-hidden />
 
-      {filteredTracks.length === 0 ? (
+      <MusicHomeBody
+        filteredTracks={filteredTracks}
+        activeFilter={activeFilter}
+        setActiveFilter={setActiveFilter}
+        quickPicks={quickPicks}
+        quickPicksSource={quickPicksSource}
+        likedTracks={likedTracks}
+        artists={artists}
+        albums={albums}
+        historyEntries={historyEntries}
+        menu={menu}
+        setMenu={setMenu}
+        openMusicLiked={openMusicLiked}
+        onPlayFile={onPlayFile}
+        onOpenArtist={onOpenArtist}
+        onOpenAlbum={onOpenAlbum}
+        onSearchYoutubeMusic={onSearchYoutubeMusic}
+      />
+      <MusicRowContextMenu menu={menu} onClose={() => setMenu(null)} />
+    </div>
+  );
+}
+
+type HomeArtist = { key: string; display: string; trackCount: number; cover: string | null };
+
+type HomeAlbum = {
+  albumKey: string;
+  artistKey: string;
+  album: string;
+  artist: string;
+  covers: ReturnType<typeof coverPathChain>;
+  isSquare: boolean;
+  tracks: MediaFile[];
+};
+
+type MusicHomeBodyProps = Pick<
+  MusicHomeViewProps,
+  "onPlayFile" | "onOpenArtist" | "onOpenAlbum" | "onSearchYoutubeMusic"
+> & {
+  filteredTracks: MediaFile[];
+  activeFilter: HomeFilter;
+  setActiveFilter: (filter: HomeFilter) => void;
+  quickPicks: MediaFile[];
+  quickPicksSource: MusicQueueSource;
+  likedTracks: MediaFile[];
+  artists: HomeArtist[];
+  albums: HomeAlbum[];
+  historyEntries: PlayHistoryEntry[];
+  menu: MusicRowContextMenuState | null;
+  setMenu: Dispatch<SetStateAction<MusicRowContextMenuState | null>>;
+  openMusicLiked: () => void;
+};
+
+/** Memo: the header re-renders on panel toggles and compact flips; every shelf below it does not need to. */
+const MusicHomeBody = memo(function MusicHomeBody({
+  filteredTracks,
+  activeFilter,
+  setActiveFilter,
+  quickPicks,
+  quickPicksSource,
+  likedTracks,
+  artists,
+  albums,
+  historyEntries,
+  menu,
+  setMenu,
+  openMusicLiked,
+  onPlayFile,
+  onOpenArtist,
+  onOpenAlbum,
+  onSearchYoutubeMusic,
+}: MusicHomeBodyProps) {
+  return filteredTracks.length === 0 ? (
           <MusicHomeSearchEmpty
             searchQuery=""
             activeFilter={activeFilter}
@@ -604,7 +589,7 @@ export function MusicHomeView({
 
             {/* Artists circular scroll shelf */}
             {artists.length > 0 && (
-              <ScrollShelf title="Artists">
+              <MusicShelf title="Artists" gap={MUSIC_SHELF_GAP_HOME_PX}>
                 {artists.map((a) => (
                   <ArtistPill
                     key={a.key}
@@ -631,22 +616,17 @@ export function MusicHomeView({
                     }}
                   />
                 ))}
-              </ScrollShelf>
+              </MusicShelf>
             )}
 
-            {/* Albums horizontal pageable scroll shelf */}
             {albums.length > 0 && (
-              <MusicAlbumShelf
-                title="Albums"
-                gap={MUSIC_ALBUM_SHELF_GAP_HOME_PX}
-                items={albums}
-                keyFn={(a) => `${a.artistKey}::${a.albumKey}`}
-                renderItem={(a) => (
+              <MusicShelf title="Albums" gap={MUSIC_SHELF_GAP_HOME_PX}>
+                {albums.map((a) => (
                   <MusicAlbumCard
+                    key={`${a.artistKey}::${a.albumKey}`}
                     title={a.album}
                     subtitle={a.artist}
-                    cover={a.cover}
-                    coverFallback={a.coverFallback}
+                    covers={a.covers}
                     onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
                     onContextMenu={(e) => setMenu({
                       context: { kind: "album", artistKey: a.artistKey, albumKey: a.albumKey, displayName: a.album, artistName: a.artist },
@@ -661,8 +641,8 @@ export function MusicHomeView({
                         : undefined,
                     })}
                   />
-                )}
-              />
+                ))}
+              </MusicShelf>
             )}
 
             {activeFilter === "all" && (
@@ -682,8 +662,5 @@ export function MusicHomeView({
               />
             )}
           </div>
-        )}
-      <MusicRowContextMenu menu={menu} onClose={() => setMenu(null)} />
-    </div>
-  );
-}
+        );
+});

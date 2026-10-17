@@ -11,16 +11,16 @@ export function useScrollEdgeState(deps: unknown[] = []) {
 
   const update = useCallback(() => {
     const el = scrollRef.current;
-    if (!el) {
-      setEdges({ top: false, bottom: false });
-      return;
+    let top = false;
+    let bottom = false;
+    if (el) {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      const overflow = scrollHeight - clientHeight > 1;
+      top = overflow && scrollTop > 4;
+      bottom = overflow && scrollTop < scrollHeight - clientHeight - 4;
     }
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    const overflow = scrollHeight - clientHeight > 1;
-    setEdges({
-      top: overflow && scrollTop > 4,
-      bottom: overflow && scrollTop < scrollHeight - clientHeight - 4,
-    });
+    // The observers fire on every subtree mutation; a fresh object each time re-renders the host, which mutates again and never settles.
+    setEdges((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
   }, []);
 
   useEffect(() => {

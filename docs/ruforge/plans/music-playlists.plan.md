@@ -45,7 +45,7 @@ Phase 4 notes:
 - Playlists persist to `app_data/music-playlists.json` (atomic temp file then rename) through `read_music_playlists_file` / `write_music_playlists_file`. Only the main window runs the file sync; mini windows write localStorage and the main window mirrors to the file. On start, whichever copy was saved last wins, and localStorage is migrated into the file once.
 - Items store `identityKey` next to `path`. On rescan, items whose path is gone are re-pointed to the library file with the same key. Records without the key still load.
 - Sort (custom, title, artist, date added) already existed from Phase 2. The description is edited in a Spotify-style "Edit details" dialog, which replaces the Rename row in the `...` menu, and shows under the title.
-- `.m3u8` export sits in the `...` menu. Import sits in the sidebar `+` menu ("Import .m3u8"); it matches by path, then artist and title, then file name, then a unique title, and reports unmatched lines in a music toast (app toasts are hidden in Music mode).
+- `.m3u8` export sits in the `...` menu. Import sits in the sidebar `+` menu ("Import .m3u8"); it matches by path, then artist and title, then file name, then a unique title, and reports unmatched lines in a toast.
 - `cargo check` could not run in the build container (system `gdk-3.0` missing); the Rust side has unit tests that need a desktop toolchain.
 
 Not yet built: collapsed-sidebar playlist covers, multi-select (Ctrl/Shift), drag sources on Artist page rows and Home rows, and the Phase 4 "later" bullet. There's no duplicate prompt; the checkbox picker replaces it, and adding a song that is already there is a no-op.

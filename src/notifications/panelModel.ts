@@ -58,6 +58,7 @@ const DOWNLOAD_KICKER: Partial<Record<NotificationKind, NotificationKicker>> = {
   "download-failed": { text: "Download failed", tone: "danger" },
   "download-timed-out": { text: "Timed out", tone: "danger" },
   "download-blocked": { text: "Held", tone: "warn" },
+  "security-blocked": { text: "Security", tone: "muted" },
 };
 
 /** The short line above the title: what happened and who did it, so the title only names the video. */

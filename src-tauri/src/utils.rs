@@ -165,7 +165,8 @@ pub fn vtt_sidecars_for_stem(parent: &Path, stem: &str) -> std::io::Result<Vec<(
     Ok(out)
 }
 
-/// Same ordering as subtitle track pickers: `und` first, then language tag.
+/// Same ordering as subtitle track pickers: `und` first, then language tag, with YouTube's
+/// `{lang}-orig` (the speaker's own words) ahead of its `{lang}` sibling.
 pub fn sort_vtt_sidecars_lang_first(pairs: &mut Vec<(PathBuf, String)>) {
     pairs.sort_by(|a, b| {
         let rank = |l: &str| -> u8 {
@@ -175,15 +176,44 @@ pub fn sort_vtt_sidecars_lang_first(pairs: &mut Vec<(PathBuf, String)>) {
                 1
             }
         };
+        let base = |l: &str| l.strip_suffix("-orig").unwrap_or(l).to_string();
+        let orig_first = |l: &str| u8::from(!l.ends_with("-orig"));
         rank(a.1.as_str())
             .cmp(&rank(b.1.as_str()))
-            .then_with(|| a.1.cmp(&b.1))
+            .then_with(|| base(&a.1).cmp(&base(&b.1)))
+            .then_with(|| orig_first(&a.1).cmp(&orig_first(&b.1)))
     });
+}
+
+fn vtt_has_youtube_word_timing(path: &Path) -> bool {
+    use std::io::Read;
+    let mut head = Vec::with_capacity(64 * 1024);
+    let Ok(file) = std::fs::File::open(path) else { return false };
+    if file.take(64 * 1024).read_to_end(&mut head).is_err() {
+        return false;
+    }
+    let text = String::from_utf8_lossy(&head);
+    text.match_indices('<').any(|(i, _)| {
+        let tag = text[i + 1..].split('>').next().unwrap_or("");
+        tag.len() >= 9 && tag.contains(':') && tag.contains('.') && tag.chars().all(|c| c.is_ascii_digit() || c == ':' || c == '.')
+    })
+}
+
+/// YouTube writes `{lang}` as a machine rewrite of `{lang}-orig` when it auto-translates a video
+/// into its own language; the rewrite paraphrases the speaker. Drop it when the original is present.
+/// Uploaded captions carry no word timing, so they are kept.
+pub fn drop_youtube_rewritten_vtt_sidecars(pairs: &mut Vec<(PathBuf, String)>) {
+    let origs: std::collections::HashSet<String> = pairs
+        .iter()
+        .filter_map(|(_, l)| l.strip_suffix("-orig").map(str::to_string))
+        .collect();
+    pairs.retain(|(p, l)| !(origs.contains(l) && vtt_has_youtube_word_timing(p)));
 }
 
 /// One representative path for gallery metadata (matches first track order from [`vtt_sidecars_for_stem`]).
 pub fn primary_vtt_sidecar(parent: &Path, stem: &str) -> Option<PathBuf> {
     let mut pairs = vtt_sidecars_for_stem(parent, stem).ok()?;
+    drop_youtube_rewritten_vtt_sidecars(&mut pairs);
     if pairs.is_empty() {
         return None;
     }

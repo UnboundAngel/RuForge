@@ -455,10 +455,10 @@ function OnboardingMediaLightbox({
         initial={{ opacity: 0, scale: 0.94, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: 0.22, ease: SHRINK_EASE } }}
         exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.14, ease: SHRINK_EASE } }}
-        className="relative z-[1] w-[min(96vw,1280px,calc(88vh*1.6))] overflow-hidden rounded-[20px] bg-[#261d18]"
+        className="relative z-[1] w-[min(96vw,1280px,calc(88vh*1.6))] overflow-hidden rounded-[20px] bg-[color:var(--rf-field)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="aspect-[16/10] w-full bg-[#1c1512]">
+        <div className="aspect-[16/10] w-full bg-[color:var(--bg)]">
           {isVideo ? (
             <video
               src={src}
@@ -508,7 +508,7 @@ function ExpandedDemo({
   };
 
   const islandMedia = mediaPaused ? (
-    <div className="h-full w-full bg-[#322620]" aria-hidden />
+    <div className="h-full w-full bg-[color:var(--rf-field-raised)]" aria-hidden />
   ) : (
     <img
       src={mediaSrc}
@@ -537,13 +537,13 @@ function ExpandedDemo({
         <button
           type="button"
           onClick={openLightbox}
-          className="flex h-[200px] w-full cursor-zoom-in items-center justify-center overflow-hidden rounded-2xl bg-[#322620] p-0"
+          className="flex h-[200px] w-full cursor-zoom-in items-center justify-center overflow-hidden rounded-2xl bg-[color:var(--rf-field-raised)] p-0"
           aria-label={`Enlarge ${mediaAlt}`}
         >
           {islandMedia}
         </button>
       ) : (
-        <div className="flex h-[200px] w-full items-center justify-center overflow-hidden rounded-2xl bg-[#322620]">
+        <div className="flex h-[200px] w-full items-center justify-center overflow-hidden rounded-2xl bg-[color:var(--rf-field-raised)]">
           {islandMedia}
         </div>
       )}
@@ -874,7 +874,7 @@ export function OnboardingIsland({
       </AnimatePresence>
 
       <motion.div
-        className="pointer-events-none fixed top-0 left-1/2 z-[110] flex w-full max-w-lg -translate-x-1/2 justify-center overflow-visible pt-[6px]"
+        className="pointer-events-none fixed top-0 left-1/2 z-[110] flex w-full max-w-lg -translate-x-1/2 justify-center overflow-visible pt-[3px]"
         style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
         initial={false}
         animate={{ opacity: 1, scale: 1, y: 0 }}

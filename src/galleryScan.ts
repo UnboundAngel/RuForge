@@ -88,6 +88,8 @@ export function mediaFileFromGalleryJson(o: Record<string, unknown>): MediaFile 
   if (poster != null && String(poster) !== "") file.ruforgePosterPath = String(poster);
   if (sub != null && String(sub) !== "") file.subtitlePath = String(sub);
   if (hint != null && String(hint) !== "") file.downloadMetadataHint = String(hint);
+  // Neighbor scans feed Up next, which reads the channel from here like the library cards do.
+  if (o.youtube && typeof o.youtube === "object") file.youtube = o.youtube as MediaFile["youtube"];
 
   const rawChapters = Array.isArray(o.chapters) ? (o.chapters as MediaFile["chapters"]) : null;
   file.chapters =

@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { ListMusic } from "lucide-react";
+import { useImageFallback } from "@/components/ui/FallbackImg";
 import type { MediaFile } from "@/types";
 import { cn } from "@/lib/utils";
 import { LikedSongsCover } from "./LikedSongsCover";
@@ -13,22 +13,24 @@ type Props = {
   className?: string;
   iconSize?: number;
   radius?: string;
+  /** Rendered at 128 px or less: local art uses cached thumbnails. */
+  thumb?: boolean;
 };
 
-export function MusicPlaylistCover({ files, coverFile, src, className, iconSize = 40, radius }: Props) {
-  const [broken, setBroken] = useState<string | null>(null);
+export function MusicPlaylistCover({ files, coverFile, src, className, iconSize = 40, radius, thumb }: Props) {
+  const remote = useImageFallback(src);
   const icon = <ListMusic size={iconSize} strokeWidth={1.75} style={{ color: "var(--music-text-muted)" }} />;
 
-  if (src && broken !== src) {
+  if (remote.src) {
     return (
       <div
         className={cn("overflow-hidden bg-white/[0.06]", className)}
         style={{ borderRadius: radius ?? "var(--music-card-radius, 14px)" }}
       >
-        <img src={src} alt="" draggable={false} onError={() => setBroken(src)} className="h-full w-full object-cover" />
+        <img src={remote.src} alt="" draggable={false} onError={remote.onError} className="h-full w-full object-cover" />
       </div>
     );
   }
 
-  return <LikedSongsCover files={coverFile ? [coverFile] : files} className={className} radius={radius} emptyIcon={icon} />;
+  return <LikedSongsCover files={coverFile ? [coverFile] : files} className={className} radius={radius} emptyIcon={icon} thumb={thumb} />;
 }

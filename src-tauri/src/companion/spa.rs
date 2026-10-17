@@ -26,6 +26,8 @@ fn content_type_for(path: &str) -> &'static str {
         "font/woff2"
     } else if path.ends_with(".woff") {
         "font/woff"
+    } else if path.ends_with(".webmanifest") {
+        "application/manifest+json"
     } else if path.ends_with(".json") {
         "application/json"
     } else {
@@ -53,4 +55,35 @@ pub async fn index() -> Response {
 
 pub async fn asset(AxumPath(path): AxumPath<String>) -> Response {
     serve_embedded(&format!("assets/{path}"))
+}
+
+pub async fn manifest() -> Response {
+    serve_embedded("manifest.webmanifest")
+}
+
+pub async fn service_worker() -> Response {
+    let mut res = serve_embedded("sw.js");
+    res.headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    res
+}
+
+/// Imported by `sw.js`; the browser stores it with the worker, so it also works offline.
+pub async fn art_cache_script() -> Response {
+    let mut res = serve_embedded("art-cache.js");
+    res.headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    res
+}
+
+pub async fn apple_touch_icon() -> Response {
+    serve_embedded("apple-touch-icon.png")
+}
+
+pub async fn icon_192() -> Response {
+    serve_embedded("icon-192.png")
+}
+
+pub async fn icon_512() -> Response {
+    serve_embedded("icon-512.png")
 }

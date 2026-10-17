@@ -1,7 +1,7 @@
 # Privacy
 
 
-Last updated: October 2, 2026
+Last updated: October 11, 2026
 
 
 RuForge runs on your computer. The project runs no servers of its own (Cloudflare hosts the ruforge.app website) and has no accounts, and nothing you download, watch or search is sent to the maintainer. This page lists what RuForge keeps on your PC, every place it connects to, and what the website collects.
@@ -17,6 +17,7 @@ RuForge runs on your computer. The project runs no servers of its own (Cloudflar
 - Artist details for the Music "About the artist" sheet, cached in the app data folder after the first lookup.
 - Optional sign-in data. If you sign in to YouTube in RuForge's built-in YouTube tab, browser session data is stored locally in RuForge's own WebView2 profile, separate from your normal browser. RuForge does not upload it.
 - A log file in the app's log folder. By default it records warnings and errors; the Debugging tab can turn on more detail. Log lines can include file paths and links. The log stays on your PC unless you attach it to a bug report yourself.
+- An activity log for stats (downloads finished, watch and listen sessions, library changes, game sessions, and feature use counts). It is stored only in RuForge's app data folder on this device. Nothing in that log is sent anywhere. RuForge does not record browsing, searches, watch history, follows or page contents from YouTube, Explorer, Glance or any embedded browser. A download started from Explorer is still recorded as a download. You can export the log as JSON or CSV, or delete it, through the app when those controls ship (commands already exist: export and clear).
 
 
 ## What leaves your computer
@@ -79,7 +80,7 @@ RuForge has no server of its own. Each connection below goes straight from your 
 ## What RuForge does not do
 
 
-- We do not collect or report any data about your downloads, browsing or playback. yt-dlp and the built-in browser still connect to the sites you use, the same way any browser or downloader does.
+- We do not collect or report any data about your downloads, browsing or playback to the maintainer or any analytics service. An activity log for stats stays on your PC only (see above). yt-dlp and the built-in browser still connect to the sites you use, the same way any browser or downloader does.
 - RuForge has no analytics or telemetry. It sends no usage stats and no crash reports. The update check described above is the only request the project counts. Versions up to 0.6.0 had optional usage and crash toggles hidden behind the Debugging settings switch, off by default; 0.6.1 removes them.
 - No RuForge account, no login to RuForge and no cloud sync.
 - No ads, no referral links and no affiliate rewrites of URLs.

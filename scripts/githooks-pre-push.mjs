@@ -10,6 +10,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
+import { findGamesLeaks, readGamesPatterns } from './games-leak.mjs';
+import { scheduledPrivatePathsForRef } from './scheduled-lib.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const listPath = join(root, 'scripts/private-only-paths.txt');
@@ -49,6 +51,11 @@ function commitHasPrivatePath(sha, paths) {
     }
   }
   return null;
+}
+
+function commitGamesLeaks(sha) {
+  const files = run(['ls-tree', '-r', '--name-only', sha]).split(/\r?\n/).filter(Boolean);
+  return findGamesLeaks(files, readGamesPatterns());
 }
 
 function newCommits(localSha, remoteSha) {
@@ -101,13 +108,55 @@ for (const u of updates) {
   }
 }
 
+if (!isPublic) {
+  for (const u of updates) {
+    if (u.localSha === ZERO) continue;
+    let base = u.remoteSha;
+    if (base === ZERO) {
+      try {
+        base = run(['merge-base', u.localSha, 'sync/main']);
+      } catch {
+        continue;
+      }
+    }
+    try {
+      execFileSync('node', [join(root, 'scripts/file-size-check.mjs'), '--rev', u.localSha, '--since', base], {
+        cwd: root,
+        stdio: ['ignore', 'inherit', 'inherit'],
+      });
+    } catch {
+      process.exit(1);
+    }
+  }
+  // Warn only: a leak on sync is harmless until publish-snapshot, which hard-fails on it.
+  try {
+    execFileSync('node', [join(root, 'scripts/scheduled.mjs'), 'check'], {
+      cwd: root,
+      stdio: ['ignore', 'ignore', 'inherit'],
+    });
+  } catch {
+    console.error('warning: scheduled.mjs check failed (above); publish-snapshot will refuse until fixed');
+  }
+}
+
 if (isPublic) {
   for (const u of updates) {
     if (u.localSha === ZERO) continue;
-    const hit = commitHasPrivatePath(u.localSha, paths);
+    const hit = commitHasPrivatePath(u.localSha, [...paths, ...scheduledPrivatePathsForRef(u.localSha)]);
     if (hit) {
       console.error(
         `blocked: tip ${u.localSha.slice(0, 7)} still has private-only path ${hit}`,
+      );
+      process.exit(1);
+    }
+    const leaks = commitGamesLeaks(u.localSha);
+    if (leaks.length) {
+      console.error(
+        `blocked: tip ${u.localSha.slice(0, 7)} still has Games paths (use publish-snapshot.mjs):\n` +
+          leaks
+            .slice(0, 40)
+            .map((p) => `  ${p}`)
+            .join('\n'),
       );
       process.exit(1);
     }

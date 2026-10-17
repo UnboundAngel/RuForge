@@ -1,5 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { cn } from "@/lib/utils";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { openCreatorPage } from "./creatorPageStore";
 
 /** A cold library can name dozens of channels at once; YouTube throttles a burst of page loads. */
@@ -54,11 +56,7 @@ export function ChannelAvatar({
     <div
       className={`${className} flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.08] text-[13px] font-bold text-stone-300`}
     >
-      {src ? (
-        <img src={src} alt="" className="h-full w-full object-cover" onError={() => setSrc(null)} />
-      ) : (
-        channel.trim().charAt(0).toUpperCase()
-      )}
+      <FallbackImg src={src} className="h-full w-full object-cover" fallback={channel.trim().charAt(0).toUpperCase()} />
     </div>
   );
 }
@@ -114,6 +112,79 @@ function ChannelLink({
   );
 }
 
+/** A short eased glide reads calmer than a slow crawl, which steps or blurs at low pixel speeds. */
+const PING_PONG_GLIDE_PX_PER_SEC = 140;
+const PING_PONG_HOLD_MS = 1800;
+const PING_PONG_EASE = "cubic-bezier(0.65, 0, 0.35, 1)";
+
+/** Truncated at rest; while `active`, an overflowing line glides to its end, rests, and glides back. */
+function MarqueeLine({ active, rest, line }: { active: boolean; rest: ReactNode; line: ReactNode }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const lineRef = useRef<HTMLDivElement>(null);
+  const [shift, setShift] = useState(0);
+
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const el = lineRef.current;
+    setShift(active && box && el ? Math.max(0, el.offsetWidth - box.clientWidth) : 0);
+  }, [active]);
+
+  useEffect(() => {
+    const box = boxRef.current;
+    const el = lineRef.current;
+    if (!shift || !box || !el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const glide = (shift / PING_PONG_GLIDE_PX_PER_SEC) * 1000;
+    const total = 2 * (PING_PONG_HOLD_MS + glide);
+    const leave = PING_PONG_HOLD_MS / total;
+    const arrive = (PING_PONG_HOLD_MS + glide) / total;
+    const back = (2 * PING_PONG_HOLD_MS + glide) / total;
+    const timing = { duration: total, iterations: Infinity };
+    const start = `translateX(0)`;
+    const end = `translateX(-${shift}px)`;
+    const move = el.animate(
+      [
+        { transform: start, offset: 0 },
+        { transform: start, offset: leave, easing: PING_PONG_EASE },
+        { transform: end, offset: arrive },
+        { transform: end, offset: back, easing: PING_PONG_EASE },
+        { transform: start, offset: 1 },
+      ],
+      timing,
+    );
+    const atStart = { "--rf-ping-pong-fade-l": "0px", "--rf-ping-pong-fade-r": "0.5rem" };
+    const atEnd = { "--rf-ping-pong-fade-l": "0.85rem", "--rf-ping-pong-fade-r": "0px" };
+    const fade = box.animate(
+      [
+        { ...atStart, offset: 0 },
+        { ...atStart, offset: leave, easing: PING_PONG_EASE },
+        { ...atEnd, offset: arrive },
+        { ...atEnd, offset: back, easing: PING_PONG_EASE },
+        { ...atStart, offset: 1 },
+      ],
+      timing,
+    );
+    return () => {
+      move.cancel();
+      fade.cancel();
+    };
+  }, [shift]);
+
+  return (
+    <div
+      ref={boxRef}
+      className={cn("mt-1 overflow-hidden whitespace-nowrap text-[13px] text-stone-400", shift > 0 && "rf-ping-pong-fade")}
+    >
+      {active ? (
+        <div ref={lineRef} className="flex w-max items-center">
+          {line}
+        </div>
+      ) : (
+        rest
+      )}
+    </div>
+  );
+}
+
 /** YouTube-style text block under a thumbnail: avatar, title, then channel and `meta` on one line. */
 export function VideoByline({
   channel,
@@ -122,6 +193,8 @@ export function VideoByline({
   title,
   meta,
   action,
+  footer,
+  active,
 }: {
   channel: string | null | undefined;
   channelId: string | null | undefined;
@@ -129,15 +202,38 @@ export function VideoByline({
   title: ReactNode;
   meta: ReactNode;
   action?: ReactNode;
+  /** Under the channel line, aligned with the title. */
+  footer?: ReactNode;
+  /** Card hover; omit to track hover on the byline itself. */
+  active?: boolean;
 }) {
+  const [selfHovered, setSelfHovered] = useState(false);
+  const hovered = active ?? selfHovered;
   const name = (
     <>
       <span className="truncate">{channel}</span>
       {verified ? <VerifiedMark /> : null}
     </>
   );
+  const channelPart = (className: string) =>
+    channel && channelId ? (
+      <ChannelLink
+        channelId={channelId}
+        channel={channel}
+        className={cn(className, "transition-colors duration-150 hover:text-stone-100")}
+      >
+        {name}
+      </ChannelLink>
+    ) : channel ? (
+      <span className={className}>{name}</span>
+    ) : null;
+  const dot = channel && meta ? <span className="mx-1.5 shrink-0 text-stone-600">·</span> : null;
   return (
-    <div className="flex gap-3 px-0.5">
+    <div
+      className="flex gap-3 px-0.5"
+      onMouseEnter={active === undefined ? () => setSelfHovered(true) : undefined}
+      onMouseLeave={active === undefined ? () => setSelfHovered(false) : undefined}
+    >
       {channel && channelId ? (
         <ChannelLink
           channelId={channelId}
@@ -151,21 +247,24 @@ export function VideoByline({
       ) : null}
       <div className="min-w-0 flex-1">
         {title}
-        <p className="mt-1 flex min-w-0 items-center text-[13px] text-stone-400">
-          {channel && channelId ? (
-            <ChannelLink
-              channelId={channelId}
-              channel={channel}
-              className="flex min-w-0 max-w-[60%] shrink-0 items-center gap-1 transition-colors duration-150 hover:text-stone-100"
-            >
-              {name}
-            </ChannelLink>
-          ) : channel ? (
-            <span className="flex min-w-0 max-w-[60%] shrink-0 items-center gap-1">{name}</span>
-          ) : null}
-          {channel && meta ? <span className="mx-1.5 shrink-0 text-stone-600">·</span> : null}
-          <span className="min-w-0 truncate">{meta}</span>
-        </p>
+        <MarqueeLine
+          active={hovered}
+          rest={
+            <div className="flex min-w-0 items-center">
+              {channelPart("flex min-w-0 max-w-[60%] shrink-0 items-center gap-1")}
+              {dot}
+              <span className="min-w-0 truncate">{meta}</span>
+            </div>
+          }
+          line={
+            <>
+              {channelPart("flex items-center gap-1")}
+              {dot}
+              <span>{meta}</span>
+            </>
+          }
+        />
+        {footer}
       </div>
       {action}
     </div>

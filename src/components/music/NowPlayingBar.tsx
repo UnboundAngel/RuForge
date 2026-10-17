@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { Ban, ChevronLeft, Ellipsis } from "lucide-react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import { useScrubberHover } from "@/hooks/useScrubberHover";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { DownloadJob } from "@/downloadQueue";
 import { useMainAudioCurrentTime } from "@/playback/mainAudioPlaybackContext";
-import { bestCoverPath } from "@/mediaKind";
+import { coverPathChain } from "@/albumCoverPath";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { cn } from "@/lib/utils";
 import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
 import { loopModeAriaLabel } from "@/playbackLoopStorage";
@@ -21,6 +21,7 @@ import { MusicVolumeControl } from "./MusicVolumeControl";
 import { MusicLikeButton } from "./MusicLikeButton";
 import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
+import { Slider } from "@/components/ui/Slider";
 import { MusicLyricsMicIcon } from "@/components/icons/MusicLyricsMicIcon";
 import {
   dismissMusicMenuPointer,
@@ -180,11 +181,14 @@ export function NowPlayingBar({
     isScrubbingRef.current = false;
   }, [playingFile?.path, clearPendingRelease]);
 
+  const detachDragRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     return () => {
       if (pendingReleaseTimeoutRef.current !== null) {
         clearTimeout(pendingReleaseTimeoutRef.current);
       }
+      detachDragRef.current?.();
     };
   }, []);
 
@@ -216,6 +220,8 @@ export function NowPlayingBar({
     };
 
     const onUp = (ev: MouseEvent) => {
+      // Detach before the guard: a track change mid-drag clears the flag and would strand these listeners.
+      detach();
       if (!isScrubbingRef.current) return;
       const finalSec = previewFromClientX(ev.clientX);
       isScrubbingRef.current = false;
@@ -228,10 +234,16 @@ export function NowPlayingBar({
       } else {
         clearPendingRelease();
       }
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
     };
 
+    const detach = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      if (detachDragRef.current === detach) detachDragRef.current = null;
+    };
+
+    detachDragRef.current?.();
+    detachDragRef.current = detach;
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   }, [currentTime, duration, onBeginScrub, onReleaseScrub, previewFromClientX, clearPendingRelease]);
@@ -257,8 +269,6 @@ export function NowPlayingBar({
     cycleLoopMode();
   }, [cycleLoopMode]);
 
-  const coverPath = playingFile ? bestCoverPath(playingFile) : null;
-  const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
   const artist = playingFile ? rawArtistFromFile(playingFile) : "";
   const artistNavKey = playingFile ? artistKeyFromFile(playingFile) : "";
   const displayDuration =
@@ -311,24 +321,23 @@ export function NowPlayingBar({
           className="flex items-center gap-3 min-w-0 text-left cursor-pointer"
           aria-label={expanded ? "Collapse player" : "Expand player"}
         >
-          {coverSrc ? (
-            <div className="w-12 h-12 shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-black shadow-md ring-1 ring-white/10">
-              <img
-                src={coverSrc}
-                alt=""
-                className="block h-full w-full object-cover"
-              />
-            </div>
-          ) : (
-            <div
-              className="w-12 h-12 shrink-0 flex items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-black shadow-md ring-1 ring-white/10"
-              style={{ color: "var(--music-text-muted)" }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-              </svg>
-            </div>
-          )}
+          <div
+            className="w-12 h-12 shrink-0 flex items-center justify-center overflow-hidden rounded-2xl border border-white/15 bg-black shadow-md ring-1 ring-white/10"
+            style={{ color: "var(--music-text-muted)" }}
+          >
+            <FallbackImg
+              key={playingFile.path}
+              src={coverPathChain(playingFile)}
+              local
+              thumb
+              className="block h-full w-full object-cover"
+              fallback={
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg>
+              }
+            />
+          </div>
           <div className="min-w-0 max-w-[min(280px,32vw)]" style={{ color: "var(--music-text-primary)" }}>
             <MarqueeText text={playingFile.name} className="text-sm font-medium leading-tight" layoutKey={playingFile.path} />
             {artist && artistNavKey && (
@@ -663,15 +672,17 @@ export function NowPlayingBar({
                                     </button>
                                   )}
                                 </div>
-                                <input
-                                  type="range"
-                                  min={0}
-                                  max={MUSIC_CROSSFADE_MAX_SEC}
-                                  step={1}
-                                  value={crossfadeSec}
-                                  onChange={(e) => onSetCrossfadeSec(Number(e.target.value))}
-                                  className="w-full accent-[var(--music-accent)]"
-                                  aria-label="Crossfade duration"
+                                <Slider
+                                  label="Crossfade duration"
+                                  level={crossfadeSec / MUSIC_CROSSFADE_MAX_SEC}
+                                  valueText={crossfadeSec <= 0 ? "Off" : `${crossfadeSec} seconds`}
+                                  step={1 / MUSIC_CROSSFADE_MAX_SEC}
+                                  onChange={(level) => {
+                                    const sec = Math.round(level * MUSIC_CROSSFADE_MAX_SEC);
+                                    if (sec !== crossfadeSec) onSetCrossfadeSec(sec);
+                                  }}
+                                  thumbFill="color-mix(in srgb, var(--music-accent) 10%, #0f0f0f)"
+                                  className="w-full"
                                 />
                               </div>
                             </MusicMenuSection>

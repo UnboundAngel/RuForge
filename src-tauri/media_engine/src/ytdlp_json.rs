@@ -23,6 +23,18 @@ pub fn media_inspection_from_json(
     file_size_bytes_audio: Option<u64>,
     file_size_bytes_video: Option<u64>,
 ) -> MediaInspection {
+    let max_height = max_height_from_ytdlp_format(video_format);
+    let probed_height = if audio_primary {
+        None
+    } else {
+        let entry = ytdlp_primary_entry(&json);
+        let formats = entry
+            .get("formats")
+            .and_then(|v| v.as_array())
+            .map(|a| a.as_slice())
+            .unwrap_or(&[]);
+        pick_best_video_height_from_formats(formats, max_height).or_else(|| entry_height(entry))
+    };
     let base = inspection_body_from_json(json);
     let file_size_bytes = if audio_primary {
         file_size_bytes_audio.or(file_size_bytes_video)
@@ -35,6 +47,7 @@ pub fn media_inspection_from_json(
         file_size_bytes,
         file_size_bytes_audio,
         file_size_bytes_video,
+        height: probed_height.or(base.height),
         choices: default_choice_set(video_format),
         ..base
     }
@@ -105,6 +118,8 @@ fn inspection_body_from_json(json: Value) -> MediaInspection {
                 playlist_items: Some(previews),
                 uploader,
                 channel,
+                channel_id: ytdlp_channel_id(&json),
+                height: None,
                 choices: default_choice_set(DEFAULT_VIDEO_FORMAT),
             }
         }
@@ -127,6 +142,8 @@ fn inspection_body_from_json(json: Value) -> MediaInspection {
                 playlist_items: None,
                 uploader,
                 channel,
+                channel_id: ytdlp_channel_id(entry).or_else(|| ytdlp_channel_id(&json)),
+                height: entry_height(entry),
                 choices: default_choice_set(DEFAULT_VIDEO_FORMAT),
             }
         }
@@ -161,6 +178,50 @@ pub fn dual_file_sizes_from_ytdlp_json(
         );
     }
     dual_file_sizes_from_entry_json(ytdlp_primary_entry(json), max_height, audio_primary)
+}
+
+fn ytdlp_channel_id(json: &Value) -> Option<String> {
+    json.get("channel_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn entry_height(entry: &Value) -> Option<u32> {
+    height_from_format_entry(entry).or_else(|| {
+        entry
+            .get("height")
+            .and_then(|v| {
+                v.as_u64()
+                    .or_else(|| v.as_i64().filter(|&i| i >= 0).map(|i| i as u64))
+            })
+            .map(|h| h as u32)
+            .filter(|&h| h > 0)
+    })
+}
+
+fn pick_best_video_height_from_formats(formats: &[Value], max_height: Option<u32>) -> Option<u32> {
+    let mut best: Option<(u32, f64)> = None;
+    for fmt in formats {
+        if ytdlp_codec_is_none(fmt.get("vcodec").and_then(|v| v.as_str())) {
+            continue;
+        }
+        let height = height_from_format_entry(fmt)?;
+        if let Some(cap) = max_height {
+            if height > cap {
+                continue;
+            }
+        }
+        let score = format_stream_score_kbps(fmt).unwrap_or(0.0);
+        let replace = match best {
+            None => true,
+            Some((prev_h, prev_score)) => height > prev_h || (height == prev_h && score > prev_score),
+        };
+        if replace {
+            best = Some((height, score));
+        }
+    }
+    best.map(|(h, _)| h)
 }
 
 fn ytdlp_uploader_channel(json: &Value) -> (Option<String>, Option<String>) {
@@ -237,19 +298,29 @@ pub fn video_file_size_from_ytdlp_json(json: &Value) -> Option<u64> {
             })
     }
 
-    fn sum_sizes_from_format_array(arr: &[Value]) -> Option<u64> {
+    /// Every part must be sized: a sum that skips an unsized HLS video stream reports only the audio.
+    fn sum_all_sizes_from_format_array(arr: &[Value], duration_secs: f64) -> Option<u64> {
         if arr.is_empty() {
             return None;
         }
         let mut sum = 0u64;
-        let mut any = false;
         for f in arr {
-            if let Some(n) = size_from_format_entry(f) {
-                sum = sum.saturating_add(n);
-                any = true;
-            }
+            let n = size_from_format_entry(f).or_else(|| {
+                tbr_kbps_from_json(f).and_then(|tbr| estimate_bytes_from_bitrate(duration_secs, tbr))
+            })?;
+            sum = sum.saturating_add(n);
         }
-        any.then_some(sum).filter(|&s| s > 0)
+        Some(sum).filter(|&s| s > 0)
+    }
+
+    let duration = ytdlp_duration_secs(json).unwrap_or(0.0);
+
+    // yt-dlp's top-level filesize_approx silently drops formats it cannot size, so the
+    // per-format sum (with bitrate fallback) is checked first.
+    if let Some(arr) = json.get("requested_formats").and_then(|v| v.as_array()) {
+        if let Some(sum) = sum_all_sizes_from_format_array(arr, duration) {
+            return Some(sum);
+        }
     }
 
     if let Some(n) = json.get("filesize").and_then(u64_from_field).filter(|&n| n > 0) {
@@ -263,11 +334,9 @@ pub fn video_file_size_from_ytdlp_json(json: &Value) -> Option<u64> {
         return Some(n);
     }
 
-    for key in ["requested_formats", "requested_downloads"] {
-        if let Some(arr) = json.get(key).and_then(|v| v.as_array()) {
-            if let Some(sum) = sum_sizes_from_format_array(arr) {
-                return Some(sum);
-            }
+    if let Some(arr) = json.get("requested_downloads").and_then(|v| v.as_array()) {
+        if let Some(sum) = sum_all_sizes_from_format_array(arr, duration) {
+            return Some(sum);
         }
     }
 
@@ -727,6 +796,20 @@ mod tests {
             max_height_from_ytdlp_format("bestvideo[height<=720]+bestaudio"),
             Some(720)
         );
+    }
+
+    #[test]
+    fn unsized_hls_video_part_is_estimated_from_bitrate() {
+        let json = serde_json::json!({
+            "duration": 1889,
+            "filesize_approx": 28226244u64,
+            "requested_formats": [
+                { "format_id": "616", "vcodec": "vp09", "acodec": "none", "tbr": 4715.629 },
+                { "format_id": "251", "vcodec": "none", "acodec": "opus", "tbr": 119.568, "filesize": 28226244u64 }
+            ]
+        });
+        let size = video_file_size_from_ytdlp_json(&json).unwrap();
+        assert!(size > 1_100_000_000 && size < 1_200_000_000, "{size}");
     }
 
     #[test]

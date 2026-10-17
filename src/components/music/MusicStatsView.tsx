@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localImageSrc, localThumbSrc } from "@/lib/localImageSrc";
 import { ChevronLeft, Disc3, Music2, Play } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
@@ -23,9 +23,15 @@ import {
   type ListenStat,
   type TopArtistStat,
 } from "./musicListenStats";
+import {
+  refreshListenSnapshot,
+  useListenSnapshotReady,
+  useListenSnapshotRevision,
+} from "@/lib/musicListenSnapshot";
 import { musicQueueSource } from "./musicQueueSource";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { MusicTrackIndexPlay } from "./MusicTrackIndexPlay";
+import { EdgeSquishScroll } from "@/components/ui/EdgeSquishScroll";
 
 const CONTENT_PAD = "px-8 sm:px-10";
 const CONTENT_WIDTH = "max-w-4xl w-full mx-auto";
@@ -47,7 +53,7 @@ function StatsHeroBackdrop({ covers }: { covers: string[] }) {
     <div className="absolute inset-0 flex overflow-hidden" aria-hidden>
       {covers.map((c) => (
         <div key={c} className="flex-1 min-w-0">
-          <img src={convertFileSrc(c)} alt="" className="w-full h-full" style={{ objectFit: "cover" }} />
+          <img src={localImageSrc(c)} alt="" className="w-full h-full" style={{ objectFit: "cover" }} />
         </div>
       ))}
     </div>
@@ -105,7 +111,7 @@ type TopTrackCardProps = {
 function TopTrackCard({ rank, row, lookup, hero, onPlay, onOpen, onContextMenu, menuOpen }: TopTrackCardProps) {
   const file = resolveStatFile(row, lookup);
   const cover = coverForStat(row, lookup);
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localImageSrc(cover) : null;
   const artist = row.artist.trim();
   const rankLabel = String(rank).padStart(2, "0");
 
@@ -134,7 +140,7 @@ function TopTrackCard({ rank, row, lookup, hero, onPlay, onOpen, onContextMenu, 
         menuOpen && "ring-1 ring-white/20 rounded-[var(--r-media,18px)]",
       )}
     >
-      <div className="relative aspect-square w-full overflow-hidden rounded-[var(--r-media,18px)]">
+      <div data-squish-cover className="relative aspect-square w-full overflow-hidden rounded-[var(--r-media,18px)] transition-transform duration-150 ease-out">
         {coverSrc ? (
           <img src={coverSrc} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: "cover" }} />
         ) : (
@@ -191,7 +197,7 @@ function CompactTrackRow({ rank, row, lookup, onPlay, onOpen, onContextMenu, men
   const playingPath = useRuforgeStore((s) => s.playingFile?.path);
   const playback = useOptionalMainAudioPlayback();
   const cover = coverForStat(row, lookup);
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localThumbSrc(cover) : null;
   const artist = row.artist.trim();
   const isPlaying = !!file && playingPath === file.path;
   const showPauseOnHover = isPlaying && playback != null && !playback.paused;
@@ -281,7 +287,7 @@ function ArtistTile({ rank, row, lookup, onOpen, onContextMenu, menuOpen }: Arti
         menuOpen && "ring-1 ring-white/20 rounded-2xl",
       )}
     >
-      <div className="relative w-[5rem] h-[5rem] sm:w-[5.25rem] sm:h-[5.25rem] rounded-full overflow-hidden transition-transform duration-200 group-hover/artist:scale-105">
+      <div data-squish-cover className="relative w-[5rem] h-[5rem] sm:w-[5.25rem] sm:h-[5.25rem] rounded-full overflow-hidden transition-transform duration-200 group-hover/artist:scale-105">
         {tracks.length > 0 ? (
           <LikedSongsCover files={tracks} className="w-full h-full" />
         ) : (
@@ -324,6 +330,8 @@ export function MusicStatsView({ onBack }: Props) {
   const openMusicArtist = useRuforgeStore((s) => s.openMusicArtist);
   const openMusicSong = useRuforgeStore((s) => s.openMusicSong);
   const lookup = useStatsMediaLookup();
+  const listenReady = useListenSnapshotReady();
+  const listenRevision = useListenSnapshotRevision();
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -332,9 +340,14 @@ export function MusicStatsView({ onBack }: Props) {
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    void refreshListenSnapshot();
+  }, []);
+
   const snapshot = useMemo(() => {
     void tick;
     void playingPath;
+    void listenRevision;
     const week = getStatsSince(SEVEN_DAYS_MS);
     return {
       allTime: {
@@ -347,7 +360,7 @@ export function MusicStatsView({ onBack }: Props) {
       weekTracks: getTopTracksSince(10, SEVEN_DAYS_MS),
       weekArtists: getTopArtistsSince(10, SEVEN_DAYS_MS),
     };
-  }, [playingPath, tick]);
+  }, [playingPath, tick, listenRevision]);
 
   const heroCovers = useMemo(() => {
     const seen = new Set<string>();
@@ -361,6 +374,21 @@ export function MusicStatsView({ onBack }: Props) {
     }
     return out;
   }, [snapshot.topTracks, lookup]);
+
+  const heroInsight = useMemo(() => {
+    const topTrack = snapshot.topTracks[0];
+    const topArtist = snapshot.topArtists[0];
+    if (topTrack?.title && topArtist?.display) {
+      return `${topTrack.title} and ${topArtist.display} lead your rotation on this device.`;
+    }
+    if (topTrack?.title) {
+      return `${topTrack.title} is your most played track here.`;
+    }
+    if (topArtist?.display) {
+      return `${topArtist.display} is your most played artist here.`;
+    }
+    return "Rankings from listen history in your local library.";
+  }, [snapshot.topArtists, snapshot.topTracks]);
 
   const statsSource = musicQueueSource("stats", "Stats");
 
@@ -416,13 +444,54 @@ export function MusicStatsView({ onBack }: Props) {
     snapshot.week.listenTimeSec > 0
     && (snapshot.weekTracks.length > 0 || snapshot.weekArtists.length > 0);
 
+  const handleBack = () => {
+    if (musicDetail?.kind === "stats" && musicDetail.backTo === "profile") {
+      useRuforgeStore.setState({ musicDetail: { kind: "profile" } });
+      return;
+    }
+    onBack?.();
+  };
+
+  if (!listenReady) {
+    return (
+      <div className="flex flex-col h-full" aria-busy aria-label="Loading listening stats">
+        {onBack && (
+          <button
+            type="button"
+            onClick={handleBack}
+            className="flex items-center gap-1.5 px-6 py-3 shrink-0 text-sm transition-opacity opacity-60 hover:opacity-100"
+            style={{ color: "var(--music-text-secondary)" }}
+          >
+            <ChevronLeft size={16} /> Back
+          </button>
+        )}
+        <div className="flex flex-1 flex-col gap-6 px-8 sm:px-10 pt-10 pb-14 max-w-4xl w-full mx-auto">
+          <div className="flex flex-col gap-3">
+            <div className="h-10 w-56 animate-pulse rounded-md" style={{ background: "rgba(255,255,255,0.1)" }} />
+            <div className="h-4 w-80 max-w-full animate-pulse rounded-md" style={{ background: "rgba(255,255,255,0.08)" }} />
+            <div className="h-3 w-64 max-w-full animate-pulse rounded-md" style={{ background: "rgba(255,255,255,0.06)" }} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-24 animate-pulse rounded-2xl"
+                style={{ background: "rgba(255,255,255,0.06)" }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!hasAnyStats) {
     return (
       <div className="flex flex-col h-full">
         {onBack && (
           <button
             type="button"
-            onClick={onBack}
+            onClick={handleBack}
             className="flex items-center gap-1.5 px-6 py-3 shrink-0 text-sm transition-opacity opacity-60 hover:opacity-100"
             style={{ color: "var(--music-text-secondary)" }}
           >
@@ -448,29 +517,6 @@ export function MusicStatsView({ onBack }: Props) {
     heroSummaryParts.push(`${formatListenDuration(snapshot.week.listenTimeSec)} this week`);
   }
   const heroSummary = heroSummaryParts.join(". ");
-
-  const heroInsight = useMemo(() => {
-    const topTrack = snapshot.topTracks[0];
-    const topArtist = snapshot.topArtists[0];
-    if (topTrack?.title && topArtist?.display) {
-      return `${topTrack.title} and ${topArtist.display} lead your rotation on this device.`;
-    }
-    if (topTrack?.title) {
-      return `${topTrack.title} is your most played track here.`;
-    }
-    if (topArtist?.display) {
-      return `${topArtist.display} is your most played artist here.`;
-    }
-    return "Rankings from listen history in your local library.";
-  }, [snapshot.topArtists, snapshot.topTracks]);
-
-  const handleBack = () => {
-    if (musicDetail?.kind === "stats" && musicDetail.backTo === "profile") {
-      useRuforgeStore.setState({ musicDetail: { kind: "profile" } });
-      return;
-    }
-    onBack?.();
-  };
 
   return (
     <div className="flex flex-col h-full overflow-y-auto rf-scrollbar" style={{ background: "var(--music-bg)" }}>
@@ -531,7 +577,7 @@ export function MusicStatsView({ onBack }: Props) {
         {topThree.length > 0 && (
           <section>
             <StatsSectionTitle>All-time top tracks</StatsSectionTitle>
-            <div className="flex items-end gap-5 sm:gap-6 overflow-x-auto pb-2 rf-scrollbar">
+            <EdgeSquishScroll contentClassName="items-end gap-5 sm:gap-6 pb-2">
               {topThree.map((row, i) => {
                 const file = resolveStatFile(row, lookup);
                 return (
@@ -548,9 +594,9 @@ export function MusicStatsView({ onBack }: Props) {
                   />
                 );
               })}
-            </div>
+            </EdgeSquishScroll>
             {restTracks.length > 0 && (
-              <div className="mt-6 flex gap-4 sm:gap-5 overflow-x-auto pb-2 rf-scrollbar">
+              <EdgeSquishScroll className="mt-6" contentClassName="gap-4 sm:gap-5 pb-2">
                 {restTracks.map((row, i) => {
                   const file = resolveStatFile(row, lookup);
                   return (
@@ -566,7 +612,7 @@ export function MusicStatsView({ onBack }: Props) {
                     />
                   );
                 })}
-              </div>
+              </EdgeSquishScroll>
             )}
             {topThree.length >= 2 && (
               <button
@@ -589,7 +635,7 @@ export function MusicStatsView({ onBack }: Props) {
         {snapshot.topArtists.length > 0 && (
           <section>
             <StatsSectionTitle>All-time top artists</StatsSectionTitle>
-            <div className="flex gap-6 sm:gap-7 overflow-x-auto pb-2 rf-scrollbar">
+            <EdgeSquishScroll contentClassName="gap-6 sm:gap-7 pb-2">
               {snapshot.topArtists.map((row, i) => (
                 <ArtistTile
                   key={row.artistKey}
@@ -601,7 +647,7 @@ export function MusicStatsView({ onBack }: Props) {
                   onContextMenu={(e) => openArtistMenu(row.artistKey, row.display, e)}
                 />
               ))}
-            </div>
+            </EdgeSquishScroll>
           </section>
         )}
 
@@ -633,7 +679,7 @@ export function MusicStatsView({ onBack }: Props) {
             {snapshot.weekArtists.length > 0 && (
               <section>
                 <StatsSectionTitle>Top artists this week</StatsSectionTitle>
-                <div className="flex gap-6 sm:gap-7 overflow-x-auto pb-2 rf-scrollbar">
+                <EdgeSquishScroll contentClassName="gap-6 sm:gap-7 pb-2">
                   {snapshot.weekArtists.map((row, i) => (
                     <ArtistTile
                       key={row.artistKey}
@@ -645,7 +691,7 @@ export function MusicStatsView({ onBack }: Props) {
                       onContextMenu={(e) => openArtistMenu(row.artistKey, row.display, e)}
                     />
                   ))}
-                </div>
+                </EdgeSquishScroll>
               </section>
             )}
           </>

@@ -6,12 +6,13 @@ import { VIDEO_PREVIEW_SEC, feedCookieSource, videoPreviewStartSec, type FeedVid
 
 export type FeedPreviewStatus = "loading" | "playing" | "paused";
 
-const LOAD_TIMEOUT_MS = 20_000;
+const LOAD_TIMEOUT_MS = 15_000;
 
 type FeedPreviewState = {
   id: string | null;
   status: FeedPreviewStatus | null;
   src: string | null;
+  audioSrc: string | null;
   start: number;
   /** 0..1 through the preview window. */
   progress: number;
@@ -22,6 +23,7 @@ export const useFeedPreview = create<FeedPreviewState>(() => ({
   id: null,
   status: null,
   src: null,
+  audioSrc: null,
   start: 0,
   progress: 0,
   muted: false,
@@ -56,15 +58,18 @@ async function resolveStream(video: FeedVideo): Promise<PreviewStream> {
 export function stopFeedPreview(): void {
   generation++;
   if (useFeedPreview.getState().id) {
-    useFeedPreview.setState({ id: null, status: null, src: null, start: 0, progress: 0 });
+    useFeedPreview.setState({ id: null, status: null, src: null, audioSrc: null, start: 0, progress: 0 });
   }
 }
 
-export function failFeedPreview(videoId: string): void {
+export function failFeedPreview(videoId: string, reason: string): void {
   if (useFeedPreview.getState().id !== videoId) return;
   cache.delete(videoId);
   stopFeedPreview();
-  useRuforgeStore.getState().notify("Couldn't play the preview");
+  console.error(`[feed preview] ${videoId}: ${reason}`);
+  useRuforgeStore
+    .getState()
+    .notify(import.meta.env.DEV ? `Couldn't play the preview: ${reason}` : "Couldn't play the preview");
 }
 
 export function setFeedPreviewMuted(muted: boolean): void {
@@ -82,18 +87,27 @@ export async function toggleFeedPreview(video: FeedVideo): Promise<void> {
   }
   stopFeedPreview();
   const mine = ++generation;
-  useFeedPreview.setState({ id: video.videoId, status: "loading", src: null, start: 0, progress: 0 });
-  window.setTimeout(() => {
-    if (mine === generation && useFeedPreview.getState().status === "loading") failFeedPreview(video.videoId);
-  }, LOAD_TIMEOUT_MS);
+  useFeedPreview.setState({ id: video.videoId, status: "loading", src: null, audioSrc: null, start: 0, progress: 0 });
+  let stream: PreviewStream;
   try {
-    const stream = await resolveStream(video);
-    if (mine !== generation) return;
-    const duration = stream.duration ?? video.duration;
-    useFeedPreview.setState({ src: stream.url, start: videoPreviewStartSec(duration, stream.hookStart) });
-  } catch {
-    if (mine === generation) failFeedPreview(video.videoId);
+    stream = await resolveStream(video);
+  } catch (e) {
+    if (mine === generation) failFeedPreview(video.videoId, String(e));
+    return;
   }
+  if (mine !== generation) return;
+  // Timed from here: the yt-dlp lookup has its own limit and can be slow while downloads run.
+  window.setTimeout(() => {
+    if (mine === generation && useFeedPreview.getState().status === "loading") {
+      failFeedPreview(video.videoId, "stream did not start playing");
+    }
+  }, LOAD_TIMEOUT_MS);
+  const duration = stream.duration ?? video.duration;
+  useFeedPreview.setState({
+    src: stream.url,
+    audioSrc: stream.audioUrl ?? null,
+    start: videoPreviewStartSec(duration, stream.hookStart),
+  });
 }
 
 /** The card's `<video>` reports where it is; the window closes itself at the end. */

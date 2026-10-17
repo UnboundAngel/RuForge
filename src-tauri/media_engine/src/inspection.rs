@@ -129,6 +129,8 @@ mod tests {
             playlist_items: None,
             uploader: None,
             channel: None,
+            channel_id: None,
+            height: None,
             choices: MediaChoiceSet {
                 allowed_video_formats: vec!["best".into()],
                 allowed_audio_formats: vec!["m4a".into()],

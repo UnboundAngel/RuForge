@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { Icon } from "@iconify/react";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { Disc3, History, ListMusic, Music2, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MediaFile } from "@/types";
@@ -95,18 +95,16 @@ export function MusicSearchSuggestions({ items, activeIndex, onHover, onPick, on
                   </button>
                 ) : null}
                 {thumb ? (
-                  <img
-                    src={convertFileSrc(thumb)}
-                    alt=""
+                  <FallbackImg
+                    src={thumb}
+                    local
+                    thumb
                     loading="lazy"
-                    draggable={false}
-                    onError={(e) => {
-                      e.currentTarget.style.visibility = "hidden";
-                    }}
                     className={cn(
                       "h-8 w-8 shrink-0 object-cover",
                       item.kind === "artist" ? "rounded-full" : "rounded-md",
                     )}
+                    fallback={<span className="w-8 shrink-0" aria-hidden />}
                   />
                 ) : item.kind === "youtube" ? null : (
                   <span className="w-8 shrink-0" aria-hidden />

@@ -1,10 +1,11 @@
-import { useMemo, useState, useEffect } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { useMemo, useState } from "react";
 import { Play, MoreHorizontal, Shuffle } from "lucide-react";
+import { localThumbSrc } from "@/lib/localImageSrc";
+import { useImageFallback } from "@/components/ui/FallbackImg";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath, bestCoverPath, hasSquareCover } from "@/mediaKind";
-import { albumCoverPathWithFallback } from "@/albumCoverPath";
+import { coverPathChain } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import type { MediaFile } from "@/types";
 import { primaryArtist } from "./musicArtist";
@@ -38,16 +39,18 @@ type SongRowProps = {
 
 function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: SongRowProps) {
   const cover = bestCoverPath(file);
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localThumbSrc(cover) : null;
   const artist = file.artist ?? file.albumArtist ?? (file.name.includes(" - ") ? file.name.split(" - ")[0].trim() : "");
   const displayAlbum = resolveDisplayAlbum(file);
   const playback = useOptionalMainAudioPlayback();
   const showPauseOnHover = isPlaying && playback != null && !playback.paused;
 
+  // Lists run to 400+ unvirtualized rows; content-visibility skips style/layout/paint offscreen.
+  // Rows are a fixed 60px (44px content box plus py-2) with nothing overflowing, so the intrinsic size keeps scroll height exact.
   return (
     <div
       {...musicTrackDragProps(file)}
-      className="group/row flex items-center gap-3 px-4 py-2 rounded w-full transition-colors cursor-pointer"
+      className="group/row flex items-center gap-3 px-4 py-2 rounded w-full transition-colors cursor-pointer [content-visibility:auto] [contain-intrinsic-size:auto_44px]"
       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--music-surface-raised)")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
       onClick={onClick}
@@ -107,28 +110,15 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen }: S
 type AlbumRowProps = {
   album: string;
   artist: string;
-  cover: string | null;
-  coverFallback?: string | null;
+  covers: string[];
   trackCount: number;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
 
-function AlbumRow({ album, artist, cover, coverFallback = null, trackCount, onClick, onContextMenu }: AlbumRowProps) {
-  const [coverSrc, setCoverSrc] = useState<string | null>(() => (cover ? convertFileSrc(cover) : null));
+function AlbumRow({ album, artist, covers, trackCount, onClick, onContextMenu }: AlbumRowProps) {
+  const { src: coverSrc, onError: handleCoverError } = useImageFallback(covers, { local: true });
   const [hovered, setHovered] = useState(false);
-
-  useEffect(() => {
-    setCoverSrc(cover ? convertFileSrc(cover) : null);
-  }, [cover]);
-
-  const handleCoverError = () => {
-    if (coverFallback) {
-      setCoverSrc(convertFileSrc(coverFallback));
-    } else {
-      setCoverSrc(null);
-    }
-  };
 
   const meta =
     artist
@@ -198,7 +188,7 @@ type ArtistRowProps = {
 };
 
 function ArtistRow({ artist, trackCount, cover, onClick, onContextMenu }: ArtistRowProps) {
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localThumbSrc(cover) : null;
 
   return (
     <button
@@ -351,7 +341,7 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
             ) : (
               <>
                 <div className="flex items-end gap-5 px-6 pb-4 pt-2">
-                  <LikedSongsCover files={likedTracks} className="w-28 h-28 shrink-0" />
+                  <LikedSongsCover files={likedTracks} className="w-28 h-28 shrink-0" thumb />
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--music-text-muted)" }}>
                       Playlist
@@ -446,14 +436,12 @@ export function MusicLibraryView({ onPlayFile, onOpenArtist, onOpenAlbum }: Prop
             {albums.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
                 {albums.map((a) => {
-                  const paths = albumCoverPathWithFallback(a.tracks[0]!);
                   return (
                     <AlbumRow
                       key={`${a.artistKey}::${a.albumKey}`}
                       album={a.album}
                       artist={a.artist}
-                      cover={paths.primary}
-                      coverFallback={paths.fallback}
+                      covers={coverPathChain(a.tracks[0]!)}
                       trackCount={a.tracks.length}
                       onClick={() => onOpenAlbum(a.artistKey, a.albumKey)}
                       onContextMenu={(e) => setMenu({

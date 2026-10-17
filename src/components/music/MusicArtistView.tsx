@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { ChevronLeft, MapPin, Music2, Disc3 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useImageFallback } from "@/components/ui/FallbackImg";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
-import { albumCoverPathWithFallback } from "@/albumCoverPath";
+import { coverPathChain } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
@@ -43,28 +44,15 @@ function artistInfoKeysFor(artistKey: string, displayName: string): string[] {
 
 type AlbumCardProps = {
   album: string;
-  cover: string | null;
-  coverFallback?: string | null;
+  covers: string[];
   trackCount: number;
   year?: number | null;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
 
-function AlbumCard({ album, cover, coverFallback = null, trackCount, year, onClick, onContextMenu }: AlbumCardProps) {
-  const [coverSrc, setCoverSrc] = useState<string | null>(() => (cover ? convertFileSrc(cover) : null));
-
-  useEffect(() => {
-    setCoverSrc(cover ? convertFileSrc(cover) : null);
-  }, [cover]);
-
-  const handleCoverError = () => {
-    if (coverFallback) {
-      setCoverSrc(convertFileSrc(coverFallback));
-    } else {
-      setCoverSrc(null);
-    }
-  };
+function AlbumCard({ album, covers, trackCount, year, onClick, onContextMenu }: AlbumCardProps) {
+  const { src: coverSrc, onError: handleCoverError } = useImageFallback(covers, { local: true });
   const metaLabel = `${trackCount} ${trackCount === 1 ? "song" : "songs"}`;
 
   return (
@@ -194,7 +182,7 @@ type SongRowProps = {
 
 function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, motionDelay, rowHoverBg }: SongRowProps) {
   const cover = bestCoverPath(file);
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localThumbSrc(cover) : null;
   const displayTitle = file.canonicalTitle || file.name;
   const displayAlbum = resolveDisplayAlbum(file);
   const playback = useOptionalMainAudioPlayback();
@@ -285,10 +273,11 @@ function SongRow({ file, index, isPlaying, onClick, onContextMenu, menuOpen, mot
   );
 }
 
-function pickHeroCover(
-  albums: { cover: string | null; coverFallback?: string | null; year?: number | null }[],
+/** Newest album with any art, else the first track that has some. */
+function pickHeroCovers(
+  albums: { covers: string[]; year?: number | null }[],
   tracks: MediaFile[],
-): { primary: string | null; fallback: string | null } {
+): string[] {
   const sorted = [...albums].sort((a, b) => {
     if (a.year && b.year) return b.year - a.year;
     if (a.year) return -1;
@@ -296,18 +285,13 @@ function pickHeroCover(
     return 0;
   });
   for (const album of sorted) {
-    if (album.cover || album.coverFallback) {
-      return {
-        primary: album.cover,
-        fallback: album.coverFallback ?? null,
-      };
-    }
+    if (album.covers.length > 0) return album.covers;
   }
   for (const track of tracks) {
-    const cover = bestCoverPath(track);
-    if (cover) return { primary: cover, fallback: null };
+    const covers = coverPathChain(track);
+    if (covers.length > 0) return covers;
   }
-  return { primary: null, fallback: null };
+  return [];
 }
 
 // ---- Section header with left accent bar -----------------------------------
@@ -362,12 +346,10 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
   const albums = useMemo(() => {
     const groups = buildMultiTrackAlbumGroups(tracks, primaryArtist);
     return groups.map((g) => {
-      const paths = albumCoverPathWithFallback(g.tracks[0]!);
       return {
         key: g.albumKey,
         display: g.album,
-        cover: paths.primary,
-        coverFallback: paths.fallback,
+        covers: coverPathChain(g.tracks[0]!),
         year: g.tracks.find((t) => t.year)?.year ?? null,
         tracks: g.tracks,
       };
@@ -379,25 +361,12 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
     });
   }, [tracks]);
 
-  const heroPaths = useMemo(() => pickHeroCover(albums, tracks), [albums, tracks]);
-  const [heroCoverSrc, setHeroCoverSrc] = useState<string | null>(null);
-  const [heroAmbiencePath, setHeroAmbiencePath] = useState<string | null>(null);
-
-  useEffect(() => {
-    const path = heroPaths.primary ?? heroPaths.fallback;
-    setHeroCoverSrc(path ? convertFileSrc(path) : null);
-    setHeroAmbiencePath(path);
-  }, [heroPaths.primary, heroPaths.fallback]);
-
-  const handleHeroCoverError = () => {
-    if (heroPaths.fallback && heroAmbiencePath === heroPaths.primary) {
-      setHeroCoverSrc(convertFileSrc(heroPaths.fallback));
-      setHeroAmbiencePath(heroPaths.fallback);
-      return;
-    }
-    setHeroCoverSrc(null);
-    setHeroAmbiencePath(null);
-  };
+  const heroCovers = useMemo(() => pickHeroCovers(albums, tracks), [albums, tracks]);
+  const {
+    src: heroCoverSrc,
+    path: heroAmbiencePath,
+    onError: handleHeroCoverError,
+  } = useImageFallback(heroCovers, { local: true });
 
   const totalDuration = useMemo(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
 
@@ -608,8 +577,7 @@ export function MusicArtistView({ artistKey, onPlayFile, onOpenAlbum, onBack }: 
               <AlbumCard
                 key={a.key}
                 album={a.display}
-                cover={a.cover}
-                coverFallback={a.coverFallback}
+                covers={a.covers}
                 trackCount={a.tracks.length}
                 year={a.year}
                 onClick={() => onOpenAlbum(a.key)}

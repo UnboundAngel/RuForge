@@ -5,7 +5,7 @@ import { shelfUploads, toFeedVideo, unseenUploads } from "@/watchlist/watchlistS
 import { useWatchlistStore } from "@/watchlist/watchlistStore";
 
 /**
- * One row of unseen uploads for Library home. Uploads that are already in the library get marked
+ * One row of recent uploads from followed channels for Library home. Uploads that are already in the library get marked
  * seen here, because a shelf card downloads through the plain feed path and never tells the watchlist.
  */
 export function useWatchlistShelf(enabled: boolean, libraryIds: ReadonlySet<string>, limit: number): FeedVideo[] {

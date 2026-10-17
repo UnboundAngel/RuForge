@@ -1,10 +1,8 @@
-import { useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check, ChevronDown, Loader2, Music, Pause, Play } from "lucide-react";
 import type { MediaFile } from "@/types";
-import { bestCoverPath } from "@/mediaKind";
-import { albumCoverPathWithFallback } from "@/albumCoverPath";
+import { coverPathChain } from "@/albumCoverPath";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/playlistImport/normalize";
 import { type ImportRow, chooseImportCandidate, outsideTrackFor, setImportRow } from "@/playlistImport/importSession";
@@ -219,28 +217,19 @@ function CandidateThumb({
   small?: boolean;
 }) {
   const { status, progress } = useSongPreview(source);
-  const [broken, setBroken] = useState(false);
   const size = small ? "h-8 w-8" : "h-10 w-10";
   return (
     <button
       type="button"
       onClick={() => void toggleMusicPreview(source)}
       className={cn(
-        "rf-music-tooltip-anchor group/thumb relative shrink-0 overflow-hidden rounded-md bg-white/[0.06]",
+        "rf-music-tooltip-anchor rf-art-clip group/thumb relative shrink-0 bg-white/[0.06] [--rf-art-r:6px]",
         size,
       )}
       aria-label={status === "playing" ? "Pause preview" : "Preview"}
       data-tooltip={status === "playing" ? "Pause preview" : "Preview"}
     >
-      {thumbnail && !broken ? (
-        <img
-          src={thumbnail}
-          alt=""
-          className="h-full w-full object-cover"
-          loading="lazy"
-          onError={() => setBroken(true)}
-        />
-      ) : null}
+      <FallbackImg src={thumbnail} className="h-full w-full object-cover" loading="lazy" />
       <span
         className={cn(
           "absolute inset-0 flex items-center justify-center bg-black/55 text-white transition-opacity",
@@ -295,23 +284,15 @@ export function ImportLibraryGroup({ items }: { items: { row: ImportRow; index: 
 }
 
 function LibraryCover({ file }: { file: MediaFile }) {
-  const paths = albumCoverPathWithFallback(file);
-  const chain = [...new Set([paths.primary, paths.fallback, bestCoverPath(file)])].filter((p): p is string => !!p);
-  const [idx, setIdx] = useState(0);
-  const src = chain[idx] ? convertFileSrc(chain[idx]) : null;
   return (
     <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-white/[0.06] text-white/30">
-      {src ? (
-        <img
-          src={src}
-          alt=""
-          draggable={false}
-          onError={() => setIdx((i) => i + 1)}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <Music size={15} aria-hidden />
-      )}
+      <FallbackImg
+        src={coverPathChain(file)}
+        local
+        thumb
+        className="h-full w-full object-cover"
+        fallback={<Music size={15} aria-hidden />}
+      />
     </span>
   );
 }

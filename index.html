@@ -21,10 +21,15 @@
 
           var isOverlay =
             label === "island" ||
+            label === "notify-overlay" ||
             label === "notify" ||
             label === "mini" ||
             label === "music-mini" ||
-            label === "radial-nav";
+            label === "radial-nav-overlay" ||
+            label === "radial-nav" ||
+            label === "layout-editor" ||
+            label === "rf-overlay" ||
+            label === "glance-popout";
 
           if (isOverlay) {
             document.documentElement.dataset.bootSkip = "1";
@@ -46,6 +51,15 @@
             document.head.appendChild(link);
           }
           document.documentElement.dataset.bootMode = music ? "music" : "default";
+          try {
+            var saved = JSON.parse(localStorage.getItem("ruforge-settings") || "{}");
+            if (!music && saved && saved.legacyVideoColors === true) {
+              document.documentElement.dataset.rfVideoPalette = "legacy";
+            }
+            if (saved && saved.appDensity === "compact") {
+              document.documentElement.dataset.rfDensity = "compact";
+            }
+          } catch (e2) {}
         } catch (e) {
           document.documentElement.dataset.bootMode = "default";
         }
@@ -58,6 +72,11 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
+        background: #000000;
+      }
+
+      html[data-rf-video-palette="legacy"],
+      html[data-rf-video-palette="legacy"] body {
         background: #271c18;
       }
 
@@ -78,6 +97,22 @@
       }
 
       html[data-overlay-shell="1"] #rf-boot {
+        display: none !important;
+      }
+
+      /* Lets the undecorated main window be dragged before React mounts; main.tsx removes it so it never covers the real title bar buttons. */
+      #rf-boot-drag {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: var(--rf-titlebar-h, 48px);
+        z-index: 100000;
+        background: transparent;
+        pointer-events: auto;
+      }
+
+      html[data-overlay-shell="1"] #rf-boot-drag {
         display: none !important;
       }
 
@@ -292,6 +327,7 @@
     </style>
   </head>
   <body>
+    <div id="rf-boot-drag" data-tauri-drag-region></div>
     <div id="rf-boot" data-mode="default" aria-hidden="true">
       <div class="rf-boot__layer rf-boot__layer--default"></div>
       <div class="rf-boot__layer rf-boot__layer--music"></div>

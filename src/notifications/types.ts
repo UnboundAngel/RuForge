@@ -1,4 +1,4 @@
-export type NotificationSourceId = "watchlist" | "download";
+export type NotificationSourceId = "watchlist" | "download" | "security" | "stats";
 
 export type NotificationKind =
   | "upload"
@@ -8,7 +8,11 @@ export type NotificationKind =
   | "download-failed"
   | "download-timed-out"
   /** Storage cap or disk space: a queue hold or a refused add. */
-  | "download-blocked";
+  | "download-blocked"
+  /** A YouTube page tried to leave YouTube or poked a decoy (`src/lib/securityTripwires.ts`). */
+  | "security-blocked"
+  /** Quiet milestone from the activity stats engine. */
+  | "stats-milestone";
 
 export type NotificationActionId =
   | "queue"
@@ -33,6 +37,8 @@ export type NotificationItem = {
   createdAt: number;
   read: boolean;
   actions: NotificationActionId[];
+  /** Personal-best stats rows: the record (bytes/s or seconds) and the one it beat. */
+  record?: { value: number; previous?: number; titles?: string[] };
   /** Source-specific references the source's action runner needs. */
   ref: {
     videoId?: string;
@@ -63,8 +69,11 @@ export type NotificationSource = {
 /** `settings` is the gear view, not a tab strip entry. */
 export type NotificationCenterTab = "feed" | "channels" | "history" | "settings";
 
-/** Notification settings the panel shows; alerts live in app settings, the interval in Rust's watchlist. */
-export type NotificationPrefs = { alerts: boolean; checkIntervalMin: number };
+/** What the user can silence: hidden from the feed and badge, and no toast or island notice. */
+export type NotificationMuteKey = "uploads" | "downloads" | "problems" | "milestones" | "security";
+
+/** Notification settings the panel shows; alerts and mutes live in app settings, the interval in Rust's watchlist. */
+export type NotificationPrefs = { alerts: boolean; checkIntervalMin: number; muted: NotificationMuteKey[] };
 
 export type NotificationCenterFilter = "all" | NotificationSourceId;
 

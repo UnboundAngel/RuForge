@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::media::scrub_sprites_complete_for_path;
 use crate::commands::media::list_scrub_sprite_paths_for_video;
+use crate::library::path_access::{allow_library_path, allow_path};
 use crate::utils::{is_audio_only_ext, is_item_bucket, is_media_ext, is_playlist_bucket, primary_vtt_sidecar, thumb_dir_for_stem, vtt_sidecars_for_stem, POSTER_FILE, THUMB_DIR_NAME};
 
 fn is_scrub_sprite_video_ext(ext: &str) -> bool {
@@ -1166,7 +1167,8 @@ pub fn build_gallery_entries_for_roots(roots: &[String]) -> Result<Vec<GalleryEn
 /// that still goes through the one shared ingestion primitive (`scan_gallery_dir`)
 /// rather than a second independent walk.
 #[tauri::command]
-pub fn scan_dir_for_neighbors(dir: String) -> Result<Vec<GalleryEntry>, String> {
+pub fn scan_dir_for_neighbors(app: tauri::AppHandle, dir: String) -> Result<Vec<GalleryEntry>, String> {
+    allow_path(&app, &dir)?;
     scan_gallery_dir(&dir)
 }
 
@@ -1389,22 +1391,7 @@ pub struct RegroupPlaylistResult {
 }
 
 fn sanitize_playlist_folder_name_regroup(raw: &str) -> String {
-    let mut s = raw.trim().to_string();
-    if s.is_empty() {
-        return "playlist".to_string();
-    }
-    for ch in ['<', '>', ':', '"', '/', '\\', '|', '?', '*'] {
-        s = s.replace(ch, "_");
-    }
-    s = s.split_whitespace().collect::<Vec<_>>().join(" ");
-    if s.is_empty() {
-        return "playlist".to_string();
-    }
-    if s.len() > 120 {
-        s.truncate(120);
-        s = s.trim().to_string();
-    }
-    s
+    crate::path_guard::sanitize_folder_name(raw, 120, "playlist")
 }
 
 fn sidecar_video_id_matches(sidecar_path: Option<&std::path::Path>, source_id: &str) -> bool {
@@ -1529,6 +1516,7 @@ fn move_media_bundle(from_media: &Path, dest_media: &Path) -> Result<(), String>
 
 #[tauri::command]
 pub fn regroup_playlist_downloads(
+    app: tauri::AppHandle,
     search_roots: Vec<String>,
     folder_title: String,
     items: Vec<RegroupPlaylistItem>,
@@ -1537,8 +1525,8 @@ pub fn regroup_playlist_downloads(
         .into_iter()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-        .map(PathBuf::from)
-        .collect();
+        .map(|s| allow_library_path(&app, &s))
+        .collect::<Result<_, _>>()?;
     if roots.is_empty() {
         return Err("No download folders to search.".into());
     }

@@ -1,4 +1,8 @@
 const YT_ID_RE = /^[a-zA-Z0-9_-]{11}$/;
+
+export function isYouTubeVideoId(value: unknown): value is string {
+  return typeof value === "string" && YT_ID_RE.test(value);
+}
 const YT_PLAYLIST_ID_RE = /^[A-Za-z0-9_-]{10,}$/;
 
 function isYoutubeHost(host: string): boolean {
@@ -335,5 +339,7 @@ export function sanitizePlaylistFolderName(raw: string): string {
   s = s.replace(/\s+/g, " ").trim();
   if (!s.length) return "playlist";
   if (s.length > 120) s = s.slice(0, 120).trim();
+  // Windows drops trailing dots and spaces, so "." and ".." would name the parent folder.
+  s = s.replace(/[. ]+$/, "");
   return s || "playlist";
 }

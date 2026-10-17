@@ -20,6 +20,17 @@ export const pageFadeTransition = {
   ease: OVERLAY_EASE,
 } as const;
 
+export const NAV_SHELL_EASE = [0.65, 0, 0.35, 1] as const;
+
+/**
+ * Mode switches fade the whole window through its background. An ease-out curve empties it
+ * within ~50ms and then holds black until the next shell enters, which reads as a flicker.
+ */
+export const navShellFadeTransition = {
+  duration: pageFadeTransition.duration,
+  ease: NAV_SHELL_EASE,
+} as const;
+
 /** Bell popovers grow out of their anchor; the overlay webview waits `NOTIFY_PANEL_EXIT_MS` before hiding. */
 export const notifyPanelMotion = {
   initial: { opacity: 0, y: -8, scale: 0.97 },

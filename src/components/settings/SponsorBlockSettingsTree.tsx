@@ -17,28 +17,9 @@ import {
   SB_GRADUATE_MIN_MANUAL_SKIPS,
 } from "../../sponsorBlockConstants";
 import { SponsorBlockMiniScrubber } from "../player/SponsorBlockMiniScrubber";
+import { Switch } from "../ui/Switch";
 import { SettingsDescription } from "./settingsDescription";
 import { SponsorBlockCategoryModeSelect } from "./SponsorBlockCategoryModeSelect";
-
-const ToggleSlot: React.FC<{ active: boolean; onClick?: () => void }> = ({ active, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`w-12 h-6 rounded-full relative cursor-pointer transition-all duration-300 border border-white/[0.05] ${
-      active
-        ? "bg-[#2A1E1A] shadow-[0_2px_5px_rgba(0,0,0,0.5)]"
-        : "bg-[#1D1613] shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]"
-    }`}
-  >
-    <motion.div
-      animate={{ x: active ? 26 : 2 }}
-      transition={{ type: "spring", stiffness: 600, damping: 35 }}
-      className={`pointer-events-none absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-colors duration-300 ${
-        active ? "bg-[color:var(--accent)]" : "bg-stone-700"
-      }`}
-    />
-  </button>
-);
 
 const CATEGORY_HINTS: Record<SponsorBlockSkipCategory, string> = {
   sponsor: "Paid promotions and brand deals",
@@ -183,10 +164,9 @@ export const SponsorBlockSettingsTree: React.FC = () => {
           />
         </div>
         <div className="rf-settings-row-control" onClick={(e) => e.stopPropagation()}>
-          <ToggleSlot
-            active={settings.sponsorBlockEnabled}
-            onClick={() => {
-              const next = !settings.sponsorBlockEnabled;
+          <Switch
+            checked={settings.sponsorBlockEnabled}
+            onChange={(next) => {
               void updateSetting("sponsorBlockEnabled", next);
               if (!next) setCategoriesOpen(false);
             }}
@@ -208,7 +188,7 @@ export const SponsorBlockSettingsTree: React.FC = () => {
             }}
             className={categoriesSettled ? "" : "overflow-hidden"}
           >
-            <div className="mb-2 mt-1 rounded-2xl bg-black/20 px-4 py-1.5 shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)]">
+            <div className="rf-settings-subrows">
               {SPONSORBLOCK_SKIP_CATEGORIES.map((cat) => (
                 <SponsorBlockCategoryRow
                   key={cat}

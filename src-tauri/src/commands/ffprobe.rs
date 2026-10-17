@@ -209,6 +209,7 @@ pub async fn probe_local_media_ffprobe(
     media_path: String,
     force_refresh: Option<bool>,
 ) -> Result<FfprobeHint, String> {
+    crate::library::path_access::allow_path(&app, &media_path)?;
     let refresh = force_refresh == Some(true);
     probe_ffprobe_async(app, media_path, refresh).await
 }

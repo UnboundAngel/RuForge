@@ -35,7 +35,7 @@ const next = index < FEATURE_PAGES.length - 1 ? FEATURE_PAGES[index + 1] : undef
 
 <div class="rf-read-progress" data-read-progress aria-hidden="true" />
 
-<MobilePageHeader title={page.title} description={page.description} backHref="/m/features" backLabel="Features">
+<MobilePageHeader title={page.pageHeading ?? page.title} description={page.description} backHref="/m/features" backLabel="Features">
   <p class="mt-3 text-xs font-medium text-rf-text-muted/60">
     {readingMinutes} min read · {page.sections.length} {page.sections.length === 1 ? 'section' : 'sections'}
   </p>

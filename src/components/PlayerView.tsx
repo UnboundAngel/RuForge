@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from "react";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "motion/react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, forwardRef, useImperativeHandle, useMemo, isValidElement, cloneElement } from "react";
+import { motion, AnimatePresence, useMotionValue, useTransform } from "motion/react";
 import { Icon } from "@iconify/react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 // @ts-ignore
@@ -17,9 +17,14 @@ import {
   Ellipsis,
   MessageSquare,
   ChevronRight,
+  Brackets,
 } from "lucide-react";
+import { DescriptionText } from "./player/DescriptionText";
+import { useVideoDescription } from "@/hooks/useVideoDescription";
+import { chaptersFromDescription } from "@/lib/videoDescription";
+import type { PlayerSidePanelTab } from "./player/comments/CommentsPanel";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
-import { type FfprobeHint, type MediaFile } from "../types";
+import { type Chapter, type FfprobeHint, type MediaFile } from "../types";
 import { ScrubHoverPreview } from "./player/ScrubHoverPreview";
 import {
   PlayerCenterFeedback,
@@ -44,8 +49,13 @@ import {
   videoEndCardsLeadSec,
   videoEndFadeSec,
 } from "../videoEndScreenSuggestions";
-import { VideoEndScreen, type VideoEndScreenPhase } from "./VideoEndScreen";
+import { VideoEndScreen, type VideoEndScreenCreator, type VideoEndScreenPhase } from "./VideoEndScreen";
+import { openCreatorPage } from "./library/creatorPageStore";
 import { isAudioOnlyPath } from "../mediaKind";
+import {
+  closeVideoWatchSession,
+  onVideoWatchTick,
+} from "../lib/videoWatchActivity";
 import { fetchSubtitleTracks, revokeSubtitleBlobSrcs, subtitleTracksWithBlobSrc, syncVideoTextTrackModes, type SubtitleTrack } from "../localVideoSubtitles";
 import { cookieContextFromSettings } from "@/downloadQueue";
 import { useRuforgeStore } from "../store/ruforgeStore";
@@ -56,10 +66,13 @@ import {
   nextChapterIndex,
   normalizeChapters,
   prevChapterIndex,
+  scrubberPercentForTime,
   timeForScrubberClientX,
   timeForScrubberPercent,
 } from "../chapters";
 import { ChapterScrubber } from "./player/ChapterScrubber";
+import { ScrubLoopRange, type SectionLoop } from "./player/ScrubLoopRange";
+import { ScrubHeatmap, mostReplayedRange, type HeatmapPoint } from "./player/ScrubHeatmap";
 import { AudioHeroStage } from "./player/AudioHeroStage";
 import { SponsorBlockScrubOverlay } from "./player/SponsorBlockScrubOverlay";
 import { SponsorBlockSkipButton } from "./player/SponsorBlockSkipButton";
@@ -82,9 +95,14 @@ import {
   SlidingCommentsDrawer,
 } from "./player/comments/SlidingCommentsDrawer";
 import { useVideoComments } from "./player/comments/useVideoComments";
-import { NEXT_UP_PANEL_WIDTH, NextUpPanel } from "./player/NextUpPanel";
+import { NextUpPanel } from "./player/nextUp/NextUpPanel";
+import { sortNextUpItems } from "./player/nextUp/nextUpOrder";
+import { useExclusiveSidePanels } from "./player/sidePanel/useExclusiveSidePanels";
+import { useNextUpSort } from "./player/nextUp/useNextUpSort";
 import { PlayerSkipFlash, useSkipFlash } from "./player/PlayerSkipFlash";
 import { usePlayerKeyboardShortcuts } from "../hooks/usePlayerKeyboardShortcuts";
+import { useFreezeFrameZoom } from "../hooks/useFreezeFrameZoom";
+import { FreezeZoomPill } from "./player/FreezeZoomPill";
 import {
   PlayerBarGroupBubble,
   PlayerBarInnerButton,
@@ -119,7 +137,7 @@ const SpeedIcon = ({ speed, className = "" }: { speed: number; className?: strin
 
 const Tooltip = ({ text, children, className = "" }: { text: string; children: React.ReactNode; className?: string }) => (
   <div className={`relative inline-flex items-center justify-center ${className}`} data-tooltip={text}>
-    {children}
+    {isValidElement<{ "aria-label"?: string }>(children) ? cloneElement(children, { "aria-label": text }) : children}
   </div>
 );
 
@@ -129,6 +147,9 @@ interface PlayerViewProps {
 }
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+/** Session memory for the side panel tab; the edge-hold gesture opens it without picking one. */
+let lastSidePanelTab: PlayerSidePanelTab = "comments";
 
 export type PlayerViewHandle = {
   getCurrentTime: () => number;
@@ -162,7 +183,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     [galleryEntries],
   );
 
-  const folderAudioPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
+  const rawFolderPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
+  const [nextUpSort] = useNextUpSort();
+  const folderAudioPlaylist = useMemo(() => sortNextUpItems(rawFolderPlaylist, nextUpSort), [rawFolderPlaylist, nextUpSort]);
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const loopMode = useRuforgeStore((s) => s.loopMode);
@@ -195,9 +218,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   );
   const mediaRef = useRef<HTMLMediaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const zoomViewportRef = useRef<HTMLDivElement>(null);
 
   const scrubberRef = useRef<HTMLDivElement>(null);
-  const volumeRef = useRef<HTMLDivElement>(null);
   const controlsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [progress, setProgress] = useState(0);
@@ -228,6 +251,14 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [isPressing, setIsPressing] = useState<"left" | "right" | null>(null);
   const [previousSpeed, setPreviousSpeed] = useState(1);
   const pressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      // The press timer drives the shared host audio's speed, so it must not fire after the player closes.
+      if (pressTimeout.current) clearTimeout(pressTimeout.current);
+      if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
+    },
+    [],
+  );
   const blockClickRef = useRef(false);
   const scrubGenerationRef = useRef(0);
   /** Blocks `timeupdate` from snapping the scrub thumb while a seek is in flight. */
@@ -279,6 +310,38 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     !audioOnly,
   );
 
+  const [sectionLoop, setSectionLoop] = useState<SectionLoop | null>(null);
+  const sectionLoopRef = useRef(sectionLoop);
+  sectionLoopRef.current = sectionLoop;
+  useEffect(() => {
+    setSectionLoop(null);
+  }, [file.path]);
+
+  const [heatmap, setHeatmap] = useState<HeatmapPoint[]>([]);
+  const mostReplayed = useMemo(() => mostReplayedRange(heatmap), [heatmap]);
+  const [fetchedChapters, setFetchedChapters] = useState<Chapter[] | null>(null);
+  useEffect(() => {
+    setHeatmap([]);
+    setFetchedChapters(null);
+    if (audioOnly) return;
+    let cancelled = false;
+    const { settings: s } = useRuforgeStore.getState();
+    void invoke<{ heatmap: HeatmapPoint[]; chapters: Chapter[] }>("local_media_youtube_extras", {
+      path: file.path,
+      browserCookies: s.browserContext || null,
+      cookieFile: s.cookieFile || null,
+    })
+      .then((extras) => {
+        if (cancelled) return;
+        setHeatmap(extras.heatmap);
+        if (extras.chapters.length >= 2) setFetchedChapters(extras.chapters);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [file.path, audioOnly]);
+
   /** Warm ffprobe disk cache; results are not shown in the player UI. */
   useEffect(() => {
     void invoke<FfprobeHint>("probe_local_media_ffprobe", {
@@ -315,7 +378,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         subtitleBlobTracksRef.current = tracks;
         setSubtitleTracks(tracks);
         const pref = subtitlePreferredLangRef.current?.trim() || null;
-        const found = pref ? tracks.find((t) => t.lang === pref) : undefined;
+        const found = pref
+          ? (tracks.find((t) => t.lang === pref) ?? tracks.find((t) => t.lang === `${pref}-orig`))
+          : undefined;
         if (pref && found) {
           setSelectedSubtitleLang(found.lang);
           setIsSubtitlesEnabled(true);
@@ -387,7 +452,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     setPlaybackSpeedState(speed);
   };
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
-  const [showPlaylist, setShowPlaylist] = useState(false);
+  const { showPlaylist, setShowPlaylist, commentsPanelOpen, setCommentsPanelOpen } = useExclusiveSidePanels();
   const [endScreen, setEndScreen] = useState<{
     phase: VideoEndScreenPhase;
     suggestions: MediaFile[];
@@ -395,12 +460,18 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   } | null>(null);
   const [endDimOpacity, setEndDimOpacity] = useState(0);
   const [endCardHovered, setEndCardHovered] = useState(false);
+  const [endCardsHidden, setEndCardsHidden] = useState(false);
   const endFadeGainRef = useRef(1);
   const endSuggestionsForPathRef = useRef<{
     path: string;
     suggestions: MediaFile[];
   } | null>(null);
-  const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
+  const [sidePanelTab, setSidePanelTabState] = useState<PlayerSidePanelTab>(() => lastSidePanelTab);
+  const setSidePanelTab = useCallback((tab: PlayerSidePanelTab) => {
+    lastSidePanelTab = tab;
+    setSidePanelTabState(tab);
+  }, []);
+  const { text: descriptionText, loading: descriptionLoading, viewCount: descriptionViews, uploadDate: descriptionDate } = useVideoDescription(file.path);
   const [showPlayerMoreMenu, setShowPlayerMoreMenu] = useState(false);
   const { feedback: centerFeedback, showFeedback: showCenterFeedback } =
     usePlayerCenterFeedback();
@@ -418,17 +489,11 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     commentCookies.cookieFile,
   );
   const commentsPanelX = useMotionValue(COMMENTS_PANEL_WIDTH);
-  const nextUpPanelX = useSpring(NEXT_UP_PANEL_WIDTH, { stiffness: 340, damping: 30 });
-  useEffect(() => {
-    nextUpPanelX.set(showPlaylist ? 0 : NEXT_UP_PANEL_WIDTH);
-  }, [showPlaylist, nextUpPanelX]);
+  const nextUpPanelX = useMotionValue(COMMENTS_PANEL_WIDTH);
+  const handleNextUpPanelX = useCallback((x: number) => nextUpPanelX.set(x), [nextUpPanelX]);
   /** How much of the right edge a side panel covers; the video and the control bar give that space up. */
   const sidePanelInset = useTransform(() =>
-    Math.max(
-      COMMENTS_PANEL_WIDTH - commentsPanelX.get(),
-      NEXT_UP_PANEL_WIDTH - nextUpPanelX.get(),
-      0,
-    ),
+    Math.max(COMMENTS_PANEL_WIDTH - commentsPanelX.get(), COMMENTS_PANEL_WIDTH - nextUpPanelX.get(), 0),
   );
   const commentsVideoScale = useTransform(
     sidePanelInset,
@@ -442,6 +507,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     setEndScreen(null);
     setEndDimOpacity(0);
     setEndCardHovered(false);
+    setEndCardsHidden(false);
     endFadeGainRef.current = 1;
     endSuggestionsForPathRef.current = null;
   }, [file.path]);
@@ -510,10 +576,31 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     setEndCardHovered(hovered);
   }, []);
 
-  const toggleCommentsPanel = useCallback(() => {
-    setShowPlaylist(false);
-    setCommentsPanelOpen((open) => !open);
+  const handleEndCardsHide = useCallback(() => {
+    setEndCardsHidden(true);
+    setEndCardHovered(false);
+    setEndScreen((prev) => (prev?.phase === "cards" ? null : prev));
   }, []);
+
+  const endScreenCreator = useMemo((): VideoEndScreenCreator | null => {
+    const channelId = file.youtube?.channelId;
+    const channel = file.youtube?.channel?.trim();
+    return channelId && channel ? { channelId, channel } : null;
+  }, [file.youtube?.channelId, file.youtube?.channel]);
+
+  const handleEndScreenOpenCreator = useCallback(
+    (creator: VideoEndScreenCreator) => {
+      onBack();
+      openCreatorPage(creator.channelId, creator.channel);
+    },
+    [onBack],
+  );
+
+  /** Opens the drawer on the last-used tab; the tabs inside it switch between description and comments. */
+  const toggleCommentsPanel = useCallback(() => {
+    setCommentsPanelOpen(!commentsPanelOpen);
+  }, [commentsPanelOpen, setCommentsPanelOpen]);
+  const commentsActive = commentsPanelOpen;
 
   const audioMediaSrc = useMemo(
     () => (audioOnly ? convertFileSrc(file.path) : ""),
@@ -640,7 +727,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
 
     if (remaining <= leadSec) {
-      const suggestions = ensureEndSuggestions();
+      const suggestions = endCardsHidden ? [] : ensureEndSuggestions();
       if (suggestions.length === 0) {
         if (endScreen) setEndScreen(null);
         const dim = fadeProgress;
@@ -674,6 +761,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     currentTime,
     endScreen,
     endCardHovered,
+    endCardsHidden,
     endDimOpacity,
     ensureEndSuggestions,
     applyVideoOutputWithFade,
@@ -682,10 +770,17 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const handlePlaybackEnded = useCallback(() => {
     if (loopMode === "one") return;
     const m = mediaRef.current;
+    const loop = sectionLoopRef.current;
+    if (m && loop?.end != null) {
+      m.currentTime = loop.start;
+      void m.play().catch(() => {});
+      return;
+    }
     if (m && isFinite(m.duration) && m.duration > 0) {
       writePlaybackPos(file.path, m.duration, m.duration);
     }
     if (!audioOnly) {
+      closeVideoWatchSession("completed");
       if (loopMode === "all") {
         const vi = videoLibrarySorted.findIndex((f) => f.path === file.path);
         if (vi >= 0 && videoLibrarySorted.length > 0) {
@@ -921,19 +1016,30 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         : file.duration > 0
           ? file.duration
           : 0;
-    return normalizeChapters(file.chapters, dur);
-  }, [file.chapters, file.duration, duration]);
+    const real = normalizeChapters(file.chapters?.length ? file.chapters : fetchedChapters, dur);
+    return real ?? normalizeChapters(chaptersFromDescription(descriptionText, dur), dur);
+  }, [file.chapters, fetchedChapters, file.duration, duration, descriptionText]);
 
   const [scrubberBarWidthPx, setScrubberBarWidthPx] = useState(0);
+  // The scrubber unmounts whenever the controls hide: measure each element it mounts as, and drop hover
+  // state on unmount since no mouseleave fires for a removed element.
+  const [scrubberEl, setScrubberEl] = useState<HTMLDivElement | null>(null);
+  const attachScrubber = useCallback(
+    (el: HTMLDivElement | null) => {
+      scrubberRef.current = el;
+      setScrubberEl(el);
+      if (!el) onScrubberMouseLeave();
+    },
+    [onScrubberMouseLeave],
+  );
   useEffect(() => {
-    const el = scrubberRef.current;
-    if (!el) return;
-    const sync = () => setScrubberBarWidthPx(el.getBoundingClientRect().width);
+    if (!scrubberEl) return;
+    const sync = () => setScrubberBarWidthPx(scrubberEl.getBoundingClientRect().width);
     sync();
     const ro = new ResizeObserver(sync);
-    ro.observe(el);
+    ro.observe(scrubberEl);
     return () => ro.disconnect();
-  }, [file.path]);
+  }, [scrubberEl]);
 
   const spriteHover = useMemo(() => {
     if (!isHoveringScrubber) return null;
@@ -1077,6 +1183,69 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     showCenterFeedback,
   ]);
 
+  const sectionLoopActive = sectionLoop?.end != null;
+  useEffect(() => {
+    if (!sectionLoopActive || isPaused || audioDelegated) return;
+    let prev = mediaRef.current?.currentTime ?? 0;
+    let raf = 0;
+    const tick = () => {
+      const vid = mediaRef.current;
+      const loop = sectionLoopRef.current;
+      if (vid && loop?.end != null) {
+        const now = vid.currentTime;
+        // Only a playhead crossing the end loops back, so seeking past it on purpose escapes the loop.
+        if (prev < loop.end && now >= loop.end) vid.currentTime = loop.start;
+        prev = vid.currentTime;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sectionLoopActive, isPaused, audioDelegated]);
+
+  const cycleSectionLoop = useCallback(() => {
+    const vid = mediaRef.current;
+    if (!vid || scrubDuration <= 0) return;
+    const t = vid.currentTime;
+    const loop = sectionLoopRef.current;
+    if (!loop) {
+      setSectionLoop({ start: t, end: null });
+      return;
+    }
+    if (loop.end == null) {
+      const start = Math.min(loop.start, t);
+      const end = Math.min(scrubDuration, Math.max(loop.start, t, start + 0.5));
+      setSectionLoop({ start, end });
+      vid.currentTime = start;
+      return;
+    }
+    setSectionLoop(null);
+  }, [scrubDuration]);
+
+  const loopPercentForTime = useCallback(
+    (t: number) => {
+      if (scrubDuration <= 0) return 0;
+      return chapters && chapters.length >= 2
+        ? scrubberPercentForTime(chapters, scrubDuration, t, scrubberBarWidthPx)
+        : (t / scrubDuration) * 100;
+    },
+    [chapters, scrubDuration, scrubberBarWidthPx],
+  );
+  const loopMarkerExpandedAt = (t: number) => {
+    if (!chapters || chapters.length < 2) return isHoveringScrubber || isScrubbing;
+    if (!isHoveringScrubber || scrubDuration <= 0) return false;
+    const hoverT = timeForScrubberPercent(chapters, scrubDuration, scrubberHoverPos, scrubberBarWidthPx);
+    return chapterAtTime(chapters, hoverT)?.index === chapterAtTime(chapters, t)?.index;
+  };
+  const loopTimeForClientX = (clientX: number) => {
+    const rect = scrubberRef.current?.getBoundingClientRect();
+    if (!rect || scrubDuration <= 0) return 0;
+    return Math.min(
+      scrubDuration,
+      Math.max(0, timeForScrubberClientX(chapters, scrubDuration, clientX, rect.left, rect.width)),
+    );
+  };
+
   const seekToPercent = useCallback(
     (fraction: number) => {
       if (scrubDuration <= 0) return;
@@ -1106,6 +1275,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     seekToPercent: scrubDuration > 0 ? seekToPercent : undefined,
     jumpPrevChapter: chapters ? jumpPrevChapter : undefined,
     jumpNextChapter: chapters ? jumpNextChapter : undefined,
+  });
+
+  const freezeZoom = useFreezeFrameZoom({
+    viewportRef: zoomViewportRef,
+    mediaRef,
+    enabled: !audioOnly && isPaused,
   });
 
   const handleSeeked = useCallback(() => {
@@ -1293,6 +1468,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       const vid = mediaRef.current;
       if (!vid) return;
 
+      if (!isAudioOnlyPath(file.path)) {
+        onVideoWatchTick(playbackSpeed, !vid.paused);
+      }
+
       syncPausedFromMedia(vid.paused);
 
       if (isFinite(vid.currentTime)) {
@@ -1329,16 +1508,15 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     applyMediaOutputState(vid, volume * endFadeGainRef.current, isMuted);
     vid.preservesPitch = true;
     vid.playbackRate = playbackSpeed;
+    // `autoPlay` waits until the browser judges it can play through, a visible late start; play() starts on the next frames.
+    if (vid.paused && !vid.ended) void vid.play().catch(() => {});
 
     const dur = vid.duration;
     if (!Number.isFinite(dur) || dur <= 0) return;
 
     if (resumeSeekAppliedPathRef.current === file.path) return;
 
-    let resume = 0;
-    if (!audioOnly) {
-      resume = readResumeSeconds(file.path, dur, { rewindSeconds: RESUME_REWIND_SEC });
-    }
+    const resume = audioOnly ? 0 : readResumeSeconds(file.path, dur, { rewindSeconds: RESUME_REWIND_SEC });
 
     resumeSeekAppliedPathRef.current = file.path;
     vid.currentTime = resume;
@@ -1431,27 +1609,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       window.removeEventListener("mouseup", onUp);
     };
 
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-
-  // Volume drag
-  const getVolumePosition = (e: { clientX: number }): number => {
-    const rect = volumeRef.current?.getBoundingClientRect();
-    if (!rect) return 0;
-    return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-  };
-
-  const handleVolumeMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsVolumeDragging(true);
-    changeVolume(getVolumePosition(e));
-    const onMove = (ev: MouseEvent) => changeVolume(getVolumePosition(ev));
-    const onUp = () => {
-      setIsVolumeDragging(false);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
@@ -1564,11 +1721,12 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     >
       <NextUpPanel
         open={showPlaylist}
-        x={nextUpPanelX}
+        onOpenChange={setShowPlaylist}
+        onAnimatedXChange={handleNextUpPanelX}
         items={folderAudioPlaylist}
         currentPath={file.path}
+        wraps={loopMode === "all" && audioOnly}
         onSelect={setPlayingFile}
-        onClose={() => setShowPlaylist(false)}
       />
       {/* Local <video> or host-delegated audio presentation */}
       <div className="absolute inset-0">
@@ -1646,17 +1804,21 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               aria-hidden
             />
             <div
-              className="relative z-10 flex h-full w-full min-h-0 items-center justify-center transition-opacity duration-200"
+              ref={zoomViewportRef}
+              data-zoom={freezeZoom.dataZoom}
+              className="freeze-zoom-viewport relative z-10 flex h-full w-full min-h-0 items-center justify-center transition-opacity duration-200"
               style={{ opacity: mediaBlendOpacity }}
             >
               <video
                 ref={bindVideoRef}
                 src={convertFileSrc(file.path)}
                 crossOrigin="anonymous"
-                className="relative h-full w-full object-contain"
+                data-zoom={freezeZoom.dataZoom}
+                className="freeze-zoom-media relative h-full w-full object-contain"
+                style={freezeZoom.mediaStyle}
                 autoPlay
                 playsInline
-                preload="metadata"
+                preload="auto"
                 poster={coverArtSrc ? convertFileSrc(coverArtSrc) : undefined}
                 onCanPlay={(e) => {
                   handleMediaCanPlay(e.currentTarget);
@@ -1677,13 +1839,14 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 onEnded={() => {
                   if (loopMode !== "one") handlePlaybackEnded();
                 }}
-                onClick={togglePlay}
-                onDoubleClick={toggleFullscreen}
-                onMouseDown={handleMouseDown}
+                onClick={() => freezeZoom.handleClick(togglePlay)}
+                onDoubleClick={() => freezeZoom.handleDoubleClick(toggleFullscreen)}
+                onMouseDown={freezeZoom.zoomed ? undefined : handleMouseDown}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
                 onAuxClick={handleAuxClickMute}
                 onWheel={(e) => {
+                  if (e.ctrlKey) return;
                   if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
                   if (e.deltaY === 0) return;
                   changeVolume(Math.min(1, Math.max(0, volume + (e.deltaY > 0 ? -0.05 : 0.05))));
@@ -1711,6 +1874,18 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         <SlidingCommentsDrawer
           isOpen={commentsPanelOpen}
           onOpenChange={setCommentsPanelOpen}
+          tab={sidePanelTab}
+          onTabChange={setSidePanelTab}
+          description={(
+            <DescriptionText
+              text={descriptionText}
+              loading={descriptionLoading}
+              viewCount={descriptionViews}
+              uploadDate={descriptionDate}
+              durationSec={isFinite(duration) && duration > 0 ? duration : file.duration}
+              onSeek={seekToTimeSeconds}
+            />
+          )}
           comments={videoComments}
           commentsLoading={commentsLoading}
           commentsLoadingLabel={commentsLoadingLabel}
@@ -1736,10 +1911,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             phase={endScreen.phase}
             suggestions={endScreen.suggestions}
             autoplayArmed={endScreen.autoplayArmed}
+            creator={endScreenCreator}
+            onOpenCreator={handleEndScreenOpenCreator}
             onSelect={handleEndScreenSelect}
             onCancelTimer={handleEndScreenCancelTimer}
             onPlayNow={handleEndScreenPlayNow}
             onCardHoverChange={handleEndCardHoverChange}
+            onHide={handleEndCardsHide}
           />
         )}
       </AnimatePresence>
@@ -1748,26 +1926,50 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       <AnimatePresence>
         {isPressing && (
           <motion.div
-            initial={{ opacity: 0, y: -20, x: "-50%" }}
-            animate={{ opacity: 1, y: 0, x: "-50%" }}
-            exit={{ opacity: 0, y: -20, x: "-50%" }}
-            className="absolute top-24 left-1/2 z-[100] px-6 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full flex items-center gap-3 pointer-events-none"
+            initial={{ opacity: 0, y: -8, x: "-50%", scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
+            exit={{ opacity: 0, y: -8, x: "-50%", scale: 0.96 }}
+            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute top-20 left-1/2 z-[100] flex items-center gap-2 rounded-full bg-black/75 py-1.5 pl-3.5 pr-3 shadow-[0_2px_10px_rgba(0,0,0,0.35)] pointer-events-none"
           >
-            <div className="flex gap-0.5">
-              {[...Array(2)].map((_, i) => (
-                <Icon 
+            <span className="text-[13px] font-semibold tabular-nums text-white">
+              {isPressing === "right" ? "2×" : "0.5×"}
+            </span>
+            <span className="flex items-center" aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <motion.svg
                   key={i}
-                  icon={isPressing === "right" ? "tabler:player-play-filled" : "tabler:player-play-filled"} 
-                  className={`w-4 h-4 text-[#271C18] ${isPressing === "left" ? "rotate-180" : ""}`}
-                />
+                  viewBox="0 0 8 10"
+                  className="h-2.5 w-2 -ml-px fill-white first:ml-0"
+                  initial={{ opacity: 0.25 }}
+                  animate={{ opacity: [0.25, 1, 0.25] }}
+                  transition={{
+                    duration: isPressing === "right" ? 0.9 : 1.8,
+                    repeat: Infinity,
+                    delay: i * (isPressing === "right" ? 0.15 : 0.3),
+                    ease: "easeInOut",
+                  }}
+                >
+                  <path d="M0 0.8v8.4a.6.6 0 0 0 .9.5l6.6-4.2a.6.6 0 0 0 0-1L.9.3A.6.6 0 0 0 0 .8z" />
+                </motion.svg>
               ))}
-            </div>
-            <span className="text-sm font-black tracking-widest text-white uppercase">
-              {isPressing === "right" ? "2.0x Faster" : "0.5x Slower"}
             </span>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {!audioOnly && (
+        <motion.div
+          style={{ right: sidePanelInset }}
+          className="pointer-events-none absolute left-0 top-0 h-24 z-[75]"
+        >
+          <FreezeZoomPill
+            scale={freezeZoom.scale}
+            onReset={freezeZoom.reset}
+            className="pointer-events-auto right-8 top-[33px]"
+          />
+        </motion.div>
+      )}
 
       {/* Center feedback (play/pause, volume, captions) */}
       <PlayerCenterFeedback feedback={centerFeedback} />
@@ -1848,12 +2050,22 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
           >
             {/* Scrubber */}
             <div
-              ref={scrubberRef}
+              ref={attachScrubber}
               className={`relative z-10 w-full min-w-0 max-w-full cursor-pointer group/scrubber py-2 pointer-events-auto ${isScrubbing ? "cursor-grabbing" : ""}`}
               onMouseDown={handleScrubMouseDown}
               onMouseMove={onScrubberMouseMove}
               onMouseLeave={onScrubberMouseLeave}
             >
+              {heatmap.length > 1 && scrubDuration > 0 && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-[calc(0.5rem+13px)] h-5">
+                  <ScrubHeatmap
+                    points={heatmap}
+                    percentForTime={loopPercentForTime}
+                    playedPercent={playedBarPercent}
+                    visible={isHoveringScrubber || isScrubbing}
+                  />
+                </div>
+              )}
               {chapters && chapters.length >= 2 && (duration > 0 || file.duration > 0) ? (
                 <ChapterScrubber
                   chapters={chapters}
@@ -1867,24 +2079,39 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                   scrubberThumbs={scrubberThumbs}
                   formatTime={formatTime}
                   overlay={settings.sponsorBlockEnabled ? sponsorBlock.scrubOverlay : undefined}
+                  mostReplayed={mostReplayed}
+                  loopRange={sectionLoop?.end != null ? { start: sectionLoop.start, end: sectionLoop.end } : null}
                 />
               ) : (
                 <div className="relative flex h-3 w-full items-end overflow-visible">
                   <div
-                    className={`h-1.5 w-full origin-bottom rounded-full relative transition-transform duration-150 ${isScrubbing || isHoveringScrubber ? "scale-y-[2]" : ""} bg-white/15 overflow-hidden`}
+                    className={`rf-scrub-groove h-1.5 w-full origin-bottom rounded-full relative transition-transform duration-150 ${isScrubbing || isHoveringScrubber ? "scale-y-[2]" : ""} overflow-hidden`}
                   >
                     {settings.sponsorBlockEnabled && scrubDuration > 0 && sponsorBlock.scrubOverlay && (
                       <SponsorBlockScrubOverlay duration={scrubDuration} overlay={sponsorBlock.scrubOverlay} />
                     )}
-                    <div className="absolute top-0 left-0 h-full bg-white/20 rounded-full" style={{ width: `${buffered}%` }} />
-                    <div className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)]" style={{ width: `${playedBarPercent}%` }} />
+                    <div className="rf-scrub-buffered absolute top-0 left-0 h-full rounded-full" style={{ width: `${buffered}%` }} />
                     {isHoveringScrubber && (
-                      <div className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none" style={{ width: `${scrubberHoverPos}%` }} />
+                      <div className="rf-scrub-hover absolute top-0 left-0 h-full rounded-full pointer-events-none" style={{ width: `${scrubberHoverPos}%` }} />
+                    )}
+                    <div className="rf-scrub-played absolute top-0 left-0 h-full rounded-full" style={{ width: `${playedBarPercent}%` }} />
+                    {sectionLoop?.end != null && scrubDuration > 0 && (
+                      <div
+                        className="rf-scrub-loop-band absolute inset-y-0 pointer-events-none"
+                        style={{
+                          left: `${(sectionLoop.start / scrubDuration) * 100}%`,
+                          width: `${((sectionLoop.end - sectionLoop.start) / scrubDuration) * 100}%`,
+                        }}
+                      />
                     )}
                   </div>
                   <div
-                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg pointer-events-none z-20 transition-opacity ${isHoveringScrubber || isScrubbing ? "opacity-100" : "opacity-0"}`}
-                    style={{ left: `${playedBarPercent}%` }}
+                    className="rf-scrub-knob absolute w-3.5 h-3.5 rounded-full pointer-events-none z-20"
+                    style={{
+                      left: `${playedBarPercent}%`,
+                      bottom: isHoveringScrubber || isScrubbing ? 6 : 3,
+                      transform: `translate(-50%, 50%) scale(${isHoveringScrubber || isScrubbing ? 1 : 0})`,
+                    }}
                   />
                   {isHoveringScrubber && isFinite(duration) && duration > 0 && (
                     <AnimatePresence>
@@ -1899,9 +2126,22 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                             ? sponsorBlock.scrubOverlay
                             : undefined
                         }
+                        mostReplayed={mostReplayed}
                       />
                     </AnimatePresence>
                   )}
+                </div>
+              )}
+              {sectionLoop && scrubDuration > 0 && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-2 top-2">
+                  <ScrubLoopRange
+                    loop={sectionLoop}
+                    percentForTime={loopPercentForTime}
+                    timeForClientX={loopTimeForClientX}
+                    onChange={setSectionLoop}
+                    formatTime={formatTime}
+                    expandedAt={loopMarkerExpandedAt}
+                  />
                 </div>
               )}
             </div>
@@ -1924,10 +2164,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                     <PlayerBarVolumeBubble
                       muted={isMuted}
                       volume={volume}
-                      volumeRef={volumeRef}
                       isDragging={isVolumeDragging}
                       onToggleMute={() => setMuted(!isMuted)}
-                      onMouseDown={handleVolumeMouseDown}
+                      onVolume={changeVolume}
+                      onDragChange={setIsVolumeDragging}
                       icon={<VolumeIconCmp className={volumeIconClass} />}
                     />
                   </Tooltip>
@@ -1967,6 +2207,24 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                       <LoopModeSwapIcon mode={loopMode} size={18} />
                     </PlayerBarInnerButton>
                   </Tooltip>
+                  {!audioDelegated && (
+                    <Tooltip
+                      text={
+                        !sectionLoop
+                          ? "Loop a section: set start"
+                          : sectionLoop.end == null
+                            ? "Set loop end"
+                            : "Stop section loop"
+                      }
+                    >
+                      <PlayerBarInnerButton
+                        onClick={cycleSectionLoop}
+                        className={sectionLoop ? "text-[color:var(--accent)]" : ""}
+                      >
+                        <Brackets className={`w-[18px] h-[18px] ${sectionLoop && sectionLoop.end == null ? "opacity-60" : ""}`} />
+                      </PlayerBarInnerButton>
+                    </Tooltip>
+                  )}
                   <div className="relative">
                     <Tooltip text="Playback speed">
                       <PlayerBarInnerButton
@@ -2063,7 +2321,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                           {(prevInFolder || nextInFolder) && <div className="my-1 border-t border-white/10" />}
                           <button
                             type="button"
-                            onClick={() => { setShowPlaylist(!showPlaylist); setCommentsPanelOpen(false); setShowPlayerMoreMenu(false); }}
+                            onClick={() => { setShowPlaylist(!showPlaylist); setShowPlayerMoreMenu(false); }}
                             className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-white/5 flex items-center gap-2 ${showPlaylist ? "text-[color:var(--accent)]" : "text-stone-300 hover:text-white"}`}
                           >
                             <Layers className="w-4 h-4" /> Up next
@@ -2072,9 +2330,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                             <button
                               type="button"
                               onClick={() => { toggleCommentsPanel(); setShowPlayerMoreMenu(false); }}
-                              className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-white/5 flex items-center gap-2 ${commentsPanelOpen ? "text-[color:var(--accent)]" : "text-stone-300 hover:text-white"}`}
+                              className={`w-full px-3 py-2 text-left text-[11px] font-bold hover:bg-white/5 flex items-center gap-2 ${commentsActive ? "text-[color:var(--accent)]" : "text-stone-300 hover:text-white"}`}
                             >
-                              <MessageSquare className="w-4 h-4" /> Comments
+                              <MessageSquare className="w-4 h-4" /> Description and comments
                             </button>
                           )}
                           {subtitleTracks.length > 0 && (
@@ -2192,10 +2450,10 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                     </PlayerBarInnerButton>
                   </Tooltip>
                   {!audioOnly && (
-                    <Tooltip text="Comments">
+                    <Tooltip text="Description and comments">
                       <PlayerBarInnerButton
                         onClick={toggleCommentsPanel}
-                        className={commentsPanelOpen ? "text-[color:var(--accent)]" : ""}
+                        className={commentsActive ? "text-[color:var(--accent)]" : ""}
                       >
                         <MessageSquare className="w-4 h-4" />
                       </PlayerBarInnerButton>

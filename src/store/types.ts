@@ -14,10 +14,17 @@ import {
   RUFORGE_INTERNAL_DIR,
 } from "../platformPaths";
 import { readSessionLoopMode, type LoopMode } from "../playbackLoopStorage";
+import { normalizeHotkeyOverrides, type HotkeyOverrides } from "../lib/hotkeys";
+import { normalizeMutedList } from "../notifications/muteModel";
+import type { NotificationMuteKey } from "../notifications/types";
+import { normalizeGames, type GameRecord } from "../lib/gamesSettings";
 
 export type { LoopMode };
 
-export type ActiveTab = "downloader" | "media" | "player" | "settings" | "explorer";
+export type ActiveTab = "downloader" | "media" | "player" | "settings" | "explorer" | "games";
+
+/** The tabs a video can be opened from, and so where closing the player returns to. */
+export type BrowseTab = "media" | "games";
 
 /** Shell persona cycled from the radial menu center (logo / settings scope later). */
 export type NavMode = "default" | "music";
@@ -58,6 +65,7 @@ export type SettingsTab =
   | "downloads"
   | "playback"
   | "appearance"
+  | "shortcuts"
   | "advanced"
   | "debugging";
 
@@ -108,6 +116,12 @@ export function clampMaxConcurrentDownloads(n: unknown): number {
   return Math.min(MAX_CONCURRENT_DOWNLOADS_CAP, Math.max(1, x));
 }
 
+export type AppDensity = "cozy" | "compact";
+
+export function normalizeAppDensity(raw: unknown): AppDensity {
+  return raw === "compact" ? "compact" : "cozy";
+}
+
 export interface RuforgeSettings {
   launchAtStartup: boolean;
   minimizeToTray: boolean;
@@ -119,7 +133,12 @@ export interface RuforgeSettings {
   downloadAudioFormat: string;
   preferredQuality: string;
   accentColor: string;
-  gridDensity: string;
+  /** When true, video mode keeps the original warm brown palette instead of Music's neutral blacks. */
+  legacyVideoColors: boolean;
+  /** App chrome sizing: Cozy is the standard 48px title band and 56px rail, Compact the slimmer one. */
+  appDensity: AppDensity;
+  /** While a video plays in the player, fold the rail and title band into the window rim until the pointer nears them. */
+  autoHideChromeWhilePlaying: boolean;
   hardwareAcceleration: boolean;
   storageLimitGB: number;
   browserContext: string;
@@ -178,10 +197,32 @@ export interface RuforgeSettings {
   discordPresenceShowBrowsing: boolean;
   /** When false, new uploads from followed channels stay silent (badges and auto-download still run). */
   watchlistAlerts: boolean;
+  /** Notification groups the user silenced (`NotificationMuteKey`); hidden from the bell and never toasted. */
+  notificationMuted: NotificationMuteKey[];
   /** When true, the title bar shows the export-to-drive button (Settings > Export always has it). */
   showExportInTitlebar: boolean;
   /** Experiment: the bell opens the notification center inside the titlebar island instead of the popover. */
   notificationsInIsland: boolean;
+  /** Rebound keyboard shortcuts by action id; actions not listed use their defaults (`lib/hotkeys.ts`). */
+  hotkeyBindings: HotkeyOverrides;
+  /** Video mini opacity while ghost mode is on, `MINI_GHOST_OPACITY_MIN` to 1. */
+  miniGhostOpacity: number;
+  /** Watch the foreground window for known games (Settings > Playback > Games). */
+  gameDetectionEnabled: boolean;
+  /** System-wide in-game overlay (Settings > Playback > Games). Default on. */
+  inGameOverlayEnabled: boolean;
+  /** Ghost mode only: pause when playback runs past a chapter end. */
+  ghostPauseAtChapterEnd: boolean;
+  /** Built-ins first (cannot be deleted), then games the user added. */
+  games: GameRecord[];
+}
+
+export const MINI_GHOST_OPACITY_MIN = 0.4;
+export const MINI_GHOST_OPACITY_DEFAULT = 0.7;
+
+export function clampMiniGhostOpacity(raw: unknown): number {
+  const n = typeof raw === "number" && Number.isFinite(raw) ? raw : MINI_GHOST_OPACITY_DEFAULT;
+  return Math.min(1, Math.max(MINI_GHOST_OPACITY_MIN, n));
 }
 
 export const DEFAULT_SETTINGS: RuforgeSettings = {
@@ -192,7 +233,9 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   downloadAudioFormat: "m4a",
   preferredQuality: "1080p (HD)",
   accentColor: "#EDCF9B",
-  gridDensity: "Default",
+  legacyVideoColors: false,
+  appDensity: "cozy",
+  autoHideChromeWhilePlaying: false,
   hardwareAcceleration: true,
   storageLimitGB: 50,
   browserContext: "",
@@ -222,14 +265,26 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   discordPresenceShowTitles: true,
   discordPresenceShowBrowsing: true,
   watchlistAlerts: true,
+  notificationMuted: [],
   showExportInTitlebar: false,
   notificationsInIsland: false,
+  hotkeyBindings: {},
+  miniGhostOpacity: MINI_GHOST_OPACITY_DEFAULT,
+  gameDetectionEnabled: true,
+  inGameOverlayEnabled: true,
+  ghostPauseAtChapterEnd: false,
+  games: normalizeGames(undefined),
 };
 
-/** Hidden legacy default was `"chrome"` (not in downloader UI). Treat as no cookie source. */
+/**
+ * Hidden legacy default was `"chrome"` (not in downloader UI); `"safari"` was offered but is
+ * macOS-only. Treat both as no cookie source. Edge and Brave app-bound cookie encryption on
+ * Windows blocks yt-dlp (yt-dlp#10927), so those saved choices move to Internal.
+ */
 export function normalizeBrowserContext(raw: string | undefined | null): string {
   const v = (raw ?? "").trim();
-  if (!v || v === "chrome") return "";
+  if (!v || v === "chrome" || v === "safari") return "";
+  if (v === "edge" || v === "brave") return "ruforge";
   return v;
 }
 
@@ -270,8 +325,18 @@ export function loadMergedSettings(): RuforgeSettings {
       discordPresenceShowTitles: merged.discordPresenceShowTitles !== false,
       discordPresenceShowBrowsing: merged.discordPresenceShowBrowsing !== false,
       watchlistAlerts: merged.watchlistAlerts !== false,
+      notificationMuted: normalizeMutedList(merged.notificationMuted),
       showExportInTitlebar: merged.showExportInTitlebar === true,
       notificationsInIsland: merged.notificationsInIsland === true,
+      legacyVideoColors: merged.legacyVideoColors === true,
+      appDensity: normalizeAppDensity(merged.appDensity),
+      autoHideChromeWhilePlaying: merged.autoHideChromeWhilePlaying === true,
+      hotkeyBindings: normalizeHotkeyOverrides(merged.hotkeyBindings),
+      miniGhostOpacity: clampMiniGhostOpacity(merged.miniGhostOpacity),
+      gameDetectionEnabled: merged.gameDetectionEnabled !== false,
+      inGameOverlayEnabled: merged.inGameOverlayEnabled !== false,
+      ghostPauseAtChapterEnd: merged.ghostPauseAtChapterEnd === true,
+      games: normalizeGames(merged.games),
     };
   } catch {
     return DEFAULT_SETTINGS;

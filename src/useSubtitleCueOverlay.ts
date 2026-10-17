@@ -44,13 +44,16 @@ function decodeHtmlEntities(text: string): string {
 }
 
 /**
- * YouTube-style speaker markers (`>>`, `>>>`, `»`) — strip everywhere and collapse whitespace.
+ * YouTube-style speaker markers (`>>`, `>>>`, `»`): strip everywhere and collapse whitespace within
+ * each line. Line breaks stay; rolling captions keep the finished line above the one being spoken.
  */
 function stripSpeakerMarkers(text: string): string {
   return text
     .replace(/(?:>{2,}|»+)/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length > 0)
+    .join("\n");
 }
 
 function normalizeCuePlainText(raw: string): string {

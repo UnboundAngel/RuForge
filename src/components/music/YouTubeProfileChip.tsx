@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
+import { useImageFallback } from "@/components/ui/FallbackImg";
 import { isYoutubeAuthSurfaceActive } from "@/lib/youtubeAuthSurface";
 import {
   readYoutubeProfileCache,
@@ -23,20 +24,19 @@ export function YouTubeProfileChip({ className, size = "md" }: Props) {
   const openProfilePage = useRuforgeStore((s) => s.openProfilePage);
   const authSurfaceActive = isYoutubeAuthSurfaceActive(navMode, activeTab, musicView);
 
-  const [imageFailed, setImageFailed] = useState(false);
-  const [fallbackAvatarUrl, setFallbackAvatarUrl] = useState<string | null>(null);
-
   const liveAvatarUrl = profile
     ? sanitizeYoutubeAvatarUrl(profile.avatarUrl)
     : null;
-  const avatarUrl = liveAvatarUrl ?? fallbackAvatarUrl;
-  const hasPhoto = !!avatarUrl && !imageFailed;
-  const hoverLabel = youtubeProfileHoverLabel(profile);
-
-  useEffect(() => {
-    setImageFailed(false);
-    setFallbackAvatarUrl(null);
+  const cachedAvatarUrl = useMemo(() => {
+    if (!liveAvatarUrl) return null;
+    const cached = readYoutubeProfileCache()?.avatarUrl;
+    return cached ? sanitizeYoutubeAvatarUrl(cached) : null;
   }, [liveAvatarUrl]);
+  // The cached avatar only stands in for a live one that failed to load, never for a signed-out profile.
+  const avatar = useImageFallback(liveAvatarUrl ? [liveAvatarUrl, cachedAvatarUrl] : null);
+  const avatarUrl = avatar.src;
+  const hasPhoto = !!avatarUrl;
+  const hoverLabel = youtubeProfileHoverLabel(profile);
 
   if (hasPhoto) {
     const displayName = profile?.displayName ?? "YouTube";
@@ -61,17 +61,7 @@ export function YouTubeProfileChip({ className, size = "md" }: Props) {
               referrerPolicy="no-referrer"
               decoding="async"
               className="rf-yt-profile-pill__avatar"
-              onError={() => {
-                const cache = readYoutubeProfileCache();
-                const cachedUrl = cache?.avatarUrl
-                  ? sanitizeYoutubeAvatarUrl(cache.avatarUrl)
-                  : null;
-                if (cachedUrl && cachedUrl !== avatarUrl) {
-                  setFallbackAvatarUrl(cachedUrl);
-                  return;
-                }
-                setImageFailed(true);
-              }}
+              onError={avatar.onError}
             />
           </div>
           <div className="rf-yt-profile-pill__label-wrap">

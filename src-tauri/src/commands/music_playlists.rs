@@ -56,8 +56,8 @@ pub fn write_music_playlists_file(app: AppHandle, contents: String) -> Result<()
 
 /// Reads a user-picked `.m3u8` / `.m3u` for import. Extension-gated so it cannot read arbitrary files.
 #[tauri::command]
-pub fn read_playlist_text_file(path: String) -> Result<String, String> {
-    let p = PathBuf::from(&path);
+pub fn read_playlist_text_file(app: AppHandle, path: String) -> Result<String, String> {
+    let p = crate::library::path_access::allow_path(&app, &path)?;
     if !is_playlist_text_path(&p) {
         return Err("Only .m3u8 and .m3u files can be imported.".into());
     }
@@ -71,8 +71,8 @@ pub fn read_playlist_text_file(path: String) -> Result<String, String> {
 
 /// Writes a user-picked `.m3u8` / `.m3u` for export.
 #[tauri::command]
-pub fn write_playlist_text_file(path: String, contents: String) -> Result<(), String> {
-    let p = PathBuf::from(&path);
+pub fn write_playlist_text_file(app: AppHandle, path: String, contents: String) -> Result<(), String> {
+    let p = crate::library::path_access::allow_path(&app, &path)?;
     if !is_playlist_text_path(&p) {
         return Err("Playlists can only be exported as .m3u8 or .m3u.".into());
     }
@@ -88,9 +88,16 @@ fn path_relocatable(path: &Path) -> bool {
 }
 
 #[tauri::command]
-pub async fn playlist_paths_relocatable(paths: Vec<String>) -> Result<Vec<bool>, String> {
+pub async fn playlist_paths_relocatable(app: AppHandle, paths: Vec<String>) -> Result<Vec<bool>, String> {
+    let checked: Vec<Option<PathBuf>> = paths
+        .iter()
+        .map(|p| crate::library::path_access::allow_path(&app, p).ok())
+        .collect();
     tauri::async_runtime::spawn_blocking(move || {
-        paths.iter().map(|p| path_relocatable(Path::new(p))).collect()
+        checked
+            .iter()
+            .map(|p| p.as_deref().is_some_and(path_relocatable))
+            .collect()
     })
     .await
     .map_err(|e| e.to_string())

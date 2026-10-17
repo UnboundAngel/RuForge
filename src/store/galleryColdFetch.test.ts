@@ -96,6 +96,7 @@ describe("galleryColdFetch", () => {
       skipPosterBackfill: true,
       skipScrubBackfill: true,
       joinColdInFlight: true,
+      skipIfUnchanged: true,
     });
   });
 });

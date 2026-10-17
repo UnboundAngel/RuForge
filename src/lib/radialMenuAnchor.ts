@@ -1,18 +1,14 @@
 /** Must match default `size` on `RadialMenu`. */
-export const RADIAL_MENU_SIZE_DEFAULT = 280;
+export const RADIAL_MENU_SIZE_DEFAULT = 252;
 
-const FRAME_PADDING = 32;
-const HINT_GAP = 10;
-const LABEL_SLACK = 44;
+/** Room around the disc for its float shadow; the overlay webview clips anything past this. */
+export const RADIAL_MENU_FRAME_PADDING = 64;
 export const RADIAL_MENU_SAFE_MARGIN = 12;
 
 export function radialMenuHalfExtent(
   size = RADIAL_MENU_SIZE_DEFAULT,
 ): number {
-  const radius = size / 2;
-  const frameHalf = (size + FRAME_PADDING) / 2;
-  const hintReach = radius + HINT_GAP + LABEL_SLACK;
-  return Math.max(frameHalf, hintReach);
+  return (size + RADIAL_MENU_FRAME_PADDING) / 2;
 }
 
 export function clampRadialMenuCenter(

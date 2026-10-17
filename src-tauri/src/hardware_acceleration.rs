@@ -9,6 +9,10 @@ const HW_ACCEL_PREF_FILE: &str = "hardware-acceleration.json";
 const WRY_WIN_DEFAULT_FEATURES: &str =
     "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion";
 
+/// The same minus `msSmartScreenProtection`, for webviews that load arbitrary sites.
+#[cfg(target_os = "windows")]
+const WRY_WIN_THIRD_PARTY_FEATURES: &str = "--disable-features=msWebOOUI,msPdfOOUI,CalculateNativeWinOcclusion";
+
 #[cfg(target_os = "windows")]
 const WIN_VISIBLE_PLAYBACK_ARGS: &str = "--disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding";
 
@@ -40,33 +44,33 @@ impl HardwareAccelerationDisk {
     }
 
     #[cfg(target_os = "windows")]
-    fn disable_gpu_browser_args() -> Option<String> {
-        Some(format!(
-            "{} {} --disable-gpu --disable-gpu-compositing",
-            WRY_WIN_DEFAULT_FEATURES, WIN_VISIBLE_PLAYBACK_ARGS,
-        ))
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    fn disable_gpu_browser_args() -> Option<String> {
-        None
+    fn browser_args(&self, features: &str) -> Option<String> {
+        let gpu = if self.hardware_acceleration { "" } else { " --disable-gpu --disable-gpu-compositing" };
+        Some(format!("{features} {WIN_VISIBLE_PLAYBACK_ARGS}{gpu}"))
     }
 
     pub fn webview_additional_browser_args(&self) -> Option<String> {
-        if self.hardware_acceleration {
-            #[cfg(target_os = "windows")]
-            {
-                return Some(format!(
-                    "{} {}",
-                    WRY_WIN_DEFAULT_FEATURES, WIN_VISIBLE_PLAYBACK_ARGS
-                ));
-            }
-            #[cfg(not(target_os = "windows"))]
-            {
-                return None;
-            }
+        #[cfg(target_os = "windows")]
+        {
+            self.browser_args(WRY_WIN_DEFAULT_FEATURES)
         }
-        Self::disable_gpu_browser_args()
+        #[cfg(not(target_os = "windows"))]
+        {
+            None
+        }
+    }
+
+    /// Like [`Self::webview_additional_browser_args`], but SmartScreen stays on: the glance
+    /// viewer shows any public site, and downloads or phishing pages are what it screens.
+    pub fn third_party_browser_args(&self) -> Option<String> {
+        #[cfg(target_os = "windows")]
+        {
+            self.browser_args(WRY_WIN_THIRD_PARTY_FEATURES)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            None
+        }
     }
 
     pub fn save_to_app_disk(&self, app: &AppHandle) -> Result<(), String> {

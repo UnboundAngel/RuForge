@@ -323,9 +323,9 @@ export function AccentColorPicker({ value, onChange }: AccentColorPickerProps) {
         aria-label="Pick accent color"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "rounded-2xl border border-white/5 bg-[#261d18] p-1.5 transition-colors",
-          "hover:bg-[#322620]",
-          open && "bg-[#322620]",
+          "rounded-2xl border border-white/5 bg-[color:var(--rf-set-field,#261d18)] p-1.5 transition-colors",
+          "hover:bg-[color:var(--rf-field-raised)]",
+          open && "bg-[color:var(--rf-field-raised)]",
         )}
       >
         <span
@@ -359,7 +359,7 @@ export function AccentColorPicker({ value, onChange }: AccentColorPickerProps) {
                 transition={motionDuration(reduceMotion, overlayPanelTransition)}
                 style={{ left: pos.left, top: pos.top }}
                 className={cn(
-                  "fixed w-[248px] rounded-[20px] bg-[#271C18] p-2.5",
+                  "fixed w-[248px] rounded-[20px] bg-[color:var(--rf-surface)] p-2.5",
                   "shadow-[0_10px_28px_rgba(0,0,0,0.45)]",
                   OVERLAY_Z_CLASS.menus,
                 )}
@@ -406,7 +406,7 @@ export function AccentColorPicker({ value, onChange }: AccentColorPickerProps) {
                     }}
                   >
                     <span
-                      className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#271C18] shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
+                      className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[color:var(--rf-surface)] shadow-[0_1px_3px_rgba(0,0,0,0.5)]"
                       style={{
                         left: `${(hsv.h / 360) * 100}%`,
                         backgroundColor: hueCss(hsv.h),
@@ -420,13 +420,13 @@ export function AccentColorPicker({ value, onChange }: AccentColorPickerProps) {
                         type="button"
                         aria-label="Sample color from screen"
                         onClick={() => void pickEyedrop()}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[#1D1613] text-stone-400 transition-colors hover:bg-[#322620] hover:text-stone-200"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[color:var(--rf-surface-deep)] text-stone-400 transition-colors hover:bg-[color:var(--rf-field-raised)] hover:text-stone-200"
                       >
                         <Pipette className="h-3.5 w-3.5" strokeWidth={2} />
                       </button>
                     ) : null}
 
-                    <div className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-[12px] bg-[#1D1613] px-3">
+                    <div className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-[12px] bg-[color:var(--rf-surface-deep)] px-3">
                       <span className="text-[11px] font-semibold text-stone-500">#</span>
                       <input
                         value={hexDraft}

@@ -1,3 +1,4 @@
+import { openCreatorFromNotifications } from "@/notifications/openCreator";
 import { useEffect, useState } from "react";
 import type { NotifyOverlayAction } from "@/lib/notifyOverlayEvents";
 import {
@@ -8,6 +9,7 @@ import {
   showNotifyOverlay,
   type NotifyOverlayAnchor,
 } from "@/lib/notifyOverlayHost";
+import { setNotificationMuted } from "@/notifications/mute";
 import { setNotificationFilter, setNotificationTab } from "@/notifications/notificationCenterStore";
 import {
   closeNotificationPopover,
@@ -96,6 +98,14 @@ function applyOverlayAction(action: NotifyOverlayAction): void {
       return;
     case "setCheckInterval":
       if (typeof action.minutes === "number") changeCheckInterval(action.minutes);
+      return;
+    case "setMuted":
+      setNotificationMuted(action.key, action.muted === true);
+      return;
+    case "openCreator":
+      if (typeof action.channelId === "string" && typeof action.channel === "string") {
+        openCreatorFromNotifications(action.channelId, action.channel);
+      }
       return;
   }
 }

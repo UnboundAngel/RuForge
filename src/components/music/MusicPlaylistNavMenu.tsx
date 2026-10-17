@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FileDown, ListEnd, Pencil, Trash2 } from "lucide-react";
+import { FileDown, ListEnd, Pencil, ScanText, Trash2 } from "lucide-react";
+import { openPlaylistImportInto } from "@/playlistImport/importSession";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
 import type { VirtualPlaylistRecord } from "@/virtualPlaylists";
@@ -70,6 +71,12 @@ export function MusicPlaylistNavMenu({
               setEditing(m);
               setEditOpen(true);
             })}
+          />
+          <MusicMenuRow
+            tone={MUSIC_MENU_TONES.playlist}
+            icon={<ScanText size={icon} />}
+            label="Add from screenshots"
+            onClick={pick((m) => void openPlaylistImportInto(m.record.id))}
           />
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.file}

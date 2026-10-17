@@ -39,8 +39,8 @@ import {
 import {
   IslandWatchlistCompactContent,
   IslandWatchlistExpandedContent,
-  ISLAND_WATCHLIST_EXPANDED_DIMENSIONS,
   islandWatchlistCollapsedWidth,
+  islandWatchlistExpandedDims,
   type IslandWatchlist,
 } from "./IslandWatchlistContent";
 import {
@@ -81,7 +81,7 @@ const ISLAND_DIMENSIONS: Record<
   "download-expanded": islandDownloadExpandedDims(1),
   expanded: { width: 350, height: 184, borderRadius: 40 },
   watchlist: { width: 240, height: 36, borderRadius: 18 },
-  "watchlist-expanded": { ...ISLAND_WATCHLIST_EXPANDED_DIMENSIONS },
+  "watchlist-expanded": islandWatchlistExpandedDims(1),
   notifications: { width: 400, height: 220, borderRadius: 24 },
 };
 
@@ -127,7 +127,8 @@ export type DynamicIslandContent = {
 type DynamicIslandProps = {
   state: IslandState;
   content: DynamicIslandContent;
-  waveformLevels: readonly number[];
+  /** Omit in the main window: the waveform leaf subscribes itself so the island does not re-render per frame. */
+  waveformLevels?: readonly number[];
   onClick: () => void;
   onPlayPause: (e: MouseEvent) => void;
   onSeek?: (seconds: number) => void;
@@ -263,7 +264,7 @@ function CompactContent({
   skipDir,
 }: {
   content: DynamicIslandContent;
-  waveformLevels: readonly number[];
+  waveformLevels?: readonly number[];
   skipDir: IslandSkipDir;
 }) {
   return (
@@ -390,11 +391,7 @@ export function DynamicIsland({
   const baseDims = ISLAND_DIMENSIONS[effectiveState];
   const restingDims =
     updateMode && updateAvailable?.collapsed
-      ? {
-          width: islandUpdateCollapsedWidth(),
-          height: 36,
-          borderRadius: 18,
-        }
+      ? { width: islandUpdateCollapsedWidth(), height: 36, borderRadius: 18 }
       : updateMode && !updateAvailable?.collapsed
         ? { ...ISLAND_UPDATE_EXPANDED_DIMENSIONS }
       : effectiveState === "capture" && captureSavedCaption
@@ -402,9 +399,11 @@ export function DynamicIsland({
         : noticeActive
           ? { ...baseDims, width: noticeIslandWidth(notice!.message) }
           : effectiveState === "watchlist" && watchlist
-            ? { ...baseDims, width: islandWatchlistCollapsedWidth(watchlist.count) }
+            ? { ...baseDims, width: islandWatchlistCollapsedWidth(watchlist) }
             : effectiveState === "download" && download
               ? { ...baseDims, width: downloadIslandWidth(download) }
+            : effectiveState === "watchlist-expanded" && watchlist
+              ? islandWatchlistExpandedDims(Math.min(3, watchlist.rows.length))
             : effectiveState === "download-expanded" && download
               ? islandDownloadExpandedDims(download.jobs.length)
               : effectiveState === "notifications"

@@ -5,6 +5,7 @@ use std::time::{Duration, Instant, SystemTime};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::library::path_access::{allow_path, allowed_roots};
 use crate::media_bundle::strip_ytdlp_stream_suffix;
 use crate::utils::{is_audio_only_ext, resolve_info_json_path, THUMB_DIR_NAME};
 
@@ -180,6 +181,16 @@ pub fn clean_music_title(raw: &str) -> String {
         return s;
     }
 
+    // Label uploads tack on "| Genre | NCS - Copyright Free Music"; the full-width bar is how
+    // yt-dlp writes `|` into Windows filenames.
+    let cut = [s.find(" | "), s.find('\u{FF5C}')].into_iter().flatten().min();
+    if let Some(idx) = cut {
+        let head = s[..idx].trim();
+        if !head.is_empty() {
+            s = head.to_string();
+        }
+    }
+
     // Strip prod. ... suffix (everything from "prod." to end, across case)
     if let Some(idx) = s.to_lowercase().find("prod.") {
         s = s[..idx].trim_end_matches('-').trim_end().to_string();
@@ -193,6 +204,7 @@ pub fn clean_music_title(raw: &str) -> String {
         "official audio",
         "official lyric video",
         "official visualizer",
+        "ncs release",
         "lyric video",
         "lyrics",
         "audio",
@@ -833,9 +845,12 @@ pub async fn ensure_music_meta(
     force: Option<bool>,
     artist_tags: Option<bool>,
 ) -> bool {
+    let Ok(media) = allow_path(&app, &media_path) else {
+        return false;
+    };
     enrich_music_meta_path(
         &app,
-        Path::new(&media_path),
+        &media,
         EnrichMode::Full {
             force: force.unwrap_or(false),
         },
@@ -848,8 +863,8 @@ pub async fn ensure_music_meta(
 
 /// Read the enrichment sidecar for a file (for the song detail page).
 #[tauri::command]
-pub async fn read_music_meta(media_path: String) -> Option<MusicMetaSidecarDto> {
-    let media = PathBuf::from(&media_path);
+pub async fn read_music_meta(app: AppHandle, media_path: String) -> Option<MusicMetaSidecarDto> {
+    let media = allow_path(&app, &media_path).ok()?;
     let parent = media.parent()?;
     let stem = media.file_stem()?.to_str()?;
     let sidecar = sidecar_path_for(parent, stem);
@@ -868,7 +883,7 @@ pub async fn backfill_music_meta(
     force: Option<bool>,
 ) -> Result<u32, String> {
     let force = force.unwrap_or(false);
-    let all = library_audio_files(&roots);
+    let all = library_audio_files(&allowed_roots(&app, &roots));
     let backfill_opts = EnrichOpts { artist_tags: true };
 
     let mut to_enrich_full: Vec<PathBuf> = Vec::new();
@@ -1194,6 +1209,19 @@ mod tests {
     #[test]
     fn strips_prod_suffix() {
         clean_eq!("Beat prod. Some Producer", "Beat");
+    }
+
+    #[test]
+    fn strips_pipe_genre_tail() {
+        clean_eq!(
+            "Cartoon, Jéja - On & On (feat. Daniel Levi) | Electronic Pop | NCS - Copyright Free Music",
+            "Cartoon, Jéja - On & On (feat. Daniel Levi)"
+        );
+        clean_eq!(
+            "On & On (feat. Daniel Levi) \u{FF5C} Electronic Pop \u{FF5C} NCS - Copyright Free Music",
+            "On & On (feat. Daniel Levi)"
+        );
+        clean_eq!("Disfigure - Blank [NCS Release]", "Disfigure - Blank");
     }
 
     #[test]

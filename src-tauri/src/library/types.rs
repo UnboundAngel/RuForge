@@ -61,7 +61,22 @@ pub struct CompanionItemProjection {
     pub audio_codec: String,
     pub playable: bool,
     pub has_thumb: bool,
+    /// Cover file mtime (unix seconds); keys the immutable `/art` URL so a changed cover refetches.
+    #[serde(default)]
+    pub thumb_v: u64,
     pub size_bytes: u64,
+    /// Tag or enriched artist; for videos, the uploading channel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artist: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub album: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub year: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track_no: Option<u32>,
+    /// File creation time, unix seconds. 0 when the filesystem does not report it.
+    #[serde(default)]
+    pub added_at: u64,
 }
 
 /// Internal-only record backing one companion item. Holds real paths; `resolver`

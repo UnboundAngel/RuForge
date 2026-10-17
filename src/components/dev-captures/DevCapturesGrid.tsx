@@ -165,8 +165,8 @@ export function DevCapturesGrid({ entries, onRefresh }: DevCapturesGridProps) {
 
   return (
     <>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+      <div className="mb-3 flex min-h-8 items-center justify-between gap-3">
+        <span className="text-[12px] text-stone-500">
           {selected.size > 0 ? `${selected.size} selected` : `${entries.length} captures`}
         </span>
         <button
@@ -176,9 +176,9 @@ export function DevCapturesGrid({ entries, onRefresh }: DevCapturesGridProps) {
             const path = selectedPaths[0];
             if (path) openAnnotate(path);
           }}
-          className="px-4 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all border active:scale-95 disabled:opacity-40 disabled:pointer-events-none bg-[#1D1613] text-[color:var(--accent)] border-[color-mix(in_srgb,var(--accent),transparent_80%)] hover:bg-stone-800"
+          className="rf-settings-btn"
         >
-          ANNOTATE
+          Annotate
         </button>
       </div>
 

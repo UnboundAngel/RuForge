@@ -24,6 +24,8 @@ export type VirtualPlaylistRecord = {
   system?: boolean;
   kind?: VirtualPlaylistKind;
   description?: string;
+  /** The game this video playlist belongs to, so its game page can find it. */
+  gameId?: string;
 };
 
 export const PLAYLIST_DESCRIPTION_MAX = 300;
@@ -112,10 +114,16 @@ export function normalizeRecord(raw: VirtualPlaylistRecord): VirtualPlaylistReco
     : [];
   const description =
     typeof raw.description === "string" ? raw.description.trim().slice(0, PLAYLIST_DESCRIPTION_MAX) : "";
+  const kind: VirtualPlaylistKind = raw.kind === "music" && id !== WATCH_LATER_ID ? "music" : "video";
+  const gameId =
+    kind === "video" && id !== WATCH_LATER_ID && typeof raw.gameId === "string" && raw.gameId.trim()
+      ? raw.gameId.trim()
+      : "";
   return {
     id,
     title,
     ...(description ? { description } : {}),
+    ...(gameId ? { gameId } : {}),
     items,
     thumbnailPath:
       typeof raw.thumbnailPath === "string" && raw.thumbnailPath
@@ -126,7 +134,7 @@ export function normalizeRecord(raw: VirtualPlaylistRecord): VirtualPlaylistReco
         ? raw.updatedAt
         : Date.now(),
     system: raw.system === true || id === WATCH_LATER_ID,
-    kind: raw.kind === "music" && id !== WATCH_LATER_ID ? "music" : "video",
+    kind,
   };
 }
 
@@ -261,6 +269,7 @@ export function createVirtualPlaylistRecord(
   seedPaths: string[] = [],
   now = Date.now(),
   kind: VirtualPlaylistKind = "video",
+  gameId?: string,
 ): VirtualPlaylistRecord {
   const seen = new Set<string>();
   const items: VirtualPlaylistItem[] = [];
@@ -278,6 +287,7 @@ export function createVirtualPlaylistRecord(
     updatedAt: now,
     system: false,
     kind,
+    ...(kind === "video" && gameId ? { gameId } : {}),
   };
 }
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { MediaFile } from "../types";
 import type { RuforgeSettings } from "../store/types";
+import { onVideoWatchSponsorSkip } from "../lib/videoWatchActivity";
 import { SB_DEMOTE_UNDO_WINDOW_SEC, SB_UNSKIP_PROMPT_MS } from "../sponsorBlockConstants";
 import { startFastForward } from "./sponsorBlockFastForward";
 import {
@@ -217,6 +218,7 @@ export function useSponsorBlockPlayback({
       autoSkippedRef.current.add(key);
       setAutoSkipTick((n) => n + 1);
       setUnskip({ start: s.segment[0], end, category });
+      onVideoWatchSponsorSkip(Math.max(0, end - s.segment[0]));
       // Armed only once playback lands, or the ramp's own in-between positions would read as a rewind.
       const land = () => {
         lastAutoSkipRef.current = { end, at: performance.now(), category };
@@ -267,6 +269,7 @@ export function useSponsorBlockPlayback({
     const active = activeSkipSegments(segments, currentTime);
     const cat = active[0]?.category;
     if (cat && isSkipCategory(cat)) onManualSkip(cat);
+    onVideoWatchSponsorSkip(Math.max(0, target - currentTime));
     sprintTo(currentTime, target);
   }, [segmentsForCurrentFile, segments, currentTime, sprintTo, onManualSkip]);
 

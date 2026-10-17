@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { localImageSrc } from "@/lib/localImageSrc";
 import { emit, listen } from "@tauri-apps/api/event";
 import { applyMediaOutputState } from "@/applyMediaOutputState";
 import { bestCoverPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
 import { emitActivityHandoffSync } from "@/lib/activityHandoffSync";
+import { isLocalAbsoluteMediaPath, isLocalMediaFilePayload } from "@/lib/trustedMediaPath";
 import type { PlayInMusicMiniPayload } from "@/playerHandoff";
 import { loopModeFromHandoff } from "@/playerHandoff";
 import { writePlaybackPos } from "@/playbackStorage";
@@ -77,7 +79,7 @@ function writeStoredVolume(v: number) {
 
 export function coverSrcFor(file: MediaFile): string | null {
   const p = bestCoverPath(file);
-  return p ? convertFileSrc(p) : null;
+  return p ? localImageSrc(p) : null;
 }
 
 const LAYER_PRUNE_MS = 760;
@@ -303,7 +305,11 @@ export function useMusicMiniPlayback() {
   useEffect(() => {
     void emit("music-mini-ready");
     const unlistenPlay = listen<PlayInMusicMiniPayload>("play-in-music-mini", (e) => {
-      applyHandoff(e.payload);
+      const p = e.payload;
+      if (!isLocalMediaFilePayload(p?.file)) return;
+      if (p.queueSnapshot != null && !(Array.isArray(p.queueSnapshot) && p.queueSnapshot.every(isLocalMediaFilePayload))) return;
+      if (p.manualQueue != null && !(Array.isArray(p.manualQueue) && p.manualQueue.every(isLocalAbsoluteMediaPath))) return;
+      applyHandoff(p);
     });
     const unlistenStop = listen("stop-music-mini-playback", () => {
       void (async () => {

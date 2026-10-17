@@ -1,9 +1,14 @@
-import { memo } from "react";
+import { memo, useSyncExternalStore } from "react";
 
-import { ISLAND_WAVEFORM_BAR_COUNT } from "@/lib/islandWaveformLevels";
+import {
+  getIslandWaveformLevels,
+  ISLAND_WAVEFORM_BAR_COUNT,
+  subscribeIslandWaveformLevels,
+} from "@/lib/islandWaveformLevels";
 
 type Props = {
-  levels: readonly number[];
+  /** Omit to read the live in-app levels; subscribing here keeps the 60 Hz re-render on this leaf alone. */
+  levels?: readonly number[];
   coverSrc?: string | null;
   accentColor: string;
   muted?: boolean;
@@ -19,6 +24,8 @@ const MIN_AMP = 1;
 const END_INSET = 3.5;
 
 type Pt = [number, number];
+
+const noopSubscribe = () => () => {};
 
 /** Catmull-Rom through the points as cubic Beziers, continuing an existing path. */
 function smoothThrough(pts: Pt[]): string {
@@ -58,8 +65,13 @@ export const ActivityIslandWaveform = memo(function ActivityIslandWaveform({
   muted,
   className,
 }: Props) {
+  const live = useSyncExternalStore(
+    levels ? noopSubscribe : subscribeIslandWaveformLevels,
+    getIslandWaveformLevels,
+    getIslandWaveformLevels,
+  );
   const useCoverArt = Boolean(coverSrc) && !muted;
-  const clip = `path("${lensPath(levels)}")`;
+  const clip = `path("${lensPath(levels ?? live)}")`;
 
   return (
     <div

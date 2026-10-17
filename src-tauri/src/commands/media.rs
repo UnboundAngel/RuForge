@@ -11,6 +11,7 @@ use tauri_plugin_shell::ShellExt;
 use tokio::sync::{Mutex, Semaphore};
 
 use crate::commands::recently_deleted::append_manifest_entry;
+use crate::library::path_access::{allow_library_path, allow_path};
 use crate::media_bundle::{collect_deletion_paths, prune_empty_dirs_after_media_delete};
 use crate::process_tree::kill_shell_child_tree;
 use crate::utils::{duration_from_ytdlp_info_json, thumb_dir_for_stem, POSTER_FILE, THUMB_DIR_NAME};
@@ -486,6 +487,7 @@ async fn write_poster_jpeg(
 
 #[tauri::command]
 pub async fn ensure_poster_if_missing(app: AppHandle, video_path: String) -> Result<(), String> {
+    allow_path(&app, &video_path)?;
     let vk = video_path.clone();
     with_per_video_ffmpeg_lock(&vk, |slot| {
         let app = app.clone();
@@ -557,7 +559,8 @@ pub fn list_scrub_sprite_paths_for_video(video_path: &Path) -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn list_scrub_sprite_paths(video_path: String) -> Result<Vec<String>, String> {
+pub fn list_scrub_sprite_paths(app: AppHandle, video_path: String) -> Result<Vec<String>, String> {
+    allow_path(&app, &video_path)?;
     let path = Path::new(&video_path);
     if !path.is_file() {
         return Err("Invalid video path".into());
@@ -661,6 +664,7 @@ pub async fn extract_frames(
     video_path: String,
     allow_generate: Option<bool>,
 ) -> Result<Vec<String>, String> {
+    allow_path(&app, &video_path)?;
     let allow_generate = allow_generate.unwrap_or(true);
     let vk = video_path.clone();
     let video_file_path = Path::new(&video_path);
@@ -821,6 +825,7 @@ pub async fn delete_media_batch(app: AppHandle, paths: Vec<String>) -> Result<u6
     let total = paths.len();
     let mut deleted_bytes: u64 = 0;
     for (index, video_path) in paths.into_iter().enumerate() {
+        allow_library_path(&app, &video_path)?;
         if let Ok(meta) = std::fs::metadata(&video_path) {
             if meta.is_file() {
                 deleted_bytes = deleted_bytes.saturating_add(meta.len());
@@ -845,6 +850,7 @@ pub async fn delete_media(
     app: AppHandle,
     video_path: String,
 ) -> Result<DeleteMediaResult, String> {
+    allow_library_path(&app, &video_path)?;
     let _ffmpeg_hold = acquire_ffmpeg_lock_for_delete(&video_path).await;
     let result = delete_media_filesystem(&app, &video_path)?;
     if let Some(lib) = app.try_state::<crate::library::LibraryState>() {
@@ -917,8 +923,8 @@ fn subtitle_display_label(lang_tag: &str) -> String {
 
 /// Discover sidecar WebVTT files next to the video: `{stem}.vtt`, `{stem}.{lang}.vtt`.
 #[tauri::command]
-pub fn get_subtitle_tracks(video_path: String) -> Result<Vec<SubtitleTrack>, String> {
-    let path = PathBuf::from(&video_path);
+pub fn get_subtitle_tracks(app: AppHandle, video_path: String) -> Result<Vec<SubtitleTrack>, String> {
+    let path = allow_path(&app, &video_path)?;
     let parent = path
         .parent()
         .ok_or_else(|| "Video path has no parent directory".to_string())?;
@@ -928,6 +934,7 @@ pub fn get_subtitle_tracks(video_path: String) -> Result<Vec<SubtitleTrack>, Str
         .ok_or_else(|| "Video file name is not valid UTF-8".to_string())?;
 
     let mut pairs = crate::utils::vtt_sidecars_for_stem(parent, stem).map_err(|e| e.to_string())?;
+    crate::utils::drop_youtube_rewritten_vtt_sidecars(&mut pairs);
     crate::utils::sort_vtt_sidecars_lang_first(&mut pairs);
 
     let tracks = pairs
@@ -946,8 +953,8 @@ const MAX_SUBTITLE_VTT_BYTES: u64 = 6 * 1024 * 1024;
 
 /// Read a local `.vtt` for `<track>` blob URLs (avoids cross-origin load from `asset.localhost` vs dev UI origin).
 #[tauri::command]
-pub fn read_local_subtitle_vtt(path: String) -> Result<String, String> {
-    let p = PathBuf::from(&path);
+pub fn read_local_subtitle_vtt(app: AppHandle, path: String) -> Result<String, String> {
+    let p = allow_path(&app, &path)?;
     let is_vtt = p
         .extension()
         .and_then(|e| e.to_str())

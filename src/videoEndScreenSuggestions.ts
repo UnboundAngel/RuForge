@@ -7,9 +7,9 @@ export const VIDEO_END_CARDS_LEAD_RATIO = 0.05;
 export const VIDEO_END_CARDS_LEAD_MIN_SEC = 2;
 export const VIDEO_END_CARDS_LEAD_MAX_SEC = 10;
 export const VIDEO_END_FADE_SEC = 5;
-/** Mild dim while end cards are up; hover only bumps slightly so the video stays readable. */
+/** Mild dim while end cards are up; hovering a card darkens the video hard so the card reads as the focus. */
 export const VIDEO_END_CARDS_DIM = 0.1;
-export const VIDEO_END_CARDS_HOVER_DIM = 0.16;
+export const VIDEO_END_CARDS_HOVER_DIM = 0.6;
 
 /** Seconds before end when suggestion cards appear (2–10s from % of duration). */
 export function videoEndCardsLeadSec(durationSec: number): number {

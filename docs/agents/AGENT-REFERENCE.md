@@ -41,7 +41,7 @@ Allowed: non-obvious constraints, tradeoffs, external references, intent the sig
 
 ### 2. Component and function extraction
 
-Extract when ANY is true: React component exceeds ~120 rendered lines; helper used by more than one file; hook with state + effects over ~30 lines; inline SVG/animation over ~40 lines; fourth JSX nesting level incoming.
+Per-file line limits by kind: root `AGENTS.md` > Code (`scripts/file-size-check.mjs`). Extract when ANY is true: React component exceeds ~120 rendered lines; helper used by more than one file; hook with state + effects over ~30 lines; inline SVG/animation over ~40 lines; fourth JSX nesting level incoming.
 
 Components go in `components/<feature>/` or `components/ui/`. Hooks next to consumer or in `hooks/`. Shared helpers in `lib/` (website) or `src/lib/` (desktop). Types co-locate with owner; app root `types.ts` for cross-cutting.
 
@@ -89,6 +89,14 @@ Minisign (updater) and Authenticode (installer SmartScreen) are independent. Do 
 - **Playback persistence:** `src/playbackStorage.ts` for furthest position + stored duration; thumbnail bars via `getPlaybackThumbnailBar`.
 - **Mini player:** transparent undecorated window; "back to app" should focus `main` before closing mini.
 - **Player:** opacity dip + no remounting `key` on `<video>` when auto-advancing; folder queue first, then library sorted list when settings allow.
+
+## Shortcuts contract
+
+Every new key or input gesture (keyboard chord, Ctrl+wheel, drag, double-click, click combo) gets a row in Settings > Shortcuts in the same change.
+
+- Keyboard chords go in `HOTKEY_ACTIONS` (`src/lib/hotkeys.ts`) and are rebindable.
+- Gestures apps do not usually let you rebind (mouse wheel, drag, double-click, Esc and other reserved keys) go in as fixed `FixedHotkeyKeys` rows in the matching group in `src/components/SettingsView.tsx`.
+- Mouse gestures render as keycaps through the `MOUSE_*` tokens in `src/components/settings/HotkeyBindingControl.tsx` (add a token there for a new gesture), never as plain words.
 
 ## Onboarding contract
 

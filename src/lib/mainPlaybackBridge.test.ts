@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import {
   getMainPlaybackBridge,
@@ -101,6 +101,44 @@ describe("mainPlaybackBridge backward-jump guard", () => {
     });
 
     expect(getMainPlaybackBridge()?.currentTime).toBe(100);
+  });
+
+  it("accepts a backward jump that persists past the hold window (repeat loop)", () => {
+    vi.useFakeTimers();
+    try {
+      publishMainPlaybackBridge("host-audio", {
+        paused: false,
+        currentTime: 154,
+        duration: 154,
+        mediaKey: "a.mp3",
+      });
+      publishMainPlaybackBridge("host-audio", {
+        paused: false,
+        currentTime: 0.2,
+        duration: 154,
+        mediaKey: "a.mp3",
+      });
+      expect(getMainPlaybackBridge()?.currentTime).toBe(154);
+
+      vi.advanceTimersByTime(1100);
+      publishMainPlaybackBridge("host-audio", {
+        paused: false,
+        currentTime: 1.3,
+        duration: 154,
+        mediaKey: "a.mp3",
+      });
+      expect(getMainPlaybackBridge()?.currentTime).toBe(1.3);
+
+      publishMainPlaybackBridge("host-audio", {
+        paused: false,
+        currentTime: 1.6,
+        duration: 154,
+        mediaKey: "a.mp3",
+      });
+      expect(getMainPlaybackBridge()?.currentTime).toBe(1.6);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("accepts a restart at 0 when the track changes while playing", () => {

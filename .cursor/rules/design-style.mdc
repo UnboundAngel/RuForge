@@ -18,9 +18,16 @@ The triangulation of references: **Spotify + Apple Music + Cineby** (media, tona
 
 ## NON-NEGOTIABLES (the stuff that kills the generic look)
 
-These are the rules that matter most. Break these and the output is wrong.
+These are the rules that matter most. Break these and the output is wrong. Shared visual helpers to reuse, and visual pairs (banned vs approved, plus the only allowed divider variants): `.cursor/skills/ruforge-design/design-reference.html`.
 
-1. **No divider lines. Ever.** No `border-bottom` between list items, no `<hr>`, no dotted separators, no `divide-y`. Separate with spacing first, tonal surfaces second, a highlight block for the active item only.
+1. **No divider lines between items.** No `border-bottom` between list items, no `<hr>`, no dotted separators, no `divide-y`. Separate with spacing first, tonal surfaces second, a highlight block for the active item only. Two approved exceptions, copy them exactly (see `design-reference.html`): the sortable table column header line that hands off to a stuck raised header (`MusicPlaylistColumnHeader` + `useStuckHeader`), and the short title bar cluster hairline (`w-px h-4 bg-stone-500/20 mx-1`). Menus never use hairlines; they group with labeled section cards (rule 10).
+10. **Context and overflow menus follow the Music menu.** Build with `musicMenuUi.tsx` (`MusicFloatingMenu`, `MusicMenuSection`, `MusicMenuRow`, `MUSIC_MENU_TONES`): actions grouped by intent into section cards with a 9px uppercase label, primary group first with a faint accent wash, destructive row last with `variant="danger"`. No flat ten-row lists, no item title as the header. Library, feed and playlist menus pass `theme="library"`; Music keeps the default. Pick-one lists (sort, quality, audio output) use the same kit, opened under a plain button with `menuAnchorPoint()`. Inside the island or a popover that must own its clicks, render `MusicMenuPanel` in place. Never build a morph menu (a chip that grows into a menu); `MORPH_SPRING` as a motion constant is fine.
+11. **Horizontal card rows use `EdgeSquishScroll`** (`src/components/ui/EdgeSquishScroll.tsx`) in every mode. Mark each card's cover `data-squish-cover`. Arrows come only from its `arrows` prop (radial-shade chevrons on row hover); never header arrow circles, bordered or blurred arrow buttons. Titled Music rows use `MusicShelf`. No hand-rolled `overflow-x-auto` row with its own mask, and no paged shelves.
+12. **On/off switches use `Switch`** (`src/components/ui/Switch.tsx`): `md` in Settings rows, `sm` in popovers and dense panels. Colors come from `.rf-switch` per mode; never hand-roll a track and knob. Round include checkboxes and radio groups are separate controls.
+13. **Toasts go through the store's `notify`** in every mode; `AppToastHost` is the only host and `.rf-toast` sets the mode colors. Never add a second toast store or host.
+14. **Sliders use `Slider`** (`src/components/ui/Slider.tsx`): volume, crossfade, any 0 to 1 value. Pass `thumbFill` as the surface color behind it. Never a native `<input type="range">`.
+15. **Yes/no questions call `askConfirm`** (`ConfirmDialog.tsx`); pass `item` to show what is affected and `tone: "accent"` when nothing is destroyed. Dialog footers use the `SettingsModalShell` buttons: `SettingsModalBtnDanger` for destructive primaries, `MusicModalBtn` in `theme="music"`. Never paste the red or pill class strings.
+16. **Images that can fail use `FallbackImg`** (`src/components/ui/FallbackImg.tsx`): pass every candidate URL and a `fallback` node; `useImageFallback` when two imgs share a source. Track covers come from `coverPathChain(file)`. Never write an `onError` on an img.
 2. **No glows.** No colored `box-shadow` halos, no `drop-shadow` glow, no neon edges. Glow is banned outright.
 3. **Shadows are functional only.** A shadow appears to *signal* something: this element floats, or content has scrolled under a sticky header. Never a default decoration on every card. When used: soft, thin, low-opacity, same hue family as the background.
 4. **Never letterbox media on a black background.** Images fill their frame with `object-fit: cover` and crop. If the aspect ratio mismatches, crop. Never pad with bars. A muddy dark blob with black side-bars is the single worst anti-pattern (see `design-style-anti-patterns` rule).
@@ -168,6 +175,7 @@ Dot-separated metadata lines (`8.5 · 2019 · TV Show`) use `--text-muted`.
 - **Spring reserved for signature moments** — voice orb, toggles, success checkmark morph, hero/escaping-media entrance. Where the motion *is* the personality.
 - **Perf rule (hard):** animate `transform` and `opacity` ONLY. Never animate `width`, `height`, `top`, `left`, `margin`. That is the literal cause of laggy UI. Use `transform: scale/translate`.
 - **Respect `prefers-reduced-motion`:** kill non-essential motion when requested.
+- **Every open, close, page swap and tab swap animates, with the house palette (hard).** Nothing pops in or swaps cold, Games included. Reuse `src/lib/overlayMotion.ts`; never invent new durations or curves. Dialogs and popovers: `SettingsModalShell` with its default `rise` entrance (backdrop `overlayFadeTransition`, panel 12px rise plus 0.98 to 1 scale on `overlayPanelTransition`). Pages and tab content: key the content by page or tab and enter with `pageTransition` (opacity plus a small y rise). Drill-in and back: `x` slide like `GamesView`. Bell popovers: `notifyPanelMotion`. Gate with `useReducedMotion()` / `motionDuration`.
 
 ---
 
@@ -197,7 +205,7 @@ This is where most generic UI fails. Read the `design-style-media-cards` rule fo
   - Resume/duration timestamp → **bottom-right** of the thumbnail.
   - Rank badge (TOP 01) → **top-left**.
   - Rating · year · type → dot-separated `--text-muted` line **under** the card.
-- **Section headers** can use a short accent bar to the left of the title (the Cineby `| Continue watching` red tick).
+- **Section headers** are plain titles; never an accent bar beside them.
 - **Nav bars: solid** (transparent-over-media is fine, but not frosted). **Search bars / floating overlays: glassy** (backdrop blur). Pick blur by element role. Never blanket-glass.
 - **Surface texture:** subtle grain on large surfaces (kills gradient banding) + gradient mesh/scrim on hero backdrops. Both are welcome; keep them subtle.
 

@@ -6,7 +6,7 @@ import { OVERLAY_Z_CLASS } from "@/lib/overlayZIndex";
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
-import { IMPORT_PROMPT } from "@/playlistImport/importPrompt";
+import { IMPORT_PROMPT, importPromptFor } from "@/playlistImport/importPrompt";
 import { parseImport } from "@/playlistImport/parseImport";
 import {
   closePlaylistImport,
@@ -14,39 +14,37 @@ import {
   importMergeTarget,
   importRowOwnedFile,
   importRowSaveable,
+  importTargetSongs,
   libraryByVideoId,
   resetPlaylistImport,
   retryPlaylistImport,
   savePlaylistImport,
   startPlaylistImport,
   useImportSession,
+  useImportTargetTitle,
 } from "@/playlistImport/importSession";
-import { SettingsModalShell } from "@/components/settings/SettingsModalShell";
+import { MusicModalBtn, SettingsModalShell } from "@/components/settings/SettingsModalShell";
 import { useStuckHeader } from "@/hooks/useStuckHeader";
 import { useMusicPreviewBridge } from "./MusicPreviewButton";
 import { MusicPlaylistHeader, formatPlaylistLength } from "./MusicPlaylistHeader";
 import { IMPORT_ROW_GRID, ImportLibraryGroup, ImportRowView } from "./MusicPlaylistImportRow";
-import { showMusicToast } from "./musicToast";
 import { useMusicLibraryTracks } from "./useMusicPlaylists";
 
 const FIELD =
   "w-full rounded-xl border border-transparent bg-white/[0.06] px-3.5 text-sm text-white placeholder:text-white/40 outline-none transition-colors hover:bg-white/[0.08] focus:border-white/[0.16] focus:bg-white/[0.1] caret-[#ff0033]";
-const GHOST =
-  "h-10 rounded-full px-5 text-sm font-bold text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white";
-const PRIMARY =
-  "h-10 rounded-full bg-[#ff0033] px-6 text-sm font-bold text-white transition-[filter,transform] hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40";
-
 type Filter = "all" | "check" | "missing";
 
 /** Music's playlist import: copy a prompt, paste the chatbot's JSON, review matches, save. Mounted once in the shell. */
 export function MusicPlaylistImport() {
   const { open, phase } = useImportSession(useShallow((s) => ({ open: s.open, phase: s.phase })));
+  const targetTitle = useImportTargetTitle();
+  const pasteTitle = targetTitle ? `Add songs to “${targetTitle}”` : "Import a playlist";
   return (
     <SettingsModalShell
       open={open}
       onClose={closePlaylistImport}
       titleId="rf-music-import-title"
-      title={phase === "paste" ? "Import a playlist" : "Review matches"}
+      title={phase === "paste" ? pasteTitle : "Review matches"}
       eyebrow={null}
       theme="music"
       zIndexClass={OVERLAY_Z_CLASS.confirm}
@@ -63,7 +61,10 @@ export function MusicPlaylistImport() {
 const PASTE_FORM = "rf-music-import-paste";
 
 function PasteStep() {
-  const { text, error } = useImportSession(useShallow((s) => ({ text: s.draft, error: s.draftError })));
+  const { text, error, targetId } = useImportSession(
+    useShallow((s) => ({ text: s.draft, error: s.draftError, targetId: s.targetId })),
+  );
+  const targetTitle = useImportTargetTitle();
   const library = useMusicLibraryTracks();
   const [copied, setCopied] = useState(false);
   const areaRef = useRef<HTMLTextAreaElement>(null);
@@ -75,12 +76,12 @@ function PasteStep() {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(IMPORT_PROMPT);
+      await navigator.clipboard.writeText(targetId ? importPromptFor(importTargetSongs(targetId)) : IMPORT_PROMPT);
       noteOnboardingEvent("import-prompt-copied");
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      showMusicToast("Couldn't copy the prompt", "error");
+      useRuforgeStore.getState().notify("Couldn't copy the prompt", "error");
     }
   };
 
@@ -109,12 +110,18 @@ function PasteStep() {
         <li className="flex gap-3">
           <StepNumber n={1} />
           <span className="min-w-0 flex-1">
-            Copy the prompt and send it to any chatbot (ChatGPT, Claude, Gemini) with screenshots of your playlist.
+            {targetTitle
+              ? "Copy the prompt and send it to any chatbot (ChatGPT, Claude, Gemini) with screenshots of the songs to add. The prompt lists what this playlist already has, so those get left out."
+              : "Copy the prompt and send it to any chatbot (ChatGPT, Claude, Gemini) with screenshots of your playlist."}
           </span>
         </li>
         <li className="flex gap-3">
           <StepNumber n={2} />
-          <span className="min-w-0 flex-1">Paste the whole reply below. RuForge finds each song for you to check before anything downloads.</span>
+          <span className="min-w-0 flex-1">
+            {targetTitle
+              ? `Paste the whole reply below. RuForge finds each song for you to check, then adds them to “${targetTitle}”.`
+              : "Paste the whole reply below. RuForge finds each song for you to check before anything downloads."}
+          </span>
         </li>
       </ol>
       <button
@@ -161,17 +168,10 @@ function PasteFooter() {
   const empty = useImportSession((s) => !s.draft.trim());
   return (
     <>
-      <button type="button" onClick={closePlaylistImport} className={GHOST}>
-        Cancel
-      </button>
-      <button
-        type="submit"
-        form={PASTE_FORM}
-        disabled={empty}
-        className={PRIMARY}
-      >
+      <MusicModalBtn onClick={closePlaylistImport}>Cancel</MusicModalBtn>
+      <MusicModalBtn variant="primary" type="submit" form={PASTE_FORM} disabled={empty}>
         Continue
-      </button>
+      </MusicModalBtn>
     </>
   );
 }
@@ -181,9 +181,10 @@ function ReviewStep() {
   const { rows, name, notes, stopped } = useImportSession(
     useShallow((s) => ({ rows: s.rows, name: s.name, notes: s.notes, stopped: s.stopped })),
   );
+  const targetTitle = useImportTargetTitle();
   const [filter, setFilterState] = useState<Filter>("all");
   const [openAlt, setOpenAlt] = useState<number | null>(null);
-  const mergeTarget = useMemo(() => importMergeTarget(name), [name]);
+  const mergeTarget = useMemo(() => (targetTitle ? null : importMergeTarget(name)), [name, targetTitle]);
   // A row fixed from inside a filter stays in view until the filter changes, so it doesn't vanish mid-review.
   const [pinned, setPinned] = useState<Set<number>>(() => new Set());
   const setFilter = (f: Filter) => {
@@ -238,7 +239,7 @@ function ReviewStep() {
     <div data-music-mode="true" className="flex flex-col">
       <div className="-mx-6 [--music-surface:#181818] [mask-image:linear-gradient(to_bottom,transparent,black_24px)]">
         <MusicPlaylistHeader
-          title={name.trim() || DEFAULT_IMPORT_NAME}
+          title={targetTitle ?? (name.trim() || DEFAULT_IMPORT_NAME)}
           tracks={[]}
           coverFile={hero.coverFile}
           coverSrc={hero.cover}
@@ -249,7 +250,7 @@ function ReviewStep() {
             </>
           }
           startEditing={false}
-          onRename={(next) => useImportSession.setState({ name: next })}
+          onRename={targetTitle ? undefined : (next) => useImportSession.setState({ name: next })}
         />
       </div>
       <div ref={headerRef} className="flex flex-col gap-3 pb-3">
@@ -444,7 +445,7 @@ function ReviewFooter() {
         ? `Added to your playlist, ${res.alreadyIn} already there.`
         : "Added to your playlist."
       : "Playlist created.";
-    showMusicToast(
+    useRuforgeStore.getState().notify(
       res.queued
         ? `${lead} ${res.queued} ${res.queued === 1 ? "song joins" : "songs join"} it as ${res.queued === 1 ? "it downloads" : "they download"}.`
         : lead,
@@ -460,12 +461,12 @@ function ReviewFooter() {
               .join(" · ")
           : "Tick the songs to save"}
       </span>
-      <button type="button" onClick={resetPlaylistImport} className={cn(GHOST, "h-9 px-4 text-[13px]")}>
+      <MusicModalBtn onClick={resetPlaylistImport} className="h-9 px-4 text-[13px]">
         Start over
-      </button>
-      <button type="button" onClick={save} disabled={!picked.length} className={cn(PRIMARY, "h-9 px-5 text-[13px]")}>
+      </MusicModalBtn>
+      <MusicModalBtn variant="primary" onClick={save} disabled={!picked.length} className="h-9 px-5 text-[13px]">
         Save {picked.length || ""} {picked.length === 1 ? "song" : "songs"}
-      </button>
+      </MusicModalBtn>
     </>
   );
 }

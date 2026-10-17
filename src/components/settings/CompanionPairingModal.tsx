@@ -4,20 +4,16 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { X } from "lucide-react";
 import ruforgeAppIcon from "../../assets/ruforgeAppIcon.png";
 import { companionQrSvg } from "../../lib/companionQr";
+import { OVERLAY_Z_CLASS } from "../../lib/overlayZIndex";
 import {
   motionDuration,
   overlayFadeTransition,
   overlayPanelTransition,
 } from "../../lib/overlayMotion";
 
-const companionAccentBtn =
-  "px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95";
-
-const companionNeutralBtn =
-  "px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95";
-
 export type CompanionQrPayload = {
   url: string;
+  phoneUrl: string | null;
   ip: string;
   port: number;
   code: string;
@@ -34,11 +30,63 @@ type CompanionPairingModalProps = {
   onOpenLocal: () => void;
 };
 
-function formatRemaining(expiresAtUnix: number): string {
-  const remaining = Math.max(0, expiresAtUnix - Math.floor(Date.now() / 1000));
-  const mins = Math.floor(remaining / 60);
-  const secs = remaining % 60;
-  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+const PAIRING_TTL_SECS = 120;
+
+function secondsLeft(expiresAtUnix: number): number {
+  return Math.max(0, expiresAtUnix - Math.floor(Date.now() / 1000));
+}
+
+function QrTile({ value }: { value: string }) {
+  const markup = useMemo(() => (value ? companionQrSvg(value) : ""), [value]);
+  return (
+    <div className="w-[200px] rounded-[18px] bg-[#f5ede4] p-3.5">
+      <div className="relative aspect-square w-full">
+        {markup ? (
+          <>
+            <div
+              className="absolute inset-0 [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
+              dangerouslySetInnerHTML={{ __html: markup }}
+              aria-hidden
+            />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="h-[30px] w-[30px] rounded-[8px] bg-[#f5ede4] p-[5px]">
+                <img
+                  src={ruforgeAppIcon}
+                  alt=""
+                  className="h-full w-full rounded-[4px] object-cover"
+                  draggable={false}
+                />
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CodeCells({ code, dim }: { code: string; dim: boolean }) {
+  const chars = code.padEnd(8, " ").slice(0, 8).split("");
+  const group = (from: number) => (
+    <div className="flex gap-1.5">
+      {chars.slice(from, from + 4).map((ch, i) => (
+        <span
+          key={from + i}
+          className={`flex h-[52px] w-9 items-center justify-center rounded-[12px] bg-[color:var(--rf-field)] font-display text-[26px] font-bold transition-colors duration-200 ${
+            dim ? "text-stone-600" : "text-stone-100"
+          }`}
+        >
+          {ch}
+        </span>
+      ))}
+    </div>
+  );
+  return (
+    <div className="flex select-all gap-3" aria-label={`Pairing code ${code}`}>
+      {group(0)}
+      {group(4)}
+    </div>
+  );
 }
 
 export const CompanionPairingModal: React.FC<CompanionPairingModalProps> = ({
@@ -47,153 +95,110 @@ export const CompanionPairingModal: React.FC<CompanionPairingModalProps> = ({
   pairing,
   busy,
   onRefresh,
-  onCopyLink,
   onOpenLocal,
 }) => {
-  const [remaining, setRemaining] = useState("2:00");
-
-  useEffect(() => {
-    if (!open || !pairing) return;
-    const tick = () => setRemaining(formatRemaining(pairing.expSecs));
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-  }, [open, pairing]);
-
-  const qrMarkup = useMemo(
-    () => (pairing?.url ? companionQrSvg(pairing.url) : ""),
-    [pairing?.url],
-  );
   const reduceMotion = useReducedMotion();
+  const [left, setLeft] = useState(PAIRING_TTL_SECS);
   const [dismissReady, setDismissReady] = useState(false);
 
   useEffect(() => {
     if (!open) setDismissReady(false);
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !pairing) return;
+    const tick = () => setLeft(secondsLeft(pairing.expSecs));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [open, pairing]);
+
+  const phone = pairing?.phoneUrl != null;
+  const expired = pairing != null && left === 0;
+
   return createPortal(
     <AnimatePresence>
       {open ? (
-    <motion.div
-      key="companion-pairing"
-      className="fixed inset-0 z-[900] flex items-center justify-center bg-[#0e0a08]/80 p-4 backdrop-blur-[2px]"
-      role="presentation"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={motionDuration(reduceMotion, overlayFadeTransition)}
-      onAnimationComplete={() => setDismissReady(true)}
-    >
-      <button
-        type="button"
-        className={`absolute inset-0 cursor-default ${dismissReady ? "" : "pointer-events-none"}`}
-        aria-label="Close dialog"
-        onClick={onClose}
-      />
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="companion-pairing-title"
-        className="relative w-full max-w-[360px] rounded-[var(--radius-modal)] bg-[#1D1613] px-5 py-5 shadow-[0_16px_48px_rgba(0,0,0,0.55)]"
-        onClick={(e) => e.stopPropagation()}
-        initial={{ opacity: 0, y: 12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 8, scale: 0.98 }}
-        transition={motionDuration(reduceMotion, overlayPanelTransition)}
-      >
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-              Browser companion
-            </p>
-            <h2
-              id="companion-pairing-title"
-              className="text-[15px] font-semibold leading-snug text-stone-100"
-            >
-              Pairing link (localhost)
-            </h2>
-            <p className="text-[11px] leading-relaxed text-stone-500">
-              Same PC only · one-time link · code expires in {remaining}
-            </p>
-          </div>
+        <motion.div
+          key="companion-pairing"
+          className={`fixed inset-0 ${OVERLAY_Z_CLASS.fullscreen} flex items-center justify-center bg-black/65 p-6`}
+          role="presentation"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={motionDuration(reduceMotion, overlayFadeTransition)}
+          onAnimationComplete={() => setDismissReady(true)}
+        >
           <button
             type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 text-stone-500 transition-colors hover:text-stone-200"
+            className={`absolute inset-0 cursor-default ${dismissReady ? "" : "pointer-events-none"}`}
             aria-label="Close"
+            onClick={onClose}
+          />
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={phone ? "Pair a phone" : "Pairing link"}
+            className="relative rounded-[24px] bg-[color:var(--rf-surface)] p-[7px] shadow-[0_16px_48px_rgba(0,0,0,0.45)]"
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            transition={motionDuration(reduceMotion, overlayPanelTransition)}
           >
-            <X size={18} />
-          </button>
-        </div>
+            <div className="relative flex flex-col items-center rounded-[18px] bg-[color:var(--rf-surface-deep)] px-8 pb-7 pt-9">
+              <button
+                type="button"
+                onClick={onClose}
+                className="absolute right-3 top-3 rounded-lg p-1.5 text-stone-500 transition-colors hover:text-stone-200"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
 
-        <div className="flex flex-col items-center gap-3">
-          {pairing && qrMarkup ? (
-            <div className="w-[min(210px,52vw)] rounded-[var(--radius-input)] bg-[#f5ede4] p-3">
-              <div className="relative aspect-square w-full">
-                <div
-                  className="absolute inset-0 [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
-                  dangerouslySetInnerHTML={{ __html: qrMarkup }}
-                  aria-hidden
-                />
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div className="flex h-[14%] w-[14%] min-h-[24px] min-w-[24px] max-h-[32px] max-w-[32px] items-center justify-center rounded-[7px] bg-[#f5ede4] p-[5px] shadow-[inset_0_0_0_1px_rgba(28,21,18,0.1)]">
-                    <img
-                      src={ruforgeAppIcon}
-                      alt=""
-                      className="h-full w-full rounded-[3px] object-cover"
-                      draggable={false}
+              <QrTile value={(phone ? pairing?.phoneUrl : pairing?.url) ?? ""} />
+
+              {phone && pairing ? (
+                <>
+                  <div className="mt-6">
+                    <CodeCells code={pairing.code} dim={expired} />
+                  </div>
+                  <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-[color:var(--rf-field)]">
+                    <div
+                      className="h-full w-full origin-left rounded-full bg-[color:var(--accent)] transition-transform duration-1000 ease-linear"
+                      style={{ transform: `scaleX(${left / PAIRING_TTL_SECS})` }}
                     />
                   </div>
-                </div>
+                </>
+              ) : null}
+
+              <div className="mt-5 flex h-8 items-center">
+                {expired ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={onRefresh}
+                    className="rounded-[var(--radius-input)] px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--accent)] transition-[filter,transform] hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
+                  >
+                    New code
+                  </button>
+                ) : phone ? (
+                  <p className="text-[12px] text-stone-500">
+                    Scan with your iPhone, then type this code
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!pairing || busy}
+                    onClick={onOpenLocal}
+                    className="rounded-[var(--radius-input)] px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-[color:var(--accent)] transition-[filter,transform] hover:brightness-110 active:scale-[0.98] disabled:opacity-40"
+                  >
+                    Open on this PC
+                  </button>
+                )}
               </div>
             </div>
-          ) : (
-            <div className="flex aspect-square w-[min(210px,52vw)] items-center justify-center rounded-[var(--radius-input)] bg-[#261d18] text-[10px] uppercase tracking-[0.12em] text-stone-500">
-              No pairing link
-            </div>
-          )}
-
-          {pairing?.url ? (
-            <button
-              type="button"
-              onClick={() => void onCopyLink()}
-              className="w-full max-w-full break-all px-1 text-center font-mono text-[11px] leading-snug text-stone-400 transition-colors hover:text-[color:var(--accent)]"
-              data-tooltip={pairing.url}
-              aria-label="Copy pairing link"
-            >
-              {pairing.url}
-            </button>
-          ) : null}
-        </div>
-
-        <div className="mt-5 flex flex-wrap justify-center gap-2">
-          <button
-            type="button"
-            disabled={!pairing || busy}
-            onClick={() => void onCopyLink()}
-            className={companionAccentBtn}
-          >
-            COPY LINK
-          </button>
-          <button
-            type="button"
-            disabled={!pairing || busy}
-            onClick={() => void onOpenLocal()}
-            className={companionAccentBtn}
-          >
-            OPEN LOCALLY
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void onRefresh()}
-            className={companionNeutralBtn}
-          >
-            REFRESH CODE
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
+          </motion.div>
+        </motion.div>
       ) : null}
     </AnimatePresence>,
     document.body,

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
+import { localImageSrc } from "@/lib/localImageSrc";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 import { appDataDir, join } from "@tauri-apps/api/path";
@@ -47,6 +48,7 @@ import {
 import {
   youtubeMusicSearchUrl,
   classifyMusicExploreUrl,
+  isYouTubeVideoId,
 } from "@/youtubeUrl";
 import { enqueuePastedExploreWatch } from "@/lib/enqueuePastedExploreWatch";
 import {
@@ -114,7 +116,7 @@ import {
   onYoutubeAuthSurfaceLeave,
 } from "@/lib/youtubeAuthSurface";
 import { profileNeedsIdentityProbe } from "@/lib/youtubeProfileSession";
-import { isPrimaryModifierOnly } from "@/lib/shortcutLabels";
+import { matchHotkeyEvent } from "@/hooks/useHotkeys";
 import {
   ensureRadialNavOverlay,
   setRadialNavSurfaceActive,
@@ -137,6 +139,14 @@ function logMusicExploreNavigation(
 }
 
 const sidebarEase = [0.4, 0, 0.2, 1] as const;
+const MUSIC_SHELL_HOTKEYS = [
+  "music.toggleNav",
+  "music.newPlaylist",
+  "music.goHome",
+  "music.goExplore",
+  "music.goLibrary",
+] as const;
+
 const SIDEBAR_FULL = "var(--music-sidebar-width)";
 const SIDEBAR_COLLAPSED = "var(--music-library-collapsed-width)";
 
@@ -332,7 +342,16 @@ function MusicSponsorBlockSync({
   return null;
 }
 
-export function MusicShell() {
+export function MusicShell({
+  nativeSurfacesReady = true,
+  nativeSurfacesCovered = false,
+}: {
+  nativeSurfacesReady?: boolean;
+  /** App UI (Settings) sits over Music: hide the native webview without pausing it. */
+  nativeSurfacesCovered?: boolean;
+}) {
+  const nativeSurfacesCoveredRef = useRef(nativeSurfacesCovered);
+  nativeSurfacesCoveredRef.current = nativeSurfacesCovered;
   const isMainMaximized = useMainWindowMaximized();
   const activeView = useRuforgeStore((s) => s.musicView);
   const setMusicView = useRuforgeStore((s) => s.setMusicView);
@@ -506,7 +525,7 @@ export function MusicShell() {
   const isPasteMode = panelMode === "paste";
   const showExploreStrip = activeView === "explore" && !musicDetail && !playerExpanded;
   const showExplorePanel = activeView === "explore" && panelOpen;
-  const exploreWebviewActive = showExploreStrip;
+  const exploreWebviewActive = showExploreStrip && nativeSurfacesReady && !nativeSurfacesCovered;
 
   useEffect(() => {
     logMusicExploreNavigation("shell-state", {
@@ -778,7 +797,7 @@ export function MusicShell() {
       (ev) => {
         if (!alive) return;
         const { videoId, title } = ev.payload ?? {};
-        if (!videoId) return;
+        if (!isYouTubeVideoId(videoId)) return;
 
         const store = useRuforgeStore.getState();
         if (store.settings.autoDownloadPlayingSongs === false) return;
@@ -1040,7 +1059,7 @@ export function MusicShell() {
 
       if (!exploreWebviewActive) {
         musicExploreLastBoundsRef.current = null;
-        if (wasActive) {
+        if (wasActive && !nativeSurfacesCoveredRef.current) {
           await pauseMedia();
         }
         const wv = musicExploreWebviewRef.current;
@@ -1134,6 +1153,15 @@ export function MusicShell() {
     playMusicQueue(file, playlist ?? [file], source ?? null, opts);
   }, [playMusicQueue]);
 
+  const handlePlayQueueRow = useCallback((file: MediaFile) => {
+    handlePlayFolderNeighbor(file, { clearSessionLoop: true });
+  }, [handlePlayFolderNeighbor]);
+
+  const handlePlayHistoryRow = useCallback((file: MediaFile) => {
+    setPendingListenEndReason("manual_switch");
+    playMusicQueue(file, [file], musicQueueSource("recent", "Recently listened"));
+  }, [playMusicQueue]);
+
   const handleBack = useCallback(() => {
     cycleNavMode();
   }, [cycleNavMode]);
@@ -1202,7 +1230,7 @@ export function MusicShell() {
   }, [activeView, exploreWebviewActive, schedulePendingMusicExploreNavigate]);
 
   const coverPath = playingFile ? bestCoverPath(playingFile) : null;
-  const coverSrc = coverPath ? convertFileSrc(coverPath) : null;
+  const coverSrc = coverPath ? localImageSrc(coverPath) : null;
   const trackTitle = playingFile?.name ?? "";
   const trackArtist =
     playingFile?.artist
@@ -1233,51 +1261,27 @@ export function MusicShell() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const el = e.target;
-      if (
-        el instanceof HTMLInputElement
-        || el instanceof HTMLTextAreaElement
-        || (el instanceof HTMLElement && el.isContentEditable)
-      ) {
-        return;
-      }
-
-      const key = e.key.toLowerCase();
-
-      if (isPrimaryModifierOnly(e) && !e.altKey && key === "b") {
-        e.preventDefault();
-        e.stopPropagation();
-        setNavCollapsed((c) => !c);
-        resyncExploreWebview();
-        return;
-      }
-
-      if (isPrimaryModifierOnly(e) && !e.altKey && !e.shiftKey && key === "n") {
-        e.preventDefault();
-        e.stopPropagation();
-        openMusicPlaylist(createMusicPlaylist());
-        return;
-      }
-
-      if (!e.altKey || e.ctrlKey || e.metaKey) return;
-
-      // Option+digit types a symbol on macOS, so match the physical key instead of e.key.
-      if (e.code === "Digit1") {
-        e.preventDefault();
-        e.stopPropagation();
-        setMusicView("home");
-        return;
-      }
-      if (e.code === "Digit2") {
-        e.preventDefault();
-        e.stopPropagation();
-        setMusicView("explore");
-        return;
-      }
-      if (e.code === "Digit3") {
-        e.preventDefault();
-        e.stopPropagation();
-        setMusicView("library");
+      const action = matchHotkeyEvent(e, MUSIC_SHELL_HOTKEYS);
+      if (!action) return;
+      e.preventDefault();
+      e.stopPropagation();
+      switch (action) {
+        case "music.toggleNav":
+          setNavCollapsed((c) => !c);
+          resyncExploreWebview();
+          break;
+        case "music.newPlaylist":
+          openMusicPlaylist(createMusicPlaylist());
+          break;
+        case "music.goHome":
+          setMusicView("home");
+          break;
+        case "music.goExplore":
+          setMusicView("explore");
+          break;
+        case "music.goLibrary":
+          setMusicView("library");
+          break;
       }
     };
     document.addEventListener("keydown", onKeyDown, true);
@@ -1286,7 +1290,7 @@ export function MusicShell() {
 
   return (
     <div
-      className="relative flex flex-col flex-1 min-w-0 min-h-0 pt-10 overflow-hidden"
+      className="relative flex flex-col flex-1 min-w-0 min-h-0 pt-[calc(var(--rf-titlebar-h)-var(--music-shell-gap,8px))] overflow-hidden"
       data-music-player-expanded={shellBlack ? "true" : undefined}
       style={{
         background: shellBlack ? "#000000" : "var(--music-shell-chrome)",
@@ -1396,6 +1400,11 @@ export function MusicShell() {
             >
               <div ref={assignWebviewHostRef} className="absolute inset-0 z-0" />
               <div className="relative z-[1] min-h-0 min-w-0 h-full w-full overflow-hidden">
+                {/*
+                  Box-less scope for the hero's per-frame --hero-energy var: it reaches both hero
+                  layers but not the page views, which are still mounted while the player fades.
+                */}
+                <div className="contents" data-audio-hero-scope="">
                 <AnimatePresence>
                   {playerExpanded && playingFile && (
                     <motion.div
@@ -1452,6 +1461,7 @@ export function MusicShell() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+                </div>
 
                 <AnimatePresence mode="wait">
                   {playerExpanded ? null : musicDetail?.kind === "artist" ? (
@@ -1520,7 +1530,8 @@ export function MusicShell() {
                       />
                     </motion.div>
                   ) : activeView === "explore" ? (
-                    <motion.div key="explore" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0 pointer-events-none">
+                    // The native webview hides at once and this placeholder is empty, so a fading exit is only dead air before the next view.
+                    <motion.div key="explore" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0 } }} transition={{ duration: 0.15 }} className="absolute inset-0 pointer-events-none">
                       <MusicExploreView />
                     </motion.div>
                   ) : (
@@ -1593,15 +1604,8 @@ export function MusicShell() {
             manualQueue={playback.manualQueue}
             folderAudioPlaylist={folderAudioPlaylist}
             onSeek={playback.seek}
-            onPlay={(file) => handlePlayFolderNeighbor(file, { clearSessionLoop: true })}
-            onPlayHistory={(file) => {
-              setPendingListenEndReason("manual_switch");
-              playMusicQueue(
-                file,
-                [file],
-                musicQueueSource("recent", "Recently listened"),
-              );
-            }}
+            onPlay={handlePlayQueueRow}
+            onPlayHistory={handlePlayHistoryRow}
             historyEntries={historyEntries}
             chapters={chapters}
             sbSegments={sbSegments}

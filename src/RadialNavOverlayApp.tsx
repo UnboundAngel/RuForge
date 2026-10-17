@@ -1,7 +1,9 @@
 import { emit, listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useState } from "react";
 
+import { syncRuforgeVideoPalette } from "@/accentCss";
 import { RadialMenu } from "@/components/ui/radial-menu";
+import { loadMergedSettings } from "@/store/types";
 import { radialMenuItemsForMode } from "@/lib/radialNavItems";
 import {
   RADIAL_NAV_ALT_EVENT,
@@ -61,6 +63,13 @@ export default function RadialNavOverlayApp() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!state.open) return;
+    syncRuforgeVideoPalette(
+      state.navMode === "default" && loadMergedSettings().legacyVideoColors === true,
+    );
+  }, [state.open, state.navMode]);
+
   const menuItems = useMemo(() => radialMenuItemsForMode(state.navMode), [state.navMode]);
 
   return (
@@ -68,6 +77,7 @@ export default function RadialNavOverlayApp() {
       <RadialMenu
         open={state.open}
         navMode={state.navMode}
+        accent={state.accent}
         menuItems={menuItems}
         onCenterClick={() => void emit(RADIAL_NAV_CENTER_EVENT)}
         onSelect={(item) =>

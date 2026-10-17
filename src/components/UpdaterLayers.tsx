@@ -98,7 +98,7 @@ export function UpdaterMainOverlays({
           initial={{ opacity: 0, x: 20, y: 0 }}
           animate={{ opacity: 1, x: 0, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
-          className="pointer-events-auto absolute top-6 right-6 z-[60] w-[min(calc(100vw-3rem),19rem)] rounded-[20px] border border-white/10 bg-[#271C18]/95 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+          className="pointer-events-auto absolute top-6 right-6 z-[60] w-[min(calc(100vw-3rem),19rem)] rounded-[20px] border border-white/10 bg-[color:var(--rf-surface)]/95 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.5)] backdrop-blur-xl"
         >
           <button
             type="button"
@@ -126,7 +126,7 @@ export function UpdaterMainOverlays({
                 whileTap={{ scale: 0.98 }}
                 type="button"
                 onClick={onInstallRestart}
-                className="rounded-lg bg-[color:var(--accent)] px-3.5 py-1.5 text-center text-[10px] font-black uppercase tracking-widest text-[#1D1613] transition"
+                className="rounded-lg bg-[color:var(--accent)] px-3.5 py-1.5 text-center text-[10px] font-black uppercase tracking-widest text-[color:var(--rf-on-accent)] transition"
               >
                 Install &amp; Restart
               </motion.button>
@@ -168,7 +168,7 @@ export function UpdaterFullWindowUpdate({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[600] flex flex-col items-center justify-center bg-[#1D1613]"
+      className="fixed inset-0 z-[600] flex flex-col items-center justify-center bg-[color:var(--rf-surface-deep)]"
       aria-live="polite"
       aria-modal="true"
       role="alertdialog"
@@ -217,7 +217,7 @@ export function UpdaterFullWindowUpdate({
                     whileTap={{ scale: 0.98 }}
                     type="button"
                     onClick={onRetry}
-                    className="rounded-lg bg-[color:var(--accent)] px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[#1D1613]"
+                    className="rounded-lg bg-[color:var(--accent)] px-4 py-2 text-[10px] font-black uppercase tracking-widest text-[color:var(--rf-on-accent)]"
                   >
                     Try again
                   </motion.button>

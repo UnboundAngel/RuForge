@@ -1457,6 +1457,12 @@ export function useDownloaderView({
     };
   }, [replaceDialogOpen, setDownloaderDuplicateDialogOpenInStore]);
 
+  useEffect(() => {
+    const { setDownloaderStartArmed } = useRuforgeStore.getState();
+    setDownloaderStartArmed(downloadStartPending);
+    return () => setDownloaderStartArmed(false);
+  }, [downloadStartPending]);
+
   const handleQuickEnqueueFromClipboard = useCallback(async (injectedUrl?: string) => {
     if (storageBlocksNewDownloads) {
       setQuickEnqueueHint("storage_full");
@@ -1600,6 +1606,19 @@ export function useDownloaderView({
     setDownloaderUrlFocused(false);
     setClipboardOfferUrl(null);
   }, [setDownloaderUrlFocused]);
+
+  // React fires no blur when a focused input unmounts (the swap to "Starting soon", closing the
+  // overlay), which left the focus underline stuck open after the field came back.
+  const urlInputRef = useCallback(
+    (el: HTMLInputElement | null) => {
+      if (!el) return;
+      if (el !== document.activeElement) setDownloaderUrlFocused(false);
+      return () => {
+        if (useRuforgeStore.getState().isFocused) handleUrlBlur();
+      };
+    },
+    [setDownloaderUrlFocused, handleUrlBlur],
+  );
 
   const applyClipboardOffer = useCallback(() => {
     if (!clipboardOfferUrl) return;
@@ -2194,6 +2213,7 @@ export function useDownloaderView({
     handleUrlFocus,
     handleUrlClick,
     handleUrlBlur,
+    urlInputRef,
     handleUrlPaste,
     applyClipboardOffer,
     handleUrlClipPaste,

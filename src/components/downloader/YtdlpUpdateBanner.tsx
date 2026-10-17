@@ -106,11 +106,11 @@ export function YtdlpUpdateBanner({
       <div
         role="region"
         aria-label="yt-dlp update"
-        className="pointer-events-auto relative w-full max-w-[30rem] overflow-hidden rounded-[20px] bg-[#261d18]"
+        className="pointer-events-auto relative w-full max-w-[30rem] overflow-hidden rounded-[20px] bg-[color:var(--rf-field)]"
       >
         <motion.div
           aria-hidden
-          className="absolute inset-0 origin-left bg-[color-mix(in_srgb,var(--accent)_22%,#261d18)]"
+          className="absolute inset-0 origin-left bg-[color-mix(in_srgb,var(--accent)_22%,var(--rf-field))]"
           initial={false}
           animate={{ scaleX: fill }}
           transition={reduceMotion ? { duration: 0 } : { duration: 0.35, ease: EASE_OUT }}
@@ -132,7 +132,7 @@ export function YtdlpUpdateBanner({
                       initial={reduceMotion ? false : { scale: 0.3, rotate: -45 }}
                       animate={{ scale: 1, rotate: 0 }}
                       transition={reduceMotion ? { duration: 0 } : POP_SPRING}
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[color:var(--accent)] text-[#1D1613]"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[color:var(--accent)] text-[color:var(--rf-on-accent)]"
                     >
                       <Check size={13} strokeWidth={3.25} />
                     </motion.span>
@@ -175,7 +175,7 @@ export function YtdlpUpdateBanner({
                 <button
                   type="button"
                   onClick={onUpdate}
-                  className="h-9 rounded-[var(--radius-input)] bg-[color:var(--accent)] px-4 text-[12.5px] font-semibold text-[#1D1613] transition-[filter,transform] duration-150 hover:brightness-110 active:scale-[0.97]"
+                  className="h-9 rounded-[var(--radius-input)] bg-[color:var(--accent)] px-4 text-[12.5px] font-semibold text-[color:var(--rf-on-accent)] transition-[filter,transform] duration-150 hover:brightness-110 active:scale-[0.97]"
                 >
                   {phase === "error" ? "Try again" : "Update"}
                 </button>

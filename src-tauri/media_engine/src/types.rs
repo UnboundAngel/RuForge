@@ -83,6 +83,11 @@ pub struct MediaInspection {
     pub uploader: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
+    /// Best matching video height for the probe format cap, when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
     pub choices: MediaChoiceSet,
 }
 

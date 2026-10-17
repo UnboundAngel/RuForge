@@ -26,7 +26,7 @@ export function HeroFormatSwitch({ audioOnly, onToggle }: { audioOnly: boolean; 
               <motion.span
                 layoutId="hero-format-switch-pill"
                 transition={{ type: "spring", stiffness: 500, damping: 38 }}
-                className="absolute inset-0 rounded-full bg-[#3e2f27]"
+                className="absolute inset-0 rounded-full bg-[color:var(--rf-field-hover)]"
               />
             )}
             <Icon size={13} strokeWidth={2.5} className="relative" />

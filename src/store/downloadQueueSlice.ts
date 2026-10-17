@@ -1,5 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { StateCreator, StoreApi } from "zustand";
+import {
+  classifyDownloadError,
+  mapEnqueueSourceToEntryPoint,
+  recordActivity,
+} from "../lib/activityLog";
 import { markMusicDownloadManualCancel } from "../lib/musicDownloadManualCancel";
 import {
   fetchVideoInfoForQueueHydration,
@@ -8,7 +13,9 @@ import {
 import { downloadQueueHydrationPool } from "../downloadQueueHydrationPool";
 import {
   mergeDownloadProgressWithSmoothing,
+  qualityLabelFromHeight,
   resetDownloadProgressEtaSmoothing,
+  trackDownloadPeakBps,
 } from "../downloadProgress";
 import {
   collapseDownloadJobsByUrl,
@@ -73,7 +80,12 @@ import {
 import { findLibraryDuplicate } from "../duplicateDownload";
 import { updatePlaylistDownloadSidecarFromJob } from "../lib/playlistDownloadSidecar";
 import { mediaFileFromDownloadFinish } from "../galleryEntries";
-import { youtubeUrlsMatch } from "../youtubeUrl";
+import { isAudioOnlyPath } from "../mediaKind";
+import { announceLibraryArrival } from "../components/library/libraryArrivals";
+import { runTagRules, tagTargetFromFile, tagVideo } from "../lib/libraryTagsStore";
+import { gameTagId } from "../lib/libraryTags";
+import { addPendingGameTag, takePendingGameTag } from "@games";
+import { extractYouTubeVideoId, youtubeUrlsMatch } from "../youtubeUrl";
 import {
   applyStorageFit,
   NOT_ENOUGH_STORAGE_LABEL,
@@ -412,6 +424,8 @@ async function hydrateDownloadJobMetadata(
       fileSizeBytesVideo: cur.metadata?.fileSizeBytesVideo ?? null,
       uploader: cur.metadata?.uploader,
       channel: cur.metadata?.channel,
+      channelId: cur.metadata?.channelId,
+      height: cur.metadata?.height,
     };
     applySnapshot(snapshotWithResolvedFileSize(snapshot, audioOnly));
   }
@@ -840,12 +854,19 @@ export const createDownloadQueueSlice: StateCreator<
         continue;
       }
 
+      const resume = Boolean(next.resumeOnStart);
       starts.push({
         id: next.id,
         url: next.url,
-        resume: Boolean(next.resumeOnStart),
+        resume,
       });
       const now = Date.now();
+      const priorBytes =
+        typeof next.progress?.downloadedBytes === "number" && next.progress.downloadedBytes > 0
+          ? next.progress.downloadedBytes
+          : typeof next.resumedBytes === "number" && next.resumedBytes > 0
+            ? next.resumedBytes
+            : 0;
       jobs = jobs.map((j) =>
         j.id === next.id
           ? {
@@ -854,6 +875,9 @@ export const createDownloadQueueSlice: StateCreator<
               error: null,
               resumeOnStart: false,
               downloadingSince: now,
+              resumedBytes: resume ? priorBytes : 0,
+              peakBps: undefined,
+              speedSamples: undefined,
             }
           : j,
       );
@@ -950,6 +974,11 @@ export const createDownloadQueueSlice: StateCreator<
     enqueueDownload: (url, options, meta) => {
       get().restoreDownloadQueueFromSessionIfEmpty();
       const urlTrim = url.trim();
+      const scope = get().explorerGameScope;
+      if (meta?.enqueueSource === "explorerAdd" && scope && get().settings.games.some((g) => g.id === scope.gameId)) {
+        const videoId = extractYouTubeVideoId(urlTrim);
+        if (videoId) addPendingGameTag(videoId, scope.gameId);
+      }
       const approval: DownloadJobApproval = meta?.approval ?? "auto";
       const snapshot =
         meta?.snapshot ??
@@ -1036,6 +1065,10 @@ export const createDownloadQueueSlice: StateCreator<
         ...(meta?.enqueueSource ? { enqueueSource: meta.enqueueSource } : {}),
         ...(meta?.devSimulateDownload ? { devSimulateDownload: true } : {}),
       };
+      recordActivity({
+        kind: "download_queued",
+        entryPoint: mapEnqueueSourceToEntryPoint(meta?.enqueueSource),
+      });
       set((s) => {
         const downloadJobs = collapseDownloadJobsByUrl([...s.downloadJobs, job]);
         persistDownloadJobs(downloadJobs);
@@ -1281,6 +1314,15 @@ export const createDownloadQueueSlice: StateCreator<
     removeDownloadJob: async (id, opts) => {
       const job = get().downloadJobs.find((j) => j.id === id);
       if (!job) return;
+      if (
+        opts?.manual &&
+        (job.status === "queued" || job.status === "downloading" || job.status === "paused")
+      ) {
+        recordActivity({
+          kind: "download_canceled",
+          entryPoint: mapEnqueueSourceToEntryPoint(job.enqueueSource),
+        });
+      }
       if (opts?.manual) {
         markMusicDownloadManualCancel(job.url);
       }
@@ -1401,7 +1443,11 @@ export const createDownloadQueueSlice: StateCreator<
             j.progress,
             payload,
           );
-          return { ...j, progress };
+          const peak = trackDownloadPeakBps(
+            { downloadingSince: j.downloadingSince, peakBps: j.peakBps, speedSamples: j.speedSamples },
+            progress.speed,
+          );
+          return { ...j, progress, ...peak };
         });
         let focus = s.focusedJobId;
         const payloadJob = downloadJobs.find((j) => j.id === payload.jobId);
@@ -1581,14 +1627,100 @@ export const createDownloadQueueSlice: StateCreator<
         );
       }
 
+      {
+        const entryPoint = mapEnqueueSourceToEntryPoint(finishedJobBefore.enqueueSource);
+        const retries = Math.max(0, (finishedJobBefore.attemptCount ?? 1) - 1);
+        if (!payload.success) {
+          recordActivity({
+            kind: "download_failed",
+            errorClass: classifyDownloadError(payload.error ?? finishedJobBefore.error),
+            entryPoint,
+            retries,
+          });
+        }
+      }
+
       if (payload.success) {
         const upserted = mediaFileFromDownloadFinish(
           payload.outputPath,
           finishedJobBefore,
           finishedUrl,
         );
+        {
+          const entryPoint = mapEnqueueSourceToEntryPoint(finishedJobBefore.enqueueSource);
+          const retries = Math.max(0, (finishedJobBefore.attemptCount ?? 1) - 1);
+          const meta = finishedJobBefore.metadata;
+          const audioOnly =
+            finishedJobBefore.options.audioOnly === true ||
+            (payload.outputPath ? isAudioOnlyPath(payload.outputPath) : false);
+          const bytes =
+            finishedJobBefore.progress?.downloadedBytes ??
+            finishedJobBefore.progress?.totalBytes ??
+            meta?.fileSizeBytes ??
+            undefined;
+          const resumedBytes =
+            typeof finishedJobBefore.resumedBytes === "number" && finishedJobBefore.resumedBytes > 0
+              ? finishedJobBefore.resumedBytes
+              : undefined;
+          const elapsedMs =
+            finishedJobBefore.downloadingSince != null
+              ? Math.max(0, Date.now() - finishedJobBefore.downloadingSince)
+              : undefined;
+          const transferred =
+            bytes != null ? Math.max(0, bytes - (resumedBytes ?? 0)) : undefined;
+          const avgBps =
+            transferred != null && elapsedMs != null && elapsedMs > 0
+              ? (transferred * 1000) / elapsedMs
+              : undefined;
+          const container = payload.outputPath?.includes(".")
+            ? payload.outputPath.split(".").pop()?.toLowerCase()
+            : undefined;
+          const formatSpec = finishedJobBefore.options.format?.trim() || undefined;
+          recordActivity({
+            kind: "download_finished",
+            itemId: upserted?.sourceId ?? undefined,
+            jobId: finishedJobBefore.id,
+            videoId: finishedUrl
+              ? extractYouTubeVideoId(finishedUrl) ?? undefined
+              : upserted?.sourceId ?? undefined,
+            title: meta?.title?.trim() || finishedJobBefore.title?.trim() || undefined,
+            channelId: meta?.channelId?.trim() || undefined,
+            channelName: meta?.channel?.trim() || meta?.uploader?.trim() || undefined,
+            mediaKind: audioOnly ? "audio" : "video",
+            quality: qualityLabelFromHeight(meta?.height, audioOnly),
+            formatSpec,
+            container,
+            bytes,
+            mediaDurationSec: meta?.duration != null && meta.duration > 0 ? meta.duration : undefined,
+            elapsedMs,
+            avgBps,
+            peakBps: finishedJobBefore.peakBps,
+            entryPoint,
+            resumed: (resumedBytes ?? 0) > 0,
+            resumedBytes,
+            retries,
+          });
+        }
         if (upserted) {
           get().upsertGalleryMediaFile(upserted);
+          void runTagRules(
+            [tagTargetFromFile(upserted, finishedJobBefore.metadata?.channel ?? finishedJobBefore.metadata?.uploader)],
+            get().settings.games,
+          );
+          const pendingGame = takePendingGameTag(upserted.sourceId);
+          if (pendingGame && get().settings.games.some((g) => g.id === pendingGame.gameId)) {
+            tagVideo(upserted, gameTagId(pendingGame.gameId));
+          }
+          // Playlist items land in their playlist stack, which has no slot for a flight to aim at.
+          if (!isAudioOnlyPath(upserted.path) && !finishedJobBefore.options.playlistOutputFolder?.trim()) {
+            const videoId = upserted.sourceId;
+            announceLibraryArrival(
+              upserted.path,
+              finishedJobBefore.metadata?.thumbnail?.trim() ||
+                (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null),
+              finishedJobBefore.metadata?.title?.trim() || finishedJobBefore.title?.trim() || null,
+            );
+          }
         } else {
           void get().fetchEntries({
             manageLoadingStart: false,

@@ -271,8 +271,13 @@ impl LibraryState {
         Ok(())
     }
 
+    // notify_waiters() stores no permit, so the waiter must be registered before the
+    // flag is read or a publish that lands in between is lost and the invoke never returns.
     async fn wait_flight_desktop(flight: &ReindexFlight) -> Result<(), String> {
         loop {
+            let notified = flight.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
             if flight.desktop_done.load(Ordering::SeqCst) {
                 if let Some(e) = flight.error.lock().await.clone() {
                     return Err(e);
@@ -282,12 +287,15 @@ impl LibraryState {
             if let Some(e) = flight.error.lock().await.clone() {
                 return Err(e);
             }
-            flight.notify.notified().await;
+            notified.await;
         }
     }
 
     async fn wait_flight_probe(flight: &ReindexFlight) -> Result<(), String> {
         loop {
+            let notified = flight.notify.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
             if flight.probe_done.load(Ordering::SeqCst) {
                 if let Some(e) = flight.error.lock().await.clone() {
                     return Err(e);
@@ -297,7 +305,7 @@ impl LibraryState {
             if let Some(e) = flight.error.lock().await.clone() {
                 return Err(e);
             }
-            flight.notify.notified().await;
+            notified.await;
         }
     }
 

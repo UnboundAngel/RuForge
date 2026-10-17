@@ -3,7 +3,7 @@ import { ChannelAvatar } from "@/components/library/VideoByline";
 import { formatAge } from "@/components/library/youtubeFeed";
 import type { WatchedChannel } from "@/watchlist/types";
 import { panelRowDetailClass, panelRowTitleClass } from "../panelStyles";
-import { MiniToggle } from "./MiniToggle";
+import { Switch } from "@/components/ui/Switch";
 
 type Props = {
   channel: WatchedChannel;
@@ -46,9 +46,11 @@ export function ChannelRow({ channel, onAutoDownload, onUnfollow }: Props) {
       >
         <Icon icon="tabler:user-minus" width={18} height={18} aria-hidden />
       </button>
-      <MiniToggle
-        active={channel.autoDownload}
+      <Switch
+        size="sm"
+        checked={channel.autoDownload}
         label={channel.autoDownload ? "Auto-download on" : "Auto-download new uploads"}
+        tooltip={channel.autoDownload ? "Auto-download on" : "Auto-download new uploads"}
         onChange={(next) => onAutoDownload(channel.channelId, next)}
       />
     </li>

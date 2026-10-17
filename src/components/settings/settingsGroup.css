@@ -1,0 +1,124 @@
+/* H2 under the "Settings" modal title: same serif, no rule, whitespace separates groups. */
+.rf-settings-shell .rf-settings-section-header {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.1875rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  text-transform: none;
+  color: rgb(245 245 244);
+  margin: 0 0 0.75rem;
+}
+
+/* Rows of a section sit in one quiet panel, fill only. Overflow stays visible so dropdown menus can escape; the first and last rows round the corners instead. */
+.rf-settings-shell .rf-settings-section-body {
+  border-radius: 0.75rem;
+  background-color: rgb(255 255 255 / 0.025);
+}
+
+/* Intro sits outside the panel, under the header. */
+.rf-settings-shell .rf-settings-section--intro .rf-settings-section-header {
+  margin-bottom: 0.375rem;
+}
+
+.rf-settings-section-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.75rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: rgb(120 113 108);
+}
+
+.rf-settings-shell .rf-settings-row {
+  min-height: 4.25rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0;
+  transition: background-color 0.15s ease;
+}
+
+/* Block rows hold custom content; same inset as rows so nothing touches the panel edge. */
+.rf-settings-shell .rf-settings-row.rf-settings-row--block {
+  display: block;
+  min-height: 0;
+  padding: 0.875rem 1rem;
+}
+
+/* Rows that live inside a wrapper (collapsible trees) stay flat in the panel. */
+.rf-settings-rows {
+  display: block;
+}
+
+.rf-settings-shell .rf-settings-subrows > .rf-settings-row {
+  padding-left: 1.75rem;
+}
+
+.rf-settings-shell .rf-settings-section-body > .rf-settings-row:first-child,
+.rf-settings-shell .rf-settings-section-body > :first-child > .rf-settings-row:first-child,
+.rf-settings-shell .rf-settings-section-body > :first-child > :first-child > .rf-settings-row:first-child {
+  border-top-left-radius: 0.75rem;
+  border-top-right-radius: 0.75rem;
+}
+
+.rf-settings-shell .rf-settings-section-body > .rf-settings-row:last-child,
+.rf-settings-shell .rf-settings-section-body > :last-child > .rf-settings-row:last-child,
+.rf-settings-shell .rf-settings-section-body > :last-child > :last-child > .rf-settings-row:last-child,
+.rf-settings-shell .rf-settings-section-body > :last-child > :last-child > :last-child > .rf-settings-row:last-child {
+  border-bottom-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+}
+
+.rf-settings-shell .rf-settings-row:hover {
+  background-color: rgb(255 255 255 / 0.02);
+}
+
+.rf-settings-shell .rf-settings-row--block:hover {
+  background-color: transparent;
+}
+
+/* Hairline inset 1rem on both sides, between rows only. */
+.rf-settings-shell .rf-settings-row + .rf-settings-row,
+.rf-settings-shell .rf-settings-row + .rf-settings-rows > .rf-settings-row:first-child,
+.rf-settings-shell .rf-settings-subrows > .rf-settings-row {
+  background-image: linear-gradient(rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.05));
+  background-size: calc(100% - 2rem) 1px;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+/* Default row action: quiet secondary. Accent stays off it; only --danger adds colour. */
+.rf-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 7rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.875rem;
+  border-radius: 0.5rem;
+  background-color: rgb(255 255 255 / 0.06);
+  color: rgb(231 229 228);
+  font-size: 0.78125rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.rf-settings-btn:hover {
+  background-color: rgb(255 255 255 / 0.1);
+}
+
+.rf-settings-btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.rf-settings-btn--danger {
+  color: rgb(248 113 113);
+}
+
+.rf-settings-btn--danger:hover {
+  background-color: rgb(239 68 68 / 0.12);
+}

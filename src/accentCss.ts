@@ -7,6 +7,19 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
+/** Legacy brown is opt-in and video mode only; `index.html` sets the same attribute before first paint. */
+export function syncRuforgeVideoPalette(legacy: boolean) {
+  const root = document.documentElement;
+  if (legacy) root.dataset.rfVideoPalette = "legacy";
+  else delete root.dataset.rfVideoPalette;
+}
+
+export function syncRuforgeDensity(compact: boolean) {
+  const root = document.documentElement;
+  if (compact) root.dataset.rfDensity = "compact";
+  else delete root.dataset.rfDensity;
+}
+
 export function syncRuforgeAccentCss(hex: string, returnRgb?: boolean): { r: number, g: number, b: number } | void {
   const safe = hex?.trim() || "#EDCF9B";
   const root = document.documentElement;

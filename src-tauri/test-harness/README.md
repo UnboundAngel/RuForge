@@ -6,6 +6,8 @@
 | --- | --- |
 | `child-job/` | `child_job.rs`: kill-on-close job objects, timeouts, force-killed owners, long and detached runs |
 | `listen-log/` | `music_listen_log.rs`, `music_playlists.rs`, `capability_audit.rs` (with a `tauri` stub) |
+| `activity-log/` | `activity_log.rs`, `activity_stats.rs`, `music_playlists.rs` (write_atomic): monthly JSONL, rollups, milestones, label gate |
+| `game-match/` | `games/game_match.rs`: game exe and window title matching for game detection |
 | `download-artifacts/` | `download_artifacts.rs`; `src/lib.rs` carries a copy of `strip_ytdlp_stream_suffix` from `commands/gallery.rs`, so keep the two in step |
 
 Run with `cd src-tauri/test-harness/<crate> && cargo test`.

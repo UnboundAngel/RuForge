@@ -42,7 +42,7 @@ export function pickChannelVideos(
     lists.forEach((list, i) => {
       while (out.length < count && cursors[i] < list.length) {
         const video = list[cursors[i]++];
-        if (video.short || seen.has(video.videoId)) continue;
+        if (seen.has(video.videoId)) continue;
         seen.add(video.videoId);
         out.push(video);
         progressed = true;

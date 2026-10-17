@@ -1,9 +1,16 @@
 import { downloadSource } from "./sources/downloadSource";
+import { securitySource } from "./sources/securitySource";
+import { statsSource } from "./sources/statsSource";
 import { watchlistSource } from "./sources/watchlistSource";
 import type { NotificationItem, NotificationSource } from "./types";
 
 /** Feed order on ties. A new producer is one source file plus one line here. */
-export const NOTIFICATION_SOURCES: readonly NotificationSource[] = [watchlistSource, downloadSource];
+export const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
+  watchlistSource,
+  downloadSource,
+  securitySource,
+  statsSource,
+];
 
 export function notificationSource(id: NotificationItem["source"]): NotificationSource | undefined {
   return NOTIFICATION_SOURCES.find((s) => s.id === id);

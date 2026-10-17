@@ -26,16 +26,21 @@ function removeExtractingForPayloadPath(path: string): void {
 export function wireScrubSpriteGalleryIndicators(): () => void {
   let disposed = false;
   const unsubs: Array<() => void> = [];
+  // A listener that registers after dispose would otherwise never be removed.
+  const keep = (un: () => void) => {
+    if (disposed) un();
+    else unsubs.push(un);
+  };
 
   void listen<{ videoPath: string }>("scrub-sprites-started", (ev) => {
     if (disposed) return;
     useRuforgeStore.getState().addGalleryExtractingPath(ev.payload.videoPath);
-  }).then((un) => unsubs.push(un));
+  }).then(keep);
 
   void listen<{ videoPath: string }>("scrub-sprites-finished", (ev) => {
     if (disposed) return;
     removeExtractingForPayloadPath(ev.payload.videoPath);
-  }).then((un) => unsubs.push(un));
+  }).then(keep);
 
   void listen<{ videoPath: string }>("scrub-sprites-updated", (ev) => {
     if (disposed) return;
@@ -46,7 +51,7 @@ export function wireScrubSpriteGalleryIndicators(): () => void {
     );
     removeExtractingForPayloadPath(path);
     if (wasExtracting) scheduleGalleryScrubRefresh();
-  }).then((un) => unsubs.push(un));
+  }).then(keep);
 
   return () => {
     disposed = true;

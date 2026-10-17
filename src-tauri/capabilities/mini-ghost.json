@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "mini-ghost",
+  "description": "Ghost mode in the video mini player: click-through plus system-wide shortcuts that only exist while the mini is open. No other window may grab keys from other apps.",
+  "windows": ["mini"],
+  "permissions": [
+    "core:window:allow-set-ignore-cursor-events",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered"
+  ]
+}

@@ -473,7 +473,11 @@ fn is_dir_empty(dir: &Path) -> bool {
 }
 
 #[tauri::command]
-pub fn migrate_library_layout(options: MigrateOptions) -> Result<MigrateResult, String> {
+pub fn migrate_library_layout(
+    app: tauri::AppHandle,
+    options: MigrateOptions,
+) -> Result<MigrateResult, String> {
+    crate::library::path_access::allow_library_path(&app, &options.root)?;
     let root = Path::new(&options.root);
     if !root.is_dir() {
         return Err(format!("Library root does not exist: {}", root.display()));

@@ -2,11 +2,11 @@
 
 > Live cursor. Mint reads this FIRST, then `AGENTS.md`. Update LAST after user-visible app behavior that will ship. If this file and the code disagree, the code wins: fix this file forward. Never git-restore a dirty tree to match it.
 
-Shipping version: 0.6.2 (unreleased)
+Shipping version: 0.7.0 (unreleased)
 
 Last shipped to users: 0.6.1
 
-Last updated: 2026-10-03 (0.6.1 release)
+Last updated: 2026-10-16 (Unreleased log)
 
 Status: 0.6.1 live on GitHub and updater.json (release https://github.com/UnboundAngel/RuForge/releases/tag/v0.6.1, tag on public snapshot `f1b6f6c`). Version files read 0.6.1. Bundled yt-dlp 2026.08.19. From 0.6.0 on, the app checks `ruforge.app/updater.json` (Cloudflare Pages 302 to the GitHub raw file) with GitHub as the fallback; daily launch counts are in Cloudflare zone analytics filtered by path `/updater.json`. Companion still developer-gated on localhost. Local Vite binds 1430 (HMR 1431) so it does not collide with Finch on 1420. Website Astro is pinned to 4321.
 
@@ -38,12 +38,19 @@ Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shi
 
 None.
 
+## Planned for 0.7.0
+
+Nothing open.
+
 ## Next 3 (priority order)
 
 1. Playlist import Phase 2: CLI entry (roadmap "import playlists with one terminal command", in progress).
 2. Download history log in the title bar bell (roadmap "a history of everything you've downloaded").
 
 ## Notes (not P0)
+
+- When 0.7.0 ships: update the winget manifest `AppsAndFeaturesEntries` `Publisher` to `UnboundAngel` (installer `bundle.publisher` now sets it).
+- WinGet: `UnboundAngel.RuForge` 0.6.1 is in moderator review at https://github.com/microsoft/winget-pkgs/pull/446178 (CLA signed, validation passed, opened 2026-10-03). Last checked: 2026-10-08 (open, waiting on a moderator; no activity since 2026-10-03). Check at most once every 3 days with `gh pr view 446178 -R microsoft/winget-pkgs --json state,labels,comments`, then update the date. A moderator comment needs Angel to reply. Once it merges, flip the roadmap item "install and update with WinGet" to Finished, update the README install section, and drop this note. Manifest lives on fork branch `UnboundAngel/winget-pkgs:UnboundAngel.RuForge-0.6.1`.
 
 - Codex stays out of app implementation by default. Use it for CI, GitHub, Cursor prompts, and review summaries. Codex chats: `docs/agents/codex/AGENTS.md`.
 - SponsorBlock is integrated; master toggle on by default.

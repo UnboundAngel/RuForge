@@ -3,7 +3,6 @@ import { create } from "zustand";
 import { applyMediaOutputState, uiVolumeToGain } from "@/applyMediaOutputState";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
-import { showMusicToast } from "./musicToast";
 import type { OutsideTrack } from "./musicOutsideRecommend";
 import { PREVIEW_SEC, type PreviewStream, previewStartSec, previewStreamFresh } from "./musicPreviewStream";
 
@@ -194,7 +193,7 @@ function ensureAudio(): HTMLAudioElement {
     if (!id) return;
     if (id.startsWith("yt:")) cache.delete(id.slice(3));
     stopMusicPreview();
-    showMusicToast("Couldn't play the preview", "error");
+    useRuforgeStore.getState().notify("Couldn't play the preview", "error");
   });
   audio = el;
   return el;
@@ -273,13 +272,13 @@ export async function toggleMusicPreview(source: PreviewSource): Promise<void> {
       if (mine !== generation || useMusicPreview.getState().status !== "loading") return;
       forget();
       stopMusicPreview();
-      showMusicToast("Couldn't play the preview", "error");
+      useRuforgeStore.getState().notify("Couldn't play the preview", "error");
     }, LOAD_TIMEOUT_MS);
     await el.play();
   } catch {
     if (mine !== generation) return;
     forget();
     stopMusicPreview();
-    showMusicToast("Couldn't play the preview", "error");
+    useRuforgeStore.getState().notify("Couldn't play the preview", "error");
   }
 }

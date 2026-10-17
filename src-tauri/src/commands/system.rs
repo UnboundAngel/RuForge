@@ -1,5 +1,9 @@
 use std::path::{Path, PathBuf};
 
+use tauri::AppHandle;
+
+use crate::library::path_access::allow_path;
+
 fn resolve_existing_path(input: &str) -> Result<PathBuf, String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -14,18 +18,19 @@ fn resolve_existing_path(input: &str) -> Result<PathBuf, String> {
 
 /// Opens a URL in the default browser, or a local path in the system file manager.
 #[tauri::command]
-pub async fn open_external_url(url: String) -> Result<(), String> {
+pub async fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
     let trimmed = url.trim();
     if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
         return tauri_plugin_opener::open_url(trimmed, None::<&str>)
             .map_err(|e| e.to_string());
     }
-    open_in_file_manager(trimmed.to_string()).await
+    open_in_file_manager(app, trimmed.to_string()).await
 }
 
 /// Opens a folder in the file manager, or reveals a file inside its parent folder.
 #[tauri::command]
-pub async fn open_in_file_manager(path: String) -> Result<(), String> {
+pub async fn open_in_file_manager(app: AppHandle, path: String) -> Result<(), String> {
+    allow_path(&app, path.trim())?;
     let canonical = resolve_existing_path(&path)?;
     open_local_in_file_manager(&canonical)
 }

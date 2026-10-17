@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import { motion } from "motion/react";
 
 import { DynamicIsland, type DynamicIslandContent } from "@/components/island/DynamicIsland";
 import { AppTooltipLayer } from "@/components/ui/TooltipLayer";
@@ -20,6 +21,7 @@ import {
   useIslandOverlayBounds,
 } from "@/hooks/useIslandOverlayWindow";
 import { islandOverlayBounds } from "@/lib/islandOverlayBounds";
+import { ISLAND_WATCHLIST_HOLD_GRACE_MS } from "@/watchlist/islandWatchlist";
 
 const EMPTY_CONTENT: DynamicIslandContent = {
   coverSrc: null,
@@ -108,6 +110,20 @@ export default function IslandOverlayApp() {
   useEffect(() => {
     if (!hasDownload) setExpandedTarget((t) => (t === "download" ? null : t));
   }, [hasDownload]);
+
+  // The main window owns the dwell timer, so it needs to know when the pointer is on the pill.
+  const watchlistHeld = watchlist != null && (hovered || islandState === "watchlist-expanded");
+  useEffect(() => {
+    void emitDesktopIslandControl({ type: "watchlistHold", held: watchlistHeld });
+  }, [watchlistHeld]);
+
+  useEffect(() => {
+    if (islandState !== "watchlist-expanded" || hovered) return;
+    const timer = window.setTimeout(() => {
+      setExpandedTarget((t) => (t === "watchlist" ? null : t));
+    }, ISLAND_WATCHLIST_HOLD_GRACE_MS);
+    return () => window.clearTimeout(timer);
+  }, [islandState, hovered]);
 
   const bounds = islandOverlayBounds(islandState);
   useIslandOverlayBounds(bounds.width, bounds.height);
@@ -232,13 +248,25 @@ export default function IslandOverlayApp() {
     void emitDesktopIslandControl({ type: "popOut" });
   }, []);
 
-  if (!visible) {
-    return <div className="h-full w-full bg-transparent" />;
-  }
+  const musicMode = payload?.navMode === "music";
 
   return (
-    <div className="pointer-events-none flex h-full w-full justify-center overflow-visible bg-transparent pt-[6px]">
-      <div className="pointer-events-auto" data-island-hit="">
+    <div
+      className="pointer-events-none flex h-full w-full justify-center overflow-visible bg-transparent pt-[6px]"
+      data-rf-nav-mode={musicMode ? "music" : "media"}
+      data-music-mode={musicMode ? "true" : undefined}
+    >
+      <motion.div
+        initial={false}
+        animate={visible ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.7 }}
+        transition={
+          visible
+            ? { duration: 0.18, ease: [0.16, 1, 0.3, 1] }
+            : { duration: 0.26, ease: [0.4, 0, 1, 1], delay: 0.2 }
+        }
+        className={`origin-top ${visible ? "pointer-events-auto" : "pointer-events-none"}`}
+        data-island-hit={visible ? "" : undefined}
+      >
         <DynamicIsland
           compactPills
           state={islandState}
@@ -281,7 +309,7 @@ export default function IslandOverlayApp() {
           }}
           onPopOut={handlePopOut}
         />
-      </div>
+      </motion.div>
       <AppTooltipLayer />
     </div>
   );

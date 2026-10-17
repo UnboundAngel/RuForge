@@ -5,10 +5,19 @@ import { throttleMusicExplorePageFetch } from "@/lib/ytdlpPageFetchThrottle";
 import { extractYouTubeVideoId } from "@/youtubeUrl";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { MediaFile } from "@/types";
+import { askConfirm } from "@/components/ConfirmDialog";
+import { rawArtistFromFile } from "@/components/music/musicArtist";
+import { resolveMusicPlaylistTracks } from "@/components/music/musicPlaylists";
 import { fileVideoId, type OutsideTrack } from "@/components/music/musicOutsideRecommend";
 import { downloadOutsideTrackIntoPlaylist } from "@/components/music/useMusicOutsideRecommendations";
 import { libraryTracksFor } from "@/components/music/useMusicPlaylists";
-import { findMusicPlaylistByTitle, loadVirtualPlaylistRecords, recordHasPath } from "@/virtualPlaylists";
+import {
+  type VirtualPlaylistRecord,
+  findMusicPlaylistByTitle,
+  loadVirtualPlaylistRecords,
+  recordHasPath,
+} from "@/virtualPlaylists";
+import type { ImportPromptSong } from "./importPrompt";
 import {
   IMPORT_SESSION_KEY,
   type SavedImportSession,
@@ -19,6 +28,7 @@ import {
 import { findInLibrary } from "./libraryMatch";
 import type { ImportTrack, ParsedImport } from "./parseImport";
 import { type MatchBucket, type ScoredCandidate, bucketFor, rankCandidates, searchQueryFor } from "./scoreMatches";
+import { bumpCounter, recordActivity } from "@/lib/activityLog";
 
 /** Results fetched per row; the review dropdown shows the best few. */
 const SEARCH_LIMIT = 8;
@@ -46,6 +56,8 @@ type ImportSession = {
   open: boolean;
   phase: "paste" | "review";
   name: string;
+  /** Playlist this import adds to, picked from that playlist's menu; null makes a new one. */
+  targetId: string | null;
   rows: ImportRow[];
   /** Summary of what the parser dropped or merged, shown above the list. */
   notes: string[];
@@ -71,6 +83,7 @@ export const useImportSession = create<ImportSession>(() => ({
   open: false,
   phase: "paste",
   name: "",
+  targetId: null,
   rows: [],
   notes: [],
   stopped: null,
@@ -97,7 +110,14 @@ function persistNow(): void {
 }
 
 useImportSession.subscribe((s, prev) => {
-  if (s.rows === prev.rows && s.draft === prev.draft && s.name === prev.name && s.phase === prev.phase && s.stopped === prev.stopped) {
+  if (
+    s.rows === prev.rows &&
+    s.draft === prev.draft &&
+    s.name === prev.name &&
+    s.targetId === prev.targetId &&
+    s.phase === prev.phase &&
+    s.stopped === prev.stopped
+  ) {
     return;
   }
   if (persistTimer) clearTimeout(persistTimer);
@@ -111,11 +131,37 @@ let activeRun: number | null = null;
 
 export function openPlaylistImport(): void {
   const s = useImportSession.getState();
-  // Reopening mid-review keeps the list; a finished or empty session starts over.
+  // Reopening mid-review keeps the list, whichever playlist it was for; otherwise a new playlist starts.
   if (s.phase !== "review" || !s.rows.length) {
-    useImportSession.setState({ open: true, phase: "paste" });
+    useImportSession.setState({ open: true, phase: "paste", targetId: null });
+    bumpCounter("feature:playlist_import");
     return;
   }
+  resumeReview(s);
+}
+
+/** Import into a playlist the user already has. A review running for another playlist asks first. */
+export async function openPlaylistImportInto(targetId: string): Promise<void> {
+  const s = useImportSession.getState();
+  if (s.phase === "review" && s.rows.length) {
+    if (s.targetId === targetId) {
+      resumeReview(s);
+      return;
+    }
+    const ok = await askConfirm({
+      title: "Discard the import in progress?",
+      message: `You're still reviewing songs for “${s.name.trim() || DEFAULT_IMPORT_NAME}”. Starting here throws that list away.`,
+      confirmLabel: "Discard",
+      theme: "music",
+    });
+    if (!ok) return;
+    resetPlaylistImport();
+    useImportSession.setState({ draft: "" });
+  }
+  useImportSession.setState({ open: true, phase: "paste", targetId, draftError: null });
+}
+
+function resumeReview(s: ImportSession): void {
   useImportSession.setState({ open: true });
   void refreshLibraryForImport();
   // After a refresh the list comes back from storage with its unsearched rows still waiting.
@@ -200,17 +246,21 @@ async function searchRow(source: ImportTrack) {
  */
 export async function startPlaylistImport(parsed: ParsedImport, library: MediaFile[]): Promise<void> {
   const runId = useImportSession.getState().runId + 1;
+  const target = importTarget(useImportSession.getState().targetId);
   const rows: ImportRow[] = parsed.tracks.map((source) => {
     const hit = findInLibrary(source, library);
     return hit
       ? { source, state: "done", library: hit, candidates: [], choice: -1, bucket: "library", include: true }
       : { source, state: "waiting", library: null, candidates: [], choice: -1, bucket: "missing", include: false };
   });
+  const kept = dropRowsInTarget(rows, target);
+  const notes = parseNotes(parsed);
   useImportSession.setState({
     phase: "review",
-    name: parsed.name ?? DEFAULT_IMPORT_NAME,
-    rows,
-    notes: parseNotes(parsed),
+    name: target?.title ?? parsed.name ?? DEFAULT_IMPORT_NAME,
+    targetId: target?.id ?? null,
+    rows: kept,
+    notes,
     stopped: null,
     runId,
   });
@@ -219,15 +269,49 @@ export async function startPlaylistImport(parsed: ParsedImport, library: MediaFi
   const fresh = libraryTracksFor(useRuforgeStore.getState().entries);
   useImportSession.setState((s) => {
     if (s.runId !== runId) return s;
+    const next = s.rows.map((r): ImportRow => {
+      if (r.state !== "waiting") return r;
+      const hit = findInLibrary(r.source, fresh);
+      return hit ? { ...r, state: "done", library: hit, bucket: "library", include: true } : r;
+    });
+    const remaining = dropRowsInTarget(next, target);
+    const dropped = rows.length - remaining.length;
     return {
-      rows: s.rows.map((r) => {
-        if (r.state !== "waiting") return r;
-        const hit = findInLibrary(r.source, fresh);
-        return hit ? { ...r, state: "done", library: hit, bucket: "library", include: true } : r;
-      }),
+      rows: remaining,
+      notes: dropped ? [...notes, `Left out ${dropped} ${dropped === 1 ? "song" : "songs"} already in this playlist`] : notes,
     };
   });
   await runMatching(runId);
+}
+
+/** The playlist an import adds to, while it still exists. */
+function importTarget(targetId: string | null): VirtualPlaylistRecord | null {
+  if (!targetId) return null;
+  return useRuforgeStore.getState().virtualPlaylistRecords.find((r) => r.id === targetId) ?? null;
+}
+
+function dropRowsInTarget(rows: ImportRow[], target: VirtualPlaylistRecord | null): ImportRow[] {
+  if (!target) return rows;
+  return rows.filter((r) => !r.library || !recordHasPath(target, r.library.path));
+}
+
+/** Title and artist of every song already in the target, for the copied prompt. */
+export function importTargetSongs(targetId: string | null): ImportPromptSong[] {
+  const target = importTarget(targetId);
+  if (!target) return [];
+  const { tracks } = resolveMusicPlaylistTracks(target, libraryTracksFor(useRuforgeStore.getState().entries));
+  return tracks.map((f) => ({
+    title: f.canonicalTitle ?? f.name.replace(/\.[^.]+$/, ""),
+    artist: rawArtistFromFile(f),
+  }));
+}
+
+/** Title of the playlist an open import adds to, or null for a new playlist. */
+export function useImportTargetTitle(): string | null {
+  const targetId = useImportSession((s) => s.targetId);
+  return useRuforgeStore((s) =>
+    targetId ? (s.virtualPlaylistRecords.find((r) => r.id === targetId)?.title ?? null) : null,
+  );
 }
 
 /** The store can hold a snapshot from before the latest downloads landed; owned songs must come from disk. */
@@ -357,14 +441,15 @@ export function savePlaylistImport(): {
   alreadyIn: number;
   queued: number;
 } | null {
-  const { rows, name } = useImportSession.getState();
+  const { rows, name, targetId } = useImportSession.getState();
   const picked = rows.filter(importRowSaveable);
   if (!picked.length) return null;
   const store = useRuforgeStore.getState();
   const byId = libraryByVideoId();
   const owned = picked.map((r) => importRowOwnedFile(r, byId));
   const seeds = owned.flatMap((f) => (f ? [f.path] : []));
-  const target = findMusicPlaylistByTitle(loadVirtualPlaylistRecords(), name);
+  // A pinned playlist deleted mid-review falls back to the name, which recreates it.
+  const target = importTarget(targetId) ?? findMusicPlaylistByTitle(loadVirtualPlaylistRecords(), name);
   let playlistId: string;
   let alreadyIn = 0;
   if (target) {
@@ -383,6 +468,7 @@ export function savePlaylistImport(): {
   useImportSession.setState((s) => ({
     open: false,
     phase: "paste",
+    targetId: null,
     rows: [],
     notes: [],
     stopped: null,
@@ -390,5 +476,11 @@ export function savePlaylistImport(): {
     draft: "",
     draftError: null,
   }));
-  return { playlistId, merged: !!target, added: seeds.length - alreadyIn, alreadyIn, queued };
+  const added = seeds.length - alreadyIn;
+  recordActivity({
+    kind: "playlist_imported",
+    trackCount: picked.length,
+    source: targetId ? "existing_playlist" : "new_playlist",
+  });
+  return { playlistId, merged: !!target, added, alreadyIn, queued };
 }

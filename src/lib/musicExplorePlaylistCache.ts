@@ -15,20 +15,34 @@ function cacheKeyForUrl(url: string): string {
   return normalizeYouTubeUrlForCompare(url);
 }
 
+/** Each entry holds a full track list (a big playlist is ~0.5 MB), so keep only the most recent. */
+const MAX_CACHED_PLAYLISTS = 12;
+
 const sessionCache = new Map<string, CachedMusicExplorePlaylist>();
 
 export function getCachedMusicExplorePlaylist(
   url: string,
 ): CachedMusicExplorePlaylist | null {
   const key = cacheKeyForUrl(url);
-  return sessionCache.get(key) ?? null;
+  const hit = sessionCache.get(key);
+  if (!hit) return null;
+  sessionCache.delete(key);
+  sessionCache.set(key, hit);
+  return hit;
 }
 
 export function setCachedMusicExplorePlaylist(
   url: string,
   entry: CachedMusicExplorePlaylist,
 ): void {
-  sessionCache.set(cacheKeyForUrl(url), entry);
+  const key = cacheKeyForUrl(url);
+  sessionCache.delete(key);
+  sessionCache.set(key, entry);
+  while (sessionCache.size > MAX_CACHED_PLAYLISTS) {
+    const oldest = sessionCache.keys().next().value;
+    if (oldest === undefined) break;
+    sessionCache.delete(oldest);
+  }
 }
 
 export function patchCachedMusicExplorePlaylistItems(

@@ -8,6 +8,7 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import { openUrlInExplorer } from "@/watchlist/watchlistActions";
 import { downloadFeedVideo } from "./downloadFeedVideo";
 import { FeedVideoMenu, feedMenuKey } from "./FeedVideoMenu";
+import type { MenuAt } from "@/components/music/musicMenuUi";
 import { MetaParts, VideoByline } from "./VideoByline";
 import {
   type FeedPreviewStatus,
@@ -23,43 +24,92 @@ import { type FeedVideo, formatAge, formatViewCount } from "./youtubeFeed";
 const SPRING = { type: "spring", stiffness: 520, damping: 30 } as const;
 
 /** Plays the preview window over the thumbnail; the store decides what, this element just obeys. */
+/** Past this the separate audio stream is snapped back onto the picture. */
+const AUDIO_DRIFT_SEC = 0.25;
+
 function FeedPreviewVideo({ videoId, status }: { videoId: string; status: FeedPreviewStatus }) {
   const src = useFeedPreview((s) => s.src);
+  const audioSrc = useFeedPreview((s) => s.audioSrc);
   const start = useFeedPreview((s) => s.start);
   const muted = useFeedPreview((s) => s.muted);
   const ref = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [visible, setVisible] = useState(false);
+
+  const followVideo = (play: boolean) => {
+    const video = ref.current;
+    const audio = audioRef.current;
+    if (!video || !audio) return;
+    if (Math.abs(audio.currentTime - video.currentTime) > AUDIO_DRIFT_SEC) audio.currentTime = video.currentTime;
+    if (!play) audio.pause();
+    else if (audio.paused && !audio.muted) {
+      void audio.play().catch((e: unknown) => {
+        if (e instanceof DOMException && e.name === "NotAllowedError") setFeedPreviewMuted(true);
+      });
+    }
+  };
+
+  // The click that asked for the preview is seconds old by the time the stream resolves, so the webview may
+  // refuse sound; start muted rather than fail.
+  const playVideo = (el: HTMLVideoElement) => {
+    void el.play().catch((e: unknown) => {
+      const name = e instanceof DOMException ? e.name : String(e);
+      if (name === "AbortError") return;
+      if (name === "NotAllowedError" && !el.muted) {
+        el.muted = true;
+        setFeedPreviewMuted(true);
+        void el.play().catch((e2: unknown) => failFeedPreview(videoId, `play() refused: ${String(e2)}`));
+        return;
+      }
+      failFeedPreview(videoId, `play() refused: ${name}`);
+    });
+  };
 
   useEffect(() => {
     const el = ref.current;
     if (!el || status === "loading") return;
-    if (status === "paused") el.pause();
-    else if (el.paused) void el.play().catch(() => failFeedPreview(videoId));
+    if (status === "paused") {
+      el.pause();
+      audioRef.current?.pause();
+    } else if (el.paused) playVideo(el);
   }, [status, videoId]);
 
   if (!src) return null;
   return (
-    <video
-      ref={ref}
-      src={src}
-      muted={muted}
-      playsInline
-      preload="auto"
-      onLoadedMetadata={(e) => {
-        e.currentTarget.currentTime = start;
-        void e.currentTarget.play().catch(() => failFeedPreview(videoId));
-      }}
-      onPlaying={() => {
-        setVisible(true);
-        if (useFeedPreview.getState().status === "loading") useFeedPreview.setState({ status: "playing" });
-      }}
-      onTimeUpdate={(e) => reportFeedPreviewTime(videoId, e.currentTarget.currentTime, e.currentTarget.duration)}
-      onError={() => failFeedPreview(videoId)}
-      className={cn(
-        "absolute inset-0 w-full h-full object-cover transition-opacity duration-300",
-        visible ? "opacity-100" : "opacity-0",
-      )}
-    />
+    <>
+      <video
+        ref={ref}
+        src={src}
+        muted={audioSrc ? true : muted}
+        playsInline
+        preload="auto"
+        onLoadedMetadata={(e) => {
+          e.currentTarget.currentTime = start;
+          if (audioRef.current) audioRef.current.currentTime = start;
+          playVideo(e.currentTarget);
+        }}
+        onPlaying={() => {
+          setVisible(true);
+          followVideo(true);
+          if (useFeedPreview.getState().status === "loading") useFeedPreview.setState({ status: "playing" });
+        }}
+        onWaiting={() => audioRef.current?.pause()}
+        onPause={() => audioRef.current?.pause()}
+        onTimeUpdate={(e) => {
+          if (!e.currentTarget.paused) followVideo(true);
+          reportFeedPreviewTime(videoId, e.currentTarget.currentTime, e.currentTarget.duration);
+        }}
+        onError={(e) => {
+          const err = e.currentTarget.error;
+          failFeedPreview(videoId, `media error ${err?.code ?? "?"}${err?.message ? `: ${err.message}` : ""}`);
+        }}
+        className={cn(
+          "absolute inset-0 w-full h-full object-cover transition-opacity duration-300",
+          visible ? "opacity-100" : "opacity-0",
+        )}
+      />
+      {audioSrc ? <audio ref={audioRef} src={audioSrc} muted={muted} preload="auto" /> : null}
+    </>
   );
 }
 
@@ -125,21 +175,29 @@ function WatchButton({ video }: { video: FeedVideo }) {
   );
 }
 
-const RING_R = 13;
-const RING_C = 2 * Math.PI * RING_R;
-
-function DownloadButton({ video }: { video: FeedVideo }) {
-  const { queued, percent, failed, error } = useOutsideDownloadPercent(video.url);
-  const done = queued && !failed && percent >= 100;
+/** Progress lives on the sidebar download button; the card only says the video is on its way. */
+function DownloadButton({
+  video,
+  inLibrary,
+  onDownload,
+}: {
+  video: FeedVideo;
+  inLibrary: boolean;
+  onDownload: (video: FeedVideo) => void;
+}) {
+  const job = useOutsideDownloadPercent(video.url);
+  const { queued, percent, error } = job;
+  const failed = !inLibrary && job.failed;
+  const done = inLibrary || (queued && !failed && percent >= 100);
   const busy = queued && !failed && !done;
-  const tooltip = failed ? (error ?? "Download failed, click to retry") : done ? "Downloaded" : busy ? `${Math.round(percent)}%` : "Download";
+  const tooltip = failed ? (error ?? "Download failed, click to retry") : done ? "Downloaded" : busy ? "Downloading" : "Download";
   return (
     <button
       type="button"
       disabled={busy || done}
       onClick={(e) => {
         e.stopPropagation();
-        downloadFeedVideo(video);
+        onDownload(video);
       }}
       data-tooltip={tooltip}
       aria-label={failed ? `Retry download of ${video.title}` : `Download ${video.title}`}
@@ -152,26 +210,7 @@ function DownloadButton({ video }: { video: FeedVideo }) {
             : "bg-white/[0.07] text-stone-200 opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 hover:bg-[color:var(--accent)] hover:text-stone-900 active:scale-95",
       )}
     >
-      {busy ? (
-        <>
-          <svg className="absolute inset-0 -rotate-90" viewBox="0 0 36 36" aria-hidden>
-            <circle cx="18" cy="18" r={RING_R} fill="none" stroke="currentColor" strokeOpacity={0.18} strokeWidth={3} />
-            <circle
-              cx="18"
-              cy="18"
-              r={RING_R}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeDasharray={RING_C}
-              strokeDashoffset={RING_C * (1 - Math.max(0.04, percent / 100))}
-              className="transition-[stroke-dashoffset] duration-300"
-            />
-          </svg>
-          <span className="text-[9px] font-black tabular-nums">{Math.round(percent)}</span>
-        </>
-      ) : done ? (
+      {done ? (
         <Check size={16} strokeWidth={3} />
       ) : failed ? (
         <RotateCcw size={15} strokeWidth={2.5} />
@@ -185,14 +224,16 @@ function DownloadButton({ video }: { video: FeedVideo }) {
 /** A not-yet-downloaded video from the YouTube feed: preview it in place, one click to keep it. */
 export const FeedVideoCard = memo(function FeedVideoCard({
   video,
-  shape = "video",
   opensInExplorer = false,
+  inLibrary = false,
+  onDownload = downloadFeedVideo,
 }: {
   video: FeedVideo;
-  /** `short` is the tall Shorts shelf: 9:16 frame and a lighter text block with no avatar. */
-  shape?: "video" | "short";
   /** Click starts the video on YouTube in Explorer instead of previewing it in place. */
   opensInExplorer?: boolean;
+  /** Already downloaded before this session, so the queue alone cannot tell. */
+  inLibrary?: boolean;
+  onDownload?: (video: FeedVideo) => void;
 }) {
   const status = useFeedPreview((s) => (s.id === video.videoId ? s.status : null));
   const progress = useFeedPreview((s) => (s.id === video.videoId ? s.progress : 0));
@@ -203,21 +244,28 @@ export const FeedVideoCard = memo(function FeedVideoCard({
   const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
   const download = useOutsideDownloadPercent(video.url);
   const [hovered, setHovered] = useState(false);
+  const [menuAt, setMenuAt] = useState<MenuAt>({ x: 0, y: 0, placement: "anchor" });
 
-  const setMenuOpen = (next: boolean) => {
-    if (next) setGalleryActiveMenu({ path: menuKey });
-    else if (useRuforgeStore.getState().activeMenu?.path === menuKey) setGalleryActiveMenu(null);
+  const openMenu = (at: MenuAt) => {
+    setMenuAt(at);
+    setGalleryActiveMenu({ path: menuKey });
+  };
+  const closeMenu = () => {
+    if (useRuforgeStore.getState().activeMenu?.path === menuKey) setGalleryActiveMenu(null);
   };
 
   const actions = (
     <div className="flex shrink-0 items-start gap-0.5">
-      <DownloadButton video={video} />
+      <DownloadButton video={video} inLibrary={inLibrary} onDownload={onDownload} />
       <FeedVideoMenu
         video={video}
         open={menuOpen}
-        mounted={hovered || menuOpen}
-        canDownload={!download.queued || download.failed}
-        onOpenChange={setMenuOpen}
+        at={menuAt}
+        visible={hovered}
+        canDownload={!inLibrary && (!download.queued || download.failed)}
+        onDownload={onDownload}
+        onOpen={openMenu}
+        onClose={closeMenu}
       />
     </div>
   );
@@ -243,14 +291,12 @@ export const FeedVideoCard = memo(function FeedVideoCard({
         e.preventDefault();
         e.stopPropagation();
         setHovered(true);
-        setMenuOpen(true);
+        openMenu({ x: e.clientX, y: e.clientY, placement: "cursor" });
       }}
     >
       <div
-        className={cn(
-          "relative overflow-hidden rounded-[var(--r-media,16px)] bg-[color:var(--rf-well-raised)]",
-          shape === "short" ? "aspect-[9/16]" : "aspect-video",
-        )}
+        data-squish-cover
+        className="rf-art-clip relative aspect-video bg-[color:var(--rf-well-raised)] transition-transform duration-150 ease-out [--rf-art-r:var(--r-media,16px)]"
       >
         {video.thumbnail ? (
           <img
@@ -278,7 +324,7 @@ export const FeedVideoCard = memo(function FeedVideoCard({
           </button>
         ) : null}
 
-        {video.duration && !status && shape === "video" ? (
+        {video.duration && !status ? (
           <div className="absolute bottom-2.5 right-2.5 z-10 px-2 py-0.5 rounded-md bg-black/75 text-[11px] font-bold text-white tracking-wider tabular-nums">
             {formatDuration(video.duration)}
           </div>
@@ -296,32 +342,19 @@ export const FeedVideoCard = memo(function FeedVideoCard({
         ) : null}
       </div>
 
-      {shape === "short" ? (
-        <div className="flex gap-2 px-0.5">
-          <div className="min-w-0 flex-1">
-            <h3 className="text-[14px] font-semibold leading-snug line-clamp-2 text-stone-50 transition-colors duration-150 group-hover/card:text-[color:var(--accent)]">
-              {video.title}
-            </h3>
-            {video.viewCount != null ? (
-              <p className="mt-1 truncate text-[13px] text-stone-400">{formatViewCount(video.viewCount)}</p>
-            ) : null}
-          </div>
-          {actions}
-        </div>
-      ) : (
-        <VideoByline
-          channel={video.channel}
-          channelId={video.channelId}
-          verified={video.channelVerified ?? false}
-          title={
-            <h3 className="text-[15px] font-semibold leading-snug line-clamp-2 text-stone-50 transition-colors duration-150 group-hover/card:text-[color:var(--accent)]">
-              {video.title}
-            </h3>
-          }
-          meta={meta.length > 0 ? <MetaParts parts={meta} /> : null}
-          action={actions}
-        />
-      )}
+      <VideoByline
+        channel={video.channel}
+        channelId={video.channelId}
+        verified={video.channelVerified ?? false}
+        title={
+          <h3 className="text-[15px] font-semibold leading-snug line-clamp-2 text-stone-50 transition-colors duration-150 group-hover/card:text-[color:var(--accent)]">
+            {video.title}
+          </h3>
+        }
+        meta={meta.length > 0 ? <MetaParts parts={meta} /> : null}
+        action={actions}
+        active={hovered}
+      />
     </div>
   );
 });

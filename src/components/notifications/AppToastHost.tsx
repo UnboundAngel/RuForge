@@ -13,7 +13,7 @@ const ICONS: Record<
 };
 
 /**
- * Default-mode toasts: bottom-center pills, same shape as `MusicToastHost` in the Default palette.
+ * The one toast host for every mode: bottom-center pills, colors from `.rf-toast` per mode.
  * Above the downloader and Settings overlays (z-300), under fullscreen and confirm dialogs.
  */
 export function AppToastHost({ clearPlayerDock }: { clearPlayerDock: boolean }) {
@@ -41,7 +41,7 @@ export function AppToastHost({ clearPlayerDock }: { clearPlayerDock: boolean }) 
               exit={{ opacity: 0, y: 8, scale: 0.96 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               role={t === "error" ? "alert" : "status"}
-              className="pointer-events-auto flex w-fit max-w-[min(100%,30rem)] items-center gap-2.5 rounded-xl bg-[#33271f] py-2.5 pl-4 pr-3 text-sm font-medium text-stone-100 shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
+              className="rf-toast pointer-events-auto flex w-fit max-w-[min(100%,30rem)] items-center gap-2.5 py-2.5 pl-4 pr-3 text-sm font-medium shadow-[0_8px_24px_rgba(0,0,0,0.5)]"
             >
               <Icon size={16} className={`shrink-0 ${className}`} />
               <span className="line-clamp-2 min-w-0">{n.message}</span>
@@ -52,7 +52,7 @@ export function AppToastHost({ clearPlayerDock }: { clearPlayerDock: boolean }) 
                     n.action?.run();
                     dismiss(n.id);
                   }}
-                  className="-my-1 ml-1 shrink-0 rounded-lg bg-[color-mix(in_srgb,var(--accent)_16%,#33271f)] px-3 py-1 text-[13px] font-semibold text-[color:var(--accent)] transition-[filter,transform] duration-150 hover:brightness-125 active:scale-[0.97]"
+                  className="rf-toast-action -my-1 ml-1 shrink-0 px-3 py-1 text-[13px] font-semibold transition-[color,filter,transform] duration-150 active:scale-[0.97]"
                 >
                   {n.action.label}
                 </button>

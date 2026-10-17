@@ -1,3 +1,4 @@
+pub mod art;
 pub mod auth;
 pub mod commands;
 pub mod routes;
@@ -5,6 +6,7 @@ pub mod spa;
 
 use std::collections::HashMap;
 use std::net::UdpSocket;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -26,6 +28,47 @@ pub fn browser_base_url(port: u16) -> String {
     format!("http://localhost:{port}")
 }
 
+pub fn tailnet_base_url(host: &str) -> String {
+    format!("https://{host}")
+}
+
+/// A wrong guess burns the code after this many tries, so the 8-char code never meets brute force.
+pub const PAIRING_MAX_FAILURES: u32 = 5;
+
+/// This machine's MagicDNS name from the Tailscale CLI, or None when Tailscale is absent or logged out.
+pub fn detect_tailnet_host() -> Option<String> {
+    let candidates = [
+        "tailscale".to_string(),
+        r"C:\Program Files\Tailscale\tailscale.exe".to_string(),
+    ];
+    for bin in candidates {
+        let mut cmd = std::process::Command::new(&bin);
+        cmd.args(["status", "--json"]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+        let Ok(out) = cmd.output() else { continue };
+        if !out.status.success() {
+            return None;
+        }
+        let json: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+        if json.get("BackendState").and_then(|v| v.as_str()) != Some("Running") {
+            return None;
+        }
+        let name = json
+            .get("Self")?
+            .get("DNSName")?
+            .as_str()?
+            .trim_end_matches('.')
+            .to_ascii_lowercase();
+        return auth::is_tailnet_name(&name).then_some(name);
+    }
+    None
+}
+
 pub fn now_unix() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -40,11 +83,28 @@ pub struct Session {
     pub label: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredSession {
+    hash: String,
+    id: String,
+    label: String,
+    created_at: i64,
+    last_seen: i64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct StoredDevices {
+    secret: String,
+    sessions: Vec<StoredSession>,
+}
+
 pub struct PairingCode {
     pub code: String,
     pub created_at: i64,
     pub expires_at: i64,
     pub used: bool,
+    pub failures: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -64,7 +124,9 @@ pub struct ProgressQueryResult {
 
 pub struct CompanionInner {
     pub session_secret: RwLock<[u8; 32]>,
+    /// Keyed by `auth::hash_token(cookie)`; mirrored to `companion-devices.json`.
     pub sessions: RwLock<HashMap<String, Session>>,
+    pub devices_path: RwLock<Option<PathBuf>>,
     pub pairing: RwLock<Option<PairingCode>>,
     /// In-memory mirror for companion resume reads; never serialized with paths.
     pub progress_cache: RwLock<HashMap<String, ProgressSnapshot>>,
@@ -75,7 +137,73 @@ pub struct CompanionInner {
     pub app_handle: RwLock<Option<AppHandle>>,
     pub bind_port: RwLock<u16>,
     pub lan_ip: RwLock<Option<String>>,
+    pub tailnet_host: RwLock<Option<String>>,
     pub running: AtomicBool,
+}
+
+impl CompanionInner {
+    pub async fn load_devices(&self, path: PathBuf) {
+        let stored = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|raw| serde_json::from_str::<StoredDevices>(&raw).ok());
+        if let Some(stored) = stored {
+            if let Some(secret) = auth::secret_from_hex(&stored.secret) {
+                let now = now_unix();
+                *self.session_secret.write().await = secret;
+                let mut sessions = self.sessions.write().await;
+                for s in stored.sessions {
+                    if auth::session_expired(s.created_at, s.last_seen, now) {
+                        continue;
+                    }
+                    sessions.insert(
+                        s.hash,
+                        Session {
+                            id: s.id,
+                            created_at: s.created_at,
+                            last_seen: s.last_seen,
+                            label: s.label,
+                        },
+                    );
+                }
+            }
+        }
+        *self.devices_path.write().await = Some(path);
+        self.persist().await;
+    }
+
+    pub async fn persist(&self) {
+        let Some(path) = self.devices_path.read().await.clone() else {
+            return;
+        };
+        let stored = StoredDevices {
+            secret: auth::secret_to_hex(&*self.session_secret.read().await),
+            sessions: self
+                .sessions
+                .read()
+                .await
+                .iter()
+                .map(|(hash, s)| StoredSession {
+                    hash: hash.clone(),
+                    id: s.id.clone(),
+                    label: s.label.clone(),
+                    created_at: s.created_at,
+                    last_seen: s.last_seen,
+                })
+                .collect(),
+        };
+        let Ok(json) = serde_json::to_string(&stored) else {
+            return;
+        };
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, json).is_err() || std::fs::rename(&tmp, &path).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+            crate::rf_log!(
+                "companion.server",
+                log::Level::Warn,
+                "companion devices file write failed"
+            );
+        }
+    }
 }
 
 pub type CompanionStateHandle = Arc<CompanionInner>;
@@ -103,12 +231,14 @@ impl CompanionState {
             inner: Arc::new(CompanionInner {
                 session_secret: RwLock::new(generate_secret()),
                 sessions: RwLock::new(HashMap::new()),
+                devices_path: RwLock::new(None),
                 pairing: RwLock::new(None),
                 progress_cache: RwLock::new(HashMap::new()),
                 progress_read_pending: RwLock::new(HashMap::new()),
                 app_handle: RwLock::new(None),
                 bind_port: RwLock::new(DEFAULT_PORT),
                 lan_ip: RwLock::new(detect_lan_ip()),
+                tailnet_host: RwLock::new(None),
                 running: AtomicBool::new(false),
             }),
             shutdown_tx: std::sync::Mutex::new(None),
@@ -118,6 +248,13 @@ impl CompanionState {
     pub async fn start(&self, app: AppHandle) {
         if self.inner.running.load(Ordering::SeqCst) {
             return;
+        }
+
+        if let Ok(data_dir) = app.path().app_data_dir() {
+            let _ = std::fs::create_dir_all(&data_dir);
+            self.inner
+                .load_devices(data_dir.join("companion-devices.json"))
+                .await;
         }
 
         if let Ok(cache_dir) = app.path().app_cache_dir() {
@@ -141,6 +278,7 @@ impl CompanionState {
         }
 
         *self.inner.app_handle.write().await = Some(app.clone());
+        self.refresh_tailnet_host().await;
 
         let listener = match tokio::net::TcpListener::bind((LOOPBACK_BIND, DEFAULT_PORT)).await {
             Ok(l) => l,
@@ -220,20 +358,31 @@ impl CompanionState {
         }
     }
 
+    pub async fn refresh_tailnet_host(&self) -> Option<String> {
+        let host = tokio::task::spawn_blocking(detect_tailnet_host)
+            .await
+            .ok()
+            .flatten();
+        *self.inner.tailnet_host.write().await = host.clone();
+        host
+    }
+
     pub async fn mint_pairing_code(&self) -> PairingCode {
-        let code = auth::random_token(16);
+        let code = auth::random_pairing_code();
         let now = now_unix();
         let pairing = PairingCode {
             code: code.clone(),
             created_at: now,
             expires_at: now + 120,
             used: false,
+            failures: 0,
         };
         *self.inner.pairing.write().await = Some(PairingCode {
             code: pairing.code.clone(),
             created_at: pairing.created_at,
             expires_at: pairing.expires_at,
             used: pairing.used,
+            failures: 0,
         });
         pairing
     }
@@ -243,6 +392,7 @@ impl CompanionState {
         self.inner.sessions.write().await.clear();
         *self.inner.pairing.write().await = None;
         self.inner.progress_cache.write().await.clear();
+        self.inner.persist().await;
     }
 }
 

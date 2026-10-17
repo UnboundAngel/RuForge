@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { Check, ChevronDown, ChevronUp, Minus, Video } from "lucide-react";
 import { HoverMarqueeText } from "./music/HoverMarqueeText";
 import { cn } from "../lib/utils";
@@ -82,12 +82,12 @@ export function CleanupListHeader({
   return (
     <>
       <div ref={sentinelRef} aria-hidden className="h-px -mb-px" />
-      <div className="sticky top-0 z-10 -mx-6 bg-[#1D1613] px-6">
+      <div className="sticky top-0 z-10 -mx-6 bg-[color:var(--rf-surface-deep)] px-6">
         {/* Raised fill crossfades on opacity, not background-color, so it stays in step with the scroll. */}
         <span
           aria-hidden
           className={cn(
-            "pointer-events-none absolute inset-0 bg-[#271C18] transition-opacity duration-200 motion-reduce:transition-none",
+            "pointer-events-none absolute inset-0 bg-[color:var(--rf-surface)] transition-opacity duration-200 motion-reduce:transition-none",
             stuck ? "opacity-100" : "opacity-0",
           )}
         />
@@ -112,7 +112,7 @@ export function CleanupListHeader({
             onClick={onToggleAll}
             className={cn(
               "flex h-[18px] w-[18px] items-center justify-center rounded-md transition-colors duration-150 disabled:cursor-wait xl:h-5 xl:w-5 2xl:h-[22px] 2xl:w-[22px]",
-              selectAll === "none" ? "bg-[#322620] text-transparent hover:bg-[#3e2f27]" : "bg-red-500/90 text-stone-100",
+              selectAll === "none" ? "bg-[color:var(--rf-field-raised)] text-transparent hover:bg-[color:var(--rf-field-hover)]" : "bg-red-500/90 text-stone-100",
             )}
           >
             {selectAll === "some" ? <Minus size={12} strokeWidth={3} /> : <Check size={12} strokeWidth={3} />}
@@ -163,16 +163,16 @@ export const CleanupListRow = memo(function CleanupListRow({ candidate: c, check
       <span
         className={cn(
           "flex h-[18px] w-[18px] items-center justify-center rounded-md transition-colors duration-150 xl:h-5 xl:w-5 2xl:h-[22px] 2xl:w-[22px]",
-          checked ? "bg-red-500/90 text-stone-100" : "bg-[#322620] text-transparent",
+          checked ? "bg-red-500/90 text-stone-100" : "bg-[color:var(--rf-field-raised)] text-transparent",
         )}
         aria-hidden
       >
         <Check size={12} strokeWidth={3} />
       </span>
-      <span className="relative aspect-video w-14 overflow-hidden rounded bg-[#261d18] xl:w-[88px] xl:rounded-md 2xl:w-28 2xl:rounded-lg">
+      <span className="relative aspect-video w-14 overflow-hidden rounded bg-[color:var(--rf-field)] xl:w-[88px] xl:rounded-md 2xl:w-28 2xl:rounded-lg">
         {thumb ? (
           <img
-            src={convertFileSrc(thumb)}
+            src={localThumbSrc(thumb)}
             alt=""
             loading="lazy"
             decoding="async"
@@ -186,7 +186,7 @@ export const CleanupListRow = memo(function CleanupListRow({ candidate: c, check
       <HoverMarqueeText text={title} active={hovered} className="text-[13px] font-medium text-stone-100 xl:text-[14px] 2xl:text-[15px]" />
       <span className="truncate text-[12px] tabular-nums text-stone-500 xl:text-[13px]">{addedLabel(c.created)}</span>
       <span className="flex items-center justify-center gap-2 self-center leading-none">
-        <span className="h-1 w-8 shrink-0 overflow-hidden rounded-full bg-[#322620] xl:w-12 2xl:w-14">
+        <span className="h-1 w-8 shrink-0 overflow-hidden rounded-full bg-[color:var(--rf-field-raised)] xl:w-12 2xl:w-14">
           <span
             className="block h-full origin-left bg-[color:var(--accent)]"
             style={{ transform: `scaleX(${c.watchProgressPct / 100})` }}

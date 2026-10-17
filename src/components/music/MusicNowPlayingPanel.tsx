@@ -4,14 +4,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localImageSrc, localThumbSrc } from "@/lib/localImageSrc";
 import { motion, useReducedMotion } from "framer-motion";
 import { MoreHorizontal, PanelRightClose } from "lucide-react";
 import { Icon } from "@iconify/react";
 
 import type { MediaFile } from "@/types";
 import { bestCoverPath, isAudioOnlyPath } from "@/mediaKind";
-import { albumCoverPathWithFallback } from "@/albumCoverPath";
+import { coverPathChain } from "@/albumCoverPath";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import {
   ensureArtistMetaSidecar,
@@ -36,7 +37,7 @@ import {
 } from "./musicYoutubeCredits";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { HoverMarqueeText } from "./HoverMarqueeText";
-import { MusicEdgeSquishScroll } from "./MusicEdgeSquishScroll";
+import { EdgeSquishScroll } from "@/components/ui/EdgeSquishScroll";
 import { buildCombinedQueuePaths } from "./musicQueueReorder";
 import { MusicArtistAboutSheet } from "./MusicArtistAboutSheet";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
@@ -161,11 +162,8 @@ export function MusicNowPlayingPanel({
   const artistCoverCandidates = useMemo(() => {
     const list: string[] = [];
     const pushFile = (file: MediaFile) => {
-      const paths = albumCoverPathWithFallback(file);
-      for (const p of [paths.primary, paths.fallback, bestCoverPath(file)]) {
-        if (!p) continue;
-        const src = convertFileSrc(p);
-        if (!list.includes(src)) list.push(src);
+      for (const p of coverPathChain(file)) {
+        if (!list.includes(p)) list.push(p);
       }
     };
     // Prefer the playing track — its cover is already proven in the bar.
@@ -187,22 +185,14 @@ export function MusicNowPlayingPanel({
     for (const t of [playingFile, ...artistTracks.filter((f) => f.path !== playingFile.path)]) {
       const album = (t.canonicalAlbum ?? t.album ?? "").trim().toLowerCase();
       if (album && seenAlbums.has(album)) continue;
-      const { primary, fallback } = albumCoverPathWithFallback(t);
-      const chain = [...new Set([primary, fallback, bestCoverPath(t)].filter((p): p is string => !!p))];
+      const chain = coverPathChain(t);
       if (chain.length === 0) continue;
       if (album) seenAlbums.add(album);
-      out.push(chain.map((p) => convertFileSrc(p)));
+      out.push(chain.map((p) => localImageSrc(p)));
       if (out.length >= 5) break;
     }
     return out;
   }, [playingFile, artistTracks]);
-
-  const [artistCoverIdx, setArtistCoverIdx] = useState(0);
-  useEffect(() => {
-    setArtistCoverIdx(0);
-  }, [playingFile.path, artistKey]);
-
-  const artistCoverSrc = artistCoverCandidates[artistCoverIdx] ?? null;
 
   const artistDisplayName = useMemo(() => {
     if (artistInfo?.name) return artistInfo.name;
@@ -447,11 +437,11 @@ export function MusicNowPlayingPanel({
             >
               Related songs
             </p>
-            <MusicEdgeSquishScroll>
+            <EdgeSquishScroll>
               {relatedSongs.map((file) => (
                 <RelatedSongTile key={file.path} file={file} onPlay={onPlay} />
               ))}
-            </MusicEdgeSquishScroll>
+            </EdgeSquishScroll>
           </div>
         ) : null}
 
@@ -464,31 +454,20 @@ export function MusicNowPlayingPanel({
                 background: "var(--music-surface)",
               }}
             >
-              {artistCoverSrc ? (
-                <img
-                  src={artistCoverSrc}
-                  alt=""
-                  draggable={false}
-                  className="absolute inset-0 block"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    objectPosition: "center center",
-                    // Zoom past letterboxed thumbs so side bars never show.
-                    transform: "scale(1.22)",
-                    transformOrigin: "center center",
-                  }}
-                  onError={() => setArtistCoverIdx((i) => i + 1)}
-                />
-              ) : (
-                <div
-                  className="absolute inset-0 flex items-center justify-center"
-                  style={{ color: "var(--music-text-muted)" }}
-                >
-                  <Icon icon="solar:music-note-bold" width={40} height={40} aria-hidden />
-                </div>
-              )}
+              {/* Zoomed past letterboxed thumbs so side bars never show. */}
+              <FallbackImg
+                src={artistCoverCandidates}
+                local
+                className="absolute inset-0 block h-full w-full scale-[1.22] object-cover object-center"
+                fallback={(
+                  <div
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{ color: "var(--music-text-muted)" }}
+                  >
+                    <Icon icon="solar:music-note-bold" width={40} height={40} aria-hidden />
+                  </div>
+                )}
+              />
               <div
                 className="pointer-events-none absolute inset-0"
                 style={{
@@ -634,23 +613,7 @@ function RelatedSongTile({
   onPlay: (file: MediaFile) => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const coverCandidates = useMemo(() => {
-    const paths = albumCoverPathWithFallback(file);
-    const list: string[] = [];
-    for (const p of [paths.primary, paths.fallback, bestCoverPath(file)]) {
-      if (!p) continue;
-      const src = convertFileSrc(p);
-      if (!list.includes(src)) list.push(src);
-    }
-    return list;
-  }, [file]);
-  const [coverIdx, setCoverIdx] = useState(0);
-  const coverSrc = coverCandidates[coverIdx] ?? null;
   const artistLabel = file.artist ?? file.albumArtist ?? "Unknown artist";
-
-  useEffect(() => {
-    setCoverIdx(0);
-  }, [file.path]);
 
   return (
     <button
@@ -665,26 +628,22 @@ function RelatedSongTile({
     >
       <div className="flex h-[6.5rem] w-full items-center justify-center overflow-visible">
         <div
-          data-profile-scroll-cover
+          data-squish-cover
           className="relative h-full w-full overflow-hidden rounded-lg transition-transform duration-150 ease-out will-change-transform"
         >
-          {coverSrc ? (
-            <img
-              src={coverSrc}
-              alt=""
-              draggable={false}
-              className="absolute inset-0 block h-full w-full"
-              style={{ objectFit: "cover", objectPosition: "center center" }}
-              onError={() => setCoverIdx((i) => i + 1)}
-            />
-          ) : (
-            <div
-              className="absolute inset-0 flex items-center justify-center"
-              style={{ background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
-            >
-              <Icon icon="solar:music-note-bold" width={28} height={28} aria-hidden />
-            </div>
-          )}
+          <FallbackImg
+            src={coverPathChain(file)}
+            local
+            className="absolute inset-0 block h-full w-full object-cover object-center"
+            fallback={(
+              <div
+                className="absolute inset-0 flex items-center justify-center"
+                style={{ background: "var(--music-surface-raised)", color: "var(--music-text-muted)" }}
+              >
+                <Icon icon="solar:music-note-bold" width={28} height={28} aria-hidden />
+              </div>
+            )}
+          />
         </div>
       </div>
       <div className="min-w-0 px-0.5">
@@ -721,7 +680,7 @@ function NextQueueRow({
   onContextMenu: (x: number, y: number) => void;
 }) {
   const path = bestCoverPath(file);
-  const src = path ? convertFileSrc(path) : null;
+  const src = path ? localThumbSrc(path) : null;
   const artistLabel = file.artist ?? file.albumArtist ?? "Unknown artist";
   const nextArtistKey = artistKeyFromFile(file);
 

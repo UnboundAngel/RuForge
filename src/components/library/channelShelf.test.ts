@@ -17,8 +17,8 @@ const video = (id: string, viewCount: number | null = null, extra: Partial<FeedV
 });
 
 describe("pickChannelVideos", () => {
-  it("takes newest, most viewed and watched in turns, skipping repeats, Shorts and the library", () => {
-    const recent = [video("new1", 10), video("new2", 900), video("new3", 50), video("new4", 5000), video("s", 1e6, { short: true })];
+  it("takes newest, most viewed and watched in turns, skipping repeats and the library", () => {
+    const recent = [video("new1", 10), video("new2", 900), video("new3", 50), video("new4", 5000)];
     const watched = [video("old1"), video("new1")];
     const picked = pickChannelVideos(recent, watched, new Set(["new3"]), 5);
     expect(picked.map((v) => v.videoId)).toEqual(["new1", "new4", "old1", "new2"]);

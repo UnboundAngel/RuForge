@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 
 import {
   bridgeOwnerMatchesRenderState,
@@ -33,7 +33,7 @@ function coverPathForFile(file: MediaFile | null): string | null {
 }
 
 function coverSrcForPath(coverPath: string | null): string | null {
-  return coverPath ? convertFileSrc(coverPath) : null;
+  return coverPath ? localThumbSrc(coverPath) : null;
 }
 
 function resolveDuration(file: MediaFile | null, bridgeDuration: number): number {

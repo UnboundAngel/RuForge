@@ -39,8 +39,11 @@ export async function deleteLibraryMedia(
     message: `Move this item to the system ${systemTrashName()}? You can restore it from Recently Deleted while it stays there.`,
     confirmLabel: "Delete",
     cancelLabel: "Cancel",
-    itemPreview: opts.preview ?? file.thumbnailPath ?? file.ruforgePosterPath,
-    itemMeta: `${formatStorageSize(file.size)} • ${file.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "")}`,
+    item: {
+      preview: opts.preview ?? file.thumbnailPath ?? file.ruforgePosterPath,
+      title: file.name.replace(/_/g, " ").replace(/\.[^/.]+$/, ""),
+      detail: formatStorageSize(file.size),
+    },
     theme: noun === "song" ? "music" : "app",
   });
   if (!approved) return false;

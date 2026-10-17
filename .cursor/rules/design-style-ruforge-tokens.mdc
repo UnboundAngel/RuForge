@@ -10,7 +10,8 @@ A concrete, filled-in version of the per-project contract from `design-style` §
 
 RuForge is a media app, so it's **dark** (long watches in dark rooms), and each section carries its own **tonal hue**.
 
-## RuForge Home — warm/cozy (espresso + sand-gold)
+## RuForge Home: user accent on charcoal (default); espresso + sand-gold is Legacy only
+Default mode (downloads, library, player, Games) follows the user's accent (inline `--accent` on `<html>`) on charcoal. The palette below only applies with Settings > Appearance > Legacy colors in video player. Sections inside a mode never override the accent.
 ```
 THEME MODE:  dark
 BASE HUE:    warm espresso brown

@@ -3,7 +3,7 @@ import { AnimatePresence } from "framer-motion";
 import { Icon } from "@iconify/react";
 import { Home, Search, X } from "lucide-react";
 import { RuForgeCaptureTrigger } from "@/components/dev-captures/RuForgeCaptureTrigger";
-import { altKeyLabel, modKeyLabel } from "@/lib/shortcutLabels";
+import { matchHotkeyEvent, useHotkeyTooltip } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
 import { bestCoverPath } from "@/mediaKind";
 import { useRuforgeStore } from "@/store/ruforgeStore";
@@ -26,6 +26,8 @@ type RecentItem = Extract<MusicSearchSuggestion, { kind: "search" | "play" }>;
 
 const MAX_RECENT_PLAYS = 8;
 const MAX_SUGGESTIONS = 14;
+
+const MUSIC_SEARCH_HOTKEY = ["music.search"] as const;
 
 const RED_HOVER = "hover:bg-[color-mix(in_srgb,var(--music-accent)_22%,#1f1f1f)]";
 
@@ -56,6 +58,9 @@ export function MusicTopBar({
 }: Props) {
   const musicDetail = useRuforgeStore((s) => s.musicDetail);
   const [query, setQuery] = useState("");
+  const homeTooltip = useHotkeyTooltip("Home", "music.goHome");
+  const searchTooltip = useHotkeyTooltip("Search YouTube Music", "music.search");
+  const exploreTooltip = useHotkeyTooltip("Explore YouTube Music", "music.goExplore");
   const [focused, setFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -105,7 +110,7 @@ export function MusicTopBar({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+      if (matchHotkeyEvent(e, MUSIC_SEARCH_HOTKEY)) {
         e.preventDefault();
         inputRef.current?.focus();
         inputRef.current?.select();
@@ -160,19 +165,19 @@ export function MusicTopBar({
           type="button"
           onClick={() => onSelect("home")}
           className={cn(
-            "rf-music-tooltip-anchor rf-music-press w-9 h-9 shrink-0 flex items-center justify-center rounded-full bg-white/[0.08] transition-colors duration-200",
+            "rf-music-tooltip-anchor rf-music-press h-[var(--rf-titlebar-ctl-h)] w-[var(--rf-titlebar-ctl-h)] shrink-0 flex items-center justify-center rounded-full bg-white/[0.08] transition-colors duration-200",
             homeActive
               ? "text-[color:var(--music-accent)]"
               : cn("text-white/60 hover:text-white", RED_HOVER),
           )}
-          aria-label={`Home (${altKeyLabel()}+1)`}
+          aria-label={homeTooltip}
           aria-current={homeActive ? "page" : undefined}
-          data-tooltip={`Home (${altKeyLabel()}+1)`}
+          data-tooltip={homeTooltip}
         >
           <Home size={18} strokeWidth={homeActive ? 2.5 : 2} />
         </button>
 
-        <div className="relative h-9 w-[var(--rf-music-search-w)]">
+        <div className="relative h-[var(--rf-titlebar-ctl-h)] w-[var(--rf-music-search-w)]">
           <AnimatePresence>
             {open && (
               <MusicSearchSuggestions
@@ -191,7 +196,7 @@ export function MusicTopBar({
               if (active) pick(active);
             }}
             className={cn(
-              "relative flex h-9 items-center rounded-full border text-white/80 transition-colors duration-200",
+              "relative flex h-[var(--rf-titlebar-ctl-h)] items-center rounded-full border text-white/80 transition-colors duration-200",
               focused
                 ? "border-white/[0.16] bg-white/[0.12]"
                 : "border-transparent bg-white/[0.08] hover:bg-white/[0.11]",
@@ -199,7 +204,7 @@ export function MusicTopBar({
           >
             <button
               type="submit"
-              className="rf-music-press w-10 h-9 shrink-0 flex items-center justify-center rounded-full hover:text-white"
+              className="rf-music-press w-10 h-[var(--rf-titlebar-ctl-h)] shrink-0 flex items-center justify-center rounded-full hover:text-white"
               aria-label="Search YouTube Music"
               tabIndex={-1}
             >
@@ -224,7 +229,7 @@ export function MusicTopBar({
                 }
               }}
               placeholder="What do you want to play?"
-              aria-label={`Search YouTube Music (${modKeyLabel()}+K)`}
+              aria-label={searchTooltip}
               aria-expanded={open}
               aria-autocomplete="list"
               role="combobox"
@@ -248,10 +253,10 @@ export function MusicTopBar({
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onSelect("explore")}
-              className="rf-music-tooltip-anchor rf-music-press mr-1 flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-white/[0.1] pl-2 pr-3 text-[13px] font-semibold text-white transition-colors hover:bg-white/[0.16]"
-              aria-label={`Explore YouTube Music (${altKeyLabel()}+2)`}
+              className="rf-music-tooltip-anchor rf-music-press mr-1 flex h-[calc(var(--rf-titlebar-ctl-h)-8px)] shrink-0 items-center gap-1.5 rounded-full bg-white/[0.1] pl-2 pr-3 text-[13px] font-semibold text-white transition-colors hover:bg-white/[0.16]"
+              aria-label={exploreTooltip}
               aria-current={exploreActive ? "page" : undefined}
-              data-tooltip={`Explore YouTube Music (${altKeyLabel()}+2)`}
+              data-tooltip={exploreTooltip}
             >
               <Icon
                 icon={YOUTUBE_MUSIC_ICON}

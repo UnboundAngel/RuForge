@@ -6,11 +6,21 @@ import { emitTo, listen, type EventTarget, type UnlistenFn } from "@tauri-apps/a
  * Explorer (it has event permission). Private state therefore goes through Rust commands, which remote
  * pages cannot call, and the event is only a ping. Keys must match `private_mailbox.rs`.
  */
-export type MailboxSlotKey = "notify-overlay-state" | "desktop-island-state";
+export type MailboxSlotKey =
+  | "notify-overlay-state"
+  | "desktop-island-state"
+  | "game-state"
+  | "game-overlay-fg"
+  | "game-overlay-state";
 export type MailboxQueueKey =
   | "notification-center-record"
   | "notify-overlay-action"
-  | "desktop-island-control";
+  | "desktop-island-control"
+  | "security-trip"
+  | "game-layout-save"
+  | "game-glance-layout-save"
+  | "game-overlay-action"
+  | "playback-surface-control";
 
 type Slot<T> = { version: number; payload: T };
 

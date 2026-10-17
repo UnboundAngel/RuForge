@@ -43,6 +43,8 @@ export type DesktopIslandStatePayload = {
   notice: IslandNotice | null;
   /** New uploads that arrived while main was unfocused; null when none are left unseen. */
   watchlist: IslandWatchlist | null;
+  /** Main's mode, so the overlay wears the same palette as the in-app island. */
+  navMode: "music" | "media";
   /** Present on track changes so the overlay webview can slide prev vs next. */
   skipDir?: IslandSkipDir;
 };
@@ -65,6 +67,7 @@ export type DesktopIslandControl =
   | { type: "watchlistOpen"; videoId: string }
   | { type: "watchlistMarkAllSeen" }
   | { type: "watchlistShowAll" }
+  | { type: "watchlistHold"; held: boolean }
   | { type: "openDownloads" }
   | { type: "startDownload"; jobId: string };
 

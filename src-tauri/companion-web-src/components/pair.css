@@ -1,0 +1,310 @@
+.pair-screen {
+  min-height: 100svh;
+  background: var(--pair-0);
+  display: flex;
+  padding: calc(env(safe-area-inset-top) + 56px) 24px calc(env(safe-area-inset-bottom) + 24px);
+}
+
+.pair-column {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.pair-screen--center .pair-column {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.pair-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  object-fit: cover;
+  margin-bottom: 24px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.pair-title {
+  margin: 0;
+  font-family: "Cabinet Grotesk", -apple-system, system-ui, sans-serif;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--pair-text-strong);
+}
+
+.pair-sub {
+  margin: 12px 0 0;
+  max-width: 34ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--pair-text-muted);
+}
+
+.pair-install {
+  margin-top: 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--pair-1);
+}
+
+.pair-install-tile {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--pair-2);
+  color: var(--pair-text-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pair-install-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pair-text-strong);
+}
+
+.pair-install-body {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--pair-text-muted);
+}
+
+.pair-code {
+  position: relative;
+  display: block;
+  margin-top: 36px;
+  cursor: text;
+}
+
+/* Stays focusable and paste/autofill-able; the cells below are only its picture.
+   16px keeps iOS from zooming the page on focus. */
+.pair-code-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  font-size: 16px;
+  color: transparent;
+  caret-color: transparent;
+  background: transparent;
+  outline: none;
+}
+
+.pair-cells {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.pair-cells--shake {
+  animation: pair-shake 0.36s var(--pair-ease);
+}
+
+.pair-cell-group {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  max-width: 190px;
+}
+
+.pair-cell {
+  position: relative;
+  flex: 1;
+  height: 58px;
+  border-radius: 12px;
+  background: var(--pair-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Cabinet Grotesk", -apple-system, system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--pair-text-strong);
+  transition: background-color 150ms var(--pair-ease), transform 150ms var(--pair-ease);
+}
+
+.pair-cell--active {
+  background: var(--pair-3);
+}
+
+.pair-cell--filled {
+  transform: scale(1.02);
+}
+
+.pair-cell--error {
+  color: var(--music-accent-hover);
+}
+
+.pair-caret {
+  width: 2px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--music-accent);
+  animation: pair-caret 1s steps(1) infinite;
+}
+
+.pair-error {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--music-accent-hover);
+}
+
+.pair-card {
+  margin-top: 32px;
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--pair-1);
+  text-align: left;
+  width: 100%;
+}
+
+.pair-card-label {
+  margin: 0 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pair-text-muted);
+}
+
+.pair-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pair-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--pair-text);
+}
+
+.pair-step strong {
+  font-weight: 600;
+  color: var(--pair-text-strong);
+}
+
+.pair-step-num {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-top: -1px;
+  border-radius: 999px;
+  background: var(--pair-3);
+  color: var(--pair-text);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pair-footer {
+  margin-top: auto;
+  padding-top: 32px;
+  width: 100%;
+}
+
+.pair-cta {
+  width: 100%;
+  height: 54px;
+  border-radius: 12px;
+  background: var(--music-accent);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  transition: transform 150ms var(--pair-ease), background-color 150ms var(--pair-ease), color 150ms var(--pair-ease);
+}
+
+.pair-cta:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.pair-cta:disabled {
+  background: var(--pair-2);
+  color: var(--pair-text-muted);
+  cursor: default;
+}
+
+.pair-footnote {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--pair-text-muted);
+}
+
+.pair-progress {
+  position: relative;
+  width: 120px;
+  height: 3px;
+  margin-top: 28px;
+  border-radius: 999px;
+  background: var(--pair-2);
+  overflow: hidden;
+}
+
+.pair-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--music-accent);
+  animation: pair-progress 1.1s var(--pair-ease) infinite;
+}
+
+@keyframes pair-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes pair-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(2px); }
+}
+
+@keyframes pair-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pair-cells--shake,
+  .pair-caret,
+  .pair-progress::after {
+    animation: none;
+  }
+  .pair-cell,
+  .pair-cta {
+    transition: none;
+  }
+}

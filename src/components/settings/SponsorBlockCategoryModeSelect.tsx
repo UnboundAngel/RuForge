@@ -37,7 +37,7 @@ export const SponsorBlockCategoryModeSelect: React.FC<Props> = ({ value, onChang
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center justify-between gap-3 min-w-[172px] px-3 py-2 bg-[#1D1613] hover:bg-[#241A16] cursor-pointer shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 transition-all rounded-xl ${
+        className={`flex items-center justify-between gap-3 min-w-[172px] px-3 py-2 bg-[color:var(--rf-set-well,#1D1613)] hover:bg-[color:var(--rf-set-hover,#241A16)] cursor-pointer shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 transition-all rounded-xl ${
           open ? "rounded-b-none border-b-0" : ""
         }`}
       >
@@ -55,7 +55,7 @@ export const SponsorBlockCategoryModeSelect: React.FC<Props> = ({ value, onChang
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="absolute top-full left-0 right-0 z-50 bg-[#1D1613] border border-white/5 border-t-0 rounded-b-xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)]"
+            className="absolute top-full left-0 right-0 z-50 bg-[color:var(--rf-set-well,#1D1613)] border border-white/5 border-t-0 rounded-b-xl overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)]"
           >
             {MODE_OPTIONS.map((opt) => (
               <button

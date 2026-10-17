@@ -100,29 +100,58 @@ pub fn destination_summary(output_dir: &str, filename_template_eff: &str) -> Str
     format!("{}/{}", output_dir.trim_end_matches(['/', '\\']), filename_template_eff)
 }
 
+/// A user or portable yt-dlp config (`-o`, `-f`, `--exec`) would silently override RuForge's own
+/// arguments and break artifact tracking, so every invocation opts out of config files.
+pub const IGNORE_CONFIG: &str = "--ignore-config";
+
+/// URLs go after `--` so a value starting with `-` (`--exec=...`) can never parse as an option.
+pub fn push_url_positionals<I, S>(args: &mut Vec<String>, urls: I)
+where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+{
+    args.push("--".into());
+    args.extend(urls.into_iter().map(Into::into));
+}
+
+/// Options added after a builder ran must land before the `--` that guards the URLs.
+pub fn insert_options_before_urls<I>(args: &mut Vec<String>, options: I)
+where
+    I: IntoIterator<Item = String>,
+{
+    let at = args.iter().rposition(|a| a == "--").unwrap_or(args.len());
+    args.splice(at..at, options);
+}
+
 pub fn build_inspect_args(url: &str, format: Option<&str>, auth: Option<&AuthConfig>) -> Vec<String> {
-    let mut args = vec!["-J".into(), "-s".into()];
+    let mut args = vec![IGNORE_CONFIG.into(), "-J".into(), "-s".into()];
     if let Some(f) = format.filter(|s| !s.is_empty()) {
         args.push("-f".into());
         args.push(f.to_string());
     }
     push_auth_args(&mut args, auth);
     push_politeness_args(&mut args);
-    args.push(url.to_string());
+    push_url_positionals(&mut args, [url]);
     args
 }
 
 /// One listing pass: entries carry title, duration, and thumbnails but no formats, so no per-video lookups.
 pub fn build_flat_playlist_args(url: &str, auth: Option<&AuthConfig>) -> Vec<String> {
-    let mut args = vec!["--flat-playlist".into(), "-J".into(), "--no-warnings".into()];
+    let mut args = vec![
+        IGNORE_CONFIG.into(),
+        "--flat-playlist".into(),
+        "-J".into(),
+        "--no-warnings".into(),
+    ];
     push_auth_args(&mut args, auth);
-    args.push(url.to_string());
+    push_url_positionals(&mut args, [url]);
     args
 }
 
 /// One JSON line per video. `--ignore-errors` keeps one private or removed video from dropping the batch.
 pub fn build_row_sizes_args(urls: &[String], auth: Option<&AuthConfig>) -> Vec<String> {
     let mut args = vec![
+        IGNORE_CONFIG.into(),
         "-j".into(),
         "-s".into(),
         "--no-warnings".into(),
@@ -130,7 +159,7 @@ pub fn build_row_sizes_args(urls: &[String], auth: Option<&AuthConfig>) -> Vec<S
         "--no-playlist".into(),
     ];
     push_auth_args(&mut args, auth);
-    args.extend(urls.iter().cloned());
+    push_url_positionals(&mut args, urls.iter().cloned());
     args
 }
 
@@ -143,7 +172,9 @@ pub fn build_download_args(
     auth: Option<&AuthConfig>,
     js_runtime_path: Option<&Path>,
 ) -> Result<Vec<String>, EngineError> {
+    let url = crate::url::validate_http_url(url)?;
     let mut args = vec![
+        IGNORE_CONFIG.to_string(),
         "-P".to_string(),
         output_dir.to_string(),
         "-o".to_string(),
@@ -185,6 +216,11 @@ pub fn build_download_args(
         args.push(sub_langs.to_string());
         args.push("--convert-subs".to_string());
         args.push("vtt".to_string());
+        // Captions are rate limited separately (HTTP 429). yt-dlp aborts the whole video on a caption
+        // failure unless errors are ignored; a real media failure still exits non-zero.
+        args.push("--ignore-errors".to_string());
+        args.push("--sleep-subtitles".to_string());
+        args.push("1".to_string());
     }
 
     push_auth_args(&mut args, auth);
@@ -197,7 +233,7 @@ pub fn build_download_args(
     args.push("10".to_string());
     args.push("--fragment-retries".to_string());
     args.push("10".to_string());
-    args.push(url.to_string());
+    push_url_positionals(&mut args, [url]);
     Ok(args)
 }
 
@@ -208,8 +244,11 @@ pub fn push_auth_args(args: &mut Vec<String>, auth: Option<&AuthConfig>) {
         .as_deref()
         .filter(|s| !s.is_empty())
     {
-        args.push("--cookies".into());
-        args.push(file.to_string());
+        // Callers validate (and surface the error); this keeps a bad path off yt-dlp regardless.
+        if crate::cookie_file::check_cookie_file_path(file).is_ok() {
+            args.push("--cookies".into());
+            args.push(file.to_string());
+        }
         return;
     }
     if let Some(browser) = auth
@@ -317,5 +356,59 @@ mod tests {
             args,
             vec!["--cookies-from-browser".to_string(), "firefox".to_string()]
         );
+    }
+
+    fn video_choices() -> ValidatedDownloadChoices {
+        ValidatedDownloadChoices {
+            video_format: "best".into(),
+            audio_only: false,
+            audio_format: "m4a".into(),
+            sub_langs: String::new(),
+        }
+    }
+
+    #[test]
+    fn download_args_end_with_guarded_url_and_ignore_config() {
+        let url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+        let args = build_download_args(url, &video_choices(), "C:/out", "%(title)s.%(ext)s", false, None, None)
+            .unwrap();
+        assert_eq!(&args[args.len() - 2..], &["--".to_string(), url.to_string()]);
+        assert_eq!(args.iter().filter(|a| *a == "--").count(), 1);
+        assert!(args.iter().any(|a| a == IGNORE_CONFIG));
+    }
+
+    #[test]
+    fn download_args_reject_option_shaped_and_non_http_urls() {
+        for url in [r"--config-locations=\\192.0.2.10\s\c.conf", "--exec=calc", "file:///C:/x", ""] {
+            assert!(
+                build_download_args(url, &video_choices(), "C:/out", "%(title)s.%(ext)s", false, None, None)
+                    .is_err(),
+                "{url}"
+            );
+        }
+    }
+
+    #[test]
+    fn builders_guard_every_url_positional() {
+        let url = "https://www.youtube.com/playlist?list=PL1";
+        for args in [build_inspect_args(url, Some("best"), None), build_flat_playlist_args(url, None)] {
+            assert_eq!(&args[args.len() - 2..], &["--".to_string(), url.to_string()]);
+            assert_eq!(args[0], IGNORE_CONFIG);
+        }
+        let urls = vec!["https://a.test/1".to_string(), "https://a.test/2".to_string()];
+        let args = build_row_sizes_args(&urls, None);
+        assert_eq!(&args[args.len() - 3..], &["--".to_string(), urls[0].clone(), urls[1].clone()]);
+    }
+
+    #[test]
+    fn late_options_are_inserted_before_the_url_guard() {
+        let mut args = vec!["-J".to_string()];
+        push_url_positionals(&mut args, ["https://a.test/v"]);
+        insert_options_before_urls(&mut args, ["--encoding".to_string(), "utf-8".to_string()]);
+        assert_eq!(args, vec!["-J", "--encoding", "utf-8", "--", "https://a.test/v"]);
+
+        let mut bare = vec!["-J".to_string(), "https://a.test/v".to_string()];
+        insert_options_before_urls(&mut bare, ["--no-warnings".to_string()]);
+        assert_eq!(bare, vec!["-J", "https://a.test/v", "--no-warnings"]);
     }
 }

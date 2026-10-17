@@ -23,6 +23,7 @@ export function useOverlayWaveformLevels(
   remoteRef.current = remoteLevels;
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
+  const wakeRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const local = Array.from({ length: ISLAND_WAVEFORM_BAR_COUNT }, (_, i) => remoteLevels[i] ?? IDLE);
@@ -63,12 +64,27 @@ export function useOverlayWaveformLevels(
       }
 
       if (changed) setLevels([...local]);
+      // Paused and settled: park until `paused` flips back and wakes the loop.
+      if (isPaused && !changed) {
+        raf = 0;
+        return;
+      }
       raf = requestAnimationFrame(frame);
     };
 
+    wakeRef.current = () => {
+      if (raf === 0) raf = requestAnimationFrame(frame);
+    };
     raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      wakeRef.current = () => {};
+      cancelAnimationFrame(raf);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!paused) wakeRef.current();
+  }, [paused]);
 
   return levels;
 }

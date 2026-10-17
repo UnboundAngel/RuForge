@@ -16,9 +16,7 @@ import {
 } from "./islandSkipMotion";
 import { LoopModeSwapIcon } from "@/components/ui/LoopModeSwapIcon";
 import { PlayPauseMorphIcon } from "@/components/ui/PlayPauseMorphIcon";
-
-const islandBtnClass =
-  "flex h-7 w-7 shrink-0 items-center justify-center text-zinc-300 transition-[color,transform] duration-150 hover:text-white active:scale-[0.97] disabled:opacity-30 disabled:pointer-events-none";
+import { islandBtnClass } from "./islandButtonClass";
 
 /** Half-width of rewind | play | forward cluster for wing sizing. */
 const TRANSPORT_HALF_PX = 50;
@@ -209,11 +207,14 @@ function IslandScrubber({
     setIsScrubbing(false);
   }, [content.trackKey, clearPendingRelease]);
 
+  const detachDragRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     return () => {
       if (pendingReleaseTimeoutRef.current !== null) {
         clearTimeout(pendingReleaseTimeoutRef.current);
       }
+      detachDragRef.current?.();
     };
   }, []);
 
@@ -266,6 +267,8 @@ function IslandScrubber({
       };
 
       const onUp = (ev: globalThis.MouseEvent) => {
+        // Detach before the guard: a track change mid-drag clears the flag and would strand these listeners.
+        detach();
         if (!isScrubbingRef.current) return;
         const finalSec = dragTrackRectRef.current
           ? previewFromClientX(ev.clientX, dragTrackRectRef.current)
@@ -289,10 +292,16 @@ function IslandScrubber({
         } else {
           clearPendingRelease();
         }
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
       };
 
+      const detach = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        if (detachDragRef.current === detach) detachDragRef.current = null;
+      };
+
+      detachDragRef.current?.();
+      detachDragRef.current = detach;
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
@@ -334,7 +343,7 @@ function IslandScrubber({
 
 type Props = {
   content: DynamicIslandContent;
-  waveformLevels: readonly number[];
+  waveformLevels?: readonly number[];
   skipDir?: IslandSkipDir;
   onPlayPause: (e: MouseEvent) => void;
   onSeek?: (seconds: number) => void;

@@ -1,30 +1,17 @@
-import { useEffect, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { Play } from "lucide-react";
+import { useImageFallback } from "@/components/ui/FallbackImg";
 
 type Props = {
   title: string;
   subtitle: string;
-  cover: string | null;
-  coverFallback?: string | null;
+  /** Local cover paths, best first (`coverPathChain`). */
+  covers: string[];
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 };
 
-export function MusicAlbumCard({ title, subtitle, cover, coverFallback = null, onClick, onContextMenu }: Props) {
-  const [coverSrc, setCoverSrc] = useState<string | null>(() => (cover ? convertFileSrc(cover) : null));
-
-  useEffect(() => {
-    setCoverSrc(cover ? convertFileSrc(cover) : null);
-  }, [cover]);
-
-  const handleCoverError = () => {
-    if (coverFallback) {
-      setCoverSrc(convertFileSrc(coverFallback));
-    } else {
-      setCoverSrc(null);
-    }
-  };
+export function MusicAlbumCard({ title, subtitle, covers, onClick, onContextMenu }: Props) {
+  const { src: coverSrc, onError: handleCoverError } = useImageFallback(covers, { local: true });
   return (
     <button
       type="button"
@@ -35,7 +22,7 @@ export function MusicAlbumCard({ title, subtitle, cover, coverFallback = null, o
       }}
       className="flex flex-col gap-3 text-left group/card shrink-0 w-36 md:w-40 transition-all duration-300 relative hover:z-25 snap-start"
     >
-      <div className="relative w-32 h-32 md:w-36 md:h-36 shrink-0 z-10">
+      <div data-squish-cover className="relative w-32 h-32 md:w-36 md:h-36 shrink-0 z-10 transition-transform duration-150 ease-out">
         <div className="absolute top-0.5 bottom-0.5 right-0.5 aspect-square rounded-full bg-neutral-950 border border-neutral-800 transition-all duration-500 ease-out translate-x-0 group-hover/card:translate-x-6 group-hover/card:rotate-[180deg] z-0 flex items-center justify-center">
           <div className="absolute inset-2 rounded-full border border-neutral-900/60" />
           <div className="absolute inset-4 rounded-full border border-neutral-900/60" />

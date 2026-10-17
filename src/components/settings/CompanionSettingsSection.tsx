@@ -1,17 +1,16 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { SettingsDescription } from "./settingsDescription";
+import { SettingItem, SettingsSection } from "./settingsChrome";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRuforgeStore } from "../../store/ruforgeStore";
+import { Switch } from "../ui/Switch";
 import {
   CompanionPairingModal,
   type CompanionQrPayload,
 } from "./CompanionPairingModal";
 
-const companionAccentBtn =
-  "px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-[color:var(--accent)] rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] active:scale-95";
-
-const companionNeutralBtn =
-  "px-5 py-2.5 bg-[#1D1613] hover:bg-stone-800 disabled:opacity-50 disabled:pointer-events-none text-stone-300 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] border border-white/5 active:scale-95";
+const KEYWORDS = "companion browser phone iphone pair qr tailscale";
 
 type CompanionStatus = {
   running: boolean;
@@ -19,6 +18,7 @@ type CompanionStatus = {
   browserUrl: string | null;
   lanIp: string | null;
   lanReachable: boolean;
+  phoneUrl: string | null;
   sessionCount: number;
 };
 
@@ -101,6 +101,20 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
     }
   };
 
+  // Links work once, so every copy mints a fresh one rather than reusing one Open in web spent.
+  const handleCopyFreshLink = async () => {
+    setBusy(true);
+    try {
+      const payload = await mintPairing();
+      await navigator.clipboard.writeText(payload.url);
+      notify("Pairing link copied. It works once, for 2 minutes.");
+    } catch (e) {
+      notify(typeof e === "string" ? e : "Could not copy pairing link.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleOpenWeb = async () => {
     setBusy(true);
     try {
@@ -116,7 +130,7 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
   const handleShowQr = async () => {
     setBusy(true);
     try {
-      if (!pairing) await mintPairing();
+      await mintPairing();
       setQrOpen(true);
     } catch (e) {
       notify(typeof e === "string" ? e : "Could not show pairing QR.");
@@ -140,92 +154,85 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
     ? `${status?.browserUrl ?? `http://localhost:${status?.port ?? "?"}`} (${status?.sessionCount ?? 0} paired)`
     : "Stopped";
 
+  const introLong = `When enabled, RuForge runs a small HTTP server on this PC only (127.0.0.1). Your browser can browse and stream files you already downloaded. Nothing is exposed to your Wi-Fi or the internet. To use it on your phone, install Tailscale on this PC and the phone, run tailscale serve --bg ${status?.port ?? 8787} once on this PC, then use Pair a phone.`;
+  const phoneLine = status?.phoneUrl
+    ? `Phone address: ${status.phoneUrl}`
+    : "Tailscale is not running on this PC, so the QR falls back to the localhost link.";
+
   return (
-    <section className="rf-settings-section">
-      <h3 className="rf-settings-section-header">Browser companion (same PC)</h3>
-      <div className="flex flex-col gap-4 px-1">
-        <p className="text-[11px] leading-relaxed text-stone-400 max-w-2xl">
-          When enabled, RuForge runs a small HTTP server on this PC only
-          (`127.0.0.1`). Your default browser can browse and stream files you
-          already downloaded. Nothing is exposed to your Wi-Fi or the internet.
-          Use Open in web from this screen; RuForge opens the correct localhost
-          URL with a one-time pairing link. LAN, phone, and TV access are not
-          part of V1.
-        </p>
-
-        {!acked ? (
-          <button
-            type="button"
-            onClick={handleAcknowledge}
-            className="self-start px-4 py-2 rounded-xl text-[10px] font-black tracking-widest bg-[#1D1613] border border-[color-mix(in_srgb,var(--accent),transparent_80%)] text-[color:var(--accent)] hover:bg-stone-800 transition-colors"
-          >
-            I UNDERSTAND, SHOW CONTROLS
-          </button>
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-4 max-w-2xl">
-              <div>
-                <p className="text-sm font-semibold text-stone-200">Companion server</p>
-                <p className="text-[11px] text-stone-500 mt-1">{statusLine}</p>
-              </div>
-              <button
-                type="button"
+    <SettingsSection
+      variant="group"
+      title="Browser companion"
+      keywords={KEYWORDS}
+      intro={
+        <>
+          <p>Local-only server for browsing your downloads from a browser or phone.</p>
+          <SettingsDescription description={introLong} />
+        </>
+      }
+    >
+      {!acked ? (
+        <SettingItem
+          title="Companion server"
+          description="Read the note above, then show the controls."
+          keywords={KEYWORDS}
+          control={
+            <button type="button" onClick={handleAcknowledge} className="rf-settings-btn">
+              I understand
+            </button>
+          }
+        />
+      ) : (
+        <>
+          <SettingItem
+            title="Companion server"
+            description={statusLine}
+            keywords={KEYWORDS}
+            control={
+              <Switch
+                checked={running}
                 disabled={busy}
-                onClick={() => void handleToggle()}
-                className={`w-12 h-6 rounded-full relative transition-all duration-300 border border-white/[0.05] disabled:opacity-50 ${
-                  running
-                    ? "bg-[#2A1E1A] shadow-[0_2px_5px_rgba(0,0,0,0.5)]"
-                    : "bg-[#1D1613] shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)]"
-                }`}
-                aria-pressed={running}
-                aria-label={running ? "Stop companion server" : "Start companion server"}
-              >
-                <span
-                  className={`absolute top-1 w-4 h-4 rounded-full bg-[color:var(--accent)] shadow-md transition-all duration-300 ${
-                    running ? "left-7" : "left-1"
-                  }`}
-                />
-              </button>
-            </div>
-
-            {running ? (
-              <div className="flex flex-col gap-2 max-w-2xl">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void handleOpenWeb()}
-                    className={companionAccentBtn}
-                  >
-                    OPEN IN WEB
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void handleRefreshPairing()}
-                    className={companionNeutralBtn}
-                  >
-                    REFRESH PAIRING LINK
-                  </button>
-                </div>
-                <p className="text-[10px] leading-relaxed text-stone-600">
-                  Advanced: QR encodes the same localhost pairing link for manual
-                  open or future LAN work. Not required for same-PC use.
-                </p>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleShowQr()}
-                  className={`self-start ${companionNeutralBtn}`}
-                >
-                  SHOW PAIRING QR
-                </button>
-              </div>
-            ) : null}
-          </>
-        )}
-      </div>
-
+                onChange={() => void handleToggle()}
+                label={running ? "Stop companion server" : "Start companion server"}
+              />
+            }
+          />
+          {running ? (
+            <>
+              <SettingItem
+                title="Browser access"
+                description="Open the companion in your browser or copy a fresh link."
+                keywords={KEYWORDS}
+                control={
+                  <div className="flex items-center gap-2">
+                    <button type="button" disabled={busy} onClick={() => void handleOpenWeb()} className="rf-settings-btn">
+                      Open in web
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => void handleCopyFreshLink()} className="rf-settings-btn">
+                      Copy link
+                    </button>
+                  </div>
+                }
+              />
+              <SettingItem
+                title="Phone"
+                description={phoneLine}
+                keywords={KEYWORDS}
+                control={
+                  <div className="flex items-center gap-2">
+                    <button type="button" disabled={busy} onClick={() => void handleShowQr()} className="rf-settings-btn">
+                      Pair a phone
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => void handleRefreshPairing()} className="rf-settings-btn">
+                      Refresh link
+                    </button>
+                  </div>
+                }
+              />
+            </>
+          ) : null}
+        </>
+      )}
       <CompanionPairingModal
         open={qrOpen}
         onClose={() => setQrOpen(false)}
@@ -235,6 +242,6 @@ export const CompanionSettingsSection: React.FC<{ active: boolean }> = ({ active
         onCopyLink={() => void handleCopyUrl()}
         onOpenLocal={() => void handleOpenLocal()}
       />
-    </section>
+    </SettingsSection>
   );
 };

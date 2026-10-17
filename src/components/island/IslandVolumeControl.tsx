@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { Volume1, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Slider } from "@/components/ui/Slider";
 
 const ICON_W_PX = 28;
 const SLIDER_W_PX = 52;
@@ -21,7 +22,6 @@ function clamp01(n: number) {
 
 export function IslandVolumeControl({ volume, isMuted, onVolume, onMuted }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const [hovering, setHovering] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -47,41 +47,18 @@ export function IslandVolumeControl({ volume, isMuted, onVolume, onMuted }: Prop
     [toggleMute],
   );
 
-  const seekToClientX = useCallback(
-    (clientX: number) => {
-      const track = trackRef.current;
-      if (!track) return;
-      const rect = track.getBoundingClientRect();
-      const frac = clamp01((clientX - rect.left) / rect.width);
+  const setLevel = useCallback(
+    (frac: number) => {
       onVolume(frac);
       if (isMuted && frac > 0) onMuted(false);
     },
     [isMuted, onMuted, onVolume],
   );
 
-  const handleTrackMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      e.stopPropagation();
-      draggingRef.current = true;
-      setDragging(true);
-      seekToClientX(e.clientX);
-      const onMove = (ev: MouseEvent) => {
-        if (draggingRef.current) seekToClientX(ev.clientX);
-      };
-      const onUp = (ev: MouseEvent) => {
-        draggingRef.current = false;
-        setDragging(false);
-        seekToClientX(ev.clientX);
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-      };
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    },
-    [seekToClientX],
-  );
+  const onDragChange = useCallback((next: boolean) => {
+    draggingRef.current = next;
+    setDragging(next);
+  }, []);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -145,33 +122,15 @@ export function IslandVolumeControl({ volume, isMuted, onVolume, onMuted }: Prop
         }}
         transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       >
-        <div
-          ref={trackRef}
-          className="relative h-4 w-full cursor-pointer"
-          role="slider"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(displayLevel * 100)}
-          aria-label="Volume"
-          onMouseDown={(e) => {
-            if (e.button === 1) {
-              e.preventDefault();
-              toggleMute(e);
-              return;
-            }
-            handleTrackMouseDown(e);
-          }}
-        >
-          <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-zinc-700" />
-          <div
-            className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-white pointer-events-none"
-            style={{ width: `${displayLevel * 100}%` }}
-          />
-          <div
-            className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-zinc-900 pointer-events-none"
-            style={{ left: `${displayLevel * 100}%` }}
-          />
-        </div>
+        <Slider
+          label="Volume"
+          level={displayLevel}
+          onChange={setLevel}
+          onDragChange={onDragChange}
+          onMiddleClick={() => onMuted(!isMuted)}
+          thumbFill="var(--rf-island-shell)"
+          className="w-full"
+        />
       </motion.div>
     </div>
   );

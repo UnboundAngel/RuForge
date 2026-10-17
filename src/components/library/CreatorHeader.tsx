@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { FollowChannelButton } from "@/components/watchlist/FollowChannelButton";
 import { creatorMeta } from "./creatorSections";
 import { openChannelInExplorer } from "./openChannel";
@@ -22,17 +23,13 @@ function BannerArt({ url }: { url: string | null | undefined }) {
 }
 
 function HeroAvatar({ url, channelId, channel }: { url: string | null | undefined; channelId: string; channel: string }) {
-  const [failed, setFailed] = useState(false);
   const frame = "h-24 w-24 shrink-0 rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.5)]";
-  if (!url || failed) return <ChannelAvatar channelId={channelId} channel={channel} className={`${frame} text-4xl!`} />;
   return (
-    <img
+    <FallbackImg
       src={url}
-      alt=""
-      draggable={false}
       referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
       className={`${frame} bg-white/[0.08] object-cover`}
+      fallback={<ChannelAvatar channelId={channelId} channel={channel} className={`${frame} text-4xl!`} />}
     />
   );
 }

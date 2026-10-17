@@ -43,6 +43,7 @@ type QuietFetchOpts = {
   skipScrubBackfill?: boolean;
   joinColdInFlight?: boolean;
   forceReindex?: boolean;
+  skipIfUnchanged?: boolean;
 };
 
 export async function runEnsureGalleryOnViewMount(opts: {
@@ -73,6 +74,7 @@ export async function runEnsureGalleryOnViewMount(opts: {
       skipPosterBackfill: true,
       skipScrubBackfill: true,
       joinColdInFlight: true,
+      skipIfUnchanged: true,
     });
     return;
   }

@@ -1,3 +1,4 @@
+import { openCreatorFromNotifications } from "@/notifications/openCreator";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -141,6 +142,7 @@ export function NotificationCenterPopover() {
           ref={panelRef}
           role="dialog"
           aria-label="Notifications"
+          data-glance-punch
           data-music-mode={navMode === "music" ? "true" : undefined}
           className={`fixed ${OVERLAY_Z_CLASS.menus} flex max-h-[min(640px,calc(100vh-72px))] w-[480px] origin-top-right flex-col overflow-hidden rounded-[20px] bg-[color:var(--rf-popover-bg)] shadow-[0_18px_48px_rgba(0,0,0,0.55)] ring-1 ring-white/[0.06]`}
           style={{ top: shownAnchor.top, right: shownAnchor.right }}
@@ -159,6 +161,7 @@ export function NotificationCenterPopover() {
             onMarkAllRead={markEveryNotificationRead}
             onTab={setNotificationTab}
             onOpenSettings={openNotificationSettings}
+            onOpenCreator={openCreatorFromNotifications}
             onClose={closeNotificationPopover}
           />
         </motion.div>

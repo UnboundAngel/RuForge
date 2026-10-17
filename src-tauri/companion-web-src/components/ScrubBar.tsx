@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import type { SponsorSegment } from "../types";
 import { fetchStreamToken } from "../api";
 import { fmtDuration } from "../types";
+import { useClock } from "../playbackClock";
+import { cachedSpriteUrl } from "../offlineSprites";
 
 const SPRITE_COLS = 10;
 const SPRITE_ROWS = 10;
@@ -9,6 +11,13 @@ const SPRITE_CELL_W = 160;
 const SPRITE_CELL_H = 90;
 const SPRITE_SECS_PER_CELL = 5;
 const SPRITE_CELLS_PER_SHEET = SPRITE_COLS * SPRITE_ROWS;
+const SPRITE_URL_TTL_MS = 240_000;
+// Desktop's ScrubHoverPreview uses a 192px thumb in an 8px-padded card; scaled to fit a phone picture.
+const THUMB_W = 128;
+const THUMB_H = (THUMB_W * SPRITE_CELL_H) / SPRITE_CELL_W;
+const CARD_PAD = 8;
+const CARD_W = THUMB_W + CARD_PAD * 2;
+const BUBBLE_HALF_W = 28;
 
 const SB_COLORS: Record<string, string> = {
   sponsor: "#00d400",
@@ -21,193 +30,208 @@ const SB_COLORS: Record<string, string> = {
   music_offtopic: "#ff9900",
 };
 
-function spriteSheetIndex(timeSec: number): number {
-  const cellIdx = Math.floor(timeSec / SPRITE_SECS_PER_CELL);
-  return Math.floor(cellIdx / SPRITE_CELLS_PER_SHEET);
-}
-
-function spriteBgPos(timeSec: number): { x: number; y: number } {
-  const cellIdx = Math.floor(timeSec / SPRITE_SECS_PER_CELL);
-  const cellInSheet = cellIdx % SPRITE_CELLS_PER_SHEET;
-  const col = cellInSheet % SPRITE_COLS;
-  const row = Math.floor(cellInSheet / SPRITE_COLS);
-  return { x: -col * SPRITE_CELL_W, y: -row * SPRITE_CELL_H };
-}
-
 type Props = {
   duration: number;
-  currentTime: number;
   activeId: string | null;
   spriteCount: number;
   sbSegments: SponsorSegment[];
-  dragging: boolean;
-  onSeekStart: () => void;
+  /** `video` sits on the bottom edge of the picture with no time row; the overlay shows times. */
+  variant?: "music" | "video";
+  /** Video only: the knob shows while the overlay controls are up. */
+  showKnob?: boolean;
   onSeek: (seconds: number) => void;
+  onScrubbing?: (active: boolean) => void;
 };
 
+type SpriteUrl = { url: string | null; at: number };
+
+/** Desktop scrubber: thin track, white fill; hovering or dragging shows the frame and the time there. */
 export function ScrubBar({
   duration,
-  currentTime,
   activeId,
   spriteCount,
   sbSegments,
-  dragging,
-  onSeekStart,
+  variant = "music",
+  showKnob = true,
   onSeek,
+  onScrubbing,
 }: Props) {
+  const currentTime = useClock();
   const trackRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
-  const [hoverTime, setHoverTime] = useState<number | null>(null);
-  const [hoverX, setHoverX] = useState(0);
-  const spriteTokens = useRef<Map<number, string | null | "pending">>(new Map());
-  const [, forceUpdate] = useState(0);
+  const [dragT, setDragT] = useState<number | null>(null);
+  const [hoverT, setHoverT] = useState<number | null>(null);
+  const [trackW, setTrackW] = useState(0);
+  const sprites = useRef<Map<number, SpriteUrl>>(new Map());
+  const [, bump] = useState(0);
 
   useEffect(() => {
-    spriteTokens.current.clear();
-    if (!activeId || spriteCount === 0) return;
-    for (let i = 0; i < spriteCount; i++) {
-      const idx = i;
-      spriteTokens.current.set(idx, "pending");
-      void fetchStreamToken(activeId, { kind: "sprite", idx }).then((url) => {
-        spriteTokens.current.set(idx, url);
-        forceUpdate((n) => n + 1);
-      });
-    }
+    sprites.current.clear();
   }, [activeId, spriteCount]);
 
-  const pctFromX = useCallback(
-    (clientX: number): number => {
-      const track = trackRef.current;
-      if (!track || !duration) return 0;
-      const rect = track.getBoundingClientRect();
-      return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    },
-    [duration],
-  );
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      onSeekStart();
-      draggingRef.current = true;
-      const pct = pctFromX(e.clientX);
-      onSeek(pct * duration);
-
-      const onMove = (ev: MouseEvent) => {
-        if (!draggingRef.current) return;
-        const p = pctFromX(ev.clientX);
-        onSeek(p * duration);
-      };
-      const onUp = (ev: MouseEvent) => {
-        draggingRef.current = false;
-        const p = pctFromX(ev.clientX);
-        onSeek(p * duration);
-        window.removeEventListener("mousemove", onMove);
-        window.removeEventListener("mouseup", onUp);
-      };
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    },
-    [duration, onSeekStart, onSeek, pctFromX],
-  );
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      const pct = pctFromX(e.clientX);
-      const t = pct * duration;
-      setHoverTime(t);
-      const track = trackRef.current;
-      if (track) {
-        const rect = track.getBoundingClientRect();
-        setHoverX(e.clientX - rect.left);
-      }
-    },
-    [duration, pctFromX],
-  );
-
-  const handleMouseLeave = () => {
-    if (!draggingRef.current) setHoverTime(null);
+  const refreshSprites = () => {
+    if (!activeId || spriteCount === 0) return;
+    const now = Date.now();
+    for (let idx = 0; idx < spriteCount; idx++) {
+      const cur = sprites.current.get(idx);
+      if (cur && now - cur.at < SPRITE_URL_TTL_MS) continue;
+      sprites.current.set(idx, { url: cur?.url ?? null, at: now });
+      // A saved video carries its own sheets, so previews work with no PC in reach.
+      void cachedSpriteUrl(activeId, idx)
+        .then((local) => local ?? fetchStreamToken(activeId, { kind: "sprite", idx }))
+        .then((url) => {
+          sprites.current.set(idx, { url, at: Date.now() });
+          bump((n) => n + 1);
+        });
+    }
   };
 
-  const fillPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const measure = () => {
+    const r = trackRef.current?.getBoundingClientRect();
+    setTrackW(r ? r.width : 0);
+  };
 
-  const spriteNode = (() => {
-    if (spriteCount === 0 || hoverTime === null) return null;
-    const sheetIdx = spriteSheetIndex(hoverTime);
-    const tokenKey = spriteTokens.current.get(sheetIdx);
-    if (!tokenKey || tokenKey === "pending") return null;
-    const pos = spriteBgPos(hoverTime);
-    return (
-      <div
-        className="sprite-preview"
-        style={{
-          left: hoverX,
-          width: SPRITE_CELL_W,
-          height: SPRITE_CELL_H,
-          backgroundImage: `url(${tokenKey})`,
-          backgroundPosition: `${pos.x}px ${pos.y}px`,
-          backgroundSize: `${SPRITE_COLS * SPRITE_CELL_W}px ${SPRITE_ROWS * SPRITE_CELL_H}px`,
-        }}
-      />
-    );
-  })();
+  const timeAt = (clientX: number) => {
+    const track = trackRef.current;
+    if (!track || !duration) return 0;
+    const rect = track.getBoundingClientRect();
+    const frac = (clientX - rect.left) / rect.width;
+    return Math.max(0, Math.min(1, frac)) * duration;
+  };
+
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (!duration) return;
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    measure();
+    refreshSprites();
+    setHoverT(null);
+    setDragT(timeAt(e.clientX));
+    onScrubbing?.(true);
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (dragT !== null) {
+      setDragT(timeAt(e.clientX));
+      return;
+    }
+    if (e.pointerType === "mouse" && duration) {
+      if (hoverT === null) {
+        measure();
+        refreshSprites();
+      }
+      setHoverT(timeAt(e.clientX));
+    }
+  };
+  const endDrag = (seekTo: number | null) => {
+    if (dragT === null) return;
+    if (seekTo !== null) onSeek(seekTo);
+    setDragT(null);
+    onScrubbing?.(false);
+  };
+
+  const shown = dragT ?? currentTime;
+  const pct = duration > 0 ? Math.min(1, Math.max(0, shown / duration)) : 0;
+  const peekT = dragT ?? hoverT;
+  const peekPct = peekT !== null && duration > 0 ? Math.min(1, Math.max(0, peekT / duration)) : 0;
+
+  let sprite: CSSProperties | null = null;
+  let spriteX = 0;
+  if (peekT !== null && spriteCount > 0 && trackW > 0) {
+    const cell = Math.floor(peekT / SPRITE_SECS_PER_CELL);
+    const url = sprites.current.get(Math.floor(cell / SPRITE_CELLS_PER_SHEET))?.url;
+    if (url) {
+      const inSheet = cell % SPRITE_CELLS_PER_SHEET;
+      spriteX = Math.max(0, Math.min(trackW - CARD_W, peekPct * trackW - CARD_W / 2));
+      const k = THUMB_W / SPRITE_CELL_W;
+      sprite = {
+        width: THUMB_W,
+        height: THUMB_H,
+        backgroundImage: `url(${url})`,
+        backgroundPosition: `${-(inSheet % SPRITE_COLS) * SPRITE_CELL_W * k}px ${-Math.floor(inSheet / SPRITE_COLS) * SPRITE_CELL_H * k}px`,
+        backgroundSize: `${SPRITE_COLS * SPRITE_CELL_W * k}px ${SPRITE_ROWS * SPRITE_CELL_H * k}px`,
+      };
+    }
+  }
+
+  const bubbleX = trackW > 0
+    ? Math.max(BUBBLE_HALF_W, Math.min(trackW - BUBBLE_HALF_W, peekPct * trackW))
+    : 0;
+
+  const cls = [
+    "ph-scrub",
+    `ph-scrub--${variant}`,
+    dragT !== null ? "ph-scrub--drag" : "",
+    hoverT !== null ? "ph-scrub--hover" : "",
+    showKnob ? "" : "ph-scrub--noknob",
+  ].filter(Boolean).join(" ");
 
   return (
-    <div className="scrub-wrap">
+    <div className={cls}>
+      {peekT !== null && sprite ? (
+        <div className="ph-scrub-preview" style={{ transform: `translateX(${spriteX}px)` }}>
+          <div className="ph-scrub-card">
+            <div className="ph-scrub-sprite" style={sprite} />
+          </div>
+          <span className="ph-scrub-preview-time">{fmtDuration(peekT)}</span>
+        </div>
+      ) : null}
+      {peekT !== null && !sprite ? (
+        <span className="ph-scrub-bubble" style={{ left: bubbleX }}>
+          {fmtDuration(peekT)}
+        </span>
+      ) : null}
       <div
-        ref={trackRef}
-        className="scrub-track"
+        className="ph-scrub-hit"
         role="slider"
+        aria-label="Seek"
         aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(fillPct)}
+        aria-valuemax={Math.round(duration)}
+        aria-valuenow={Math.round(shown)}
+        aria-valuetext={fmtDuration(shown)}
         tabIndex={0}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerLeave={() => setHoverT(null)}
+        onPointerUp={(e) => endDrag(timeAt(e.clientX))}
+        onPointerCancel={() => endDrag(null)}
         onKeyDown={(e) => {
           if (!duration) return;
-          if (e.key === "ArrowRight") onSeek(Math.min(duration, currentTime + 5));
-          if (e.key === "ArrowLeft") onSeek(Math.max(0, currentTime - 5));
+          if (e.key === "ArrowRight") onSeek(Math.min(duration, currentTime + 10));
+          if (e.key === "ArrowLeft") onSeek(Math.max(0, currentTime - 10));
         }}
-        style={{ position: "relative" }}
       >
-        {sbSegments
-          .filter((s) => s.actionType === "skip" && duration > 0)
-          .map((s, i) => (
-            <div
-              key={i}
-              className="scrub-sb-segment"
-              style={{
-                left: `${(s.segment[0] / duration) * 100}%`,
-                width: `${((s.segment[1] - s.segment[0]) / duration) * 100}%`,
-                background: SB_COLORS[s.category] ?? "#888",
-              }}
-            />
-          ))}
-        <div className="scrub-fill" style={{ width: `${fillPct}%` }} />
-        <div className="scrub-knob" style={{ left: `${fillPct}%` }} />
-        {spriteNode}
-        {hoverTime !== null && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: "calc(100% + 4px)",
-              left: hoverX,
-              transform: "translateX(-50%)",
-              fontSize: 11,
-              color: "var(--music-text-muted)",
-              pointerEvents: "none",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {fmtDuration(hoverTime)}
+        <div ref={trackRef} className="ph-scrub-track">
+          <div className="ph-scrub-groove">
+            {duration > 0
+              ? sbSegments
+                  .filter((s) => s.actionType === "skip")
+                  .map((s, i) => (
+                    <span
+                      key={s.UUID ?? i}
+                      className="ph-scrub-seg"
+                      style={{
+                        left: `${(s.segment[0] / duration) * 100}%`,
+                        width: `${((s.segment[1] - s.segment[0]) / duration) * 100}%`,
+                        background: SB_COLORS[s.category] ?? "#888",
+                      }}
+                    />
+                  ))
+              : null}
+            {hoverT !== null && dragT === null ? (
+              <span className="ph-scrub-ghost" style={{ transform: `scaleX(${peekPct})` }} />
+            ) : null}
+            <span className="ph-scrub-fill" style={{ transform: `scaleX(${pct})` }} />
           </div>
-        )}
+          <span className="ph-scrub-rail" style={{ transform: `translateX(${pct * 100}%)` }}>
+            <span className="ph-scrub-knob" />
+          </span>
+        </div>
       </div>
-      <div className="scrub-time-label">
-        {fmtDuration(currentTime)} / {duration > 0 ? fmtDuration(duration) : "0:00"}
-      </div>
+      {variant === "music" ? (
+        <div className="ph-scrub-times">
+          <span>{fmtDuration(shown)}</span>
+          <span>{duration > 0 ? `-${fmtDuration(Math.max(0, duration - shown))}` : "--:--"}</span>
+        </div>
+      ) : null}
     </div>
   );
 }

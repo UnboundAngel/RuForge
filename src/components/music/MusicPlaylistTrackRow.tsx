@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { ChevronDown, ChevronUp, Clock3, MoreHorizontal, Music } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
@@ -189,8 +189,12 @@ export const MusicPlaylistTrackRow = memo(function MusicPlaylistTrackRow({
         onReorderDrop(file.path);
       }}
       onDragEnd={onReorderEnd}
-      onClick={() => onSelect(file.path)}
-      onDoubleClick={() => onPlay(file)}
+      onClick={() => {
+        onSelect(file.path);
+        // The current song resumes if paused but never restarts or pauses from a row click.
+        if (!isPlaying) onPlay(file);
+        else if (!showPause) onPlayToggle(file);
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         onSelect(file.path);
@@ -222,7 +226,6 @@ export const MusicPlaylistTrackRow = memo(function MusicPlaylistTrackRow({
           e.stopPropagation();
           onPlayToggle(file);
         }}
-        onDoubleClick={(e) => e.stopPropagation()}
         className="flex justify-center"
         aria-label={showPause ? `Pause ${title}` : `Play ${title}`}
       >
@@ -238,7 +241,7 @@ export const MusicPlaylistTrackRow = memo(function MusicPlaylistTrackRow({
       <div className="flex items-center gap-3 min-w-0">
         {!compact && (cover ? (
           <img
-            src={convertFileSrc(cover)}
+            src={localThumbSrc(cover)}
             alt=""
             draggable={false}
             className="w-10 h-10 shrink-0 object-cover rounded"
@@ -295,7 +298,6 @@ export const MusicPlaylistTrackRow = memo(function MusicPlaylistTrackRow({
             e.stopPropagation();
             onContextMenu(e, file);
           }}
-          onDoubleClick={(e) => e.stopPropagation()}
           aria-label={`More options for ${title}`}
         >
           <MoreHorizontal size={16} />

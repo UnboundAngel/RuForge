@@ -13,13 +13,10 @@ export function useMainWindowMaximized(): boolean {
     };
     sync();
 
-    let unlisten: (() => void) | undefined;
-    void win.onResized(sync).then((fn) => {
-      unlisten = fn;
-    });
+    const unlisten = win.onResized(sync);
 
     return () => {
-      unlisten?.();
+      void unlisten.then((fn) => fn());
     };
   }, []);
 

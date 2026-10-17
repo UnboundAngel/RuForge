@@ -18,6 +18,7 @@
 pub mod commands;
 pub mod config;
 pub mod library_state;
+pub mod path_access;
 pub mod remux;
 pub mod resolver;
 pub mod scanner;

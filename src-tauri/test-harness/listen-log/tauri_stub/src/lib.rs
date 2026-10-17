@@ -1,4 +1,5 @@
 pub use tauri_macros_stub::command;
+pub use url::Url;
 pub struct AppHandle;
 pub struct PathResolver;
 impl PathResolver {

@@ -90,14 +90,14 @@ export function ImmersiveDownloadHero({
         {thumbnail?.trim() ? (
           <div
             data-downloader-hero-thumb
-            className="relative mx-auto w-full max-w-sm overflow-hidden rounded-[20px] bg-[#241c18] aspect-video"
+            className="relative mx-auto w-full max-w-sm overflow-hidden rounded-[20px] bg-[color:var(--rf-field)] aspect-video"
           >
             <img
               src={thumbnail.trim()}
               alt=""
               className="h-full w-full object-cover"
             />
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#1D1613]/55 via-transparent to-transparent" />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[color:var(--rf-surface-deep)]/55 via-transparent to-transparent" />
           </div>
         ) : null}
 

@@ -146,8 +146,8 @@ export function MusicRightPanelMini({
     }
   }, []);
 
-  const pointerInsideZone = useCallback((clientX: number, clientY: number) => {
-    const rects = [pillRef.current, armRef.current, dockRef.current]
+  const pointerInsideZone = useCallback((clientX: number, clientY: number, withPill: boolean) => {
+    const rects = (withPill ? [pillRef.current, armRef.current, dockRef.current] : [armRef.current, dockRef.current])
       .filter((el): el is HTMLDivElement => el != null)
       .map((el) => el.getBoundingClientRect());
     return rects.some((r) =>
@@ -169,16 +169,16 @@ export function MusicRightPanelMini({
     return clearHintTimer;
   }, [hintKey, clearHintTimer]);
 
+  // The arm and dock zones are click-through so content under them (shelf edge arrows, the
+  // last card in a row) stays usable; the pointer position alone decides the hover.
   useEffect(() => {
-    if (!hovered) return;
     const onPointerMove = (e: PointerEvent) => {
-      if (!pointerInsideZone(e.clientX, e.clientY)) {
-        setHovered(false);
-      }
+      const overShelfArrow = (e.target as Element | null)?.closest?.(".rf-shelf-arrow") != null;
+      setHovered((was) => !overShelfArrow && pointerInsideZone(e.clientX, e.clientY, was));
     };
     window.addEventListener("pointermove", onPointerMove);
     return () => window.removeEventListener("pointermove", onPointerMove);
-  }, [hovered, pointerInsideZone]);
+  }, [pointerInsideZone]);
 
   const showPill = hovered || hintVisible;
   const tabItems = tabItemsFor(showSegmentsTab, showNowPlaying);
@@ -194,21 +194,19 @@ export function MusicRightPanelMini({
     >
       <div
         ref={armRef}
-        className="pointer-events-auto absolute top-2 bottom-2"
+        className="absolute top-2 bottom-2"
         style={{ right: HOVER_ARM_RIGHT, width: HOVER_ARM_WIDTH }}
-        onPointerEnter={() => setHovered(true)}
         aria-hidden
       />
 
       <div
         ref={dockRef}
-        className="pointer-events-auto absolute top-2"
+        className="absolute top-2"
         style={{
           right: MINI_PANEL_RIGHT_INSET,
           width: "var(--music-sidebar-collapsed-width)",
           height: "min(16rem, calc(100% - 1rem))",
         }}
-        onPointerEnter={() => setHovered(true)}
         aria-hidden
       />
 
@@ -461,6 +459,10 @@ function TabPanel({
   active: boolean;
   children: React.ReactNode;
 }) {
+  // A tab mounts the first time it is shown, then stays mounted so it keeps its scroll. Mounting
+  // every hidden list up front landed in the same frames as the panel's open ease.
+  const [shown, setShown] = useState(active);
+  if (active && !shown) setShown(true);
   return (
     <div
       className="absolute inset-0 flex flex-col min-h-0"
@@ -470,7 +472,7 @@ function TabPanel({
       }}
       aria-hidden={!active}
     >
-      {children}
+      {shown ? children : null}
     </div>
   );
 }

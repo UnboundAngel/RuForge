@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MediaFile } from "@/types";
 import { OVERLAY_Z_CLASS } from "@/lib/overlayZIndex";
 import { PLAYLIST_DESCRIPTION_MAX } from "@/virtualPlaylists";
-import { SettingsModalShell } from "@/components/settings/SettingsModalShell";
+import { MusicModalBtn, SettingsModalShell } from "@/components/settings/SettingsModalShell";
 import { MusicPlaylistCover } from "./MusicPlaylistCover";
 
 type Props = {
@@ -65,21 +65,10 @@ export function MusicPlaylistEditDetails({
       maxWidthClass="max-w-[520px]"
       footer={
         <>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-10 rounded-full px-5 text-sm font-bold text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form={FORM_ID}
-            disabled={!canSave}
-            className="h-10 rounded-full bg-[#ff0033] px-6 text-sm font-bold text-white transition-[filter,transform] hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40"
-          >
+          <MusicModalBtn onClick={onClose}>Cancel</MusicModalBtn>
+          <MusicModalBtn variant="primary" type="submit" form={FORM_ID} disabled={!canSave}>
             Save
-          </button>
+          </MusicModalBtn>
         </>
       }
     >

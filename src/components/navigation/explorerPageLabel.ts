@@ -24,6 +24,19 @@ export function explorerPageLabel(url: string): string {
   return "YouTube";
 }
 
+/** The trimmed `search_query` of a youtube.com results page ("" when empty), or null for any other page. */
+export function explorerSearchQuery(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const path = u.pathname.replace(/\/+$/, "") || "/";
+  if (path !== "/results") return null;
+  return u.searchParams.get("search_query")?.trim() ?? "";
+}
+
 /** A pasted YouTube link as a youtube.com page the Explorer can open, or null. */
 export function resolveExplorerPasteUrl(input: string): string | null {
   const text = input.trim();

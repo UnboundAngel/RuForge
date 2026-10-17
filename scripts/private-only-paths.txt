@@ -7,3 +7,21 @@ docs/agents/handoffs/
 docs/agents/PERSONAL.md
 docs/ruforge/archive/
 .claude/
+
+# Games (paid extra): real module + Rust + caps + Worker + plans. Stub stays public.
+src/games/
+src-tauri/src/games/
+src-tauri/test-harness/game-match/
+src-tauri/capabilities/glance-popout.json
+src-tauri/capabilities/games-windows.json
+src-tauri/capabilities/games-system-hotkeys.json
+infra/guides/
+docs/agents/GAMES.md
+docs/ruforge/plans/game-guides.plan.md
+docs/ruforge/plans/g5-g6-spec.md
+docs/ruforge/plans/games-monetization.md
+scripts/file-size-baseline.games.json
+docs/agents/release/shipped-games.jsonl
+docs/ruforge/plans/game-detection.plan.md
+docs/ruforge/plans/gamer-update.plan.md
+docs/ruforge/plans/stats-and-recap.md

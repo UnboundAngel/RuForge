@@ -35,6 +35,88 @@ export function resetDownloadProgressEtaSmoothing(jobId: string): void {
   etaStateByJob.delete(jobId);
 }
 
+/** Parse yt-dlp speed tokens (`1.23MiB/s`, `450KiB/s`, `120B/s`). */
+export function parseYtdlpSpeedToBps(raw: string): number | null {
+  const t = raw.trim();
+  if (!t || t === "???") return null;
+  const m = /^([\d.]+)\s*([KMGT]?i?B)\/s$/i.exec(t);
+  if (!m) return null;
+  const num = Number.parseFloat(m[1]!);
+  if (!Number.isFinite(num) || num < 0) return null;
+  const unit = m[2]!.toUpperCase();
+  const mult =
+    unit === "B"
+      ? 1
+      : unit === "KB" || unit === "KIB"
+        ? 1024
+        : unit === "MB" || unit === "MIB"
+          ? 1024 * 1024
+          : unit === "GB" || unit === "GIB"
+            ? 1024 * 1024 * 1024
+            : unit === "TB" || unit === "TIB"
+              ? 1024 * 1024 * 1024 * 1024
+              : null;
+  if (mult == null) return null;
+  const bps = num * mult;
+  return Number.isFinite(bps) && bps > 0 ? bps : null;
+}
+
+const QUALITY_HEIGHTS: ReadonlyArray<{ min: number; label: string }> = [
+  { min: 2160, label: "2160p" },
+  { min: 1440, label: "1440p" },
+  { min: 1080, label: "1080p" },
+  { min: 720, label: "720p" },
+  { min: 480, label: "480p" },
+  { min: 360, label: "360p" },
+];
+
+/** Map a finished file's video height (or audio-only) to a readable quality label. */
+export function qualityLabelFromHeight(
+  height: number | null | undefined,
+  audioOnly: boolean,
+): string | undefined {
+  if (audioOnly) return "audio";
+  if (height == null || !Number.isFinite(height) || height <= 0) return undefined;
+  for (const row of QUALITY_HEIGHTS) {
+    if (height >= row.min) return row.label;
+  }
+  return "360p";
+}
+
+const PEAK_WARMUP_MS = 2000;
+const PEAK_WINDOW_MS = 3000;
+const PEAK_SAMPLE_CAP = 24;
+
+/** Update peakBps from a progress speed sample; ignores warm-up and single-sample spikes via a ~3s window. */
+export function trackDownloadPeakBps(
+  job: {
+    downloadingSince?: number;
+    peakBps?: number;
+    speedSamples?: { tMs: number; bps: number }[];
+  },
+  speedRaw: string,
+  nowMs = Date.now(),
+): Pick<typeof job, "peakBps" | "speedSamples"> {
+  const bps = parseYtdlpSpeedToBps(speedRaw);
+  if (bps == null) {
+    return { peakBps: job.peakBps, speedSamples: job.speedSamples };
+  }
+  const since = job.downloadingSince;
+  if (since != null && nowMs - since < PEAK_WARMUP_MS) {
+    return { peakBps: job.peakBps, speedSamples: job.speedSamples };
+  }
+  const samples = [...(job.speedSamples ?? []), { tMs: nowMs, bps }];
+  while (samples.length > PEAK_SAMPLE_CAP) samples.shift();
+  const windowStart = nowMs - PEAK_WINDOW_MS;
+  const inWindow = samples.filter((s) => s.tMs >= windowStart);
+  if (inWindow.length < 2) {
+    return { peakBps: job.peakBps, speedSamples: samples };
+  }
+  const avg = inWindow.reduce((sum, s) => sum + s.bps, 0) / inWindow.length;
+  const peakBps = job.peakBps == null ? avg : Math.max(job.peakBps, avg);
+  return { peakBps, speedSamples: samples };
+}
+
 /** Parse yt-dlp ETA tokens (`MM:SS`, `H:MM:SS`). */
 export function parseYtdlpEtaToSeconds(raw: string): number | null {
   const t = raw.trim();

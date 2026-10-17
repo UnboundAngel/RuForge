@@ -3,7 +3,11 @@ import type { MainPlaybackBridgeOwner } from "@/playback/bridgeArbitration";
 
 let snapshot: MainPlaybackSnapshot | null = null;
 let owner: MainPlaybackBridgeOwner | null = null;
+let backwardSince: number | null = null;
 const listeners = new Set<() => void>();
+
+// A one-off bad sample recovers within this window; repeat looping the track or a backward seek does not.
+const BACKWARD_HOLD_MS = 1000;
 
 function notify() {
   for (const fn of listeners) fn();
@@ -34,13 +38,21 @@ function mergeSnapshot(
   let currentTime = value.currentTime;
   let paused = value.paused;
 
-  if (prev && prev.mediaKey === value.mediaKey) {
-    if (
-      currentTime < prev.currentTime - 0.75 &&
-      !paused &&
-      prev.currentTime > 1.5
-    ) {
+  const jumpedBack =
+    prev !== null &&
+    prev.mediaKey === value.mediaKey &&
+    currentTime < prev.currentTime - 0.75 &&
+    !paused &&
+    prev.currentTime > 1.5;
+  if (!jumpedBack) {
+    backwardSince = null;
+  } else {
+    const now = Date.now();
+    backwardSince ??= now;
+    if (now - backwardSince < BACKWARD_HOLD_MS) {
       currentTime = prev.currentTime;
+    } else {
+      backwardSince = null;
     }
   }
 
@@ -78,6 +90,7 @@ export function publishMainPlaybackBridge(
     if (owner === bridgeOwner) {
       owner = null;
       snapshot = null;
+      backwardSince = null;
       notify();
     }
     return;

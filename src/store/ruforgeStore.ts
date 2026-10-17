@@ -30,6 +30,7 @@ import {
   topNScrubBackfillCandidates,
 } from "../scrubSpriteBackfill";
 import { mediaPathsMatch } from "../lib/mediaPathMatch";
+import { isBrowseTab } from "@games";
 import {
   DEFAULT_OUTPUT_DIR,
   DEFAULT_SETTINGS,
@@ -42,6 +43,7 @@ import {
   writePlayerLoopModeToLs,
   nextNavMode,
   type ActiveTab,
+  type BrowseTab,
   type GalleryFilter,
   type LoopMode,
   type MusicDetail,
@@ -73,6 +75,15 @@ import {
   loadLikedIdentityKeys,
   toggleTrackLike,
 } from "../components/music/musicLikedTracks";
+import {
+  bumpCounter,
+  maybeRecordDailyLibrarySnapshot,
+  recordActivity,
+} from "../lib/activityLog";
+import {
+  closeVideoWatchSession,
+  syncVideoWatchSession,
+} from "../lib/videoWatchActivity";
 import { buildSmartShuffleOrder } from "../components/music/musicSmartShuffle";
 import {
   reconcilePlaylistIdentities,
@@ -110,6 +121,7 @@ import {
   writeMusicPlaybackSession,
 } from "../lib/musicPlaybackSessionStorage";
 import { parkAndStopVideoPlayback } from "../lib/videoPlaybackPark";
+import { forgetMissingLocalImages } from "../lib/localImageSrc";
 import {
   buildMusicEffectivePlaylist,
   musicEffectivePlaylistIndex,
@@ -145,6 +157,7 @@ import {
 
 export type {
   ActiveTab,
+  BrowseTab,
   GalleryFilter,
   MusicDetail,
   MusicView,
@@ -189,6 +202,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   storageStats: { total_bytes: number; file_count: number } | null;
 
   activeTab: ActiveTab;
+  /** Where leaving the player goes back to: the library or the Games view a video was opened from. */
+  browseTab: BrowseTab;
   /** Settings is a centered overlay; does not replace the underlying tab. */
   settingsOpen: boolean;
   /** Download hero is a large overlay; library (or explorer) stays the underlying tab. */
@@ -203,6 +218,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   lastExplorerUrl: string;
   /** A page the app asked Explorer to open; wins over the webview's own URL until it has loaded. */
   explorerNavTarget: string | null;
+  /** Explorer downloads get tagged to this game until the scope ends. */
+  explorerGameScope: { gameId: string } | null;
   youtubeSessionStatus: YoutubeSessionStatus;
   /** Display profile (live probe or cache); null when signed-out. */
   youtubeExplorerProfile: YouTubeExplorerProfile | null;
@@ -215,6 +232,8 @@ export interface RuforgeStore extends DownloadQueueSlice {
   urlSourceHint: "clipboard" | "explorer" | null;
   /** True while Replace/Cancel duplicate dialog is open (`DuplicateDownloadDialog`). */
   downloaderDuplicateDialogOpen: boolean;
+  /** True while Download was clicked and the start is still waiting on metadata or the duplicate check. */
+  downloaderStartArmed: boolean;
   metadataLoading: boolean;
   downloading: boolean;
   progress: ProgressPayload | null;
@@ -421,7 +440,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setSelectedPlaylist: (p: PlaylistCollection | null) => void;
   /** Re-merge localStorage virtual playlists into `entries` (and refresh `selectedPlaylist`). */
   refreshVirtualPlaylists: () => void;
-  createVirtualPlaylist: (title: string, seedPaths?: string[]) => string;
+  createVirtualPlaylist: (title: string, seedPaths?: string[], opts?: { gameId?: string }) => string;
   deleteVirtualPlaylist: (id: string) => boolean;
   renameVirtualPlaylist: (id: string, title: string) => void;
   addToVirtualPlaylist: (id: string, paths: string[]) => void;
@@ -442,6 +461,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setSearchValue: (v: string) => void;
   setLastExplorerUrl: (url: string) => void;
   setExplorerNavTarget: (url: string | null) => void;
+  setExplorerGameScope: (scope: { gameId: string } | null) => void;
   setYoutubeProfileSession: (session: {
     status: YoutubeSessionStatus;
     profile: YouTubeExplorerProfile | null;
@@ -458,6 +478,7 @@ export interface RuforgeStore extends DownloadQueueSlice {
   setDownloaderUrl: (url: string) => void;
   setDownloaderUrlSourceHint: (hint: RuforgeStore["urlSourceHint"]) => void;
   setDownloaderDuplicateDialogOpen: (v: boolean) => void;
+  setDownloaderStartArmed: (v: boolean) => void;
   setDownloaderMetadataLoading: (v: boolean) => void;
   setDownloading: (v: boolean) => void;
   setDownloadProgress: (p: ProgressPayload | null) => void;
@@ -490,6 +511,11 @@ export interface RuforgeStore extends DownloadQueueSlice {
     joinColdInFlight?: boolean;
     /** Force Rust to walk/reindex instead of serving the published desktop snapshot. */
     forceReindex?: boolean;
+    /**
+     * Quiet view-mount refresh: leave `entries` untouched when the snapshot matches the last
+     * one applied, so showing a kept-alive mode shell does not re-render every library consumer.
+     */
+    skipIfUnchanged?: boolean;
   }) => Promise<void>;
   /**
    * Media/Music mount policy: first call this session runs a cold scan with poster/scrub
@@ -641,6 +667,9 @@ export function clearRuforgeNotificationDismissTimers(): void {
 /** Monotonic token: only the latest `fetchEntries` run may write `entries` or clear `galleryLoading`. */
 let galleryFetchToken = 0;
 
+/** Last snapshot `fetchEntries` applied, and the `entries` array it produced. */
+let lastAppliedGallerySnapshot: { json: string; entries: GalleryEntry[] } | null = null;
+
 /** Serial for poster backfill so stale async work cannot chain a second scan after navigation. */
 let galleryPosterEpoch = 0;
 let galleryScrubEpoch = 0;
@@ -706,6 +735,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       storageStats: null,
 
       activeTab: "media",
+      browseTab: "media",
       settingsOpen: false,
       downloaderOpen: false,
       settingsTab: "general",
@@ -716,6 +746,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       searchValue: "",
       lastExplorerUrl: "https://www.youtube.com",
       explorerNavTarget: null,
+      explorerGameScope: null,
       ...(() => {
         const hydrated = hydrateYoutubeProfileSession();
         return {
@@ -729,6 +760,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       url: "",
       urlSourceHint: null,
       downloaderDuplicateDialogOpen: false,
+      downloaderStartArmed: false,
       metadataLoading: false,
       downloading: false,
       progress: null,
@@ -792,6 +824,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
         ) {
           const parkedAt = parkAndStopVideoPlayback(prev);
           claimMainPlayback();
+          // Park video without closing the watch session; resume restores the same item.
           set({
             playingFile,
             loopMode,
@@ -831,7 +864,19 @@ export const useRuforgeStore = create<RuforgeStore>()(
                 ? { parkedVideoFile: null, parkedVideoAt: null }
                 : {}),
           });
+          if (!isAudioOnlyPath(playingFile.path)) {
+            syncVideoWatchSession(
+              playingFile,
+              "main",
+              prev && prev.path !== playingFile.path ? "switched" : "switched",
+            );
+          } else if (prev && !isAudioOnlyPath(prev.path)) {
+            closeVideoWatchSession("switched");
+          }
         } else {
+          if (prev && !isAudioOnlyPath(prev.path)) {
+            closeVideoWatchSession("closed");
+          }
           clearMusicPlaybackSession();
           set({ playingFile });
           tryFlushDeferredScrubBackfill(get);
@@ -894,7 +939,12 @@ export const useRuforgeStore = create<RuforgeStore>()(
       },
 
       toggleMusicLike: (file) => {
-        toggleTrackLike(file);
+        const liked = toggleTrackLike(file);
+        const identityKey = musicTrackIdentityKey(file, primaryArtist);
+        recordActivity({
+          kind: liked ? "music_liked" : "music_unliked",
+          identityKey,
+        });
         set({ musicLikedKeys: loadLikedIdentityKeys() });
       },
 
@@ -1158,7 +1208,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
             });
             set({
               playingFile: null,
-              ...(navMode !== "music" ? { activeTab: "media" } : {}),
+              ...(navMode !== "music" ? { activeTab: get().browseTab } : {}),
             });
 
             const emitHandoff = async () => {
@@ -1166,6 +1216,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
             };
 
             await invoke("open_mini_player");
+            bumpCounter("feature:mini_player");
             if (existingMini) {
               await emitHandoff();
             } else {
@@ -1173,6 +1224,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
             }
           } else {
             await invoke("open_mini_player");
+            bumpCounter("feature:mini_player");
           }
         } catch (e) {
           console.error(e);
@@ -1263,6 +1315,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
           set({ playingFile: null });
 
           await invoke("open_music_mini_player");
+          bumpCounter("feature:music_mini");
           if (readyWait) await readyWait;
 
           await emitTo("music-mini", "play-in-music-mini", payload);
@@ -1513,6 +1566,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       openAuthorizeCleanupModal: async () => {
         const { saveToInternal, fetchEntries } = get();
         if (!saveToInternal) return;
+        bumpCounter("feature:cleanup");
         // Open first; never block the click on a cold gallery scan.
         set({ cleanupModalOpen: true });
         if (get().entries.length === 0) {
@@ -1560,6 +1614,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
           settingsOpen: false,
           downloaderOpen: false,
           ...(tab !== "media" ? { galleryScrollChrome: 0 } : {}),
+          ...(isBrowseTab(tab) ? { browseTab: tab } : {}),
         });
         if (tab !== "player") tryFlushDeferredScrubBackfill(get);
       },
@@ -1588,8 +1643,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
         });
       },
 
-      createVirtualPlaylist: (title, seedPaths = []) => {
-        const record = createVirtualPlaylistRecord(title, seedPaths);
+      createVirtualPlaylist: (title, seedPaths = [], opts) => {
+        const record = createVirtualPlaylistRecord(title, seedPaths, Date.now(), "video", opts?.gameId);
         mutateVirtualRecords((recs) => [...recs, record]);
         get().refreshVirtualPlaylists();
         return record.id;
@@ -1601,11 +1656,13 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const record = createVirtualPlaylistRecord(title, seedPaths, Date.now(), "music");
         mutateVirtualRecords((recs) => [...recs, record]);
         get().refreshVirtualPlaylists();
+        recordActivity({ kind: "music_playlist_created", playlistId: record.id });
         return record.id;
       },
 
       deleteVirtualPlaylist: (id) => {
         if (id === WATCH_LATER_ID) return false;
+        const before = loadVirtualPlaylistRecords().find((r) => r.id === id);
         let removed = false;
         mutateVirtualRecords((recs) => {
           const next = recs.filter((r) => r.id !== id);
@@ -1613,6 +1670,9 @@ export const useRuforgeStore = create<RuforgeStore>()(
           return next;
         });
         if (!removed) return false;
+        if (before?.kind === "music") {
+          recordActivity({ kind: "music_playlist_deleted", playlistId: id });
+        }
         const path = virtualPlaylistPath(id);
         set((s) => ({
           selectedPlaylist:
@@ -1645,10 +1705,17 @@ export const useRuforgeStore = create<RuforgeStore>()(
 
       addToVirtualPlaylist: (id, paths) => {
         if (paths.length === 0) return;
+        const before = loadVirtualPlaylistRecords().find((r) => r.id === id);
+        const beforeCount = before?.items.length ?? 0;
         mutateVirtualRecords((recs) =>
           recs.map((r) => (r.id === id ? addPathsToRecord(r, paths) : r)),
         );
         get().refreshVirtualPlaylists();
+        const after = loadVirtualPlaylistRecords().find((r) => r.id === id);
+        const added = Math.max(0, (after?.items.length ?? beforeCount) - beforeCount);
+        if (added > 0 && after?.kind === "music") {
+          recordActivity({ kind: "music_tracks_added", count: added, playlistId: id });
+        }
       },
 
       removeFromVirtualPlaylist: (id, path) => {
@@ -1729,6 +1796,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       setSearchValue: (v) => set({ searchValue: v }),
       setLastExplorerUrl: (url) => set({ lastExplorerUrl: url }),
       setExplorerNavTarget: (url) => set({ explorerNavTarget: url }),
+      setExplorerGameScope: (scope) => set({ explorerGameScope: scope }),
       setYoutubeProfileSession: (session) =>
         set({
           youtubeSessionStatus: session.status,
@@ -1739,9 +1807,10 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const id = Date.now() + Math.floor(Math.random() * 1000);
         set((s) => ({ notifications: [...s.notifications, { id, message, type, action }] }));
         if (type === "info" || type === "warning") {
+          // Long enough to reach an Undo without the pill vanishing under the cursor.
           const handle = setTimeout(() => {
             get().dismissNotification(id);
-          }, 4000);
+          }, action ? 6000 : 4000);
           notificationDismissTimers.set(id, handle);
         } else if (type === "error") {
           const handle = setTimeout(() => {
@@ -1768,6 +1837,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
       setDownloaderUrlSourceHint: (urlSourceHint) => set({ urlSourceHint }),
       setDownloaderDuplicateDialogOpen: (downloaderDuplicateDialogOpen) =>
         set({ downloaderDuplicateDialogOpen }),
+      setDownloaderStartArmed: (downloaderStartArmed) => set({ downloaderStartArmed }),
       setDownloaderMetadataLoading: (metadataLoading) => set({ metadataLoading }),
       setDownloading: (downloading) => set({ downloading }),
       setDownloadProgress: (progress) => set({ progress }),
@@ -1806,6 +1876,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
         }),
 
       fetchEntries: async (opts) => {
+        forgetMissingLocalImages();
         if (opts?.joinColdInFlight) {
           const joined = tryJoinColdGalleryFetch();
           if (joined) return joined;
@@ -1836,8 +1907,20 @@ export const useRuforgeStore = create<RuforgeStore>()(
           const unique = snapshot.entries;
           if (myToken !== galleryFetchToken) return;
           if (galleryPosterEpoch !== posterEpoch || galleryScrubEpoch !== scrubEpoch) return;
+          const json = JSON.stringify(unique);
+          const last = lastAppliedGallerySnapshot;
+          if (
+            opts?.skipIfUnchanged
+            && last
+            && last.json === json
+            && last.entries === get().entries
+          ) {
+            if (get().galleryDesktopReady !== snapshot.ready) set({ galleryDesktopReady: snapshot.ready });
+            return;
+          }
           set((s) => {
             const synced = syncVirtualPlaylistsIntoState(unique, s.selectedPlaylist);
+            lastAppliedGallerySnapshot = { json, entries: synced.entries };
             return {
               entries: synced.entries,
               selectedPlaylist: synced.selectedPlaylist,
@@ -1846,6 +1929,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
               libraryScanRevision: s.libraryScanRevision + 1,
             };
           });
+          maybeRecordDailyLibrarySnapshot(unique);
           const mediaFiles = unique.flatMap((e) =>
             e.kind === "media" ? [e as MediaFile] : (e as PlaylistCollection).items,
           );

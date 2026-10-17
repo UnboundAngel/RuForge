@@ -19,6 +19,8 @@ type Props = {
   item: NotificationItem;
   onAction: (item: NotificationItem, action: NotificationActionId) => void;
   onMarkRead: (item: NotificationItem) => void;
+  /** Island density: the buttons slide in on hover and take the title's room, so they never cover text. */
+  dense?: boolean;
 };
 
 /** Upcoming premieres keep a visible but disabled Queue so the row explains why it cannot download yet. */
@@ -52,10 +54,17 @@ const sideButtonClass =
   "flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition-colors duration-150 hover:bg-white/[0.07] hover:text-stone-100 focus-visible:bg-white/[0.07] focus-visible:text-stone-100 focus-visible:outline-none";
 
 /** Everything else, in a slim column that fades in with the row's hover. */
-export function NotificationSideActions({ item, onAction, onMarkRead }: Props) {
+export function NotificationSideActions({ item, onAction, onMarkRead, dense = false }: Props) {
   const rest = queueHeld(item) ? item.actions : item.actions.slice(1);
+  if (dense && rest.length === 0 && item.read) return null;
   return (
-    <div className="flex w-7 shrink-0 flex-col items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
+    <div
+      className={`opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 ${
+        dense
+          ? "flex max-w-0 shrink-0 items-center gap-0.5 overflow-hidden transition-[max-width,opacity] group-focus-within:max-w-24 group-hover:max-w-24"
+          : "flex w-7 shrink-0 flex-col items-center gap-1"
+      }`}
+    >
       {rest.map((action) => (
         <button
           key={action}

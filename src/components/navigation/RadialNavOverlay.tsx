@@ -12,6 +12,7 @@ import {
 import {
   hideRadialNavOverlay,
   pushRadialNavState,
+  setRadialNavAccent,
   showRadialNavOverlay,
 } from "@/lib/radialNavOverlayHost";
 import { mainWindowPortalRoot } from "@/lib/mainWindowFrame";
@@ -35,8 +36,18 @@ export function RadialNavOverlay({
 }: RadialNavOverlayProps) {
   const navMode = useRuforgeStore((s) => s.navMode);
   const cycleNavMode = useRuforgeStore((s) => s.cycleNavMode);
-  const setNavMode = useRuforgeStore((s) => s.setNavMode);
+  const settingsOpen = useRuforgeStore((s) => s.settingsOpen);
+  const openSettings = useRuforgeStore((s) => s.openSettings);
+  const closeSettings = useRuforgeStore((s) => s.closeSettings);
   const setMusicView = useRuforgeStore((s) => s.setMusicView);
+
+  const accentColor = useRuforgeStore((s) => s.settings.accentColor);
+  const accent =
+    typeof accentColor === "string" && accentColor.startsWith("#") ? accentColor : undefined;
+
+  useEffect(() => {
+    setRadialNavAccent(accent);
+  }, [accent]);
 
   const menuItems = radialMenuItemsForMode(navMode);
 
@@ -45,8 +56,8 @@ export function RadialNavOverlay({
     if (!action) return;
     if (action.kind === "tab") { onNavigate(action.tab); return; }
     if (action.kind === "music") { setMusicView(action.view); return; }
-    setNavMode("default");
-    onNavigate("settings");
+    if (settingsOpen) closeSettings();
+    else openSettings();
   };
 
   const handleSelectRef = useRef(handleSelect);
@@ -97,6 +108,7 @@ export function RadialNavOverlay({
         <RadialMenu
           open={open && presentation === "dom"}
           navMode={navMode}
+          accent={accent}
           menuItems={menuItems}
           onCenterClick={onCenterClick ?? cycleNavMode}
           onSelect={handleSelect}

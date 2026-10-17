@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { emit } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -12,6 +12,9 @@ import {
   getActiveListenEventId,
   transferListenSession,
 } from "@/lib/musicListenSession";
+import type { DesktopIslandControl } from "@/lib/desktopIslandBridge";
+import { useMusicMiniArrange } from "@games";
+import { listenPrivateQueue } from "@/lib/privateMailbox";
 import { cn } from "@/lib/utils";
 import { MusicMiniTitleBar } from "./MusicMiniTitleBar";
 import { MusicMiniDisc } from "./MusicMiniDisc";
@@ -25,7 +28,34 @@ import { coverSrcFor, useMusicMiniPlayback } from "./useMusicMiniPlayback";
 export default function MusicMiniPlayer() {
   const chrome = useMusicMiniWindowChrome();
   const playback = useMusicMiniPlayback();
+  const playbackRef = useRef(playback);
+  playbackRef.current = playback;
   const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    const unlisten = listenPrivateQueue<DesktopIslandControl>(
+      "playback-surface-control",
+      "playback-surface-control",
+      (control) => {
+        const p = playbackRef.current;
+        if (control.type === "togglePlay") {
+          p.togglePlay();
+          return;
+        }
+        if (control.type === "skipNext") {
+          p.skipNext();
+          return;
+        }
+        if (control.type === "skipBy" && typeof control.delta === "number" && p.duration > 0) {
+          const next = Math.max(0, Math.min(p.duration, p.currentTime + control.delta));
+          p.seekPct(next / p.duration);
+        }
+      },
+    );
+    return () => void unlisten.then((u) => u());
+  }, []);
+
+  useMusicMiniArrange();
 
   const handleBack = useCallback(async () => {
     if (!playback.playingFile) {
@@ -58,16 +88,11 @@ export default function MusicMiniPlayer() {
   }, [playback]);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    void getCurrentWindow()
-      .onCloseRequested(() => {
-        emitMusicMiniTeardown();
-      })
-      .then((fn) => {
-        unlisten = fn;
-      });
+    const unlisten = getCurrentWindow().onCloseRequested(() => {
+      emitMusicMiniTeardown();
+    });
     return () => {
-      unlisten?.();
+      void unlisten.then((fn) => fn());
     };
   }, []);
 

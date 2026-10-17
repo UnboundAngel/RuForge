@@ -34,15 +34,16 @@ type SettingsModalShellProps = {
   /** Extra classes on the scrolling body, e.g. `pt-0` so a sticky header can sit flush at the top. */
   bodyClassName?: string;
   footerClassName?: string;
-  /** Page-sized surfaces: bezel rim around a well, like Settings and the downloader. App theme only. */
-  bezel?: boolean;
   /** Height of a sticky header at the top of the body, so the scrollbar track starts below it. */
   bodyScrollInsetTop?: number;
+  /** `fade` opens in place with opacity only: no slide or scale, so text never re-snaps when the motion ends. */
+  entrance?: "rise" | "fade";
+  titleClassName?: string;
 };
 
 const SHELL_THEME = {
   app: {
-    panel: "bg-[#1D1613] rounded-[var(--radius-modal)]",
+    panel: "bg-[color:var(--rf-surface-deep)] rounded-[var(--radius-modal)]",
     title: "text-stone-100",
     muted: "text-stone-500",
     close: "text-stone-500 hover:text-stone-200",
@@ -73,11 +74,13 @@ export function SettingsModalShell({
   theme = "app",
   bodyClassName,
   footerClassName,
-  bezel = false,
   bodyScrollInsetTop,
+  entrance = "rise",
+  titleClassName,
 }: SettingsModalShellProps) {
   const t = SHELL_THEME[theme];
-  const rim = bezel && theme === "app";
+  /** App dialogs all wear the Settings bezel: rim around a well. Music stays flat like Spotify. */
+  const rim = theme === "app";
   const reduceMotion = useReducedMotion();
   const fade = motionDuration(reduceMotion, overlayFadeTransition);
   const panel = motionDuration(reduceMotion, overlayPanelTransition);
@@ -125,18 +128,18 @@ export function SettingsModalShell({
               "relative flex w-full flex-col overflow-hidden shadow-[0_16px_48px_rgba(0,0,0,0.45)]",
               maxWidthClass,
               maxHeightClass,
-              rim ? "rounded-[24px] bg-[#271C18] p-[7px]" : t.panel,
+              rim ? "rounded-[24px] bg-[color:var(--rf-surface)] p-[7px]" : t.panel,
             )}
             onClick={(e) => e.stopPropagation()}
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            initial={entrance === "rise" ? { opacity: 0, y: 12, scale: 0.98 } : { opacity: 0 }}
+            animate={entrance === "rise" ? { opacity: 1, y: 0, scale: 1 } : { opacity: 1 }}
+            exit={entrance === "rise" ? { opacity: 0, y: 8, scale: 0.98 } : { opacity: 0 }}
             transition={panel}
           >
             <div
               className={cn(
                 "flex min-h-0 flex-1 flex-col",
-                rim && "overflow-hidden rounded-[18px] bg-[#1D1613]",
+                rim && "overflow-hidden rounded-[18px] bg-[color:var(--rf-surface-deep)]",
               )}
             >
               <header className="shrink-0 space-y-2 px-6 pb-1 pt-6">
@@ -156,7 +159,7 @@ export function SettingsModalShell({
                     ) : null}
                     <h2
                       id={titleId}
-                      className={cn("text-base font-semibold leading-snug", t.title)}
+                      className={cn("text-base font-semibold leading-snug", t.title, titleClassName)}
                     >
                       {title}
                     </h2>
@@ -210,7 +213,7 @@ export function SettingsModalSurface({
 }) {
   return (
     <div
-      className={`rounded-[var(--radius-input)] bg-[#261d18] px-4 py-3 ${className}`}
+      className={`rounded-[var(--radius-input)] bg-[color:var(--rf-field)] px-4 py-3 ${className}`}
     >
       {children}
     </div>
@@ -292,7 +295,69 @@ export function SettingsModalBtnPrimary({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`${btnBase} rounded-[var(--radius-input)] bg-[color:var(--accent)] text-[#1D1613] hover:brightness-105 ${className}`}
+      className={`${btnBase} rounded-[var(--radius-input)] bg-[color:var(--accent)] text-[color:var(--rf-on-accent)] hover:brightness-105 ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Destructive primary: deletes and anything else that cannot be taken back with one click. */
+export function SettingsModalBtnDanger({
+  children,
+  onClick,
+  disabled,
+  className = "",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`${btnBase} rounded-[var(--radius-input)] bg-red-500/90 text-stone-100 hover:brightness-110 ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+const MUSIC_BTN = {
+  primary:
+    "h-10 rounded-full bg-[#ff0033] px-6 text-sm font-bold text-white transition-[filter,transform] hover:brightness-110 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40",
+  secondary:
+    "h-10 rounded-full px-5 text-sm font-bold text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white",
+} as const;
+
+/** Footer buttons for `theme="music"` dialogs: Spotify's red pill and a quiet text pill. */
+export function MusicModalBtn({
+  variant = "secondary",
+  children,
+  onClick,
+  disabled,
+  type = "button",
+  form,
+  className,
+}: {
+  variant?: keyof typeof MUSIC_BTN;
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  type?: "button" | "submit";
+  form?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type={type}
+      form={form}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(MUSIC_BTN[variant], className)}
     >
       {children}
     </button>
@@ -323,7 +388,7 @@ export function SettingsModalTextInput({
       placeholder={placeholder}
       disabled={disabled}
       autoFocus={autoFocus}
-      className="w-full rounded-xl bg-[#261d18] px-4 py-3.5 text-[15px] font-medium text-stone-100 outline-none placeholder:text-stone-600 placeholder:font-normal focus:bg-[#2a211c] transition-colors disabled:opacity-50"
+      className="w-full rounded-xl bg-[color:var(--rf-field)] px-4 py-3.5 text-[15px] font-medium text-stone-100 outline-none placeholder:text-stone-600 placeholder:font-normal focus:bg-[color:var(--rf-field-raised)] transition-colors disabled:opacity-50"
     />
   );
 }

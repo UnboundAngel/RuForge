@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { creatorFiles, creatorMeta, creatorPlaylists, creatorSections, creatorTabs } from "./creatorSections";
 import type { FeedVideo } from "./youtubeFeed";
 
-const video = (id: string, viewCount: number | null = null, short = false): FeedVideo => ({
+const video = (id: string, viewCount: number | null = null): FeedVideo => ({
   videoId: id,
   title: id,
   url: `https://www.youtube.com/watch?v=${id}`,
@@ -13,12 +13,11 @@ const video = (id: string, viewCount: number | null = null, short = false): Feed
   duration: null,
   viewCount,
   timestamp: null,
-  short,
 });
 
 describe("creatorSections", () => {
-  it("drops downloads and Shorts, and ranks popular by views", () => {
-    const recent = [video("a", 10), video("b", 500), video("own", 9000), video("s", 1e6, true), video("c", 80)];
+  it("drops downloads and ranks popular by views", () => {
+    const recent = [video("a", 10), video("b", 500), video("own", 9000), video("c", 80)];
     const out = creatorSections(recent, [video("w"), video("w"), video("own")], new Set(["own"]));
     expect(out.uploads.map((v) => v.videoId)).toEqual(["a", "b", "c"]);
     expect(out.latest.map((v) => v.videoId)).toEqual(["a", "b", "c"]);

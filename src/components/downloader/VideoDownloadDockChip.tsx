@@ -5,11 +5,12 @@ import { useMusicDownloadCelebrations } from "@/hooks/useMusicDownloadCelebratio
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { RadialNavIcon } from "@/components/navigation/RadialNavIcon";
-import { downloadShortcutLabel } from "@/lib/shortcutLabels";
+import { useHotkeyLabel } from "@/hooks/useHotkeys";
 import { extractYouTubeVideoId } from "@/youtubeUrl";
+import { newestPendingArrival, useLibraryArrivals } from "@/components/library/libraryArrivals";
 
-const SIZE = 44;
-const THUMB = 32;
+const SIZE = 40;
+const THUMB = 29;
 const STROKE = 2.5;
 
 function jobThumb(job: DownloadJob | undefined, url: string): string | null {
@@ -35,6 +36,7 @@ export function VideoDownloadRailButton({
   onToggle,
 }: VideoDownloadRailButtonProps) {
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
+  const downloadKey = useHotkeyLabel("library.toggleDownloader") ?? undefined;
   const celebrating = useMusicDownloadCelebrations(downloadJobs);
   const activeJobs = useMemo(
     () =>
@@ -46,26 +48,34 @@ export function VideoDownloadRailButton({
       ),
     [downloadJobs],
   );
-  const hasWork = activeJobs.length > 0 || celebrating != null;
+  const arrivals = useLibraryArrivals((s) => s.arrivals);
+  // A finished download holds the chip until its card is on screen, so the flight has a chip to leave from.
+  const waiting = useMemo(
+    () => (activeJobs.length === 0 && celebrating == null ? newestPendingArrival(arrivals) : null),
+    [activeJobs.length, celebrating, arrivals],
+  );
+  const hasWork = activeJobs.length > 0 || celebrating != null || waiting != null;
   const showChip = hasWork && !overlayOpen;
   const activeJob =
     activeJobs.find((j) => j.status === "downloading") ??
     activeJobs.find((j) => j.status === "queued") ??
     activeJobs[0];
-  const title =
-    celebrating?.title ??
-    activeJob?.metadata?.title ??
-    activeJob?.title ??
-    "Downloading";
-  const thumbnail = jobThumb(
-    activeJob,
-    celebrating?.url ?? activeJob?.url ?? "",
-  );
-  const pct = celebrating
-    ? celebrating.kind === "complete" || celebrating.kind === "cancel"
-      ? 100
-      : clampPct(celebrating.startPct ?? 0)
-    : clampPct(activeJob?.progress?.percentage ?? 0);
+  const title = waiting
+    ? (waiting.arrival.title ?? "Download finished")
+    : (celebrating?.title ??
+      activeJob?.metadata?.title ??
+      activeJob?.title ??
+      "Downloading");
+  const thumbnail = waiting
+    ? waiting.arrival.thumbnail
+    : jobThumb(activeJob, celebrating?.url ?? activeJob?.url ?? "");
+  const pct = waiting
+    ? 100
+    : celebrating
+      ? celebrating.kind === "complete" || celebrating.kind === "cancel"
+        ? 100
+        : clampPct(celebrating.startPct ?? 0)
+      : clampPct(activeJob?.progress?.percentage ?? 0);
   const indeterminate =
     !celebrating &&
     !!activeJob &&
@@ -77,7 +87,7 @@ export function VideoDownloadRailButton({
   const r = (SIZE - STROKE) / 2 - 1;
   const c = 2 * Math.PI * r;
   const dash = indeterminate ? c * 0.28 : (pct / 100) * c;
-  const count = activeJobs.length;
+  const count = waiting ? waiting.count : activeJobs.length;
 
   if (showChip) {
     return (
@@ -86,14 +96,14 @@ export function VideoDownloadRailButton({
         data-rail-tab="downloader"
         data-tooltip="Expand downloads"
         data-tooltip-side="right"
-        data-tooltip-shortcut={downloadShortcutLabel()}
+        data-tooltip-shortcut={downloadKey}
         onClick={onToggle}
         disabled={disabled}
         aria-label={`${title}. Expand preview.`}
-        className="group/rail relative flex h-11 w-11 items-center justify-center rounded-xl text-[color:var(--accent)]"
+        className="group/rail relative flex h-[var(--rf-rail-btn)] w-[var(--rf-rail-btn)] items-center justify-center rounded-xl text-[color:var(--accent)]"
       >
         <span
-          className="relative flex items-center justify-center overflow-hidden rounded-full bg-[#1D1613]"
+          className="relative flex items-center justify-center overflow-hidden rounded-full bg-[color:var(--rf-surface-deep)]"
           style={{ width: THUMB, height: THUMB }}
         >
           {thumbnail ? (
@@ -143,13 +153,13 @@ export function VideoDownloadRailButton({
       data-rail-tab="downloader"
       data-tooltip="Download"
       data-tooltip-side="right"
-      data-tooltip-shortcut={downloadShortcutLabel()}
+      data-tooltip-shortcut={downloadKey}
       onClick={onToggle}
       disabled={disabled}
       aria-label="Download"
       aria-current={overlayOpen ? "page" : undefined}
       className={cn(
-        "group/rail relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-150",
+        "group/rail relative flex h-[var(--rf-rail-btn)] w-[var(--rf-rail-btn)] items-center justify-center rounded-xl transition-colors duration-150",
         overlayOpen
           ? "text-[color:var(--accent)]"
           : "text-stone-500 hover:text-stone-200",

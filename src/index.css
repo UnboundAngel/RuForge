@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @source not "../website";
 @source not "../docs";
+@source not "../scripts";
+@source not "../**/*.{md,mdc,txt,jsonl}";
 
 @font-face {
   font-family: "Patrick Hand";
@@ -50,6 +52,39 @@
   animation: marquee 22s linear infinite;
 }
 
+/* Ping-pong timing is driven from VideoByline.tsx (MarqueeLine); these only declare the animatable fade edges. */
+@property --rf-ping-pong-fade-l {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --rf-ping-pong-fade-r {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* Same soft clip as .rf-marquee-fade-left, but only on the side that still has hidden text. */
+.rf-ping-pong-fade {
+  --rf-ping-pong-fade-r: 0.5rem;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--rf-ping-pong-fade-l),
+    #000 calc(100% - var(--rf-ping-pong-fade-r)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--rf-ping-pong-fade-l),
+    #000 calc(100% - var(--rf-ping-pong-fade-r)),
+    transparent 100%
+  );
+}
+
+
 @keyframes rf-download-card-shimmer {
   0% {
     background-position: 200% 0;
@@ -90,6 +125,21 @@
   animation: rf-download-progress-indeterminate 1.15s ease-in-out infinite;
 }
 
+/* Glance: the content well sinks inward so the bezel reads as a wider frame around the page. */
+.rf-main-content-shell {
+  transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-glance] .rf-main-content-shell {
+  transform: scale(0.965);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-main-content-shell {
+    transition: none;
+  }
+}
+
 @keyframes rf-download-progress-pulse {
   0%,
   100% {
@@ -117,6 +167,20 @@
   }
 }
 
+/*
+ * Rounded media frame. overflow:hidden + border-radius clips every child on its own with
+ * anti-aliased edges, so art under a scrim, strip or progress track leaks through the
+ * bottom corners as light notches. One clip-path over a single filtered group clips the
+ * flattened result once. The Tailwind filter vars keep grayscale/brightness utilities
+ * working on the same element. clip-path also clips box-shadow: put shadows on a wrapper.
+ */
+.rf-art-clip {
+  clip-path: inset(0 round var(--rf-art-r, 16px));
+  filter: var(--tw-blur,) var(--tw-brightness,) var(--tw-contrast,) var(--tw-grayscale,)
+    var(--tw-hue-rotate,) var(--tw-invert,) var(--tw-saturate,) var(--tw-sepia,)
+    var(--tw-drop-shadow,) opacity(1);
+}
+
 /* Soft clip only — no painted overlay (overlays mismatch menu / hover tints). */
 .rf-marquee-fade-left {
   mask-image: linear-gradient(
@@ -135,25 +199,42 @@
   );
 }
 
+/* App density (Settings, Appearance). Registered so the switch interpolates; index.html sets the attribute before
+   first paint so launch does not morph. This is a one-off layout morph, which is why it is allowed to move layout. */
+@property --rf-density {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+html {
+  --rf-density: 0;
+  transition: --rf-density 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-rf-density="compact"] {
+  --rf-density: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { transition: none; }
+}
+
 :root {
-  --color-media-page: #141414;
-  --color-media-panel: #1e1c1b;
-  --color-media-card: #262321;
-  --bg: #1c1512;
-  /* Near-neutral so thumbnails carry the color; the bezel stays brand brown. */
-  --rf-well: #151211;
-  --rf-well-raised: #201c1a;
+  --color-media-page: #121212;
+  --color-media-panel: #1a1a1a;
+  --color-media-card: #242424;
+  --bg: #0a0a0a;
+  --rf-well: #121212;
+  --rf-well-raised: #1a1a1a;
   /* Lighter than both bezel and well so a floating panel separates from the page behind it. */
-  --rf-popover-bg: #322620;
-  --rf-popover-raised: rgb(255 255 255 / 0.06);
-  --surface: rgba(43, 30, 25, 0.7);
-  --surface-elevated: rgba(56, 39, 32, 0.85);
-  --border: rgba(212, 163, 115, 0.1);
+  --rf-popover-bg: #282828;
+  --rf-popover-raised: rgb(255 255 255 / 0.08);
   /* Synced from RuForge settings (see `accentCss.ts`); defaults to sand gold */
   --accent: #EDCF9B;
   --accent-glow: rgba(237, 207, 155, 0.28);
   --text: #fafaf9;
-  --text-muted: #a8a29e;
+  --text-muted: #a3a3a3;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --font-hand: "Patrick Hand", cursive;
   --font-display: "Cabinet Grotesk", Inter, system-ui, sans-serif;
@@ -162,18 +243,84 @@
   --radius-card: 20px;
   --radius-modal: 24px;
   --radius-pill: 999px;
-  --rf-titlebar-h: 48px;
+  /* Cozy 0 to Compact 1. Every density-sized token derives from this so a switch morphs instead of snapping.
+     Cozy is the pre-black-theme chrome (48px band, 56px rail); Compact is the slimmer chrome that came with it. */
+  --rf-titlebar-h: calc(48px - 6px * var(--rf-density));
+  /* The in-app island is 36px tall in both densities; this centers it in the band. */
+  --rf-island-top: calc((var(--rf-titlebar-h) - 36px) / 2);
+  /* Pills and round buttons that sit in the title band (Music Home + search). */
+  --rf-titlebar-ctl-h: 36px;
+  --rf-rail-w: calc(56px - 12px * var(--rf-density));
+  --rf-rail-btn: calc(44px - 4px * var(--rf-density));
+  --rf-rail-logo: calc(32px - 6px * var(--rf-density));
   /* Tab bulge strip: title band + label row (media/settings). */
   --rf-tab-chrome-h: 40px;
   --rf-tab-strip-h: calc(var(--rf-titlebar-h) + var(--rf-tab-chrome-h));
   --rf-window-outer-radius: 12px;
   /* MusicTopBar search pill; the Music island slot is laid out against it. */
   --rf-music-search-w: min(420px, 32vw);
-  /* Activity island shell: darker espresso pocket on #271C18 chrome (portal sets data-rf-nav-mode). */
-  --rf-island-shell-media: #181210;
-  --rf-island-shell-music: #000000;
+  /* Activity island shell (the in-app portal and the overlay both set data-rf-nav-mode). */
+  --rf-island-shell-media: #121212;
+  --rf-island-shell-music: #24080d;
   --rf-island-update-accent: 190 75 55;
   --rf-island-update-brown: 120 68 52;
+  /* Video mode window chrome (title band, rail, tab bulges). */
+  --rf-bezel: #000000;
+  /* Floating panels, drawers and dialog rims. */
+  --rf-surface: #181818;
+  /* Inner well of dialogs and dark chips. */
+  --rf-surface-deep: #121212;
+  --rf-field: #242424;
+  --rf-field-raised: #2e2e2e;
+  --rf-field-hover: #383838;
+  /* Text and glyphs sitting on the accent fill. */
+  --rf-on-accent: #0a0a0a;
+}
+
+/* "Legacy colors in video player": opt-in warm brown, video mode only. Set on <html> before first paint (index.html) so portals follow and nothing flashes. */
+html[data-rf-video-palette="legacy"] {
+  --bg: #1c1512;
+  --color-media-page: #141414;
+  --color-media-panel: #1e1c1b;
+  --color-media-card: #262321;
+  --rf-well: #151211;
+  --rf-well-raised: #201c1a;
+  --rf-popover-bg: #322620;
+  --rf-popover-raised: rgb(255 255 255 / 0.06);
+  --rf-island-shell-media: #181210;
+  --rf-bezel: #271C18;
+  --rf-surface: #271C18;
+  --rf-surface-deep: #1D1613;
+  --rf-field: #261d18;
+  --rf-field-raised: #322620;
+  --rf-field-hover: #3e2f27;
+  --rf-on-accent: #1D1613;
+  --text-muted: #a8a29e;
+}
+
+/* Tailwind's warm stone ramp stays only for legacy. */
+html:not([data-rf-video-palette="legacy"]) {
+  --color-stone-50: oklch(98.5% 0 0);
+  --color-stone-100: oklch(97% 0 0);
+  --color-stone-200: oklch(92.2% 0 0);
+  --color-stone-300: oklch(87% 0 0);
+  --color-stone-400: oklch(70.8% 0 0);
+  --color-stone-500: oklch(55.6% 0 0);
+  --color-stone-600: oklch(43.9% 0 0);
+  --color-stone-700: oklch(37.1% 0 0);
+  --color-stone-800: oklch(26.9% 0 0);
+  --color-stone-900: oklch(20.5% 0 0);
+  --color-stone-950: oklch(14.5% 0 0);
+}
+
+/* Find bar matches (src/lib/findEngine.js). */
+::highlight(rf-find) {
+  background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+::highlight(rf-find-active) {
+  background-color: var(--accent);
+  color: var(--rf-on-accent, #0c0c0c);
 }
 
 html,
@@ -196,6 +343,11 @@ html[data-rf-window-rounded="1"] #rf-boot {
   border-radius: var(--rf-window-outer-radius);
   clip-path: inset(0 round var(--rf-window-outer-radius));
   overflow: hidden;
+}
+
+/* Mode switches swap this color; it eases with the outgoing shell (navShellFadeTransition) so the window never snaps. */
+.rf-main-window-shell {
+  transition: background-color 180ms cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 .rf-main-window-shell--rounded {
@@ -275,50 +427,6 @@ html[data-rf-window-rounded="1"] #rf-boot {
   height: 100%;
 }
 
-.glass {
-  background: var(--surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.glass-elevated {
-  background: var(--surface-elevated);
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
-  border: 1px solid rgba(212, 163, 115, 0.15);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-}
-
-.btn-pill {
-  border-radius: var(--radius-pill);
-  transition: all 250ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.btn-pill:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px var(--accent-glow);
-}
-
-.btn-pill:active {
-  transform: scale(0.97);
-}
-
-.input-modern {
-  border-radius: var(--radius-input);
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--border);
-  transition: all 200ms ease;
-}
-
-.input-modern:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-glow);
-  outline: none;
-}
-
 /* Text Selection */
 ::selection {
   background: var(--accent-glow);
@@ -341,6 +449,38 @@ html[data-rf-window-rounded="1"] #rf-boot {
 
 .controls-hidden .subtitle-overlay-host {
   padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Freeze-frame zoom (PlayerView / MiniPlayer): transform values come from useFreezeFrameZoom. */
+.freeze-zoom-viewport {
+  overflow: hidden;
+}
+
+.freeze-zoom-viewport[data-zoom="zoomed"] {
+  cursor: grab;
+}
+
+.freeze-zoom-viewport[data-zoom="dragging"] {
+  cursor: grabbing;
+}
+
+.freeze-zoom-media {
+  transform-origin: 0 0;
+  transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.freeze-zoom-media[data-zoom] {
+  cursor: inherit;
+}
+
+.freeze-zoom-media[data-zoom="dragging"] {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .freeze-zoom-media {
+    transition: none;
+  }
 }
 
 /* SponsorBlock skip button: anchor above player chrome, settle modestly when controls hide. */
@@ -400,7 +540,7 @@ html[data-rf-window-rounded="1"] #rf-boot {
   font-weight: 700;
   font-size: clamp(11px, 2.2vw + 0.45vmin, 22px);
   line-height: 1.35;
-  white-space: normal;
+  white-space: pre-line;
   overflow-wrap: anywhere;
   word-break: normal;
   overflow: visible;
@@ -451,7 +591,7 @@ html.ruforge-island-root #root {
 }
 
 .rf-notify-card {
-  background: rgb(39 28 24 / 0.62);
+  background: color-mix(in srgb, var(--rf-surface) 62%, transparent);
   backdrop-filter: blur(20px) saturate(1.15);
   -webkit-backdrop-filter: blur(20px) saturate(1.15);
   box-shadow:
@@ -467,14 +607,44 @@ html.ruforge-island-root #root {
   color: var(--text);
 }
 
+.rf-settings-dialog {
+  --rf-set-rim: #181818;
+  --rf-set-well: #121212;
+  --rf-set-field: #242424;
+  --rf-set-tabbar: #1a1a1a;
+  --rf-set-tab-active: #2a2a2a;
+  --rf-set-hover: #2a2a2a;
+  --rf-set-on-accent: #0a0a0a;
+}
+
+html[data-rf-video-palette="legacy"] .rf-settings-dialog {
+  --rf-set-rim: #271C18;
+  --rf-set-well: #1D1613;
+  --rf-set-field: #261d18;
+  --rf-set-tabbar: #221a16;
+  --rf-set-tab-active: #2c241f;
+  --rf-set-hover: #292524;
+  --rf-set-on-accent: #1D1613;
+}
+
+/* Opened over Music: Spotify-style neutral blacks, and the Music red stands in for the Library accent. */
+[data-music-mode="true"] .rf-settings-dialog {
+  --accent: var(--music-accent);
+  --rf-set-rim: #181818;
+  --rf-set-well: #121212;
+  --rf-set-field: #242424;
+  --rf-set-tabbar: #1a1a1a;
+  --rf-set-tab-active: #2a2a2a;
+  --rf-set-hover: #2a2a2a;
+  --rf-set-on-accent: #ffffff;
+}
+
 .rf-settings-shell {
-  background-color: #1d1613;
+  background-color: var(--rf-set-well);
 }
 
 .rf-settings-section + .rf-settings-section {
-  margin-top: 2.75rem;
-  padding-top: 1.75rem;
-  border-top: 1px solid rgb(255 255 255 / 0.04);
+  margin-top: 2.5rem;
 }
 
 .rf-settings-section:not(:has(.rf-settings-row)) {
@@ -546,7 +716,6 @@ html.ruforge-island-root #root {
   line-height: 1.35;
   transition: color 0.2s ease;
 }
-
 .rf-settings-row:hover .rf-settings-row-label h4.text-stone-400 {
   color: rgb(231 229 228);
 }
@@ -554,6 +723,155 @@ html.ruforge-island-root #root {
 .rf-settings-row-control {
   flex-shrink: 0;
   align-self: center;
+}
+
+.rf-hotkey-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.rf-hotkey-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0.25rem;
+  border-radius: 0.625rem;
+  background-color: var(--rf-set-tabbar);
+  color: rgb(168 162 158);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button.rf-hotkey-chip:hover {
+  background-color: var(--rf-set-hover);
+  color: rgb(231 229 228);
+}
+
+button.rf-hotkey-chip:active {
+  transform: scale(0.97);
+}
+
+.rf-hotkey-chip:focus-visible,
+.rf-hotkey-reset:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 45%);
+}
+
+.rf-hotkey-chip--static {
+  opacity: 0.7;
+}
+
+.rf-hotkey-chip--add {
+  justify-content: center;
+  min-width: 2rem;
+  padding: 0.25rem 0.5rem;
+  background-color: transparent;
+  opacity: 0;
+}
+
+.rf-settings-row:hover .rf-hotkey-chip--add,
+.rf-hotkey-chip--add:focus-visible,
+.rf-hotkey-chip--unset {
+  opacity: 1;
+}
+
+.rf-hotkey-chip--unset {
+  color: rgb(120 113 108);
+  font-weight: 500;
+}
+
+.rf-hotkey-chip--recording {
+  padding-right: 0.625rem;
+  background-color: var(--rf-set-tab-active);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 55%);
+}
+
+.rf-hotkey-recording-hint {
+  padding-left: 0.25rem;
+  color: var(--accent);
+  animation: rf-hotkey-recording-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes rf-hotkey-recording-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.rf-hotkey-cap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.4375rem;
+  border-radius: 0.4375rem;
+  background-color: var(--rf-set-field);
+  color: rgb(231 229 228);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.rf-hotkey-cap--mouse {
+  gap: 0.3125rem;
+  padding-left: 0.375rem;
+}
+
+.rf-hotkey-mouse {
+  width: 0.5625rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+}
+
+.rf-hotkey-mouse-body {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  opacity: 0.55;
+}
+
+.rf-hotkey-mouse-hit {
+  fill: currentColor;
+}
+
+.rf-hotkey-reset-slot {
+  display: inline-flex;
+  width: 1.75rem;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rf-hotkey-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  color: rgb(120 113 108);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.rf-hotkey-reset:hover {
+  color: var(--accent);
+  background-color: var(--rf-set-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-hotkey-recording-hint {
+    animation: none;
+  }
 }
 
 .rf-settings-tree-children {
@@ -596,49 +914,13 @@ html.ruforge-island-root #root {
 
 /* ── Sidebar nav (Claude-like flat list) ─────────────────────────────── */
 /* Same surface as `.rf-music-tooltip`. */
-.rf-radial-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 0.5rem;
-  background: #282828;
-  padding: 0.4375rem 0.625rem;
-  font-weight: 600;
-  line-height: 1.2;
-  color: rgb(255 255 255 / 0.95);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
-  white-space: nowrap;
-  pointer-events: none;
-}
-
-.rf-radial-hint {
-  font-size: 0.8125rem;
-  letter-spacing: 0.02em;
-}
-
-
 .rf-sidebar {
   z-index: 40;
   background-color: transparent;
   overflow: visible;
-  --rf-nav-item-py: 0.625rem;
-  --rf-nav-item-px: 0.75rem;
-  --rf-nav-item-gap: 0.75rem;
-  --rf-nav-icon-slot: 1.125rem;
   --rf-nav-label-size: 0.875rem;
   --rf-nav-label-weight: 500;
-  --rf-nav-default-color: rgb(120 113 108);
-  --rf-nav-hover-color: rgb(214 211 209);
-  --rf-nav-active-color: rgb(250 250 249);
-  --rf-nav-icon-default: rgb(87 83 78);
-  --rf-nav-icon-hover: rgb(168 162 158);
-  --rf-nav-icon-active: rgb(250 250 249);
-  --rf-nav-accent-bar: var(--accent);
 }
-
-/* Future theme hooks: set data-nav-mode on .rf-sidebar (youtube | movie | music). */
-/* [data-nav-mode="youtube"] { --rf-nav-accent-bar: #ff0000; } */
-/* [data-nav-mode="movie"]   { --rf-nav-active-color: ...; } */
 
 /* Music mode palette - applied to the full app shell in music mode. */
 [data-music-mode="true"] {
@@ -1048,61 +1330,6 @@ html.ruforge-island-root #root {
 }
 
 
-.rf-sidebar-nav-item {
-  gap: var(--rf-nav-item-gap);
-  padding: var(--rf-nav-item-py) var(--rf-nav-item-px);
-  color: var(--rf-nav-default-color);
-  transition: color 0.15s ease;
-  justify-content: flex-start;
-}
-
-.rf-sidebar-nav-icon-slot {
-  width: var(--rf-nav-icon-slot);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.rf-sidebar-nav-item:hover {
-  color: var(--rf-nav-hover-color);
-}
-
-.rf-sidebar-nav-item--active {
-  color: var(--rf-nav-active-color);
-}
-
-.rf-sidebar-nav-item--active:hover {
-  color: var(--rf-nav-active-color);
-}
-
-.rf-sidebar-nav-icon {
-  color: var(--rf-nav-icon-default);
-  transition: color 0.15s ease;
-}
-
-.rf-sidebar-nav-item:hover .rf-sidebar-nav-icon {
-  color: var(--rf-nav-icon-hover);
-}
-
-.rf-sidebar-nav-item--active .rf-sidebar-nav-icon {
-  color: var(--rf-nav-icon-active);
-}
-
-.rf-sidebar-nav-label {
-  font-size: var(--rf-nav-label-size);
-  font-weight: var(--rf-nav-label-weight);
-  letter-spacing: 0;
-  text-transform: none;
-  transition:
-    opacity 0.2s ease,
-    max-width 0.28s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.rf-sidebar-nav-accent {
-  background-color: var(--rf-nav-accent-bar);
-}
-
 .rf-sidebar-toggle-label {
   font-size: var(--rf-nav-label-size);
   font-weight: var(--rf-nav-label-weight);
@@ -1111,11 +1338,6 @@ html.ruforge-island-root #root {
   transition:
     opacity 0.2s ease,
     max-width 0.28s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-/* Inset vignette sits above scrollable content (child layers cover shell box-shadow). */
-.rf-main-content-vignette {
-  box-shadow: inset 4px 4px 18px rgba(0, 0, 0, 0.32);
 }
 
 .rf-chrome-column {
@@ -1230,7 +1452,116 @@ html.ruforge-island-root #root {
   opacity: 1;
 }
 
-.rf-profile-scroll-clip {
+/* Carousel arrow: chevron on a radial shade of the page's own hue, never a chip. */
+.rf-shelf-arrow {
+  color: #e7e5e4;
+}
+
+.rf-shelf-arrow:hover {
+  color: var(--accent);
+}
+
+.rf-shelf-arrow-shade {
+  background: radial-gradient(closest-side, rgb(18 13 11 / 0.85), transparent);
+}
+
+[data-music-mode="true"] .rf-shelf-arrow:hover {
+  color: var(--music-accent);
+}
+
+[data-music-mode="true"] .rf-shelf-arrow-shade {
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.85), transparent);
+}
+
+/* Library: warm pill with an accent-tinted action. Music: Spotify's grey pill, bold white action that reddens on hover. */
+.rf-toast {
+  border-radius: 12px;
+  background: var(--rf-field-raised);
+  color: #f5f5f4;
+}
+
+.rf-toast-action {
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--rf-field-raised));
+  color: var(--accent);
+}
+
+.rf-toast-action:hover {
+  filter: brightness(1.25);
+}
+
+[data-music-mode="true"] .rf-toast {
+  border-radius: 8px;
+  background: #2a2a2a;
+  color: #fff;
+}
+
+[data-music-mode="true"] .rf-toast-action {
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+}
+
+[data-music-mode="true"] .rf-toast-action:hover {
+  filter: none;
+  color: var(--music-accent);
+}
+
+/* Ghost HUD has no plate behind it; the shadow is the only thing keeping it legible over bright games. */
+.rf-ghost-readout {
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.8);
+}
+
+/* Same 1px dark underline as the readout, so the hairline holds up over sky and snow. */
+.rf-ghost-edge {
+  filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.55));
+}
+
+/* Matches the ~250ms timeupdate cadence so the fill glides instead of stepping. */
+.rf-ghost-edge-fill {
+  transition: transform 250ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-ghost-edge-fill {
+    transition: none;
+  }
+}
+
+/* Tonal fills only (no engraving). Library: accent tint + accent knob. Music: Spotify's solid red track, white knob. */
+.rf-switch {
+  background: rgb(255 255 255 / 0.1);
+  transition: background-color 200ms;
+}
+
+.rf-switch[data-checked="true"] {
+  background: color-mix(in srgb, var(--accent), transparent 78%);
+}
+
+.rf-switch-knob {
+  background: #78716c;
+  transition: background-color 200ms;
+}
+
+.rf-switch[data-checked="true"] .rf-switch-knob {
+  background: var(--accent);
+}
+
+[data-music-mode="true"] .rf-switch {
+  background: rgb(255 255 255 / 0.16);
+}
+
+[data-music-mode="true"] .rf-switch[data-checked="true"] {
+  background: var(--music-accent);
+}
+
+[data-music-mode="true"] .rf-switch-knob,
+[data-music-mode="true"] .rf-switch[data-checked="true"] .rf-switch-knob {
+  background: #fff;
+}
+
+.rf-squish-scroll-clip {
   -webkit-mask-image: linear-gradient(to right, #000, #000);
   mask-image: linear-gradient(to right, #000, #000);
   transition:
@@ -1238,17 +1569,17 @@ html.ruforge-island-root #root {
     mask-image 0.2s ease;
 }
 
-.rf-profile-scroll-clip[data-fade-right="true"]:not([data-fade-left="true"]) {
+.rf-squish-scroll-clip[data-fade-right="true"]:not([data-fade-left="true"]) {
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 32px), transparent 100%);
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 32px), transparent 100%);
 }
 
-.rf-profile-scroll-clip[data-fade-left="true"]:not([data-fade-right="true"]) {
+.rf-squish-scroll-clip[data-fade-left="true"]:not([data-fade-right="true"]) {
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 100%);
   mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 100%);
 }
 
-.rf-profile-scroll-clip[data-fade-left="true"][data-fade-right="true"] {
+.rf-squish-scroll-clip[data-fade-left="true"][data-fade-right="true"] {
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
   mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
 }
@@ -1292,14 +1623,6 @@ html.ruforge-island-root #root {
 
 .rf-music-history-toggle[data-active="false"]:hover {
   color: rgba(255, 255, 255, 0.58);
-}
-
-.rf-music-right-switch {
-  transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.rf-music-right-switch-thumb {
-  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Music mini pop-out (imports/miniplayer layout) */
@@ -1538,11 +1861,12 @@ button.rf-yt-profile-pill {
 }
 
 .rf-island-shell {
-  background-color: var(--rf-island-shell-media);
+  --rf-island-shell: var(--rf-island-shell-media);
+  background-color: var(--rf-island-shell);
 }
 
-.rf-activity-island-portal[data-rf-nav-mode="music"] .rf-island-shell {
-  background-color: var(--rf-island-shell-music);
+[data-rf-nav-mode="music"] .rf-island-shell {
+  --rf-island-shell: var(--rf-island-shell-music);
 }
 
 /* Music centers Home + search in the titlebar, so the island takes the gap between the logo and Home.
@@ -1553,11 +1877,73 @@ button.rf-yt-profile-pill {
   justify-content: safe center;
 }
 
-.rf-activity-island-portal[data-rf-nav-mode="music"][data-rf-island-empty="true"] {
-  opacity: 0;
+/* Video scrubber: a dark groove so buffered and unplayed read apart from the gold played fill on any frame. */
+.rf-scrub-groove {
+  background-color: rgb(0 0 0 / 0.55);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07);
 }
-.rf-activity-island-portal[data-rf-nav-mode="music"][data-rf-island-empty="true"] * {
-  pointer-events: none !important;
+.rf-scrub-buffered {
+  background-color: rgb(255 255 255 / 0.2);
+}
+.rf-scrub-hover {
+  background-color: rgb(255 255 255 / 0.14);
+}
+.rf-scrub-played {
+  background-color: var(--accent);
+}
+.rf-scrub-knob {
+  background-color: var(--accent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.55);
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), bottom 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rf-scrub-loop-band {
+  background-color: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.rf-scrub-loop-handle {
+  background-color: var(--accent);
+  box-shadow: 0 0 0 1.5px rgb(0 0 0 / 0.6);
+}
+.rf-scrub-heatmap {
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition: opacity 160ms ease-out, transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rf-scrub-heatmap[data-visible="true"] {
+  opacity: 1;
+  transform: scaleY(1);
+}
+.rf-scrub-heatmap__stop-top--rest {
+  stop-color: rgb(255 255 255 / 0.2);
+}
+.rf-scrub-heatmap__stop-bottom--rest {
+  stop-color: rgb(255 255 255 / 0.04);
+}
+.rf-scrub-heatmap__stop-top--played {
+  stop-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.rf-scrub-heatmap__stop-bottom--played {
+  stop-color: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.rf-scrub-heatmap__line--rest,
+.rf-scrub-heatmap__line--played {
+  fill: none;
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+}
+.rf-scrub-heatmap__line--rest {
+  stroke: rgb(255 255 255 / 0.42);
+}
+.rf-scrub-heatmap__line--played {
+  stroke: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rf-scrub-knob,
+  .rf-scrub-heatmap {
+    transition: none;
+  }
+  .rf-scrub-heatmap {
+    transform: none;
+  }
 }
 
 @property --rf-island-update-angle {
@@ -1617,16 +2003,6 @@ button.rf-yt-profile-pill {
   }
 }
 
-.rf-island-update-version-menu {
-  scrollbar-width: none;
-}
-
-.rf-island-update-version-menu::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
 /* Light catches the upper half of the waveform lens so it reads as liquid, not a flat cutout. */
 .rf-island-waveform-sheen {
   background: linear-gradient(to bottom, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0) 50%);
@@ -1646,10 +2022,28 @@ button.rf-yt-profile-pill {
   }
 }
 
+/* "Hide bars while a video plays" (Appearance): rail, title band controls and island fade while the player
+   grows into the window rim. Visibility waits for the fade so nothing stays clickable underneath. */
+.rf-autohide-chrome {
+  transition: opacity 220ms ease-out, visibility 0s linear 0s;
+}
+
+html[data-rf-chrome-hidden] .rf-autohide-chrome {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 220ms ease-out, visibility 0s linear 220ms;
+}
+
+/* Comments drawer sits on the player's pure black. Thread lines are a solid gray, not translucent white,
+   so segments that overlap at their joins do not paint darker or brighter. */
 .rf-comments-header {
   position: relative;
   z-index: 20;
-  background: #271c18;
+  background: #000;
+}
+
+:root {
+  --rf-comments-line: #2b2b2b;
 }
 
 .rf-comments-header::after {
@@ -1734,26 +2128,17 @@ button.rf-yt-profile-pill {
   }
 }
 
+/* Follows the active theme (black or legacy brown) and the user's accent; no fixed palette. */
 .rf-code-panel {
   overflow: hidden;
   border-radius: 0.625rem;
-  border: 1px solid rgb(237 215 156 / 0.08);
-  background: linear-gradient(180deg, #1a1412 0%, #0d0a09 100%);
-  box-shadow:
-    inset 0 1px 0 rgb(237 215 156 / 0.05),
-    0 1px 2px rgb(0 0 0 / 0.28);
+  background: var(--rf-surface);
 }
 
 .rf-code-panel__header-wrap {
   display: flex;
   align-items: stretch;
-  background: rgb(13 10 9 / 0.72);
-  box-shadow: inset 0 -1px 0 rgb(237 215 156 / 0);
-  transition: box-shadow 0.18s ease;
-}
-
-.rf-code-panel--open .rf-code-panel__header-wrap {
-  box-shadow: inset 0 -1px 0 rgb(237 215 156 / 0.08);
+  background: var(--rf-surface-deep);
 }
 
 .rf-code-panel__header {
@@ -1772,11 +2157,11 @@ button.rf-yt-profile-pill {
 }
 
 .rf-code-panel__header:hover {
-  background: rgb(22 17 15 / 0.92);
+  background: var(--rf-field);
 }
 
 .rf-code-panel__header:focus-visible {
-  outline: 2px solid rgb(237 215 156 / 0.32);
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   outline-offset: -2px;
 }
 
@@ -1793,15 +2178,15 @@ button.rf-yt-profile-pill {
 }
 
 .rf-code-panel__dir {
-  color: rgb(201 184 122 / 0.55);
+  color: var(--text-muted);
 }
 
 .rf-code-panel__name {
-  color: rgb(237 215 156 / 0.92);
+  color: var(--text);
 }
 
 .rf-code-panel__ext {
-  color: rgb(237 215 156 / 0.62);
+  color: var(--text-muted);
 }
 
 .rf-code-panel__aside {
@@ -1815,17 +2200,17 @@ button.rf-yt-profile-pill {
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   line-height: 1rem;
-  color: rgb(201 184 122 / 0.5);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .rf-code-panel__sep {
-  color: rgb(201 184 122 / 0.35);
+  color: color-mix(in srgb, var(--text-muted) 60%, transparent);
 }
 
 .rf-code-panel__chevron {
   flex-shrink: 0;
-  color: rgb(201 184 122 / 0.45);
+  color: var(--text-muted);
   opacity: 0.7;
   transition:
     transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1834,7 +2219,7 @@ button.rf-yt-profile-pill {
 }
 
 .rf-code-panel__header:hover .rf-code-panel__chevron {
-  color: rgb(237 215 156 / 0.55);
+  color: var(--text);
   opacity: 1;
 }
 
@@ -1849,9 +2234,8 @@ button.rf-yt-profile-pill {
   justify-content: center;
   width: 2rem;
   border: 0;
-  border-left: 1px solid rgb(237 215 156 / 0.06);
   background: transparent;
-  color: rgb(201 184 122 / 0.45);
+  color: var(--text-muted);
   cursor: pointer;
   transition:
     color 0.18s ease,
@@ -1859,12 +2243,12 @@ button.rf-yt-profile-pill {
 }
 
 .rf-code-panel__copy:hover {
-  color: rgb(237 215 156 / 0.72);
-  background: rgb(22 17 15 / 0.55);
+  color: var(--text);
+  background: var(--rf-field);
 }
 
 .rf-code-panel__copy:focus-visible {
-  outline: 2px solid rgb(237 215 156 / 0.32);
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   outline-offset: -2px;
 }
 
@@ -1897,7 +2281,7 @@ button.rf-yt-profile-pill {
   margin: 0 0 0.75rem;
   font-size: 0.75rem;
   line-height: 1.5;
-  color: rgb(201 184 122 / 0.72);
+  color: var(--text-muted);
 }
 
 .rf-code-panel:not(.rf-code-panel--open) .rf-code-panel__code {
@@ -1927,32 +2311,32 @@ button.rf-yt-profile-pill {
   display: block;
   white-space: pre-wrap;
   word-break: break-word;
-  color: rgb(237 215 156 / 0.9);
+  color: color-mix(in srgb, var(--text) 90%, transparent);
 }
 
 .rf-crash-hl-kw {
-  color: #c9956a;
+  color: var(--accent);
   font-weight: 600;
 }
 
 .rf-crash-hl-fn {
-  color: #e8c078;
+  color: color-mix(in srgb, var(--accent) 70%, var(--text));
 }
 
 .rf-crash-hl-path {
-  color: rgb(237 215 156 / 0.82);
+  color: color-mix(in srgb, var(--text) 82%, transparent);
 }
 
 .rf-crash-hl-num {
-  color: #b8894f;
+  color: color-mix(in srgb, var(--accent) 60%, var(--text-muted));
 }
 
 .rf-crash-hl-str {
-  color: #d4a373;
+  color: color-mix(in srgb, var(--accent) 45%, var(--text));
 }
 
 .rf-crash-hl-muted {
-  color: rgb(201 184 122 / 0.62);
+  color: var(--text-muted);
 }
 
 .rf-crash-details-action {
@@ -1962,8 +2346,8 @@ button.rf-yt-profile-pill {
   padding: 0.3125rem 0.625rem;
   border: 0;
   border-radius: var(--radius-pill);
-  background: rgb(13 10 9 / 0.55);
-  color: rgb(201 184 122 / 0.72);
+  background: var(--rf-surface-deep);
+  color: var(--text-muted);
   font-size: 0.6875rem;
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -1975,8 +2359,8 @@ button.rf-yt-profile-pill {
 }
 
 .rf-crash-details-action:hover {
-  color: rgb(237 215 156 / 0.92);
-  background: rgb(22 17 15 / 0.88);
+  color: var(--text);
+  background: var(--rf-field);
 }
 
 .rf-crash-details-action:active {
@@ -1984,11 +2368,11 @@ button.rf-yt-profile-pill {
 }
 
 .rf-crash-details-action--accent {
-  color: rgb(237 215 156 / 0.88);
+  color: var(--accent);
 }
 
 .rf-crash-details-action:focus-visible {
-  outline: 2px solid rgb(237 215 156 / 0.32);
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   outline-offset: 2px;
 }
 
@@ -2083,14 +2467,11 @@ button.rf-yt-profile-pill {
     color-mix(in srgb, var(--accent) 88%, #fff 12%),
     var(--accent)
   );
-  color: #110d0b;
+  color: var(--rf-on-accent);
   font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.18),
-    0 10px 28px rgb(0 0 0 / 0.28);
   transition:
     transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     filter 0.18s ease;
@@ -2105,7 +2486,7 @@ button.rf-yt-profile-pill {
 }
 
 .rf-crash-reload-btn:focus-visible {
-  outline: 2px solid rgb(237 215 156 / 0.45);
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 3px;
 }
 

@@ -21,6 +21,8 @@ function clamp(n: number, min: number, max: number) {
 }
 
 function hideThumb(thumb: HTMLElement) {
+  // Parked at the top so the next layout() has nothing to reset (and no style to invalidate).
+  thumb.style.transform = "none";
   thumb.style.opacity = "0";
   thumb.style.visibility = "hidden";
   thumb.style.pointerEvents = "none";
@@ -66,7 +68,7 @@ function bindRfScrollbar(el: HTMLElement) {
   const layout = () => {
     // A translated thumb counts as scrollable overflow, so parked at the bottom it would keep
     // the old scroll height alive after the content shrinks. Park it at the top to measure.
-    thumb.style.transform = "none";
+    if (thumb.style.transform !== "none") thumb.style.transform = "none";
     const { scrollTop, scrollHeight, clientHeight } = el;
     if (clientHeight <= 0) {
       hideThumb(thumb);
@@ -177,33 +179,57 @@ function unbindRfScrollbar(el: HTMLElement) {
 }
 
 export function startRfScrollbars(root: ParentNode = document.body): () => void {
-  const scan = () => {
+  const dirty = new Set<Node>();
+
+  const scan = (all: boolean) => {
     for (const el of [...boundEls]) {
       if (!el.isConnected || !el.classList.contains("rf-scrollbar")) unbindRfScrollbar(el);
     }
+    // Kids may have grown after bind, so remeasure overflow, but only in scrollers that hold a
+    // mutation: every layout() forces a reflow, and box resizes are already caught by the ResizeObserver.
+    const touched = new Set<HTMLElement>();
+    if (!all) {
+      for (const node of dirty) {
+        for (let n: Node | null = node; n; n = n.parentNode) {
+          if (boundEls.has(n as HTMLElement)) touched.add(n as HTMLElement);
+        }
+      }
+    }
+    dirty.clear();
     root.querySelectorAll<HTMLElement>(".rf-scrollbar").forEach((el) => {
       if (!el.isConnected) return;
       const existing = bound.get(el);
       if (existing) {
-        // Kids may have grown after bind — remeasure overflow.
-        existing.layout();
+        if (all || touched.has(el)) existing.layout();
         return;
       }
       bindRfScrollbar(el);
     });
   };
 
-  const mo = new MutationObserver(scan);
+  // Mutations arrive in bursts, so coalesce to one scan per frame.
+  let scanFrame = 0;
+  const scheduleScan = (records: MutationRecord[]) => {
+    for (const r of records) dirty.add(r.target);
+    if (scanFrame) return;
+    scanFrame = requestAnimationFrame(() => {
+      scanFrame = 0;
+      scan(false);
+    });
+  };
+
+  const mo = new MutationObserver(scheduleScan);
   mo.observe(root, {
     childList: true,
     subtree: true,
     attributes: true,
     attributeFilter: ["class"],
   });
-  scan();
+  scan(true);
 
   return () => {
     mo.disconnect();
+    if (scanFrame) cancelAnimationFrame(scanFrame);
     for (const el of [...boundEls]) unbindRfScrollbar(el);
   };
 }

@@ -19,7 +19,7 @@ const loginTrust = landingLoginTrust('');
 ---
 
 <BaseLayout
-  title="RuForge: Open-source media library for Windows"
+  title="RuForge: free yt-dlp GUI and media library for Windows"
   description={SITE.description}
   flushTop
   jsonLd={[softwareApplicationSchema(), organizationSchema()]}
@@ -97,6 +97,22 @@ const loginTrust = landingLoginTrust('');
     </section>
 
     <LandingFeaturesSection />
+
+    <section class="rf-container pb-8 scroll-reveal" aria-labelledby="games-teaser-heading">
+      <div class="rounded-3xl border border-rf-border/40 bg-rf-surface p-10 md:p-14">
+        <div class="max-w-xl space-y-4">
+          <p class="inline-block rounded-full border border-rf-border/60 bg-rf-bg px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-rf-accent">
+            Coming soon
+          </p>
+          <h2 id="games-teaser-heading" class="font-display text-3xl font-bold tracking-tight text-rf-text leading-tight">
+            Games mode
+          </h2>
+          <p class="text-base leading-relaxed text-rf-text-muted/90">
+            A home for the games you play: their guides and videos in one place, and a mini player that stays out of your way while you're in game.
+          </p>
+        </div>
+      </div>
+    </section>
 
     {/* High-Fidelity Rich Highlight Card at Bottom */}
     <section class="rf-container pb-4 scroll-reveal">

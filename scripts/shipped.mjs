@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const logPath = join(repoRoot, 'docs/agents/release/shipped.jsonl');
+const gamesLogPath = join(repoRoot, 'docs/agents/release/shipped-games.jsonl');
 const statePath = join(repoRoot, 'STATE.md');
 const DEFAULT_ENTRY = '.shipped-entry.txt';
 const FILE_RE = /(?:[/\\]|\.(?:ts|tsx|rs|js|mjs|css|md|json|astro|toml))$/i;
@@ -13,6 +14,9 @@ function usage(exit = 1) {
   console.error(`Write ${DEFAULT_ENTRY} then:
 node scripts/shipped.mjs add
 node scripts/shipped.mjs amend
+node scripts/shipped.mjs add --games   (private Games log, same format)
+node scripts/shipped.mjs retag 0.6.2 0.7.0
+node scripts/shipped.mjs park Games   (move unreleased rows of an area to the Games log)
 node scripts/shipped.mjs find sponsorblock
 node scripts/shipped.mjs list`);
   process.exit(exit);
@@ -117,8 +121,9 @@ function consumeEntry(path) {
   }
 }
 
-function cmdAdd(arg) {
+function cmdAdd(arg, games) {
   const { path, parsed } = readEntryFile(arg);
+  const target = games ? gamesLogPath : logPath;
   const row = {
     v: shippingVersion(),
     area: parsed.area,
@@ -127,10 +132,10 @@ function cmdAdd(arg) {
     at: today(),
   };
   // Editors that save without a final newline would glue this row onto the last one.
-  const existing = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '';
+  const existing = existsSync(target) ? readFileSync(target, 'utf8') : '';
   const lead = existing && !existing.endsWith('\n') ? '\n' : '';
-  appendFileSync(logPath, lead + JSON.stringify(row) + '\n', 'utf8');
-  bumpStateStamp();
+  appendFileSync(target, lead + JSON.stringify(row) + '\n', 'utf8');
+  if (!games) bumpStateStamp();
   consumeEntry(path);
   console.log(JSON.stringify(row));
 }
@@ -164,6 +169,25 @@ function cmdAmend(arg) {
   console.log('now', JSON.stringify(rows[idx]));
 }
 
+function cmdRetag(from, to) {
+  if (!from || !to) usage();
+  let n = 0;
+  const rows = readRows().map((row) => (row.v === from ? (n++, { ...row, v: to }) : row));
+  writeRows(rows);
+  console.log(`retagged ${n} rows ${from} -> ${to}`);
+}
+
+function cmdPark(area) {
+  if (!area) usage();
+  const v = shippingVersion();
+  const rows = readRows();
+  const moved = rows.filter((r) => r.v === v && String(r.area).toLowerCase() === area.toLowerCase());
+  if (!moved.length) return console.log('nothing to park');
+  writeRows(rows.filter((r) => !moved.includes(r)));
+  appendFileSync(gamesLogPath, moved.map((r) => JSON.stringify(r) + '\n').join(''), 'utf8');
+  console.log(`parked ${moved.length} rows in ${gamesLogPath}`);
+}
+
 function cmdFind(rest) {
   const q = rest.join(' ').trim().toLowerCase();
   if (!q) usage();
@@ -185,7 +209,9 @@ const argv = process.argv.slice(2);
 const cmd = argv[0];
 const rest = argv.slice(1);
 
-if (cmd === 'add') cmdAdd(rest[0]);
+if (cmd === 'add') cmdAdd(rest.find((a) => !a.startsWith('-')), rest.includes('--games'));
+else if (cmd === 'retag') cmdRetag(rest[0], rest[1]);
+else if (cmd === 'park') cmdPark(rest[0]);
 else if (cmd === 'amend') cmdAmend(rest[0]);
 else if (cmd === 'find' || cmd === 'search') cmdFind(rest);
 else if (cmd === 'list' || cmd === 'unreleased') cmdList();

@@ -115,8 +115,8 @@ const MAX_COMMENTS_SIDECAR_BYTES: u64 = 2 * 1024 * 1024;
 
 /// Read `{stem}.comments.json` for a library video (Rust I/O; avoids plugin-fs scope limits).
 #[tauri::command]
-pub fn read_video_comments_sidecar(media_path: String) -> Result<Option<String>, String> {
-    let media = PathBuf::from(&media_path);
+pub fn read_video_comments_sidecar(app: AppHandle, media_path: String) -> Result<Option<String>, String> {
+    let media = crate::library::path_access::allow_path(&app, &media_path)?;
     let candidates = comments_sidecar_candidate_paths(&media);
     for path in candidates {
         let meta = match std::fs::metadata(&path) {
@@ -196,7 +196,7 @@ pub async fn ensure_video_comments_sidecar(
     browser_cookies: Option<String>,
     cookie_file: Option<String>,
 ) -> Result<Option<String>, String> {
-    let media = PathBuf::from(&media_path);
+    let media = crate::library::path_access::allow_path(&app, &media_path)?;
     if let Some(raw) = read_sidecar_raw_from_disk(&media)? {
         return Ok(Some(raw));
     }

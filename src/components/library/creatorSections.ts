@@ -13,7 +13,7 @@ const SHELF_MAX = 18;
  * recent uploads by views: the channel tab can't be asked for YouTube's own Popular sort.
  */
 export function creatorSections(recent: FeedVideo[], watched: FeedVideo[], libraryIds: ReadonlySet<string>): CreatorSections {
-  const fresh = recent.filter((v) => !v.short && !libraryIds.has(v.videoId));
+  const fresh = recent.filter((v) => !libraryIds.has(v.videoId));
   const popular = fresh
     .filter((v) => v.viewCount != null)
     .sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0))
@@ -24,7 +24,7 @@ export function creatorSections(recent: FeedVideo[], watched: FeedVideo[], libra
     latest: fresh.slice(0, SHELF_MAX),
     popular: popular.length >= MIN_POPULAR ? popular : [],
     watched: watched
-      .filter((v) => !v.short && !libraryIds.has(v.videoId) && !seen.has(v.videoId) && seen.add(v.videoId))
+      .filter((v) => !libraryIds.has(v.videoId) && !seen.has(v.videoId) && seen.add(v.videoId))
       .slice(0, SHELF_MAX),
   };
 }

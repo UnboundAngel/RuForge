@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { Clock, MoreHorizontal } from "lucide-react";
 import type { MediaFile } from "@/types";
 import { bestCoverPath } from "@/mediaKind";
@@ -34,7 +34,7 @@ export function MusicQuickPickRow({
   variant = "gradient",
 }: Props) {
   const cover = bestCoverPath(file);
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localThumbSrc(cover) : null;
   const artist = artistLabel(file);
   const playingFile = useRuforgeStore((s) => s.playingFile);
   const playback = useOptionalMainAudioPlayback();

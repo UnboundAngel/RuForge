@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { bumpLocalImageGeneration } from "@/lib/localImageSrc";
 
 export type DeleteMediaResult = {
   removed: boolean;
@@ -7,5 +8,8 @@ export type DeleteMediaResult = {
 };
 
 export async function deleteMediaAtPath(videoPath: string): Promise<DeleteMediaResult> {
-  return invoke<DeleteMediaResult>("delete_media", { videoPath });
+  const result = await invoke<DeleteMediaResult>("delete_media", { videoPath });
+  // A re-download can write different art to the same cover paths.
+  bumpLocalImageGeneration();
+  return result;
 }

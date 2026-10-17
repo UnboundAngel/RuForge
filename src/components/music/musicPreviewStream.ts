@@ -1,5 +1,7 @@
 export type PreviewStream = {
   url: string;
+  /** Video previews only: `url` is silent and this stream carries the sound. */
+  audioUrl?: string | null;
   duration: number | null;
   expiresAt: number | null;
   hookStart: number | null;

@@ -22,7 +22,7 @@ export const SponsorBlockSkipButton: React.FC<SkipButtonProps> = ({ prompt, onCl
       exit={{ opacity: 0, y: offset }}
       transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
       onClick={onClick}
-      className="rf-sb-skip-btn pointer-events-auto absolute right-6 z-[56] flex select-none items-center gap-2.5 rounded-full bg-[#1D1613]/90 py-2 pl-3.5 pr-3 text-[12px] font-semibold text-stone-100 shadow-[0_10px_28px_rgba(0,0,0,0.45)] ring-1 ring-white/10 backdrop-blur-sm transition-colors hover:bg-[#271C18] active:scale-95 sm:right-8"
+      className="rf-sb-skip-btn pointer-events-auto absolute right-6 z-[56] flex select-none items-center gap-2.5 rounded-full bg-[color:var(--rf-surface-deep)]/90 py-2 pl-3.5 pr-3 text-[12px] font-semibold text-stone-100 shadow-[0_10px_28px_rgba(0,0,0,0.45)] ring-1 ring-white/10 backdrop-blur-sm transition-colors hover:bg-[color:var(--rf-surface)] active:scale-95 sm:right-8"
     >
       <SponsorBlockMiniScrubber category={prompt.category} />
       {prompt.label}

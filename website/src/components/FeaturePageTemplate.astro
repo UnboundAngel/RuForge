@@ -15,11 +15,12 @@ export interface FeatureSection {
 
 interface Props {
   title: string;
+  heading?: string;
   description: string;
   sections: FeatureSection[];
 }
 
-const { title, description, sections } = Astro.props;
+const { title, heading, description, sections } = Astro.props;
 ---
 
 <article class="feature-page rf-container">
@@ -33,7 +34,7 @@ const { title, description, sections } = Astro.props;
         <li class="feature-page__breadcrumb-current">{title}</li>
       </ol>
     </nav>
-    <h1 class="feature-page__title">{title}</h1>
+    <h1 class="feature-page__title">{heading ?? title}</h1>
     <p class="feature-page__desc">{description}</p>
   </header>
 

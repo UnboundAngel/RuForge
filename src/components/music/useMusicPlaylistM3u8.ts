@@ -10,7 +10,6 @@ import {
   playlistNameFromPath,
   serializeM3u8,
 } from "./musicPlaylistM3u8";
-import { showMusicToast } from "./musicToast";
 import { useMusicLibraryTracks } from "./useMusicPlaylists";
 
 const M3U_FILTERS = [{ name: "Playlist", extensions: ["m3u8", "m3u"] }];
@@ -26,9 +25,9 @@ export function useExportPlaylistM3u8() {
     const path = /\.m3u8?$/i.test(target) ? target : `${target}.m3u8`;
     try {
       await invoke("write_playlist_text_file", { path, contents: serializeM3u8(tracks, title) });
-      showMusicToast(`Exported ${title}`);
+      useRuforgeStore.getState().notify(`Exported ${title}`);
     } catch (e) {
-      showMusicToast(`Could not export: ${String(e)}`, "error");
+      useRuforgeStore.getState().notify(`Could not export: ${String(e)}`, "error");
     }
   }, []);
 }
@@ -45,17 +44,17 @@ export function useImportPlaylistM3u8() {
     try {
       text = await invoke<string>("read_playlist_text_file", { path });
     } catch (e) {
-      showMusicToast(`Could not read playlist: ${String(e)}`, "error");
+      useRuforgeStore.getState().notify(`Could not read playlist: ${String(e)}`, "error");
       return;
     }
     const parsed = parseM3u8(text, path);
     if (parsed.entries.length === 0) {
-      showMusicToast("That file has no songs in it", "warning");
+      useRuforgeStore.getState().notify("That file has no songs in it", "warning");
       return;
     }
     const { paths, unmatched } = matchM3u8Entries(parsed.entries, library);
     const title = parsed.name ?? playlistNameFromPath(path);
     openMusicPlaylist(createMusicPlaylist(paths, title));
-    showMusicToast(importSummary(title, paths.length, unmatched), unmatched > 0 ? "warning" : "info");
+    useRuforgeStore.getState().notify(importSummary(title, paths.length, unmatched), unmatched > 0 ? "warning" : "info");
   }, [createMusicPlaylist, openMusicPlaylist, library]);
 }

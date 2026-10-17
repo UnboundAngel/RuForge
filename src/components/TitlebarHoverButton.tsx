@@ -11,7 +11,7 @@ export const titlebarIconButtonClass =
 
 /** Log in chip in the titlebar. */
 export const titlebarLoginPillClassName =
-  "rf-yt-login-pill flex shrink-0 items-center justify-center rounded-lg border border-stone-500/25 bg-[#1D1613] px-3 text-[10px] font-semibold tracking-wide text-stone-200 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-[color,background-color,border-color,transform] duration-200 hover:border-stone-400/35 hover:bg-[#221a17] hover:text-stone-100 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:color-mix(in_srgb,var(--accent),transparent_45%)]";
+  "rf-yt-login-pill flex shrink-0 items-center justify-center rounded-lg border border-stone-500/25 bg-[color:var(--rf-surface-deep)] px-3 text-[10px] font-semibold tracking-wide text-stone-200 shadow-[0_8px_24px_rgba(0,0,0,0.35)] transition-[color,background-color,border-color,transform] duration-200 hover:border-stone-400/35 hover:bg-[color:var(--rf-field)] hover:text-stone-100 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[color:color-mix(in_srgb,var(--accent),transparent_45%)]";
 
 /** Title bar icon control: shared hover/focus treatment; tooltip via `data-tooltip`. */
 export function TitlebarHoverButton({

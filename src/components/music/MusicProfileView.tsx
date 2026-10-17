@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localImageSrc, localThumbSrc } from "@/lib/localImageSrc";
 import { ChevronLeft, Disc3, Heart, Music2, Play } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
@@ -28,9 +28,14 @@ import {
   type ListenStat,
   type TopArtistStat,
 } from "./musicListenStats";
+import {
+  refreshListenSnapshot,
+  useListenSnapshotReady,
+  useListenSnapshotRevision,
+} from "@/lib/musicListenSnapshot";
 import { musicQueueSource } from "./musicQueueSource";
 import { MusicRowContextMenu, type MusicRowContextMenuState } from "./MusicRowContextMenu";
-import { MusicEdgeSquishScroll } from "./MusicEdgeSquishScroll";
+import { EdgeSquishScroll } from "@/components/ui/EdgeSquishScroll";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -90,24 +95,36 @@ type GlanceStatProps = {
   value: string;
   hint?: string;
   labelTone?: string;
+  loading?: boolean;
   onClick?: () => void;
 };
 
-function GlanceStat({ label, value, hint, labelTone, onClick }: GlanceStatProps) {
-  const Tag = onClick ? "button" : "div";
+function StatPulse({ className }: { className: string }) {
+  return (
+    <span
+      className={cn("inline-block animate-pulse rounded-md", className)}
+      style={{ background: "rgba(255,255,255,0.1)" }}
+      aria-hidden
+    />
+  );
+}
+
+function GlanceStat({ label, value, hint, labelTone, loading, onClick }: GlanceStatProps) {
+  const Tag = onClick && !loading ? "button" : "div";
   return (
     <Tag
-      type={onClick ? "button" : undefined}
-      onClick={onClick}
+      type={onClick && !loading ? "button" : undefined}
+      onClick={loading ? undefined : onClick}
       className={cn(
         "flex flex-col items-center justify-center text-center gap-2.5 px-3 py-5 sm:px-4 sm:py-6 min-w-0 w-full rounded-[16px] transition-[background,transform] duration-150",
-        onClick && "hover:bg-white/[0.05] active:scale-[0.99] cursor-pointer",
+        onClick && !loading && "hover:bg-white/[0.05] active:scale-[0.99] cursor-pointer",
       )}
       style={{
-        background: onClick
+        background: onClick && !loading
           ? "color-mix(in srgb, var(--music-accent) 5%, var(--music-surface-raised) 95%)"
           : "color-mix(in srgb, var(--music-surface-raised) 72%, transparent)",
       }}
+      aria-busy={loading || undefined}
     >
       <span
         className="text-[11px] font-bold uppercase tracking-[0.14em] leading-none"
@@ -115,19 +132,40 @@ function GlanceStat({ label, value, hint, labelTone, onClick }: GlanceStatProps)
       >
         {label}
       </span>
+      {loading ? (
+        <StatPulse className="h-7 w-16 sm:w-20" />
+      ) : (
+        <span
+          className="text-2xl sm:text-[1.75rem] font-bold tabular-nums tracking-tight leading-none"
+          style={{ color: "var(--music-text-primary)" }}
+        >
+          {value}
+        </span>
+      )}
       <span
-        className="text-2xl sm:text-[1.75rem] font-bold tabular-nums tracking-tight leading-none"
-        style={{ color: "var(--music-text-primary)" }}
-      >
-        {value}
-      </span>
-      <span
-        className="text-xs leading-snug min-h-[1rem] max-w-[10rem]"
+        className="text-xs leading-snug min-h-[1rem] max-w-[10rem] flex items-center justify-center"
         style={{ color: "var(--music-text-muted)" }}
       >
-        {hint ?? "\u00a0"}
+        {loading ? <StatPulse className="h-3 w-14" /> : (hint ?? "\u00a0")}
       </span>
     </Tag>
+  );
+}
+
+function HighlightsLoading() {
+  return (
+    <ProfileScrollRow title="Your highlights">
+      {[0, 1].map((i) => (
+        <div key={i} className="flex flex-col gap-3 shrink-0 w-[8.5rem] sm:w-[9.5rem]" aria-hidden>
+          <StatPulse className={cn("w-full", i === 0 ? "aspect-square rounded-[var(--r-media,16px)]" : "h-[5.25rem] sm:h-[5.75rem] w-[5.25rem] sm:w-[5.75rem] rounded-full mx-auto")} />
+          <div className="px-0.5 flex flex-col gap-1.5 items-start">
+            <StatPulse className="h-2.5 w-14" />
+            <StatPulse className="h-3 w-24" />
+            <StatPulse className="h-2.5 w-20" />
+          </div>
+        </div>
+      ))}
+    </ProfileScrollRow>
   );
 }
 
@@ -135,9 +173,9 @@ function ProfileScrollRow({ title, children }: { title: string; children: ReactN
   return (
     <section>
       <SectionLabel>{title}</SectionLabel>
-      <MusicEdgeSquishScroll contentClassName="gap-5 sm:gap-6 pb-2">
+      <EdgeSquishScroll contentClassName="gap-5 sm:gap-6 pb-2">
         {children}
-      </MusicEdgeSquishScroll>
+      </EdgeSquishScroll>
     </section>
   );
 }
@@ -153,7 +191,7 @@ type SpotlightTrackProps = {
 function SpotlightTrack({ row, lookup, onPlay, onContextMenu, menuOpen }: SpotlightTrackProps) {
   const file = resolveStatFile(row, lookup);
   const cover = file ? bestCoverPath(file) : null;
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localImageSrc(cover) : null;
 
   return (
     <button
@@ -173,7 +211,7 @@ function SpotlightTrack({ row, lookup, onPlay, onContextMenu, menuOpen }: Spotli
     >
       <div className="aspect-square w-full flex items-center justify-center overflow-visible">
         <div
-          data-profile-scroll-cover
+          data-squish-cover
           className="relative w-full h-full overflow-hidden rounded-[var(--r-media,16px)] transition-transform duration-150 ease-out will-change-transform"
         >
         {coverSrc ? (
@@ -234,7 +272,7 @@ function SpotlightArtist({ row, lookup, onOpen, onContextMenu, menuOpen }: Spotl
     >
       <div className="flex items-center justify-center overflow-visible h-[5.25rem] sm:h-[5.75rem]">
         <div
-          data-profile-scroll-cover
+          data-squish-cover
           className="relative w-[5.25rem] h-[5.25rem] sm:w-[5.75rem] sm:h-[5.75rem] rounded-full overflow-hidden transition-transform duration-150 ease-out will-change-transform"
         >
           {tracks.length > 0 ? (
@@ -275,7 +313,7 @@ type RecentChipProps = {
 function RecentChip({ entry, lookup, onPlay, onContextMenu, menuOpen }: RecentChipProps) {
   const file = resolveStatFile(entry, lookup);
   const cover = file ? bestCoverPath(file) : null;
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localThumbSrc(cover) : null;
 
   return (
     <button
@@ -295,7 +333,7 @@ function RecentChip({ entry, lookup, onPlay, onContextMenu, menuOpen }: RecentCh
     >
       <div className="aspect-square w-full flex items-center justify-center overflow-visible">
         <div
-          data-profile-scroll-cover
+          data-squish-cover
           className="relative w-full h-full overflow-hidden rounded-[14px] transition-transform duration-150 ease-out will-change-transform"
         >
           {coverSrc ? (
@@ -340,6 +378,8 @@ export function MusicProfileView({ onBack }: Props) {
   const playMusicQueue = useRuforgeStore((s) => s.playMusicQueue);
   const playingPath = useRuforgeStore((s) => s.playingFile?.path);
   const lookup = useProfileMediaLookup();
+  const listenReady = useListenSnapshotReady();
+  const listenRevision = useListenSnapshotRevision();
   const [menu, setMenu] = useState<MusicRowContextMenuState | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -348,9 +388,14 @@ export function MusicProfileView({ onBack }: Props) {
     return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    void refreshListenSnapshot();
+  }, []);
+
   const snapshot = useMemo(() => {
     void tick;
     void playingPath;
+    void listenRevision;
     const week = getStatsSince(SEVEN_DAYS_MS);
     const likedFiles = resolveLikedFiles(lookup.audioFiles);
     return {
@@ -364,7 +409,7 @@ export function MusicProfileView({ onBack }: Props) {
       libraryCount: lookup.audioFiles.length,
       likedFiles,
     };
-  }, [lookup, playingPath, tick]);
+  }, [lookup, playingPath, tick, listenRevision]);
 
   const avatarUrl = profile ? sanitizeYoutubeAvatarUrl(profile.avatarUrl) : null;
   const handleLabel = formatYoutubeHandleLabel(profile) ?? youtubeProfileHoverLabel(profile);
@@ -437,7 +482,7 @@ export function MusicProfileView({ onBack }: Props) {
           <div
             className="absolute inset-0"
             style={{
-              backgroundImage: `url(${convertFileSrc(heroCover)})`,
+              backgroundImage: `url(${localImageSrc(heroCover)})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
               filter: "blur(14px) brightness(0.28)",
@@ -515,11 +560,13 @@ export function MusicProfileView({ onBack }: Props) {
               label="Listened"
               value={formatListenDuration(snapshot.allTimeListenSec)}
               hint={weekHint}
+              loading={!listenReady}
             />
             <GlanceStat
               label="Plays"
               value={snapshot.allTimePlays.toLocaleString()}
               hint={snapshot.week.playCount > 0 ? `${snapshot.week.playCount} this week` : undefined}
+              loading={!listenReady}
             />
             <GlanceStat
               label="Liked"
@@ -534,7 +581,9 @@ export function MusicProfileView({ onBack }: Props) {
           </div>
         </section>
 
-        {(snapshot.topTrack || snapshot.topArtist) && (
+        {!listenReady && <HighlightsLoading />}
+
+        {listenReady && (snapshot.topTrack || snapshot.topArtist) && (
           <ProfileScrollRow title="Your highlights">
               {snapshot.topTrack && (() => {
                 const topFile = resolveStatFile(snapshot.topTrack, lookup);
@@ -594,7 +643,7 @@ export function MusicProfileView({ onBack }: Props) {
               style={{ background: "color-mix(in srgb, var(--music-surface) 88%, transparent)" }}
             >
               <div className="w-[4.5rem] h-[4.5rem] shrink-0 overflow-hidden rounded-[16px]">
-                <LikedSongsCover files={snapshot.likedFiles} className="w-full h-full" />
+                <LikedSongsCover files={snapshot.likedFiles} className="w-full h-full" thumb />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold flex items-center gap-1.5" style={{ color: "var(--music-text-primary)" }}>
@@ -609,7 +658,7 @@ export function MusicProfileView({ onBack }: Props) {
           </section>
         )}
 
-        {snapshot.recent.length > 0 && (
+        {listenReady && snapshot.recent.length > 0 && (
           <ProfileScrollRow title="Recently played">
               {snapshot.recent.map((entry) => {
                 const file = resolveStatFile(entry, lookup);

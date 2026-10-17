@@ -15,6 +15,7 @@ const row = (title: string, state: ImportRow["state"]): ImportRow => ({
 const session = (over: Partial<SavedImportSession> = {}): SavedImportSession => ({
   phase: "review",
   name: "Late Night Drive",
+  targetId: null,
   rows: [row("A", "done"), row("B", "searching"), row("C", "waiting")],
   notes: ["1 overlapping row merged"],
   stopped: null,
@@ -30,6 +31,11 @@ describe("import session persistence", () => {
     expect(back?.rows.map((r) => r.state)).toEqual(["done", "waiting", "waiting"]);
     expect(back?.notes).toEqual(["1 overlapping row merged"]);
     expect(hasPendingSearches(back!.rows)).toBe(true);
+  });
+
+  it("remembers which playlist the import adds to", () => {
+    expect(restoreImportSession(serializeImportSession(session({ targetId: "pl-1" })))?.targetId).toBe("pl-1");
+    expect(restoreImportSession(serializeImportSession(session()))?.targetId).toBeNull();
   });
 
   it("keeps a paste-step draft on its own", () => {

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { FallbackImg } from "@/components/ui/FallbackImg";
 import { useScrollEdgeState } from "@/hooks/useScrollEdgeState";
 import {
   Check,
@@ -20,27 +21,21 @@ import {
 } from "./commentThreadUtils";
 
 function CommentAvatar({ user, avatar }: { user: string; avatar: string }) {
-  const [failed, setFailed] = useState(false);
   const initial = user.replace(/^@/, "").charAt(0).toUpperCase() || "?";
-
-  if (avatar && !failed) {
-    return (
-      <img
-        src={avatar}
-        alt={user}
-        onError={() => setFailed(true)}
-        className="mt-[2px] h-7 w-7 shrink-0 rounded-full bg-white/10 object-cover"
-      />
-    );
-  }
-
   return (
-    <div
-      className="mt-[2px] flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-media-card)] text-[11px] font-bold text-white/70"
-      aria-hidden
-    >
-      {initial}
-    </div>
+    <FallbackImg
+      src={avatar}
+      alt={user}
+      className="mt-[2px] h-7 w-7 shrink-0 rounded-full bg-white/10 object-cover"
+      fallback={(
+        <div
+          className="mt-[2px] flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:var(--color-media-card)] text-[11px] font-bold text-white/70"
+          aria-hidden
+        >
+          {initial}
+        </div>
+      )}
+    />
   );
 }
 
@@ -90,7 +85,7 @@ function ReactionButton({
 }) {
   const [active, setActive] = useState(false);
   const [trigger, setTrigger] = useState(0);
-  const activeColor = type === "up" ? "#38bdf8" : "#f87171";
+  const activeColor = type === "up" ? "var(--accent)" : "#f87171";
 
   const handleTap = () => {
     const nextActive = !active;
@@ -135,7 +130,7 @@ function ReactionButton({
 }
 
 const commentsFloatMenuClass =
-  "absolute right-0 top-full z-50 mt-1 min-w-[11rem] overflow-hidden rounded-2xl border border-white/10 bg-stone-950/95 py-1 shadow-2xl backdrop-blur-xl";
+  "absolute right-0 top-full z-50 mt-1 min-w-[11rem] overflow-hidden rounded-2xl bg-[color:var(--rf-popover-bg)] py-1 shadow-2xl";
 const commentsFloatItemClass =
   "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-[11px] font-bold outline-none transition-colors hover:bg-white/5";
 
@@ -261,7 +256,7 @@ export function FormattedText({ text }: { text: string }) {
     <p className="mb-1 whitespace-pre-wrap pr-2 text-[13.5px] font-medium leading-[1.45] text-white/90">
       {text.split(" ").map((word, i) =>
         word.startsWith("@") ? (
-          <span key={`${word}-${i}`} className="text-sky-400">
+          <span key={`${word}-${i}`} className="text-[color:var(--accent)]">
             {word}{" "}
           </span>
         ) : (
@@ -300,7 +295,7 @@ export function CommentThread({
         >
           <path
             d="M 0.75 0 V 20 Q 0.75 32 12.75 32 H 36"
-            stroke="rgba(255,255,255,0.15)"
+            stroke="var(--rf-comments-line)"
             strokeWidth="1.5"
           />
         </svg>
@@ -308,7 +303,7 @@ export function CommentThread({
 
       {depth > 0 && !isLast && (
         <div
-          className="pointer-events-none absolute border-l-[1.5px] border-white/[0.15]"
+          className="pointer-events-none absolute border-l-[1.5px] border-[color:var(--rf-comments-line)]"
           style={{ left: -21.75, top: 20, bottom: 0 }}
         />
       )}
@@ -329,20 +324,20 @@ export function CommentThread({
               data-tooltip="Collapse replies"
               aria-label="Collapse replies"
             >
-              <div className="h-full w-[1.5px] bg-white/[0.15] transition-all group-hover/thread:w-[2px] group-hover/thread:bg-sky-400" />
+              <div className="h-full w-[1.5px] bg-[color:var(--rf-comments-line)] transition-all group-hover/thread:w-[2px] group-hover/thread:bg-[color:var(--accent)]" />
             </button>
           )}
 
           {hasRepliesData && !showReplies && (
             <div
-              className="pointer-events-none absolute z-0 bg-white/[0.15] transition-colors group-hover/thread:bg-sky-400"
+              className="pointer-events-none absolute z-0 bg-[color:var(--rf-comments-line)] transition-colors group-hover/thread:bg-[color:var(--accent)]"
               style={{ left: 13.25, top: 31, bottom: 15, width: 1.5 }}
             />
           )}
 
           {hasRepliesData && !showReplies && (
             <svg
-              className="pointer-events-none absolute z-0 text-white/[0.15] transition-colors group-hover/thread:text-sky-400"
+              className="pointer-events-none absolute z-0 text-[color:var(--rf-comments-line)] transition-colors group-hover/thread:text-[color:var(--accent)]"
               style={{ left: 12.5, bottom: 0, height: 16 }}
               width="28"
               height="16"
@@ -383,7 +378,7 @@ export function CommentThread({
               <button
                 type="button"
                 onClick={() => setShowReplies(false)}
-                className="ml-1 flex cursor-pointer items-center gap-1 rounded-full border-none bg-transparent px-3 py-1.5 text-[12px] font-bold text-sky-400 outline-none transition-colors hover:bg-sky-400/10 hover:text-sky-300 focus:outline-none"
+                className="ml-1 flex cursor-pointer items-center gap-1 rounded-full border-none bg-transparent px-3 py-1.5 text-[12px] font-bold text-[color:var(--accent)] outline-none transition-colors hover:bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)] focus:outline-none"
               >
                 <ChevronUp size={13} />
                 <span>Hide replies</span>
@@ -396,7 +391,7 @@ export function CommentThread({
               <button
                 type="button"
                 onClick={() => setShowReplies(true)}
-                className="flex cursor-pointer select-none items-center rounded-full border-none bg-transparent px-3 py-1 text-[13px] font-bold text-sky-400 outline-none transition-colors hover:bg-blue-400/10 hover:text-blue-300 focus:outline-none group-hover/thread:bg-blue-400/5 group-hover/thread:text-blue-300"
+                className="flex cursor-pointer select-none items-center rounded-full border-none bg-transparent px-3 py-1 text-[13px] font-bold text-[color:var(--accent)] outline-none transition-colors hover:bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)] focus:outline-none group-hover/thread:bg-[color:color-mix(in_srgb,var(--accent)_6%,transparent)]"
               >
                 <span>
                   {totalReplies} {totalReplies === 1 ? "reply" : "replies"}
@@ -427,7 +422,17 @@ export function CommentThread({
 
 import type { VideoCommentsViewState } from "./useVideoComments";
 
+export type PlayerSidePanelTab = "description" | "comments";
+
+const SIDE_PANEL_TABS: readonly [PlayerSidePanelTab, string][] = [
+  ["description", "Description"],
+  ["comments", "Comments"],
+];
+
 type CommentsPanelProps = {
+  tab: PlayerSidePanelTab;
+  onTabChange: (tab: PlayerSidePanelTab) => void;
+  description: ReactNode;
   comments: VideoComment[];
   filterType: "top" | "newest";
   onFilterChange: (type: "top" | "newest") => void;
@@ -440,6 +445,9 @@ type CommentsPanelProps = {
 };
 
 export function CommentsPanel({
+  tab,
+  onTabChange,
+  description,
   comments,
   filterType,
   onFilterChange,
@@ -451,13 +459,17 @@ export function CommentsPanel({
   onRetry,
 }: CommentsPanelProps) {
   const sortedComments = sortComments(comments, filterType);
-  const showCapLabel = viewState === "ready" || viewState === "empty";
   const { scrollRef, edges, onScroll } = useScrollEdgeState([
+    tab,
     sortedComments.length,
     loading,
     viewState,
     filterType,
   ]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [tab, scrollRef]);
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
@@ -465,19 +477,29 @@ export function CommentsPanel({
         className="rf-comments-header flex shrink-0 items-center justify-between px-6 pb-3 pt-5"
         data-scrolled={edges.top ? "true" : undefined}
       >
-        <div className="flex items-baseline gap-3">
-          <h2 className="text-[20px] font-bold tracking-tight text-white">Comments</h2>
-          {showCapLabel ? (
-            <span className="text-[14px] font-medium text-white/50">Top 25 threads</span>
-          ) : null}
+        <div className="flex items-baseline gap-4" role="tablist">
+          {SIDE_PANEL_TABS.map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => onTabChange(id)}
+              className={`cursor-pointer border-none bg-transparent p-0 text-[20px] font-bold tracking-tight outline-none transition-colors ${
+                tab === id ? "text-white" : "text-white/35 hover:text-white/70"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <div className="flex items-center gap-1.5 text-white/90">
-          <FilterMenu currentType={filterType} onChange={onFilterChange} />
+          {tab === "comments" ? <FilterMenu currentType={filterType} onChange={onFilterChange} /> : null}
           <button
             type="button"
             className="cursor-pointer rounded-full p-2.5 transition-colors hover:bg-white/10"
             onClick={onClose}
-            aria-label="Close comments"
+            aria-label="Close panel"
           >
             <X size={22} strokeWidth={2} />
           </button>
@@ -489,7 +511,9 @@ export function CommentsPanel({
         onScroll={onScroll}
         className="rf-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 pb-8 pt-2"
       >
-        {loading ? (
+        {tab === "description" ? (
+          description
+        ) : loading ? (
           <p className="px-1 py-8 text-[13px] font-medium text-white/45">{loadingLabel}</p>
         ) : viewState === "error" ? (
           <div className="px-1 py-8">
@@ -500,7 +524,7 @@ export function CommentsPanel({
               <button
                 type="button"
                 onClick={onRetry}
-                className="mt-3 cursor-pointer rounded-full border-none bg-transparent px-0 py-1 text-[13px] font-bold text-sky-400 outline-none transition-colors hover:text-sky-300"
+                className="mt-3 cursor-pointer rounded-full border-none bg-transparent px-0 py-1 text-[13px] font-bold text-[color:var(--accent)] outline-none transition-colors hover:brightness-110"
               >
                 Retry
               </button>
@@ -519,9 +543,12 @@ export function CommentsPanel({
             No comments on this video.
           </p>
         ) : (
-          sortedComments.map((thread) => (
-            <CommentThread key={thread.id} comment={thread} />
-          ))
+          <>
+            <p className="pt-1 text-[10px] font-bold uppercase tracking-widest text-white/40">Top 25 threads</p>
+            {sortedComments.map((thread) => (
+              <CommentThread key={thread.id} comment={thread} />
+            ))}
+          </>
         )}
       </div>
     </div>

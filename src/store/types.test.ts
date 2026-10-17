@@ -29,3 +29,25 @@ describe("showExportInTitlebar", () => {
     expect(loadMergedSettings().showExportInTitlebar).toBe(true);
   });
 });
+
+describe("browserContext", () => {
+  beforeEach(() => {
+    store = {};
+  });
+
+  it("moves saved Edge and Brave choices to Internal", () => {
+    store["ruforge-settings"] = JSON.stringify({ browserContext: "edge" });
+    expect(loadMergedSettings().browserContext).toBe("ruforge");
+    store["ruforge-settings"] = JSON.stringify({ browserContext: "brave" });
+    expect(loadMergedSettings().browserContext).toBe("ruforge");
+  });
+
+  it("keeps Firefox, Zen and a picked cookies file", () => {
+    store["ruforge-settings"] = JSON.stringify({ browserContext: "firefox" });
+    expect(loadMergedSettings().browserContext).toBe("firefox");
+    store["ruforge-settings"] = JSON.stringify({ browserContext: "zen" });
+    expect(loadMergedSettings().browserContext).toBe("zen");
+    store["ruforge-settings"] = JSON.stringify({ browserContext: "custom" });
+    expect(loadMergedSettings().browserContext).toBe("custom");
+  });
+});

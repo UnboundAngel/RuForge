@@ -1,6 +1,8 @@
 mod app_state;
+mod asset_protocol;
 pub mod commands;
 pub mod companion;
+mod cover_thumbs;
 pub mod debug_log;
 mod deno_binary;
 mod dev_gate;
@@ -11,16 +13,22 @@ mod capability_audit;
 mod download_artifacts;
 mod download_job_manager;
 mod focus_protocol;
+#[cfg(ruforge_games)]
+mod games;
 mod hardware_acceleration;
 mod window_classname;
 pub mod library;
 mod media_bundle;
+mod nav_guard;
+mod path_guard;
 mod child_job;
 mod process_tree;
 mod radial_nav_bridge;
+mod scheduled_gate;
 mod tray;
 mod utils;
 mod webview_permissions;
+mod webview_trust;
 mod ytdlp_binary;
 mod ytdlp_rate_limit;
 #[cfg(windows)]
@@ -68,6 +76,15 @@ use crate::commands::music_listen_log::{
     music_listen_get_integrity, music_listen_get_snapshot, music_listen_import_legacy,
     music_listen_rebuild_snapshot, music_listen_transfer,
 };
+use crate::commands::activity_log::{
+    activity_backfill_report, activity_bump_counters, activity_clear, activity_export,
+    activity_query, activity_record, activity_watch_accumulate, activity_watch_begin,
+    activity_watch_end, activity_watch_sponsor_skip, activity_watch_transfer,
+};
+use crate::commands::activity_stats::{
+    stats_bests, stats_calendar, stats_clock, stats_item, stats_milestones, stats_streaks,
+    stats_summary, stats_take_milestone_notes, stats_top,
+};
 use crate::commands::lyrics::{backfill_lyrics, ensure_lyrics, lookup_lyrics, read_lyrics};
 use crate::commands::musicmeta::{
     backfill_music_meta, ensure_artist_meta_sidecar, ensure_music_meta, get_artist_info,
@@ -93,8 +110,16 @@ use crate::commands::music_playlists::{
     playlist_paths_relocatable, read_music_playlists_file, read_playlist_text_file,
     write_music_playlists_file, write_playlist_text_file,
 };
-use crate::commands::music_preview::{music_preview_local_hook, resolve_music_preview_stream};
-use crate::commands::youtube_feed::{get_video_stats, get_youtube_feed_page, resolve_video_preview_stream};
+use crate::commands::settings_file::{read_settings_file, write_settings_file};
+use crate::commands::library_tags::{
+    library_info_descriptions, library_info_meta, read_library_tags_file, write_library_tags_file,
+};
+use crate::commands::music_preview::{
+    local_media_youtube_extras, music_preview_local_hook, resolve_music_preview_stream,
+};
+use crate::commands::youtube_feed::{
+    get_video_stats, get_youtube_feed_page, resolve_video_preview_stream,
+};
 use crate::commands::channel_avatar::get_channel_avatar;
 use crate::commands::channel_profile::get_channel_profile;
 use crate::commands::disk_space::get_disk_space;
@@ -106,7 +131,7 @@ use crate::commands::removable_drives::{
     RemovableDrivesState,
 };
 use crate::commands::settings::{
-    authorize_cleanup, clear_ruforge_cache, get_hardware_acceleration_browser_args,
+    clear_ruforge_cache, get_hardware_acceleration_browser_args,
     get_hardware_acceleration_pref, get_show_debugging_settings_pref, get_storage_stats,
     open_windows_sound_settings, set_hardware_acceleration_pref, set_show_debugging_settings_pref,
     update_tray_config,
@@ -126,180 +151,18 @@ use crate::library::commands::{
 use crate::library::LibraryState;
 use crate::tray::{setup_tray, tray_front_debug};
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    #[allow(unused_mut)]
-    let mut context = tauri::generate_context!();
-    apply_hardware_acceleration_prefs_to_context(&mut context);
+#[cfg(ruforge_games)]
+use crate::games::destroy_windows as destroy_games_windows;
+#[cfg(not(ruforge_games))]
+fn destroy_games_windows(_app: &tauri::AppHandle) {}
 
-    #[cfg(windows)]
-    {
-        let app_id = windows_audio_brand::process_app_user_model_id(&context.config().identifier);
-        windows_audio_brand::set_explicit_app_user_model_id(&app_id);
-        windows_playback_qos::disable_background_execution_throttling();
-    }
-
-    let mut builder = tauri::Builder::default();
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
-            // `tauri-plugin-single-instance` with the `deep-link` feature forwards argv to
-            // `tauri-plugin-deep-link`, which emits `deep-link://new-url` on the running instance.
-        }));
-    }
-
-    builder = builder
-        .plugin(tauri_plugin_deep_link::init())
-        .manage(AppConfig {
-            minimize_to_tray: Mutex::new(true),
-        })
-        .manage(DownloadJobManager::default())
-        .manage(ExportBundleState::default())
-        .manage(RemovableDrivesState::default())
-        .manage(crate::companion::CompanionState::new())
-        .manage(crate::discord_rpc::DiscordRpcState::new())
-        .manage(crate::commands::private_mailbox::PrivateMailbox::default())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--silently"])))
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(webview_permissions::init())
-        .plugin(radial_nav_bridge::init())
-        .plugin(
-            tauri_plugin_snap_layout::init()
-                .button_id("ruforge-tb-maximize")
-                .build(),
-        )
-        .append_invoke_initialization_script(
-            r";(function(){try{var h=(window.location.hostname||'').toLowerCase();if(h==='tauri.localhost'||h==='localhost'||h==='127.0.0.1'||h.endsWith('.tauri.localhost'))return;if((window.location.protocol||'')==='tauri:')return;window.__snapLayoutInit=true;}catch(e){}})();",
-        )
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(crate::debug_log::plugin_max_level())
-                .filter(|meta| crate::debug_log::log_filter(meta))
-                .build(),
-        );
-
-    builder
-        .setup(|app| {
-            let handle = app.handle().clone();
-            crate::ytdlp_binary::start_userdata_ytdlp_reconcile(&handle);
-
-            // Rust is the sole authority for library config + index. Seed/load
-            // persisted config now, before any command can race the first
-            // `get_library_snapshot` / companion start call.
-            let library_config = crate::library::config::load_or_init(&handle)
-                .map_err(|e| format!("failed to load library config: {e}"))?;
-            app.manage(LibraryState::new(library_config));
-
-            let job_manager_for_engine = app.state::<DownloadJobManager>().inner().clone();
-            let active_probe = std::sync::Arc::new(move || {
-                job_manager_for_engine
-                    .has_active_downloads()
-                    .unwrap_or(false)
-            });
-            app.manage(crate::media_engine_adapter::MediaEngineState::new(
-                handle.clone(),
-                1,
-                active_probe,
-            ));
-
-            crate::companion::register_progress_query_listener(&handle);
-
-            warm_ytdlp_release_cache_spawn(handle.clone());
-
-            spawn_removable_drives_watcher(app.handle());
-            app.manage(crate::commands::watchlist::WatchlistState::load(app.handle()));
-            crate::commands::watchlist::poller::spawn_watchlist_poller(app.handle());
-
-            setup_tray(app)?;
-
-            focus_protocol::setup_focus_protocol(app)?;
-
-            #[cfg(windows)]
-            windows_audio_brand::apply_window_taskbar_icons(app.handle());
-
-            if let Err(e) =
-                crate::commands::music_listen_log::music_listen_startup_housekeeping(app.handle())
-            {
-                crate::rf_log!(
-                    "core.startup",
-                    log::Level::Warn,
-                    "listen log startup housekeeping failed: {e}"
-                );
-            }
-
-            #[cfg(windows)]
-            {
-                let display_name = app
-                    .config()
-                    .product_name
-                    .clone()
-                    .unwrap_or_else(|| "RuForge".to_string());
-                let icon_path = std::env::current_exe().unwrap_or_default();
-                windows_audio_brand::spawn_mixer_branding_thread(display_name, icon_path);
-            }
-
-            if let Some(main) = app.get_webview_window("main") {
-                app.manage(DevCaptureMainWindow(main.clone()));
-                note_main_window_monitor(app.handle());
-                let _ = main.listen(TRAY_SHOW_MAIN_EVENT, |_event| {
-                    crate::rf_log!(
-                        "core.tray",
-                        log::Level::Info,
-                        "main webview received `{TRAY_SHOW_MAIN_EVENT}` (routing OK)"
-                    );
-                });
-            } else {
-                crate::rf_log!(
-                    "core.tray",
-                    log::Level::Warn,
-                    "setup could not resolve main webview — tray emit will miss"
-                );
-            }
-
-            #[cfg(windows)]
-            taskbar_thumbbar::attach_to_main(app);
-
-            Ok(())
-        })
-        .on_window_event(|window, event| {
-            if window.label() == "main" {
-                match event {
-                    tauri::WindowEvent::Moved(_)
-                    | tauri::WindowEvent::Resized(_)
-                    | tauri::WindowEvent::ScaleFactorChanged { .. } => {
-                        note_main_window_monitor(window.app_handle());
-                    }
-                    tauri::WindowEvent::CloseRequested { api, .. } => {
-                        let state = window.state::<AppConfig>();
-                        let minimize_to_tray = *state.minimize_to_tray.lock().unwrap();
-                        if minimize_to_tray {
-                            note_main_window_monitor(window.app_handle());
-                            let _ = window.hide();
-                            api.prevent_close();
-                            let _ = window.app_handle().emit_to(
-                                EventTarget::webview_window("main"),
-                                MAIN_HIDDEN_EVENT,
-                                (),
-                            );
-                        }
-                    }
-                    #[cfg(windows)]
-                    tauri::WindowEvent::Destroyed => {
-                        taskbar_thumbbar::on_main_destroyed();
-                    }
-                    _ => {}
-                }
-            }
-        })
-        .invoke_handler(tauri::generate_handler![
+// `tauri::generate_handler!` cannot take a per-item cfg, so the core list lives in this one macro
+// and `run` builds two cfg'd handlers from it: core only, or core plus the Games list from
+// `games::with_commands!`. A Tauri plugin for Games was rejected: plugin commands are namespaced
+// (`plugin:games|x`), which would change invoke names and split the ACL into a second permission set.
+macro_rules! invoke_handler_with {
+    ($($games:tt)*) => {
+        tauri::generate_handler![
             capture_main_window_dev,
             dev_captures_folder_path,
             list_dev_captures,
@@ -315,6 +178,7 @@ pub fn run() {
             get_playlist_items_page,
             resolve_music_preview_stream,
             music_preview_local_hook,
+            local_media_youtube_extras,
             get_youtube_feed_page,
             resolve_video_preview_stream,
             get_channel_avatar,
@@ -381,7 +245,6 @@ pub fn run() {
             delete_media_batch,
             get_storage_stats,
             get_disk_space,
-            authorize_cleanup,
             clear_ruforge_cache,
             eval_in_webview,
             is_linux_host,
@@ -423,6 +286,12 @@ pub fn run() {
             remove_recently_deleted_entry,
             read_music_playlists_file,
             write_music_playlists_file,
+            read_settings_file,
+            write_settings_file,
+            read_library_tags_file,
+            write_library_tags_file,
+            library_info_descriptions,
+            library_info_meta,
             read_playlist_text_file,
             write_playlist_text_file,
             playlist_paths_relocatable,
@@ -435,6 +304,28 @@ pub fn run() {
             music_listen_rebuild_snapshot,
             music_listen_import_legacy,
             music_listen_clear,
+            activity_record,
+            activity_bump_counters,
+            activity_query,
+            activity_export,
+            activity_clear,
+            activity_watch_begin,
+            activity_watch_accumulate,
+            activity_watch_sponsor_skip,
+            activity_watch_transfer,
+            activity_watch_end,
+            activity_backfill_report,
+            stats_summary,
+            stats_top,
+            stats_calendar,
+            stats_clock,
+            stats_streaks,
+            stats_bests,
+            stats_item,
+            stats_milestones,
+            stats_take_milestone_notes,
+            crate::scheduled_gate::scheduled_status,
+            crate::scheduled_gate::scheduled_invoke,
             crate::companion::commands::companion_start,
             crate::companion::commands::companion_stop,
             crate::companion::commands::companion_status,
@@ -447,14 +338,329 @@ pub fn run() {
             crate::discord_rpc::commands::discord_rpc_status,
             #[cfg(windows)]
             taskbar_thumbbar::sync_taskbar_transport,
-        ])
+            $($games)*
+        ]
+    };
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    apply_hardware_acceleration_prefs_to_context(&mut context);
+
+    #[cfg(windows)]
+    {
+        let app_id = windows_audio_brand::process_app_user_model_id(&context.config().identifier);
+        windows_audio_brand::set_explicit_app_user_model_id(&app_id);
+        windows_playback_qos::disable_background_execution_throttling();
+    }
+
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(ruforge_games)]
+    {
+        builder = crate::games::manage_state(builder);
+    }
+
+    type Handler = fn(tauri::ipc::Invoke<tauri::Wry>) -> bool;
+    #[cfg(ruforge_games)]
+    let handler: Handler = crate::games::with_commands!(invoke_handler_with);
+    #[cfg(not(ruforge_games))]
+    let handler: Handler = invoke_handler_with!();
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
+            // `tauri-plugin-single-instance` with the `deep-link` feature forwards argv to
+            // `tauri-plugin-deep-link`, which emits `deep-link://new-url` on the running instance.
+        }));
+    }
+
+    builder = builder
+        .plugin(tauri_plugin_deep_link::init())
+        .manage(AppConfig {
+            minimize_to_tray: Mutex::new(true),
+        })
+        .manage(DownloadJobManager::default())
+        .manage(ExportBundleState::default())
+        .manage(RemovableDrivesState::default())
+        .manage(crate::companion::CompanionState::new())
+        .manage(crate::discord_rpc::DiscordRpcState::new())
+        .manage(crate::commands::private_mailbox::PrivateMailbox::default())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--silently"])))
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(webview_permissions::init())
+        .plugin(radial_nav_bridge::init())
+        .plugin(nav_guard::init())
+        .register_asynchronous_uri_scheme_protocol("asset", asset_protocol::handle)
+        .plugin(
+            tauri_plugin_snap_layout::init()
+                .button_id("ruforge-tb-maximize")
+                .build(),
+        )
+        .append_invoke_initialization_script(
+            r";(function(){try{var h=(window.location.hostname||'').toLowerCase();if(h==='tauri.localhost'||h==='localhost'||h==='127.0.0.1'||h.endsWith('.tauri.localhost'))return;if((window.location.protocol||'')==='tauri:')return;window.__snapLayoutInit=true;}catch(e){}})();",
+        )
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(crate::debug_log::plugin_max_level())
+                .filter(|meta| crate::debug_log::log_filter(meta))
+                .build(),
+        );
+
+    builder
+        .setup(|app| {
+            let setup_started = std::time::Instant::now();
+            let handle = app.handle().clone();
+            crate::ytdlp_binary::start_userdata_ytdlp_reconcile(&handle);
+
+            // Rust is the sole authority for library config + index. Seed/load
+            // persisted config now, before any command can race the first
+            // `get_library_snapshot` / companion start call.
+            let library_config = crate::library::config::load_or_init(&handle)
+                .map_err(|e| format!("failed to load library config: {e}"))?;
+            app.manage(LibraryState::new(library_config));
+
+            let job_manager_for_engine = app.state::<DownloadJobManager>().inner().clone();
+            let active_probe = std::sync::Arc::new(move || {
+                job_manager_for_engine
+                    .has_active_downloads()
+                    .unwrap_or(false)
+            });
+            app.manage(crate::media_engine_adapter::MediaEngineState::new(
+                handle.clone(),
+                1,
+                active_probe,
+            ));
+
+            crate::companion::register_progress_query_listener(&handle);
+
+            warm_ytdlp_release_cache_spawn(handle.clone());
+            crate::scheduled_gate::spawn_refresh(&handle);
+            crate::cover_thumbs::spawn_prune(&handle);
+
+            spawn_removable_drives_watcher(app.handle());
+            app.manage(crate::commands::watchlist::WatchlistState::load(app.handle()));
+            crate::commands::watchlist::poller::spawn_watchlist_poller(app.handle());
+
+            setup_tray(app)?;
+
+            focus_protocol::setup_focus_protocol(app)?;
+
+            #[cfg(windows)]
+            windows_audio_brand::apply_window_taskbar_icons(app.handle());
+
+            // Disk-heavy (log scans, rollup rebuild, milestone eval) and would freeze the
+            // undecorated window's drag if run here. Every reader takes the same log mutexes
+            // or rebuilds rollups idempotently, so results match whether this has finished or not.
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let t = std::time::Instant::now();
+                    if let Err(e) =
+                        crate::commands::music_listen_log::music_listen_startup_housekeeping(&handle)
+                    {
+                        crate::rf_log!(
+                            "core.startup",
+                            log::Level::Warn,
+                            "listen log startup housekeeping failed: {e}"
+                        );
+                    }
+                    let listen_ms = t.elapsed().as_millis();
+                    if let Err(e) =
+                        crate::commands::activity_log::activity_startup_housekeeping(&handle)
+                    {
+                        crate::rf_log!(
+                            "core.startup",
+                            log::Level::Warn,
+                            "activity log startup housekeeping failed: {e}"
+                        );
+                    }
+                    crate::rf_log!(
+                        "core.startup",
+                        log::Level::Info,
+                        "background housekeeping done: listen {listen_ms}ms, total {}ms",
+                        t.elapsed().as_millis()
+                    );
+                });
+            }
+
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    spawn_activity_library_backfill(handle).await;
+                });
+            }
+
+            #[cfg(windows)]
+            {
+                let display_name = app
+                    .config()
+                    .product_name
+                    .clone()
+                    .unwrap_or_else(|| "RuForge".to_string());
+                let icon_path = std::env::current_exe().unwrap_or_default();
+                windows_audio_brand::spawn_mixer_branding_thread(display_name, icon_path);
+            }
+
+            if let Some(main) = app.get_webview_window("main") {
+                app.manage(DevCaptureMainWindow(main.clone()));
+                note_main_window_monitor(app.handle());
+                let _ = main.listen(TRAY_SHOW_MAIN_EVENT, |_event| {
+                    crate::rf_log!(
+                        "core.tray",
+                        log::Level::Info,
+                        "main webview received `{TRAY_SHOW_MAIN_EVENT}` (routing OK)"
+                    );
+                });
+            } else {
+                crate::rf_log!(
+                    "core.tray",
+                    log::Level::Warn,
+                    "setup could not resolve main webview — tray emit will miss"
+                );
+            }
+
+            #[cfg(windows)]
+            taskbar_thumbbar::attach_to_main(app);
+
+            crate::rf_log!(
+                "core.startup",
+                log::Level::Info,
+                "setup closure blocked main thread for {}ms",
+                setup_started.elapsed().as_millis()
+            );
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Only the video mini registers system-wide shortcuts (ghost mode). Its JS cleanup
+            // does not run if the webview dies, and a leftover registration keeps stealing those
+            // keys from every other app.
+            if window.label() == "mini" && matches!(event, tauri::WindowEvent::Destroyed) {
+                use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                let _ = window.app_handle().global_shortcut().unregister_all();
+            }
+            if window.label() == "main" {
+                match event {
+                    tauri::WindowEvent::Moved(_)
+                    | tauri::WindowEvent::Resized(_)
+                    | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                        note_main_window_monitor(window.app_handle());
+                    }
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        let state = window.state::<AppConfig>();
+                        let minimize_to_tray = *state.minimize_to_tray.lock().unwrap();
+                        if minimize_to_tray {
+                            note_main_window_monitor(window.app_handle());
+                            let _ = window.hide();
+                            api.prevent_close();
+                            let _ = window.app_handle().emit_to(
+                                EventTarget::webview_window("main"),
+                                MAIN_HIDDEN_EVENT,
+                                (),
+                            );
+                        } else {
+                            destroy_games_windows(window.app_handle());
+                        }
+                    }
+                    tauri::WindowEvent::Destroyed => {
+                        destroy_games_windows(window.app_handle());
+                        #[cfg(windows)]
+                        taskbar_thumbbar::on_main_destroyed();
+                    }
+                    _ => {}
+                }
+            }
+        })
+        .invoke_handler(handler)
         .build(context)
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
+                crate::commands::activity_log::flush_counters(app_handle);
                 if let Some(state) = app_handle.try_state::<crate::discord_rpc::DiscordRpcState>() {
                     state.shutdown();
                 }
             }
         });
+}
+
+async fn spawn_activity_library_backfill(app: tauri::AppHandle) {
+    use crate::commands::activity_log::run_library_backfill;
+    use crate::commands::gallery::GalleryEntry;
+    use crate::library::LibraryState;
+    use tauri::Manager;
+
+    let Some(state) = app.try_state::<LibraryState>() else {
+        return;
+    };
+    if let Err(e) = state.ensure_desktop_snapshot(&app, false).await {
+        crate::rf_log!(
+            "core.startup",
+            log::Level::Warn,
+            "activity backfill: library snapshot failed: {e}"
+        );
+        return;
+    }
+    let (_version, _ready, entries) = state.desktop_snapshot().await;
+    let mut files = Vec::new();
+    for entry in entries {
+        match entry {
+            GalleryEntry::Media { file } => {
+                files.push((
+                    file.path.clone(),
+                    file.size,
+                    file.duration,
+                    file.created,
+                    Some(file.name.clone()),
+                    file.source_id.clone().or_else(|| {
+                        file.source_url.as_ref().and_then(|u| {
+                            // Keep only a bare id when the URL is a typical watch link; never guess.
+                            let id = u.split("v=").nth(1)?.split('&').next()?;
+                            if id.is_empty() {
+                                None
+                            } else {
+                                Some(id.to_string())
+                            }
+                        })
+                    }),
+                    file.youtube.as_ref().and_then(|y| y.channel_id.clone()),
+                    file.youtube.as_ref().and_then(|y| y.channel.clone()),
+                ));
+            }
+            GalleryEntry::Playlist { playlist } => {
+                for file in playlist.items {
+                    files.push((
+                        file.path.clone(),
+                        file.size,
+                        file.duration,
+                        file.created,
+                        Some(file.name.clone()),
+                        file.source_id.clone(),
+                        file.youtube.as_ref().and_then(|y| y.channel_id.clone()),
+                        file.youtube.as_ref().and_then(|y| y.channel.clone()),
+                    ));
+                }
+            }
+        }
+    }
+    let report = run_library_backfill(&app, &files);
+    if report.skipped_reason.is_none() {
+        crate::rf_log!(
+            "core.startup",
+            log::Level::Info,
+            "activity backfill: download_finished={} library_snapshot={}",
+            report.download_finished,
+            report.library_snapshot
+        );
+    }
 }

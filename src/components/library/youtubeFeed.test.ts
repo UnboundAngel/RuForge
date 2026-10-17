@@ -92,16 +92,13 @@ describe("videoPreviewStartSec", () => {
 
 describe("gridColumnsFor", () => {
   it("fits as many cards as the minimum width allows", () => {
-    expect(gridColumnsFor(1327, "Default")).toBe(3);
-    expect(gridColumnsFor(1328, "Default")).toBe(4);
-    expect(gridColumnsFor(200, "Cozy")).toBe(1);
-    expect(gridColumnsFor(1300, "Compact")).toBe(4);
+    expect(gridColumnsFor(1327)).toBe(3);
+    expect(gridColumnsFor(1328)).toBe(4);
+    expect(gridColumnsFor(200)).toBe(1);
   });
 
-  it("grows cards instead of adding columns past the density cap", () => {
-    expect(gridColumnsFor(2500, "Default")).toBe(4);
-    expect(gridColumnsFor(2500, "Cozy")).toBe(3);
-    expect(gridColumnsFor(2500, "Compact")).toBe(5);
+  it("grows cards instead of adding columns past the cap", () => {
+    expect(gridColumnsFor(2500)).toBe(4);
   });
 });
 

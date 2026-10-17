@@ -46,7 +46,7 @@ export function DownloaderCloseMorph({
 
   return createPortal(
     <motion.div
-      className={`pointer-events-none fixed overflow-hidden rounded-full bg-[#1D1613] shadow-[0_8px_24px_rgba(0,0,0,0.4)] ${OVERLAY_Z_CLASS.menus}`}
+      className={`pointer-events-none fixed overflow-hidden rounded-full bg-[color:var(--rf-surface-deep)] shadow-[0_8px_24px_rgba(0,0,0,0.4)] ${OVERLAY_Z_CLASS.menus}`}
       style={{ width: LAND_SIZE, height: LAND_SIZE }}
       initial={{
         left: startLeft,
@@ -100,7 +100,9 @@ export function DownloaderCloseMorph({
   );
 }
 
-export function measureDownloaderCloseMorph(): DownloaderCloseMorphPayload | null {
+export function measureDownloaderCloseMorph(
+  thumbnailOverride?: string | null,
+): DownloaderCloseMorphPayload | null {
   const rail = document.querySelector<HTMLElement>('[data-rail-tab="downloader"]');
   if (!rail) return null;
   const to = rail.getBoundingClientRect();
@@ -111,7 +113,7 @@ export function measureDownloaderCloseMorph(): DownloaderCloseMorphPayload | nul
   if (!from || from.width <= 0 || from.height <= 0) return null;
 
   const img = thumbEl?.querySelector("img");
-  const thumbnail = img?.currentSrc || img?.src || null;
+  const thumbnail = thumbnailOverride || img?.currentSrc || img?.src || null;
 
   return { thumbnail, from, to };
 }

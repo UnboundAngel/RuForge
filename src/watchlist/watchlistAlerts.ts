@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { recordDownloadNotification } from "@/notifications/sources/downloadItems";
 import { useRuforgeStore } from "@/store/ruforgeStore";
+import { isMuted } from "@/notifications/mute";
 import { claimUserNotification, deliverUserNotification, isAnyRuforgeWindowFocused } from "@/systemNotify";
 import type { WatchlistSnapshot, WatchlistUpload } from "./types";
 import { enqueueWatchlistUploads } from "./watchlistActions";
@@ -48,7 +49,7 @@ export async function handleNewUploads(uploads: WatchlistUpload[]): Promise<void
   if (!claimUserNotification(`watchlist:${uploads.map((u) => u.videoId).join(",")}`)) return;
   const autoQueued = await runAutoDownloads(uploads);
   const s = useRuforgeStore.getState();
-  if (!s.settings.watchlistAlerts) return;
+  if (!s.settings.watchlistAlerts || isMuted("uploads")) return;
   // The island watchlist variant renders this batch; a plain island notice would duplicate it.
   if (await isAnyRuforgeWindowFocused()) s.notify(watchlistAlertCopy(uploads, autoQueued), "info");
   else addToIslandBatch(uploads.map((u) => u.videoId));

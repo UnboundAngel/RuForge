@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 /** ~10fps blurred canvas backdrop sampled from a playing `<video>`. */
 export function useVideoAmbientBackdrop(
@@ -6,14 +6,20 @@ export function useVideoAmbientBackdrop(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   enabled: boolean,
 ) {
-  const ambientRafRef = useRef<number | null>(null);
-
   useEffect(() => {
     if (!enabled) return;
 
+    let cancelled = false;
+    let rafId: number | null = null;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
     const updateAmbient = () => {
-      setTimeout(() => {
-        ambientRafRef.current = requestAnimationFrame(updateAmbient);
+      rafId = null;
+      if (cancelled) return;
+      // Cleanup must clear this timer too, or the chain outlives the effect and stacks on every remount.
+      timerId = setTimeout(() => {
+        timerId = null;
+        if (!cancelled) rafId = requestAnimationFrame(updateAmbient);
       }, 100);
 
       const video = videoRef.current;
@@ -37,9 +43,11 @@ export function useVideoAmbientBackdrop(
       ctx.globalAlpha = 1.0;
     };
 
-    ambientRafRef.current = requestAnimationFrame(updateAmbient);
+    rafId = requestAnimationFrame(updateAmbient);
     return () => {
-      if (ambientRafRef.current !== null) cancelAnimationFrame(ambientRafRef.current);
+      cancelled = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (timerId !== null) clearTimeout(timerId);
     };
   }, [enabled, videoRef, canvasRef]);
 }

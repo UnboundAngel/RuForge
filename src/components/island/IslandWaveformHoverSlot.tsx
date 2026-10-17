@@ -5,7 +5,7 @@ import { useState, type MouseEvent } from "react";
 import { ActivityIslandWaveform } from "./ActivityIslandWaveform";
 
 type Props = {
-  levels: readonly number[];
+  levels?: readonly number[];
   coverSrc: string | null;
   accentColor: string;
   muted?: boolean;

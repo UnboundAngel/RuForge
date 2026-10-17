@@ -1,4 +1,4 @@
-/* Electro stage. --hero-energy (0..1) is set on :root per frame by AudioHeroStage while this skin is active. */
+/* Electro stage. --hero-energy (0..1) is set per frame by AudioHeroStage on the nearest [data-audio-hero-scope] while this skin is active. */
 
 .ex-screen {
   position: absolute;

@@ -1,14 +1,16 @@
 import type { ReactNode } from "react";
 import { ChevronRight, ExternalLink } from "lucide-react";
-import type { NotificationPrefs } from "@/notifications/types";
+import { NOTIFICATION_MUTE_OPTIONS } from "@/notifications/muteModel";
+import type { NotificationMuteKey, NotificationPrefs } from "@/notifications/types";
 import type { WatchedChannel } from "@/watchlist/types";
 import { CHECK_INTERVAL_OPTIONS } from "@/watchlist/watchlistSettings";
-import { MiniToggle } from "./channels/MiniToggle";
+import { Switch } from "@/components/ui/Switch";
 import { controlLabelClass, panelLabelClass, panelRowDetailClass, raisedClass } from "./panelStyles";
 
 export type PrefsHandlers = {
   onAlerts: (enabled: boolean) => void;
   onCheckInterval: (minutes: number) => void;
+  onMute: (key: NotificationMuteKey, muted: boolean) => void;
 };
 
 type Props = {
@@ -113,13 +115,34 @@ export function NotificationPrefsView({
           title="New upload alerts"
           description="In app, or on the desktop island while RuForge is in the background."
           control={
-            <MiniToggle
-              active={prefs.alerts}
+            <Switch
+              size="sm"
+              checked={prefs.alerts}
               label={prefs.alerts ? "Upload alerts on" : "Upload alerts off"}
               onChange={handlers.onAlerts}
             />
           }
         />
+      </Section>
+      <Section title="Show in notifications">
+        {NOTIFICATION_MUTE_OPTIONS.map((o) => {
+          const shown = !prefs.muted.includes(o.key);
+          return (
+            <Row
+              key={o.key}
+              title={o.label}
+              description={o.description}
+              control={
+                <Switch
+                  size="sm"
+                  checked={shown}
+                  label={`${o.label} ${shown ? "shown" : "muted"}`}
+                  onChange={(on) => handlers.onMute(o.key, !on)}
+                />
+              }
+            />
+          );
+        })}
       </Section>
       <Section title="Schedule">
         <Row

@@ -1,10 +1,10 @@
-import { useMemo, useState, useEffect } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { useMemo, useState } from "react";
 import { ChevronLeft } from "lucide-react";
+import { useImageFallback } from "@/components/ui/FallbackImg";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useOptionalMainAudioPlayback } from "@/playback/mainAudioPlaybackContext";
 import { isAudioOnlyPath } from "@/mediaKind";
-import { albumCoverPathWithFallback } from "@/albumCoverPath";
+import { coverPathChain } from "@/albumCoverPath";
 import { flattenGalleryScanToMediaFiles } from "@/galleryScan";
 import { formatDuration } from "@/components/downloader/downloaderFormat";
 import type { MediaFile } from "@/types";
@@ -129,21 +129,10 @@ export function MusicAlbumView({ artistKey, albumKey, onPlayFile, onOpenArtist, 
     return artistKey;
   }, [tracks, artistKey]);
 
-  const [coverSrc, setCoverSrc] = useState<string | null>(null);
-  useEffect(() => {
-    const paths = tracks[0]
-      ? albumCoverPathWithFallback(tracks[0])
-      : { primary: null, fallback: null };
-    setCoverSrc(paths.primary ? convertFileSrc(paths.primary) : null);
-  }, [tracks]);
-  const handleCoverError = () => {
-    const fallback = tracks[0] ? albumCoverPathWithFallback(tracks[0]).fallback : null;
-    if (fallback) {
-      setCoverSrc(convertFileSrc(fallback));
-    } else {
-      setCoverSrc(null);
-    }
-  };
+  const { src: coverSrc, onError: handleCoverError } = useImageFallback(
+    tracks[0] ? coverPathChain(tracks[0]) : null,
+    { local: true },
+  );
   const totalDuration = useMemo(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
 
   const albumSource = useMemo(() => musicQueueSource("album", displayAlbum), [displayAlbum]);

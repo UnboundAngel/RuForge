@@ -1,6 +1,6 @@
 [package]
 name = "ruforge"
-version = "0.6.1"
+version = "0.7.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -24,6 +24,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+serde_json = "1"
 
 [dependencies]
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "unstable", "macos-private-api"] }
@@ -70,6 +71,10 @@ rust-embed = "8"
 tauri-plugin-deep-link = "2"
 discord-rich-presence = "=1.1.0"
 roxmltree = "0.21.1"
+http-range = "0.1"
+percent-encoding = "2"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+tauri-plugin-global-shortcut = "2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
@@ -107,6 +112,19 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 debug = false
 
+# Cover thumbnails decode on demand; unoptimized decoders take ~10x longer in dev builds.
+[profile.dev.package.image]
+opt-level = 3
+
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+
+[profile.dev.package.image-webp]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
 # Opt in with --profile debugging when a debugger or full symbols are needed.
 [profile.debugging]
 inherits = "dev"
@@ -122,15 +140,20 @@ libc = "0.2"
 webview2-com = "0.38"
 windows = { version = "0.61", features = [
   "Win32_Foundation",
+  "Win32_Graphics_Dwm",
   "Win32_Graphics_Gdi",
   "Win32_Media_Audio",
   "Win32_Security",
   "Win32_Storage_FileSystem",
+  "Win32_Storage_Packaging_Appx",
   "Win32_System_Com",
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_JobObjects",
+  "Win32_System_Registry",
   "Win32_System_Threading",
+  "Win32_UI_Accessibility",
   "Win32_UI_Controls",
+  "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
 ] }

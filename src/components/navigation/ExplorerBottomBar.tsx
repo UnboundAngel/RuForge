@@ -64,7 +64,7 @@ export function ExplorerBottomBar({ url, onNavigate, onReload }: Props) {
   };
 
   return (
-    <div className="flex w-full shrink-0 flex-col bg-[#271C18]">
+    <div className="flex w-full shrink-0 flex-col bg-[color:var(--rf-bezel)]">
       {!pasteMode && (
         <span className="truncate px-4 pt-1.5 text-[10px] font-medium text-[color:var(--accent)]">
           {explorerPageLabel(url)}

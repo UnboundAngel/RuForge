@@ -1,5 +1,5 @@
 import type { DragEvent } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localThumbSrc } from "@/lib/localImageSrc";
 import { bestCoverPath } from "@/mediaKind";
 import type { MediaFile } from "@/types";
 import { setMusicTrackDragData, trackArtistLabel } from "./musicPlaylists";
@@ -29,7 +29,7 @@ function buildGhost(file: MediaFile): HTMLElement {
   const cover = bestCoverPath(file);
   const thumb = document.createElement(cover ? "img" : "div");
   thumb.className = "rf-music-drag-ghost-cover";
-  if (cover && thumb instanceof HTMLImageElement) thumb.src = convertFileSrc(cover);
+  if (cover && thumb instanceof HTMLImageElement) thumb.src = localThumbSrc(cover);
   card.appendChild(thumb);
 
   const text = document.createElement("div");

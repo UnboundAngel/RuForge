@@ -25,19 +25,19 @@ export function albumCoverPathForTrack(file: {
   return bestCoverPath(file);
 }
 
-export function albumCoverPathWithFallback(file: {
+/** Every local cover worth trying for a track, best first: playlist sidecar, embedded art, thumbnail, poster. */
+export function coverPathChain(file: {
   path: string;
   embeddedCoverPath?: string | null;
   thumbnailPath?: string | null;
   ruforgePosterPath?: string | null;
-}): { primary: string | null; fallback: string | null } {
+}): string[] {
   const loc = playlistSidecarLocationFromTrackPath(file.path);
-  if (loc) {
-    return {
-      primary: playlistLocalCoverPath(loc),
-      fallback: bestCoverPath(file),
-    };
-  }
-  const cover = bestCoverPath(file);
-  return { primary: cover, fallback: null };
+  const all = [
+    loc ? playlistLocalCoverPath(loc) : null,
+    file.embeddedCoverPath,
+    file.thumbnailPath,
+    file.ruforgePosterPath,
+  ];
+  return [...new Set(all.filter((p): p is string => !!p))];
 }

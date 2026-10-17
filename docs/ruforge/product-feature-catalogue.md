@@ -429,7 +429,6 @@ Settings UI: `src/components/SettingsView.tsx`. Persisted via Zustand `partializ
 | YouTube URL normalization/compare | `youtubeUrl.ts` | Dedup, duplicates, conflicts |
 | Titlebar hover tooltips | `TitlebarHoverButton.tsx` | |
 | Custom dropdown component in Settings | `SettingsView.tsx` (`CustomSelect`) | |
-| `CustomDropdown.tsx` | Standalone component file | Verify usage if marketing lists “custom selects” |
 | Chapter data on `MediaFile` | `types.ts`, `gallery.rs` | **No player chapter UI** found |
 | `downloadMetadataHint` on entries | `types.ts` | **No UI** surfaced in components grep |
 | Deferred: draggable queue, crossfade, gapless | `mediaKind.ts` comment | Not implemented |

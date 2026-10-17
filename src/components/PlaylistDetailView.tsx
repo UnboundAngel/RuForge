@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import {
   Play,
   Shuffle,
   ArrowLeft,
+  ArrowUpDown,
+  Check,
+  ChevronDown,
   HardDrive,
   MoreVertical,
   GripVertical,
@@ -13,7 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { PlaylistCollection, MediaFile } from "../types";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localImageSrc } from "@/lib/localImageSrc";
 import { getPlaybackThumbnailBar } from "../playbackStorage";
 import { formatDuration } from "./downloader/downloaderFormat";
 import { formatStorageSize } from "../formatStorageSize";
@@ -26,10 +29,23 @@ import {
 } from "../virtualPlaylists";
 import { mediaPathsMatch } from "../lib/mediaPathMatch";
 import { PlaylistEmptyThumb } from "./PlaylistEmptyThumb";
-import { MorphLabelMenu, usePlaylistSortItems } from "./MorphLabelMenu";
-import { MORPH_MENU_SHELL } from "./ui/Morph";
+import {
+  MUSIC_MENU_ICON_SIZE,
+  MUSIC_MENU_TONES,
+  MusicFloatingMenu,
+  MusicMenuRow,
+  MusicMenuSection,
+  menuAnchorPoint,
+  type MenuAt,
+} from "./music/musicMenuUi";
 
 type SortMode = "manual" | "added-newest" | "added-oldest";
+
+const SORT_OPTIONS: ReadonlyArray<readonly [SortMode, string]> = [
+  ["manual", "Manual"],
+  ["added-newest", "Date added (newest)"],
+  ["added-oldest", "Date added (oldest)"],
+];
 
 function displayTitle(file: MediaFile): string {
   return file.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "");
@@ -65,16 +81,14 @@ export const PlaylistDetailView = ({
     playlist.items[0]?.ruforgePosterPath;
 
   const [sortMode, setSortMode] = useState<SortMode>("manual");
-  const [sortOpen, setSortOpen] = useState(false);
-  const [rowMenuPath, setRowMenuPath] = useState<string | null>(null);
+  const [sortAt, setSortAt] = useState<MenuAt | null>(null);
+  const [rowMenu, setRowMenu] = useState<{ path: string; at: MenuAt } | null>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
-  const sortItems = usePlaylistSortItems(sortMode, setSortMode);
-
   useEffect(() => {
     setSortMode("manual");
-    setRowMenuPath(null);
-    setSortOpen(false);
+    setRowMenu(null);
+    setSortAt(null);
   }, [playlist.path]);
 
   const displayItems = useMemo(() => {
@@ -90,12 +104,7 @@ export const PlaylistDetailView = ({
     return items;
   }, [isVirtual, playlistId, playlist.items, sortMode]);
 
-  const sortLabel =
-    sortMode === "manual"
-      ? "Manual"
-      : sortMode === "added-newest"
-        ? "Date added (newest)"
-        : "Date added (oldest)";
+  const sortLabel = SORT_OPTIONS.find(([mode]) => mode === sortMode)?.[1] ?? "Manual";
 
   const playOrdered = (shuffle: boolean) => {
     void handlePlayPlaylist(displayItems, shuffle, playlistSource);
@@ -119,12 +128,9 @@ export const PlaylistDetailView = ({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="h-full flex flex-col md:flex-row overflow-hidden relative"
-      onClick={() => setRowMenuPath(null)}
     >
-      <div className="absolute inset-0 pointer-events-none shadow-[inset_4px_4px_18px_rgba(0,0,0,0.32)] z-20 rounded-tl-[32px]" />
-
       <div className="relative w-full md:w-[420px] lg:w-[460px] flex flex-col flex-shrink-0 px-6 pt-6 z-10 bg-[color:var(--rf-well)]">
-        <div className="relative flex-1 w-full rounded-t-[28px] flex flex-col bg-[#271C18]">
+        <div className="relative flex-1 w-full rounded-t-[28px] flex flex-col bg-[color:var(--rf-surface)]">
           <div className="relative h-full px-7 pt-7 pb-28 flex flex-col overflow-y-auto z-10 rf-scrollbar">
             <button
               onClick={onBack}
@@ -138,12 +144,12 @@ export const PlaylistDetailView = ({
 
             <div className="mt-8 flex flex-col">
               <div
-                className="relative aspect-video rounded-2xl overflow-hidden bg-[#1a1411] group cursor-pointer"
+                className="rf-art-clip relative aspect-video bg-[color:var(--rf-surface-deep)] group cursor-pointer"
                 onClick={() => playOrdered(false)}
               >
                 {mainThumbnail ? (
                   <img
-                    src={convertFileSrc(mainThumbnail)}
+                    src={localImageSrc(mainThumbnail)}
                     alt=""
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
@@ -203,13 +209,51 @@ export const PlaylistDetailView = ({
       <motion.div className="flex-1 overflow-y-auto pl-4 pr-8 py-10 bg-[color:var(--rf-well)] rf-scrollbar">
         <div className="space-y-3 relative z-10 max-w-3xl">
           {isVirtual ? (
-            <MorphLabelMenu
-              label={sortLabel}
-              items={sortItems}
-              open={sortOpen}
-              onOpenChange={setSortOpen}
-              ariaLabel="Sort playlist"
-            />
+            <>
+              <button
+                type="button"
+                aria-label="Sort playlist"
+                aria-haspopup="menu"
+                aria-expanded={sortAt != null}
+                className={`inline-flex h-[30px] items-center gap-2 rounded-[10px] px-2.5 text-[10px] font-black uppercase tracking-[0.16em] transition-colors ${
+                  sortAt ? "bg-white/[0.06] text-stone-200" : "text-stone-400 hover:text-stone-200"
+                }`}
+                onClick={(e) =>
+                  setSortAt(sortAt ? null : { ...menuAnchorPoint(e.currentTarget, "start"), placement: "anchor" })
+                }
+              >
+                <span>Sort: {sortLabel}</span>
+                <ChevronDown size={12} className="shrink-0" />
+              </button>
+              <MusicFloatingMenu
+                open={sortAt != null}
+                x={sortAt?.x ?? 0}
+                y={sortAt?.y ?? 0}
+                placement="anchor"
+                theme="library"
+                onClose={() => setSortAt(null)}
+                ariaLabel="Sort playlist"
+              >
+                <MusicMenuSection label="Sort by" tone={MUSIC_MENU_TONES.navigate}>
+                  {SORT_OPTIONS.map(([mode, label]) => (
+                    <MusicMenuRow
+                      key={mode}
+                      tone={MUSIC_MENU_TONES.navigate}
+                      label={label}
+                      active={sortMode === mode}
+                      icon={<ArrowUpDown size={MUSIC_MENU_ICON_SIZE} strokeWidth={2.25} />}
+                      trailing={sortMode === mode
+                        ? <Check size={12} strokeWidth={2.5} className="shrink-0 text-[color:var(--accent)]" aria-hidden />
+                        : null}
+                      onClick={() => {
+                        setSortMode(mode);
+                        setSortAt(null);
+                      }}
+                    />
+                  ))}
+                </MusicMenuSection>
+              </MusicFloatingMenu>
+            </>
           ) : null}
 
           {displayItems.length === 0 ? (
@@ -226,11 +270,10 @@ export const PlaylistDetailView = ({
                 item={item}
                 index={index}
                 canReorder={Boolean(isVirtual && playlistId && sortMode === "manual")}
-                menuOpen={rowMenuPath === item.path}
+                menuAt={rowMenu?.path === item.path ? rowMenu.at : null}
                 dragOver={dragOver === index}
-                onOpenMenu={() =>
-                  setRowMenuPath((p) => (p === item.path ? null : item.path))
-                }
+                onOpenMenu={(at) => setRowMenu({ path: item.path, at })}
+                onCloseMenu={() => setRowMenu(null)}
                 onPlay={() => void handlePlayFile(item, displayItems, playlistSource)}
                 onDragStart={() => setDragFrom(index)}
                 onDragOver={() => setDragOver(index)}
@@ -244,7 +287,7 @@ export const PlaylistDetailView = ({
                     ? () => {
                         removeFromVirtualPlaylist(playlistId, item.path);
                         notify("Removed from playlist");
-                        setRowMenuPath(null);
+                        setRowMenu(null);
                       }
                     : undefined
                 }
@@ -252,7 +295,7 @@ export const PlaylistDetailView = ({
                   playlistId && sortMode === "manual"
                     ? () => {
                         moveVirtualPlaylistItem(playlistId, item.path, "top");
-                        setRowMenuPath(null);
+                        setRowMenu(null);
                       }
                     : undefined
                 }
@@ -260,7 +303,7 @@ export const PlaylistDetailView = ({
                   playlistId && sortMode === "manual"
                     ? () => {
                         moveVirtualPlaylistItem(playlistId, item.path, "bottom");
-                        setRowMenuPath(null);
+                        setRowMenu(null);
                       }
                     : undefined
                 }
@@ -269,7 +312,7 @@ export const PlaylistDetailView = ({
                     ? () => {
                         setVirtualPlaylistThumbnail(playlistId, item.path);
                         notify("Playlist thumbnail updated");
-                        setRowMenuPath(null);
+                        setRowMenu(null);
                       }
                     : undefined
                 }
@@ -286,9 +329,10 @@ function PlaylistRow({
   item,
   index,
   canReorder,
-  menuOpen,
+  menuAt,
   dragOver,
   onOpenMenu,
+  onCloseMenu,
   onPlay,
   onDragStart,
   onDragOver,
@@ -302,9 +346,10 @@ function PlaylistRow({
   item: MediaFile;
   index: number;
   canReorder: boolean;
-  menuOpen: boolean;
+  menuAt: MenuAt | null;
   dragOver: boolean;
-  onOpenMenu: () => void;
+  onOpenMenu: (at: MenuAt) => void;
+  onCloseMenu: () => void;
   onPlay: () => void;
   onDragStart: () => void;
   onDragOver: () => void;
@@ -316,9 +361,17 @@ function PlaylistRow({
   onSetThumbnail?: () => void;
 }) {
   const title = displayTitle(item);
+  const menuOpen = menuAt != null;
+  const hasMenu = Boolean(onRemove || onMoveTop || onMoveBottom || onSetThumbnail);
+  const icon = MUSIC_MENU_ICON_SIZE;
 
   return (
     <div
+      onContextMenu={(e) => {
+        if (!hasMenu) return;
+        e.preventDefault();
+        onOpenMenu({ x: e.clientX, y: e.clientY, placement: "cursor" });
+      }}
       draggable={canReorder}
       onDragStart={(e) => {
         if (!canReorder) {
@@ -358,10 +411,11 @@ function PlaylistRow({
         </div>
       )}
 
-      <div className="relative w-44 aspect-video rounded-2xl overflow-hidden bg-stone-900 flex-shrink-0 shadow-lg border border-white/5">
+      <div className="w-44 flex-shrink-0 rounded-2xl shadow-lg">
+      <div className="rf-art-clip relative aspect-video bg-stone-900 border border-white/5">
         {item.thumbnailPath || item.ruforgePosterPath ? (
           <img
-            src={convertFileSrc(item.thumbnailPath || item.ruforgePosterPath!)}
+            src={localImageSrc(item.thumbnailPath || item.ruforgePosterPath!)}
             alt=""
             className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
           />
@@ -388,6 +442,7 @@ function PlaylistRow({
           );
         })()}
       </div>
+      </div>
 
       <div className="flex-1 min-w-0">
         <h3 className="text-[15px] font-bold text-stone-100 group-hover:text-[color:var(--accent)] transition-colors truncate">
@@ -401,70 +456,75 @@ function PlaylistRow({
         </div>
       </div>
 
-      {(onRemove || onMoveTop || onMoveBottom || onSetThumbnail) && (
+      {hasMenu && (
         <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
-            onClick={onOpenMenu}
+            aria-label="Video options"
+            data-tooltip="More options"
+            onClick={(e) => {
+              if (menuOpen) onCloseMenu();
+              else onOpenMenu({ ...menuAnchorPoint(e.currentTarget), placement: "anchor" });
+            }}
             className={`p-2.5 text-stone-500 hover:text-white transition-all rounded-xl ${
               menuOpen ? "opacity-100 bg-white/5" : "opacity-0 group-hover:opacity-100"
             }`}
           >
             <MoreVertical size={18} />
           </button>
-          <AnimatePresence>
-            {menuOpen ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                className={`absolute right-0 top-full mt-1 z-40 w-max rounded-2xl p-1 ${MORPH_MENU_SHELL}`}
-              >
-                {onRemove ? (
-                  <button
-                    type="button"
-                    onClick={onRemove}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white text-left"
-                  >
-                    <Trash2 size={13} />
-                    Remove from playlist
-                  </button>
-                ) : null}
-                {onMoveTop ? (
-                  <button
-                    type="button"
-                    onClick={onMoveTop}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white text-left"
-                  >
-                    <ArrowUpToLine size={13} />
-                    Move to top
-                  </button>
-                ) : null}
-                {onMoveBottom ? (
-                  <button
-                    type="button"
-                    onClick={onMoveBottom}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white text-left"
-                  >
-                    <ArrowDownToLine size={13} />
-                    Move to bottom
-                  </button>
-                ) : null}
-                {onSetThumbnail ? (
-                  <button
-                    type="button"
-                    onClick={onSetThumbnail}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[11px] font-bold text-stone-300 hover:bg-white/5 hover:text-white text-left"
-                  >
-                    <ImageIcon size={13} />
-                    Set as playlist thumbnail
-                  </button>
-                ) : null}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
         </div>
       )}
+      <MusicFloatingMenu
+        open={menuOpen}
+        x={menuAt?.x ?? 0}
+        y={menuAt?.y ?? 0}
+        placement={menuAt?.placement}
+        theme="library"
+        onClose={onCloseMenu}
+        ariaLabel={`Actions for ${title}`}
+      >
+        {onMoveTop || onMoveBottom ? (
+          <MusicMenuSection label="Order" tone={MUSIC_MENU_TONES.playback}>
+            {onMoveTop ? (
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.playback}
+                label="Move to top"
+                icon={<ArrowUpToLine size={icon} strokeWidth={2.25} />}
+                onClick={onMoveTop}
+              />
+            ) : null}
+            {onMoveBottom ? (
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.playback}
+                label="Move to bottom"
+                icon={<ArrowDownToLine size={icon} strokeWidth={2.25} />}
+                onClick={onMoveBottom}
+              />
+            ) : null}
+          </MusicMenuSection>
+        ) : null}
+        {onSetThumbnail || onRemove ? (
+          <MusicMenuSection label="Playlist" tone={MUSIC_MENU_TONES.playlist}>
+            {onSetThumbnail ? (
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.playlist}
+                label="Use as playlist cover"
+                icon={<ImageIcon size={icon} strokeWidth={2.25} />}
+                onClick={onSetThumbnail}
+              />
+            ) : null}
+            {onRemove ? (
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.playlist}
+                label="Remove from playlist"
+                variant="danger"
+                icon={<Trash2 size={icon} strokeWidth={2.25} />}
+                onClick={onRemove}
+              />
+            ) : null}
+          </MusicMenuSection>
+        ) : null}
+      </MusicFloatingMenu>
     </div>
   );
 }

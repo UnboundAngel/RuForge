@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { localImageSrc } from "@/lib/localImageSrc";
 import { ChevronLeft, Play, Youtube, Link } from "lucide-react";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { isAudioOnlyPath, bestCoverPath } from "@/mediaKind";
@@ -208,7 +208,7 @@ export function MusicTrackView({
   }
 
   const cover = bestCoverPath(file);
-  const coverSrc = cover ? convertFileSrc(cover) : null;
+  const coverSrc = cover ? localImageSrc(cover) : null;
   const artistKey = artistKeyFromFile(file);
   const artistDisplay = rawArtistFromFile(file);
   const albumKey = album ? albumKeyFromFile(file) : "";

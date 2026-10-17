@@ -268,6 +268,65 @@ fn thumb_path_for(file: &MediaFile, canonical: &Path) -> Option<PathBuf> {
     find_sibling_thumb(canonical)
 }
 
+fn thumb_version(path: &Path) -> u64 {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn artist_from_stem(stem: &str) -> Option<String> {
+    let (artist, _) = stem.split_once(" - ")?;
+    let artist = artist.trim();
+    (!artist.is_empty()).then(|| artist.to_string())
+}
+
+/// "Jiffy Lube Live, Bristow, VA, USA": a comma followed by a two-letter state code.
+fn is_live_venue_album(s: &str) -> bool {
+    s.match_indices(',').any(|(i, _)| {
+        let rest: Vec<char> = s[i + 1..].trim_start().chars().take(3).collect();
+        rest.len() >= 3
+            && rest[0].is_ascii_uppercase()
+            && rest[1].is_ascii_uppercase()
+            && (rest[2] == ',' || rest[2].is_whitespace())
+    })
+}
+
+fn display_album(tag: Option<String>, canonical: &Path) -> Option<String> {
+    let cleaned = tag.map(|raw| {
+        let t = raw.trim();
+        let dated = t.len() >= 10
+            && t.as_bytes()[..10]
+                .iter()
+                .enumerate()
+                .all(|(i, b)| if i == 4 || i == 7 { *b == b'-' } else { b.is_ascii_digit() });
+        if dated {
+            t[10..].trim_start_matches(|c: char| c == ':' || c.is_whitespace()).trim().to_string()
+        } else {
+            t.to_string()
+        }
+    });
+    match cleaned {
+        Some(a) if !a.is_empty() && !is_live_venue_album(&a) => Some(a),
+        other => canonical
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .map(str::trim)
+            .filter(|n| {
+                !n.is_empty()
+                    && !matches!(
+                        n.to_ascii_lowercase().as_str(),
+                        "music" | "downloads" | "playlists" | "videos" | "audio"
+                    )
+            })
+            .map(str::to_string)
+            .or(other.filter(|a| !a.is_empty())),
+    }
+}
+
 fn media_files_from_entries(entries: &[GalleryEntry]) -> Vec<MediaFile> {
     entries
         .iter()
@@ -381,9 +440,36 @@ pub async fn probe_companion_items(
             probe.container.clone()
         };
 
+        let non_empty = |s: &Option<String>| s.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+        let title = match media_type {
+            MediaType::Audio => non_empty(&file.canonical_title).unwrap_or_else(|| file.name.clone()),
+            MediaType::Video => file.name.clone(),
+        };
+        // Same resolution order as the desktop Music views (`rawArtistFromFile`,
+        // `resolveDisplayAlbum`) so artist and album pages group identically.
+        let artist = match media_type {
+            MediaType::Audio => non_empty(&file.canonical_artist)
+                .or_else(|| non_empty(&file.album_artist))
+                .or_else(|| non_empty(&file.artist))
+                .or_else(|| artist_from_stem(&file.name))
+                .or_else(|| canonical.file_stem().and_then(|s| s.to_str()).and_then(artist_from_stem)),
+            MediaType::Video => file
+                .youtube
+                .as_ref()
+                .and_then(|y| non_empty(&y.channel))
+                .or_else(|| non_empty(&file.artist)),
+        };
+        let album = match media_type {
+            MediaType::Audio => display_album(
+                non_empty(&file.canonical_album).or_else(|| non_empty(&file.album)),
+                &canonical,
+            ),
+            MediaType::Video => None,
+        };
+
         let projection = CompanionItemProjection {
             id: id.clone(),
-            title: file.name.clone(),
+            title,
             media_type,
             duration_secs,
             container: container.clone(),
@@ -396,7 +482,13 @@ pub async fn probe_companion_items(
                 &probe.audio_codec,
             ),
             has_thumb: thumb_path.is_some(),
+            thumb_v: thumb_path.as_deref().map(thumb_version).unwrap_or(0),
             size_bytes,
+            artist,
+            album,
+            year: file.year,
+            track_no: file.track_no,
+            added_at: file.created,
         };
 
         companion_items.insert(

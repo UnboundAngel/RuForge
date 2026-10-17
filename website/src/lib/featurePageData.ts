@@ -14,7 +14,10 @@ export interface FeatureSectionDef {
 
 export interface FeaturePageDef {
   slug: string;
+  /** Short label for nav, breadcrumbs and prev/next links. */
   title: string;
+  /** Page h1 when it should carry a search phrase too long for the nav label. */
+  pageHeading?: string;
   metaTitle: string;
   metaDescription: string;
   description: string;
@@ -26,9 +29,10 @@ export const FEATURE_PAGES: FeaturePageDef[] = [
   {
     slug: 'downloader',
     title: 'Downloader',
-    metaTitle: 'YouTube downloader for videos, audio, and playlists',
-    metaDescription: 'Download YouTube videos, audio, and whole playlists to your PC. See the file size first, pick the quality, and skip videos you already have.',
-    description: 'Paste a link, a playlist, or a whole stack of links. You see what you are getting before it downloads, and the files are yours to keep.',
+    pageHeading: 'yt-dlp GUI for Windows',
+    metaTitle: 'yt-dlp GUI and YouTube downloader for Windows',
+    metaDescription: 'Free, open-source yt-dlp GUI for Windows. Download YouTube videos, audio, and playlists, see the file size first, and skip what you already have.',
+    description: 'RuForge runs yt-dlp for you, so there is no command line to learn. Paste a link, a playlist, or a whole stack of links. You see what you are getting before it downloads, and the files are yours to keep.',
     imageDir: 'download',
     sections: [
       {

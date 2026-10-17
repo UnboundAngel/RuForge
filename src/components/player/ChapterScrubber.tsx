@@ -31,6 +31,9 @@ type ChapterScrubberProps = {
   onMouseMove?: (e: React.MouseEvent<HTMLDivElement>) => void;
   onMouseLeave?: () => void;
   overlay?: ScrubBarOverlay;
+  mostReplayed?: { start: number; end: number } | null;
+  /** Section loop, tinted inside each chapter pill so it grows with the hovered one. */
+  loopRange?: { start: number; end: number } | null;
 };
 
 export function ChapterScrubber({
@@ -48,6 +51,8 @@ export function ChapterScrubber({
   onMouseMove,
   onMouseLeave,
   overlay,
+  mostReplayed,
+  loopRange,
 }: ChapterScrubberProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [barWidthPx, setBarWidthPx] = useState(0);
@@ -188,7 +193,7 @@ export function ChapterScrubber({
           return (
             <div
               key={`${ch.start_time}-${i}`}
-              className={`relative min-w-0 rounded-full bg-white/15 overflow-hidden ${
+              className={`rf-scrub-groove relative min-w-0 rounded-full overflow-hidden transition-transform duration-150 ${
                 isHoveredChapter ? "z-20" : "z-0"
               }`}
               style={{
@@ -240,17 +245,26 @@ export function ChapterScrubber({
               ))}
 
               <div
-                className="absolute top-0 left-0 h-full bg-white/25 rounded-full pointer-events-none"
+                className="rf-scrub-buffered absolute top-0 left-0 h-full rounded-full pointer-events-none"
                 style={{ width: `${isFuture ? 0 : localBuffered}%` }}
-              />
-              <div
-                className="absolute top-0 left-0 h-full bg-[#271C18] rounded-full shadow-[0_0_10px_rgba(39,28,24,0.4)] pointer-events-none"
-                style={{ width: `${localPlayed}%` }}
               />
               {localHover > 0 && (
                 <div
-                  className="absolute top-0 left-0 h-full bg-white/10 rounded-full pointer-events-none"
+                  className="rf-scrub-hover absolute top-0 left-0 h-full rounded-full pointer-events-none"
                   style={{ width: `${localHover}%` }}
+                />
+              )}
+              <div
+                className="rf-scrub-played absolute top-0 left-0 h-full rounded-full pointer-events-none"
+                style={{ width: `${localPlayed}%` }}
+              />
+              {loopRange && chDuration > 0 && loopRange.end > ch.start_time && loopRange.start < ch.end_time && (
+                <div
+                  className="rf-scrub-loop-band absolute inset-y-0 pointer-events-none"
+                  style={{
+                    left: `${((Math.max(loopRange.start, ch.start_time) - ch.start_time) / chDuration) * 100}%`,
+                    width: `${((Math.min(loopRange.end, ch.end_time) - Math.max(loopRange.start, ch.start_time)) / chDuration) * 100}%`,
+                  }}
                 />
               )}
             </div>
@@ -259,13 +273,11 @@ export function ChapterScrubber({
       </div>
 
       <div
-        className={`absolute w-4 h-4 bg-white rounded-full border-2 border-[#271C18] shadow-lg pointer-events-none z-30 transition-[opacity,bottom] duration-150 ${
-          isHovering || isScrubbing ? "opacity-100" : "opacity-0"
-        }`}
+        className="rf-scrub-knob absolute w-3.5 h-3.5 rounded-full pointer-events-none z-30"
         style={{
           left: `${playheadPercent}%`,
           bottom: knobCenterFromBottom,
-          transform: "translate(-50%, 50%)",
+          transform: `translate(-50%, 50%) scale(${isHovering || isScrubbing ? 1 : 0})`,
         }}
       />
 
@@ -284,6 +296,7 @@ export function ChapterScrubber({
               formatTime={formatTime}
               cursorPercent={hoverPercent}
               sbOverlay={overlay}
+              mostReplayed={mostReplayed}
             />
           )}
       </AnimatePresence>

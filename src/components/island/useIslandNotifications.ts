@@ -1,3 +1,4 @@
+import { openCreatorFromNotifications } from "@/notifications/openCreator";
 import { useMemo } from "react";
 
 import { mainChannelHandlers, mainPrefsHandlers } from "@/components/notifications/mainPanelHandlers";
@@ -43,6 +44,7 @@ export function useIslandNotifications(enabled: boolean): NotificationCenterPane
             onMarkAllRead: markEveryNotificationRead,
             onTab: setNotificationTab,
             onOpenSettings: openNotificationSettings,
+            onOpenCreator: openCreatorFromNotifications,
             onClose: closeNotificationPopover,
           }
         : null,

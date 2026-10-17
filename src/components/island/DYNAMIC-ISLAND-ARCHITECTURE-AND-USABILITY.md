@@ -9,7 +9,7 @@ This document describes how the RuForge activity island expands, animates, and w
 | `ActivityIsland.tsx` | Integration layer: session state, user expand/collapse, portal mount, handlers, content mapping |
 | `DynamicIsland.tsx` | Visual shell: single morphing container + inner content swap |
 | `ActivityIslandWaveform.tsx` | Five-bar accent waveform (compact + expanded header) |
-| `IslandAudioOutputControl.tsx` | Headphones MorphMenu (`paintedRest={false}`); device list from main content |
+| `IslandAudioOutputControl.tsx` | Headphones button with an in-place Music menu kit panel (`MusicMenuPanel`, library theme); device list from main content |
 | `islandIcons.tsx` | SVG icons for expanded controls |
 | `src/lib/activityIslandResolve.ts` | Pure rules: when island shows, when expand is allowed, navigate-to-owner |
 | `src/hooks/useCurrentActivity.ts` | Session snapshot: file, paused, time, cover |
@@ -202,7 +202,7 @@ max-w-lg
 WebkitAppRegion: "no-drag"  // Tauri: clicks hit island, not drag strip
 ```
 
-Titlebar height token: `--rf-titlebar-h: 48px` in `src/index.css`. Content column uses `pt-[var(--rf-titlebar-h)]`.
+Titlebar height token: `--rf-titlebar-h` in `src/index.css` (48px Cozy, 42px Compact; derived from `--rf-density`). The in-app island stays 36px and `--rf-island-top` centers it in either band. Content column uses `pt-[var(--rf-titlebar-h)]`.
 
 ### Z-index stack
 
@@ -263,7 +263,7 @@ DynamicIsland      ← content prop only
 | `audioOutputDeviceId` | Persisted app-wide sink id (`audioOutputDevices.ts`); empty = system default |
 | `audioOutputDevices` | Main-enumerated outputs (pushed to desktop overlay; overlay webview cannot list devices) |
 
-Expanded headphones control uses MorphMenu with bare rest (icon only). Open shell is opaque `#271C18`. Routes output on the owning main media element. Desktop overlay is remote only: selection goes through `DesktopIslandControl` `{ type: "audioOutput"; deviceId }` and is applied on main (including `AudioContext.setSinkId` when the island waveform uses a media-element source).
+Expanded headphones control opens an in-place `MusicMenuPanel` (library theme) under the icon; it is not portaled because the island window only takes clicks on the island itself. Routes output on the owning main media element. Desktop overlay is remote only: selection goes through `DesktopIslandControl` `{ type: "audioOutput"; deviceId }` and is applied on main (including `AudioContext.setSinkId` when the island waveform uses a media-element source).
 
 ### Video bridge note
 

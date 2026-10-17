@@ -33,7 +33,7 @@ The ratio itself tells the user what kind of thing they're looking at. A portrai
 - **Metadata line** (rating · year · type): UNDER the card, dot-separated, `--text-muted`. The rating star/number can carry the accent.
 
 ## Section structure
-- Header: short title, optionally a **left accent bar** (small vertical tick in the accent color, Cineby `| Continue watching` style).
+- Header: short title. No accent bar beside it (see `design-style-anti-patterns.mdc`).
 - Horizontal scroll row of cards with consistent gap (`--space-4`).
 - **Scroll affordance:** left/right arrow on a soft radial shadow that fades into the app background (same hue, darkened). Reads as atmosphere pointing the way, NOT a solid button chip. Appears on hover of the row.
 - **Section differentiation:** if two rows carry different value, vary card size or art treatment. Don't clone the same row three times with different titles.

@@ -342,18 +342,21 @@ pub fn auth_from_download_options(
     browser_cookies: Option<&str>,
     cookie_file: Option<&str>,
     browser_cookie_arg: Option<String>,
-) -> Option<AuthConfig> {
+) -> Result<Option<AuthConfig>, String> {
     if let Some(file) = cookie_file.filter(|s| !s.is_empty()) {
-        return Some(AuthConfig {
+        media_engine::cookie_file::validate_cookie_file(file)?;
+        return Ok(Some(AuthConfig {
             cookie_file: Some(file.to_string()),
             browser_label: None,
-        });
+        }));
     }
-    if let Some(browser) = browser_cookies.filter(|s| !s.is_empty() && *s != "chrome") {
-        return Some(AuthConfig {
+    if let Some(browser) =
+        browser_cookies.filter(|s| !s.is_empty() && *s != "chrome" && *s != "custom")
+    {
+        return Ok(Some(AuthConfig {
             cookie_file: None,
             browser_label: browser_cookie_arg.or_else(|| Some(browser.to_string())),
-        });
+        }));
     }
-    None
+    Ok(None)
 }

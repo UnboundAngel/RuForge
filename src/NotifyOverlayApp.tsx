@@ -2,6 +2,7 @@ import { emitTo } from "@tauri-apps/api/event";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
+import { syncRuforgeVideoPalette } from "@/accentCss";
 import type { ChannelHandlers } from "@/components/notifications/channels/ChannelsPanel";
 import { NotificationCenterPanel } from "@/components/notifications/NotificationCenterPanel";
 import type { PrefsHandlers } from "@/components/notifications/NotificationPrefsView";
@@ -22,6 +23,7 @@ import {
 import { REDUCED_PANEL_MOTION, notifyPanelMotion } from "@/lib/overlayMotion";
 import { listenPrivateState, pushPrivateRecord } from "@/lib/privateMailbox";
 import type { NotificationActionId, NotificationItem } from "@/notifications/types";
+import { loadMergedSettings } from "@/store/types";
 
 const MAIN = "main";
 
@@ -43,6 +45,7 @@ const channelHandlers: ChannelHandlers = {
 const prefsHandlers: PrefsHandlers = {
   onAlerts: (enabled) => send({ type: "setAlerts", enabled }),
   onCheckInterval: (minutes) => send({ type: "setCheckInterval", minutes }),
+  onMute: (key, muted) => send({ type: "setMuted", key, muted }),
 };
 
 /** Host B: the notification panel in a transparent child webview stacked above the YouTube webviews. */
@@ -65,6 +68,13 @@ export default function NotifyOverlayApp() {
     void unlisten.then(() => emitTo(MAIN, NOTIFY_OVERLAY_READY_EVENT));
     return () => void unlisten.then((off) => off());
   }, []);
+
+  useEffect(() => {
+    if (!state?.open) return;
+    syncRuforgeVideoPalette(
+      state.navMode !== "music" && loadMergedSettings().legacyVideoColors === true,
+    );
+  }, [state?.open, state?.navMode]);
 
   useEffect(() => {
     const onBlur = () => close("blur");
@@ -118,7 +128,7 @@ export default function NotifyOverlayApp() {
             role="dialog"
             aria-label="Notifications"
             data-music-mode={state.navMode === "music" ? "true" : undefined}
-            className="flex w-full origin-top-right flex-col overflow-hidden rounded-[20px] bg-[color:var(--rf-popover-bg)] shadow-[0_4px_12px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.06]"
+            className="flex w-full origin-top-right flex-col overflow-hidden rounded-[20px] bg-[color:var(--rf-popover-bg)] shadow-[0_8px_20px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.08]"
             style={panelStyle}
             {...(reduceMotion ? REDUCED_PANEL_MOTION : notifyPanelMotion)}
           >
@@ -135,6 +145,7 @@ export default function NotifyOverlayApp() {
               onMarkAllRead={() => send({ type: "markAllRead" })}
               onTab={(tab) => send({ type: "tab", tab })}
               onOpenSettings={() => send({ type: "openSettings" })}
+              onOpenCreator={(channelId, channel) => send({ type: "openCreator", channelId, channel })}
               onClose={() => close("escape")}
             />
           </motion.div>

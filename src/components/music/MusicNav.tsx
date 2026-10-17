@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Library, Maximize2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { altKeyLabel, modKeyLabel } from "@/lib/shortcutLabels";
+import { useHotkeyTooltip } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
 import { MusicNavCreateButton } from "./MusicNavCreateButton";
 
@@ -64,6 +64,9 @@ function PanelToggleIcon({ open, size }: { open: boolean; size: number }) {
  */
 export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, panelSlot, footerSlot }: Props) {
   const libraryActive = activeView === "library";
+  const openTooltip = useHotkeyTooltip("Open Your Library", "music.toggleNav");
+  const collapseTooltip = useHotkeyTooltip("Collapse Your Library", "music.toggleNav");
+  const fullLibraryTooltip = useHotkeyTooltip("Show full library", "music.goLibrary");
 
   if (collapsed) {
     return (
@@ -73,8 +76,8 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
             type="button"
             onClick={onToggleCollapse}
             className={cn(ICON_BTN, "group/toggle w-10 h-10", RED_HOVER)}
-            aria-label={`Open Your Library (${modKeyLabel()}+B)`}
-            data-tooltip={`Open Your Library (${modKeyLabel()}+B)`}
+            aria-label={openTooltip}
+            data-tooltip={openTooltip}
           >
             <PanelToggleIcon open size={24} />
           </button>
@@ -93,8 +96,8 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
           type="button"
           onClick={onToggleCollapse}
           className="group/toggle rf-music-tooltip-anchor rf-music-press-soft flex items-center gap-2.5 min-w-0 mr-auto text-base font-bold text-white/80 hover:text-white"
-          aria-label={`Collapse Your Library (${modKeyLabel()}+B)`}
-          data-tooltip={`Collapse Your Library (${modKeyLabel()}+B)`}
+          aria-label={collapseTooltip}
+          data-tooltip={collapseTooltip}
         >
           <PanelToggleIcon open={false} size={22} />
           <span className="truncate">Your Library</span>
@@ -109,8 +112,8 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
             RED_HOVER,
             libraryActive && "text-[color:var(--music-accent)] hover:text-[color:var(--music-accent)]",
           )}
-          aria-label={`Show full library (${altKeyLabel()}+3)`}
-          data-tooltip={`Show full library (${altKeyLabel()}+3)`}
+          aria-label={fullLibraryTooltip}
+          data-tooltip={fullLibraryTooltip}
         >
           <Maximize2 size={16} />
         </button>
