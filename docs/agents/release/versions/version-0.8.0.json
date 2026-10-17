@@ -1,0 +1,135 @@
+{
+  "nodes": [
+    {
+      "id": "t-playlists",
+      "type": "task",
+      "label": "Playlists",
+      "agent": "claude",
+      "details": [
+        "Downloaded YouTube playlists are checked for new videos on the channel schedule, with a bell notice and a Download button."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-settings",
+      "type": "task",
+      "label": "Settings",
+      "agent": "claude",
+      "details": [
+        "Notifications > Watch downloaded playlists turns playlist checks off."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-library",
+      "type": "task",
+      "label": "Library",
+      "agent": "claude",
+      "details": [
+        "Save to playlist is a small popup with playlist covers and search, video playlists only.",
+        "Delete single videos from a pasted playlist.",
+        "Playlist downloads fly onto their playlist card when the Playlists tab is open."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-downloads",
+      "type": "fix",
+      "label": "Downloads",
+      "agent": "claude",
+      "details": [
+        "No console windows flash on screen after a download or when opening Settings > Downloads.",
+        "The download slot no longer gets stuck on a finished cover during long batches."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-channels",
+      "type": "fix",
+      "label": "Channels",
+      "agent": "claude",
+      "details": [
+        "Followed creators keep loading new uploads when YouTube's channel feed fails, instead of Channel feed not found."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-library",
+      "type": "fix",
+      "label": "Library",
+      "agent": "claude",
+      "details": [
+        "Playlist covers use the video thumbnail instead of its first frame."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-music",
+      "type": "fix",
+      "label": "Music",
+      "agent": "claude",
+      "details": [
+        "The title bar avatar opens your profile from the video library."
+      ],
+      "files": []
+    }
+  ],
+  "edges": [
+    {
+      "source": "claude",
+      "target": "t-playlists"
+    },
+    {
+      "source": "t-playlists",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-settings"
+    },
+    {
+      "source": "t-settings",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-library"
+    },
+    {
+      "source": "t-library",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-downloads"
+    },
+    {
+      "source": "f-downloads",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-channels"
+    },
+    {
+      "source": "f-channels",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-library"
+    },
+    {
+      "source": "f-library",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-music"
+    },
+    {
+      "source": "f-music",
+      "target": "ruforge"
+    }
+  ]
+}
