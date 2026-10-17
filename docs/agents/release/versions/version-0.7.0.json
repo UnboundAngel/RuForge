@@ -1,0 +1,272 @@
+{
+  "nodes": [
+    {
+      "id": "t-player",
+      "type": "task",
+      "label": "Player",
+      "agent": "claude",
+      "details": [
+        "Description tab next to Comments, with clickable timestamps and chapters built from the description.",
+        "YouTube's most replayed graph above the scrubber.",
+        "Loop a section of a video with the brackets button.",
+        "Ctrl+wheel zooms into a paused frame up to 8x.",
+        "Next up panel with a now-playing card, watch progress and a sort menu.",
+        "End cards with the creator's avatar and a Hide button."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-settings",
+      "type": "task",
+      "label": "Settings",
+      "agent": "claude",
+      "details": [
+        "Keyboard shortcuts tab (Ctrl+/) where every hotkey can be rebound."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-appearance",
+      "type": "task",
+      "label": "Appearance",
+      "agent": "claude",
+      "details": [
+        "Black theme with your accent in video mode, Legacy colors brings back the brown.",
+        "App density (Cozy or Compact) slims the title bar and side rail, and both can hide while a video plays."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-library",
+      "type": "task",
+      "label": "Library",
+      "agent": "claude",
+      "details": [
+        "Tag videos by hand, with tag chips and a page per tag.",
+        "Finished downloads fly into their card in the Video Library."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-mini-player",
+      "type": "task",
+      "label": "Mini player",
+      "agent": "claude",
+      "details": [
+        "Ghost mode (Ctrl+Alt+G) with a chapter readout."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-notifications",
+      "type": "task",
+      "label": "Notifications",
+      "agent": "claude",
+      "details": [
+        "Filter the island by uploads or downloads and mute each kind."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-downloads",
+      "type": "task",
+      "label": "Downloads",
+      "agent": "claude",
+      "details": [
+        "Zen browser as a sign-in cookie source."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-music",
+      "type": "task",
+      "label": "Music",
+      "agent": "claude",
+      "details": [
+        "Settings opens inside Music, and Add from screenshots on a playlist."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-activity",
+      "type": "task",
+      "label": "Activity",
+      "agent": "claude",
+      "details": [
+        "A private local activity log for future stats; nothing is uploaded."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-downloads",
+      "type": "fix",
+      "label": "Downloads",
+      "agent": "claude",
+      "details": [
+        "Closing the downloader right after clicking Download no longer drops the download.",
+        "A rate-limited caption no longer fails the whole video, and errors show yt-dlp's real message.",
+        "Video size estimates count the video stream instead of only the audio.",
+        "Edge, Brave and Safari leave the cookie list because yt-dlp cannot read them on Windows."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-player",
+      "type": "fix",
+      "label": "Player",
+      "agent": "claude",
+      "details": [
+        "Auto captions show the original transcript in complete phrases.",
+        "Downloads saved without chapters or the replay graph fetch them once when opened."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-music",
+      "type": "fix",
+      "label": "Music",
+      "agent": "claude",
+      "details": [
+        "One click plays a song in a playlist.",
+        "Synced lyrics load for label uploads, and the lyrics header no longer covers the lines.",
+        "Profile and stats show a loading state instead of empty zeros.",
+        "The player bar drops a track whose file was deleted."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-dynamic-island",
+      "type": "fix",
+      "label": "Dynamic Island",
+      "agent": "claude",
+      "details": [
+        "No longer freezes at the end of a song on repeat or after seeking back."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-app",
+      "type": "fix",
+      "label": "App",
+      "agent": "claude",
+      "details": [
+        "Switching between Library and Music keeps each mode's scroll and open page."
+      ],
+      "files": []
+    }
+  ],
+  "edges": [
+    {
+      "source": "claude",
+      "target": "t-player"
+    },
+    {
+      "source": "t-player",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-settings"
+    },
+    {
+      "source": "t-settings",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-appearance"
+    },
+    {
+      "source": "t-appearance",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-library"
+    },
+    {
+      "source": "t-library",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-mini-player"
+    },
+    {
+      "source": "t-mini-player",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-notifications"
+    },
+    {
+      "source": "t-notifications",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-downloads"
+    },
+    {
+      "source": "t-downloads",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-music"
+    },
+    {
+      "source": "t-music",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-activity"
+    },
+    {
+      "source": "t-activity",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-downloads"
+    },
+    {
+      "source": "f-downloads",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-player"
+    },
+    {
+      "source": "f-player",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-music"
+    },
+    {
+      "source": "f-music",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-dynamic-island"
+    },
+    {
+      "source": "f-dynamic-island",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-app"
+    },
+    {
+      "source": "f-app",
+      "target": "ruforge"
+    }
+  ]
+}

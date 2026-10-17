@@ -36,7 +36,7 @@
   { "appArea": "Video Library", "difficulty": "High", "featureName": "a library home that feels like YouTube, with creator pages", "priority": "High", "status": "Finished" },
   { "appArea": "Music Library", "difficulty": "High", "featureName": "make playlists, even from a screenshot of one", "priority": "High", "status": "Finished" },
   { "appArea": "Music Library", "difficulty": "Medium", "featureName": "import playlists with one terminal command", "priority": "High", "status": "To-Do", "roadmapStatus": "progress" },
-  { "appArea": "Infra", "difficulty": "Medium", "featureName": "every popup, switch and toast looks and works the same", "priority": "Medium", "status": "Finished", "roadmapStatus": "unreleased" },
+  { "appArea": "Infra", "difficulty": "Medium", "featureName": "every popup, switch and toast looks and works the same", "priority": "Medium", "status": "Finished" },
   { "appArea": "Music Library", "difficulty": "Medium", "featureName": "song suggestions you can preview before adding", "priority": "Medium", "status": "Finished" },
   { "appArea": "Music Library", "difficulty": "Medium", "featureName": "one search bar for your music and YouTube Music", "priority": "Medium", "status": "Finished" },
   { "appArea": "Player", "difficulty": "Medium", "featureName": "see each sponsor skip and undo it", "priority": "Medium", "status": "Finished" },
@@ -62,7 +62,7 @@
   { "appArea": "Download Screen", "difficulty": "High", "featureName": "schedule downloads to run overnight", "priority": "High", "status": "To-Do" },
   { "appArea": "Video Library", "difficulty": "Medium", "featureName": "drag files in to add them to your library", "priority": "Medium", "status": "To-Do" },
   { "appArea": "Settings Screen", "difficulty": "Medium", "featureName": "pick your own accent color", "priority": "Medium", "status": "Finished" },
-  { "appArea": "Settings Screen", "difficulty": "Low", "featureName": "set your own keyboard shortcuts", "priority": "Low", "status": "To-Do" },
+  { "appArea": "Settings Screen", "difficulty": "Low", "featureName": "set your own keyboard shortcuts", "priority": "Low", "status": "Finished" },
   { "appArea": "Explorer", "difficulty": "Medium", "featureName": "follow channels and hear about new uploads", "priority": "High", "status": "Finished" },
   { "appArea": "Infra", "difficulty": "High", "featureName": "a proper Linux installer", "priority": "Low", "status": "To-Do" },
   { "appArea": "Infra", "difficulty": "High", "featureName": "RuForge on Mac", "priority": "Low", "status": "To-Do" }
