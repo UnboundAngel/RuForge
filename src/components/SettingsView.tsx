@@ -57,6 +57,7 @@ import {
   SettingsSearchRootContext,
   SettingsSection,
 } from './settings/settingsChrome';
+import { PlaylistWatchSettingItem } from './settings/PlaylistWatchSettingItem';
 import { ShortcutsTab } from './settings/ShortcutsTab';
 import {
   GAMES_ENABLED,
@@ -1462,12 +1463,11 @@ export const SettingsView: React.FC<{
                   control={
                     <Switch
                       checked={settings.watchlistAlerts !== false}
-                      onChange={() =>
-                        updateSetting("watchlistAlerts", settings.watchlistAlerts === false)
-                      }
+                      onChange={() => updateSetting("watchlistAlerts", settings.watchlistAlerts === false)}
                     />
                   }
                 />
+                <PlaylistWatchSettingItem />
                 <SettingItem
                   title="Check followed channels"
                   description="How often RuForge looks for new uploads from channels you follow."

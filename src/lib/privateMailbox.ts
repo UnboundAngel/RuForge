@@ -20,7 +20,8 @@ export type MailboxQueueKey =
   | "game-layout-save"
   | "game-glance-layout-save"
   | "game-overlay-action"
-  | "playback-surface-control";
+  | "playback-surface-control"
+  | "playlist-watch-new";
 
 type Slot<T> = { version: number; payload: T };
 

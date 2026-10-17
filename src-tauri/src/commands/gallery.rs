@@ -936,7 +936,7 @@ fn playlist_with_items(mut playlist: PlaylistCollection, items: Vec<MediaFile>) 
     if !stack_ok {
         playlist.stack_thumbnail_path = items
             .first()
-            .and_then(|item| item.ruforge_poster_path.clone().or_else(|| item.thumbnail_path.clone()));
+            .and_then(|item| item.thumbnail_path.clone().or_else(|| item.ruforge_poster_path.clone()));
     }
     playlist.item_count = items.len() as u32;
     playlist.combined_duration = combined_duration;
@@ -1116,7 +1116,7 @@ pub fn scan_gallery_dir(dir: &str) -> Result<Vec<GalleryEntry>, String> {
                     .then(|| folder_jpg.to_string_lossy().to_string())
                     .or_else(|| {
                         items.iter().find_map(|it| {
-                            it.ruforge_poster_path.clone().or_else(|| it.thumbnail_path.clone())
+                            it.thumbnail_path.clone().or_else(|| it.ruforge_poster_path.clone())
                         })
                     });
                 out.push(GalleryEntry::Playlist {
@@ -1199,7 +1199,7 @@ fn build_playlist_entry(dir: &std::path::Path, name: &str) -> Option<GalleryEntr
         .then(|| folder_jpg.to_string_lossy().to_string())
         .or_else(|| {
             items.iter().find_map(|it| {
-                it.ruforge_poster_path.clone().or_else(|| it.thumbnail_path.clone())
+                it.thumbnail_path.clone().or_else(|| it.ruforge_poster_path.clone())
             })
         });
     Some(GalleryEntry::Playlist {

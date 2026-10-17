@@ -225,8 +225,8 @@ function metadataInvokePayload(metadata?: PlaylistSidecarMetadata) {
   };
 }
 
-export function kickoffPlaylistDownloadSidecar(input: PlaylistSidecarKickoff): Promise<void> {
-  return invoke("kickoff_playlist_download_sidecar", {
+export async function kickoffPlaylistDownloadSidecar(input: PlaylistSidecarKickoff): Promise<void> {
+  await invoke("kickoff_playlist_download_sidecar", {
     outputDir: input.outputDir,
     folderName: input.folderName,
     listUrl: input.listUrl,
@@ -238,6 +238,8 @@ export function kickoffPlaylistDownloadSidecar(input: PlaylistSidecarKickoff): P
     })),
     metadata: metadataInvokePayload(input.metadata) ?? null,
   });
+  // Dynamic so the store graph never imports the watcher back; picks the new folder up without a restart.
+  void import("@/playlistWatch/playlistWatchSync").then((m) => m.syncPlaylistWatch());
 }
 
 export function updatePlaylistDownloadSidecarMetadata(input: {

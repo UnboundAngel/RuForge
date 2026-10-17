@@ -527,8 +527,7 @@ async fn ensure_poster_if_missing_inner(
         std::fs::create_dir_all(&thumb_root).map_err(|e| e.to_string())?;
         #[cfg(target_os = "windows")]
         {
-            let mut attrib_cmd = std::process::Command::new("attrib");
-            let _ = attrib_cmd.args(["+h", thumb_root.to_str().unwrap()]).status();
+            crate::no_console::hide_path(&thumb_root);
         }
     }
     std::fs::create_dir_all(&thumb_dir).map_err(|e| e.to_string())?;
@@ -584,8 +583,7 @@ async fn extract_frames_generate_inner(
         std::fs::create_dir_all(&thumb_root).map_err(|e| e.to_string())?;
         #[cfg(target_os = "windows")]
         {
-            let mut attrib_cmd = std::process::Command::new("attrib");
-            let _ = attrib_cmd.args(["+h", thumb_root.to_str().unwrap()]).status();
+            crate::no_console::hide_path(&thumb_root);
         }
     }
 

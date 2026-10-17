@@ -25,6 +25,7 @@ pub mod migrate;
 pub mod island_overlay;
 pub mod player;
 pub mod playlist_sidecar;
+pub mod playlist_watch;
 pub mod removable_drives;
 pub mod settings;
 pub mod sponsorblock;

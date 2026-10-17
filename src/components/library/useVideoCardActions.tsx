@@ -1,11 +1,12 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { GalleryEntry, MediaFile, PlaylistCollection } from "@/types";
 import { deleteLibraryMedia } from "@/deleteLibraryMedia";
 import { filterMainLibraryEntries } from "@/mainLibraryFilter";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { WATCH_LATER_ID, virtualPlaylistPath } from "@/virtualPlaylists";
-import { SaveToPlaylistModal } from "../SaveToPlaylistModal";
+import type { MenuAt } from "../music/musicMenuUi";
+import { SaveToPlaylistPopover } from "./SaveToPlaylistPopover";
 
 /** Path form the library compares on, since scans and playlists can disagree on slashes and case. */
 export function libraryPathKey(path: string): string {
@@ -46,7 +47,8 @@ export function useVideoCardActions() {
   const addGalleryExtractingPath = useRuforgeStore((s) => s.addGalleryExtractingPath);
   const removeGalleryExtractingPath = useRuforgeStore((s) => s.removeGalleryExtractingPath);
   const toggleWatchLater = useRuforgeStore((s) => s.toggleWatchLater);
-  const [savePaths, setSavePaths] = useState<string[] | null>(null);
+  const [save, setSave] = useState<{ paths: string[]; at: MenuAt } | null>(null);
+  const lastSave = useRef<{ paths: string[] }>({ paths: [] });
 
   const onDelete = useCallback(
     async (file: MediaFile) => {
@@ -84,12 +86,17 @@ export function useVideoCardActions() {
     [notify, setGalleryActiveMenu, toggleWatchLater],
   );
 
+  const openSavePopover = useCallback((paths: string[], at: MenuAt) => {
+    lastSave.current = { paths };
+    setSave({ paths, at });
+  }, []);
+
   const onSaveToPlaylist = useCallback(
-    (file: MediaFile) => {
+    (file: MediaFile, at: MenuAt) => {
       setGalleryActiveMenu(null);
-      setSavePaths([file.path]);
+      openSavePopover([file.path], at);
     },
-    [setGalleryActiveMenu],
+    [openSavePopover, setGalleryActiveMenu],
   );
 
   const watchLaterPaths = useMemo(() => {
@@ -99,8 +106,13 @@ export function useVideoCardActions() {
     return new Set((wl?.items ?? []).map((i) => libraryPathKey(i.path)));
   }, [entries]);
 
+  // Paths stay mounted through the close so the popover keeps its rows while it hides.
   const saveModal = (
-    <SaveToPlaylistModal open={savePaths !== null} onClose={() => setSavePaths(null)} mediaPaths={savePaths ?? []} />
+    <SaveToPlaylistPopover
+      paths={save?.paths ?? lastSave.current.paths}
+      at={save?.at ?? null}
+      onClose={() => setSave(null)}
+    />
   );
 
   return {
@@ -109,7 +121,7 @@ export function useVideoCardActions() {
     onToggleWatchLater,
     onSaveToPlaylist,
     watchLaterPaths,
-    setSavePaths,
+    openSavePopover,
     saveModal,
   };
 }

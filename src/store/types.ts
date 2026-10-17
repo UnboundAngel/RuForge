@@ -197,6 +197,8 @@ export interface RuforgeSettings {
   discordPresenceShowBrowsing: boolean;
   /** When false, new uploads from followed channels stay silent (badges and auto-download still run). */
   watchlistAlerts: boolean;
+  /** When false, downloaded YouTube playlists are not checked for videos added later. */
+  playlistWatchEnabled: boolean;
   /** Notification groups the user silenced (`NotificationMuteKey`); hidden from the bell and never toasted. */
   notificationMuted: NotificationMuteKey[];
   /** When true, the title bar shows the export-to-drive button (Settings > Export always has it). */
@@ -265,6 +267,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   discordPresenceShowTitles: true,
   discordPresenceShowBrowsing: true,
   watchlistAlerts: true,
+  playlistWatchEnabled: true,
   notificationMuted: [],
   showExportInTitlebar: false,
   notificationsInIsland: false,
@@ -325,6 +328,7 @@ export function loadMergedSettings(): RuforgeSettings {
       discordPresenceShowTitles: merged.discordPresenceShowTitles !== false,
       discordPresenceShowBrowsing: merged.discordPresenceShowBrowsing !== false,
       watchlistAlerts: merged.watchlistAlerts !== false,
+      playlistWatchEnabled: merged.playlistWatchEnabled !== false,
       notificationMuted: normalizeMutedList(merged.notificationMuted),
       showExportInTitlebar: merged.showExportInTitlebar === true,
       notificationsInIsland: merged.notificationsInIsland === true,

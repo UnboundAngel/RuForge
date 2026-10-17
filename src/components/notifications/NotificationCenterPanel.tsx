@@ -76,6 +76,7 @@ export function NotificationCenterPanel({
       download: 0,
       security: 0,
       stats: 0,
+      playlist: 0,
     };
     const unreadBy = { ...total };
     for (const i of items) {

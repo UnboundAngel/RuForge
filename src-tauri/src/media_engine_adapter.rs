@@ -74,7 +74,9 @@ fn resolve_ytdlp_path(app: &AppHandle) -> Result<String, EngineError> {
 /// Direct tokio spawn for inspect/simulate. Tauri shell event channels can stall after
 /// yt-dlp exits when multiple hydrations run (queued downloads), leaving prepare hung.
 async fn output_via_tokio(exe: &Path, args: &[String]) -> Result<ProcessOutput, EngineError> {
+    use crate::no_console::NoConsole;
     let mut child = tokio::process::Command::new(exe)
+        .no_console()
         .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())

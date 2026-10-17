@@ -1,4 +1,5 @@
 import { downloadSource } from "./sources/downloadSource";
+import { playlistSource } from "./sources/playlistSource";
 import { securitySource } from "./sources/securitySource";
 import { statsSource } from "./sources/statsSource";
 import { watchlistSource } from "./sources/watchlistSource";
@@ -8,6 +9,7 @@ import type { NotificationItem, NotificationSource } from "./types";
 export const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
   watchlistSource,
   downloadSource,
+  playlistSource,
   securitySource,
   statsSource,
 ];

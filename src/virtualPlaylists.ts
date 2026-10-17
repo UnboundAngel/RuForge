@@ -215,11 +215,11 @@ export function hydrateVirtualPlaylist(
     ? findMedia(mediaIndex, record.thumbnailPath)
     : null;
   const stackThumbnailPath =
-    (thumbOverride?.ruforgePosterPath ||
-      thumbOverride?.thumbnailPath ||
+    (thumbOverride?.thumbnailPath ||
+      thumbOverride?.ruforgePosterPath ||
       record.thumbnailPath) ??
-    items[0]?.ruforgePosterPath ??
     items[0]?.thumbnailPath ??
+    items[0]?.ruforgePosterPath ??
     null;
   const combinedDuration = items.reduce((sum, item) => sum + (item.duration || 0), 0);
   return {

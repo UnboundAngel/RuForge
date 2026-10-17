@@ -20,6 +20,7 @@ mod window_classname;
 pub mod library;
 mod media_bundle;
 mod nav_guard;
+mod no_console;
 mod path_guard;
 mod child_job;
 mod process_tree;
@@ -187,6 +188,7 @@ macro_rules! invoke_handler_with {
             crate::commands::channel_videos::get_channel_videos,
             crate::commands::channel_videos::get_youtube_history,
             crate::commands::watchlist::get_watchlist,
+            crate::commands::playlist_watch::playlist_watch_sync,
             crate::commands::watchlist::follow_channel,
             crate::commands::watchlist::unfollow_channel,
             crate::commands::watchlist::set_channel_auto_download,
@@ -451,6 +453,8 @@ pub fn run() {
             spawn_removable_drives_watcher(app.handle());
             app.manage(crate::commands::watchlist::WatchlistState::load(app.handle()));
             crate::commands::watchlist::poller::spawn_watchlist_poller(app.handle());
+            app.manage(crate::commands::playlist_watch::PlaylistWatchState::load(app.handle()));
+            crate::commands::playlist_watch::poller::spawn_playlist_poller(app.handle());
 
             setup_tray(app)?;
 

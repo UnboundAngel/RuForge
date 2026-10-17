@@ -1,4 +1,4 @@
-import { Check, Film, HardDrive, Radio, Trophy, X } from "lucide-react";
+import { Check, Film, HardDrive, ListVideo, Radio, Trophy, X } from "lucide-react";
 import { ChannelAvatar } from "@/components/library/VideoByline";
 import type { NotificationItem } from "@/notifications/types";
 
@@ -9,6 +9,7 @@ const KIND_BADGE: Record<NotificationItem["kind"], { Icon: typeof X; className: 
   "download-blocked": { Icon: HardDrive, className: "bg-amber-400 text-stone-900" },
   "security-blocked": { Icon: X, className: "bg-rose-400 text-stone-900" },
   "stats-milestone": { Icon: Trophy, className: "bg-[color:var(--accent)] text-stone-900" },
+  "playlist-new": { Icon: ListVideo, className: "bg-[color:var(--accent)] text-stone-900" },
   upload: { Icon: Film, className: "bg-stone-200 text-stone-900" },
   premiere: { Icon: Film, className: "bg-[color:var(--accent)] text-stone-900" },
   live: { Icon: Radio, className: "bg-[color:var(--accent)] text-stone-900" },

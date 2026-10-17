@@ -58,7 +58,7 @@ export const VideoCard = memo(function VideoCard({
   progressBar: ThumbnailBar;
   onDelete: (file: MediaFile) => void;
   onExtract: (file: MediaFile) => void;
-  onSaveToPlaylist: (file: MediaFile) => void;
+  onSaveToPlaylist: (file: MediaFile, at: MenuAt) => void;
   onToggleWatchLater: (file: MediaFile) => void;
   inWatchLater: boolean;
 }) {
@@ -367,7 +367,7 @@ export const VideoCard = memo(function VideoCard({
             tone={MUSIC_MENU_TONES.playlist}
             label="Save to playlist"
             icon={<ListPlus size={icon} strokeWidth={2.25} />}
-            onClick={act(() => onSaveToPlaylist(file))}
+            onClick={act(() => onSaveToPlaylist(file, menuAt))}
           />
           <MusicMenuRow
             tone={MUSIC_MENU_TONES.playlist}

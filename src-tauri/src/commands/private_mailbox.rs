@@ -18,6 +18,7 @@ const CORE_QUEUE_KEYS: &[&str] = &[
     "desktop-island-control",
     "security-trip",
     "playback-surface-control",
+    "playlist-watch-new",
 ];
 
 // Games keys register from the games module so a tree without it accepts none of them.

@@ -1,7 +1,7 @@
 import type { NotificationItem, NotificationKind, NotificationMuteKey } from "./types";
 
 export const NOTIFICATION_MUTE_OPTIONS: readonly { key: NotificationMuteKey; label: string; description: string }[] = [
-  { key: "uploads", label: "Channel uploads", description: "New videos, premieres and live streams from followed channels." },
+  { key: "uploads", label: "Channel uploads", description: "New videos, premieres and live streams from followed channels, and new videos in downloaded playlists." },
   { key: "downloads", label: "Finished downloads", description: "A download completed and the file is ready." },
   { key: "problems", label: "Download problems", description: "Failures, timeouts and downloads held for storage." },
   { key: "milestones", label: "Milestones", description: "Quiet achievements from your activity stats." },
@@ -20,6 +20,7 @@ const KIND_TO_MUTE: Record<NotificationKind, NotificationMuteKey> = {
   "download-blocked": "problems",
   "security-blocked": "security",
   "stats-milestone": "milestones",
+  "playlist-new": "uploads",
 };
 
 export function muteKeyForKind(kind: NotificationKind): NotificationMuteKey {

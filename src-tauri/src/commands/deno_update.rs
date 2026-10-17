@@ -66,7 +66,9 @@ fn userdata_deno_bin_dir(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 async fn read_deno_version(path: &Path) -> Option<String> {
+    use crate::no_console::NoConsole;
     let out = tokio::process::Command::new(path)
+        .no_console()
         .args(["--version"])
         .output()
         .await

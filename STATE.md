@@ -6,7 +6,7 @@ Shipping version: 0.8.0 (unreleased)
 
 Last shipped to users: 0.7.0
 
-Last updated: 2026-10-16 (0.7.0 released)
+Last updated: 2026-10-16 (Unreleased log)
 
 Status: 0.7.0 live on GitHub and updater.json (release https://github.com/UnboundAngel/RuForge/releases/tag/v0.7.0, tag on public snapshot `c3a626b`). Version files read 0.7.0. Bundled yt-dlp 2026.08.19. Installers are built with `RUFORGE_PUBLIC_BUILD=1`, so Games code stays out of public builds. From 0.6.0 on, the app checks `ruforge.app/updater.json` (Cloudflare Pages 302 to the GitHub raw file) with GitHub as the fallback; daily launch counts are in Cloudflare zone analytics filtered by path `/updater.json`. Companion still developer-gated on localhost. Local Vite binds 1430 (HMR 1431) so it does not collide with Finch on 1420. Website Astro is pinned to 4321.
 

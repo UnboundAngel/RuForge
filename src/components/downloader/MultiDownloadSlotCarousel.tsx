@@ -21,11 +21,31 @@ type CarouselItem = {
 type FlyPayload = { thumbnail: string; from: DOMRect };
 type LayoutMode = "pair" | "solo";
 
-function railVideosIconCenter(): { x: number; y: number } {
+type FlyTarget = { x: number; y: number; size: number };
+
+function railVideosIconCenter(): FlyTarget {
   const el = document.querySelector<HTMLElement>('[data-rail-tab="media"]');
-  if (!el) return { x: 28, y: 94 };
+  if (!el) return { x: 28, y: 94, size: RAIL_ICON_PX };
   const r = el.getBoundingClientRect();
-  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2, size: RAIL_ICON_PX };
+}
+
+/** The playlist's library card when the Playlists tab shows it on screen, else the Videos rail icon. */
+function flyTargetFor(playlistKey: string | null): FlyTarget {
+  if (playlistKey) {
+    const card = document.querySelector<HTMLElement>(
+      `[data-playlist-card="${CSS.escape(playlistKey)}"] [data-squish-cover]`,
+    );
+    const r = card?.getBoundingClientRect();
+    if (card && r && r.width > 0) {
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      // A card hidden under the downloader or scrolled off screen would swallow the flight.
+      const hit = document.elementFromPoint(x, y);
+      if (hit && card.contains(hit)) return { x, y, size: Math.min(r.width, r.height) };
+    }
+  }
+  return railVideosIconCenter();
 }
 
 function slotMetrics(cardWidth: number, mode: LayoutMode = "pair") {
@@ -39,18 +59,30 @@ function slotMetrics(cardWidth: number, mode: LayoutMode = "pair") {
 function FlyingThumb({
   thumbnail,
   from,
+  playlistKey,
   onDone,
 }: {
   thumbnail: string;
   from: DOMRect;
+  playlistKey: string | null;
   onDone: () => void;
 }) {
   const reduced =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // Measured once: re-renders from progress ticks must not retarget (and restart) the flight.
+  const [target] = useState(() => flyTargetFor(playlistKey));
+
+  // onAnimationComplete can be lost when a burst of finishes re-renders the portal mid-flight,
+  // which left the cover parked over the slot.
   useEffect(() => {
-    if (reduced) onDone();
+    if (reduced) {
+      onDone();
+      return;
+    }
+    const timer = window.setTimeout(onDone, FLY_DURATION * 1000 + 250);
+    return () => window.clearTimeout(timer);
   }, [reduced, onDone]);
 
   if (reduced) return null;
@@ -58,7 +90,6 @@ function FlyingThumb({
   const startCx = from.left + from.width / 2;
   const startCy = from.top + from.height / 2;
   const startScale = Math.max(from.width, from.height) / RAIL_ICON_PX;
-  const target = railVideosIconCenter();
 
   return createPortal(
     <motion.div
@@ -74,7 +105,7 @@ function FlyingThumb({
       animate={{
         left: target.x - RAIL_ICON_PX / 2,
         top: target.y - RAIL_ICON_PX / 2,
-        scale: 1,
+        scale: target.size / RAIL_ICON_PX,
         opacity: [1, 1, 0],
       }}
       transition={{
@@ -128,12 +159,15 @@ export function MultiDownloadSlotCarousel({
   percentage,
   speedLabel,
   currentTitle,
+  playlistKey,
 }: {
   items: CarouselItem[];
   currentIndex: number;
   percentage: number;
   speedLabel: string | null;
   currentTitle: string;
+  /** Normalized title of the playlist being downloaded, so finished items fly onto its card. */
+  playlistKey?: string | null;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const activeCardRef = useRef<HTMLDivElement>(null);
@@ -154,6 +188,7 @@ export function MultiDownloadSlotCarousel({
   const [promoteTargetIndex, setPromoteTargetIndex] = useState<number | null>(null);
 
   const promoteX = useMotionValue(0);
+  const clearFly = useCallback(() => setFly(null), []);
 
   const safeIndex = Math.min(Math.max(0, currentIndex), Math.max(0, items.length - 1));
   safeIndexRef.current = safeIndex;
@@ -247,11 +282,18 @@ export function MultiDownloadSlotCarousel({
     }
   }, [safeIndex, items.length, beginPromote, promoteX]);
 
+  const itemCountRef = useRef(items.length);
+  itemCountRef.current = items.length;
+  const beginPromoteRef = useRef(beginPromote);
+  beginPromoteRef.current = beginPromote;
+
+  // Keyed on the promotion alone: progress ticks during a batch rebuild `items` and `beginPromote`
+  // every few hundred ms, and restarting the slide on each one meant it never finished.
   useEffect(() => {
     if (!isPromoting || promoteTargetIndex == null) return;
 
     const toIndex = promoteTargetIndex;
-    const toSolo = toIndex >= items.length - 1;
+    const toSolo = toIndex >= itemCountRef.current - 1;
     let cancelled = false;
 
     const run = async () => {
@@ -277,7 +319,7 @@ export function MultiDownloadSlotCarousel({
 
       const nextSafe = safeIndexRef.current;
       if (nextSafe > toIndex) {
-        beginPromote(toIndex, nextSafe);
+        beginPromoteRef.current(toIndex, nextSafe);
       }
     };
 
@@ -286,7 +328,7 @@ export function MultiDownloadSlotCarousel({
     return () => {
       cancelled = true;
     };
-  }, [isPromoting, promoteTargetIndex, items.length, promoteX, beginPromote]);
+  }, [isPromoting, promoteTargetIndex, promoteX]);
 
   if (!activeItem) return null;
 
@@ -386,7 +428,7 @@ export function MultiDownloadSlotCarousel({
       </div>
 
       {fly ? (
-        <FlyingThumb thumbnail={fly.thumbnail} from={fly.from} onDone={() => setFly(null)} />
+        <FlyingThumb key={`${fly.thumbnail}:${fly.from.left}:${fly.from.top}`} thumbnail={fly.thumbnail} from={fly.from} playlistKey={playlistKey ?? null} onDone={clearFly} />
       ) : null}
     </div>
   );

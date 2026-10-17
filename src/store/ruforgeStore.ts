@@ -142,7 +142,6 @@ import {
   moveRecordItem,
   mutateVirtualRecords,
   nextDefaultPlaylistTitle,
-  parseVirtualPlaylistId,
   pathInWatchLater,
   removePathFromAllRecords,
   removePathFromRecord,
@@ -647,7 +646,8 @@ function syncVirtualPlaylistsIntoState(
   const nextRecords = reconcileMusicItemIdentities(disk, records ?? loadVirtualPlaylistRecords());
   const merged = mergeVirtualPlaylistsIntoEntries(disk, nextRecords);
   let nextSelected = selectedPlaylist;
-  if (selectedPlaylist && parseVirtualPlaylistId(selectedPlaylist.path)) {
+  if (selectedPlaylist) {
+    // Folder playlists refresh too, so a video deleted from the open playlist leaves its list.
     const hit = merged.find(
       (e) => e.kind === "playlist" && e.path === selectedPlaylist.path,
     );

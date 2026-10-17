@@ -67,7 +67,26 @@ pub fn parse_feed_title(xml: &str) -> Option<String> {
     child_text(doc.root_element(), "title").filter(|t| !t.is_empty())
 }
 
+const RSS_ATTEMPTS: u32 = 3;
+
+/// The RSS endpoint flips between 404, 500 and 200 for the same live channel, so a few quick retries
+/// come first, then the channel's Videos tab. Only a page that is also gone counts as not found.
 pub async fn fetch_channel_feed(
+    client: &reqwest::Client,
+    channel_id: &str,
+) -> Result<(Vec<FeedEntry>, Option<String>), FeedError> {
+    for attempt in 0..RSS_ATTEMPTS {
+        if attempt > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        }
+        if let Ok(found) = fetch_rss_feed(client, channel_id).await {
+            return Ok(found);
+        }
+    }
+    super::page_feed::fetch_videos_page(client, channel_id).await
+}
+
+async fn fetch_rss_feed(
     client: &reqwest::Client,
     channel_id: &str,
 ) -> Result<(Vec<FeedEntry>, Option<String>), FeedError> {

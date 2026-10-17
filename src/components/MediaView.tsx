@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useMemo, useCallback, type CSSProperties } from "react";
 import { motion } from "motion/react";
-import { Loader2, Trash2, Layers, Play, FolderOutput, Shuffle, FolderOpen, Plus, ListVideo } from "lucide-react";
-import { localImageSrc } from "@/lib/localImageSrc";
+import { Loader2, Trash2, Layers, Play, FolderOutput, Shuffle, FolderOpen, Plus } from "lucide-react";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { getPlaybackThumbnailBar, getWatchProgress, isVideoWatched } from "../playbackStorage";
 import { openInFileManager } from "../openInFileManager";
 import { useRuforgeStore } from "../store/ruforgeStore";
 import { filterMainLibraryEntries } from "../mainLibraryFilter";
 import { galleryScrollChromeAmount } from "../lib/galleryScrollChrome";
+import { menuAnchorPoint } from "./music/musicMenuUi";
 import { libraryPathKey, useTaggableFiles, useVideoCardActions } from "./library/useVideoCardActions";
 import {
   WATCH_LATER_ID,
@@ -15,7 +15,6 @@ import {
   parseVirtualPlaylistId,
   virtualPlaylistPath,
 } from "../virtualPlaylists";
-import { PlaylistEmptyThumb } from "./PlaylistEmptyThumb";
 import { VideoCard, type ThumbnailBar } from "./library/LibraryVideoCard";
 import {
   MUSIC_MENU_ICON_SIZE,
@@ -39,6 +38,7 @@ import { GRID_GAP_PX, useGridColumns } from "./library/useGridColumns";
 import { useWatchlistShelf } from "./watchlist/useWatchlistShelf";
 import { fileVideoId } from "./music/musicOutsideRecommend";
 import { RecommendedGamePlaylistsSlot } from "@games";
+import { PlaylistStackCard } from "./PlaylistStackCard";
 
 const CREATOR_SLIDE = { duration: 0.24, ease: OVERLAY_EASE };
 const CREATOR_FORWARD_IN = { opacity: 0, x: 28 };
@@ -50,62 +50,6 @@ function isInProgressFile(file: MediaFile): boolean {
   return progress > 0 && !isVideoWatched(file.path, file.duration);
 }
 
-const PlaylistStackCard = ({
-  playlist,
-  onClick,
-  onContextMenu,
-}: {
-  playlist: PlaylistCollection;
-  onClick: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-}) => {
-  const mainThumbnail =
-    playlist.stackThumbnailPath ||
-    playlist.items[0]?.thumbnailPath ||
-    playlist.items[0]?.ruforgePosterPath;
-  const countLabel =
-    playlist.itemCount === 0
-      ? "No videos"
-      : `${playlist.itemCount} video${playlist.itemCount === 1 ? "" : "s"}`;
-
-  return (
-    <div
-      className="group cursor-pointer flex flex-col gap-2.5"
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-    >
-      <div data-squish-cover className="rf-art-clip relative aspect-video bg-[color:var(--rf-field)] transition-transform duration-150 ease-out [--rf-art-r:var(--r-media,16px)]">
-        {mainThumbnail ? (
-          <img
-            src={localImageSrc(mainThumbnail)}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover transition-[filter] duration-200 group-hover:brightness-110"
-          />
-        ) : (
-          <PlaylistEmptyThumb className="absolute inset-0" />
-        )}
-
-        {/* YouTube-style right count strip */}
-        <div className="absolute inset-y-0 right-0 w-[28%] min-w-[4.5rem] bg-black/70 flex flex-col items-center justify-center gap-1.5 px-2">
-          <ListVideo size={18} strokeWidth={2} className="text-white" />
-          <span className="text-[11px] font-semibold text-white text-center leading-tight">
-            {countLabel}
-          </span>
-        </div>
-      </div>
-
-      <div className="px-0.5 min-w-0">
-        <h3 className="text-[13px] font-bold text-stone-100 leading-snug truncate">
-          {playlist.title.replace(/_/g, " ")}
-        </h3>
-        <p className="mt-0.5 text-[11px] font-medium text-stone-500 truncate">Playlist</p>
-        <p className="mt-0.5 text-[11px] font-medium text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity">
-          View full playlist
-        </p>
-      </div>
-    </div>
-  );
-};
 export const MediaView = ({
   onPlaylistClick,
 }: {
@@ -251,7 +195,7 @@ export const MediaView = ({
   })();
 
   const cardActions = useVideoCardActions();
-  const { setSavePaths } = cardActions;
+  const { openSavePopover } = cardActions;
 
   const libraryScanDirsPrevRef = useRef<string[] | null>(null);
 
@@ -583,7 +527,7 @@ export const MediaView = ({
                   <h2 className="text-2xl font-bold tracking-tight text-stone-50">Playlists</h2>
                   <button
                     type="button"
-                    onClick={() => setSavePaths([])}
+                    onClick={(e) => openSavePopover([], { ...menuAnchorPoint(e.currentTarget, "start"), placement: "anchor" })}
                     className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500 hover:text-[color:var(--accent)] transition-colors"
                   >
                     <Plus size={12} />
@@ -595,7 +539,7 @@ export const MediaView = ({
                     <p className="text-stone-400 font-medium text-sm">{emptyCopy}</p>
                     <button
                       type="button"
-                      onClick={() => setSavePaths([])}
+                      onClick={(e) => openSavePopover([], { ...menuAnchorPoint(e.currentTarget, "start"), placement: "anchor" })}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] text-[11px] font-semibold text-stone-200 hover:bg-white/[0.1] transition-colors"
                     >
                       <Plus size={12} />

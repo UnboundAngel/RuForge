@@ -34,9 +34,8 @@ import { AudioHeroStage } from "@/components/player/AudioHeroStage";
 import { MarqueeText } from "@/components/downloader/DownloadJobQueuePanel";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import { bestCoverPath } from "@/mediaKind";
-import {
-  type IslandSkipDir,
-} from "@/components/island/islandSkipMotion";
+import { type IslandSkipDir } from "@/components/island/islandSkipMotion";
+import { useMusicDetailSwapKey } from "./useMusicDetailSwapKey";
 import { takeIslandSkipDirForHero } from "@/lib/islandSkipDirection";
 import {
   ensureEmbeddedExplorerWebview,
@@ -597,6 +596,9 @@ export function MusicShell({
   useEffect(() => {
     if (playerExpanded && rightPanelTab === "segments") setRightPanelTab("queue");
   }, [playerExpanded, playingFile?.path]);
+
+  const detailSwapKey = useMusicDetailSwapKey();
+  useEffect(() => { if (musicDetail) { setPlayerExpanded(false); setLyricsOpen(false); } }, [musicDetail]);
 
   useEffect(() => {
     const wasOpen = prevRightPanelOpenRef.current;
@@ -1162,10 +1164,6 @@ export function MusicShell({
     playMusicQueue(file, [file], musicQueueSource("recent", "Recently listened"));
   }, [playMusicQueue]);
 
-  const handleBack = useCallback(() => {
-    cycleNavMode();
-  }, [cycleNavMode]);
-
   const handleToggleExpand = useCallback(() => {
     setPlayerExpanded((prev) => {
       if (prev) setLyricsOpen(false);
@@ -1380,7 +1378,7 @@ export function MusicShell({
               collapsed={navCollapsed}
               shellBlack={shellBlack}
               inLeftStack
-              onBack={handleBack}
+              onBack={cycleNavMode}
             />
           </div>
 
@@ -1463,7 +1461,7 @@ export function MusicShell({
                 </AnimatePresence>
                 </div>
 
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="wait" key={detailSwapKey}>
                   {playerExpanded ? null : musicDetail?.kind === "artist" ? (
                     <motion.div key={`artist-${musicDetail.key}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="absolute inset-0">
                       <MusicArtistView

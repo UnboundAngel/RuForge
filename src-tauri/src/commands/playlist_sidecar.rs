@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 const SIDECAR_SCHEMA_VERSION: u32 = 2;
-const SIDECAR_FILENAME: &str = ".ruforge-playlist.json";
+pub(crate) const SIDECAR_FILENAME: &str = ".ruforge-playlist.json";
 const PLAYLIST_COVER_FILENAME: &str = ".ruforge-playlist-cover.jpg";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,7 +154,7 @@ fn schedule_playlist_cover_persist(cover_url: String, output_dir: String, folder
     });
 }
 
-fn normalize_youtube_id(raw: &str) -> Option<String> {
+pub(crate) fn normalize_youtube_id(raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return None;
@@ -241,12 +241,12 @@ fn derive_playlist_status(tracks: &[PlaylistSidecarTrackDto], batch_idle: bool) 
     }
 }
 
-fn read_sidecar(path: &Path) -> Option<PlaylistSidecarDto> {
+pub(crate) fn read_sidecar(path: &Path) -> Option<PlaylistSidecarDto> {
     let content = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
 }
 
-fn extract_playlist_list_id(url: &str) -> Option<String> {
+pub(crate) fn extract_playlist_list_id(url: &str) -> Option<String> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
         return None;
@@ -274,7 +274,7 @@ fn playlist_list_ids_match(a: &str, b: &str) -> bool {
     }
 }
 
-fn sorted_playlist_folder_entries(playlists_dir: &Path) -> Vec<PathBuf> {
+pub(crate) fn sorted_playlist_folder_entries(playlists_dir: &Path) -> Vec<PathBuf> {
     let Ok(rd) = std::fs::read_dir(playlists_dir) else {
         return vec![];
     };

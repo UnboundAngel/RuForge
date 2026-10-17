@@ -7,6 +7,7 @@ import {
   type WatchlistSnapshot,
   type WatchlistUpload,
 } from "./types";
+import { startPlaylistWatchSync } from "@/playlistWatch/playlistWatchSync";
 import { setWatchlistSnapshot } from "./watchlistStore";
 
 export type WatchlistSyncHandlers = {
@@ -47,7 +48,9 @@ export async function startWatchlistSync(handlers: WatchlistSyncHandlers): Promi
     listen(WATCHLIST_EVENTS_EVENT, () => void drain()),
   ]);
   await drain();
+  const stopPlaylists = await startPlaylistWatchSync();
   return () => {
+    stopPlaylists();
     for (const un of unlisteners) un();
   };
 }

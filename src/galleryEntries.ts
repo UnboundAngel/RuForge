@@ -34,7 +34,7 @@ export function removePathFromGalleryEntries(
           item.ruforgePosterPath === entry.stackThumbnailPath,
       )
         ? entry.stackThumbnailPath
-        : (items[0]?.ruforgePosterPath ?? items[0]?.thumbnailPath ?? null);
+        : (items[0]?.thumbnailPath ?? items[0]?.ruforgePosterPath ?? null);
     next.push({
       ...entry,
       items,

@@ -1,5 +1,6 @@
 pub mod feed;
 pub mod model;
+pub mod page_feed;
 pub mod poller;
 pub mod resolve;
 pub mod schedule;
@@ -20,7 +21,7 @@ const WATCHLIST_FILENAME: &str = "watchlist.json";
 pub const WATCHLIST_UPDATED_EVENT: &str = "watchlist-updated";
 pub const WATCHLIST_EVENTS_EVENT: &str = "watchlist-events";
 const MANUAL_REFRESH_COOLDOWN_SECS: i64 = 120;
-const BROWSER_UA: &str =
+pub(crate) const BROWSER_UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 pub struct WatchlistState {
@@ -103,6 +104,12 @@ impl WatchlistState {
         };
         emit_updated(app);
         Ok(snapshot)
+    }
+
+    pub fn check_interval_min(&self) -> u32 {
+        self.file
+            .lock()
+            .map_or(MAX_INTERVAL_MIN, |f| f.prefs.check_interval_min)
     }
 
     fn snapshot(&self) -> Result<WatchlistSnapshot, String> {

@@ -1,4 +1,4 @@
-export type NotificationSourceId = "watchlist" | "download" | "security" | "stats";
+export type NotificationSourceId = "watchlist" | "download" | "security" | "stats" | "playlist";
 
 export type NotificationKind =
   | "upload"
@@ -12,7 +12,9 @@ export type NotificationKind =
   /** A YouTube page tried to leave YouTube or poked a decoy (`src/lib/securityTripwires.ts`). */
   | "security-blocked"
   /** Quiet milestone from the activity stats engine. */
-  | "stats-milestone";
+  | "stats-milestone"
+  /** A downloaded playlist gained videos (`src/playlistWatch/`). */
+  | "playlist-new";
 
 export type NotificationActionId =
   | "queue"
@@ -52,6 +54,8 @@ export type NotificationItem = {
     error?: string;
     /** A download of this video was refused for storage and storage is still full. */
     storageHeld?: boolean;
+    /** Videos a downloaded playlist gained, and the folder they belong in. */
+    playlist?: { listId: string; outputDir: string; folderName: string; videos: { id: string; title: string }[] };
   };
 };
 

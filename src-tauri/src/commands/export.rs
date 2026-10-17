@@ -483,10 +483,7 @@ fn sidecar_and_thumb_bytes(parent: &Path, stem: &str) -> u64 {
 #[cfg(target_os = "windows")]
 fn hide_thumb_root_if_new(thumb_root: &Path) {
     if thumb_root.is_dir() {
-        let mut attrib_cmd = std::process::Command::new("attrib");
-        let _ = attrib_cmd
-            .args(["+h", &thumb_root.to_string_lossy()])
-            .status();
+        crate::no_console::hide_path(thumb_root);
     }
 }
 
