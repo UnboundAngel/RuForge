@@ -61,12 +61,12 @@ const BUILT_WITH_PAGE_DEFS: BuiltWithPage[] = [
     slug: 'ytdlp',
     icon: 'ytdlp',
     title: 'yt-dlp Engine',
-    lead: 'Every download and metadata preview shells out to a bundled yt-dlp binary. Rust owns the process; React shows the progress.',
+    lead: 'Every download and metadata preview shells out to yt-dlp, downloaded on first launch. Rust owns the process; React shows the progress.',
     paragraphs: [
-      'Sidecars live under `src-tauri/binaries/yt-dlp-*` and are declared in `tauri.conf.json` `externalBin`. `ytdlp_shell_command` resolves the right binary for the host OS, then `start_download_job` in `downloader.rs` builds args from your Settings format string, output template, cookie options, and audio-only flag.',
+      'The installer carries no yt-dlp. On first launch, after you confirm, `src-tauri/src/tools/ytdlp.rs` fetches the latest upstream release, checks it against the published SHA-256 sums and a `--version` run, then swaps it into app data. `ytdlp_shell_command` resolves that binary, then `start_download_job` in `downloader.rs` builds args from your Settings format string, output template, cookie options, and audio-only flag.',
       'Before you click Download, the hero calls `get_video_info`. That command runs two parallel `-J -s` simulates: one with your video format string, one with `bestaudio[ext=m4a]/bestaudio` for the audio size column. Partial success is fine (audio-only preview can succeed when video simulate fails). Results are cached on the frontend keyed by URL + format + cookies so rapid tab switches do not respawn yt-dlp.',
       'Stdout parsing drives the UI. Lines containing `[download]` update percent, speed, and ETA in `downloadQueueSlice`. When bytes hit 100% but ffmpeg is still muxing, a `processing` phase latch keeps the row on "Processing…" until the child exits. A stall watchdog in TypeScript marks jobs failed if stdout goes quiet too long.',
-      'Finished jobs leave `{title}.info.json` (and often a `.webp` thumbnail) next to the media file. `scan_gallery` uses `id` from that sidecar for dedupe. Settings → Advanced can check upstream yt-dlp version and download a newer sidecar when one exists.',
+      'Finished jobs leave `{title}.info.json` (and often a `.webp` thumbnail) next to the media file. `scan_gallery` uses `id` from that sidecar for dedupe. Settings → Updates can check the upstream yt-dlp version and swap in a newer binary, even while yt-dlp runs elsewhere.',
     ],
     touchpoints: [
       '`src-tauri/src/commands/downloader.rs` spawn, progress IPC, finish events',
@@ -126,7 +126,7 @@ const BUILT_WITH_PAGE_DEFS: BuiltWithPage[] = [
       '`src-tauri/src/lib.rs` command registration',
       '`downloader.rs`, `gallery.rs`, `media.rs`, `sponsorblock.rs`',
       '`explorer_embed.rs` for Explorer bounds and visibility',
-      'Sidecar resolution for yt-dlp, ffmpeg, ffprobe under `binaries/`',
+      'Tool resolution for yt-dlp, ffmpeg, ffprobe in app data (`src-tauri/src/tools/`)',
     ],
   },
   {
@@ -151,7 +151,7 @@ const BUILT_WITH_PAGE_DEFS: BuiltWithPage[] = [
     slug: 'ffmpeg',
     icon: 'ffmpeg',
     title: 'FFmpeg Processing',
-    lead: 'ffmpeg and ffprobe ship as bundled sidecars for yt-dlp muxing, scrubber sprite sheets, and quiet metadata probes.',
+    lead: 'ffmpeg and ffprobe download on first launch and handle yt-dlp muxing, scrubber sprite sheets, and quiet metadata probes.',
     paragraphs: [
       'yt-dlp invokes ffmpeg when a download needs merge or post-process steps. RuForge watches stdout after the byte bar hits 100% and keeps the queue row in a Processing phase until the child process exits. Audio-only jobs skip video post-process paths.',
       'Scrubber hover previews are local sprite sheets. Settings → Downloads auto scrubber previews (default on) tells `downloader.rs` to call `extract_frames` after a successful video finish. The ffmpeg filter chain samples one frame every five seconds into 160×90 tiles on a 10×10 grid (`fps=1/5,scale=160:90,tile=10x10`). Sheets land under `.ruforge/thumbs/` beside the video.',
@@ -159,7 +159,7 @@ const BUILT_WITH_PAGE_DEFS: BuiltWithPage[] = [
       'ffprobe warms a disk cache (`ffprobe-hints` under app data). The player UI does not show codec strings today. Delete and replace flows cancel in-flight ffmpeg work via the per-file lock so files are not left locked on disk.',
     ],
     touchpoints: [
-      'Sidecars `binaries/ffmpeg-*` and `binaries/ffprobe-*` in `tauri.conf.json`',
+      'First-launch download in `src-tauri/src/tools/` (build pinned in `website/public/tools.json`)',
       '`src-tauri/src/commands/media.rs` sprites, posters, ffprobe cache',
       '`useScrubberThumbs.ts`, `ChapterScrubber.tsx`, `ScrubHoverPreview.tsx`',
       'Settings → Downloads auto-preview toggle (`autoScrubPreviews` in store settings)',

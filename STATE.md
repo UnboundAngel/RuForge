@@ -2,17 +2,13 @@
 
 > Live cursor. Mint reads this FIRST, then `AGENTS.md`. Update LAST after user-visible app behavior that will ship. If this file and the code disagree, the code wins: fix this file forward. Never git-restore a dirty tree to match it.
 
-Shipping version: 0.10.0 (unreleased)
+Shipping version: 0.10.1 (unreleased)
 
-Last shipped to users: 0.8.0
+Last shipped to users: 0.10.0
 
-Last updated: 2026-11-14 (Unreleased log)
+Last updated: 2026-11-14 (0.10.0 release)
 
-Held: 0.9.0 is cut and frozen on sync `release/0.9.0` at `1f69063` (version files, signed updater.json). Draft GitHub Release v0.9.0 on public holds the installer. Live updater.json still serves 0.8.0. Ship day still needs: fresh `pub_date`, step 5b website assets on the release branch, then the snapshot and publish. Ships to users around 2026-10-24 via the release skill's "Held release" steps. Main's version files still read 0.9.0 until the 0.10.0 bump.
-
-Planned held: 0.10.0 gets cut the same way as 0.9.0 (release branch on sync plus a draft GitHub Release, no snapshot until ship day). Draft notes for Angel's review: `docs/agents/release/notes-0.10.0.json`. Onboarding step `video-playlists` (introducedIn 0.10.0) is in `src/lib/onboardingSteps.ts`.
-
-Status: 0.8.0 live on GitHub and updater.json (release https://github.com/UnboundAngel/RuForge/releases/tag/v0.8.0, tag on public snapshot `54cf779`). Version files read 0.8.0. Bundled yt-dlp 2026.08.19. Installers are built with `RUFORGE_PUBLIC_BUILD=1`, so Games code stays out of public builds. From 0.6.0 on, the app checks `ruforge.app/updater.json` (Cloudflare Pages 302 to the GitHub raw file) with GitHub as the fallback; daily launch counts are in Cloudflare zone analytics filtered by path `/updater.json`. Companion still developer-gated on localhost. Local Vite binds 1430 (HMR 1431) so it does not collide with Finch on 1420. Website Astro is pinned to 4321.
+Status: 0.10.0 live on GitHub and updater.json (release https://github.com/UnboundAngel/RuForge/releases/tag/v0.10.0, tag on public snapshot `303703c`). 0.9.0 was never shipped on its own; its notes are folded into 0.10.0. Version files read 0.10.0. Installers carry no tools: yt-dlp and ffmpeg download on first launch. Public installers are built with `npm run build:signed -- -WithGames`, so Games ships free in the binary while its source stays private. From 0.6.0 on, the app checks `ruforge.app/updater.json` (Cloudflare Pages 302 to the GitHub raw file) with GitHub as the fallback; daily launch counts are in Cloudflare zone analytics filtered by path `/updater.json`. Companion still developer-gated on localhost. Local Vite binds 1430 (HMR 1431) so it does not collide with Finch on 1420. Website Astro is pinned to 4321.
 
 Closed release notes for 0.7.0 and earlier: `docs/agents/release/versions/`. Do not paste them back into this file.
 
@@ -33,7 +29,7 @@ Rules: root `AGENTS.md` → **How to log Unreleased**.
 
 ## Now
 
-0.8.0 shipped: downloaded playlists watched for new videos (bell notice, Settings toggle), Save to playlist popover, delete single videos from pasted playlists, no console window flashes, channel feed Videos page fallback, profile chip fix for the hidden MusicShell. Drained into `docs/agents/release/versions/version-0.8.0.json`; no roadmap entries flipped.
+0.10.0 shipped: Games mode (guides, videos, in-game overlay, ghosting mini player), playlist overhaul, Dynamic Island over other apps setting, From the dev announcements and polls, tools downloaded on first launch (smaller installer), queue survives restarts. Drained into `docs/agents/release/versions/version-0.10.0.json`; no roadmap entries flipped. Black capsule Dynamic Island redesign is done locally and held for 0.10.1.
 Rust tests the app crate cannot run (`cargo test` crashes with STATUS_ENTRYPOINT_NOT_FOUND) live in `src-tauri/test-harness/`; see its README.
 Unlanded July companion work (log.rs, trace_log.rs, routes.rs) was a local stash; backed up to sync branch `backup/companion-stash-2026-07-03`, not merged.
 Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shipped target. Windows dev: `npm run dev:app` (Vite on 1430). Website: `npm run dev` in `website/` (Astro on 4321).
@@ -42,14 +38,10 @@ Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shi
 
 None.
 
-## Planned for 0.10.0
-
-Playlist overhaul (headline of the release).
-
 ## Next 3 (priority order)
 
-1. Playlist overhaul (0.10.0). Playlist import Phase 2 CLI entry (roadmap "import playlists with one terminal command", in progress, `feat/playlist-import-cli`) belongs with it.
-2. Download history log in the title bar bell (roadmap "a history of everything you've downloaded").
+1. Dynamic Island black capsule redesign (0.10.1).
+2. Download history log in the title bar bell (roadmap "a history of everything you've downloaded"). Playlist import Phase 2 CLI entry (`feat/playlist-import-cli`) still open.
 3. Window drag bug (Ruforge-priv#10), then clear the 0.7.0 build warnings (unused `NamedCount` re-export, `third_party_browser_args` in `hardware_acceleration.rs`).
 
 ## Notes (not P0)

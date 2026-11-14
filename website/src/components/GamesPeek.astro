@@ -10,18 +10,18 @@ const headingId = mobile ? 'm-games-peek-heading' : 'games-peek-heading';
 <section class={`games-peek${mobile ? ' games-peek--mobile' : ''}`} aria-labelledby={headingId} data-games-peek>
   <div class="games-peek__card">
     <span class="rf-roadmap-ready-notch games-peek__notch">
-      <span class="rf-roadmap-ready-chip games-peek__chip">Sneak peek</span>
+      <span class="rf-roadmap-ready-chip games-peek__chip">New</span>
     </span>
 
     <div class="games-peek__copy">
-      <h2 id={headingId} class="games-peek__title">Games mode is coming</h2>
+      <h2 id={headingId} class="games-peek__title">Games mode is here</h2>
       <p class="games-peek__text">
-        Guides and videos for the games you play, and a mini player that stays out of your way while you're in game.
+        Guides and videos for the games you play, an in-game overlay, and a mini player that ghosts out of your way while you play. Press Alt+3.
       </p>
     </div>
 
     <div class="games-peek__window">
-      <button type="button" class="games-peek__frame" data-peek-frame aria-label="Play the Games mode preview">
+      <button type="button" class="games-peek__frame" data-peek-frame aria-label="Play the Games mode clip">
         <video
           class="games-peek__video"
           muted

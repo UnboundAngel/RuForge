@@ -51,7 +51,7 @@
   "src/store/ruforgeStore.ts": 2101,
   "website/src/components/DocsPageTemplate.astro": 824,
   "website/src/components/RoadmapFieldNotes.tsx": 692,
-  "website/src/lib/docsContent.ts": 710,
+  "website/src/lib/docsContent.ts": 701,
   "website/src/lib/docsTree.ts": 647,
   "website/src/styles/global.css": 3656
 }

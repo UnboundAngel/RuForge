@@ -1,0 +1,245 @@
+{
+  "nodes": [
+    {
+      "id": "t-games",
+      "type": "task",
+      "label": "Games",
+      "agent": "claude",
+      "details": [
+        "New Games mode on its own rail item (Alt+3) with a home page and game pages (Overview, Videos, Guides, Search).",
+        "Detects Minecraft Bedrock, Minecraft Java and any game you add from Steam or the Microsoft Store.",
+        "In-game overlay (Mod+Alt+O) with free-position widgets, and a pinned glance (Mod+Alt+P).",
+        "Ghost mode for the mini player while a game runs, with a full-screen layout editor.",
+        "Automatic tags for videos downloaded from a game's Search or Videos tab."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-settings",
+      "type": "task",
+      "label": "Settings",
+      "agent": "claude",
+      "details": [
+        "Dynamic Island over other apps (Always, When active, Off) in Settings > Appearance.",
+        "Settings > Updates has a Download tools row."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-playlists",
+      "type": "task",
+      "label": "Playlists",
+      "agent": "claude",
+      "details": [
+        "New playlist page with a full-width header, cover, creator avatars and total length.",
+        "Resume where you left off, or Start over.",
+        "Sortable table by views, uploaded, added and duration, with channel names that open the creator page.",
+        "Drag rows to reorder any playlist, downloaded ones included, saved on disk.",
+        "Drop a row on the cover to start from that video.",
+        "Rename a playlist and give it a description.",
+        "Suggested shelf under every playlist with YouTube videos you don't have yet, and Find more search in the shelf.",
+        "Recommended playlists, a New badge and a Recently played sort.",
+        "Watched and missing rows, Relocate for missing files, and bulk watched actions.",
+        "Undo after removing a video.",
+        "Drop a YouTube link on a playlist card to download into it.",
+        "Choose what happens at the end of a playlist."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-playback",
+      "type": "task",
+      "label": "Playback",
+      "agent": "claude",
+      "details": [
+        "Play next and Add to queue for videos, Shift+N and Shift+P to skip inside a playlist.",
+        "Video playlists play in their own order with auto-advance and loop inside the playlist."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-downloads",
+      "type": "task",
+      "label": "Downloads",
+      "agent": "claude",
+      "details": [
+        "Faster playlist download screen with per-row cancel, search, a live size total and a Downloads icon stack.",
+        "Resume paused downloads from the bell.",
+        "The download queue survives a restart.",
+        "Ffmpeg and yt-dlp download on first launch after you confirm, with a progress ring on the sidebar download icon."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-notifications",
+      "type": "task",
+      "label": "Notifications",
+      "agent": "claude",
+      "details": [
+        "From the dev announcements and polls in the bell, with voting, live results and a mute toggle."
+      ],
+      "files": []
+    },
+    {
+      "id": "t-updates",
+      "type": "task",
+      "label": "Updates",
+      "agent": "claude",
+      "details": [
+        "An update button at the bottom of the sidebar and in the Music storage bar installs and restarts."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-playlists",
+      "type": "fix",
+      "label": "Playlists",
+      "agent": "claude",
+      "details": [
+        "Each YouTube list keeps its own folder.",
+        "Videos past number 100 are numbered correctly.",
+        "Failed videos explain what went wrong in plain words.",
+        "Deleting a playlist asks first."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-music",
+      "type": "fix",
+      "label": "Music",
+      "agent": "claude",
+      "details": [
+        "The now-playing bar shows the playing song's cover instead of its playlist's cover."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-installer",
+      "type": "fix",
+      "label": "Installer",
+      "agent": "claude",
+      "details": [
+        "Much smaller download."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-settings",
+      "type": "fix",
+      "label": "Settings",
+      "agent": "claude",
+      "details": [
+        "Notifications in island moved from Debugging to Appearance, still off by default."
+      ],
+      "files": []
+    },
+    {
+      "id": "f-updates",
+      "type": "fix",
+      "label": "Updates",
+      "agent": "claude",
+      "details": [
+        "The update card no longer appears in the Dynamic Island."
+      ],
+      "files": []
+    }
+  ],
+  "edges": [
+    {
+      "source": "claude",
+      "target": "t-games"
+    },
+    {
+      "source": "t-games",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-settings"
+    },
+    {
+      "source": "t-settings",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-playlists"
+    },
+    {
+      "source": "t-playlists",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-playback"
+    },
+    {
+      "source": "t-playback",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-downloads"
+    },
+    {
+      "source": "t-downloads",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-notifications"
+    },
+    {
+      "source": "t-notifications",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "t-updates"
+    },
+    {
+      "source": "t-updates",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-playlists"
+    },
+    {
+      "source": "f-playlists",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-music"
+    },
+    {
+      "source": "f-music",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-installer"
+    },
+    {
+      "source": "f-installer",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-settings"
+    },
+    {
+      "source": "f-settings",
+      "target": "ruforge"
+    },
+    {
+      "source": "claude",
+      "target": "f-updates"
+    },
+    {
+      "source": "f-updates",
+      "target": "ruforge"
+    }
+  ]
+}

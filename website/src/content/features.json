@@ -1,6 +1,6 @@
 {
-  "updated": "2026-10-18",
-  "version": "0.8.0",
+  "updated": "2026-11-14",
+  "version": "0.10.0",
   "areas": [
     {
       "id": "downloading",
@@ -19,13 +19,23 @@
         { "name": "Cancel or clear batches", "what": "Stop or clear a whole batch of downloads with one click.", "since": "0.4.0" },
         { "name": "Download comments", "what": "Saves the top comment threads with each video when the setting is on.", "since": "0.1.11" },
         { "name": "Signed-in downloads", "what": "Uses your YouTube sign-in for videos that need an account." },
-        { "name": "Download tool updates", "what": "Checks for and installs the newest YouTube download tool from Settings.", "since": "0.1.8" }
+        { "name": "Download tool updates", "what": "Checks for and installs the newest YouTube download tool from Settings.", "since": "0.1.8" },
+        { "name": "Tools on first launch", "what": "ffmpeg and yt-dlp download on first launch after you confirm, so the installer stays small.", "since": "0.10.0" },
+        { "name": "Queue survives a restart", "what": "Unfinished downloads come back after you close and reopen RuForge.", "since": "0.10.0" },
+        { "name": "Resume from the bell", "what": "Resume paused downloads straight from the notification bell.", "since": "0.10.0" },
+        { "name": "Faster playlist screen", "what": "Per-row cancel, search and a live size total on the playlist download screen.", "since": "0.10.0" }
       ]
     },
     {
       "id": "playlists",
       "title": "Playlists",
       "features": [
+        { "name": "Playlist page", "what": "A full playlist page with cover, creators, total length and a sortable table.", "since": "0.10.0" },
+        { "name": "Resume a playlist", "what": "Pick up where you left off, or start over.", "since": "0.10.0" },
+        { "name": "Drag to reorder any playlist", "what": "Reorder downloaded playlists too, saved on disk.", "since": "0.10.0" },
+        { "name": "Suggested shelf", "what": "YouTube videos you don't have yet under every playlist, with Find more.", "since": "0.10.0" },
+        { "name": "Play in order", "what": "Video playlists play in their own order with auto-advance, loop and an end-of-playlist choice.", "since": "0.10.0" },
+        { "name": "Drop a link on a playlist", "what": "Drop a YouTube link on a playlist card to download into it.", "since": "0.10.0" },
         { "name": "Custom playlists", "what": "Make your own playlists in your library and in Music.", "since": "0.4.0" },
         { "name": "Watch Later", "what": "A built-in Watch Later list for videos you want to see later.", "since": "0.4.0" },
         { "name": "Rename, reorder, fill", "what": "Rename a playlist, reorder it, or fill it from a library search.", "since": "0.5.0" },
@@ -99,6 +109,18 @@
       ]
     },
     {
+      "id": "games",
+      "title": "Games",
+      "features": [
+        { "name": "Games mode", "what": "Its own mode (Alt+3) with a home page and a page for each game you play.", "since": "0.10.0" },
+        { "name": "Game detection", "what": "Finds Minecraft Bedrock, Minecraft Java and any game you add from Steam or the Microsoft Store.", "since": "0.10.0" },
+        { "name": "Game pages", "what": "Overview, Videos, Guides and Search tabs for each game.", "since": "0.10.0" },
+        { "name": "In-game overlay", "what": "Free-position widgets over your game (Mod+Alt+O), plus a pinned glance (Mod+Alt+P).", "since": "0.10.0" },
+        { "name": "Ghost mode while you play", "what": "The mini player fades out of the way while a game runs, with a layout editor.", "since": "0.10.0" },
+        { "name": "Automatic game tags", "what": "Videos downloaded from a game's Search or Videos tab get tagged with that game.", "since": "0.10.0" }
+      ]
+    },
+    {
       "id": "explorer",
       "title": "Explorer",
       "features": [
@@ -122,7 +144,9 @@
         { "name": "Channel upload alerts", "what": "Tells you when followed channels post new uploads or premieres.", "since": "0.5.0" },
         { "name": "Download result notices", "what": "Shows a check or a warning when each download finishes.", "since": "0.1.10" },
         { "name": "Playlist check notices", "what": "A bell notice when a downloaded playlist has new videos.", "since": "0.8.0" },
-        { "name": "Storage full badge", "what": "A storage badge on the download row when storage is full.", "since": "0.6.0" }
+        { "name": "Storage full badge", "what": "A storage badge on the download row when storage is full.", "since": "0.6.0" },
+        { "name": "From the dev", "what": "Announcements and polls in the bell, with voting, live results and a mute toggle.", "since": "0.10.0" },
+        { "name": "Island over other apps", "what": "Choose Always, When active or Off for the island in Settings > Appearance.", "since": "0.10.0" }
       ]
     },
     {
@@ -157,7 +181,7 @@
       "title": "Updates and privacy",
       "features": [
         { "name": "Automatic update checks", "what": "Checks for new versions once per launch and installs them for you.", "since": "0.1.8" },
-        { "name": "Update island", "what": "New updates appear in the island, with an install button.", "since": "0.2.1" },
+        { "name": "Update button", "what": "An update button at the bottom of the sidebar installs and restarts.", "since": "0.10.0" },
         { "name": "Update fallback", "what": "Checks ruforge.app first and falls back to GitHub if the site is down.", "since": "0.6.0" },
         { "name": "What's New tiles", "what": "After an update, each new feature gets a tile that opens it.", "since": "0.6.0" },
         { "name": "Crash recovery screen", "what": "A friendly screen offers Reload and the error details if something breaks.", "since": "0.2.0" },
@@ -165,7 +189,7 @@
         { "name": "Private activity log", "what": "Keeps a private activity log on your computer. Nothing is uploaded.", "since": "0.7.0" },
         { "name": "Discord activity", "what": "Optionally shares what you watch or download on Discord, off by default.", "since": "0.4.0" },
         { "name": "Website install", "what": "ruforge.app shows the latest version and installs straight from the site.", "since": "0.1.10" },
-        { "name": "License notices", "what": "The installer includes license notices for its bundled tools.", "since": "0.5.0" }
+        { "name": "License notices", "what": "License notices for the download tools RuForge uses.", "since": "0.5.0" }
       ]
     }
   ]

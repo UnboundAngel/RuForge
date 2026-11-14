@@ -13,6 +13,8 @@
  *  - `tip`: friendly tip callout.
  */
 
+import { NETWORK_TABLE } from './docsNetworkTable';
+
 export interface DocsSectionContent {
   paragraphs?: string[];
   /** Additional paragraphs rendered after steps/bullets. */
@@ -79,7 +81,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
       bullets: [
         'RuForge opens on <strong>Videos</strong>, your library.',
         'To download something, click <strong>Download</strong> in the left sidebar or press <kbd>Ctrl</kbd>+<kbd>D</kbd>. <a href="/docs/first-download">Your first download</a> walks through it.',
-        'The download tools (yt-dlp, and ffmpeg for joining video and audio) come with RuForge. There\'s nothing else to install.',
+        'On first launch, RuForge asks to download its tools (yt-dlp, and ffmpeg for joining video and audio). A ring on the sidebar <strong>Download</strong> icon shows the progress. If you skip it, <strong>Download tools</strong> in <strong>Settings</strong> &gt; <strong>Updates</strong> gets them later.',
       ],
       paragraphs2: [
         'Want your files somewhere else? <a href="/docs/library-folders">Library folders</a> shows how.',
@@ -372,7 +374,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
     },
     'Keep yt-dlp up to date': {
       paragraphs: [
-        'RuForge downloads with <strong>yt-dlp</strong>, a free tool that comes with the app. YouTube changes often, so yt-dlp gets frequent updates.',
+        'RuForge downloads with <strong>yt-dlp</strong>, a free tool RuForge downloads on first launch. YouTube changes often, so yt-dlp gets frequent updates.',
       ],
       bullets: [
         'When a newer yt-dlp is out, a banner in the downloader says <strong>A newer yt-dlp is out</strong>. Click <strong>Update</strong>.',
@@ -644,18 +646,7 @@ export const DOCS_CONTENT: Record<string, DocsPageContent> = {
       paragraphs: [
         'RuForge only connects to a service when a feature needs it:',
       ],
-      table: {
-        headers: ['Service', 'When', 'What it gets'],
-        rows: [
-          ['<strong>YouTube</strong>', 'Downloads, video details, thumbnails, channel pages', 'The videos and channels you ask for'],
-          ['<strong>SponsorBlock</strong>', 'Playing a video, if SponsorBlock is on in Settings &gt; Playback', 'A short piece of a hash of the video ID, never the ID itself'],
-          ['<strong>MusicBrainz</strong>, <strong>Cover Art Archive</strong>', 'After an audio download', 'The artist and song title'],
-          ['<strong>LRCLIB</strong>', 'Loading lyrics', 'The artist, title, album, and length'],
-          ['<strong>Wikipedia</strong>, <strong>Wikidata</strong>', 'Opening an artist page', 'The artist name'],
-          ['<strong>ruforge.app</strong>, <strong>GitHub</strong>', 'When RuForge opens', 'A check for new RuForge and yt-dlp versions. The RuForge check goes to ruforge.app, which counts it and points it to GitHub'],
-          ['<strong>Discord</strong>', 'Only if you turn it on in Settings &gt; General (off by default)', 'What you\'re playing, sent to the Discord app on your PC'],
-        ],
-      },
+      table: NETWORK_TABLE,
     },
     'Your YouTube sign-in': {
       bullets: [

@@ -38,7 +38,7 @@ export const builtWithCodeExamples: Record<string, CodeSnippetSource[]> = {
       file: 'src-tauri/src/commands/downloader.rs',
       startLine: 1371,
       endLine: 1402,
-      caption: 'Active jobs spawn the bundled yt-dlp sidecar, attach stdout parsing, and register the child with the download manager.',
+      caption: 'Active jobs spawn yt-dlp, attach stdout parsing, and register the child with the download manager.',
     },
   ],
   sponsorblock: [
@@ -69,10 +69,10 @@ export const builtWithCodeExamples: Record<string, CodeSnippetSource[]> = {
       caption: 'Tauri dev loads Vite on port 1430; release builds run `npm run build` into `dist/` first.',
     },
     {
-      file: 'src-tauri/tauri.conf.json',
-      startLine: 42,
-      endLine: 50,
-      caption: 'Sidecar binaries for yt-dlp, ffmpeg, and ffprobe ship inside the installer bundle.',
+      file: 'src-tauri/src/tools/ytdlp.rs',
+      startLine: 30,
+      endLine: 61,
+      caption: 'The installer carries no tools: yt-dlp downloads on first launch, checked against upstream SHA-256 sums before it is swapped in.',
     },
     {
       file: 'src/updaterCheck.ts',
