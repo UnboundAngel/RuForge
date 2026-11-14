@@ -60,3 +60,18 @@ export function mimeTypesMayCarryUri(dataTransfer: DataTransfer | null): boolean
     types.includes("application/x-moz-url")
   );
 }
+
+let internalDragActive = false;
+
+/**
+ * True while a drag that started inside the app (row reorder) is in flight. External drags
+ * (a link from a browser) never fire dragstart in this document, so they stay intake material.
+ */
+export function isInternalDrag(): boolean {
+  return internalDragActive;
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("dragstart", () => { internalDragActive = true; }, true);
+  document.addEventListener("dragend", () => { internalDragActive = false; }, true);
+}

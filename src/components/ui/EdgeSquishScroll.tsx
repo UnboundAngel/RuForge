@@ -217,6 +217,7 @@ export function EdgeSquishScroll({
           ref={setScroll}
           className={cn("flex gap-3 overflow-x-auto overflow-y-hidden scroll-smooth px-0.5 pb-1", contentClassName)}
           style={{ scrollbarWidth: "none", msOverflowStyle: "none", gap }}
+          data-native-wheel={wheelScroll ? "" : undefined}
           onWheel={
             wheelScroll
               ? (e) => {

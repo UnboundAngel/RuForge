@@ -123,6 +123,9 @@ const hubs: FeatureHubEntry[] = [
       <p class="features-index__desc">
         A free, open-source app for Windows: download from YouTube, keep it all in a local library, and watch with chapters and SponsorBlock.
       </p>
+      <p class="features-index__all">
+        <a href="/features/all" class="rf-inline-link">See every feature in one table</a>
+      </p>
     </header>
 
     <FeatureHubsGrid client:load hubs={hubs} />
@@ -151,6 +154,11 @@ const hubs: FeatureHubEntry[] = [
     line-height: 1.1;
     letter-spacing: -0.03em;
     color: var(--color-rf-text);
+  }
+
+  .features-index__all {
+    margin: 1rem 0 0;
+    font-size: 0.9375rem;
   }
 
   .features-index__desc {

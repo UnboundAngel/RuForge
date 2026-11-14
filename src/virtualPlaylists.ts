@@ -1,3 +1,4 @@
+import { applyDiskPlaylistMeta } from "./lib/diskPlaylistMeta";
 import { mediaPathsMatch } from "./lib/mediaPathMatch";
 import type { GalleryEntry, MediaFile, PlaylistCollection } from "./types";
 
@@ -26,6 +27,10 @@ export type VirtualPlaylistRecord = {
   description?: string;
   /** The game this video playlist belongs to, so its game page can find it. */
   gameId?: string;
+  /** Music only: the `Playlists/<folder>` download this playlist mirrors (lowercased folder name). */
+  sourceFolder?: string;
+  /** Music only: a deleted downloaded playlist, kept so the next scan does not recreate it. */
+  dismissed?: boolean;
 };
 
 export const PLAYLIST_DESCRIPTION_MAX = 300;
@@ -119,11 +124,17 @@ export function normalizeRecord(raw: VirtualPlaylistRecord): VirtualPlaylistReco
     kind === "video" && id !== WATCH_LATER_ID && typeof raw.gameId === "string" && raw.gameId.trim()
       ? raw.gameId.trim()
       : "";
+  const sourceFolder =
+    kind === "music" && typeof raw.sourceFolder === "string" && raw.sourceFolder.trim()
+      ? raw.sourceFolder.trim()
+      : "";
   return {
     id,
     title,
     ...(description ? { description } : {}),
     ...(gameId ? { gameId } : {}),
+    ...(sourceFolder ? { sourceFolder } : {}),
+    ...(sourceFolder && raw.dismissed === true ? { dismissed: true } : {}),
     items,
     thumbnailPath:
       typeof raw.thumbnailPath === "string" && raw.thumbnailPath
@@ -215,11 +226,10 @@ export function hydrateVirtualPlaylist(
     ? findMedia(mediaIndex, record.thumbnailPath)
     : null;
   const stackThumbnailPath =
-    (thumbOverride?.thumbnailPath ||
-      thumbOverride?.ruforgePosterPath ||
-      record.thumbnailPath) ??
-    items[0]?.thumbnailPath ??
-    items[0]?.ruforgePosterPath ??
+    thumbOverride?.thumbnailPath ||
+    thumbOverride?.ruforgePosterPath ||
+    items[0]?.thumbnailPath ||
+    items[0]?.ruforgePosterPath ||
     null;
   const combinedDuration = items.reduce((sum, item) => sum + (item.duration || 0), 0);
   return {
@@ -248,11 +258,13 @@ export function mergeVirtualPlaylistsIntoEntries(
   entries: GalleryEntry[],
   records: VirtualPlaylistRecord[] = loadVirtualPlaylistRecords(),
 ): GalleryEntry[] {
-  const disk = stripVirtualPlaylists(entries);
-  const mediaIndex = collectMediaIndex(disk);
+  const scanned = stripVirtualPlaylists(entries);
+  const mediaIndex = collectMediaIndex(scanned);
   const virtual = sortVirtualRecords(ensureWatchLaterInRecords(records)).map((r) =>
     hydrateVirtualPlaylist(r, mediaIndex),
   );
+  const find = (path: string) => findMedia(mediaIndex, path);
+  const disk = scanned.map((e) => (e.kind === "playlist" ? applyDiskPlaylistMeta(e, find) : e));
   return [...virtual, ...disk];
 }
 
@@ -318,7 +330,7 @@ export function findMusicPlaylistByTitle(
   if (!key) return null;
   let best: VirtualPlaylistRecord | null = null;
   for (const r of records) {
-    if (!isMusicPlaylistRecord(r)) continue;
+    if (!isMusicPlaylistRecord(r) || r.dismissed) continue;
     if (r.title.trim().replace(/\s+/g, " ").toLowerCase() !== key) continue;
     if (!best || r.updatedAt > best.updatedAt) best = r;
   }

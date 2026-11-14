@@ -7,8 +7,10 @@ Read `STATE.md` then root `AGENTS.md` first. Then open **one** of these if the t
 | [`docs/agents/AGENT-REFERENCE.md`](AGENT-REFERENCE.md) | architecture, Zustand, code quality detail, onboarding contract, updater/signing manual, mini player, playback persistence |
 | [`docs/agents/GAMES.md`](GAMES.md) | Games mode only: detection, auto-ghost, Guides, Glance, in-game overlay, game search and playlists, unlock isolation rules |
 | [`docs/agents/SCHEDULED.md`](SCHEDULED.md) | scheduled features: hold until a date, `src/scheduled/`, `ScheduledSlot`, `unlocks.json`, `scheduled.mjs` |
+| [`docs/agents/ANNOUNCEMENTS.md`](ANNOUNCEMENTS.md) | "From the dev" bell notices and polls: `announce.mjs`, signed `announcements.json`, `src-tauri/src/announcements/`. Authoring workflow: `.cursor/skills/ruforge-poll/SKILL.md` |
 | [`docs/ruforge/plans/stats-and-recap.md`](../ruforge/plans/stats-and-recap.md) | stats, activity log, tracking, profile numbers, yearly recap, milestones |
 | [`docs/agents/GOTCHAS.md`](GOTCHAS.md) | cross-cutting landmines (cargo test on Windows, title-bar drag, background Rust, big-feature phase flow) |
+| [`website/src/content/features.json`](../../website/src/content/features.json) | before proposing feature ideas: what already ships, per area (released versions only; check `STATE.md` for unreleased) |
 | [`website/AGENTS.md`](../../website/AGENTS.md) | website visuals, `/m/`, copy, SEO voice |
 | [`src/explorer/AGENTS.md`](../../src/explorer/AGENTS.md) | Explorer title band, pause/overlay, Explorer action validation |
 | [`src/components/island/AGENTS.md`](../../src/components/island/AGENTS.md) | island size cap and action validation |

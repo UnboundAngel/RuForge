@@ -4,6 +4,7 @@ pub mod error;
 pub mod events;
 pub mod inspection;
 pub mod jobs;
+pub mod playlist_stream;
 pub mod process;
 pub mod progress;
 pub mod rate_limit;
@@ -11,12 +12,14 @@ pub mod types;
 pub mod url;
 pub mod ytdlp_args;
 pub mod ytdlp_json;
+mod ytdlp_playlist_source;
 
 pub use engine::{validated_choices_from_options, MediaEngine, MediaEngineConfig};
 pub use error::{classify_ytdlp_stderr, EngineError, EngineErrorCode};
 pub use events::{ChannelEventSink, EngineEvent, EventSink, JobStore, MemoryJobStore};
 pub use inspection::{InspectionStore, DEFAULT_INSPECTION_TTL_SECS};
 pub use jobs::ActiveJobRegistry;
+pub use playlist_stream::{PlaylistStreamBatch, PlaylistStreamMeta};
 pub use process::{
     ProcessLauncher, ProcessOutput, RuntimeProvider, SpawnedProcess, StdProcessLauncher,
     SUBPROCESS_OUTPUT_TIMEOUT_SECS,

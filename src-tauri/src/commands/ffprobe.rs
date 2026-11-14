@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use tauri::{AppHandle, Manager};
-use tauri_plugin_shell::ShellExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,10 +53,7 @@ fn optional_bitrate_kbps(raw: Option<&serde_json::Value>) -> Option<u32> {
 }
 
 async fn run_ffprobe_json(app: &AppHandle, media_path: &str) -> Result<serde_json::Value, String> {
-    let cmd = app
-        .shell()
-        .sidecar("ffprobe")
-        .map_err(|e| e.to_string())?
+    let cmd = crate::tools::tool_command(app, crate::tools::paths::Tool::Ffprobe)?
         .args([
             "-v",
             "quiet",

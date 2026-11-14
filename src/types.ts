@@ -153,6 +153,7 @@ export interface DenoDownloadProgressPayload {
 
 /** Prefix on error strings when yt-dlp reports no supported JavaScript runtime. */
 export const JS_RUNTIME_MISSING_PREFIX = "JS_RUNTIME_MISSING: " as const;
+export const TOOLS_MISSING_PREFIX = "TOOLS_MISSING: " as const;
 
 function finiteNonNegativeNumber(n: unknown): n is number {
   return typeof n === "number" && Number.isFinite(n) && n >= 0;

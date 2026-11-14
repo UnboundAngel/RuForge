@@ -15,8 +15,10 @@ type LibraryIndex = {
   byVideoId: Map<string, DuplicateMatch>;
   byPlaylistId: Map<string, MediaFile>;
   byUrl: Map<string, MediaFile>;
-  byTitle: Map<string, MediaFile>;
+  byTitle: Map<string, MediaFile[]>;
 };
+
+const TITLE_MATCH_DURATION_SLACK_SECONDS = 2;
 
 function iterMediaFiles(entries: GalleryEntry[]): MediaFile[] {
   const out: MediaFile[] = [];
@@ -60,9 +62,18 @@ function libraryIndex(entries: GalleryEntry[]): LibraryIndex {
       setFirst(index.byUrl, normalizeYouTubeUrlForCompare(source), file);
     }
 
-    setFirst(index.byTitle, normalizeTitleForLibraryMatch(file.name ?? ""), file);
-    const stem = file.path.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, "") ?? "";
-    setFirst(index.byTitle, normalizeTitleForLibraryMatch(stem), file);
+    if (file.duration > 0) {
+      const stem = file.path.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, "") ?? "";
+      for (const key of new Set([
+        normalizeTitleForLibraryMatch(file.name ?? ""),
+        normalizeTitleForLibraryMatch(stem),
+      ])) {
+        if (!key) continue;
+        const bucket = index.byTitle.get(key);
+        if (bucket) bucket.push(file);
+        else index.byTitle.set(key, [file]);
+      }
+    }
   }
 
   indexCache.set(entries, index);
@@ -119,10 +130,13 @@ export function findLibraryMatchForPlaylistItem(
     if (byId) return byId;
   }
 
+  // Same title is common (covers, "Intro", re-uploads); only the same length makes it the same video.
   const wantTitle = normalizeTitleForLibraryMatch(item.title ?? "");
-  if (!wantTitle) return null;
-  const byTitle = index.byTitle.get(wantTitle);
-  return byTitle ? { file: byTitle, matchedVia: "title" } : null;
+  if (!wantTitle || !(item.duration > 0)) return null;
+  const sameLength = index.byTitle
+    .get(wantTitle)
+    ?.find((f) => Math.abs(f.duration - item.duration) <= TITLE_MATCH_DURATION_SLACK_SECONDS);
+  return sameLength ? { file: sameLength, matchedVia: "title" } : null;
 }
 
 /** True when the media file lives directly under `outputDir` (not already in a playlist folder). */

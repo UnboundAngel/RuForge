@@ -1,26 +1,28 @@
 RuForge third-party notices
 
 RuForge is licensed under the Apache License 2.0 (RUFORGE-LICENSE.txt).
-The installer also includes the following programs, each distributed
-under its own license.
+RuForge uses the following programs, each distributed under its own
+license. FFmpeg, FFprobe and yt-dlp are not in the installer: RuForge
+downloads them on first launch.
 
 
 FFmpeg and FFprobe
 ------------------
-Version 8.1.1, gyan.dev full build.
-License: GNU General Public License version 3 (FFMPEG-GPL-3.0.txt).
-The build is configured with --enable-gpl --enable-version3.
+Downloaded on first launch from the BtbN FFmpeg-Builds release pinned in
+https://ruforge.app/tools.json (FFmpeg 8.1 LGPL build, win64, static).
+License: GNU Lesser General Public License version 3 (FFMPEG-LGPL-3.0.txt).
 
 Corresponding source code:
-  FFmpeg 8.1.1: https://github.com/FFmpeg/FFmpeg/tree/n8.1.1
-  Release tarballs: https://ffmpeg.org/releases/
-  Build configuration and bundled libraries: https://www.gyan.dev/ffmpeg/builds/
+  FFmpeg: https://github.com/FFmpeg/FFmpeg
+  Build scripts and configuration: https://github.com/BtbN/FFmpeg-Builds
 
 RuForge runs FFmpeg and FFprobe as separate programs and does not modify them.
 
 
 yt-dlp
 ------
+Downloaded on first launch from https://github.com/yt-dlp/yt-dlp/releases and
+checked against the published SHA2-256SUMS.
 License: The Unlicense (YT-DLP-UNLICENSE.txt).
 Source code: https://github.com/yt-dlp/yt-dlp
 

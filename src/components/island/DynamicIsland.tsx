@@ -30,13 +30,6 @@ import { IslandExpandedContent } from "./IslandExpandedContent";
 import { IslandNotificationsContent, islandNotificationsDims } from "./IslandNotificationsContent";
 import type { NotificationCenterPanelProps } from "@/components/notifications/NotificationCenterPanel";
 import {
-  IslandUpdateCompactContent,
-  IslandUpdateExpandedContent,
-  ISLAND_UPDATE_EXPANDED_DIMENSIONS,
-  islandUpdateCollapsedWidth,
-  type IslandUpdateContentProps,
-} from "./IslandUpdateContent";
-import {
   IslandWatchlistCompactContent,
   IslandWatchlistExpandedContent,
   islandWatchlistCollapsedWidth,
@@ -151,8 +144,7 @@ type DynamicIslandProps = {
   captureSavedCaption?: string;
   captureSavedPreviewSrc?: string;
   onCaptureSavedOpen?: (e: MouseEvent) => void;
-  updateAvailable?: Omit<IslandUpdateContentProps, "compact"> & { collapsed: boolean };
-  /** Shown when `state` is "notice"; takes over a collapsed update pill too. */
+  /** Shown when `state` is "notice". */
   notice?: IslandNotice | null;
   /** Active download: its own pill in "download", a ring around the music pill in "compact". */
   download?: IslandDownload | null;
@@ -309,7 +301,6 @@ export function DynamicIsland({
   captureSavedCaption,
   captureSavedPreviewSrc,
   onCaptureSavedOpen,
-  updateAvailable,
   notice = null,
   download = null,
   onOpenDownloads,
@@ -368,14 +359,7 @@ export function DynamicIsland({
   );
 
   const noticeActive = state === "notice" && notice != null;
-  const updateMode = Boolean(updateAvailable) && !noticeActive;
-  const effectiveState: IslandState = noticeActive
-    ? "notice"
-    : updateMode
-    ? updateAvailable!.collapsed
-      ? "idle"
-      : "expanded"
-    : state;
+  const effectiveState: IslandState = noticeActive ? "notice" : state;
   const [prevState, setPrevState] = useState(effectiveState);
   const [squeezing, setSqueezing] = useState(false);
   if (prevState !== effectiveState) {
@@ -390,11 +374,7 @@ export function DynamicIsland({
 
   const baseDims = ISLAND_DIMENSIONS[effectiveState];
   const restingDims =
-    updateMode && updateAvailable?.collapsed
-      ? { width: islandUpdateCollapsedWidth(), height: 36, borderRadius: 18 }
-      : updateMode && !updateAvailable?.collapsed
-        ? { ...ISLAND_UPDATE_EXPANDED_DIMENSIONS }
-      : effectiveState === "capture" && captureSavedCaption
+    effectiveState === "capture" && captureSavedCaption
         ? { ...baseDims, width: captureIslandWidthForCaption(captureSavedCaption) }
         : noticeActive
           ? { ...baseDims, width: noticeIslandWidth(notice!.message) }
@@ -415,12 +395,12 @@ export function DynamicIsland({
       : d;
   const stageDims = fitPills(restingDims);
   const dims = squeezing ? fitPills({ ...restingDims, width: ISLAND_DIMENSIONS.idle.width }) : stageDims;
-  const interactive = effectiveState !== "idle" || Boolean(devCaptureIdle) || updateMode || idleTappable;
-  const watchlistFloating = !updateMode && effectiveState === "watchlist-expanded";
-  const downloadFloating = !updateMode && effectiveState === "download-expanded" && download != null;
-  const notificationsFloating = !updateMode && effectiveState === "notifications" && notifications != null;
+  const interactive = effectiveState !== "idle" || Boolean(devCaptureIdle) || idleTappable;
+  const watchlistFloating = effectiveState === "watchlist-expanded";
+  const downloadFloating = effectiveState === "download-expanded" && download != null;
+  const notificationsFloating = effectiveState === "notifications" && notifications != null;
   // Expanded needs overflow for its menus, but only once grown; mid-spring it would spill full-size controls.
-  const overflowVisible = !updateMode && effectiveState === "expanded" && sizeSettled;
+  const overflowVisible = effectiveState === "expanded" && sizeSettled;
 
   const stage = (key: string, node: ReactNode) => (
     <IslandStage key={key} width={stageDims.width} height={stageDims.height}>
@@ -441,37 +421,16 @@ export function DynamicIsland({
     >
       <div
         className={`rf-island-shell relative h-full w-full ${
-          updateMode ? "rf-island-shell--update" : ""
-        } ${overflowVisible ? "overflow-visible" : "overflow-hidden"} ${
-          !updateMode && effectiveState === "expanded" ? "shadow-2xl" : ""
-        } ${(updateMode && !updateAvailable?.collapsed) || watchlistFloating || downloadFloating || notificationsFloating ? "shadow-2xl" : ""} ${
+          overflowVisible ? "overflow-visible" : "overflow-hidden"
+        } ${
+          effectiveState === "expanded" ? "shadow-2xl" : ""
+        } ${watchlistFloating || downloadFloating || notificationsFloating ? "shadow-2xl" : ""} ${
           interactive ? "cursor-pointer" : "cursor-default"
         }`}
         style={{ borderRadius: dims.borderRadius }}
       >
         <AnimatePresence initial={false}>
-          {updateMode && updateAvailable
-            ? updateAvailable.collapsed
-              ? stage(
-                  "update-compact",
-                  <ContentShell>
-                    <IslandUpdateCompactContent />
-                  </ContentShell>,
-                )
-              : stage(
-                  "update-expanded",
-                  <ContentShell enterScale={0.95}>
-                    <IslandUpdateExpandedContent
-                      notes={updateAvailable.notes}
-                      installableVersion={updateAvailable.installableVersion}
-                      selectedVersion={updateAvailable.selectedVersion}
-                      onHideUntilRestart={updateAvailable.onHideUntilRestart}
-                      onInstallRestart={updateAvailable.onInstallRestart}
-                    />
-                  </ContentShell>,
-                )
-            : null}
-          {!updateMode && state === "idle" && devCaptureIdle
+          {state === "idle" && devCaptureIdle
             ? stage(
                 "idle",
                 <IslandIdleDevCaptureContent
@@ -481,14 +440,14 @@ export function DynamicIsland({
                 />,
               )
             : null}
-          {!updateMode && state === "idle" && !devCaptureIdle ? stage("idle", <IdleContent />) : null}
-          {!updateMode && state === "compact"
+          {state === "idle" && !devCaptureIdle ? stage("idle", <IdleContent />) : null}
+          {state === "compact"
             ? stage(
                 "compact",
                 <CompactContent content={content} waveformLevels={waveformLevels} skipDir={skipDir} />,
               )
             : null}
-          {!updateMode && state === "capture" && captureSavedCaption && captureSavedPreviewSrc && onCaptureSavedOpen
+          {state === "capture" && captureSavedCaption && captureSavedPreviewSrc && onCaptureSavedOpen
             ? stage(
                 "capture",
                 <IslandCaptureSavedContent
@@ -504,7 +463,7 @@ export function DynamicIsland({
                 <IslandNoticeContent notice={notice!} accentColor={content.accentColor} />,
               )
             : null}
-          {!updateMode && state === "download" && download
+          {state === "download" && download
             ? stage("download", <IslandDownloadContent download={download} onStart={onStartDownload} />)
             : null}
           {downloadFloating
@@ -523,7 +482,7 @@ export function DynamicIsland({
                 <IslandNotificationsContent panel={notifications!} onHeight={setNotificationsHeight} />,
               )
             : null}
-          {!updateMode && state === "watchlist" && watchlist
+          {state === "watchlist" && watchlist
             ? stage("watchlist-compact", <IslandWatchlistCompactContent watchlist={watchlist} />)
             : null}
           {watchlistFloating && watchlist
@@ -539,7 +498,7 @@ export function DynamicIsland({
                 />,
               )
             : null}
-          {!updateMode && state === "expanded"
+          {state === "expanded"
             ? stage(
                 "expanded",
                 <IslandExpandedContent
@@ -563,7 +522,7 @@ export function DynamicIsland({
               )
             : null}
         </AnimatePresence>
-        {download && !updateMode && (effectiveState === "download" || effectiveState === "compact") ? (
+        {download && (effectiveState === "download" || effectiveState === "compact") ? (
           <IslandProgressRing
             pct={download.waiting ? (download.pct ?? 0) : download.pct}
             pulse={!download.waiting && download.pct != null}

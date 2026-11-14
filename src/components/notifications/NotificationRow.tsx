@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { formatAge } from "@/components/library/youtubeFeed";
 import { notificationBody, notificationHeadline, notificationKicker, type NotificationKicker } from "@/notifications/panelModel";
 import type { NotificationActionId, NotificationItem } from "@/notifications/types";
+import { NotificationDevCard } from "./NotificationDevCard";
 import { NotificationLeading } from "./NotificationLeading";
 import { NotificationMilestoneRow } from "./NotificationMilestoneRow";
 import { NotificationPrimaryAction, NotificationSideActions } from "./NotificationRowActions";
@@ -39,6 +40,9 @@ function quietBadge(item: NotificationItem): boolean {
 export function NotificationRow({ item, channelName, onAction, onMarkRead, onContextMenu, compact = false, flat = false }: Props) {
   if (item.kind === "stats-milestone") {
     return <NotificationMilestoneRow item={item} onMarkRead={onMarkRead} onContextMenu={onContextMenu} compact={compact} />;
+  }
+  if (item.source === "dev") {
+    return <NotificationDevCard item={item} onAction={onAction} onMarkRead={onMarkRead} onContextMenu={onContextMenu} compact={compact} />;
   }
   const channel = notificationHeadline(item, channelName).channel ?? channelName;
   const kicker = notificationKicker(item, channelName);

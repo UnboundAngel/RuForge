@@ -13,6 +13,9 @@ import { MusicQuickPickRow } from "./MusicQuickPickRow";
 import { MusicRecentPlaylistCard } from "./MusicRecentPlaylistCard";
 import type { MusicRowContextMenuState } from "./MusicRowContextMenu";
 import { musicQueueSource, type MusicQueueSource } from "./musicQueueSource";
+import { MusicPlaylistNavMenu, type MusicPlaylistNavMenuState } from "./MusicPlaylistNavMenu";
+import { useMusicPlaylistRecords } from "./useMusicPlaylists";
+import { useRuforgeStore } from "@/store/ruforgeStore";
 
 type RecentTab = "added" | "listened";
 
@@ -55,6 +58,13 @@ export function MusicHomeRecentSection({
 
   const added = useMemo(() => buildRecentAddedGroups(tracks), [tracks]);
   const addedFeed = useMemo(() => buildRecentAddedFeed(added), [added]);
+  const openMusicPlaylist = useRuforgeStore((s) => s.openMusicPlaylist);
+  const playlistRecords = useMusicPlaylistRecords();
+  const recordByFolder = useMemo(
+    () => new Map(playlistRecords.filter((r) => r.sourceFolder).map((r) => [r.sourceFolder!, r])),
+    [playlistRecords],
+  );
+  const [playlistMenu, setPlaylistMenu] = useState<MusicPlaylistNavMenuState | null>(null);
 
   const lookup = useMemo(() => {
     const byPath = new Map<string, MediaFile>();
@@ -146,18 +156,25 @@ export function MusicHomeRecentSection({
                   {addedFeed.map((item) => {
                     if (item.kind === "playlist") {
                       const pl = item.group;
+                      const record = recordByFolder.get(pl.folderKey);
                       return (
                         <MusicRecentPlaylistCard
                           key={`pl:${pl.folderKey}`}
-                          title={pl.title}
+                          title={record?.title ?? pl.title}
                           tracks={pl.tracks}
-                          onClick={() => onPlayFile(
+                          onClick={() => record ? openMusicPlaylist(record.id) : onPlayFile(
                             pl.tracks[0]!,
                             pl.tracks,
                             musicQueueSource("playlist", pl.title),
                           )}
                           onContextMenu={(e) =>
-                            setMenu({
+                            record ? setPlaylistMenu({
+                              record,
+                              tracks: pl.tracks,
+                              coverFile: null,
+                              x: e.clientX,
+                              y: e.clientY,
+                            }) : setMenu({
                               context: { kind: "song", file: pl.tracks[0]! },
                               x: e.clientX,
                               y: e.clientY,
@@ -320,6 +337,7 @@ export function MusicHomeRecentSection({
           )}
         </div>
       </div>
+      <MusicPlaylistNavMenu menu={playlistMenu} onClose={() => setPlaylistMenu(null)} />
     </section>
   );
 }

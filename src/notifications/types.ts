@@ -1,4 +1,4 @@
-export type NotificationSourceId = "watchlist" | "download" | "security" | "stats" | "playlist";
+export type NotificationSourceId = "watchlist" | "download" | "security" | "stats" | "playlist" | "dev";
 
 export type NotificationKind =
   | "upload"
@@ -9,20 +9,43 @@ export type NotificationKind =
   | "download-timed-out"
   /** Storage cap or disk space: a queue hold or a refused add. */
   | "download-blocked"
+  /** The last session ended with unfinished downloads; the row offers Resume. */
+  | "download-paused"
   /** A YouTube page tried to leave YouTube or poked a decoy (`src/lib/securityTripwires.ts`). */
   | "security-blocked"
   /** Quiet milestone from the activity stats engine. */
   | "stats-milestone"
   /** A downloaded playlist gained videos (`src/playlistWatch/`). */
-  | "playlist-new";
+  | "playlist-new"
+  /** Signed "From the dev" announcements (`src/lib/devAnnouncementsHost.ts`). */
+  | "dev-notice"
+  | "dev-poll";
+
+/** One per poll option (ids a to f). They live in `actions` because the overlay host only runs listed actions; a voted or closed poll lists none. */
+export const POLL_PICK_ACTIONS = [
+  "poll-pick-a",
+  "poll-pick-b",
+  "poll-pick-c",
+  "poll-pick-d",
+  "poll-pick-e",
+  "poll-pick-f",
+] as const;
+export type PollPickAction = (typeof POLL_PICK_ACTIONS)[number];
+
+export function isPollPick(action: NotificationActionId): action is PollPickAction {
+  return (POLL_PICK_ACTIONS as readonly string[]).includes(action);
+}
 
 export type NotificationActionId =
+  | PollPickAction
   | "queue"
   | "open-explorer"
   | "play"
   | "show-in-folder"
   | "retry"
-  | "open-storage-settings";
+  | "open-storage-settings"
+  | "resume-queue"
+  | "open-link";
 
 export type NotificationItem = {
   /** Stable `${source}:${key}` so re-recording updates in place. */
@@ -55,6 +78,12 @@ export type NotificationItem = {
     /** A download of this video was refused for storage and storage is still full. */
     storageHeld?: boolean;
     /** Videos a downloaded playlist gained, and the folder they belong in. */
+    /** Announcement link (notice), and when a poll closes. */
+    devUrl?: string;
+    devOptions?: { id: string; label: string }[];
+    endsAt?: number | null;
+    /** Derived in `devSource`, never persisted. `counts` is only set once the user may see results. */
+    devVote?: { pick: string | null; counts: Record<string, number> | null; error: string | null; busy: boolean };
     playlist?: { listId: string; outputDir: string; folderName: string; videos: { id: string; title: string }[] };
   };
 };
@@ -74,7 +103,7 @@ export type NotificationSource = {
 export type NotificationCenterTab = "feed" | "channels" | "history" | "settings";
 
 /** What the user can silence: hidden from the feed and badge, and no toast or island notice. */
-export type NotificationMuteKey = "uploads" | "downloads" | "problems" | "milestones" | "security";
+export type NotificationMuteKey = "uploads" | "downloads" | "problems" | "milestones" | "security" | "dev";
 
 /** Notification settings the panel shows; alerts and mutes live in app settings, the interval in Rust's watchlist. */
 export type NotificationPrefs = { alerts: boolean; checkIntervalMin: number; muted: NotificationMuteKey[] };

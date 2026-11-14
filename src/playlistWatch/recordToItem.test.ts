@@ -35,6 +35,12 @@ describe("playlist watch records", () => {
     expect(next.subtitle).toContain("3 new videos");
   });
 
+  it("caps the subtitle at 3 titles", () => {
+    const ids = Array.from({ length: 8 }, (_, i) => `video${i}aaaa`);
+    const sub = recordToItem(rec(ids)).subtitle ?? "";
+    expect(sub).toBe("8 new videos: t-video0aaaa, t-video1aaaa, t-video2aaaa +5 more");
+  });
+
   it("words the toast by count", () => {
     expect(playlistToastCopy(rec(["aaaaaaaaaaa"]))).toBe("1 new video in Road");
     expect(playlistToastCopy(rec(["aaaaaaaaaaa", "bbbbbbbbbbb"]))).toBe("2 new videos in Road");

@@ -162,6 +162,13 @@ export const NAV_SECTIONS: NavSection[] = [
         externalHref: '/docs/cookies-and-ytdlp',
       },
       {
+        slug: 'compare',
+        title: 'Compare',
+        description: 'RuForge next to Parabolic, Tartube, and 4K Video Downloader.',
+        outline: [],
+        externalHref: '/compare',
+      },
+      {
         slug: 'faq',
         title: 'FAQ',
         description: 'Quick answers about cost, accounts, downloads, updates, and your data.',

@@ -1,0 +1,32 @@
+@keyframes rf-text-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* A figure that is still growing: a soft highlight sweeps across the text itself. */
+.rf-text-shimmer {
+  background-image: linear-gradient(
+    105deg,
+    currentColor 0%,
+    currentColor 40%,
+    color-mix(in srgb, currentColor 35%, transparent) 50%,
+    currentColor 60%,
+    currentColor 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: rf-text-shimmer 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-text-shimmer {
+    animation: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}

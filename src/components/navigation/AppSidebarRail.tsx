@@ -1,4 +1,5 @@
 import { RuForgeCaptureTrigger } from "@/components/dev-captures/RuForgeCaptureTrigger";
+import { UpdateAvailableButton } from "@/components/UpdateAvailableButton";
 import { VideoDownloadRailButton } from "@/components/downloader/VideoDownloadDockChip";
 import { StorageRailMeter } from "@/components/navigation/StorageRailMeter";
 import { SIDEBAR_RAIL_W } from "@/lib/sidebarLayout";
@@ -104,7 +105,8 @@ export function AppSidebarRail({
         })}
       </nav>
 
-      <div className="flex shrink-0 justify-center pb-2">
+      <div className="flex shrink-0 flex-col items-center pb-2">
+        <UpdateAvailableButton surface="rail" className="mb-1" />
         <StorageRailMeter />
       </div>
     </div>

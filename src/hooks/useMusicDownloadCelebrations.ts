@@ -84,43 +84,28 @@ export function detectDownloadJobCelebrations(
 
 function useCelebrationQueue() {
   const pendingRef = useRef<CollapsedCelebrate[]>([]);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeRef = useRef(false);
   const [celebrating, setCelebrating] = useState<CollapsedCelebrate | null>(null);
 
-  const processNextRef = useRef<() => void>(() => {});
-
-  const processNext = useCallback(() => {
-    if (timerRef.current) return;
-    const next = pendingRef.current.shift();
-    if (!next) {
-      setCelebrating(null);
-      return;
-    }
-    setCelebrating(next);
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      setCelebrating(null);
-      processNextRef.current();
-    }, MUSIC_DOWNLOAD_CELEBRATE_HOLD_MS);
-  }, []);
-
-  processNextRef.current = processNext;
-
-  const enqueue = useCallback(
-    (items: CollapsedCelebrate[]) => {
-      if (items.length === 0) return;
-      pendingRef.current.push(...items);
-      if (!timerRef.current) {
-        processNext();
-      }
-    },
-    [processNext],
-  );
-
+  // The hold timer belongs to the current celebration, so an effect re-run (StrictMode,
+  // Fast Refresh) re-arms it instead of leaving a celebration on screen forever.
   useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
+    activeRef.current = celebrating != null;
+    if (!celebrating) return;
+    const timer = setTimeout(() => {
+      const next = pendingRef.current.shift() ?? null;
+      activeRef.current = next != null;
+      setCelebrating(next);
+    }, MUSIC_DOWNLOAD_CELEBRATE_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [celebrating]);
+
+  const enqueue = useCallback((items: CollapsedCelebrate[]) => {
+    if (items.length === 0) return;
+    pendingRef.current.push(...items);
+    if (activeRef.current) return;
+    activeRef.current = true;
+    setCelebrating(pendingRef.current.shift() ?? null);
   }, []);
 
   return { celebrating, enqueue };

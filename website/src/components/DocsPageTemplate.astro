@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import DocsSidebar from './DocsSidebar.astro';
 import Disclosure from './Disclosure.astro';
+import Table from './ui/Table.astro';
 import { SpiralLoader } from './SpiralLoader';
 import type { DocsPage } from '../lib/docsTree';
 import { docsNavNeighbors } from '../lib/docsTree';
@@ -107,24 +108,7 @@ function sectionId(heading: string): string {
                       {bodyParagraphs?.map((p) => <p class="docs-p" set:html={p} />)}
                     </div>
                     <div class="docs-split__aside">
-                      {sc.table && (
-                        <div class="rf-doc-table-wrap">
-                          <table class="rf-doc-table">
-                            <thead>
-                              <tr>
-                                {sc.table.headers.map((h) => <th>{h}</th>)}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {sc.table.rows.map((row) => (
-                                <tr>
-                                  {row.map((cell) => <td set:html={cell} />)}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                      {sc.table && <Table headers={sc.table.headers} rows={sc.table.rows} />}
                       {sc.collapsible && (
                         <div class="rf-doc-disclosure">
                           <Disclosure id={`docs-more-${sectionId(heading)}`} buttonClass="rf-doc-disclosure__trigger">
@@ -178,24 +162,7 @@ function sectionId(heading: string): string {
                     </aside>
                   )}
 
-                  {sc.table && (
-                    <div class="rf-doc-table-wrap">
-                      <table class="rf-doc-table">
-                        <thead>
-                          <tr>
-                            {sc.table.headers.map((h) => <th>{h}</th>)}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sc.table.rows.map((row) => (
-                            <tr>
-                              {row.map((cell) => <td set:html={cell} />)}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  {sc.table && <Table headers={sc.table.headers} rows={sc.table.rows} />}
 
                   {sc.collapsible && (
                     <div class="rf-doc-disclosure">

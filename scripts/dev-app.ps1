@@ -90,7 +90,7 @@ try {
     }
 
     Write-Host '[dev:app] starting tauri dev' -ForegroundColor Cyan
-    $tauri = Start-Process -FilePath $npm -ArgumentList 'run', 'tauri', 'dev' `
+    $tauri = Start-Process -FilePath $npm -ArgumentList 'run', 'tauri', 'dev', '--', '--config', 'src-tauri/tauri.dev.conf.json' `
         -WorkingDirectory $repoRoot -NoNewWindow -PassThru
 
     while (-not $tauri.HasExited) {

@@ -1,4 +1,5 @@
 import { isMacPlatform } from "./shortcutLabels";
+import { VIDEO_SEQUENCE_HOTKEYS } from "./hotkeysVideoSequence";
 
 /**
  * Chord strings look like `Mod+Shift+KeyK`: modifiers in `Mod`, `Alt`, `Shift` order, then a
@@ -356,6 +357,7 @@ export const HOTKEY_ACTIONS: HotkeyAction[] = [
     scope: "system",
     defaults: ["Mod+Shift+KeyL"],
   },
+  ...VIDEO_SEQUENCE_HOTKEYS,
 ];
 
 const registeredGamesIds = new Set<string>();
@@ -401,9 +403,7 @@ export const GHOST_PLAYBACK_ACTIONS: ReadonlyArray<{
   { id: "ghost.loop", runs: "player.loop" },
 ];
 
-const ACTIONS_BY_ID = new Map<HotkeyActionId, HotkeyAction>(
-  HOTKEY_ACTIONS.map((a) => [a.id, a]),
-);
+const ACTIONS_BY_ID = new Map<HotkeyActionId, HotkeyAction>(HOTKEY_ACTIONS.map((a) => [a.id, a]));
 
 export function hotkeyAction(id: HotkeyActionId): HotkeyAction {
   return ACTIONS_BY_ID.get(id)!;

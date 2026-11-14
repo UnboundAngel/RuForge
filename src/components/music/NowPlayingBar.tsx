@@ -8,7 +8,7 @@ import { useScrubberHover } from "@/hooks/useScrubberHover";
 import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { DownloadJob } from "@/downloadQueue";
 import { useMainAudioCurrentTime } from "@/playback/mainAudioPlaybackContext";
-import { coverPathChain } from "@/albumCoverPath";
+import { trackCoverPathChain } from "@/albumCoverPath";
 import { FallbackImg } from "@/components/ui/FallbackImg";
 import { cn } from "@/lib/utils";
 import { artistKeyFromFile, rawArtistFromFile } from "./musicArtist";
@@ -299,7 +299,7 @@ export function NowPlayingBar({
 
   return (
     <div
-      ref={barRef}
+      ref={barRef} data-native-wheel
       className="shrink-0"
       style={{
         height: "var(--music-nowplaying-height)",
@@ -327,7 +327,7 @@ export function NowPlayingBar({
           >
             <FallbackImg
               key={playingFile.path}
-              src={coverPathChain(playingFile)}
+              src={trackCoverPathChain(playingFile)}
               local
               thumb
               className="block h-full w-full object-cover"

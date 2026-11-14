@@ -17,6 +17,8 @@ type CarouselItem = {
   thumbnail: string;
   title?: string;
   needsHydration?: boolean;
+  /** Set while this item's own job is transferring, so a concurrent job fills its card too. */
+  fillPct?: number | null;
 };
 type FlyPayload = { thumbnail: string; from: DOMRect };
 type LayoutMode = "pair" | "solo";
@@ -398,7 +400,7 @@ export function MultiDownloadSlotCarousel({
                     <DownloadQueueItem
                       item={previewItem}
                       variant="preview"
-                      percentage={0}
+                      percentage={previewItem.fillPct ?? 0}
                       title={cardTitle(previewItem, false)}
                       needsHydration={previewItem.needsHydration}
                     />

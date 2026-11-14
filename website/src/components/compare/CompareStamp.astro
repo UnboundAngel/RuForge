@@ -1,0 +1,23 @@
+---
+import { Image } from 'astro:assets';
+import ruforgeLogo from '../../assets/ruforge-logo.png';
+import type { ImageMetadata } from 'astro';
+
+interface Props {
+  /** Competitor icon; RuForge's own logo when omitted. */
+  logo?: ImageMetadata;
+  size?: number;
+}
+
+const { logo, size = 32 } = Astro.props;
+---
+
+<Image src={logo ?? ruforgeLogo} alt="" width={size} height={size} widths={[size, size * 2]} class="cmp-stamp" loading="lazy" decoding="async" draggable="false" />
+
+<style is:global>
+  .cmp-stamp {
+    flex-shrink: 0;
+    border-radius: 8px;
+    object-fit: contain;
+  }
+</style>

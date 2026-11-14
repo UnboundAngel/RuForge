@@ -30,6 +30,7 @@ import {
   topNScrubBackfillCandidates,
 } from "../scrubSpriteBackfill";
 import { mediaPathsMatch } from "../lib/mediaPathMatch";
+import { shuffledCopy } from "../lib/playlistPlayback";
 import { isBrowseTab } from "@games";
 import {
   DEFAULT_OUTPUT_DIR,
@@ -100,6 +101,7 @@ import {
 import type { MusicQueueSource } from "../components/music/musicQueueSource";
 import type { SponsorBlockSkipCategory } from "../sponsorBlock";
 import { isAudioOnlyPath } from "../mediaKind";
+import { isDemoPlaylistPath } from "../lib/demoPlaylistPath";
 import {
   claimMainPlayback,
   closeVideoMiniWindow,
@@ -126,11 +128,8 @@ import {
   buildMusicEffectivePlaylist,
   musicEffectivePlaylistIndex,
 } from "../lib/musicHandoffQueue";
-import type {
-  ExportBundleProgressPayload,
-  ExportOutcome,
-  ExportPanelPreset,
-} from "../lib/exportTypes";
+import type { ExportBundleProgressPayload, ExportOutcome, ExportPanelPreset } from "../lib/exportTypes";
+import { removeRecordForDelete, stampAndSyncSavedPlaylists } from "../lib/downloadedMusicPlaylists";
 import type { ActivityHandoffSnapshot, ActivityOwner } from "../lib/activityTypes";
 import {
   WATCH_LATER_ID,
@@ -619,6 +618,7 @@ function reconcileMusicItemIdentities(
   disk: GalleryEntry[],
   records: VirtualPlaylistRecord[],
 ): VirtualPlaylistRecord[] {
+  records = stampAndSyncSavedPlaylists(disk, records);
   if (!records.some((r) => r.kind === "music" && r.items.length > 0)) return records;
   const library = [...collectMediaIndex(disk).values()].filter((f) => isAudioOnlyPath(f.path));
   const result = reconcilePlaylistIdentities(records, library, playlistIdentityKey);
@@ -641,12 +641,11 @@ function syncVirtualPlaylistsIntoState(
   virtualPlaylistRecords: VirtualPlaylistRecord[];
 } {
   const disk = stripVirtualPlaylists(entries);
-  // No stale-path pruning: an offline drive or partial scan must not empty user playlists.
-  // Hydration skips missing files; deletes through the app still remove them explicitly.
+  // No stale-path pruning (offline drive or partial scan must not empty playlists); deletes go through the app.
   const nextRecords = reconcileMusicItemIdentities(disk, records ?? loadVirtualPlaylistRecords());
   const merged = mergeVirtualPlaylistsIntoEntries(disk, nextRecords);
   let nextSelected = selectedPlaylist;
-  if (selectedPlaylist) {
+  if (selectedPlaylist && !isDemoPlaylistPath(selectedPlaylist.path)) {
     // Folder playlists refresh too, so a video deleted from the open playlist leaves its list.
     const hit = merged.find(
       (e) => e.kind === "playlist" && e.path === selectedPlaylist.path,
@@ -1132,23 +1131,20 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const base = [...files];
         let queue = base;
         let musicShuffleOn = get().musicShuffleOn;
+        const isMusic = get().navMode === "music";
         if (shuffle) {
-          musicShuffleOn = true;
-          writeMusicShuffleOnToLs(true);
-          if (get().navMode === "music") {
+          if (isMusic) {
+            musicShuffleOn = true;
+            writeMusicShuffleOnToLs(true);
             queue = buildSmartShuffleOrder({
               pool: files,
               likedKeys: get().musicLikedKeys,
               seed: Date.now() & 0xffffffff,
             });
           } else {
-            queue = [...files];
-            for (let i = queue.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [queue[i], queue[j]] = [queue[j]!, queue[i]!];
-            }
+            queue = shuffledCopy(files);
           }
-        } else if (musicShuffleOn && files.length > 1) {
+        } else if (isMusic && musicShuffleOn && files.length > 1) {
           queue = buildSmartShuffleOrder({
             pool: files,
             likedKeys: get().musicLikedKeys,
@@ -1166,7 +1162,7 @@ export const useRuforgeStore = create<RuforgeStore>()(
         });
         get().setPlayingFile(queue[0]!);
         get().notify(
-          shuffle || musicShuffleOn
+          shuffle || (isMusic && musicShuffleOn)
             ? `Shuffling ${files.length} items`
             : `Playing ${files.length} items`,
         );
@@ -1665,8 +1661,8 @@ export const useRuforgeStore = create<RuforgeStore>()(
         const before = loadVirtualPlaylistRecords().find((r) => r.id === id);
         let removed = false;
         mutateVirtualRecords((recs) => {
-          const next = recs.filter((r) => r.id !== id);
-          removed = next.length !== recs.length;
+          const next = removeRecordForDelete(recs, id);
+          removed = next.length !== recs.length || next.some((r, i) => r !== recs[i]);
           return next;
         });
         if (!removed) return false;

@@ -45,6 +45,8 @@ export type DesktopIslandStatePayload = {
   watchlist: IslandWatchlist | null;
   /** Main's mode, so the overlay wears the same palette as the in-app island. */
   navMode: "music" | "media";
+  /** "Always show" with nothing to say: an inert pill that never takes input. */
+  idle?: boolean;
   /** Present on track changes so the overlay webview can slide prev vs next. */
   skipDir?: IslandSkipDir;
 };

@@ -1,0 +1,19 @@
+html.rf-recording,
+html.rf-recording * {
+  cursor: none !important;
+}
+
+.rf-rec-ring {
+  animation: rf-rec-ring 480ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes rf-rec-ring {
+  from {
+    transform: translate(var(--rf-rec-x), var(--rf-rec-y)) translate(-50%, -50%) scale(0.3);
+    opacity: 0.9;
+  }
+  to {
+    transform: translate(var(--rf-rec-x), var(--rf-rec-y)) translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}

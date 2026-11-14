@@ -3,6 +3,7 @@ import { DownloadReplaySection } from "./DownloadReplaySection";
 import { ExperimentalSection } from "./ExperimentalSection";
 import { LibraryToolsSection } from "./LibraryToolsSection";
 import { LogsDiagnosticsSection } from "./LogsDiagnosticsSection";
+import { RecordingModeSection } from "./RecordingModeSection";
 import { ScreenPreviewsSection } from "./ScreenPreviewsSection";
 import { UpdatesPreviewSection } from "./UpdatesPreviewSection";
 
@@ -21,6 +22,7 @@ export function DebuggingTab({
       {showDebuggingSettings ? <CompanionDebugSection active={active} /> : null}
       <LibraryToolsSection />
       <ExperimentalSection />
+      <RecordingModeSection />
       {import.meta.env.DEV ? <DownloadReplaySection active={active} /> : null}
       <LogsDiagnosticsSection showDevTools={showDebuggingSettings} />
     </>

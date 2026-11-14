@@ -1,4 +1,4 @@
-//! Resolved yt-dlp executable: AppData `bin/` install or bundled sidecar, whichever is newer.
+//! Resolved yt-dlp executable: AppData `bin/` install or a legacy bundled copy, whichever is newer.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -92,10 +92,9 @@ pub fn parse_ytdlp_version_parts(line: &str) -> Vec<u32> {
         .collect()
 }
 
+/// Legacy copy beside the exe (older installers) or in `src-tauri/binaries` in dev; none for new installs.
 fn bundled_ytdlp_path() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    let name = format!("yt-dlp{}", std::env::consts::EXE_SUFFIX);
-    Some(exe.parent()?.join(name))
+    crate::tools::paths::resolve_bundled(crate::tools::paths::Tool::YtDlp)
 }
 
 fn probe_version_blocking(path: &Path) -> Option<Vec<u32>> {
@@ -114,14 +113,69 @@ fn probe_version_blocking(path: &Path) -> Option<Vec<u32>> {
     (parts.len() >= 3).then_some(parts)
 }
 
+/// Puts a verified download at `final_path`. Watchlist and metadata runs keep yt-dlp.exe open
+/// outside the download queue, and Windows refuses to delete a running exe but lets it be renamed,
+/// so the old copy is moved aside first and removed on a later launch.
+pub fn swap_in_ytdlp(part_path: &Path, final_path: &Path) -> Result<(), String> {
+    let mut retired: Option<PathBuf> = None;
+    if final_path.exists() {
+        if std::fs::remove_file(final_path).is_err() {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0);
+            let aside = final_path.with_extension(format!("old-{stamp}"));
+            std::fs::rename(final_path, &aside).map_err(|e| {
+                format!("yt-dlp is in use and could not be replaced ({e}). Close RuForge's other tasks and try again.")
+            })?;
+            retired = Some(aside);
+        }
+    }
+    if let Err(e) = std::fs::rename(part_path, final_path) {
+        if let Some(aside) = &retired {
+            let _ = std::fs::rename(aside, final_path);
+        }
+        return Err(format!("Could not install the new yt-dlp: {e}"));
+    }
+    Ok(())
+}
+
+/// Removes copies retired by [`swap_in_ytdlp`] and a stale `.download.part`, now that nothing runs them.
+fn sweep_retired_ytdlp(app: &AppHandle) {
+    let Ok(dir) = userdata_ytdlp_bin_dir(app) else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    let stem = Path::new(userdata_ytdlp_filename())
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("yt-dlp")
+        .to_string();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let retired = name.starts_with(&format!("{stem}.old-"));
+        let stale_part = name == format!("{stem}.download.part");
+        if retired || stale_part {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 fn reconcile_userdata_ytdlp_blocking(app: &AppHandle) {
+    sweep_retired_ytdlp(app);
     let Ok(user_path) = userdata_ytdlp_path(app) else {
         return;
     };
     if !user_path.is_file() {
         return;
     }
-    let bundled = bundled_ytdlp_path().and_then(|p| probe_version_blocking(&p));
+    // Nothing bundled to compare against: the downloaded copy is the only one there is.
+    let Some(bundled_path) = bundled_ytdlp_path() else {
+        return;
+    };
+    let bundled = probe_version_blocking(&bundled_path);
     let user = probe_version_blocking(&user_path);
     match (&bundled, &user) {
         (Some(b), Some(u)) if u > b => return,
@@ -172,25 +226,28 @@ pub fn is_userdata_ytdlp_active(app: &AppHandle) -> bool {
     active_userdata_ytdlp_path(app).is_some()
 }
 
-/// Shell command for yt-dlp: AppData binary if active, else bundled sidecar.
-pub fn ytdlp_shell_command(app: &AppHandle) -> Result<Command, String> {
-    if let Some(user_path) = active_userdata_ytdlp_path(app) {
-        crate::rf_log!(
-            "download.binary",
-            log::Level::Info,
-            "yt-dlp: using userdata binary {}",
-            user_path.display()
-        );
-        return Ok(app.shell().command(&user_path));
-    }
-
-    crate::rf_log!("download.binary", log::Level::Debug, "yt-dlp: using bundled sidecar");
-    app.shell().sidecar("yt-dlp").map_err(|e| e.to_string())
+/// Executable yt-dlp should run: the AppData binary if active, else a legacy bundled copy.
+pub fn resolved_ytdlp_path(app: &AppHandle) -> Option<PathBuf> {
+    active_userdata_ytdlp_path(app).or_else(bundled_ytdlp_path)
 }
 
-/// Always the bundled external binary (`--version` / baseline for "update available").
+/// Shell command for yt-dlp, with `--ffmpeg-location` when ffmpeg is installed.
+pub fn ytdlp_shell_command(app: &AppHandle) -> Result<Command, String> {
+    let path = resolved_ytdlp_path(app).ok_or_else(crate::tools::missing_message)?;
+    crate::rf_log!("download.binary", log::Level::Debug, "yt-dlp: using {}", path.display());
+    let cmd = app.shell().command(&path);
+    let ffmpeg_dir = crate::tools::paths::resolve(app, crate::tools::paths::Tool::Ffmpeg)
+        .and_then(|p| p.parent().map(Path::to_path_buf));
+    Ok(match ffmpeg_dir {
+        Some(dir) => cmd.args(["--ffmpeg-location".into(), dir.display().to_string()]),
+        None => cmd,
+    })
+}
+
+/// Legacy bundled yt-dlp only (`--version` / baseline for "update available").
 pub fn bundled_ytdlp_command(app: &AppHandle) -> Result<Command, String> {
-    app.shell().sidecar("yt-dlp").map_err(|e| e.to_string())
+    let path = bundled_ytdlp_path().ok_or_else(|| "No bundled yt-dlp".to_string())?;
+    Ok(app.shell().command(path))
 }
 
 /// If the user has installed Deno into `app_data/bin/`, appends `--js-runtimes deno:<path>` to `args`.

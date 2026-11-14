@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Library, Maximize2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { UpdateAvailableButton } from "@/components/UpdateAvailableButton";
 import { useHotkeyTooltip } from "@/hooks/useHotkeys";
 import { cn } from "@/lib/utils";
 import { MusicNavCreateButton } from "./MusicNavCreateButton";
@@ -84,7 +85,10 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
           <MusicNavCreateButton className={cn(ICON_BTN, "w-10 h-10 bg-white/[0.07]", RED_HOVER)} iconSize={20} />
         </div>
         <div className="flex-1 min-h-0 flex flex-col">{panelSlot}</div>
-        {footerSlot ? <div className="shrink-0 pb-2 px-1.5 flex justify-center">{footerSlot}</div> : null}
+        <div className="shrink-0 pb-2 px-1.5 flex flex-col items-center gap-1">
+          <UpdateAvailableButton surface="music-rail" />
+          {footerSlot}
+        </div>
       </nav>
     );
   }
@@ -121,7 +125,10 @@ export function MusicNav({ activeView, onSelect, collapsed, onToggleCollapse, pa
 
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col">{panelSlot}</div>
 
-      {footerSlot ? <div className="shrink-0 pb-2 mt-auto px-2 w-full">{footerSlot}</div> : null}
+      <div className="shrink-0 pb-2 mt-auto px-2 w-full flex flex-col gap-1">
+        <UpdateAvailableButton surface="music-panel" />
+        {footerSlot}
+      </div>
     </nav>
   );
 }

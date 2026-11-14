@@ -1,0 +1,96 @@
+---
+import { getImage } from 'astro:assets';
+import ruforgeLogo from '../../assets/ruforge-logo.png';
+import MobilePageHeader from '../mobile/MobilePageHeader.astro';
+import Icon from '../Icon.astro';
+import CompareStamp from './CompareStamp.astro';
+import { cellInner, groupIcon } from './compareTable';
+import CompareCta from './CompareCta.astro';
+import './compareCells.css';
+import { COMPARE_PAGES, bothHave, compareVars, compareTable, formatChecked, type ComparePageDef } from '../../lib/comparePages';
+
+interface Props {
+  page: ComparePageDef;
+}
+
+const { page } = Astro.props;
+const [ruforgeImg, themImg] = await Promise.all([
+  getImage({ src: ruforgeLogo, width: 40 }),
+  getImage({ src: page.logo, width: 40 }),
+]);
+const groups = compareTable(page);
+const brandVars = compareVars(page);
+const shared = bothHave(page);
+const others = COMPARE_PAGES.filter((p) => p.slug !== page.slug);
+---
+
+<MobilePageHeader title={`RuForge vs ${page.name}`} description={page.description} backHref="/m/compare" backLabel="Compare">
+  <div class="mt-5 flex items-center gap-4">
+    <CompareStamp size={56} />
+    <span class="font-display text-sm font-semibold text-rf-text-muted" aria-hidden="true">vs</span>
+    <CompareStamp logo={page.logo} size={56} />
+  </div>
+  <p class="mt-4 text-xs font-medium text-rf-text-muted">Checked {formatChecked(page.checked)}</p>
+  <div class="mt-5">
+    <CompareCta page={page} downloadHref="/m/download" mobile />
+  </div>
+</MobilePageHeader>
+
+<div style={brandVars}>
+<div class="mt-6 grid grid-cols-2 gap-x-3 px-4" aria-hidden="true">
+  {[
+    { name: "RuForge", logo: ruforgeImg.src },
+    { name: page.shortName ?? page.name, logo: themImg.src },
+  ].map(({ name, logo }) => (
+    <p class="cmp-cell m-0 font-display text-[0.95rem] font-bold text-rf-text [--cmp-slot:20px]">
+      <img src={logo} width="20" height="20" alt="" draggable="false" class="h-5 w-5 object-contain" />
+      <span class="truncate">{name}</span>
+    </p>
+  ))}
+</div>
+
+<div class="mb-5 mt-3 space-y-3">
+  {groups.map((group) => (
+    <section class="overflow-hidden rounded-2xl bg-rf-surface">
+      <h2 class="m-0 flex h-10 items-center gap-2.5 bg-rf-raised px-4 leading-none [&_svg]:block font-display text-[0.95rem] font-normal text-rf-text">
+        <Fragment set:html={groupIcon(group.label)} />{group.label}
+      </h2>
+      <ul class="m-0 list-none p-0">
+        {group.rows.map(({ row, winner }) => (
+          <li class="border-b border-rf-border px-4 py-3 last:border-b-0">
+            <p class="mb-2 text-[15px] font-semibold text-rf-text">{row.feature}</p>
+            <div class="grid grid-cols-2 gap-x-3 text-[13px] leading-snug">
+              <span class="cmp-cell cmp-cell--top [--cmp-slot:20px]" set:html={cellInner(row.ruforge, "ruforge", winner)} />
+              <span class="cmp-cell cmp-cell--top [--cmp-slot:20px]" set:html={cellInner(row.them, "them", winner)} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</div>
+
+</div>
+
+{shared.length > 0 && <p class="mb-8 text-[13px] leading-relaxed text-rf-text-muted">Both have: {shared.join(", ")}.</p>}
+
+<p class="mb-8 text-[13px] leading-relaxed text-rf-text-muted/70">
+  Sources:
+  {page.sources.map((s, i) => (
+    <>
+      <a class="rf-inline-link" href={s.href} target="_blank" rel="noopener noreferrer">{s.label}</a>{i < page.sources.length - 1 ? ', ' : '.'}
+    </>
+  ))}
+</p>
+
+<ul class="mb-8 space-y-2">
+  {others.map((p) => (
+    <li>
+      <a href={`/m/compare/${p.slug}`} class="rf-m-card flex items-center justify-between rounded-xl bg-rf-surface px-4 py-4 text-base font-semibold text-rf-text no-underline">
+        RuForge vs {p.name}
+        <Icon name="chevron-right" size={18} class="shrink-0 text-rf-text-muted" />
+      </a>
+    </li>
+  ))}
+</ul>
+

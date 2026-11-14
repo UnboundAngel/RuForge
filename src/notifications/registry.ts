@@ -1,3 +1,4 @@
+import { devSource } from "./sources/devSource";
 import { downloadSource } from "./sources/downloadSource";
 import { playlistSource } from "./sources/playlistSource";
 import { securitySource } from "./sources/securitySource";
@@ -12,6 +13,7 @@ export const NOTIFICATION_SOURCES: readonly NotificationSource[] = [
   playlistSource,
   securitySource,
   statsSource,
+  devSource,
 ];
 
 export function notificationSource(id: NotificationItem["source"]): NotificationSource | undefined {

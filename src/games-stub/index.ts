@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { registerGamesHotkeyDefs } from "@/lib/hotkeys";
 import {
   normalizeGames,
@@ -96,11 +96,8 @@ export function ExplorerGameScopePill(): null {
 export function RecommendedGamePlaylistsSlot(props: {
   taggableFiles: unknown;
   virtualPlaylistRecords: unknown;
-  columns: number;
-  gridClassName: string;
-  gridStyle: CSSProperties;
   onAdd: (rec: RecommendedGamePlaylist) => void;
-  children: (recommendedSection: ReactNode) => ReactNode;
+  children: (recommendedCards: ReactNode) => ReactNode;
 }): ReactNode {
   void props.onAdd;
   return props.children(null);

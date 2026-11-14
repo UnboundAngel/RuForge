@@ -40,7 +40,11 @@ Matching: any casing, typos, and Angel's German swaps (`ich`=`I`, `bin`=`am`, `u
 
 ### Screenshots of the app
 
-Screenshot the real running app, never a stubbed harness. Start `npm run dev:app:debug` (same as `dev:app` plus WebView2 CDP on `RUFORGE_CDP_PORT`, default 9222; Angel's instance may already have it), then `node scripts/dev/shot.mjs <name> [--selector css] [--eval js]... [--hover css] [--click css] [--key k] [--wait ms] [--wait-for css] [--settle ms] [--page substr] [--port n]`. Steps run in order; `--eval` prints its return value (never throw to read data), and selectors match the first visible element. It writes `.screenshots/<name>.png`. `--eval/--hover/--click/--key/--wait/--wait-for` are ordered steps and repeat (`--key` is a Playwright key like `Escape` or `Control+K`); `--settle` is the final pause before the shot (default 300). Lucide icons are targetable as `svg.lucide-<name>` (e.g. `--click "svg.lucide-message-square"`). Leave the app as you found it: close panels you opened, never toggle fullscreen or change settings. `--list` shows the webviews (main, Explorer, island); `--state` prints location. It only disconnects, the app keeps running. Take screenshots only to check your own work. If the app is unreachable, ask Angel to start `npm run dev:app:debug`.
+Screenshot the real running app, never a stubbed harness. Start `npm run dev:app:debug` (same as `dev:app` plus WebView2 CDP on `RUFORGE_CDP_PORT`, default 9222; Angel's instance may already have it), then `node scripts/dev/shot.mjs <name> [--selector css] [--eval js]... [--hover css] [--click css] [--key k] [--wait ms] [--wait-for css] [--settle ms] [--page substr] [--port n]`. Steps run in order; `--eval` prints its return value (never throw to read data), and selectors match the first visible element. It writes `.screenshots/<name>.png`. `--eval/--hover/--click/--key/--wait/--wait-for` are ordered steps and repeat (`--key` is a Playwright key like `Escape` or `Control+K`); `--settle` is the final pause before the shot (default 300). Lucide icons are targetable as `svg.lucide-<name>` (e.g. `--click "svg.lucide-message-square"`). Leave the app as you found it: close panels you opened, never toggle fullscreen or change settings. `--list` shows the webviews (main, Explorer, island); `--state` prints location. It only disconnects, the app keeps running. Take screenshots only to check your own work. If the app is unreachable, start `npm run dev:app:debug` yourself in a terminal tab and wait for the CDP port; do not ask Angel.
+
+### Recording demo clips
+
+Angel's own captures: Settings > Debugging > Recording mode (session only, resets on restart) hides the system cursor, draws a gliding macOS-style cursor (ful1e5/apple_cursor assets in `src/assets/recording-cursors/`, shape read from the app's computed cursor: hand, I-beam, grab, grabbing, resize) with press scale and click ring, and spring-eases mouse wheel scrolling over about 700ms (`src/components/recording-mode/`; elements with `data-native-wheel`, range and number inputs, Ctrl+wheel and anything already prevented keep native wheel). Agent captures: `node scripts/dev/record.mjs <name> [steps...]` records the real running app (same CDP connection, `--page`, `--port` as shot.mjs) to `.screenshots/<name>.mp4` (constant 60 fps H.264, no audio) plus `<name>-poster.webp` and `<name>.marks.json`. It turns Recording mode on for the clip and back off after if it was off, moves the real mouse in eased curves and scrolls with real wheel events. Steps run in order and repeat: `--move/--click <css|x,y>`, `--hover`, `--drag <css>-><css>`, `--type`, `--key`, `--scroll <css>:<dy>[:ms]`, `--scroll-to <css>`, `--wait`, `--wait-for`, `--eval`, `--mark <name>`, `--script <file.json>` (array of `{step, arg}`, example in `scripts/dev/record/examples/`). Options: `--out dir`, `--fps`, `--scale|--width`, `--crf`, `--lead/--tail ms`, `--trim-start/--trim-end <mark>`, `--poster-mark`, `--cursor-start x,y`, `--no-cursor`, `--ffmpeg path` (else `FFMPEG`, PATH, the app's downloaded ffmpeg); `--help` lists all. Clips for the What's new dialog go to `src/assets/whats-new/<area>.mp4` + `<area>-poster.webp`, kept small (aim under 400 KB, about 1280 wide). Angel's own captures go through `node scripts/dev/whats-new-clip.mjs <file> <area>` and appear in What's new automatically. Clicks are real, so record only on screens where they change nothing you cannot undo.
 
 ## Remotes (sync vs public)
 
@@ -53,6 +57,10 @@ Edit in place. No ad-hoc scripts to search/replace source; `scripts/` is maintai
 ## Releases
 
 Ship, release, push it out, and the live `updater.json` contract (version, signature, `url` tag): [`.cursor/skills/ruforge-release/SKILL.md`](.cursor/skills/ruforge-release/SKILL.md). Angel signs; snapshot publishes to public.
+
+## Polls and notices
+
+"From the dev" polls and notices in the bell: follow [`.cursor/skills/ruforge-poll/SKILL.md`](.cursor/skills/ruforge-poll/SKILL.md) (interview, option recommendations, sign, publish, verify). Never suggest a poll unless Angel brings it up or the finished work is a big addition (a new mode, a major feature direction); then offer once, in one line.
 
 ## How to log Unreleased
 
@@ -92,7 +100,7 @@ Palettes: the default mode (downloads, library, player, Games) uses the user's a
 
 Music UI matches Spotify's layout as closely as the design rules allow.
 
-Every popup, dialog, page swap and tab swap animates with the existing palette in `src/lib/overlayMotion.ts` (Games too). No cold swaps, no new curves. Detail: `design-style.mdc` section 7.
+Every popup, dialog, page swap and tab swap animates with the existing palette in `src/lib/overlayMotion.ts` (Games too). No cold swaps, no new curves. Page and tab swaps use `PageSwap` (`src/components/motion/PageSwap.tsx`), never a hand-rolled keyed `motion.div`. Detail: `design-style.mdc` section 7.
 
 Every new key or input gesture gets a Settings > Shortcuts row in the same change. Contract: [`docs/agents/AGENT-REFERENCE.md`](docs/agents/AGENT-REFERENCE.md) > Shortcuts contract.
 

@@ -13,8 +13,7 @@ import {
   QuickEnqueueButton,
   QuickEnqueuePinnedChip,
 } from "./downloader/LinkChips";
-import { PlaylistPreviewList } from "./downloader/PlaylistPreviewList";
-import { PlaylistPreviewRow } from "./downloader/PlaylistPreviewRow";
+import { HeroPlaylistList } from "./downloader/HeroPlaylistList";
 import { BROWSER_OPTIONS } from "./downloader/downloaderConstants";
 import { UrlInputPacer } from "./downloader/DownloadJobQueuePanel";
 import {
@@ -23,7 +22,7 @@ import {
 } from "./downloader/ImmersiveDownloadHero";
 import { MultiDownloadSlotCarousel } from "./downloader/MultiDownloadSlotCarousel";
 import { playlistCardKey } from "@/lib/playlistCardKey";
-import { ProgressBarStreak } from "./downloader/ProgressBarStreak";
+import { HeroBatchProgress } from "./downloader/HeroBatchProgress";
 import { StorageBlockNote } from "./downloader/StorageBlockNote";
 import { YtdlpUpdateBanner } from "./downloader/YtdlpUpdateBanner";
 import { jobHasDownloadTransferStarted } from "../downloadQueue";
@@ -43,6 +42,16 @@ export const DownloaderView = (props: DownloaderViewProps) => {
   const displayHeroBytes =
     d.batchQueueHeroDisplayBytes ??
     (displayHero?.isPlaylist ? d.playlistHeroDisplayBytes : null);
+  // Playlist heroes show the running total while sizes are still arriving, and shimmer until it settles.
+  const liveSize = displayHero?.isPlaylist && !d.batchQueuePlaylistView ? d.playlistSize : null;
+  const sizeGrowing =
+    !!liveSize && (d.playlistListing || liveSize.known + liveSize.failed < liveSize.total);
+  const heroBytes =
+    liveSize && liveSize.known > 0
+      ? liveSize.bytes
+      : displayHero?.isPlaylist && displayHeroBytes != null
+        ? displayHeroBytes
+        : displayHero?.fileSizeBytes;
 
   const bigProgressPctRaw = d.progress?.percentage ?? 0;
   const bigProgressPct = Number.isFinite(bigProgressPctRaw)
@@ -595,13 +604,11 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                         {!displayHero.loading && (
                           <HeroStats
                             duration={displayHero.duration}
-                            bytes={
-                              displayHero.isPlaylist && displayHeroBytes != null
-                                ? displayHeroBytes
-                                : displayHero.fileSizeBytes
-                            }
+                            bytes={heroBytes}
                             isPlaylist={!!displayHero.isPlaylist}
                             videoCount={displayHero.playlistItems?.length ?? 0}
+                            keptCount={liveSize?.total}
+                            sizeGrowing={sizeGrowing}
                           />
                         )}
                         {d.showDuplicateBanner && (
@@ -685,47 +692,7 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           )}
                         </motion.div>
                         {displayHero.isPlaylist && displayHero.playlistItems && (
-                          <PlaylistPreviewList
-                            items={displayHero.playlistItems}
-                            itemKey={d.playlistItemKey}
-                            onReorder={d.reorderPlaylistItems}
-                            disabled={!!d.batchQueuePlaylistView}
-                            className="mx-auto mt-6 hidden h-[100px] max-w-4xl grid-cols-1 content-start gap-1 overflow-y-auto px-4 lg:grid-cols-2 pb-8 [mask-image:linear-gradient(to_bottom,black_calc(100%-40px),transparent)] min-[750px]:grid sm:mt-10 sm:h-[300px] rf-scrollbar"
-                            renderRow={(item, idx, lifted) => {
-                              const batchJob = d.batchQueuePlaylistView
-                                ? d.batchQueueJobs.find((j) => j.id === item.id)
-                                : null;
-                              const rowKey = batchJob
-                                ? batchJob.id
-                                : d.playlistItemKey(item, idx + 1);
-                              const rowAudio = batchJob
-                                ? batchJob.options.audioOnly === true
-                                : d.resolveAudioOnlyForPlaylistItem(
-                                    rowKey,
-                                    d.playlistItemAudioOverrides,
-                                    d.heroAudioOnly,
-                                  );
-                              const dup = batchJob
-                                ? d.isBatchQueueJobDuplicate(item.webpageUrl)
-                                : d.isPlaylistItemDuplicate(item);
-                              return (
-                                <PlaylistPreviewRow
-                                  index={idx + 1}
-                                  key={`playlist-row-${idx}-${item.webpageUrl ?? item.title}`}
-                                  lifted={lifted}
-                                  item={item}
-                                  audioOnly={rowAudio}
-                                  duplicate={dup}
-                                  batchJob={batchJob}
-                                  onToggleAudio={() =>
-                                    batchJob
-                                      ? d.toggleBatchQueueJobAudio(batchJob.id, !rowAudio)
-                                      : d.togglePlaylistItemAudio(rowKey, !rowAudio)
-                                  }
-                                />
-                              );
-                            }}
-                          />
+                          <HeroPlaylistList d={d} items={displayHero.playlistItems} />
                         )}
                       </motion.div>
                     ) : (
@@ -775,50 +742,11 @@ export const DownloaderView = (props: DownloaderViewProps) => {
                           }
                         />
                       </div>
-                      <div className="w-full max-w-sm">
-                        <div
-                          className="relative h-1.5 overflow-hidden rounded-full bg-white/[0.07]"
-                          role="progressbar"
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={
-                            immersivePhase === "downloading"
-                              ? Math.round(bigProgressPct)
-                              : undefined
-                          }
-                          aria-busy={immersivePhase !== "downloading"}
-                        >
-                          {immersivePhase === "downloading" ? (
-                            <motion.div
-                              className="absolute inset-y-0 left-0 rounded-full bg-[color:var(--accent)]"
-                              initial={false}
-                              animate={{ width: `${bigProgressPct}%` }}
-                              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
-                            />
-                          ) : null}
-                          {immersivePhase === "downloading" && bigProgressPct >= 2 ? (
-                            <ProgressBarStreak pct={bigProgressPct} />
-                          ) : null}
-                          {immersivePhase !== "downloading" ? (
-                            <div
-                              className={
-                                immersivePhase === "finishing"
-                                  ? "rf-download-progress-pulse absolute inset-y-0 left-0 right-0 rounded-full bg-[color:var(--accent)]"
-                                  : "rf-download-progress-indeterminate absolute inset-y-0 rounded-full bg-[color:var(--accent)]"
-                              }
-                            />
-                          ) : null}
-                        </div>
-                        <p className="mt-3 text-center text-sm font-medium text-stone-500">
-                          {immersivePhase === "preparing"
-                            ? "Connecting and starting the transfer. This can take a moment."
-                            : immersivePhase === "finishing"
-                              ? "Merging and writing the file. Progress may sit near the end."
-                              : heroSpeedLabel
-                                ? `${Math.round(bigProgressPct)}% · ${heroSpeedLabel}`
-                                : `${Math.round(bigProgressPct)}%`}
-                        </p>
-                      </div>
+                      <HeroBatchProgress
+                        phase={immersivePhase}
+                        pct={bigProgressPct}
+                        speedLabel={heroSpeedLabel}
+                      />
                       <button
                         type="button"
                         onClick={d.handleStopActiveDownload}

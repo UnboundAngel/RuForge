@@ -2,6 +2,8 @@ import { emit } from "@tauri-apps/api/event";
 import { SettingItem, SettingsSection } from "../settingsChrome";
 import { DebugUpdatePreviewRows } from "../DebugUpdatePreviewRows";
 import { DebugButton } from "./DebugButton";
+import { UpdateChipPreviewRow } from "./UpdateChipPreviewRow";
+import { ToolsInstallPreviewRow } from "./ToolsInstallPreviewRow";
 
 const KEYWORDS = "updater update release notes whats new changelog draft preview";
 
@@ -20,6 +22,8 @@ export function UpdatesPreviewSection() {
         keywords="release notes changelog"
         control={<DebugButton label="Preview" onClick={() => void emit("debug-preview-whats-new")} />}
       />
+      <UpdateChipPreviewRow />
+      <ToolsInstallPreviewRow />
       {import.meta.env.DEV && <DebugUpdatePreviewRows />}
     </SettingsSection>
   );

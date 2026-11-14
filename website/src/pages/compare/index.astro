@@ -1,0 +1,61 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Icon from '../../components/Icon.astro';
+import CompareStamp from '../../components/compare/CompareStamp.astro';
+import { COMPARE_INDEX, COMPARE_PAGES, compareHref, platformsOf } from '../../lib/comparePages';
+---
+
+<BaseLayout title={COMPARE_INDEX.metaTitle} description={COMPARE_INDEX.metaDescription}>
+  <div class="rf-container space-y-12 pt-12 pb-20">
+    <header class="flex items-end justify-between gap-10">
+      <div class="space-y-3">
+        <h1 class="font-display text-5xl font-bold tracking-tight text-rf-text">Compare</h1>
+        <p class="text-base text-rf-text-muted">{COMPARE_INDEX.description}</p>
+      </div>
+    </header>
+
+    <ul class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      {
+        COMPARE_PAGES.map((page) => (
+          <li>
+            <a
+              href={compareHref(page.slug)}
+              class="group flex h-full flex-col lg:min-h-60 rounded-xl bg-rf-surface p-6 no-underline transition-colors duration-150 hover:bg-rf-surface-2"
+            >
+              <span class="flex items-center gap-3">
+                <span class="flex shrink-0 items-center gap-1.5">
+                  <CompareStamp size={32} />
+                  <CompareStamp logo={page.logo} size={32} />
+                </span>
+                <span class="min-w-0 font-display text-[1.15rem] font-bold leading-tight tracking-tight text-rf-text">RuForge vs {page.name}</span>
+              </span>
+              <span class="mt-3 block text-sm leading-relaxed text-rf-text-muted">{page.blurb}</span>
+              <span class="mt-4 flex flex-col gap-1.5 text-xs text-rf-text-muted">
+                <span class="flex items-center gap-2">
+                  <svg class="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+                    <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+                  </svg>
+                  <span>{page.price}</span>
+                </span>
+                <span class="flex items-center gap-2">
+                  <svg class="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect width="20" height="14" x="2" y="3" rx="2" />
+                    <path d="M8 21h8M12 17v4" />
+                  </svg>
+                  <span>{platformsOf(page)}</span>
+                </span>
+              </span>
+              <span class="mt-auto flex items-center justify-between pt-6 text-xs text-rf-text-muted/60">
+                <span>See the comparison</span>
+                <span class="text-rf-text-muted/50 transition-transform duration-150 group-hover:translate-x-1 group-hover:text-rf-accent">
+                  <Icon name="chevron-right" size={18} />
+                </span>
+              </span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</BaseLayout>

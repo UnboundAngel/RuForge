@@ -56,10 +56,9 @@ function HeroBackground({ coverSrc }: { coverSrc: string | null }) {
   if (coverSrc) {
     return (
       <>
-        <img
-          src={coverSrc}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover scale-110 blur-[64px] opacity-62 saturate-[1.08]"
+        {/* Bleeds past the stage: a blur fades out at the image edge, which framed the panel. */}
+        <img src={coverSrc} alt=""
+          className="absolute -inset-[18%] h-[136%] w-[136%] max-w-none object-cover blur-[64px] opacity-62 saturate-[1.08]"
           aria-hidden
         />
         <div
@@ -359,12 +358,12 @@ function HeroForeground({
           bobbing={!isPaused && !reduceMotion}
         />
         {/*
-          Clip to the cover box on the right/top/bottom so a tucked disc cannot
-          poke out past the jacket. Negative left inset keeps the resting peek visible.
+          Clip on the right so a tucked disc cannot poke out past the jacket. The disc only
+          moves sideways, so top and bottom stay open; a flush clip boxed in the glow.
         */}
         <div
           className="relative h-full w-full"
-          style={{ clipPath: "inset(0 0 0 -62%)" }}
+          style={{ clipPath: "inset(-14% 0 -14% -62%)" }}
         >
           <div
             className="absolute z-0 pointer-events-none"

@@ -1,6 +1,7 @@
 import type { MediaFile } from "@/types";
 import { stripYtdlpStreamSuffix } from "@/galleryDedupe";
 import { extractYouTubeVideoId } from "@/youtubeUrl";
+import { groupAudioByPlaylistFolder, playlistDisplayTitle } from "@/lib/downloadedMusicPlaylists";
 import { artistKeyFromFile } from "./musicArtist";
 
 function normalizeToken(raw: string): string {
@@ -139,13 +140,36 @@ export type AlbumGroup = {
   tracks: MediaFile[];
 };
 
+const stampedCache = new WeakMap<MediaFile[], Set<string>>();
+
+/**
+ * yt-dlp tags every song of a downloaded YouTube playlist with the playlist title as its album.
+ * When that playlist mixes artists it is a playlist, not one album per artist, so those tracks
+ * never form albums. A single-artist download (a real album uploaded as a playlist) still does.
+ */
+function playlistStampedPaths(tracks: MediaFile[]): Set<string> {
+  const cached = stampedCache.get(tracks);
+  if (cached) return cached;
+  const out = new Set<string>();
+  for (const [folder, list] of groupAudioByPlaylistFolder(tracks)) {
+    const folderAlbum = normalizeAlbumShelfKey(playlistDisplayTitle(folder, list[0]!.path));
+    const stamped = list.filter((t) => normalizeAlbumShelfKey(resolveDisplayAlbum(t)) === folderAlbum);
+    if (new Set(stamped.map(artistKeyFromFile)).size < 2) continue;
+    for (const t of stamped) out.add(t.path);
+  }
+  stampedCache.set(tracks, out);
+  return out;
+}
+
 /** Group tracks by artist + album; omit single-track pseudo-albums (standalone songs). */
 export function buildMultiTrackAlbumGroups(
   tracks: MediaFile[],
   primaryArtist: (raw: string) => string,
 ): AlbumGroup[] {
   const map = new Map<string, AlbumGroup>();
+  const stamped = playlistStampedPaths(tracks);
   for (const t of tracks) {
+    if (stamped.has(t.path)) continue;
     const albumName = resolveDisplayAlbum(t);
     if (!albumName) continue;
     const artistKey = artistKeyFromFile(t);
@@ -172,7 +196,7 @@ export function fileHasBrowsableAlbum(
   tracks: MediaFile[],
 ): boolean {
   const albumName = resolveDisplayAlbum(file);
-  if (!albumName) return false;
+  if (!albumName || playlistStampedPaths(tracks).has(file.path)) return false;
   const artistKey = artistKeyFromFile(file);
   if (!artistKey) return false;
   const albumKey = normalizeAlbumShelfKey(albumName);

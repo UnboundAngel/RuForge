@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, memo } from "react";
 import { motion } from "motion/react";
-import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Play, Music, FileText, FolderOutput, FolderOpen, Clock, ListPlus, UserCheck, UserPlus, CircleUserRound, Tag } from "lucide-react";
+import { MoreVertical, Loader2, Trash2, Image as ImageIcon, Video, Volume2, VolumeX, Play, Music, FileText, FolderOutput, FolderOpen, Clock, UserCheck, UserPlus, CircleUserRound, ListStart, ListEnd } from "lucide-react";
+import { addToQueue, playNext } from "@/lib/videoQueue";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { localImageSrc } from "@/lib/localImageSrc";
 import { copyTranscriptForFile, type TranscriptVariant } from "@/copyTranscript";
@@ -28,7 +29,8 @@ import { MetaParts, VideoByline } from "./VideoByline";
 import { openCreatorPage } from "./creatorPageStore";
 import { useLibraryArrivalFlight } from "./useLibraryArrivalFlight";
 import { TagBadge } from "./tags/TagChips";
-import { VideoTagsMenu } from "./tags/VideoTagsMenu";
+import { VideoTagsFlyoutRow } from "./tags/VideoTagsFlyoutRow";
+import { SaveToPlaylistFlyoutRow } from "./SaveToPlaylistFlyoutRow";
 import { useVideoTags } from "./tags/useVideoTags";
 
 export type ThumbnailBar = { show: boolean; widthPct: number; completed: boolean };
@@ -50,7 +52,6 @@ export const VideoCard = memo(function VideoCard({
   progressBar,
   onDelete,
   onExtract,
-  onSaveToPlaylist,
   onToggleWatchLater,
   inWatchLater,
 }: {
@@ -58,7 +59,6 @@ export const VideoCard = memo(function VideoCard({
   progressBar: ThumbnailBar;
   onDelete: (file: MediaFile) => void;
   onExtract: (file: MediaFile) => void;
-  onSaveToPlaylist: (file: MediaFile, at: MenuAt) => void;
   onToggleWatchLater: (file: MediaFile) => void;
   inWatchLater: boolean;
 }) {
@@ -72,7 +72,6 @@ export const VideoCard = memo(function VideoCard({
   const channelFollow = useChannelFollow(file.youtube?.channelId, file.youtube?.channel);
   const [isHovered, setIsHovered] = useState(false);
   const [menuAt, setMenuAt] = useState<MenuAt>({ x: 0, y: 0, placement: "anchor" });
-  const [tagsAt, setTagsAt] = useState<MenuAt | null>(null);
   const tags = useVideoTags(file);
   const [previewActive, setPreviewActive] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -354,6 +353,22 @@ export const VideoCard = memo(function VideoCard({
             icon={<Play size={icon} strokeWidth={2.25} />}
             onClick={act(() => void handlePlayFile(file, undefined, null))}
           />
+          {isAudioOnlyPath(file.path) ? null : (
+            <>
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.playback}
+                label="Play next"
+                icon={<ListStart size={icon} strokeWidth={2.25} />}
+                onClick={act(() => playNext(file))}
+              />
+              <MusicMenuRow
+                tone={MUSIC_MENU_TONES.playback}
+                label="Add to queue"
+                icon={<ListEnd size={icon} strokeWidth={2.25} />}
+                onClick={act(() => addToQueue(file))}
+              />
+            </>
+          )}
         </MusicMenuSection>
         <MusicMenuSection label="Save" tone={MUSIC_MENU_TONES.playlist}>
           <MusicMenuRow
@@ -363,18 +378,8 @@ export const VideoCard = memo(function VideoCard({
             icon={<Clock size={icon} strokeWidth={2.25} />}
             onClick={act(() => onToggleWatchLater(file))}
           />
-          <MusicMenuRow
-            tone={MUSIC_MENU_TONES.playlist}
-            label="Save to playlist"
-            icon={<ListPlus size={icon} strokeWidth={2.25} />}
-            onClick={act(() => onSaveToPlaylist(file, menuAt))}
-          />
-          <MusicMenuRow
-            tone={MUSIC_MENU_TONES.playlist}
-            label="Tags…"
-            icon={<Tag size={icon} strokeWidth={2.25} />}
-            onClick={act(() => setTagsAt(menuAt))}
-          />
+          <SaveToPlaylistFlyoutRow paths={[file.path]} onClose={() => setMenuOpen(false)} />
+          <VideoTagsFlyoutRow file={file} onClose={() => setMenuOpen(false)} />
         </MusicMenuSection>
         {(channelFollow.available || (channelId && channelName)) && (
           <MusicMenuSection label="Channel" tone={MUSIC_MENU_TONES.navigate}>
@@ -448,7 +453,6 @@ export const VideoCard = memo(function VideoCard({
           />
         </MusicMenuSection>
       </MusicFloatingMenu>
-      <VideoTagsMenu file={file} title={title} at={tagsAt} onClose={() => setTagsAt(null)} />
     </div>
   );
 });

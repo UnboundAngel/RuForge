@@ -17,9 +17,18 @@ export type OnboardingCondition =
   | "import-open"
   | "import-prompt-copied"
   | "import-review"
-  | "music-playlist-made";
+  | "music-playlist-made"
+  | "video-library-ready"
+  | "video-playlists-tab"
+  | "video-playlist-open"
+  | "video-playlist-reordered"
+  | "video-playlist-suggested-seen";
 
-export type OnboardingEvent = "import-prompt-copied" | "import-saved";
+export type OnboardingEvent =
+  | "import-prompt-copied"
+  | "import-saved"
+  | "video-playlist-reordered"
+  | "video-playlist-suggested-seen";
 
 /** Videos on disk before the follow tip is worth showing. */
 export const FOLLOW_TIP_MIN_VIDEOS = 3;
@@ -27,10 +36,40 @@ export const FOLLOW_TIP_MIN_VIDEOS = 3;
 const events = new Set<OnboardingEvent>();
 const eventListeners = new Set<() => void>();
 
+/** Delay so the Find more caption gets a moment on screen when the shelf was already visible. */
+export const SUGGESTED_SEEN_DELAY_MS = 3000;
+
+let shelfVisible = false;
+let seenTimer: ReturnType<typeof setTimeout> | null = null;
+
 export function noteOnboardingEvent(event: OnboardingEvent): void {
   if (events.has(event)) return;
   events.add(event);
   for (const fn of eventListeners) fn();
+  if (event === "video-playlist-reordered" && shelfVisible && !seenTimer) {
+    seenTimer = setTimeout(() => {
+      seenTimer = null;
+      if (shelfVisible) noteOnboardingEvent("video-playlist-suggested-seen");
+    }, SUGGESTED_SEEN_DELAY_MS);
+  }
+}
+
+/** The Suggested shelf reports each enter and leave; only a sighting after a reorder counts. */
+export function noteSuggestedShelfVisible(visible: boolean): void {
+  shelfVisible = visible;
+  if (!visible && seenTimer) {
+    clearTimeout(seenTimer);
+    seenTimer = null;
+  }
+  if (visible && events.has("video-playlist-reordered")) noteOnboardingEvent("video-playlist-suggested-seen");
+}
+
+/** Test-only: forget every recorded event. */
+export function resetOnboardingEventsForTest(): void {
+  events.clear();
+  shelfVisible = false;
+  if (seenTimer) clearTimeout(seenTimer);
+  seenTimer = null;
 }
 
 const videoCountCache = new WeakMap<object, number>();
@@ -78,6 +117,36 @@ export function isOnboardingConditionMet(condition: OnboardingCondition): boolea
       return useImportSession.getState().phase === "review";
     case "music-playlist-made":
       return events.has("import-saved") || musicPlaylistRecords(s.virtualPlaylistRecords).length > 0;
+    case "video-library-ready":
+      // No video minimum: the tour brings its own demo playlist when the library is empty.
+      return (
+        !s.settingsOpen &&
+        s.navMode === "default" &&
+        s.activeTab === "media" &&
+        !s.searchValue.trim() &&
+        !useCreatorPage.getState().creator &&
+        !useCreatorPage.getState().tagId
+      );
+    case "video-playlists-tab":
+      return (
+        !s.settingsOpen &&
+        s.navMode === "default" &&
+        s.activeTab === "media" &&
+        (s.galleryFilter === "playlists" || s.selectedPlaylist !== null)
+      );
+    case "video-playlist-open":
+      // selectedPlaylist outlives the detail page (other tabs, creator pages), so require the page to be showing.
+      return (
+        !s.settingsOpen &&
+        s.navMode === "default" &&
+        s.activeTab === "media" &&
+        !useCreatorPage.getState().creator &&
+        !useCreatorPage.getState().tagId &&
+        s.selectedPlaylist !== null
+      );
+    case "video-playlist-reordered":
+    case "video-playlist-suggested-seen":
+      return events.has(condition);
   }
 }
 

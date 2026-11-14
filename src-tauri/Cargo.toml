@@ -1,6 +1,6 @@
 [package]
 name = "ruforge"
-version = "0.8.0"
+version = "0.10.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -49,6 +49,7 @@ tauri-plugin-log = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 futures-util = "0.3"
 sha2 = "0.10"
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 cookie = "0.18"
 netscape_cookies = { workspace = true }

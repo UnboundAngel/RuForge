@@ -44,25 +44,7 @@ type IslandSavedCapture = {
   contextLabel: string;
 };
 
-export type ActivityIslandUpdateAvailable = {
-  version: string;
-  notes: string;
-  installableVersion: string;
-  versionOptions: readonly string[];
-  selectedVersion: string;
-  onSelectVersion: (version: string) => void;
-  collapsed: boolean;
-  onInstallRestart: () => void;
-  onHideUntilRestart: () => void;
-  onCollapse: () => void;
-  onExpand: () => void;
-};
-
-type ActivityIslandProps = {
-  updateAvailable?: ActivityIslandUpdateAvailable | null;
-};
-
-export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) {
+export function ActivityIsland() {
   const activity = useCurrentActivity();
   const playback = useSyncExternalStore(
     subscribeMainPlaybackBridge,
@@ -132,9 +114,6 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
   const showIslandChrome =
     activity.awayFromOwningSurface || isExpanded;
 
-  const updateMode = Boolean(updateAvailable);
-  const updateExpanded = updateMode && !updateAvailable!.collapsed;
-
   const notifications = useRuforgeStore((s) => s.notifications);
   const dismissNotification = useRuforgeStore((s) => s.dismissNotification);
   const activeTab = useRuforgeStore((s) => s.activeTab);
@@ -152,7 +131,7 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
 
   // Never collapse something the user opened on purpose.
   const showNotice =
-    notice != null && !isExpanded && !updateExpanded && !notificationsOpen;
+    notice != null && !isExpanded && !notificationsOpen;
 
   const islandState: IslandState = devCaptureIsland
     ? savedCapture
@@ -162,10 +141,6 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       ? "notifications"
     : showNotice
       ? "notice"
-    : updateMode
-      ? updateAvailable!.collapsed
-        ? "idle"
-        : "expanded"
     : !hasSession || !showIslandChrome
       ? "idle"
       : isExpanded
@@ -404,14 +379,6 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
       dismissNotification(notice.id);
       return;
     }
-    if (updateMode && updateAvailable) {
-      if (updateAvailable.collapsed) {
-        updateAvailable.onExpand();
-      } else {
-        updateAvailable.onCollapse();
-      }
-      return;
-    }
     if (isExpanded) {
       setUserExpanded(false);
       return;
@@ -449,24 +416,14 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
 
   return createPortal(
     <>
-      {notificationsOpen || isExpanded || updateExpanded ? (
+      {notificationsOpen || isExpanded ? (
         <button
           type="button"
           className="pointer-events-auto fixed inset-0 z-[109] bg-transparent"
-          aria-label={
-            notificationsOpen
-              ? "Close notifications"
-              : updateExpanded
-                ? "Collapse update details"
-                : "Dismiss now playing"
-          }
+          aria-label={notificationsOpen ? "Close notifications" : "Dismiss now playing"}
           onClick={() => {
             if (notificationsOpen) {
               closeNotificationPopover();
-              return;
-            }
-            if (updateExpanded && updateAvailable) {
-              updateAvailable.onCollapse();
               return;
             }
             setUserExpanded(false);
@@ -503,21 +460,6 @@ export function ActivityIsland({ updateAvailable = null }: ActivityIslandProps) 
             notifications={islandNotifications}
             idleTappable={notificationsInIsland && !devCaptureIsland}
             content={content}
-            updateAvailable={
-              updateAvailable && !notificationsOpen
-                ? {
-                    version: updateAvailable.version,
-                    notes: updateAvailable.notes,
-                    installableVersion: updateAvailable.installableVersion,
-                    versionOptions: updateAvailable.versionOptions,
-                    selectedVersion: updateAvailable.selectedVersion,
-                    onSelectVersion: updateAvailable.onSelectVersion,
-                    collapsed: updateAvailable.collapsed,
-                    onInstallRestart: updateAvailable.onInstallRestart,
-                    onHideUntilRestart: updateAvailable.onHideUntilRestart,
-                  }
-                : undefined
-            }
             devCaptureIdle={
               devCaptureIsland && !savedCapture
                 ? {

@@ -91,14 +91,6 @@ export function useVideoCardActions() {
     setSave({ paths, at });
   }, []);
 
-  const onSaveToPlaylist = useCallback(
-    (file: MediaFile, at: MenuAt) => {
-      setGalleryActiveMenu(null);
-      openSavePopover([file.path], at);
-    },
-    [openSavePopover, setGalleryActiveMenu],
-  );
-
   const watchLaterPaths = useMemo(() => {
     const wl = entries.find(
       (e): e is PlaylistCollection => e.kind === "playlist" && e.path === virtualPlaylistPath(WATCH_LATER_ID),
@@ -119,7 +111,6 @@ export function useVideoCardActions() {
     onDelete,
     onExtract,
     onToggleWatchLater,
-    onSaveToPlaylist,
     watchLaterPaths,
     openSavePopover,
     saveModal,

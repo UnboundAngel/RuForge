@@ -4,6 +4,7 @@ export const NOTIFICATION_FILTERS: readonly { id: NotificationCenterFilter; labe
   { id: "all", label: "All" },
   { id: "watchlist", label: "Uploads" },
   { id: "download", label: "Downloads" },
+  { id: "dev", label: "Dev" },
 ];
 
 export function filterNotificationItems(
@@ -28,10 +29,17 @@ export function unreadBadgeLabel(count: number): string {
   return count > 9 ? "9+" : String(count);
 }
 
+/** Unread order: channel uploads, then dev announcements, then everything else. Read rows keep time order. */
+function freshRank(item: NotificationItem): number {
+  return item.source === "watchlist" ? 0 : item.source === "dev" ? 1 : 2;
+}
+
 export function splitByRead(items: NotificationItem[]): { fresh: NotificationItem[]; earlier: NotificationItem[] } {
   const fresh: NotificationItem[] = [];
   const earlier: NotificationItem[] = [];
   for (const item of items) (item.read ? earlier : fresh).push(item);
+  // Array.sort is stable, so each tier keeps its newest-first order.
+  fresh.sort((a, b) => freshRank(a) - freshRank(b));
   return { fresh, earlier };
 }
 
@@ -58,6 +66,7 @@ const DOWNLOAD_KICKER: Partial<Record<NotificationKind, NotificationKicker>> = {
   "download-failed": { text: "Download failed", tone: "danger" },
   "download-timed-out": { text: "Timed out", tone: "danger" },
   "download-blocked": { text: "Held", tone: "warn" },
+  "download-paused": { text: "Paused", tone: "warn" },
   "security-blocked": { text: "Security", tone: "muted" },
   "playlist-new": { text: "New in playlist", tone: "accent" },
 };

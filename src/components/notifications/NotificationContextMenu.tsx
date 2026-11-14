@@ -11,7 +11,7 @@ import {
   MusicMenuSection,
 } from "@/components/music/musicMenuUi";
 import { muteKeyForKind, muteLabel } from "@/notifications/muteModel";
-import type { NotificationActionId, NotificationItem, NotificationMuteKey } from "@/notifications/types";
+import { isPollPick, type NotificationActionId, type NotificationItem, type NotificationMuteKey } from "@/notifications/types";
 import { ACTION_META } from "./NotificationRowActions";
 
 export type NotificationMenuState = { item: NotificationItem; x: number; y: number };
@@ -91,7 +91,7 @@ export function NotificationContextMenu({ menu, containerRef, onReserve, onActio
   const ownFailure = item.kind === "download-failed" || item.kind === "download-timed-out";
   const error = item.ref.error ?? (ownFailure ? item.subtitle : null);
   const errorLabel = ownFailure ? "Copy error" : "Copy failed attempt's error";
-  const hasActions = item.actions.length > 0 || !item.read;
+  const hasActions = item.actions.some((a) => !isPollPick(a)) || !item.read;
   const muteKey = muteKeyForKind(item.kind);
 
   return (
@@ -107,7 +107,7 @@ export function NotificationContextMenu({ menu, containerRef, onReserve, onActio
       <MusicMenuPanel theme="library" role="menu" aria-label="Notification options">
         {hasActions ? (
           <MusicMenuSection label="Actions" tone={MUSIC_MENU_TONES.playback}>
-            {item.actions.map((action) => (
+            {item.actions.filter((a) => !isPollPick(a)).map((action) => (
               <MusicMenuRow
                 key={action}
                 tone={MUSIC_MENU_TONES.playback}

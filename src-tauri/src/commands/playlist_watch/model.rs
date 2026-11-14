@@ -89,7 +89,8 @@ pub fn remember(pl: &mut WatchedPlaylist, ids: impl IntoIterator<Item = String>)
 
 /// The first successful fetch is the baseline: everything in it counts as already known, so a
 /// freshly watched playlist never announces its existing videos. Shorts are remembered but never
-/// reported.
+/// reported. At most `MAX_VIDEOS_PER_RECORD` new videos are returned per call; the overflow is not
+/// remembered, so the next poll announces it.
 pub fn merge_entries(pl: &mut WatchedPlaylist, entries: &[FeedEntry]) -> Vec<NewPlaylistVideo> {
     let mut fresh: Vec<&FeedEntry> = Vec::new();
     if pl.seeded {
@@ -101,7 +102,11 @@ pub fn merge_entries(pl: &mut WatchedPlaylist, entries: &[FeedEntry]) -> Vec<New
         }
     }
     pl.seeded = true;
-    remember(pl, entries.iter().map(|e| e.video_id.clone()));
+    let overflow: Vec<&str> = fresh.iter().skip(MAX_VIDEOS_PER_RECORD).map(|e| e.video_id.as_str()).collect();
+    remember(
+        pl,
+        entries.iter().filter(|e| !overflow.contains(&e.video_id.as_str())).map(|e| e.video_id.clone()),
+    );
     fresh
         .into_iter()
         .take(MAX_VIDEOS_PER_RECORD)
@@ -147,6 +152,18 @@ mod tests {
         );
         assert_eq!(out, vec![NewPlaylistVideo { id: "ccccccccccc".into(), title: "t-ccccccccccc".into() }]);
         assert!(merge_entries(&mut pl, &[entry("ccccccccccc", false), entry("ddddddddddd", true)]).is_empty());
+    }
+
+    #[test]
+    fn playlist_watch_overflow_is_announced_on_later_polls() {
+        let mut pl = watched(&[]);
+        merge_entries(&mut pl, &[]);
+        let many: Vec<FeedEntry> = (0..30).map(|i| entry(&format!("{i:011}"), false)).collect();
+        assert_eq!(merge_entries(&mut pl, &many).len(), MAX_VIDEOS_PER_RECORD);
+        let second = merge_entries(&mut pl, &many);
+        assert_eq!(second.len(), 5);
+        assert_eq!(second[0].id, format!("{:011}", 25));
+        assert!(merge_entries(&mut pl, &many).is_empty());
     }
 
     #[test]

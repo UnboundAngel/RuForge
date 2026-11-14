@@ -74,9 +74,16 @@ pub fn parse_playlist_page(html: &str, now: i64) -> Option<Vec<FeedEntry>> {
             let video_id = r.get("videoId")?.as_str()?.to_string();
             let title = r
                 .pointer("/title/runs/0/text")
+                .or_else(|| r.pointer("/title/simpleText"))
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_string();
+            // Private and deleted videos stay in the list with their id; skipping them (and not
+            // remembering them) lets a video that turns public again be announced later.
+            let unplayable = r.get("isPlayable").and_then(Value::as_bool) == Some(false);
+            if unplayable || title == "[Private video]" || title == "[Deleted video]" {
+                return None;
+            }
             Some(FeedEntry {
                 video_id,
                 channel_id: String::new(),
@@ -102,6 +109,14 @@ mod tests {
         assert_eq!(entries[1].video_id, "bbbbbbbbbbb");
         assert_eq!(entries[1].title, "Two");
         assert!(parse_playlist_page("<html></html>", 5).is_none());
+    }
+
+    #[test]
+    fn playlist_watch_page_skips_placeholders() {
+        let html = r#"<script>var ytInitialData = {"contents":[{"playlistVideoRenderer":{"videoId":"aaaaaaaaaaa","isPlayable":true,"title":{"runs":[{"text":"One"}]}}},{"playlistVideoRenderer":{"videoId":"bbbbbbbbbbb","isPlayable":false,"title":{"runs":[{"text":"Hidden"}]}}},{"playlistVideoRenderer":{"videoId":"ccccccccccc","title":{"simpleText":"[Deleted video]"}}}]};</script>"#;
+        let entries = parse_playlist_page(html, 5).expect("parsed");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].video_id, "aaaaaaaaaaa");
     }
 
     #[test]

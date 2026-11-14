@@ -1,6 +1,7 @@
 import { type RefCallback, useCallback, useEffect, useRef, useState } from "react";
 import {
   filterSupportedYouTubeUrls,
+  isInternalDrag,
   mimeTypesMayCarryUri,
   parseDroppedUrls,
 } from "./dropIntake";
@@ -75,6 +76,7 @@ export function useUrlDropIntake({
     };
 
     const onDragEnter = (e: DragEvent) => {
+      if (isInternalDrag()) return;
       e.preventDefault();
       if (mimeTypesMayCarryUri(e.dataTransfer)) {
         setIsDragOver(true);
@@ -93,6 +95,7 @@ export function useUrlDropIntake({
     };
 
     const onDrop = (e: DragEvent) => {
+      if (isInternalDrag()) return;
       e.preventDefault();
       setIsDragOver(false);
 

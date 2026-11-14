@@ -1,0 +1,105 @@
+/* One icon slot width for header, cells and mobile lines so every column shares an icon x and a text x. */
+.cmp-th,
+.cmp-cell {
+  display: grid;
+  grid-template-columns: var(--cmp-slot, 24px) minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+}
+
+.cmp-th__slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cmp-th img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.cmp-th__name {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-rf-text);
+}
+
+.cmp-group {
+  display: flex;
+  line-height: 1;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.cmp-win,
+.cmp-off {
+  justify-self: center;
+}
+
+.cmp-win {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+}
+
+.cmp-win--ruforge {
+  background: var(--cmp-ours);
+  color: var(--cmp-ours-ink);
+}
+
+.cmp-win--them {
+  background: var(--cmp-them);
+  color: var(--cmp-them-ink);
+}
+
+.cmp-off {
+  display: inline-flex;
+  color: var(--color-rf-text-muted);
+}
+
+.cmp-cell--top {
+  align-items: start;
+}
+
+.cmp-val {
+  font-weight: 400;
+  color: var(--color-rf-text-muted);
+}
+
+.cmp-val--on {
+  font-weight: 500;
+  color: var(--color-rf-text);
+}
+
+
+.cmp-group svg,
+.cmp-cell svg {
+  display: block;
+}
+
+/* Muted text keeps 4.5:1 or better on each column's own background. */
+.cmp-val,
+.cmp-off {
+  color: var(--cmp-them-muted);
+}
+
+.cmp-val--even,
+.cmp-val--on {
+  color: var(--color-rf-text);
+}
+
+.cmp-val.cmp-side-ruforge,
+.cmp-off.cmp-side-ruforge {
+  color: var(--cmp-ours-muted);
+}
+
+.cmp-val--even.cmp-side-ruforge,
+.cmp-val--on.cmp-side-ruforge {
+  color: var(--cmp-ours);
+}

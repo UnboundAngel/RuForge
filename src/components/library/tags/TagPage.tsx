@@ -67,7 +67,7 @@ export function TagPage({
         <div className="py-20 text-center">
           <p className="text-sm font-medium text-stone-400">nothing tagged {tag.name} yet</p>
           <p className="mt-1.5 text-xs font-medium text-stone-600">
-            add a rule above, or right-click a video and pick Tags…
+            add a rule above, or right-click a video and pick Tags
           </p>
         </div>
       )}

@@ -77,6 +77,7 @@ export function NotificationCenterPanel({
       security: 0,
       stats: 0,
       playlist: 0,
+      dev: 0,
     };
     const unreadBy = { ...total };
     for (const i of items) {
@@ -151,7 +152,7 @@ export function NotificationCenterPanel({
             onScroll();
             if (menu) closeMenu();
           }}
-          className="rf-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2"
+          className="rf-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden pb-2 pl-2 pr-3.5"
           style={
             menuReserve > 0 ? { paddingBottom: 8 + menuReserve } : undefined
           }

@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 import { Icon as Iconify } from "@iconify/react";
-import { Check, Download, FolderOpen, HardDrive, Play, RotateCcw } from "lucide-react";
-import type { NotificationActionId, NotificationItem } from "@/notifications/types";
+import { Check, Download, ExternalLink, FolderOpen, HardDrive, Play, RotateCcw } from "lucide-react";
+import { POLL_PICK_ACTIONS, type NotificationActionId, type NotificationItem, type PollPickAction } from "@/notifications/types";
+
+const PICK_META = Object.fromEntries(
+  POLL_PICK_ACTIONS.map((a) => [a, { tooltip: "Vote", icon: (s: number) => <ExternalLink size={s} strokeWidth={2.25} /> }]),
+) as Record<PollPickAction, { tooltip: string; icon: (size: number) => ReactNode }>;
 
 export const ACTION_META: Record<NotificationActionId, { tooltip: string; icon: (size: number) => ReactNode }> = {
   queue: { tooltip: "Add to download queue", icon: (s) => <Download size={s} strokeWidth={2.25} /> },
@@ -13,6 +17,9 @@ export const ACTION_META: Record<NotificationActionId, { tooltip: string; icon: 
   "show-in-folder": { tooltip: "Show in folder", icon: (s) => <FolderOpen size={s} strokeWidth={2.25} /> },
   retry: { tooltip: "Retry download", icon: (s) => <RotateCcw size={s} strokeWidth={2.25} /> },
   "open-storage-settings": { tooltip: "Open storage settings", icon: (s) => <HardDrive size={s} strokeWidth={2.25} /> },
+  "resume-queue": { tooltip: "Resume downloads", icon: (s) => <Play size={s} strokeWidth={2.25} className="fill-current" /> },
+  "open-link": { tooltip: "Open", icon: (s) => <ExternalLink size={s} strokeWidth={2.25} /> },
+  ...PICK_META,
 };
 
 type Props = {

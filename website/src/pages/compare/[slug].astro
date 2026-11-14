@@ -1,0 +1,15 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ComparePageTemplate from '../../components/compare/ComparePageTemplate.astro';
+import { COMPARE_PAGES, type ComparePageDef } from '../../lib/comparePages';
+
+export function getStaticPaths() {
+  return COMPARE_PAGES.map((page) => ({ params: { slug: page.slug }, props: { page } }));
+}
+
+const { page } = Astro.props as { page: ComparePageDef };
+---
+
+<BaseLayout title={page.metaTitle} description={page.metaDescription}>
+  <ComparePageTemplate page={page} />
+</BaseLayout>

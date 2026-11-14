@@ -27,7 +27,6 @@ import {
   type PlaylistBatchEnqueueMeta,
 } from "../../downloadQueue";
 import {
-  downloadJobDualSizesReady,
   mergeVideoInfoFileSizes,
   snapshotWithResolvedFileSize,
 } from "../../downloadJobFileSizes";
@@ -48,16 +47,25 @@ import {
   isPlaylistDownloaderUrl,
   playlistItemKey,
   resolveAudioOnlyForPlaylistItem,
-  sumPlaylistDisplayBytes,
 } from "../../playlistDownloadPlan";
 import {
   canonicalYouTubeDownloaderUrl,
   extractYouTubeUrlFromText,
   playlistItemWatchUrl,
-  sanitizePlaylistFolderName,
   youtubeUrlsMatch,
 } from "../../youtubeUrl";
+import { prepareVideoPlaylistFolder } from "../../lib/videoPlaylistSidecar";
+import { rememberPlaylistFolderTitle } from "../../lib/playlistFlyTargets";
+import { getPlaylistPreviewState, usePlaylistPreviewState } from "../../lib/playlistPreviewState";
+import {
+  cancelHeroPlaylistStream,
+  heroPlaylistStreamOwns,
+  scheduleHeroPlaylistStream,
+} from "./heroPlaylistStream";
+import { fillHeroSizesInBackground } from "./heroSizeFill";
+import { usePlaylistHeroSize } from "./usePlaylistHeroSize";
 import { URL_PACER_EASE } from "./downloaderConstants";
+import { compareBatchQueueJobs } from "./batchQueueOrder";
 import { sanitizeCarouselDisplayTitle } from "./downloaderFormat";
 import { urlConflictsWithActiveDownloader } from "./downloaderUrlConflict";
 import {
@@ -67,10 +75,10 @@ import {
 import { setDownloaderReplayHandlers } from "../../features/downloader/downloaderReplayRegistry";
 import {
   commitLastDownloadBatchFromJobs,
-  commitLastDownloadBatchRecord,
   devBatchToolsEnabled,
   isDevReplaySimulateActive,
 } from "../../lib/devLastDownloadBatch";
+import { captureHeroPlaylistBatch } from "./captureHeroPlaylistBatch";
 import { deliverUserNotification } from "../../systemNotify";
 import { ytdlpVideoFormatForMetadata } from "../../downloadFormat";
 import { usePlaylistRowSizeFill } from "./usePlaylistRowSizeFill";
@@ -201,7 +209,7 @@ export function useDownloaderView({
   useEffect(() => {
     const held = downloadJobs
       .filter((j) => j.status === "queued" && j.approval === "held")
-      .sort((a, b) => a.createdAt - b.createdAt);
+      .sort(compareBatchQueueJobs);
     if (held.length > 1) {
       setBatchQueueJobIds(held.map((j) => j.id));
       return;
@@ -212,7 +220,7 @@ export function useDownloaderView({
         (j) =>
           j.status === "queued" || j.status === "downloading" || j.status === "paused",
       )
-      .sort((a, b) => a.createdAt - b.createdAt);
+      .sort(compareBatchQueueJobs);
 
     setBatchQueueJobIds((prev) => {
       if (pipeline.length > 1) {
@@ -265,6 +273,7 @@ export function useDownloaderView({
   const [downloadStartPending, setDownloadStartPending] = useState(false);
   const pendingDownloadUrlRef = useRef<string | null>(null);
   const downloadStartInflightRef = useRef(false);
+  const clearHeroAfterPlaylistRef = useRef<(() => void) | null>(null);
   const [pinnedQuickEnqueueUrls, setPinnedQuickEnqueueUrls] = useState<string[]>([]);
   const [clipboardPastedHint, setClipboardPastedHint] = useState(false);
   const [clipboardOfferUrl, setClipboardOfferUrl] = useState<string | null>(null);
@@ -410,13 +419,13 @@ export function useDownloaderView({
       const rawTitle = snap?.title ?? job?.metadata?.title ?? job?.title ?? "";
       const thumbnail = snap?.thumbnail ?? job?.metadata?.thumbnail ?? "";
       const safeTitle = sanitizeCarouselDisplayTitle(rawTitle);
+      const needsHydration =
+        downloadJobMediaNeedsHydration(job?.metadata ?? null) || !thumbnail.trim() || !safeTitle;
       return {
         thumbnail,
         title: safeTitle,
-        needsHydration:
-          downloadJobMediaNeedsHydration(job?.metadata ?? null) ||
-          !thumbnail.trim() ||
-          !safeTitle,
+        needsHydration,
+        fillPct: job?.status === "downloading" ? (job.progress?.percentage ?? 0) : null,
       };
     });
 
@@ -442,35 +451,7 @@ export function useDownloaderView({
     };
   }, [batchQueueJobIds, batchQueueSnapshots, downloadJobs]);
 
-  const playlistDownloadCarousel = useMemo(() => {
-    if (!anyDownloading) return null;
-    const playlistItems =
-      videoInfo?.playlistItems ??
-      (focusedJob?.metadata?.isPlaylist ? focusedJob.metadata.playlistItems : undefined);
-    const isPlaylistJob =
-      Boolean(videoInfo?.isPlaylist) ||
-      Boolean(focusedJob?.metadata?.isPlaylist && focusedJob.status === "downloading");
-    if (!isPlaylistJob || !playlistItems?.length || playlistItems.length <= 1) {
-      return null;
-    }
-    return {
-      items: playlistItems.map((item) => ({
-        thumbnail: item.thumbnail,
-        title: sanitizeCarouselDisplayTitle(item.title),
-        needsHydration:
-          !String(item.thumbnail ?? "").trim() ||
-          !sanitizeCarouselDisplayTitle(item.title),
-      })),
-      currentIndex: typeof progress?.currentIndex === "number" ? progress.currentIndex : 0,
-      totalItems:
-        typeof progress?.totalItems === "number"
-          ? progress.totalItems
-          : playlistItems.length,
-      collectionTitle: videoInfo?.title ?? focusedJob?.metadata?.title ?? "Playlist",
-    };
-  }, [anyDownloading, videoInfo, focusedJob, progress]);
-
-  const collectionDownloadCarousel = batchDownloadCarousel ?? playlistDownloadCarousel;
+  const collectionDownloadCarousel = batchDownloadCarousel;
   /** Held staging is a review queue (Download still required), not a transfer. */
   const batchIsHeldOnly =
     batchQueueJobs.length > 0 &&
@@ -572,6 +553,10 @@ export function useDownloaderView({
     ? heroEditableJob.options.audioOnly === true
     : settings.downloadAudioOnly === true;
 
+  const previewState = usePlaylistPreviewState();
+  const playlistListing = previewState.listing;
+  const playlistExcluded = previewState.excluded;
+
   const playlistEnqueuePlan = useMemo(() => {
     if (!videoInfo?.isPlaylist || !videoInfo.playlistItems?.length) return null;
     return buildPlaylistEnqueuePlan(
@@ -580,8 +565,10 @@ export function useDownloaderView({
       playlistItemAudioOverrides,
       heroAudioOnly,
       settings.skipDuplicatesAutomatically,
+      playlistExcluded,
     );
   }, [
+    playlistExcluded,
     videoInfo,
     entries,
     playlistItemAudioOverrides,
@@ -797,6 +784,7 @@ export function useDownloaderView({
           ...options,
           playlistOutputFolder: meta.playlistOutputFolder,
           playlistIndex: meta.playlistIndex ?? null,
+          playlistIndexWidth: meta.playlistIndexWidth ?? null,
         };
       }
       const st = useRuforgeStore.getState();
@@ -896,6 +884,7 @@ export function useDownloaderView({
         audioOnly?: boolean;
         playlistOutputFolder?: string;
         playlistIndex?: number;
+        playlistIndexWidth?: number;
         enqueueSource?: DownloadEnqueueSource;
         skipBatchCapture?: boolean;
       },
@@ -922,6 +911,7 @@ export function useDownloaderView({
           approval: "auto",
           playlistOutputFolder: meta?.playlistOutputFolder,
           playlistIndex: meta?.playlistIndex,
+          playlistIndexWidth: meta?.playlistIndexWidth,
           enqueueSource,
         },
         audioOnly,
@@ -1004,6 +994,7 @@ export function useDownloaderView({
         playlistItemAudioOverrides,
         resolveHeroAudioOnly(),
         settingsRef.current.skipDuplicatesAutomatically,
+        getPlaylistPreviewState().excluded,
       );
 
       if (plan.toDownload.length === 0) {
@@ -1020,31 +1011,21 @@ export function useDownloaderView({
         return;
       }
 
-      const folder = sanitizePlaylistFolderName(vi?.title ?? "playlist");
-      if (devBatchToolsEnabled() && vi) {
-        commitLastDownloadBatchRecord({
-          batchKind: "playlist",
-          heroUrl: barUrl || effectiveUrl,
-          heroVideoInfo: videoInfoToDownloadJobSnapshot(vi, resolveHeroAudioOnly()),
-          playlistItemAudioOverrides,
-          items: plan.toDownload.map((item) => ({
-            url: item.url,
-            source: "heroPlaylistDownload",
-            approval: "auto",
-            snapshot:
-              downloadJobSnapshotFromPlaylistItems(
-                item.url,
-                vi.playlistItems ?? [],
-                item.audioOnly,
-              ) ?? null,
-            options: {
-              playlistOutputFolder: folder,
-              playlistIndex: item.index,
-              audioOnly: item.audioOnly,
-            },
-          })),
-        });
-      }
+      const folder = await prepareVideoPlaylistFolder({
+        outputDir: saveToInternal ? internalDir : outputDir,
+        title: vi?.title ?? "playlist",
+        sourceUrl: effectiveUrl,
+        items: plan.toDownload,
+      });
+      rememberPlaylistFolderTitle(folder, vi?.title ?? "playlist");
+      captureHeroPlaylistBatch({
+        videoInfo: vi,
+        heroUrl: barUrl || effectiveUrl,
+        heroAudioOnly: resolveHeroAudioOnly(),
+        overrides: playlistItemAudioOverrides,
+        items: plan.toDownload,
+        folder,
+      });
       let batchChoice: Exclude<DuplicateDownloadChoice, "cancel"> | null = null;
       let started = 0;
       const skipped = settingsRef.current.skipDuplicatesAutomatically
@@ -1068,6 +1049,7 @@ export function useDownloaderView({
           audioOnly: item.audioOnly,
           playlistOutputFolder: folder,
           playlistIndex: item.index,
+          playlistIndexWidth: plan.indexWidth,
           enqueueSource: "heroPlaylistDownload",
           skipBatchCapture: true,
         });
@@ -1126,6 +1108,9 @@ export function useDownloaderView({
     promptDuplicateChoice,
     playlistItemAudioOverrides,
     resolveHeroAudioOnly,
+    saveToInternal,
+    internalDir,
+    outputDir,
   ]);
 
   const handleDownloadClick = useCallback(async () => {
@@ -1222,7 +1207,8 @@ export function useDownloaderView({
       Boolean(heroInfoUrl) &&
       heroInfoUrl != null &&
       youtubeUrlsMatch(heroInfoUrl, effectiveUrl) &&
-      !st0.metadataLoading;
+      !st0.metadataLoading &&
+      !getPlaylistPreviewState().listing;
 
     if (!heroReady) {
       return;
@@ -1286,7 +1272,8 @@ export function useDownloaderView({
       return;
     }
 
-    if (metadataLoading) return;
+    // A playlist still being listed waits, so the full list is what gets queued.
+    if (metadataLoading || playlistListing) return;
 
     const st = useRuforgeStore.getState();
     const heroInfoUrl = st.videoInfoUrl;
@@ -1309,6 +1296,7 @@ export function useDownloaderView({
   }, [
     downloadStartPending,
     metadataLoading,
+    playlistListing,
     videoInfo,
     videoInfoUrl,
     url,
@@ -1652,14 +1640,13 @@ export function useDownloaderView({
     setVideoInfo({ ...info, playlistItems: arrayMove(info.playlistItems, from, to) });
   }, [setVideoInfo]);
 
-  const playlistHeroDisplayBytes = useMemo(() => {
-    if (!videoInfo?.isPlaylist || !videoInfo.playlistItems?.length) return null;
-    return sumPlaylistDisplayBytes(
-      videoInfo.playlistItems,
-      playlistItemAudioOverrides,
-      heroAudioOnly,
-    );
-  }, [videoInfo, playlistItemAudioOverrides, heroAudioOnly]);
+  const { size: playlistSize, displayBytes: playlistHeroDisplayBytes } = usePlaylistHeroSize(
+    videoInfo,
+    playlistItemAudioOverrides,
+    heroAudioOnly,
+    playlistExcluded,
+    previewState.sizeErrors,
+  );
 
   const isPlaylistItemDuplicate = useCallback(
     (item: { id?: string; webpageUrl?: string }) => {
@@ -1697,7 +1684,17 @@ export function useDownloaderView({
     }, 2000);
   }, [url]);
 
+  clearHeroAfterPlaylistRef.current = () => {
+    cancelHeroPlaylistStream();
+    pendingDownloadUrlRef.current = null;
+    setDownloadStartPending(false);
+    setDownloaderUrl("");
+    setVideoInfo(null);
+    setPlaylistItemAudioOverrides({});
+  };
+
   const handleClearUrl = useCallback(() => {
+    cancelHeroPlaylistStream();
     clipboardReadGenRef.current += 1;
     setDownloaderUrl("");
     setDownloaderFocusedJobId(null);
@@ -1913,6 +1910,7 @@ export function useDownloaderView({
     setMetadataError(null);
     if (url.startsWith("http")) {
       const norm = url.trim();
+      if (!isPlaylistDownloaderUrl(norm)) cancelHeroPlaylistStream();
       const preferredQuality = settingsRef.current.preferredQuality;
       const audioOnly = settingsRef.current.downloadAudioOnly;
 
@@ -1928,6 +1926,21 @@ export function useDownloaderView({
 
       restoreDownloadQueueFromSessionIfEmpty();
       const st = useRuforgeStore.getState();
+
+      if (isPlaylistDownloaderUrl(norm)) {
+        // The stream belongs to the pasted link, so queue changes that re-run this effect leave it alone.
+        const loaded =
+          st.videoInfo?.isPlaylist && st.videoInfoUrl && youtubeUrlsMatch(norm, st.videoInfoUrl);
+        if (loaded || heroPlaylistStreamOwns(norm)) {
+          return () => {
+            active = false;
+          };
+        }
+        return scheduleHeroPlaylistStream(norm, preferredQuality, () =>
+          clearHeroAfterPlaylistRef.current?.(),
+        );
+      }
+
       const jobs = jobsForHeroMetadataReuse(st.downloadJobs);
       if (
         st.videoInfo &&
@@ -1950,52 +1963,14 @@ export function useDownloaderView({
         }
       }
 
-      const fillHeroSizesInBackground = (seedSnap: DownloadJobMediaSnapshot) => {
-        if (downloadJobDualSizesReady(seedSnap)) return;
-        void (async () => {
-          try {
-            const scheduledUrl = norm;
-            const videoFormatBg = ytdlpVideoFormatForMetadata(
-              settingsRef.current.preferredQuality,
-            );
-            const audioOnlyBg = settingsRef.current.downloadAudioOnly;
-            const info = await fetchVideoInfoWithTimeout(
-              scheduledUrl,
-              videoFormatBg,
-              audioOnlyBg,
-              cookieContextFromSettings(settingsRef.current),
-            );
-            if (!active || useRuforgeStore.getState().url.trim() !== scheduledUrl) return;
-            const base = videoInfoToDownloadJobSnapshot(info, audioOnlyBg);
-            const snap = mergeVideoInfoFileSizes(base, info, audioOnlyBg);
-            const cacheKey = downloadJobMetadataCacheKey(scheduledUrl, videoFormatBg);
-            if (cacheKey) commitDownloadJobMetadataCache(cacheKey, snap);
-            const stAfter = useRuforgeStore.getState();
-            if (
-              !stAfter.videoInfoUrl ||
-              !youtubeUrlsMatch(scheduledUrl, stAfter.videoInfoUrl) ||
-              stAfter.videoInfoPreferredQuality !== settingsRef.current.preferredQuality
-            ) {
-              return;
-            }
-            setVideoInfo(
-              downloadJobSnapshotToVideoInfo(snapshotWithResolvedFileSize(snap, audioOnlyBg)),
-              {
-                sourceUrl: scheduledUrl,
-                preferredQuality: settingsRef.current.preferredQuality,
-              },
-            );
-          } catch (e: unknown) {
-            console.error(`[RuForge] hero size fill failed: ${e}`);
-          }
-        })();
-      };
+      const fillSizes = (seedSnap: DownloadJobMediaSnapshot) =>
+        fillHeroSizesInBackground(norm, seedSnap, () => active);
 
       const jobSnap = heroReuseJobSnapshot(jobs, norm);
       if (jobSnap) {
         if (active) {
           applyHeroFromSnapshot(jobSnap);
-          fillHeroSizesInBackground(jobSnap);
+          fillSizes(jobSnap);
         }
         return () => {
           active = false;
@@ -2007,7 +1982,7 @@ export function useDownloaderView({
       if (displayCached) {
         if (active) {
           applyHeroFromSnapshot(displayCached);
-          fillHeroSizesInBackground(displayCached);
+          fillSizes(displayCached);
         }
         return () => {
           active = false;
@@ -2145,6 +2120,7 @@ export function useDownloaderView({
         if (loadingOwned) setDownloaderMetadataLoading(false);
       };
     }
+    cancelHeroPlaylistStream();
     setVideoInfo(null);
   }, [
     url,
@@ -2185,6 +2161,11 @@ export function useDownloaderView({
     playlistDuplicateSummary,
     playlistEnqueuePlan,
     playlistHeroDisplayBytes,
+    playlistSize,
+    playlistListing,
+    playlistExcluded,
+    playlistAnchor: previewState.anchor,
+    playlistSizeErrors: previewState.sizeErrors,
     playlistItemAudioOverrides,
     togglePlaylistItemAudio,
     reorderPlaylistItems,
@@ -2226,7 +2207,6 @@ export function useDownloaderView({
     batchQueueActive,
     batchQueueJobIds,
     batchDownloadCarousel,
-    playlistDownloadCarousel,
     collectionDownloadCarousel,
     showImmersiveDownload,
     batchQueuePlaylistView,

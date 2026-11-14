@@ -12,10 +12,12 @@
     2) One-line file repo\.tauri-signing-password  (gitignored - create locally if you want zero prompts)
     3) Secure prompt in the console
 
-  Optional:  -NoPause   (skip "Press Enter" at end, e.g. for other scripts)
+  Optional:  -NoPause    (skip "Press Enter" at end, e.g. for other scripts)
+             -WithGames  (include Games mode; releases from 0.10.0 on ship with it)
 #>
 param(
-  [switch]$NoPause
+  [switch]$NoPause,
+  [switch]$WithGames
 )
 
 $ErrorActionPreference = "Stop"
@@ -68,11 +70,11 @@ else {
 
 if ($WithGames) {
   Remove-Item Env:RUFORGE_PUBLIC_BUILD -ErrorAction SilentlyContinue
-  Write-Host "Games included (-WithGames). Do not publish this installer." -ForegroundColor Yellow
+  Write-Host "Games included (-WithGames). This is the release installer." -ForegroundColor Cyan
 }
 else {
   $env:RUFORGE_PUBLIC_BUILD = "1"
-  Write-Host "Public build: Games stub, no Games capabilities (RUFORGE_PUBLIC_BUILD=1)." -ForegroundColor Cyan
+  Write-Host "Games stripped (RUFORGE_PUBLIC_BUILD=1). Release installers need -WithGames." -ForegroundColor Yellow
 }
 
 Write-Host "`nRunning npm run tauri build (frontend + signed bundles)...`n" -ForegroundColor Cyan

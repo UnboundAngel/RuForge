@@ -262,8 +262,6 @@ html[data-rf-density="compact"] {
   /* Activity island shell (the in-app portal and the overlay both set data-rf-nav-mode). */
   --rf-island-shell-media: #121212;
   --rf-island-shell-music: #24080d;
-  --rf-island-update-accent: 190 75 55;
-  --rf-island-update-brown: 120 68 52;
   /* Video mode window chrome (title band, rail, tab bulges). */
   --rf-bezel: #000000;
   /* Floating panels, drawers and dialog rims. */
@@ -1943,63 +1941,6 @@ button.rf-yt-profile-pill {
   }
   .rf-scrub-heatmap {
     transform: none;
-  }
-}
-
-@property --rf-island-update-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-
-.rf-island-shell--update {
-  position: relative;
-  isolation: isolate;
-  border: none;
-  box-shadow: none;
-}
-
-.rf-island-shell--update::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1.5px;
-  background: conic-gradient(
-    from var(--rf-island-update-angle),
-    rgb(190 75 55),
-    rgb(140 85 65),
-    rgb(96 52 42),
-    rgb(168 72 54),
-    rgb(190 75 55)
-  );
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  animation: rf-island-update-rim-rotate 5s linear infinite;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.rf-island-shell--update > * {
-  z-index: 1;
-}
-
-@keyframes rf-island-update-rim-rotate {
-  to {
-    --rf-island-update-angle: 360deg;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rf-island-shell--update::before {
-    animation: none;
-    background: rgb(140 85 65);
   }
 }
 

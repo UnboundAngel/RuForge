@@ -45,13 +45,18 @@ import {
   VIDEO_END_CARDS_HOVER_DIM,
   endScreenFadeGain,
   endScreenFadeProgress,
-  pickVideoEndScreenSuggestions,
   videoEndCardsLeadSec,
   videoEndFadeSec,
 } from "../videoEndScreenSuggestions";
 import { VideoEndScreen, type VideoEndScreenCreator, type VideoEndScreenPhase } from "./VideoEndScreen";
 import { openCreatorPage } from "./library/creatorPageStore";
 import { isAudioOnlyPath } from "../mediaKind";
+import { isInVideoPlaylist, playlistLoopNext } from "../lib/playlistPlayback";
+import { nextQueuedVideo } from "../lib/videoQueue";
+import { playlistVideoEnded } from "../lib/playlistSession";
+import { useVideoSequenceHotkeys } from "../hooks/useVideoSequence";
+import { useVideoEndPlan } from "../hooks/useVideoEndPlan";
+import { useLibrarySortedMedia } from "./player/useLibrarySortedMedia";
 import {
   closeVideoWatchSession,
   onVideoWatchTick,
@@ -160,32 +165,13 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   { file, onSubtitleToggle, onBack },
   ref,
 ) {
-  const galleryEntries = useRuforgeStore((s) => s.entries);
-  const audioLibrarySorted = useMemo(
-    () =>
-      galleryEntries
-        .flatMap((e) => (e.kind === "media" ? [e] : e.items))
-        .filter((f) => isAudioOnlyPath(f.path))
-        .sort((a, b) =>
-          a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }),
-        ),
-    [galleryEntries],
-  );
-
-  const videoLibrarySorted = useMemo(
-    () =>
-      galleryEntries
-        .flatMap((e) => (e.kind === "media" ? [e] : e.items))
-        .filter((f) => !isAudioOnlyPath(f.path))
-        .sort((a, b) =>
-          a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" }),
-        ),
-    [galleryEntries],
-  );
+  const { audioLibrarySorted, videoLibrarySorted } = useLibrarySortedMedia();
 
   const rawFolderPlaylist = useRuforgeStore((s) => s.folderAudioPlaylist);
   const [nextUpSort] = useNextUpSort();
-  const folderAudioPlaylist = useMemo(() => sortNextUpItems(rawFolderPlaylist, nextUpSort), [rawFolderPlaylist, nextUpSort]);
+  const inVideoPlaylist = isInVideoPlaylist(file, rawFolderPlaylist);
+  // Playlist order is the user's; the global Next-up sort only reorders folder/audio queues.
+  const folderAudioPlaylist = useMemo(() => (inVideoPlaylist ? rawFolderPlaylist : sortNextUpItems(rawFolderPlaylist, nextUpSort)), [inVideoPlaylist, rawFolderPlaylist, nextUpSort]);
   const volume = useRuforgeStore((s) => s.volume);
   const isMuted = useRuforgeStore((s) => s.isMuted);
   const loopMode = useRuforgeStore((s) => s.loopMode);
@@ -462,10 +448,6 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
   const [endCardHovered, setEndCardHovered] = useState(false);
   const [endCardsHidden, setEndCardsHidden] = useState(false);
   const endFadeGainRef = useRef(1);
-  const endSuggestionsForPathRef = useRef<{
-    path: string;
-    suggestions: MediaFile[];
-  } | null>(null);
   const [sidePanelTab, setSidePanelTabState] = useState<PlayerSidePanelTab>(() => lastSidePanelTab);
   const setSidePanelTab = useCallback((tab: PlayerSidePanelTab) => {
     lastSidePanelTab = tab;
@@ -509,7 +491,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     setEndCardHovered(false);
     setEndCardsHidden(false);
     endFadeGainRef.current = 1;
-    endSuggestionsForPathRef.current = null;
+    resetEndSuggestions();
   }, [file.path]);
 
   useEffect(() => {
@@ -538,13 +520,8 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     [audioDelegated],
   );
 
-  const ensureEndSuggestions = useCallback((): MediaFile[] => {
-    const cached = endSuggestionsForPathRef.current;
-    if (cached?.path === file.path) return cached.suggestions;
-    const suggestions = pickVideoEndScreenSuggestions(file.path, videoLibrarySorted);
-    endSuggestionsForPathRef.current = { path: file.path, suggestions };
-    return suggestions;
-  }, [file.path, videoLibrarySorted]);
+  const { hasPlan, ensureEndSuggestions, resetEndSuggestions, playlistAutoplay, atPlaylistEnd } =
+    useVideoEndPlan(file, folderAudioPlaylist, inVideoPlaylist, videoLibrarySorted);
 
   const handleCommentsPanelX = useCallback((x: number) => {
     commentsPanelX.set(x);
@@ -556,11 +533,16 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       setEndDimOpacity(0);
       setEndCardHovered(false);
       endFadeGainRef.current = 1;
-      setMusicQueueSource(null);
+      if (!hasPlan) setMusicQueueSource(null);
       setPlayingFile(next);
     },
-    [setMusicQueueSource, setPlayingFile],
+    [hasPlan, setMusicQueueSource, setPlayingFile],
   );
+
+  const handleEndScreenLoopPlaylist = useCallback(() => {
+    const first = playlistLoopNext(file, folderAudioPlaylist);
+    if (first) handleEndScreenSelect(first);
+  }, [file, folderAudioPlaylist, handleEndScreenSelect]);
 
   const handleEndScreenCancelTimer = useCallback(() => {
     setEndScreen((prev) => (prev ? { ...prev, autoplayArmed: false } : null));
@@ -738,7 +720,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
         setEndScreen({
           phase: "cards",
           suggestions,
-          autoplayArmed: readAudioAutoAdvanceFolder(),
+          autoplayArmed: playlistAutoplay ?? readAudioAutoAdvanceFolder(),
         });
       }
       const hoverDim = endCardHovered ? VIDEO_END_CARDS_HOVER_DIM : VIDEO_END_CARDS_DIM;
@@ -781,10 +763,14 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     }
     if (!audioOnly) {
       closeVideoWatchSession("completed");
+      playlistVideoEnded(file);
       if (loopMode === "all") {
         const vi = videoLibrarySorted.findIndex((f) => f.path === file.path);
-        if (vi >= 0 && videoLibrarySorted.length > 0) {
-          setPlayingFile(videoLibrarySorted[(vi + 1) % videoLibrarySorted.length]!);
+        const loopNext = nextQueuedVideo(file) ?? (inVideoPlaylist
+          ? playlistLoopNext(file, folderAudioPlaylist)
+          : vi >= 0 ? videoLibrarySorted[(vi + 1) % videoLibrarySorted.length]! : null);
+        if (loopNext) {
+          setPlayingFile(loopNext);
           return;
         }
         setIsPaused(true);
@@ -805,7 +791,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
       setEndScreen({
         phase: "ended",
         suggestions,
-        autoplayArmed: readAudioAutoAdvanceFolder(),
+        autoplayArmed: playlistAutoplay ?? readAudioAutoAdvanceFolder(),
       });
       return;
     }
@@ -839,7 +825,9 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     setIsPaused(true);
   }, [
     loopMode,
-    file.path,
+    file,
+    inVideoPlaylist,
+    playlistAutoplay,
     audioOnly,
     folderAudioPlaylist,
     audioLibrarySorted,
@@ -1276,6 +1264,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
     jumpPrevChapter: chapters ? jumpPrevChapter : undefined,
     jumpNextChapter: chapters ? jumpNextChapter : undefined,
   });
+  useVideoSequenceHotkeys(file, folderAudioPlaylist, !audioOnly, setPlayingFile);
 
   const freezeZoom = useFreezeFrameZoom({
     viewportRef: zoomViewportRef,
@@ -1777,7 +1766,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
-              onAuxClick={handleAuxClickMute}
+              onAuxClick={handleAuxClickMute} data-native-wheel
               onWheel={(e) => {
                 if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
                 if (e.deltaY === 0) return;
@@ -1844,7 +1833,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
                 onMouseDown={freezeZoom.zoomed ? undefined : handleMouseDown}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
-                onAuxClick={handleAuxClickMute}
+                onAuxClick={handleAuxClickMute} data-native-wheel
                 onWheel={(e) => {
                   if (e.ctrlKey) return;
                   if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
@@ -1916,6 +1905,7 @@ const PlayerViewWithFile = forwardRef<PlayerViewHandle, PlayerViewProps & { file
             onSelect={handleEndScreenSelect}
             onCancelTimer={handleEndScreenCancelTimer}
             onPlayNow={handleEndScreenPlayNow}
+            onLoopPlaylist={atPlaylistEnd ? handleEndScreenLoopPlaylist : undefined}
             onCardHoverChange={handleEndCardHoverChange}
             onHide={handleEndCardsHide}
           />

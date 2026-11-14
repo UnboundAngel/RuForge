@@ -1,0 +1,29 @@
+{
+  "notes": "- **Playlists**: A new playlist page with Resume and Start over, a sortable table, drag to reorder any playlist (downloaded ones too), and rename and description.\n- **Suggested**: Every playlist has a Suggested shelf of YouTube videos you don't have yet, with Find more search right in the shelf.\n- **Playback**: Video playlists play in their own order, auto-advance and loop inside the playlist, with Play next, Add to queue, Shift+N and Shift+P.\n- **Downloads**: A faster playlist download screen with per-row cancel, search and a live size total, and paused downloads resume from the bell.\n- **And more**: Watched and missing rows with Relocate, undo on remove, recommended playlists, drop a YouTube link on a card to download into it, and the music bar shows the playing song's own cover.",
+  "additions": [
+    "Playlists: new playlist page with a full-width header, cover, creator avatars and total length",
+    "Playlists: Resume where you left off, or Start over",
+    "Playlists: sortable table by views, uploaded, added and duration, with channel names that open the creator page",
+    "Playlists: drag rows to reorder any playlist, downloaded ones included, saved on disk",
+    "Playlists: drop a row on the cover to start from that video",
+    "Playlists: rename a playlist and give it a description",
+    "Playlists: Suggested shelf under every playlist with YouTube videos you don't have yet, and Find more search in the shelf",
+    "Playlists: recommended playlists, a New badge and a Recently played sort",
+    "Playlists: watched and missing rows, Relocate for missing files, and bulk watched actions",
+    "Playlists: undo after removing a video",
+    "Playlists: drop a YouTube link on a playlist card to download into it",
+    "Playlists: choose what happens at the end of a playlist",
+    "Playback: Play next and Add to queue for videos, Shift+N and Shift+P to skip inside a playlist",
+    "Playback: video playlists play in their own order with auto-advance and loop inside the playlist",
+    "Downloads: faster playlist download screen with per-row cancel, search, a live size total and a Downloads icon stack",
+    "Downloads: resume paused downloads from the bell",
+    "Downloads: the download queue survives a restart"
+  ],
+  "fixes": [
+    "Playlists: each YouTube list keeps its own folder",
+    "Playlists: videos past number 100 are numbered correctly",
+    "Playlists: failed videos explain what went wrong in plain words",
+    "Playlists: deleting a playlist asks first",
+    "Music: the now-playing bar shows the playing song's cover instead of its playlist's cover"
+  ]
+}

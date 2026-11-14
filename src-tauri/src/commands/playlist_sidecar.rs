@@ -347,12 +347,12 @@ pub fn kickoff_playlist_download_sidecar(
     title: String,
     tracks: Vec<PlaylistSidecarTrackInput>,
     metadata: Option<PlaylistSidecarMetadataInput>,
-) -> Result<(), String> {
+    resolve_by_list_id: Option<bool>,
+) -> Result<String, String> {
     if folder_name.trim().is_empty() {
         return Err("Playlist folder name is empty.".into());
     }
     let (output_dir, folder) = checked_target(&app, &output_dir, &folder_name)?;
-    let folder = folder.as_str();
     let list_url = list_url.trim();
     if list_url.is_empty() {
         return Err("Playlist list URL is empty.".into());
@@ -360,6 +360,14 @@ pub fn kickoff_playlist_download_sidecar(
     if tracks.is_empty() {
         return Err("Playlist track roster is empty.".into());
     }
+    // Video playlists key the folder on the list id; Music keeps merging by title.
+    let by_list_id = resolve_by_list_id.unwrap_or(false);
+    let folder = if by_list_id {
+        resolve_folder_by_list_id(output_dir.trim(), &folder, list_url)
+    } else {
+        folder
+    };
+    let folder = folder.as_str();
 
     let mut dto = PlaylistSidecarDto {
         schema_version: SIDECAR_SCHEMA_VERSION,
@@ -408,7 +416,80 @@ pub fn kickoff_playlist_download_sidecar(
     }
 
     let path = sidecar_path_for(output_dir.trim(), folder);
-    write_json_sidecar(&path, &dto)
+    if by_list_id {
+        if let Some(existing) = read_sidecar(&path) {
+            dto = merge_into_existing(existing, dto);
+        }
+    }
+    write_json_sidecar(&path, &dto)?;
+    Ok(folder.to_string())
+}
+
+/// Same list appends to its folder (kept even if the user renamed it); a different list that
+/// shares the title gets "Title (2)". A folder with no sidecar predates this and still merges.
+fn resolve_folder_by_list_id(output_dir: &str, base: &str, list_url: &str) -> String {
+    let playlists_dir = PathBuf::from(output_dir).join("Playlists");
+    for folder in sorted_playlist_folder_entries(&playlists_dir) {
+        let Some(dto) = read_sidecar(&folder.join(SIDECAR_FILENAME)) else {
+            continue;
+        };
+        if playlist_list_ids_match(&dto.list_url, list_url) {
+            if let Some(name) = folder.file_name().and_then(|n| n.to_str()) {
+                return name.to_string();
+            }
+        }
+    }
+    if !playlists_dir.join(base).join(SIDECAR_FILENAME).is_file() {
+        return base.to_string();
+    }
+    for n in 2..=500u32 {
+        let candidate = format!("{base} ({n})");
+        if !playlists_dir.join(&candidate).join(SIDECAR_FILENAME).is_file() {
+            return candidate;
+        }
+    }
+    format!("{base} (501)")
+}
+
+/// Re-download or watch run of the same list: the roster is a union by video id. Earlier tracks
+/// stay with their statuses (even when the list no longer returns them), matches get their
+/// changed fields updated, and new tracks append in the incoming order.
+fn merge_into_existing(mut existing: PlaylistSidecarDto, fresh: PlaylistSidecarDto) -> PlaylistSidecarDto {
+    for track in fresh.tracks {
+        let url = track.url.clone();
+        let id = track.id.clone();
+        let found = existing
+            .tracks
+            .iter_mut()
+            .find(|t| track_matches(t, url.as_deref(), id.as_deref()));
+        match found {
+            Some(old) => {
+                if !track.title.trim().is_empty() {
+                    old.title = track.title;
+                }
+                if track.url.is_some() {
+                    old.url = track.url;
+                }
+                if track.id.is_some() {
+                    old.id = track.id;
+                }
+            }
+            None => existing.tracks.push(track),
+        }
+    }
+    existing.schema_version = SIDECAR_SCHEMA_VERSION;
+    existing.title = fresh.title;
+    existing.status = "downloading".to_string();
+    if fresh.cover_url.is_some() {
+        existing.cover_url = fresh.cover_url;
+    }
+    if fresh.playlist_kind.is_some() {
+        existing.playlist_kind = fresh.playlist_kind;
+    }
+    if fresh.declared_track_count.is_some() {
+        existing.declared_track_count = fresh.declared_track_count;
+    }
+    existing
 }
 
 #[tauri::command]
@@ -556,6 +637,47 @@ pub fn update_playlist_download_sidecar_track(
 mod tests {
     use super::*;
 
+    fn track(id: &str, title: &str, status: &str) -> PlaylistSidecarTrackDto {
+        PlaylistSidecarTrackDto {
+            url: None,
+            id: Some(id.into()),
+            title: title.into(),
+            status: status.into(),
+        }
+    }
+
+    fn dto(tracks: Vec<PlaylistSidecarTrackDto>) -> PlaylistSidecarDto {
+        PlaylistSidecarDto {
+            schema_version: SIDECAR_SCHEMA_VERSION,
+            list_url: "https://www.youtube.com/playlist?list=PLtest".into(),
+            title: "List".into(),
+            cover_url: None,
+            playlist_kind: None,
+            declared_track_count: None,
+            curator_name: None,
+            curator_id: None,
+            curator_url: None,
+            browse_entity_url: None,
+            release_year: None,
+            tracks,
+            status: "complete".into(),
+        }
+    }
+
+    #[test]
+    fn merge_keeps_earlier_tracks_and_statuses() {
+        let existing = dto(vec![track("a", "A", "done"), track("b", "B", "failed"), track("c", "C", "done")]);
+        let fresh = dto(vec![track("b", "B renamed", "pending"), track("d", "D", "pending")]);
+        let merged = merge_into_existing(existing, fresh);
+        let ids: Vec<_> = merged.tracks.iter().map(|t| t.id.clone().unwrap()).collect();
+        assert_eq!(ids, ["a", "b", "c", "d"]);
+        assert_eq!(merged.tracks[0].status, "done");
+        assert_eq!(merged.tracks[1].status, "failed");
+        assert_eq!(merged.tracks[1].title, "B renamed");
+        assert_eq!(merged.tracks[3].status, "pending");
+        assert_eq!(merged.status, "downloading");
+    }
+
     #[test]
     fn derive_status_while_active() {
         let tracks = vec![
@@ -658,6 +780,28 @@ mod tests {
             .expect("dto");
         assert_eq!(dto.title, "Disk Read");
         assert_eq!(dto.status, "downloading");
+    }
+
+    #[test]
+    fn video_folder_follows_list_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_string_lossy().to_string();
+        let write = |folder: &str, list: &str| {
+            let dir = tmp.path().join("Playlists").join(folder);
+            std::fs::create_dir_all(&dir).unwrap();
+            let json = format!(
+                r#"{{"schemaVersion":2,"listUrl":"https://www.youtube.com/playlist?list={list}","title":"T","tracks":[],"status":"complete"}}"#
+            );
+            std::fs::write(dir.join(SIDECAR_FILENAME), json).unwrap();
+        };
+        let url_a = "https://www.youtube.com/playlist?list=PLaaa";
+        let url_b = "https://www.youtube.com/playlist?list=PLbbb";
+        assert_eq!(resolve_folder_by_list_id(&root, "Mix", url_a), "Mix");
+        write("Mix", "PLaaa");
+        assert_eq!(resolve_folder_by_list_id(&root, "Mix", url_a), "Mix");
+        assert_eq!(resolve_folder_by_list_id(&root, "Mix", url_b), "Mix (2)");
+        write("Mix (2)", "PLbbb");
+        assert_eq!(resolve_folder_by_list_id(&root, "Mix", url_b), "Mix (2)");
     }
 
     #[test]

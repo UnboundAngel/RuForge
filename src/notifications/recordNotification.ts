@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isNotifyOverlayDocument } from "@/lib/notifyOverlayEvents";
+import { startDevAnnouncementHost } from "@/lib/devAnnouncementsHost";
 import { listenPrivateQueue, pushPrivateRecord } from "@/lib/privateMailbox";
 import { loadLocal, pruneLocal, startLocalPersistence, upsertLocal } from "./notificationCenterStore";
 import { NOTIFICATION_CENTER_RECORD_EVENT, type NotificationItem } from "./types";
@@ -49,8 +50,15 @@ export async function startNotificationCenter(): Promise<() => void> {
   } catch (e) {
     console.error("notification center listen failed", e);
   }
+  // Dynamic so the paused-queue notice can import this module's recorder without a cycle.
+  void import("./pausedQueueNotice").then((m) => m.announcePausedQueueOnLaunch());
+  let stopDev: (() => void) | null = null;
+  void startDevAnnouncementHost().then((un) => {
+    stopDev = un;
+  });
   return () => {
     unlisten?.();
+    stopDev?.();
     stopPersistence();
   };
 }

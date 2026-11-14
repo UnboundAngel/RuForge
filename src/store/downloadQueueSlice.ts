@@ -5,6 +5,7 @@ import {
   mapEnqueueSourceToEntryPoint,
   recordActivity,
 } from "../lib/activityLog";
+import { plainDownloadFailureMessage, shouldAutoRetryFailure } from "../lib/downloadFailureReason";
 import { markMusicDownloadManualCancel } from "../lib/musicDownloadManualCancel";
 import {
   fetchVideoInfoForQueueHydration,
@@ -28,7 +29,6 @@ import {
   patchDownloadJobOptionsForAudio,
   patchDownloadJobOptionsFromSettings,
   persistDownloadJobs,
-  restoreDownloadQueueFromSessionIfEmpty,
   toInvokeDownloadOptions,
   videoInfoToDownloadJobSnapshot,
   type DownloadJob,
@@ -40,8 +40,9 @@ import {
   DEFAULT_MAX_CONCURRENT_DOWNLOADS,
   jobHasDownloadTransferStarted,
 } from "../downloadQueue";
-import { JS_RUNTIME_MISSING_PREFIX, type ProgressPayload } from "../types";
-import { installDenoAndRetry } from "../lib/denoInstallFlow";
+import { restoreDownloadQueueFromSessionIfEmpty } from "../downloadQueueRestore";
+import type { ProgressPayload } from "../types";
+import { failureNoticeAction, stripFailurePrefix } from "../lib/toolsInstallFlow";
 import {
   appendOutputPathToLastBatch,
   appendReplayOutputPath,
@@ -82,6 +83,7 @@ import { updatePlaylistDownloadSidecarFromJob } from "../lib/playlistDownloadSid
 import { mediaFileFromDownloadFinish } from "../galleryEntries";
 import { isAudioOnlyPath } from "../mediaKind";
 import { announceLibraryArrival } from "../components/library/libraryArrivals";
+import { announcePlaylistArrival, jobThumbnailUrl } from "../lib/playlistFlyTargets";
 import { runTagRules, tagTargetFromFile, tagVideo } from "../lib/libraryTagsStore";
 import { gameTagId } from "../lib/libraryTags";
 import { addPendingGameTag, takePendingGameTag } from "@games";
@@ -669,9 +671,8 @@ function handleTimedOutDownloadJob(get: () => RuforgeStore): (jobId: string) => 
 const BATCH_MAX_ATTEMPTS = 3;
 
 /**
- * After a job finishes, check whether any playlistOutputFolder batch is now idle with
- * remaining retries. Re-queues retriable failed items so the existing pump picks them up.
- * Fires only when the batch is fully idle (no queued/downloading/paused jobs in the group).
+ * Re-queues retriable failed or timed-out items of an idle playlistOutputFolder batch (no
+ * queued/downloading/paused jobs). Private, deleted and members-only failures are never retried.
  */
 function sweepBatchRetries(
   get: () => RuforgeStore,
@@ -696,7 +697,7 @@ function sweepBatchRetries(
     if (hasActive) continue;
 
     for (const j of groupJobs) {
-      if (j.status === "failed" && (j.attemptCount ?? 1) < BATCH_MAX_ATTEMPTS) {
+      if ((j.status === "failed" || j.status === "timed_out") && (j.attemptCount ?? 1) < BATCH_MAX_ATTEMPTS && shouldAutoRetryFailure(j.status, j.error)) {
         retryIds.push(j.id);
       }
     }
@@ -1549,7 +1550,7 @@ export const createDownloadQueueSlice: StateCreator<
                   : payload.timedOut
                     ? ("timed_out" as const)
                     : ("failed" as const),
-                error: payload.error ?? null,
+                error: payload.timedOut ? (payload.error ?? null) : plainDownloadFailureMessage(payload.error),
                 progress: payload.success ? j.progress : j.progress,
                 resumeOnStart: false,
               }
@@ -1711,13 +1712,12 @@ export const createDownloadQueueSlice: StateCreator<
           if (pendingGame && get().settings.games.some((g) => g.id === pendingGame.gameId)) {
             tagVideo(upserted, gameTagId(pendingGame.gameId));
           }
-          // Playlist items land in their playlist stack, which has no slot for a flight to aim at.
-          if (!isAudioOnlyPath(upserted.path) && !finishedJobBefore.options.playlistOutputFolder?.trim()) {
-            const videoId = upserted.sourceId;
+          if (finishedJobBefore.options.playlistOutputFolder?.trim()) {
+            announcePlaylistArrival(finishedJobBefore, upserted.path);
+          } else if (!isAudioOnlyPath(upserted.path)) {
             announceLibraryArrival(
               upserted.path,
-              finishedJobBefore.metadata?.thumbnail?.trim() ||
-                (videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null),
+              jobThumbnailUrl(finishedJobBefore),
               finishedJobBefore.metadata?.title?.trim() || finishedJobBefore.title?.trim() || null,
             );
           }
@@ -1757,8 +1757,7 @@ export const createDownloadQueueSlice: StateCreator<
         });
       } else {
         const rawError = payload.error ?? "Download failed";
-        const runtimeMissing = rawError.startsWith(JS_RUNTIME_MISSING_PREFIX);
-        const cleanError = rawError.replace(JS_RUNTIME_MISSING_PREFIX, "");
+        const cleanError = stripFailurePrefix(rawError);
         const line = cleanError.split("\n")[0].replace(/^Download failed:\s*/i, "");
         const failedJobId = payload.jobId;
         void deliverUserNotification(
@@ -1766,9 +1765,7 @@ export const createDownloadQueueSlice: StateCreator<
             dedupeKey: `download-failed:${failedJobId}`,
             body: `Failed: ${line}`,
             kind: "error",
-            action: runtimeMissing
-              ? { label: "Install", run: () => void installDenoAndRetry() }
-              : { label: "Retry", run: () => get().retryDownloadJob(failedJobId) },
+            action: failureNoticeAction(rawError, () => get().retryDownloadJob(failedJobId)),
           },
           (message, type, action) => get().notify(message, type, action),
         );

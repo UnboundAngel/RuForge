@@ -13,6 +13,7 @@ pub struct DownloadPaths {
     pub filename_template: String,
     pub playlist_output_folder: Option<String>,
     pub playlist_index: Option<u32>,
+    pub playlist_index_width: Option<u32>,
 }
 
 pub fn normalize_ytdlp_audio_format(raw: &str) -> String {
@@ -67,7 +68,8 @@ pub fn effective_filename_template(
     {
         let idx = paths.playlist_index.unwrap_or(0);
         let item_name = if idx > 0 {
-            format!("{:02} - {}", idx, stem)
+            let width = paths.playlist_index_width.unwrap_or(2).max(2) as usize;
+            format!("{:0width$} - {}", idx, stem)
         } else {
             stem.to_string()
         };
@@ -141,6 +143,19 @@ pub fn build_flat_playlist_args(url: &str, auth: Option<&AuthConfig>) -> Vec<Str
         IGNORE_CONFIG.into(),
         "--flat-playlist".into(),
         "-J".into(),
+        "--no-warnings".into(),
+    ];
+    push_auth_args(&mut args, auth);
+    push_url_positionals(&mut args, [url]);
+    args
+}
+
+/// Streaming listing: one JSON line per video, printed as yt-dlp pages through the playlist.
+pub fn build_flat_playlist_stream_args(url: &str, auth: Option<&AuthConfig>) -> Vec<String> {
+    let mut args = vec![
+        IGNORE_CONFIG.into(),
+        "--flat-playlist".into(),
+        "-j".into(),
         "--no-warnings".into(),
     ];
     push_auth_args(&mut args, auth);
@@ -320,6 +335,7 @@ mod tests {
             filename_template: "%(title)s.%(ext)s".into(),
             playlist_output_folder: None,
             playlist_index: None,
+            playlist_index_width: None,
         };
         let tpl = effective_filename_template(&probe, "%(title)s.%(ext)s", &choices, &paths);
         assert!(tpl.starts_with("Videos/"));

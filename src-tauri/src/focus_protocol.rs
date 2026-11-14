@@ -61,13 +61,16 @@ pub fn request_show_main(app: &AppHandle) {
 pub fn setup_focus_protocol(app: &tauri::App) -> Result<(), String> {
     use tauri_plugin_deep_link::DeepLinkExt;
 
+    // The dev build (tauri.dev.conf.json) must not repoint the release's ruforge:// handler at target/debug.
     #[cfg(any(windows, target_os = "linux"))]
-    if let Err(e) = app.deep_link().register_all() {
-        crate::rf_log!(
-            "core.focus-protocol",
-            log::Level::Warn,
-            "register_all failed (installed builds register at setup; dev may need `start ruforge://focus`): {e}"
-        );
+    if !app.config().identifier.ends_with(".dev") {
+        if let Err(e) = app.deep_link().register_all() {
+            crate::rf_log!(
+                "core.focus-protocol",
+                log::Level::Warn,
+                "register_all failed (installed builds register at setup; dev may need `start ruforge://focus`): {e}"
+            );
+        }
     }
 
     let handle = app.handle().clone();

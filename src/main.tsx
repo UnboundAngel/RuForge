@@ -3,6 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
+import { RecordingMode } from "./components/recording-mode";
 import IslandOverlayApp from "./IslandOverlayApp";
 import NotifyOverlayApp from "./NotifyOverlayApp";
 import RadialNavOverlayApp from "./RadialNavOverlayApp";
@@ -105,7 +106,10 @@ function renderRoot(): void {
     ) : label === NOTIFY_OVERLAY_QUERY ? (
       <NotifyOverlayApp />
     ) : (
-      <App />
+      <>
+        <App />
+        <RecordingMode />
+      </>
     );
 
   ReactDOM.createRoot(rootEl).render(

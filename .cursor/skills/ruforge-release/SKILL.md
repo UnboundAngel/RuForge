@@ -19,6 +19,17 @@ Unreleased source of truth is `docs/agents/release/shipped.jsonl`, filtered by `
 
 Changelog / version-graph field detail: [`docs/agents/release/CHANGELOG-AUTHORING.md`](../../docs/agents/release/CHANGELOG-AUTHORING.md). Read it at step 8 only.
 
+## Held release (cut now, ship later)
+
+When Angel wants a version frozen and signed but not given to users yet (users get a week on the current version first, and main moves on to the next one):
+
+1. Run steps 1-5 on `main` as usual, then push `main` to sync and create `release/<semver>` on sync at that commit. Commit the step 5 signature to `release/<semver>` only.
+2. Step 7 as a **draft** GitHub Release (`gh release create v<semver> --draft`) with the installer. Skip step 6's snapshot and the public `updater.json`.
+3. On `main`, set `STATE.md` `Shipping version` to the next version and note the held one under Status, so new `shipped.mjs add` rows land on the next version. Leave the version files alone; the next release bumps them.
+4. Ship day: on `release/<semver>` (use a `git worktree`, not a checkout of main's tree), refresh `pub_date` and run step 5b, push. Then `RUFORGE_PUBLISH=1 node scripts/publish-snapshot.mjs --ref release/<semver> "Release: v<semver>"` (dry-run first), and publish the draft right after with `gh release edit v<semver> -R UnboundAngel/RuForge --target <snapshot sha> --draft=false` (a draft has no tag until then), then steps 8-10. Merge `release/<semver>` back into `main` and keep `main`'s `Shipping version`.
+
+Nothing lands on `release/<semver>` except release fixes Angel asks for.
+
 ## 1. Drain Unreleased → version bump (+ onboarding)
 
 Run `node scripts/shipped.mjs list` and read that list. **Do not default to patch +1.** Do not open the whole JSONL unless search needs it (`node scripts/shipped.mjs find …`).
@@ -37,20 +48,13 @@ State the chosen version and why in the step 10 report.
 
 Structured `notes`: markdown teaser + `additions` and `fixes` arrays. Set `version`, `url` (`.../releases/download/v<semver>/RuForge_<semver>_x64-setup.exe`). Leave `signature` empty until step 5. Do not paste the whole Unreleased dump into `notes`.
 
-## 3b. Refresh bundled yt-dlp (before build)
+## 3b. Tools are not bundled (no step)
 
-Replace `src-tauri/binaries/yt-dlp-x86_64-pc-windows-msvc.exe` with the latest upstream `yt-dlp.exe` so fresh installs never ship a stale extractor:
-
-```
-curl -fL -o src-tauri/binaries/yt-dlp-x86_64-pc-windows-msvc.exe https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
-src-tauri/binaries/yt-dlp-x86_64-pc-windows-msvc.exe --version
-```
-
-`--version` must print the tag shown on https://github.com/yt-dlp/yt-dlp/releases/latest. Include the binary in the step 6 commit and state the version in the step 10 report.
+Installers carry no yt-dlp, ffmpeg or Deno: `tauri.conf.json` has no `externalBin`, and the app downloads each tool on first launch (yt-dlp from its latest GitHub release, ffmpeg from `website/public/tools.json`). The copies in `src-tauri/binaries/` are dev-only. Nothing to refresh before the build. Touch `tools.json` only when Angel ships a new ffmpeg build.
 
 ## 4. Signed build (Angel only)
 
-Angel runs `Build-signed-windows.bat` or `npm run build:signed`. Mint reads `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/`.
+Mint starts it for Angel: run `npm run build:signed -- -WithGames` in a Terminal panel tab (`run_in_terminal`, title "signed build") and link that tab, or, when no terminal tool exists, give the command in a `bash` code block so Angel can hit Run. `-WithGames` is required for every public installer; without it the script sets `RUFORGE_PUBLIC_BUILD=1` and strips Games. Angel types the signing password himself; never ask for it, read it, or put it anywhere. Wait for Angel to say it finished, then read `RuForge_<semver>_x64-setup.exe.sig` under `src-tauri/target/release/bundle/nsis/`.
 
 ## 5. Finish `updater.json`
 
@@ -58,11 +62,17 @@ Paste `.sig` **file contents** (base64) into `signature`. Set `pub_date`. Never 
 
 ## 5b. Website release assets
 
-`npm run prep:website-release` from repo root (needs signed NSIS). `npm run prep:website-release:changelog-only` if the signed build is not ready.
+`npm run prep:website-release` from repo root (needs signed NSIS). `npm run prep:website-release:changelog-only` if the signed build is not ready. It does three things, all generated:
+
+- writes `website/src/content/releases/v<x-y-z>.md` from `updater.json` `notes` (additions, fixes) and `pub_date`,
+- copies the installer to `website/public/releases/RuForge_<semver>_x64-setup.exe` (`/download` streams it same-origin),
+- runs the website build.
+
+The header "Latest" badge, JSON-LD `softwareVersion` and download filenames read `updater.json` at build time (`__APP_VERSION__` in `website/astro.config.mjs`); never hand-edit a version string on the site.
 
 ## 6. Commit on sync + snapshot to public main
 
-Confirm release work is on `sync` `main` (private source of truth). Commit must include `updater.json`, all three version files, the refreshed yt-dlp binary, generated website changelog when applicable, and unreleased code. Push that commit to **`sync` `main`** first.
+Confirm release work is on `sync` `main` (private source of truth). Commit must include `updater.json`, all three version files, the step 5b output (release markdown and installer under `website/public/releases/`), and unreleased code. Push that commit to **`sync` `main`** first.
 
 Then publish a downstream snapshot (no private history) onto public:
 
@@ -96,7 +106,22 @@ node scripts/publish-snapshot.mjs --dry-run
 RUFORGE_PUBLISH=1 node scripts/publish-snapshot.mjs "Release: v<semver> website and roadmap"
 ```
 
-The dry-run must list only `STATE.md`, `docs/`, and `website/` paths. If app code shows up, stop and ask Angel.
+Do step 8e before this commit so one republish carries all of it. The dry-run must list only `STATE.md`, `docs/`, and `website/` paths. If app code shows up, stop and ask Angel.
+
+e. Website content pass. The generated files from 5b cover the version, download and changelog only. Everything below is hand-written and goes stale unless updated here. Go through the release's additions and fixes (`version-<semver>.json`) and check each item:
+
+| File | Update when |
+| --- | --- |
+| `website/src/content/roadmap.json` | Always (8c). Every shipped entry flips to `Finished`; nothing still says "coming" for this version. |
+| `website/src/content/features.json` | Any user-facing addition. Add rows under the right area (or a new area for a new mode), set `version` to `<semver>` and `updated` to today. It lists released features only. |
+| `website/src/lib/features.ts` (feeds `/features`, `/features/all`, `/features.txt`) and feature pages under `website/src/pages/features/` + `/m/` twins | A new mode or major feature gets its own page or section; existing pages get changed behavior. |
+| `website/public/llms.txt` | A new feature page, mode or headline capability. Keep the "Feature pages" list matching the real pages. |
+| Home teasers (`website/src/components/*Peek.astro`, `src/pages/index.astro`, `src/pages/m/index.astro`) | A "Sneak peek" or "coming" teaser for something this release ships: turn it into a shipped feature card or remove it. |
+| Docs (`website/src/lib/docsContent.ts`, `docsTree.ts`) | A new or changed Setting, shortcut, network call or privacy-relevant behavior. The privacy and network tables must match the code. |
+| Built-with pages (`website/src/lib/builtWithPages.ts`, `builtWithCodeExamples.ts`) | The architecture they describe changed (for example tools are downloaded on first launch, not bundled). |
+| Compare page, FAQ, `structuredData.ts` `featureList` | A claim there is now wrong or a headline feature is missing. |
+
+Copy rules: `website/AGENTS.md` (Copy and SEO, voice). Visual changes follow that file's screenshot rules. List each file touched in the step 10 report, or write "No website content changes needed" with the reason.
 
 Do not keep a second shipped log in AGENTS.md.
 
@@ -120,4 +145,4 @@ If any check fails, the release failed. Committed != live on `main`.
 
 ## 10. Report
 
-Chosen version + rationale, bundled yt-dlp version, pushed commit hash, GitHub Release URL, live `version` from step 9, website check result, confirmation the Release asset matches `updater.json` `url`.
+Chosen version + rationale, pushed commit hash, website content files touched (8e), GitHub Release URL, live `version` from step 9, website check result, confirmation the Release asset matches `updater.json` `url`.

@@ -11,7 +11,6 @@
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
-  copyFileSync,
   existsSync,
   lstatSync,
   mkdtempSync,
@@ -73,23 +72,6 @@ try {
   if (existsSync(nm) && !existsSync(join(work, 'node_modules'))) {
     symlinkSync(nm, join(work, 'node_modules'), linkType);
   }
-  // Windows ffmpeg/ffprobe exes are gitignored; tauri build still expects them for check.
-  const bins = join(root, 'src-tauri', 'binaries');
-  const workBins = join(work, 'src-tauri', 'binaries');
-  if (existsSync(bins) && existsSync(workBins)) {
-    for (const name of ['ffmpeg-x86_64-pc-windows-msvc.exe', 'ffprobe-x86_64-pc-windows-msvc.exe']) {
-      const src = join(bins, name);
-      const dest = join(workBins, name);
-      if (existsSync(src) && !existsSync(dest)) {
-        try {
-          symlinkSync(src, dest, 'file');
-        } catch {
-          copyFileSync(src, dest);
-        }
-      }
-    }
-  }
-
   console.log(`public-build worktree ${work} (tree ${tree.slice(0, 12)})`);
 
   const tsc = spawnSync('npx', ['tsc', '--noEmit', '-p', '.'], {
@@ -123,7 +105,7 @@ try {
   console.log('check-public-build: ok');
 } finally {
   // Drop junctions/symlinks first so recursive delete cannot follow into the host tree.
-  for (const rel of ['node_modules', 'src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe', 'src-tauri/binaries/ffprobe-x86_64-pc-windows-msvc.exe']) {
+  for (const rel of ['node_modules']) {
     const p = join(work, rel);
     try {
       if (existsSync(p) && lstatSync(p).isSymbolicLink()) unlinkSync(p);

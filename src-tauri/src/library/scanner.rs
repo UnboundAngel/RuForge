@@ -13,7 +13,6 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
-use tauri_plugin_shell::ShellExt;
 
 use crate::commands::gallery::{self, GalleryEntry, MediaFile, PlaylistCollection};
 use crate::utils::is_audio_only_ext;
@@ -147,7 +146,7 @@ struct ProbeResult {
 }
 
 async fn probe_media(app: &AppHandle, path: &Path) -> Option<ProbeResult> {
-    let output = crate::child_job::output(app.shell().sidecar("ffprobe").ok()?.args([
+    let output = crate::child_job::output(crate::tools::tool_command(app, crate::tools::paths::Tool::Ffprobe).ok()?.args([
         "-v",
         "quiet",
         "-print_format",

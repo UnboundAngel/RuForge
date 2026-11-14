@@ -1,6 +1,7 @@
 import type { DuplicateDownloadChoice } from "./components/DuplicateDownloadDialog";
 import { DEFAULT_FILENAME_TEMPLATE, SAVE_AS_NEW_FILENAME_TEMPLATE } from "./duplicateDownload";
 import { normalizeYouTubeUrlForCompare } from "./youtubeUrl";
+import { readQueueRaw, writeQueueRaw } from "./downloadQueueDisk";
 import {
   normalizeDownloadAudioFormat,
   ytdlpFormatFromPreferredQuality,
@@ -163,6 +164,7 @@ export interface DownloadJobOptions {
   playlistOutputFolder?: string | null;
   /** 1-based playlist index for ordered filenames. */
   playlistIndex?: number | null;
+  playlistIndexWidth?: number | null;
   /** When true, audio download enrich stamps artist genres on track sidecars. */
   stampArtistTags: boolean;
   /** When true, single-video downloads fetch YouTube comments into `{stem}.comments.json`. */
@@ -235,8 +237,6 @@ export type DownloadJobFinishedPayload = {
 };
 
 export { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from "./store/types";
-
-const SESSION_QUEUE_KEY = "ruforge-download-queue";
 
 export function createDownloadJobId(): string {
   return `dl-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -354,6 +354,7 @@ export function toInvokeDownloadOptions(opts: DownloadJobOptions) {
     auto_scrub_previews: opts.autoScrubberPreviews !== false,
     playlist_output_folder: opts.playlistOutputFolder ?? null,
     playlist_index: opts.playlistIndex ?? null,
+    playlist_index_width: opts.playlistIndexWidth ?? null,
     stamp_artist_tags: opts.stampArtistTags !== false,
     download_comments: opts.downloadComments === true,
   };
@@ -364,6 +365,7 @@ export type PlaylistBatchEnqueueMeta = {
   approval?: "auto" | "pending" | "held";
   playlistOutputFolder?: string;
   playlistIndex?: number;
+  playlistIndexWidth?: number;
   enqueueSource?: DownloadEnqueueSource;
 };
 
@@ -485,7 +487,7 @@ export function collapseDownloadJobsByUrl(jobs: DownloadJob[]): DownloadJob[] {
 
 export function loadPersistedDownloadJobs(): DownloadJob[] {
   try {
-    const raw = sessionStorage.getItem(SESSION_QUEUE_KEY);
+    const raw = readQueueRaw();
     if (!raw) return [];
     const parsed = JSON.parse(raw) as DownloadJob[];
     if (!Array.isArray(parsed)) return [];
@@ -511,23 +513,6 @@ export function loadInitialDownloadQueueState(): {
   return { downloadJobs, focusedJobId };
 }
 
-/** Rehydrate in-memory queue from sessionStorage when the store slice is empty (HMR / tab churn). */
-export function restoreDownloadQueueFromSessionIfEmpty(
-  currentJobs: readonly DownloadJob[],
-  currentFocus: string | null,
-): { downloadJobs: DownloadJob[]; focusedJobId: string | null } | null {
-  if (currentJobs.length > 0) return null;
-  const restored = loadPersistedDownloadJobs();
-  if (restored.length === 0) return null;
-  const focusedJobId =
-    currentFocus && restored.some((j) => j.id === currentFocus)
-      ? currentFocus
-      : restored.find((j) => j.status === "paused")?.id ??
-        restored.find((j) => j.status === "queued")?.id ??
-        null;
-  return { downloadJobs: restored, focusedJobId };
-}
-
 export function persistDownloadJobs(jobs: DownloadJob[]) {
   try {
     const toSave = jobs.filter(
@@ -536,12 +521,8 @@ export function persistDownloadJobs(jobs: DownloadJob[]) {
         j.status === "paused" ||
         j.status === "downloading",
     );
-    if (toSave.length === 0) {
-      sessionStorage.removeItem(SESSION_QUEUE_KEY);
-    } else {
-      sessionStorage.setItem(SESSION_QUEUE_KEY, JSON.stringify(toSave));
-    }
+    writeQueueRaw(toSave.length === 0 ? null : JSON.stringify(toSave));
   } catch {
-    /* ignore quota / private mode */
+    /* unserializable job: keep the last saved queue */
   }
 }

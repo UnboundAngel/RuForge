@@ -1,4 +1,4 @@
-import { Activity, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Activity, useState, useEffect, useRef, useCallback } from "react";
 import { AppTooltipLayer } from "@/components/ui/TooltipLayer";
 import { FindBarHost } from "@/components/FindBar";
 import {
@@ -39,8 +39,10 @@ import {
   CHANGELOG_PAGE,
   type UpdaterPhase,
 } from "./components/UpdaterLayers";
-import { WhatsNewDialog } from "./components/WhatsNewDialog";
+import { WhatsNewDialog } from "./components/whats-new/WhatsNewDialog";
 import { useDebugUpdaterPreview } from "./hooks/useDebugUpdaterPreview";
+import { useUpdateAvailableBridge } from "./hooks/useUpdateAvailableBridge";
+import { useToolsInstall } from "./hooks/useToolsInstall";
 import {
   buildPostInstallPayload,
   clearPendingPostInstall,
@@ -56,7 +58,6 @@ import {
   UPDATER_DOWNLOAD_STALL_MS,
   UPDATER_INSTALL_TIMEOUT_MS,
 } from "./updaterInstall";
-import { fetchReleaseCatalog, type ReleaseCatalogEntry } from "./updaterReleaseCatalog";
 import { Icon } from "@iconify/react";
 import MiniPlayer from "./MiniPlayer";
 import MusicMiniPlayer from "./components/music-mini/MusicMiniPlayer";
@@ -188,13 +189,11 @@ import { DesktopIslandOverlayDriver } from "./hooks/useDesktopIslandOverlay";
 import { notifyOnboardingModeSwap } from "./lib/onboardingRadialBridge";
 import { clearOnboardingDoneSteps, writeOnboardingLastSeenVersion } from "./lib/onboardingStorage";
 import {
+  prepareFeaturePreview,
   registerDiscordOnboardingPreview,
+  registerPlaylistsOnboardingPreview,
   registerReplayOnboardingPreview,
 } from "./lib/onboardingDebugPreview";
-import {
-  DISCORD_PRESENCE_ONBOARDING_ID,
-  DISCORD_PRESENCE_PREVIEW_LAST_SEEN,
-} from "./lib/onboardingSteps";
 
 import { useRuforgeStore, type ActiveTab } from "./store/ruforgeStore";
 import {
@@ -240,7 +239,6 @@ const WindowControls = ({
   updaterVersion,
   showExplorerQueueToolbar,
   storageBlocksNewDownloads,
-  onUpdaterStatusClick,
   settingsOpen,
   onToggleSettings,
 }: {
@@ -253,7 +251,6 @@ const WindowControls = ({
   updaterVersion: string | null;
   showExplorerQueueToolbar: boolean;
   storageBlocksNewDownloads: boolean;
-  onUpdaterStatusClick?: () => void;
   settingsOpen: boolean;
   onToggleSettings: () => void;
 }) => {
@@ -262,11 +259,7 @@ const WindowControls = ({
   return (
     <div className="rf-autohide-chrome fixed top-0 right-0 z-[100] flex h-[var(--rf-titlebar-h)] items-center pr-2 pointer-events-auto">
       <div className="mr-3">
-        <UpdaterStatusIndicator 
-          phase={updaterPhase} 
-          version={updaterVersion} 
-          onClick={onUpdaterStatusClick}
-        />
+        <UpdaterStatusIndicator phase={updaterPhase} version={updaterVersion} />
       </div>
 
       {showExplorerQueueToolbar && <ExplorerFollowButton />}
@@ -662,20 +655,12 @@ function App() {
   const [, setUpdaterNotes] = useState("");
   const [updaterDownloaded, setUpdaterDownloaded] = useState(0);
   const [updaterContentLength, setUpdaterContentLength] = useState<number | undefined>(undefined);
-  const [updaterIslandCollapsed, setUpdaterIslandCollapsed] = useState(false);
-  const updaterIslandHiddenUntilRestartRef = useRef(false);
-  const [updateReleaseCatalog, setUpdateReleaseCatalog] = useState<ReleaseCatalogEntry[]>([]);
-  const [selectedUpdateReleaseVersion, setSelectedUpdateReleaseVersion] = useState<string | null>(
-    null,
-  );
   const [updaterInstallError, setUpdaterInstallError] = useState<string | null>(null);
   const [postInstall, setPostInstall] = useState<PostInstallPayload | null>(null);
-  const debugDraftNotes = useDebugUpdaterPreview({
+  useDebugUpdaterPreview({
     setPostInstall,
     setUpdaterPhase,
-    setUpdaterIslandCollapsed,
     setUpdaterVersion,
-    setSelectedUpdateReleaseVersion,
     setUpdaterNotes,
     setUpdaterContentLength,
     setUpdaterDownloaded,
@@ -708,16 +693,12 @@ function App() {
     updateRef.current = next;
     setUpdaterVersion(next.version);
     setUpdaterNotes(teaserNotesFromUpdaterBody(next.body ?? ""));
-    setSelectedUpdateReleaseVersion(next.version);
-    setUpdaterIslandCollapsed(updaterIslandHiddenUntilRestartRef.current);
     setUpdaterPhase("available");
   }, []);
 
   const performUpdateCheck = useCallback(
     async (userInitiated: boolean) => {
       if (userInitiated) {
-        updaterIslandHiddenUntilRestartRef.current = false;
-        setUpdaterIslandCollapsed(false);
         await emit("ruforge-updater-check-status", { busy: true });
       }
       const result = await runUpdateCheck();
@@ -845,54 +826,8 @@ function App() {
   }, [notify, clearUpdaterTimers]);
   handleInstallRestartRef.current = handleInstallRestart;
 
-  const availableUpdatePayload = useMemo(() => {
-    if (!updateRef.current) return null;
-    return buildPostInstallPayload(updateRef.current.version, updateRef.current.body ?? "");
-  }, [updaterVersion]); // updaterVersion changes when updateRef is set
-
-  useEffect(() => {
-    if (updaterPhase !== "available" || !updaterVersion) {
-      setUpdateReleaseCatalog([]);
-      setSelectedUpdateReleaseVersion(null);
-      return;
-    }
-    const fallbackNotes = availableUpdatePayload?.notes ?? "";
-    void fetchReleaseCatalog().then((entries) => {
-      if (entries.length > 0) {
-        setUpdateReleaseCatalog(entries);
-        return;
-      }
-      setUpdateReleaseCatalog([{ version: updaterVersion, notes: fallbackNotes }]);
-    });
-  }, [updaterPhase, updaterVersion, availableUpdatePayload?.notes]);
-
-  const updateVersionOptions = useMemo(() => {
-    if (updateReleaseCatalog.length > 0) {
-      return updateReleaseCatalog.map((entry) => entry.version);
-    }
-    return updaterVersion ? [updaterVersion] : [];
-  }, [updateReleaseCatalog, updaterVersion]);
-
-  const islandUpdateNotes = useMemo(() => {
-    const pick = selectedUpdateReleaseVersion ?? updaterVersion;
-    if (!pick) return "";
-    if (debugDraftNotes && pick === updaterVersion) return debugDraftNotes;
-    const fromCatalog = updateReleaseCatalog.find((entry) => entry.version === pick);
-    if (fromCatalog) return fromCatalog.notes;
-    if (pick === updaterVersion) return availableUpdatePayload?.notes ?? "";
-    return "";
-  }, [
-    debugDraftNotes,
-    selectedUpdateReleaseVersion,
-    updaterVersion,
-    updateReleaseCatalog,
-    availableUpdatePayload?.notes,
-  ]);
-
-  const handleHideUpdateUntilRestart = useCallback(() => {
-    updaterIslandHiddenUntilRestartRef.current = true;
-    setUpdaterIslandCollapsed(true);
-  }, []);
+  useUpdateAvailableBridge(updaterPhase, updaterVersion, () => void handleInstallRestartRef.current());
+  useToolsInstall();
 
   useEffect(() => {
     invoke<boolean>("get_hardware_acceleration_pref")
@@ -1512,14 +1447,12 @@ function App() {
       setOnboardingOpen(true);
     };
 
-    const startDiscordOnboardingPreview = () => {
-      if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
-      writeOnboardingLastSeenVersion(DISCORD_PRESENCE_PREVIEW_LAST_SEEN);
-      clearOnboardingDoneSteps([DISCORD_PRESENCE_ONBOARDING_ID]);
-      void useRuforgeStore.getState().updateSetting("discordPresenceEnabled", false);
+    const openFeaturePreview = (kind: "discord" | "playlists") => {
+      if (!prepareFeaturePreview(kind)) return;
       setOnboardingNonce((n) => n + 1);
       setOnboardingOpen(true);
     };
+    const startDiscordOnboardingPreview = () => openFeaturePreview("discord");
 
     const unlistenDebugOnboarding = listen("debug-replay-onboarding", startReplayOnboarding);
     const unlistenDebugDiscordOnboarding = listen(
@@ -1530,6 +1463,7 @@ function App() {
     const unregisterDiscordPreview = registerDiscordOnboardingPreview(
       startDiscordOnboardingPreview,
     );
+    const unregisterPlaylistsPreview = registerPlaylistsOnboardingPreview(() => openFeaturePreview("playlists"));
 
     const unlistenDebugBootSplash = listen("debug-preview-boot-splash", () => {
       if (useRuforgeStore.getState().settings.showDebuggingSettings !== true) return;
@@ -1570,6 +1504,7 @@ function App() {
       unlistenDebugDiscordOnboarding.then((f) => f());
       unregisterReplayPreview();
       unregisterDiscordPreview();
+      unregisterPlaylistsPreview();
       unlistenDebugBootSplash.then((f) => f());
       unlistenDebugCrashUi.then((f) => f());
       unlistenDebugCrashFatal.then((f) => f());
@@ -2062,35 +1997,12 @@ function App() {
         updaterVersion={updaterVersion}
         showExplorerQueueToolbar={showExplorerToolbar}
         storageBlocksNewDownloads={storageBlocksNewDownloads}
-        onUpdaterStatusClick={undefined}
         settingsOpen={settingsOpen}
         onToggleSettings={() => (settingsOpen ? closeSettings() : openSettings())}
       />
       <NotificationCenterPopover />
 
-      {!shellBlocked && (
-        <ActivityIsland
-          updateAvailable={
-            updaterPhase === "available" &&
-            updaterVersion &&
-            !updaterIslandHiddenUntilRestartRef.current
-              ? {
-                  version: updaterVersion,
-                  notes: islandUpdateNotes,
-                  installableVersion: updaterVersion,
-                  versionOptions: updateVersionOptions,
-                  selectedVersion: selectedUpdateReleaseVersion ?? updaterVersion,
-                  onSelectVersion: setSelectedUpdateReleaseVersion,
-                  collapsed: updaterIslandCollapsed,
-                  onInstallRestart: () => void handleInstallRestart(),
-                  onHideUntilRestart: handleHideUpdateUntilRestart,
-                  onCollapse: () => setUpdaterIslandCollapsed(true),
-                  onExpand: () => setUpdaterIslandCollapsed(false),
-                }
-              : null
-          }
-        />
-      )}
+      {!shellBlocked && <ActivityIsland />}
 
       {/* Global Drag Region - Top strip except sidebar logo and window controls.
           WebView drag regions ignore DOM z-index, so the strip must not cover clickable titleband chrome. */}
@@ -2241,7 +2153,7 @@ function App() {
                               </div>
                             </motion.div>
                           )}
-                          <span className={`font-black text-[10px] uppercase tracking-[0.2em] transition-colors relative z-10 ${isActive ? "text-[color:var(--accent)]" : "text-stone-500 group-hover/tab:text-stone-300"}`}>
+                          <span data-onboarding-target={t === "playlists" && !gamesStrip && !creatorOpen ? "library-tab-playlists" : undefined} className={`font-black text-[10px] uppercase tracking-[0.2em] transition-colors relative z-10 ${isActive ? "text-[color:var(--accent)]" : "text-stone-500 group-hover/tab:text-stone-300"}`}>
                             {label}
                             {count ? <span className="ml-1.5 tabular-nums tracking-normal text-stone-600">{count}</span> : null}
                           </span>

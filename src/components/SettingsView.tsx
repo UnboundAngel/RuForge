@@ -1,9 +1,4 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useLayoutEffect,
-} from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import {
   animate,
   motion,
@@ -58,6 +53,7 @@ import {
   SettingsSection,
 } from './settings/settingsChrome';
 import { PlaylistWatchSettingItem } from './settings/PlaylistWatchSettingItem';
+import { IslandNotificationsSettingItem } from './settings/IslandNotificationsSettingItem';
 import { ShortcutsTab } from './settings/ShortcutsTab';
 import {
   GAMES_ENABLED,
@@ -70,15 +66,17 @@ import {
 } from './settings/HotkeyBindingControl';
 import { useYtdlpUpdate } from '../hooks/useYtdlpUpdate';
 import { useDenoStatus } from '../hooks/useDenoStatus';
+import { ToolsInstallRow } from './settings/ToolsInstallRow';
 import { buildEntireLibraryExportPreset } from '../lib/exportSelection';
 import { OVERLAY_Z_CLASS } from '../lib/overlayZIndex';
 import {
   motionDuration,
   overlayFadeTransition,
   overlayPanelTransition,
-  pageTransition,
 } from '../lib/overlayMotion';
+import { PageSwap } from './motion/PageSwap';
 import { cn } from '../lib/utils';
+import { BrandIcon } from './icons/BrandIcon';
 import { MORPH_SPRING } from './ui/Morph';
 import { SettingsHeader, type SettingsNavGroup } from './settings/SettingsHeader';
 
@@ -566,18 +564,8 @@ export const SettingsView: React.FC<{
   useLayoutEffect(() => {
     if (!open) return;
 
-    const measureNextH = (headerEl: HTMLDivElement, bodyEl: HTMLDivElement) => {
-      const bodyH = Math.max(
-        bodyEl.scrollHeight,
-        bodyEl.offsetHeight,
-        settingsScrollRef.current?.scrollHeight ?? 0,
-        1,
-      );
-      const maxH = Math.min(Math.round(window.innerHeight * 0.88), 840);
-      const natural =
-        headerEl.offsetHeight + bodyH + SETTINGS_SHELL_PAD_PX * 2;
-      return Math.min(Math.max(natural, 320), maxH);
-    };
+    // One height for every tab so opening on a short tab matches the filled ones.
+    const measureNextH = () => Math.max(Math.min(Math.round(window.innerHeight * 0.88), 840), 320);
 
     const commitPanelHeight = (nextH: number) => {
       if (!heightPrimedRef.current) {
@@ -627,7 +615,7 @@ export const SettingsView: React.FC<{
         heightRoSettleRef.current = null;
       }
       if (bodyScrollHeight() < 48) return false;
-      commitPanelHeight(measureNextH(headerEl, bodyEl));
+      commitPanelHeight(measureNextH());
       return true;
     };
 
@@ -639,18 +627,13 @@ export const SettingsView: React.FC<{
         const bodyEl = bodyMeasureRef.current;
         if (!headerEl || !bodyEl) return;
         if (bodyScrollHeight() < 48) return;
-        const nextH = measureNextH(headerEl, bodyEl);
+        const nextH = measureNextH();
         if (heightRoSettleRef.current != null) {
           clearTimeout(heightRoSettleRef.current);
         }
         heightRoSettleRef.current = setTimeout(() => {
           heightRoSettleRef.current = null;
           commitPanelHeight(nextH);
-          const settledHeader = headerMeasureRef.current;
-          const settledBody = bodyMeasureRef.current;
-          if (!settledHeader || !settledBody) return;
-          const settled = measureNextH(settledHeader, settledBody);
-          if (Math.abs(settled - nextH) >= 1) commitPanelHeight(settled);
         }, 64);
       });
     };
@@ -949,15 +932,7 @@ export const SettingsView: React.FC<{
               </p>
             ) : null}
             <div className="space-y-0">
-          <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={isSearching ? "search" : activeTab}
-            className="space-y-0"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={motionDuration(reduceMotion, pageTransition)}
-          >
+          <PageSwap swapKey={isSearching ? "search" : activeTab} className="space-y-0">
           {showTab("general") && (
             <div
               className={cn(
@@ -1010,7 +985,7 @@ export const SettingsView: React.FC<{
                   }
                 />
               </SettingsSection>
-              <SettingsSection title="Discord">
+              <SettingsSection title="Discord" icon={<BrandIcon name="discord" size={20} />}>
                 <SettingItem
                   title="Show activity on Discord"
                   description="When Discord is open, share RuForge activity with friends. What they see is controlled by the two options below."
@@ -1421,6 +1396,7 @@ export const SettingsView: React.FC<{
                 />
                 <SettingItem
                   title="Suggest songs from YouTube Music"
+                  icon={<BrandIcon name="youtubemusic" />}
                   description="Playlist recommendations also show songs you haven't downloaded. A song from the playlist is sent to YouTube Music to find similar ones."
                   active={settings.suggestYoutubeMusicSongs !== false}
                   control={
@@ -1437,6 +1413,7 @@ export const SettingsView: React.FC<{
                 />
                 <SettingItem
                   title="YouTube feed in Video Library"
+                  icon={<BrandIcon name="youtube" />}
                   description="Mixes videos from your YouTube home feed in with your downloads so you can preview and grab them without opening YouTube. Uses your signed-in cookies."
                   active={settings.showYoutubeFeedInLibrary !== false}
                   control={
@@ -1502,6 +1479,7 @@ export const SettingsView: React.FC<{
               <SettingsSection title="Updates">
                 <SettingItem
                   title="YouTube downloader (yt-dlp)"
+                  icon={<BrandIcon name="youtube" />}
                   description={ytdlpVersionDescription}
                   active={!ytdlpBusy}
                   control={
@@ -1537,6 +1515,7 @@ export const SettingsView: React.FC<{
                 />
                 <SettingItem
                   title="JavaScript runtime (Deno)"
+                  icon={<BrandIcon name="deno" />}
                   description={denoVersionDescription}
                   active={!denoBusy}
                   control={
@@ -1561,15 +1540,12 @@ export const SettingsView: React.FC<{
                         onClick={() => void handleDenoInstall()}
                         className="rf-settings-btn"
                       >
-                        {denoInstalling
-                          ? "Installing…"
-                          : denoStatus?.present
-                            ? "Reinstall"
-                            : "Install"}
+                        {denoInstalling ? "Installing…" : denoStatus?.present ? "Reinstall" : "Install"}
                       </button>
                     </motion.div>
                   }
                 />
+                <ToolsInstallRow />
               </SettingsSection>
               <SettingsSection title="Export" keywords="usb drive removable title bar titlebar">
                 <SettingItem
@@ -1761,6 +1737,7 @@ export const SettingsView: React.FC<{
                     />
                   }
                 />
+                <IslandNotificationsSettingItem />
                 <SettingItem
                   title="App density"
                   description="Cozy is the standard size. Compact slims the title bar and the side rail so more of the window goes to your content."
@@ -1900,8 +1877,7 @@ export const SettingsView: React.FC<{
               />
             </div>
           )}
-            </motion.div>
-            </AnimatePresence>
+            </PageSwap>
             </div>
             </div>
           </div>

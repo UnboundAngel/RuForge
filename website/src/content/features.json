@@ -1,0 +1,172 @@
+{
+  "updated": "2026-10-18",
+  "version": "0.8.0",
+  "areas": [
+    {
+      "id": "downloading",
+      "title": "Downloading",
+      "features": [
+        { "name": "Paste a link", "what": "Paste a YouTube link to save a video or song to your computer." },
+        { "name": "Audio-only downloads", "what": "Save just the sound of a video as a song file.", "since": "0.1.5" },
+        { "name": "Playlist downloads", "what": "Paste a playlist link and save each song or video into its own folder.", "since": "0.1.8" },
+        { "name": "Batch downloads", "what": "Add several links at once and track each one's progress.", "since": "0.4.0" },
+        { "name": "Download queue", "what": "A queue drawer shows each download with its thumbnail and time left.", "since": "0.1.7" },
+        { "name": "Size estimates", "what": "Shows the video and audio size before a download starts.", "since": "0.1.7" },
+        { "name": "Already in library check", "what": "Warns you as soon as you paste a link that is already saved.", "since": "0.2.2" },
+        { "name": "Disk space check", "what": "Flags downloads that will not fit your disk or library storage limit.", "since": "0.5.0" },
+        { "name": "Reorder before downloading", "what": "Drag the videos of a playlist into the order you want.", "since": "0.5.0" },
+        { "name": "Automatic retries", "what": "Failed pieces retry on their own, and stuck downloads stop and explain why.", "since": "0.2.1" },
+        { "name": "Cancel or clear batches", "what": "Stop or clear a whole batch of downloads with one click.", "since": "0.4.0" },
+        { "name": "Download comments", "what": "Saves the top comment threads with each video when the setting is on.", "since": "0.1.11" },
+        { "name": "Signed-in downloads", "what": "Uses your YouTube sign-in for videos that need an account." },
+        { "name": "Download tool updates", "what": "Checks for and installs the newest YouTube download tool from Settings.", "since": "0.1.8" }
+      ]
+    },
+    {
+      "id": "playlists",
+      "title": "Playlists",
+      "features": [
+        { "name": "Custom playlists", "what": "Make your own playlists in your library and in Music.", "since": "0.4.0" },
+        { "name": "Watch Later", "what": "A built-in Watch Later list for videos you want to see later.", "since": "0.4.0" },
+        { "name": "Rename, reorder, fill", "what": "Rename a playlist, reorder it, or fill it from a library search.", "since": "0.5.0" },
+        { "name": "Drag songs in", "what": "Drag songs onto a playlist in the sidebar to add them.", "since": "0.5.0" },
+        { "name": "Save to playlist popup", "what": "A small popup with playlist covers and search for adding a video.", "since": "0.8.0" },
+        { "name": "Downloaded playlist checks", "what": "Checks downloaded YouTube playlists for new videos and offers a Download button.", "since": "0.8.0" },
+        { "name": "Delete single videos", "what": "Delete one video from a pasted playlist without losing the rest.", "since": "0.8.0" },
+        { "name": "Playlist descriptions", "what": "Give a playlist a description of what it is for.", "since": "0.5.0" },
+        { "name": "Import from screenshots", "what": "Build a playlist from screenshots using any chatbot, then review each match.", "since": "0.5.0" },
+        { "name": "Playlist files", "what": "Export or import playlists as .m3u8 files.", "since": "0.5.0" },
+        { "name": "Recommended songs", "what": "Suggests songs you don't own yet, with a 15-second preview and an Add button.", "since": "0.5.0" },
+        { "name": "Hide suggestions", "what": "Hide a song or an artist from future suggestions for good.", "since": "0.5.0" }
+      ]
+    },
+    {
+      "id": "library",
+      "title": "Library (videos)",
+      "features": [
+        { "name": "Video library home", "what": "A YouTube-style home with Continue watching, your playlists, and channel rows.", "since": "0.5.0" },
+        { "name": "Date grid", "what": "Multi-column grid of videos grouped by date, four per row on wide windows.", "since": "0.3.0" },
+        { "name": "Tags", "what": "Tag videos by hand and open a page for each tag.", "since": "0.7.0" },
+        { "name": "Creator pages", "what": "Open a creator's page with Home, Videos, Downloaded, and Playlists tabs.", "since": "0.5.0" },
+        { "name": "Follow channels", "what": "Follow a channel to see its new uploads and auto-download them.", "since": "0.5.0" },
+        { "name": "Recycle Bin", "what": "Deleted videos go to the Recycle Bin and can be restored from the title bar.", "since": "0.1.9" },
+        { "name": "Media folders", "what": "Sorts your library into Videos, Music, Movies, Shows, and Playlists.", "since": "0.1.9" },
+        { "name": "Library folders", "what": "Tracks all your library folders in one place and moves files between them.", "since": "0.2.1" },
+        { "name": "Copy to a drive", "what": "Copy videos to a folder or USB drive, with a button when a drive is plugged in.", "since": "0.1.9" },
+        { "name": "Storage overview", "what": "Groups downloads into Music, Videos, and Livestreams, with each type's size.", "since": "0.5.0" },
+        { "name": "Storage cleanup", "what": "Frees space by removing chosen downloads in one batch.", "since": "0.2.0" },
+        { "name": "Live library updates", "what": "Finished and deleted videos update in your library without a reload.", "since": "0.2.2" }
+      ]
+    },
+    {
+      "id": "player",
+      "title": "Player",
+      "features": [
+        { "name": "Chapter seek bar", "what": "Seek bar with hover previews, chapter titles, and chapter jumps.", "since": "0.1.7" },
+        { "name": "Scrub previews", "what": "Hover previews on the seek bar, made automatically for each video download.", "since": "0.1.7" },
+        { "name": "Sponsor skipping", "what": "Skips sponsor and other segments, with an Unskip button if you want them back.", "since": "0.1.7" },
+        { "name": "Loop a section", "what": "Loop part of a video with the brackets button.", "since": "0.7.0" },
+        { "name": "Most replayed graph", "what": "Shows YouTube's most replayed graph above the scrubber.", "since": "0.7.0" },
+        { "name": "Description tab", "what": "Clickable timestamps and chapters, built from the video's description.", "since": "0.7.0" },
+        { "name": "Comment drawer", "what": "Read the top comment threads in a drawer beside the video.", "since": "0.1.11" },
+        { "name": "Next up panel", "what": "Shows what plays next, with watch progress and a sort menu.", "since": "0.7.0" },
+        { "name": "End-of-video suggestions", "what": "Suggestion cards at the end, with an Up next pick.", "since": "0.3.0" },
+        { "name": "Resume where you stopped", "what": "Videos pick up about 10 seconds before where you left off.", "since": "0.5.0" },
+        { "name": "Zoom into a paused frame", "what": "Ctrl+wheel zooms into a paused frame up to eight times.", "since": "0.7.0" },
+        { "name": "Mini player", "what": "A small floating player with compact and large layouts.", "since": "0.1.6" },
+        { "name": "Audio file player", "what": "Full player for songs with an equalizer and waveform bars.", "since": "0.1.7" },
+        { "name": "Captions", "what": "Shows captions, with auto captions in complete phrases." }
+      ]
+    },
+    {
+      "id": "music",
+      "title": "Music",
+      "features": [
+        { "name": "Music mode", "what": "A Spotify-style player with Home, Explore, Library, and a vinyl view.", "since": "0.1.9" },
+        { "name": "YouTube Music Explore", "what": "Browse YouTube Music and download songs or picked tracks as audio.", "since": "0.1.9" },
+        { "name": "Artist and album pages", "what": "Artist, album, and song pages with Play, Shuffle, and credits.", "since": "0.1.9" },
+        { "name": "Song info", "what": "Fills in correct titles, cover art, and genres for your songs.", "since": "0.1.9" },
+        { "name": "Synced lyrics", "what": "Lyrics that follow the song when they are available.", "since": "0.4.0" },
+        { "name": "Now Playing panel", "what": "Side panel with lyrics, related songs, credits, and what plays next.", "since": "0.4.0" },
+        { "name": "Crossfade", "what": "Blends one song into the next, from 0 to 12 seconds, off by default.", "since": "0.3.0" },
+        { "name": "Loop and autoplay", "what": "Loop off, all, or one, with autoplay that plans ahead.", "since": "0.3.0" },
+        { "name": "Listening stats", "what": "Play counts, top 10 lists, and a smart shuffle based on your plays.", "since": "0.1.9" },
+        { "name": "Liked Songs", "what": "Heart songs to build a Liked Songs list that shapes your picks.", "since": "0.1.9" },
+        { "name": "Music profile", "what": "A profile page with your YouTube account, stats, and storage.", "since": "0.1.10" },
+        { "name": "Search", "what": "One search bar finds songs, playlists, albums, and artists in your library.", "since": "0.5.0" },
+        { "name": "About the artist", "what": "A sheet with a Wikipedia bio, photos, your plays, and top tracks.", "since": "0.5.0" },
+        { "name": "Delete a song", "what": "Moves a song to the Recycle Bin, restorable like videos.", "since": "0.5.0" }
+      ]
+    },
+    {
+      "id": "explorer",
+      "title": "Explorer",
+      "features": [
+        { "name": "Browse YouTube", "what": "Browse YouTube inside RuForge without opening a browser." },
+        { "name": "Back, forward, and reload", "what": "Title bar buttons to go back, forward, or reload the page.", "since": "0.1.6" },
+        { "name": "Bottom address bar", "what": "Bottom bar shows the current page URL, with paste and copy buttons.", "since": "0.5.0" },
+        { "name": "Follow from Explorer", "what": "Follow a channel straight from the page you are viewing.", "since": "0.5.0" },
+        { "name": "YouTube profile", "what": "Your avatar and handle show in the title bar, or a Log in button.", "since": "0.1.10" },
+        { "name": "Full-window Explorer", "what": "Explorer fills the window under the title bar.", "since": "0.2.0" }
+      ]
+    },
+    {
+      "id": "notifications",
+      "title": "Notifications (the bell)",
+      "features": [
+        { "name": "Notification bell", "what": "The title bar bell collects new uploads and download results in one list.", "since": "0.5.0" },
+        { "name": "One-click actions", "what": "Notices come with one-click actions, such as Download.", "since": "0.5.0" },
+        { "name": "Background island", "what": "Shows downloads and what's playing in a small island when RuForge is in the background.", "since": "0.3.0" },
+        { "name": "Island filters", "what": "Filter the island to uploads or downloads, and mute each kind.", "since": "0.7.0" },
+        { "name": "Bottom-center popups", "what": "Popups appear at the bottom center, sized to fit their text.", "since": "0.5.0" },
+        { "name": "Channel upload alerts", "what": "Tells you when followed channels post new uploads or premieres.", "since": "0.5.0" },
+        { "name": "Download result notices", "what": "Shows a check or a warning when each download finishes.", "since": "0.1.10" },
+        { "name": "Playlist check notices", "what": "A bell notice when a downloaded playlist has new videos.", "since": "0.8.0" },
+        { "name": "Storage full badge", "what": "A storage badge on the download row when storage is full.", "since": "0.6.0" }
+      ]
+    },
+    {
+      "id": "customization",
+      "title": "Customization and settings",
+      "features": [
+        { "name": "Accent color", "what": "Pick any dark accent color next to the swatches.", "since": "0.4.0" },
+        { "name": "Black video theme", "what": "Black video mode with your accent, and Legacy colors for the old brown.", "since": "0.7.0" },
+        { "name": "App density", "what": "Cozy or Compact sizing that slims the title bar and side rail.", "since": "0.7.0" },
+        { "name": "Hide chrome during video", "what": "Title bar and side rail can hide while a video plays.", "since": "0.7.0" },
+        { "name": "Slim scrollbars", "what": "Scrollbars in a slim RuForge style instead of the Windows default.", "since": "0.4.0" },
+        { "name": "Settings window", "what": "Settings open in a centered window with tabs and a search box.", "since": "0.4.0" },
+        { "name": "Playback settings", "what": "A Playback tab for auto-advance, preloading, and SponsorBlock.", "since": "0.1.7" },
+        { "name": "Onboarding tips", "what": "Short tips in the library and Music, each one dismissed for good.", "since": "0.5.0" },
+        { "name": "Export button toggle", "what": "The title bar export button is off by default and can be turned on.", "since": "0.5.0" }
+      ]
+    },
+    {
+      "id": "shortcuts",
+      "title": "Shortcuts",
+      "features": [
+        { "name": "Shortcuts tab", "what": "Ctrl+/ opens a tab that lists every shortcut, and each can be rebound.", "since": "0.7.0" },
+        { "name": "Player keys", "what": "C for captions, M for mute, K to play or pause, and arrows to seek.", "since": "0.5.0" },
+        { "name": "Paste-link shortcut", "what": "Ctrl+D opens the paste-link downloader.", "since": "0.5.0" },
+        { "name": "Alt quick menu", "what": "Hold Alt for a quick menu that switches between modes, including Music.", "since": "0.1.9" },
+        { "name": "New playlist shortcut", "what": "Ctrl+N starts a new playlist.", "since": "0.5.0" },
+        { "name": "Media keys", "what": "Keyboard media keys play, pause, and skip tracks.", "since": "0.3.0" }
+      ]
+    },
+    {
+      "id": "updates-privacy",
+      "title": "Updates and privacy",
+      "features": [
+        { "name": "Automatic update checks", "what": "Checks for new versions once per launch and installs them for you.", "since": "0.1.8" },
+        { "name": "Update island", "what": "New updates appear in the island, with an install button.", "since": "0.2.1" },
+        { "name": "Update fallback", "what": "Checks ruforge.app first and falls back to GitHub if the site is down.", "since": "0.6.0" },
+        { "name": "What's New tiles", "what": "After an update, each new feature gets a tile that opens it.", "since": "0.6.0" },
+        { "name": "Crash recovery screen", "what": "A friendly screen offers Reload and the error details if something breaks.", "since": "0.2.0" },
+        { "name": "No usage tracking", "what": "RuForge sends no usage stats or crash reports.", "since": "0.6.1" },
+        { "name": "Private activity log", "what": "Keeps a private activity log on your computer. Nothing is uploaded.", "since": "0.7.0" },
+        { "name": "Discord activity", "what": "Optionally shares what you watch or download on Discord, off by default.", "since": "0.4.0" },
+        { "name": "Website install", "what": "ruforge.app shows the latest version and installs straight from the site.", "since": "0.1.10" },
+        { "name": "License notices", "what": "The installer includes license notices for its bundled tools.", "since": "0.5.0" }
+      ]
+    }
+  ]
+}

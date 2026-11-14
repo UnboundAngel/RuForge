@@ -1,6 +1,12 @@
 import altRadialDemoGif from "@/assets/onboarding/alt-radial-demo.gif";
 import discordSettingsDemoGif from "@/assets/onboarding/discord-settings-demo.gif";
 import discordSettingsDemoMp4 from "@/assets/onboarding/discord-settings-demo.mp4";
+import playlistsOpenMp4 from "@/assets/onboarding/playlists-open.mp4";
+import playlistsOpenPoster from "@/assets/onboarding/playlists-open-poster.webp";
+import playlistsReorderMp4 from "@/assets/onboarding/playlists-reorder.mp4";
+import playlistsReorderPoster from "@/assets/onboarding/playlists-reorder-poster.webp";
+
+import { GripVertical, ListVideo, type LucideIcon } from "lucide-react";
 
 import type { OnboardingCondition } from "./onboardingConditions";
 import {
@@ -23,6 +29,14 @@ export type OnboardingGuidePhase = {
   skipWhen?: OnboardingGuideCompleteWhen;
   /** Auto-advance when this becomes true while the phase is active. */
   completeWhen?: OnboardingGuideCompleteWhen;
+  /** Shown in the pill, the expanded card and the checklist row for this beat. */
+  icon?: LucideIcon;
+  /** Shorter line the pill shows while the user is mid-action (drag started, tab open). */
+  progressHint?: string;
+  /** While true and the beat is not complete yet, the pill shows `progressHint`. */
+  progressWhen?: OnboardingGuideCompleteWhen;
+  /** Looping muted clip shown at the top of the expanded card, with a still for reduced motion. */
+  clip?: { src: string; poster: string };
 };
 
 export type OnboardingIslandStep = {
@@ -51,6 +65,10 @@ export type OnboardingIslandStep = {
   /** After the demo, walk the user through these beats (tap-settings). */
   guidePhases?: readonly OnboardingGuidePhase[];
   defaultExpanded?: boolean;
+  /** Spoken after the step's last beat instead of "nice!". */
+  doneLabel?: string;
+  /** Temporary demo content shown while the step runs when the user has no real data. */
+  mockData?: "video-playlists";
 };
 
 export type OnboardingStep = OnboardingIslandStep;
@@ -180,6 +198,45 @@ export const ONBOARDING_STEPS: readonly OnboardingStep[] = [
         compact: "Review and save",
         expandedCaption: "Check the matches, untick any you don't want, then click Save.",
         completeWhen: "music-playlist-made",
+      },
+    ],
+  },
+  {
+    kind: "island",
+    id: "video-playlists",
+    introducedIn: "0.10.0",
+    compactPurpose: "Playlists got an overhaul",
+    compactFollowUp: "to continue",
+    compactVariant: "tap-settings",
+    expandedCaption:
+      "New playlist page: resume where you left off, drag to reorder, and find videos you don't have yet.",
+    defaultExpanded: true,
+    doneLabel: "Playlists tour done",
+    mockData: "video-playlists",
+    showWhen: "video-library-ready",
+    doneWhen: "video-playlist-suggested-seen",
+    guidePhases: [
+      {
+        id: "open-playlist",
+        icon: ListVideo,
+        compact: "Open a playlist",
+        expandedCaption: "Click Playlists at the top, then open a playlist.",
+        progressWhen: "video-playlists-tab",
+        progressHint: "Now open a playlist",
+        skipWhen: "video-playlist-open",
+        completeWhen: "video-playlist-open",
+        clip: { src: playlistsOpenMp4, poster: playlistsOpenPoster },
+      },
+      {
+        id: "reorder-suggested",
+        icon: GripVertical,
+        compact: "Reorder, then find more",
+        expandedCaption:
+          "Drag a row to reorder. Then scroll down to Suggested for videos you don't have yet.",
+        progressWhen: "video-playlist-reordered",
+        progressHint: "Now scroll down to Suggested",
+        completeWhen: "video-playlist-suggested-seen",
+        clip: { src: playlistsReorderMp4, poster: playlistsReorderPoster },
       },
     ],
   },

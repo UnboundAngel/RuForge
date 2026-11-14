@@ -14,7 +14,7 @@ use media_engine::{
     url::{validate_http_url, validate_ytdlp_search},
     ytdlp_args::{
         build_download_args, effective_filename_template, insert_options_before_urls,
-        push_url_positionals, DownloadPaths, IGNORE_CONFIG,
+        push_url_positionals, IGNORE_CONFIG,
     },
     InspectRequest, MediaInspection, PlaylistItemPreview as EnginePlaylistItemPreview,
     validated_choices_from_options,
@@ -358,7 +358,7 @@ fn ytdlp_browser_cookie_arg(app: &AppHandle, browser: &str) -> Result<String, St
     }
 }
 
-fn browser_cookie_arg_for_auth(
+pub(crate) fn browser_cookie_arg_for_auth(
     app: &AppHandle,
     browser_cookies: Option<&str>,
     cookie_file: Option<&str>,
@@ -823,6 +823,9 @@ pub struct DownloadOptions {
     /// 1-based index in the playlist for filename ordering (`01 - title.ext`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub playlist_index: Option<u32>,
+    /// Zero-pad width for `playlist_index`; absent means 2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playlist_index_width: Option<u32>,
     /// When true, post-download enrich copies artist MB genres onto the track sidecar.
     #[serde(default = "default_stamp_artist_tags")]
     pub stamp_artist_tags: bool,
@@ -885,6 +888,7 @@ pub(crate) fn video_info_cookie_probe(
         auto_scrub_previews: true,
         playlist_output_folder: None,
         playlist_index: None,
+        playlist_index_width: None,
         stamp_artist_tags: true,
         download_comments: false,
     })
@@ -1253,12 +1257,7 @@ pub async fn start_download_job(
         e.message
     })?;
 
-    let paths = DownloadPaths {
-        output_dir: options.output_dir.clone(),
-        filename_template: options.filename_template.clone(),
-        playlist_output_folder: options.playlist_output_folder.clone(),
-        playlist_index: options.playlist_index,
-    };
+    let paths = super::download_paths::download_paths(&options);
 
     let filename_template_eff = effective_filename_template(
         &serde_json::Value::Null,
@@ -1323,7 +1322,7 @@ pub async fn start_download_job(
             return Err(e.message);
         }
     };
-    let shell = match ytdlp_shell_command(&app) {
+    let shell = match crate::tools::download_ytdlp_command(&app) {
         Ok(c) => c,
         Err(e) => {
             manager.release_claim_if_pending(&job_id)?;

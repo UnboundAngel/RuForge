@@ -1,6 +1,6 @@
 # RuForge
 
-> RuForge is a free open-source desktop media library and yt-dlp frontend for Windows. Built with Tauri v2 and Rust, it downloads videos and audio from yt-dlp's 1000+ supported sites, stores them in a local library, and includes a full media player with chapter navigation, SponsorBlock integration, music Now Playing, and a mini player. Apache-2.0 licensed. No ads. No telemetry. No premium tier.
+> RuForge is a free open-source desktop media library and yt-dlp frontend for Windows. Built with Tauri v2 and Rust, it downloads YouTube videos, music, and playlists, stores them in a local library, and includes a full media player with chapter navigation, SponsorBlock integration, music Now Playing, and a mini player. Apache-2.0 licensed. No ads. No telemetry. No premium tier.
 
 RuForge uses yt-dlp as the download engine and FFmpeg for media processing. It ships as a signed Windows installer with an auto-updater. Linux is supported for local development; macOS is not yet supported as a release target.
 
@@ -9,6 +9,8 @@ RuForge uses yt-dlp as the download engine and FFmpeg for media processing. It s
 - [Home](https://ruforge.app/): What RuForge is and who it is for
 - [Download](https://ruforge.app/download): Signed Windows installer
 - [Features](https://ruforge.app/features): Full feature index with screenshots
+- [All features](https://ruforge.app/features/all): Every existing feature as a table per area
+- [All features as plain text](https://ruforge.app/features.txt): The same list as plain text for agents
 - [Changelog](https://ruforge.app/changelog): Release notes and version history
 - [Roadmap](https://ruforge.app/roadmap): Public feature roadmap
 - [Docs](https://ruforge.app/docs): Getting started and reference
@@ -20,6 +22,14 @@ RuForge uses yt-dlp as the download engine and FFmpeg for media processing. It s
 - [Music mode](https://ruforge.app/features/music): Offline music player with lyrics, albums, artists, and playlists
 - [Video player](https://ruforge.app/features/player): Chapter previews, SponsorBlock skipping, and saved comments
 - [Mini player](https://ruforge.app/features/mini-player): Small always-on-top window with four sizes
+
+## Comparisons
+
+- [Compare](https://ruforge.app/compare): RuForge next to other YouTube downloaders
+- [RuForge vs Parabolic](https://ruforge.app/compare/parabolic): Two free open-source yt-dlp GUIs
+- [RuForge vs Tartube](https://ruforge.app/compare/tartube): Channel tracking, SponsorBlock, playback
+- [RuForge vs 4K Video Downloader](https://ruforge.app/compare/4k-video-downloader): Free and open source vs a paid app with a limited free plan
+
 ## Getting started guides
 
 - [Download and install](https://ruforge.app/docs/install): First-run setup

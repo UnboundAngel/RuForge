@@ -445,6 +445,7 @@ mod tests {
             auto_scrub_previews: true,
             playlist_output_folder: Some("My List".into()),
             playlist_index: Some(1),
+            playlist_index_width: None,
             stamp_artist_tags: true,
             download_comments: true,
         };

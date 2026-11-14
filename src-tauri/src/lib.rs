@@ -8,6 +8,7 @@ mod deno_binary;
 mod dev_gate;
 pub mod discord_rpc;
 mod media_engine_adapter;
+mod media_engine_spawn;
 #[cfg(test)]
 mod capability_audit;
 mod download_artifacts;
@@ -25,11 +26,13 @@ mod path_guard;
 mod child_job;
 mod process_tree;
 mod radial_nav_bridge;
+mod announcements;
 mod scheduled_gate;
 mod tray;
 mod utils;
 mod webview_permissions;
 mod webview_trust;
+mod tools;
 mod ytdlp_binary;
 mod ytdlp_rate_limit;
 #[cfg(windows)]
@@ -107,6 +110,10 @@ use crate::commands::playlist_sidecar::{
     read_playlist_download_sidecar, update_playlist_download_sidecar_metadata,
     update_playlist_download_sidecar_track,
 };
+use crate::commands::playlist_user_meta::{
+    read_disk_playlist_user_meta, read_playlist_seen_file, write_disk_playlist_user_meta,
+    write_playlist_seen_file, read_playlist_pending_joins, write_playlist_pending_joins,
+};
 use crate::commands::music_playlists::{
     playlist_paths_relocatable, read_music_playlists_file, read_playlist_text_file,
     write_music_playlists_file, write_playlist_text_file,
@@ -175,6 +182,8 @@ macro_rules! invoke_handler_with {
             tray_front_debug,
             get_video_info,
             get_playlist_row_sizes,
+            crate::commands::playlist_preview_stream::stream_playlist_preview,
+            crate::commands::playlist_preview_stream::cancel_playlist_preview,
             get_music_browse_info,
             get_playlist_items_page,
             resolve_music_preview_stream,
@@ -233,6 +242,12 @@ macro_rules! invoke_handler_with {
             kickoff_playlist_download_sidecar,
             read_playlist_download_sidecar,
             find_playlist_sidecar_by_list_url,
+            read_disk_playlist_user_meta,
+            write_disk_playlist_user_meta,
+            read_playlist_seen_file,
+            write_playlist_seen_file,
+            read_playlist_pending_joins,
+            write_playlist_pending_joins,
             update_playlist_download_sidecar_metadata,
             update_playlist_download_sidecar_track,
             open_mini_player,
@@ -270,6 +285,8 @@ macro_rules! invoke_handler_with {
             download_ytdlp_update,
             get_deno_status,
             download_deno,
+            crate::tools::install::install_tools,
+            crate::tools::status::get_tools_status,
             show_island_overlay,
             hide_island_overlay,
             app_is_foreground,
@@ -290,6 +307,10 @@ macro_rules! invoke_handler_with {
             write_music_playlists_file,
             read_settings_file,
             write_settings_file,
+            crate::commands::download_queue_file::read_download_queue_file,
+            crate::commands::download_queue_file::write_download_queue_file,
+            crate::commands::playlist_progress::read_playlist_progress_file,
+            crate::commands::playlist_progress::write_playlist_progress_file,
             read_library_tags_file,
             write_library_tags_file,
             library_info_descriptions,
@@ -328,6 +349,10 @@ macro_rules! invoke_handler_with {
             stats_take_milestone_notes,
             crate::scheduled_gate::scheduled_status,
             crate::scheduled_gate::scheduled_invoke,
+            crate::announcements::announcements_get,
+            crate::announcements::announcements_ingest_debug,
+            crate::announcements::vote::announcements_poll_tally,
+            crate::announcements::vote::announcements_poll_vote,
             crate::companion::commands::companion_start,
             crate::companion::commands::companion_stop,
             crate::companion::commands::companion_status,
@@ -448,6 +473,7 @@ pub fn run() {
 
             warm_ytdlp_release_cache_spawn(handle.clone());
             crate::scheduled_gate::spawn_refresh(&handle);
+            crate::announcements::spawn_refresh(&handle);
             crate::cover_thumbs::spawn_prune(&handle);
 
             spawn_removable_drives_watcher(app.handle());

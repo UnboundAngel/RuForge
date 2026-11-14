@@ -13,7 +13,7 @@ export const MUSIC_TRACK_DRAG_MIME = "application/x-ruforge-music-paths";
 /** Music playlists, most recently touched first (matches the sidebar order). */
 export function musicPlaylistRecords(records: VirtualPlaylistRecord[]): VirtualPlaylistRecord[] {
   return records
-    .filter(isMusicPlaylistRecord)
+    .filter((r) => isMusicPlaylistRecord(r) && !r.dismissed)
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 

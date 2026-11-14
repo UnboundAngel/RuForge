@@ -1,5 +1,6 @@
 ---
 import Disclosure from '../Disclosure.astro';
+import Table from '../ui/Table.astro';
 import type { DocsSectionContent } from '../../lib/docsContent';
 
 interface Props {
@@ -36,18 +37,7 @@ const paragraphs = skipLead ? (sc.paragraphs ?? []).slice(1) : (sc.paragraphs ??
   {sc.paragraphs3?.map((p) => <p set:html={p} />)}
 
   {sc.table && (
-    <div class="rf-doc-table-wrap">
-      <table class="rf-doc-table">
-        <thead>
-          <tr>{sc.table.headers.map((h) => <th>{h}</th>)}</tr>
-        </thead>
-        <tbody>
-          {sc.table.rows.map((row) => (
-            <tr>{row.map((cell) => <td set:html={cell} />)}</tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table headers={sc.table.headers} rows={sc.table.rows} />
   )}
 
   {sc.collapsible && (

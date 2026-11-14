@@ -16,6 +16,8 @@ import {
   SB_GRADUATE_MIN_APPEARANCES,
   SB_GRADUATE_MIN_MANUAL_SKIPS,
 } from "../../sponsorBlockConstants";
+import { SponsorBlockIcon } from "../icons/SponsorBlockIcon";
+import { overlayPanelTransition } from "../../lib/overlayMotion";
 import { SponsorBlockMiniScrubber } from "../player/SponsorBlockMiniScrubber";
 import { Switch } from "../ui/Switch";
 import { SettingsDescription } from "./settingsDescription";
@@ -134,6 +136,7 @@ export const SponsorBlockSettingsTree: React.FC = () => {
       >
         <div className="rf-settings-row-label space-y-0.5">
           <div className="flex items-center gap-2">
+            <SponsorBlockIcon size={16} className={settings.sponsorBlockEnabled ? "" : "opacity-60"} />
             <h4 className={settings.sponsorBlockEnabled ? "text-stone-100" : "text-stone-400"}>
               SponsorBlock
             </h4>
@@ -179,7 +182,9 @@ export const SponsorBlockSettingsTree: React.FC = () => {
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
+            // Exiting children keep their last props, so the settled (visible) overflow must be clipped on exit itself or the rows hang out and snap away.
+            exit={{ opacity: 0, height: 0, overflow: "hidden" }}
+            transition={overlayPanelTransition}
             onAnimationStart={() => setCategoriesSettled(false)}
             onAnimationComplete={(def) => {
               if (typeof def === "object" && def !== null && "height" in def && def.height === "auto") {

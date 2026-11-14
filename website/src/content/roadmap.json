@@ -65,5 +65,6 @@
   { "appArea": "Settings Screen", "difficulty": "Low", "featureName": "set your own keyboard shortcuts", "priority": "Low", "status": "Finished" },
   { "appArea": "Explorer", "difficulty": "Medium", "featureName": "follow channels and hear about new uploads", "priority": "High", "status": "Finished" },
   { "appArea": "Infra", "difficulty": "High", "featureName": "a proper Linux installer", "priority": "Low", "status": "To-Do" },
-  { "appArea": "Infra", "difficulty": "High", "featureName": "RuForge on Mac", "priority": "Low", "status": "To-Do" }
+  { "appArea": "Infra", "difficulty": "High", "featureName": "RuForge on Mac", "priority": "Low", "status": "To-Do" },
+  { "appArea": "Explorer", "difficulty": "Medium", "featureName": "download buttons under the YouTube page, like Music has", "priority": "Medium", "status": "To-Do" }
 ]

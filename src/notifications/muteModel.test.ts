@@ -27,6 +27,12 @@ describe("muteModel", () => {
     expect(muteKeyForKind("premiere")).toBe("uploads");
   });
 
+  it("files dev notices and polls under the From the dev switch", () => {
+    expect(muteKeyForKind("dev-notice")).toBe("dev");
+    expect(muteKeyForKind("dev-poll")).toBe("dev");
+    expect(normalizeMutedList(["dev", "nope"])).toEqual(["dev"]);
+  });
+
   it("muting downloads keeps failures visible", () => {
     const items = [item("a", "download-finished"), item("b", "download-failed")];
     expect(filterMuted(items, ["downloads"]).map((i) => i.id)).toEqual(["b"]);

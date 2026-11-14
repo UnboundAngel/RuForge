@@ -58,6 +58,13 @@ describe("panelModel", () => {
     expect(earlier.map((i) => i.id)).toEqual(["b"]);
   });
 
+  it("puts unread dev items under uploads and above everything else", () => {
+    const list = [item("dl", "download"), item("dev", "dev"), item("up", "watchlist"), { ...item("old", "dev"), read: true }];
+    const { fresh, earlier } = splitByRead(list);
+    expect(fresh.map((i) => i.id)).toEqual(["up", "dev", "dl"]);
+    expect(earlier.map((i) => i.id)).toEqual(["old"]);
+  });
+
   it("builds the upload headline from the channel name", () => {
     const upload = { ...item("Video", "watchlist"), subtitle: "Chan" };
     expect(notificationHeadline(upload, null)).toEqual({ channel: "Chan", verb: "uploaded", title: "Video" });

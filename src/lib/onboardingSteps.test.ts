@@ -29,11 +29,12 @@ describe("onboarding step persistence", () => {
     store = {};
   });
 
-  it("an upgrade from 0.4.0 offers only the 0.5.0 tips", () => {
+  it("an upgrade from 0.4.0 offers the 0.5.0 tips and later", () => {
     writeOnboardingLastSeenVersion("0.4.0");
     expect(ids(resolveOnboardingSteps(readOnboardingLastSeenVersion(), false))).toEqual([
       "follow-creators",
       "playlist-import",
+      "video-playlists",
     ]);
   });
 
@@ -43,9 +44,15 @@ describe("onboarding step persistence", () => {
     expect(readOnboardingLastSeenVersion()).toBe("0.4.0");
     expect(ids(resolveOnboardingSteps(readOnboardingLastSeenVersion(), false))).toEqual([
       "follow-creators",
+      "video-playlists",
     ]);
     markOnboardingStepFinished("follow-creators");
     expect(readOnboardingLastSeenVersion()).toBe("0.5.0");
+    expect(ids(resolveOnboardingSteps(readOnboardingLastSeenVersion(), false))).toEqual([
+      "video-playlists",
+    ]);
+    markOnboardingStepFinished("video-playlists");
+    expect(readOnboardingLastSeenVersion()).toBe("0.10.0");
     expect(resolveOnboardingSteps(readOnboardingLastSeenVersion(), false)).toEqual([]);
   });
 

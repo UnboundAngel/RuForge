@@ -1,3 +1,4 @@
+import { virtualPlaylistPath, WATCH_LATER_ID } from "@/virtualPlaylists";
 import type { FeedVideo } from "./youtubeFeed";
 
 export type CreatorSections = { uploads: FeedVideo[]; latest: FeedVideo[]; popular: FeedVideo[]; watched: FeedVideo[] };
@@ -45,9 +46,10 @@ export function creatorFiles<T extends WithYoutube>(files: T[], channelId: strin
 }
 
 /** Playlists that are mostly this creator's videos, so one stray clip doesn't claim a mix. */
-export function creatorPlaylists<P extends { items: WithYoutube[] }>(playlists: P[], channelId: string, channel: string): P[] {
+export function creatorPlaylists<P extends { items: WithYoutube[]; path?: string }>(playlists: P[], channelId: string, channel: string): P[] {
   const name = channel.trim().toLowerCase();
   return playlists.filter((p) => {
+    if (p.path === virtualPlaylistPath(WATCH_LATER_ID)) return false;
     const mine = p.items.filter((f) => fromCreator(f, channelId, name)).length;
     return mine >= 2 && mine * 2 >= p.items.length;
   });

@@ -1,6 +1,7 @@
 import { emit } from "@tauri-apps/api/event";
 import {
   requestDiscordOnboardingPreview,
+  requestPlaylistsOnboardingPreview,
   requestReplayOnboardingPreview,
 } from "../../../lib/onboardingDebugPreview";
 import { requestStatsExtraSlotPreview } from "../../../lib/statsExtraSlotPreview";
@@ -31,6 +32,12 @@ export function ScreenPreviewsSection() {
         description="Island walkthrough for Discord Rich Presence only (skips older steps)."
         keywords="rich presence walkthrough"
         control={<DebugButton label="Preview" onClick={() => requestDiscordOnboardingPreview()} />}
+      />
+      <SettingItem
+        title="Preview playlists onboarding"
+        description="Island walkthrough for the playlists overhaul, with the demo playlist shown even if you have real ones."
+        keywords="video playlists walkthrough reorder suggested"
+        control={<DebugButton label="Preview" onClick={() => requestPlaylistsOnboardingPreview()} />}
       />
       <SettingItem
         title="Preview boot splash"

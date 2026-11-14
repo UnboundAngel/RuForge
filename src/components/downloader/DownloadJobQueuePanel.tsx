@@ -92,9 +92,7 @@ export const DownloadQueueItem = ({
   const opacityClass = isPending ? "opacity-55" : "opacity-100";
 
   let progress = 0;
-  if (variant === "preview") {
-    progress = 0;
-  } else if (variant === "active") {
+  if (variant) {
     progress = percentage;
   } else if (currentIndex !== undefined && index !== undefined) {
     if (index < currentIndex) progress = 100;

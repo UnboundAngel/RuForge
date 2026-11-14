@@ -1,28 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useMemo, useCallback, type CSSProperties } from "react";
 import { motion } from "motion/react";
-import { Loader2, Trash2, Layers, Play, FolderOutput, Shuffle, FolderOpen, Plus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { MediaFile, GalleryEntry, PlaylistCollection } from "../types";
 import { getPlaybackThumbnailBar, getWatchProgress, isVideoWatched } from "../playbackStorage";
-import { openInFileManager } from "../openInFileManager";
 import { useRuforgeStore } from "../store/ruforgeStore";
+import { flattenToMediaEntries } from "./library/flattenPlaylistFiles";
 import { filterMainLibraryEntries } from "../mainLibraryFilter";
 import { galleryScrollChromeAmount } from "../lib/galleryScrollChrome";
-import { menuAnchorPoint } from "./music/musicMenuUi";
 import { libraryPathKey, useTaggableFiles, useVideoCardActions } from "./library/useVideoCardActions";
 import {
   WATCH_LATER_ID,
   isVirtualPlaylistPath,
-  parseVirtualPlaylistId,
   virtualPlaylistPath,
 } from "../virtualPlaylists";
 import { VideoCard, type ThumbnailBar } from "./library/LibraryVideoCard";
-import {
-  MUSIC_MENU_ICON_SIZE,
-  MUSIC_MENU_TONES,
-  MusicFloatingMenu,
-  MusicMenuRow,
-  MusicMenuSection,
-} from "./music/musicMenuUi";
+import { PlaylistCardMenu } from "./library/PlaylistCardMenu";
+import { PlaylistsSection } from "./library/PlaylistsSection";
+import { useLibraryPlaylistSync } from "./library/useLibraryPlaylistSync";
 import { FeedVideoCard } from "./library/FeedVideoCard";
 import { FeedLoadMore } from "./library/FeedLoadMore";
 import { useYoutubeFeed, useYoutubeFeedAvailability } from "./library/useYoutubeFeed";
@@ -32,18 +26,17 @@ import { useHomeChannelShelves } from "./library/useHomeChannelShelves";
 import { CreatorPage } from "./library/CreatorPage";
 import { closeLibraryPage, useCreatorPage } from "./library/creatorPageStore";
 import { TagPage } from "./library/tags/TagPage";
-import { OVERLAY_EASE } from "@/lib/overlayMotion";
+import { motionDuration, pageTransition } from "@/lib/overlayMotion";
+import { useLibraryPageMotion } from "./library/useLibraryPageMotion";
+import { FadePresence, PageSwap } from "./motion/PageSwap";
 import { LibraryHome } from "./library/LibraryHome";
 import { GRID_GAP_PX, useGridColumns } from "./library/useGridColumns";
 import { useWatchlistShelf } from "./watchlist/useWatchlistShelf";
 import { fileVideoId } from "./music/musicOutsideRecommend";
 import { RecommendedGamePlaylistsSlot } from "@games";
 import { PlaylistStackCard } from "./PlaylistStackCard";
+import { useDemoPlaylistStacks } from "../lib/useOnboardingMockPlaylists";
 
-const CREATOR_SLIDE = { duration: 0.24, ease: OVERLAY_EASE };
-const CREATOR_FORWARD_IN = { opacity: 0, x: 28 };
-const CREATOR_BACK_IN = { opacity: 0, x: -28 };
-const CREATOR_SETTLED = { opacity: 1, x: 0 };
 
 function isInProgressFile(file: MediaFile): boolean {
   const progress = getWatchProgress(file.path, file.duration);
@@ -58,7 +51,6 @@ export const MediaView = ({
   const libraryScanDirs = useRuforgeStore((s) => s.libraryScanDirs);
   const searchQuery = useRuforgeStore((s) => s.searchValue);
   const filter = useRuforgeStore((s) => s.galleryFilter);
-  const notify = useRuforgeStore((s) => s.notify);
   const entries = useRuforgeStore((s) => s.entries);
   const hideAudioFromMainLibrary = useRuforgeStore(
     (s) => s.settings.hideAudioFromMainLibrary !== false,
@@ -68,9 +60,6 @@ export const MediaView = ({
   const activeMenu = useRuforgeStore((s) => s.activeMenu);
   const setGalleryActiveMenu = useRuforgeStore((s) => s.setGalleryActiveMenu);
   const ensureGalleryOnViewMount = useRuforgeStore((s) => s.ensureGalleryOnViewMount);
-  const handlePlayPlaylist = useRuforgeStore((s) => s.handlePlayPlaylist);
-  const openExportPanel = useRuforgeStore((s) => s.openExportPanel);
-  const deleteVirtualPlaylist = useRuforgeStore((s) => s.deleteVirtualPlaylist);
   const libraryScanRevision = useRuforgeStore((s) => s.libraryScanRevision);
 
   const libraryScrollRef = useRef<HTMLDivElement>(null);
@@ -106,16 +95,19 @@ export const MediaView = ({
   const creator = useCreatorPage((s) => s.creator);
   const tagId = useCreatorPage((s) => s.tagId);
   const pageKey = creator ? `creator:${creator.channelId}` : tagId ? `tag:${tagId}` : null;
-  const prevPageKeyRef = useRef<string | null>(null);
   const homeScrollTopRef = useRef(0);
-  const returningFromCreator = pageKey === null && prevPageKeyRef.current !== null;
-  useLayoutEffect(() => {
-    const prev = prevPageKeyRef.current;
-    prevPageKeyRef.current = pageKey;
-    const el = libraryScrollRef.current;
-    if (!el || prev === pageKey) return;
-    el.scrollTop = pageKey ? 0 : homeScrollTopRef.current;
-  }, [pageKey]);
+  const resetChrome = useCallback(() => {
+    pushedChromeRef.current = 0;
+    setGalleryScrollChrome(0);
+    applyLibraryHeaderChrome(0);
+  }, [setGalleryScrollChrome, applyLibraryHeaderChrome]);
+  const motionPlan = useLibraryPageMotion({
+    filter,
+    pageKey,
+    scrollRef: libraryScrollRef,
+    homeScrollTopRef,
+    resetChrome,
+  });
 
   const prevViewRef = useRef({ filter, searchQuery });
   useEffect(() => {
@@ -138,19 +130,6 @@ export const MediaView = ({
       pushGalleryChrome(amount);
     });
   }, [applyLibraryHeaderChrome, pushGalleryChrome]);
-
-  // Effects re-run when the kept-alive Library shell is shown again; only a real filter change
-  // should throw away the scroll position.
-  const scrolledFilterRef = useRef(filter);
-  useEffect(() => {
-    if (scrolledFilterRef.current === filter) return;
-    scrolledFilterRef.current = filter;
-    pushedChromeRef.current = 0;
-    setGalleryScrollChrome(0);
-    applyLibraryHeaderChrome(0);
-    const el = libraryScrollRef.current;
-    if (el) el.scrollTop = 0;
-  }, [filter, setGalleryScrollChrome, applyLibraryHeaderChrome]);
 
   const chromeSyncedRef = useRef(false);
   useLayoutEffect(() => {
@@ -195,7 +174,6 @@ export const MediaView = ({
   })();
 
   const cardActions = useVideoCardActions();
-  const { openSavePopover } = cardActions;
 
   const libraryScanDirsPrevRef = useRef<string[] | null>(null);
 
@@ -226,7 +204,9 @@ export const MediaView = ({
 
   const filteredEntries = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    const matched = libraryEntries.filter((entry) => {
+    const progressView = filter === "in-progress" || filter === "watched";
+    const source: GalleryEntry[] = progressView ? flattenToMediaEntries(libraryEntries) : libraryEntries;
+    const matched = source.filter((entry) => {
       const title = entry.kind === "media" ? entry.name : entry.title;
       if (q && !title.toLowerCase().includes(q)) return false;
       if (filter === "all") return entry.kind === "media";
@@ -253,10 +233,7 @@ export const MediaView = ({
     });
   }, [libraryEntries, searchQuery, filter, libraryScanRevision]);
 
-  const playlistStacks = useMemo(
-    () => filteredEntries.filter((e): e is PlaylistCollection => e.kind === "playlist"),
-    [filteredEntries],
-  );
+  const playlistStacks = useDemoPlaylistStacks(filteredEntries, entries, filter === "playlists" && !searchQuery.trim());
 
   const mediaOnlyEntries = useMemo(
     () => filteredEntries.filter((e): e is GalleryEntry & { kind: "media" } => e.kind === "media"),
@@ -286,6 +263,7 @@ export const MediaView = ({
     () => libraryEntries.filter((e): e is PlaylistCollection => e.kind === "playlist" && e.items.length > 0),
     [libraryEntries],
   );
+  useLibraryPlaylistSync(libraryPlaylists);
   const taggableFiles = useTaggableFiles();
   const virtualPlaylistRecords = useRuforgeStore((s) => s.virtualPlaylistRecords);
   const createVirtualPlaylist = useRuforgeStore((s) => s.createVirtualPlaylist);
@@ -296,8 +274,11 @@ export const MediaView = ({
   );
 
   const continueFiles = useMemo(
-    () => (homeMode ? mediaOnlyEntries.filter(isInProgressFile).slice(0, Math.max(2, columns - 1)) : []),
-    [homeMode, mediaOnlyEntries, columns],
+    () =>
+      homeMode
+        ? flattenToMediaEntries(libraryEntries).filter(isInProgressFile).slice(0, Math.max(2, columns - 1))
+        : [],
+    [homeMode, libraryEntries, columns],
   );
   // The newest row stays put, so a fresh download lands at the top instead of a channel shelf further down.
   const channelShelfFiles = useMemo(() => {
@@ -403,7 +384,6 @@ export const MediaView = ({
             progressBar={progressBarsByPath.get(item.file.path) ?? emptyProgressBar}
             onDelete={cardActions.onDelete}
             onExtract={cardActions.onExtract}
-            onSaveToPlaylist={cardActions.onSaveToPlaylist}
             onToggleWatchLater={cardActions.onToggleWatchLater}
             inWatchLater={cardActions.watchLaterPaths.has(libraryPathKey(item.file.path))}
           />
@@ -412,23 +392,20 @@ export const MediaView = ({
     </div>
   );
 
-  const renderPlaylistGrid = (playlists: PlaylistCollection[], opts?: { shelf?: boolean }) => (
+  const openPlaylistMenu = (e: React.MouseEvent, entry: PlaylistCollection) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setGalleryActiveMenu({ path: entry.path, x: e.clientX, y: e.clientY, floating: true });
+  };
+
+  const renderPlaylistGrid =(playlists: PlaylistCollection[], opts?: { shelf?: boolean }) => (
     <div className={gridLayoutClass} style={layoutStyle(columns, opts?.shelf)}>
       {playlists.map((entry) => (
         <PlaylistStackCard
           key={entry.path}
           playlist={entry}
           onClick={() => onPlaylistClick(entry)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setGalleryActiveMenu({
-              path: entry.path,
-              x: e.clientX,
-              y: e.clientY,
-              floating: true,
-            });
-          }}
+          onContextMenu={(e) => openPlaylistMenu(e, entry)}
         />
       ))}
     </div>
@@ -438,9 +415,6 @@ export const MediaView = ({
     <RecommendedGamePlaylistsSlot
       taggableFiles={taggableFiles}
       virtualPlaylistRecords={virtualPlaylistRecords}
-      columns={columns}
-      gridClassName={gridLayoutClass}
-      gridStyle={layoutStyle(columns)}
       onAdd={(rec) => {
         if (rec.playlist) {
           addToVirtualPlaylist(
@@ -456,11 +430,12 @@ export const MediaView = ({
         }
       }}
     >
-    {(recommendedSection) => (
+    {(recommendedCards) => (
     <motion.div 
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={motionDuration(motionPlan.reduce, pageTransition)}
       className="h-full flex flex-col"
       onClick={() => { setGalleryActiveMenu(null); }}
       onContextMenu={(e) => {
@@ -474,20 +449,21 @@ export const MediaView = ({
         onScroll={handleLibraryScroll}
         className="flex-1 overflow-y-auto px-6 xl:px-10 pb-32 rf-scrollbar"
       >
-        {pageKey ? null : (
-          <motion.div key="home-header" initial={returningFromCreator ? CREATOR_BACK_IN : false} animate={CREATOR_SETTLED} transition={CREATOR_SLIDE}>
-            <div ref={libraryHeaderRef} className="pt-16 pb-8">
-              <h1 className="text-3xl font-black tracking-tight text-stone-50">Video Library</h1>
-              <p className="text-stone-400 font-medium text-sm mt-1.5">
-                Browse and manage your downloaded videos.
-              </p>
-            </div>
-          </motion.div>
-        )}
+        <FadePresence show={!pageKey && filter !== "playlists"}>
+          <div ref={libraryHeaderRef} className="pt-16 pb-8">
+            <h1 className="text-3xl font-black tracking-tight text-stone-50">Video Library</h1>
+            <p className="text-stone-400 font-medium text-sm mt-1.5">Browse and manage your downloaded videos.</p>
+          </div>
+        </FadePresence>
 
         <div ref={gridMeasureRef}>
+        <PageSwap
+          swapKey={motionPlan.bodyKey}
+          direction={motionPlan.direction}
+          onEnter={motionPlan.onEnter}
+        >
         {creator ? (
-          <motion.div key={`creator-${creator.channelId}`} initial={CREATOR_FORWARD_IN} animate={CREATOR_SETTLED} transition={CREATOR_SLIDE}>
+          <>
             <CreatorPage
               creator={creator}
               files={allMediaFiles}
@@ -498,13 +474,11 @@ export const MediaView = ({
               renderGrid={renderVideoGrid}
               renderPlaylists={renderPlaylistGrid}
             />
-          </motion.div>
+          </>
         ) : tagId ? (
-          <motion.div key={`tag-${tagId}`} initial={CREATOR_FORWARD_IN} animate={CREATOR_SETTLED} transition={CREATOR_SLIDE}>
-            <TagPage tagId={tagId} files={taggableFiles} columns={columns} renderGrid={renderVideoGrid} />
-          </motion.div>
+          <TagPage tagId={tagId} files={taggableFiles} columns={columns} renderGrid={renderVideoGrid} />
         ) : (
-        <motion.div key="home" initial={returningFromCreator ? CREATOR_BACK_IN : false} animate={CREATOR_SETTLED} transition={CREATOR_SLIDE}>
+        <>
         {galleryLoading && !galleryDesktopReady ? (
           <div className="flex justify-center py-40">
             <Loader2 className="animate-spin text-[color:var(--accent)] opacity-20" size={60} />
@@ -521,37 +495,17 @@ export const MediaView = ({
         ) : (
           <div className="space-y-12">
             {showPlaylistSection ? (
-              <>
-              <section className="space-y-5">
-                <div className="flex items-end justify-between gap-4">
-                  <h2 className="text-2xl font-bold tracking-tight text-stone-50">Playlists</h2>
-                  <button
-                    type="button"
-                    onClick={(e) => openSavePopover([], { ...menuAnchorPoint(e.currentTarget, "start"), placement: "anchor" })}
-                    className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500 hover:text-[color:var(--accent)] transition-colors"
-                  >
-                    <Plus size={12} />
-                    New
-                  </button>
-                </div>
-                {playlistStacks.length === 0 ? (
-                  <div className="py-16 text-center space-y-3">
-                    <p className="text-stone-400 font-medium text-sm">{emptyCopy}</p>
-                    <button
-                      type="button"
-                      onClick={(e) => openSavePopover([], { ...menuAnchorPoint(e.currentTarget, "start"), placement: "anchor" })}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] text-[11px] font-semibold text-stone-200 hover:bg-white/[0.1] transition-colors"
-                    >
-                      <Plus size={12} />
-                      Create playlist
-                    </button>
-                  </div>
-                ) : (
-                  renderPlaylistGrid(playlistStacks)
-                )}
-              </section>
-              {recommendedSection}
-              </>
+              <PlaylistsSection
+                headerRef={libraryHeaderRef}
+                playlists={playlistStacks}
+                libraryFiles={allMediaFiles}
+                emptyCopy={emptyCopy}
+                gridClassName={gridLayoutClass}
+                gridStyle={layoutStyle(columns)}
+                recommendedGameCards={recommendedCards}
+                onOpen={onPlaylistClick}
+                onCardMenu={openPlaylistMenu}
+              />
             ) : null}
 
             {homeMode ? (
@@ -569,89 +523,23 @@ export const MediaView = ({
             ) : null}
           </div>
         )}
-        </motion.div>
+        </>
         )}
+        </PageSwap>
         </div>
       </div>
 
       {cardActions.saveModal}
 
-      {floatingMenu && floatingPlaylist && (() => {
-        const playlist = floatingPlaylist;
-        const virtual = isVirtualPlaylistPath(playlist.path);
-        const virtualId = parseVirtualPlaylistId(playlist.path);
-        const deleteId = virtual && virtualId && virtualId !== WATCH_LATER_ID ? virtualId : null;
-        const icon = MUSIC_MENU_ICON_SIZE;
-        const act = (fn: () => void) => () => {
-          setGalleryActiveMenu(null);
-          fn();
-        };
-        return (
-          <MusicFloatingMenu
-            open
-            x={floatingMenu.x!}
-            y={floatingMenu.y!}
-            placement="cursor"
-            theme="library"
-            onClose={() => setGalleryActiveMenu(null)}
-            ariaLabel={`Actions for ${playlist.title}`}
-            measureKey={playlist.path}
-          >
-            <MusicMenuSection label="Playback" tone={MUSIC_MENU_TONES.playback}>
-              <MusicMenuRow
-                tone={MUSIC_MENU_TONES.playback}
-                label="Play all"
-                icon={<Play size={icon} strokeWidth={2.25} />}
-                onClick={act(() => handlePlayPlaylist(playlist.items, false, null))}
-              />
-              <MusicMenuRow
-                tone={MUSIC_MENU_TONES.playback}
-                label="Shuffle"
-                icon={<Shuffle size={icon} strokeWidth={2.25} />}
-                onClick={act(() => handlePlayPlaylist(playlist.items, true, null))}
-              />
-            </MusicMenuSection>
-            <MusicMenuSection label="Go to" tone={MUSIC_MENU_TONES.navigate}>
-              <MusicMenuRow
-                tone={MUSIC_MENU_TONES.navigate}
-                label="Open playlist"
-                icon={<Layers size={icon} strokeWidth={2.25} />}
-                onClick={act(() => onPlaylistClick(playlist))}
-              />
-            </MusicMenuSection>
-            <MusicMenuSection label="File" tone={MUSIC_MENU_TONES.file}>
-              <MusicMenuRow
-                tone={MUSIC_MENU_TONES.file}
-                label="Export"
-                icon={<FolderOutput size={icon} strokeWidth={2.25} />}
-                onClick={act(() => openExportPanel({
-                  paths: playlist.items.map((i) => i.path),
-                  label: playlist.title,
-                }))}
-              />
-              {!virtual && (
-                <MusicMenuRow
-                  tone={MUSIC_MENU_TONES.file}
-                  label="Open folder"
-                  icon={<FolderOpen size={icon} strokeWidth={2.25} />}
-                  onClick={act(() => void openInFileManager(playlist.path))}
-                />
-              )}
-              {deleteId && (
-                <MusicMenuRow
-                  tone={MUSIC_MENU_TONES.file}
-                  label="Delete playlist"
-                  variant="danger"
-                  icon={<Trash2 size={icon} strokeWidth={2.25} />}
-                  onClick={act(() => {
-                    if (deleteVirtualPlaylist(deleteId)) notify("Playlist deleted");
-                  })}
-                />
-              )}
-            </MusicMenuSection>
-          </MusicFloatingMenu>
-        );
-      })()}
+      {floatingMenu && floatingPlaylist ? (
+        <PlaylistCardMenu
+          playlist={floatingPlaylist}
+          x={floatingMenu.x!}
+          y={floatingMenu.y!}
+          onClose={() => setGalleryActiveMenu(null)}
+          onOpen={onPlaylistClick}
+        />
+      ) : null}
     </motion.div>
     )}
     </RecommendedGamePlaylistsSlot>

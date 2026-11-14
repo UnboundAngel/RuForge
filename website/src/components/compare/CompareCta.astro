@@ -1,0 +1,171 @@
+---
+import { getImage } from 'astro:assets';
+import { DOWNLOAD_ICON, EXTERNAL_ICON } from './compareTable';
+import { compareSiteHref, type ComparePageDef } from '../../lib/comparePages';
+
+interface Props {
+  page: ComparePageDef;
+  downloadHref: string;
+  /** Adds the shared mobile press feedback class. */
+  mobile?: boolean;
+}
+
+const { page, downloadHref, mobile = false } = Astro.props;
+const logo = await getImage({ src: page.logo, width: 56 });
+---
+
+<div class="cmp-cta" style={`--cta-brand: ${page.brandColor}; --cta-ink: ${page.brandInk}`}>
+  <a class:list={['cmp-cta__main no-underline', mobile && 'rf-m-btn']} href={downloadHref}>
+    <span class="cmp-cta__label cmp-cta__label--download"><Fragment set:html={DOWNLOAD_ICON} />Download RuForge</span>
+    <span class="cmp-cta__label cmp-cta__label--site" aria-hidden="true"><Fragment set:html={EXTERNAL_ICON(16)} />Open {page.name} website</span>
+  </a>
+  <a
+    class:list={['cmp-cta__site', mobile && 'rf-m-btn']}
+    href={compareSiteHref(page)}
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label={`Visit ${page.name}`}
+    title={`Visit ${page.name}`}
+  >
+    <img src={logo.src} width="20" height="20" alt="" draggable="false" />
+    <span class="cmp-cta__badge" aria-hidden="true"><Fragment set:html={EXTERNAL_ICON(8)} /></span>
+  </a>
+</div>
+
+<style>
+  .cmp-cta {
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: 0.5rem;
+    background: var(--color-rf-accent);
+    transition: transform 0.2s ease-out, background-color 0.2s ease-out;
+  }
+
+  .cmp-cta:active {
+    transform: scale(0.98);
+  }
+
+  .cmp-cta__main {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem 0 0 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-rf-bg);
+    text-decoration: none;
+    transition: filter 0.2s ease-out, color 0.2s ease-out;
+  }
+
+  /* Both labels share one grid cell so the button keeps the wider width and nothing jumps. */
+  .cmp-cta__main {
+    display: inline-grid;
+  }
+
+  .cmp-cta__label {
+    grid-area: 1 / 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    transition: opacity 0.2s ease-out;
+  }
+
+  .cmp-cta__label--site {
+    opacity: 0;
+  }
+
+  .cmp-cta__main:hover {
+    filter: brightness(1.05);
+  }
+
+  .cmp-cta__site {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    width: 28px;
+    height: 28px;
+    margin: 0 0.45rem 0 0.15rem;
+    border-radius: 9999px;
+    background: var(--color-rf-bg);
+    transition: filter 0.2s ease-out, transform 0.2s ease-out;
+  }
+
+  .cmp-cta__site:hover {
+    filter: brightness(1.25);
+  }
+
+  .cmp-cta__site:active {
+    transform: scale(0.92);
+  }
+
+  .cmp-cta__site img {
+    display: block;
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+  }
+
+  .cmp-cta__badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    border-radius: 9999px;
+    background: var(--color-rf-accent);
+    color: var(--color-rf-bg);
+  }
+
+  .cmp-cta:has(.cmp-cta__site:focus-visible) {
+    background: var(--cta-brand);
+  }
+
+  .cmp-cta:has(.cmp-cta__site:focus-visible) .cmp-cta__main {
+    color: var(--cta-ink);
+  }
+
+  .cmp-cta:has(.cmp-cta__site:focus-visible) .cmp-cta__label--download,
+  .cmp-cta:has(.cmp-cta__site:focus-visible) .cmp-cta__label--site {
+    opacity: 1;
+  }
+
+  .cmp-cta:has(.cmp-cta__site:focus-visible) .cmp-cta__label--download {
+    opacity: 0;
+  }
+
+  /* Touch has no hover, so the circle there is only a link out. */
+  @media (hover: hover) {
+    .cmp-cta:has(.cmp-cta__site:hover) {
+      background: var(--cta-brand);
+    }
+
+    .cmp-cta:has(.cmp-cta__site:hover) .cmp-cta__main {
+      color: var(--cta-ink);
+    }
+
+    .cmp-cta:has(.cmp-cta__site:hover) .cmp-cta__label--download {
+      opacity: 0;
+    }
+
+    .cmp-cta:has(.cmp-cta__site:hover) .cmp-cta__label--site {
+      opacity: 1;
+    }
+  }
+
+  @media (max-width: 47.99rem) {
+    .cmp-cta {
+      display: flex;
+      width: 100%;
+    }
+  }
+</style>

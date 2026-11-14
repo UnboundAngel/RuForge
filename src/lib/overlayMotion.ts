@@ -10,8 +10,19 @@ export const overlayPanelTransition = {
   ease: OVERLAY_EASE,
 } as const;
 
+/** Same curve, twice the time: rows and cards that travel (add and remove) need to read as motion, not a flash. */
+export const overlaySettleTransition = {
+  duration: 0.44,
+  ease: OVERLAY_EASE,
+} as const;
+
 export const pageTransition = {
   duration: 0.22,
+  ease: OVERLAY_EASE,
+} as const;
+
+export const pageSlideTransition = {
+  duration: 0.24,
   ease: OVERLAY_EASE,
 } as const;
 
@@ -20,7 +31,7 @@ export const pageFadeTransition = {
   ease: OVERLAY_EASE,
 } as const;
 
-export const NAV_SHELL_EASE = [0.65, 0, 0.35, 1] as const;
+const NAV_SHELL_EASE = [0.65, 0, 0.35, 1] as const;
 
 /**
  * Mode switches fade the whole window through its background. An ease-out curve empties it

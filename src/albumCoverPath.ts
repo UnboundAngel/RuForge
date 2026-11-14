@@ -41,3 +41,20 @@ export function coverPathChain(file: {
   ];
   return [...new Set(all.filter((p): p is string => !!p))];
 }
+
+/** Covers for a single track, its own art first; the playlist cover is only a last resort so a playlist folder never masks the song's art. */
+export function trackCoverPathChain(file: {
+  path: string;
+  embeddedCoverPath?: string | null;
+  thumbnailPath?: string | null;
+  ruforgePosterPath?: string | null;
+}): string[] {
+  const loc = playlistSidecarLocationFromTrackPath(file.path);
+  const all = [
+    file.embeddedCoverPath,
+    file.thumbnailPath,
+    file.ruforgePosterPath,
+    loc ? playlistLocalCoverPath(loc) : null,
+  ];
+  return [...new Set(all.filter((p): p is string => !!p))];
+}

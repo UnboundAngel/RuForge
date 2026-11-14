@@ -6,6 +6,7 @@ export const NOTIFICATION_MUTE_OPTIONS: readonly { key: NotificationMuteKey; lab
   { key: "problems", label: "Download problems", description: "Failures, timeouts and downloads held for storage." },
   { key: "milestones", label: "Milestones", description: "Quiet achievements from your activity stats." },
   { key: "security", label: "Security notices", description: "Blocked navigation and probing from web pages." },
+  { key: "dev", label: "From the dev", description: "Announcements and polls from the RuForge developer." },
 ];
 
 const MUTE_KEYS: ReadonlySet<string> = new Set(NOTIFICATION_MUTE_OPTIONS.map((o) => o.key));
@@ -18,9 +19,12 @@ const KIND_TO_MUTE: Record<NotificationKind, NotificationMuteKey> = {
   "download-failed": "problems",
   "download-timed-out": "problems",
   "download-blocked": "problems",
+  "download-paused": "downloads",
   "security-blocked": "security",
   "stats-milestone": "milestones",
   "playlist-new": "uploads",
+  "dev-notice": "dev",
+  "dev-poll": "dev",
 };
 
 export function muteKeyForKind(kind: NotificationKind): NotificationMuteKey {

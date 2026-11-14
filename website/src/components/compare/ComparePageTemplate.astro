@@ -1,0 +1,244 @@
+---
+import { getImage } from 'astro:assets';
+import ruforgeLogo from '../../assets/ruforge-logo.png';
+import Table from '../ui/Table.astro';
+import CompareCta from './CompareCta.astro';
+import './compareCells.css';
+import Icon from '../Icon.astro';
+import CompareStamp from './CompareStamp.astro';
+import { buildCompareTable } from './compareTable';
+import { SITE } from '../../lib/site';
+import { COMPARE_PAGES, bothHave, compareVars, compareHref, formatChecked, type ComparePageDef } from '../../lib/comparePages';
+
+interface Props {
+  page: ComparePageDef;
+}
+
+const { page } = Astro.props;
+const [ruforgeImg, themImg] = await Promise.all([
+  getImage({ src: ruforgeLogo, width: 80 }),
+  getImage({ src: page.logo, width: 80 }),
+]);
+const table = buildCompareTable(page, { ruforge: ruforgeImg.src, them: themImg.src });
+const brandVars = compareVars(page);
+const shared = bothHave(page);
+const others = COMPARE_PAGES.filter((p) => p.slug !== page.slug);
+---
+
+<article class="cmp-page rf-container">
+  <header class="cmp-page__hero">
+    <div class="cmp-page__intro">
+      <nav class="cmp-page__breadcrumb" aria-label="Breadcrumb">
+        <ol>
+          <li><a href="/">Home</a></li>
+          <li aria-hidden="true">/</li>
+          <li><a href="/compare">Compare</a></li>
+          <li aria-hidden="true">/</li>
+          <li class="cmp-page__breadcrumb-current">{page.name}</li>
+        </ol>
+      </nav>
+      <h1 class="cmp-page__title">RuForge vs {page.name}</h1>
+      <p class="cmp-page__desc">{page.description}</p>
+      <div class="cmp-page__cta">
+        <CompareCta page={page} downloadHref="/download?start=1" />
+      </div>
+    </div>
+    <div class="cmp-page__anchor">
+      <div class="cmp-page__logos">
+        <CompareStamp size={72} />
+        <span class="cmp-page__vs" aria-hidden="true">vs</span>
+        <CompareStamp logo={page.logo} size={72} />
+      </div>
+      <p class="cmp-page__checked">
+        Checked against {page.name}'s own docs on {formatChecked(page.checked)}. Spot something out of date?
+        <a class="rf-inline-link" href={`${SITE.github}/issues`} target="_blank" rel="noopener noreferrer">Tell us</a>.
+      </p>
+    </div>
+  </header>
+
+  <section class="cmp-page__section">
+    <Table variant="compare" wrapStyle={brandVars} headers={table.headers} rows={table.rows} caption={`RuForge and ${page.name} compared feature by feature`} />
+    {shared.length > 0 && <p class="cmp-page__both">Both have: {shared.join(", ")}.</p>}
+  </section>
+
+  <p class="cmp-page__sources">
+    Sources:
+    {page.sources.map((s, i) => (
+      <>
+        <a class="rf-inline-link" href={s.href} target="_blank" rel="noopener noreferrer">{s.label}</a>{i < page.sources.length - 1 ? ', ' : '.'}
+      </>
+    ))}
+    {' '}RuForge facts come from the <a class="rf-inline-link" href="/features/all">feature list</a>.
+  </p>
+
+  <footer class="cmp-page__footer">
+    <div class="cmp-page__others">
+      {others.map((p) => (
+        <a href={compareHref(p.slug)} class="cmp-page__other">
+          RuForge vs {p.name}
+          <Icon name="chevron-right" size={16} />
+        </a>
+      ))}
+    </div>
+  </footer>
+</article>
+
+<style>
+  .cmp-page {
+    padding-bottom: 4rem;
+  }
+
+  .cmp-page__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    column-gap: 4rem;
+    align-items: end;
+    margin-bottom: 3.5rem;
+  }
+
+  .cmp-page__breadcrumb ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 1.5rem;
+    padding: 0;
+    list-style: none;
+    font-size: 0.75rem;
+    color: var(--color-rf-text-muted);
+  }
+
+  .cmp-page__breadcrumb a {
+    text-decoration: none;
+    color: var(--color-rf-text-muted);
+    transition: color 0.15s;
+  }
+
+  .cmp-page__breadcrumb a:hover {
+    color: var(--color-rf-text);
+  }
+
+  .cmp-page__breadcrumb-current {
+    color: var(--color-rf-text);
+  }
+
+  .cmp-page__title {
+    margin: 0 0 1rem;
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    color: var(--color-rf-text);
+  }
+
+  .cmp-page__desc {
+    margin: 0;
+    max-width: 38rem;
+    font-size: 1.125rem;
+    line-height: 1.7;
+    color: var(--color-rf-text-muted);
+  }
+
+  .cmp-page__anchor {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1.5rem;
+    justify-self: end;
+    max-width: 22rem;
+    text-align: right;
+  }
+
+  .cmp-page__logos {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .cmp-page__logos :global(.cmp-stamp) {
+    border-radius: 16px;
+  }
+
+  .cmp-page__vs {
+    font-family: var(--font-display);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-rf-text-muted);
+  }
+
+  .cmp-page__checked {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: var(--color-rf-text-muted);
+  }
+
+  .cmp-page__section {
+    margin-bottom: 4.5rem;
+  }
+
+  .cmp-page__cta {
+    margin-top: 1.75rem;
+  }
+
+  .cmp-page__both {
+    margin: 1.25rem 0 0;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: var(--color-rf-text-muted);
+  }
+
+  .cmp-page__sources {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    color: var(--color-rf-text-muted);
+  }
+
+  .cmp-page__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-rf-border);
+  }
+
+  .cmp-page__others {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+  }
+
+  .cmp-page__other {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-rf-text-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .cmp-page__other:hover {
+    color: var(--color-rf-text);
+  }
+
+  @media (max-width: 47.99rem) {
+    .cmp-page__hero {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cmp-page__anchor {
+      align-items: flex-start;
+      justify-self: start;
+      margin-top: 1.5rem;
+      text-align: left;
+    }
+  }
+</style>
+

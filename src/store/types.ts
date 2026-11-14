@@ -122,6 +122,13 @@ export function normalizeAppDensity(raw: unknown): AppDensity {
   return raw === "compact" ? "compact" : "cozy";
 }
 
+/** When the desktop Dynamic Island overlay may appear over other apps. */
+export type IslandMode = "always" | "active" | "off";
+
+export function normalizeIslandMode(raw: unknown): IslandMode {
+  return raw === "always" || raw === "off" ? raw : "active";
+}
+
 export interface RuforgeSettings {
   launchAtStartup: boolean;
   minimizeToTray: boolean;
@@ -205,6 +212,8 @@ export interface RuforgeSettings {
   showExportInTitlebar: boolean;
   /** Experiment: the bell opens the notification center inside the titlebar island instead of the popover. */
   notificationsInIsland: boolean;
+  /** Desktop island over other apps: always, only while something is happening, or never. */
+  islandMode: IslandMode;
   /** Rebound keyboard shortcuts by action id; actions not listed use their defaults (`lib/hotkeys.ts`). */
   hotkeyBindings: HotkeyOverrides;
   /** Video mini opacity while ghost mode is on, `MINI_GHOST_OPACITY_MIN` to 1. */
@@ -271,6 +280,7 @@ export const DEFAULT_SETTINGS: RuforgeSettings = {
   notificationMuted: [],
   showExportInTitlebar: false,
   notificationsInIsland: false,
+  islandMode: "active",
   hotkeyBindings: {},
   miniGhostOpacity: MINI_GHOST_OPACITY_DEFAULT,
   gameDetectionEnabled: true,
@@ -332,6 +342,7 @@ export function loadMergedSettings(): RuforgeSettings {
       notificationMuted: normalizeMutedList(merged.notificationMuted),
       showExportInTitlebar: merged.showExportInTitlebar === true,
       notificationsInIsland: merged.notificationsInIsland === true,
+      islandMode: normalizeIslandMode(merged.islandMode),
       legacyVideoColors: merged.legacyVideoColors === true,
       appDensity: normalizeAppDensity(merged.appDensity),
       autoHideChromeWhilePlaying: merged.autoHideChromeWhilePlaying === true,

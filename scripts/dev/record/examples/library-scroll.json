@@ -1,0 +1,8 @@
+[
+  {"step": "move", "arg": "300,300"},
+  {"step": "mark", "arg": "scroll-start"},
+  {"step": "scroll", "arg": "main:600:900"},
+  {"step": "wait", "arg": "400"},
+  {"step": "scroll", "arg": "main:-600:900"},
+  {"step": "mark", "arg": "scroll-end"}
+]

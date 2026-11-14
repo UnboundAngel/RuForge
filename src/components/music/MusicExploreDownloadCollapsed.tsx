@@ -5,12 +5,19 @@ import { useRuforgeStore } from "@/store/ruforgeStore";
 import type { DownloadJob } from "@/downloadQueue";
 import { jobHasDownloadTransferStarted } from "@/downloadQueue";
 import {
+  activeDownloadJobs,
+  activeDownloadsLabel,
+  averageDownloadPct,
+  noneTransferStarted,
+} from "@/lib/activeDownloadJobs";
+import {
   isActiveMusicExploreDownloadUi,
   musicExploreTrackDownloadUi,
 } from "@/lib/musicExploreDownloadStatus";
 import { isLikelyImageUrl, type MusicTrackInfo } from "@/lib/musicExploreTracks";
 import { extractYouTubeVideoId, youtubeUrlsMatch } from "@/youtubeUrl";
 import { cn } from "@/lib/utils";
+import { CancelPopParticles } from "./CancelPopParticles";
 
 export type CollapsedCelebrate = {
   kind: "complete" | "cancel";
@@ -40,10 +47,8 @@ const CHIP_THUMB = 28;
 const SIDEBAR_MS = 200;
 const ORB_COMPLETE_FILL_MS = 520;
 const ORB_CANCEL_POP_MS = 450;
-const ORB_CANCEL_PARTICLE_MS = 520;
 const CHIP_EXIT_MS = 320;
 const CANCEL_POP_EASE = "cubic-bezier(0.4, 0, 1, 1)";
-const CANCEL_POP_PARTICLE_COUNT = 10;
 
 function clampPct(value: number): number {
   return Math.min(100, Math.max(0, value));
@@ -167,39 +172,6 @@ function cancelPopStyle(
         : `transform ${ORB_CANCEL_POP_MS}ms ${CANCEL_POP_EASE}, opacity ${ORB_CANCEL_POP_MS}ms ${CANCEL_POP_EASE}`
       : undefined,
   };
-}
-
-function CancelPopParticles({ active }: { active: boolean }) {
-  const reducedMotion = useReducedMotion();
-  if (!active || reducedMotion) return null;
-
-  return (
-    <div
-      className="pointer-events-none absolute inset-0 z-[3] flex items-center justify-center overflow-visible rf-cancel-pop-burst"
-      style={{ "--rf-cancel-particle-ms": `${ORB_CANCEL_PARTICLE_MS}ms` } as CSSProperties}
-      aria-hidden
-    >
-      {Array.from({ length: CANCEL_POP_PARTICLE_COUNT }, (_, i) => {
-        const angle = (i / CANCEL_POP_PARTICLE_COUNT) * Math.PI * 2;
-        const dist = 14 + (i % 3) * 5;
-        const dx = Math.cos(angle) * dist;
-        const dy = Math.sin(angle) * dist;
-        return (
-          <span
-            key={i}
-            className="rf-cancel-pop-particle"
-            style={
-              {
-                "--rf-particle-x": `${dx}px`,
-                "--rf-particle-y": `${dy}px`,
-                animationDelay: `${(i % 4) * 18}ms`,
-              } as CSSProperties
-            }
-          />
-        );
-      })}
-    </div>
-  );
 }
 
 function OrbRing({
@@ -809,8 +781,14 @@ export function ExploreDownloadDockChip({
   const [livePct, setLivePct] = useState(0);
   const lastPctRef = useRef(0);
 
+  const running = activeDownloadJobs(activeJobs);
+  const multi = running.length > 1 && !celebrating;
+  const avgPct = multi ? averageDownloadPct(running) : null;
   const title =
-    celebrating?.title ?? activeJob?.metadata?.title ?? "Downloading";
+    celebrating?.title ??
+    activeDownloadsLabel(multi ? running : [], () => "") ??
+    activeJob?.metadata?.title ??
+    "Downloading";
   const thumbnail = resolveTrackThumb(
     celebrating?.thumbnail ?? activeJob?.metadata?.thumbnail ?? null,
     celebrating?.url ?? activeJob?.url ?? "",
@@ -866,27 +844,26 @@ export function ExploreDownloadDockChip({
     if (celebrating) return;
     if (!activeJob) return;
     const pct =
-      activeJob.status === "downloading"
-        ? Math.min(clampPct(activeJob.progress?.percentage ?? 0), 99)
-        : clampPct(activeJob.progress?.percentage ?? 0);
+      avgPct != null
+        ? Math.min(clampPct(avgPct), 99)
+        : activeJob.status === "downloading"
+          ? Math.min(clampPct(activeJob.progress?.percentage ?? 0), 99)
+          : clampPct(activeJob.progress?.percentage ?? 0);
     lastPctRef.current = pct;
     setLivePct(pct);
-  }, [
-    celebrating,
-    activeJob?.id,
-    activeJob?.status,
-    activeJob?.progress?.percentage,
-  ]);
+  }, [celebrating, activeJob?.id, activeJob?.status, activeJob?.progress?.percentage, avgPct]);
 
   const indeterminate =
     (isCancelTerminal && !!celebrating?.holdIndeterminate) ||
     (!celebrating &&
       !!activeJob &&
       livePct < 100 &&
-      (activeJob.status === "queued" ||
-        activeJob.status === "paused" ||
-        (activeJob.status === "downloading" &&
-          !jobHasDownloadTransferStarted(activeJob))));
+      (multi
+        ? noneTransferStarted(running)
+        : activeJob.status === "queued" ||
+          activeJob.status === "paused" ||
+          (activeJob.status === "downloading" &&
+            !jobHasDownloadTransferStarted(activeJob))));
   const ringIndeterminate = indeterminate && !isCompleteTerminal && !isCancelTerminal;
 
   const removeDownloadJob = useRuforgeStore((s) => s.removeDownloadJob);

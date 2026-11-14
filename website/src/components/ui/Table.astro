@@ -1,0 +1,230 @@
+---
+interface Props {
+  /** Headers may contain HTML. */
+  headers: string[];
+  /** Cells may contain HTML. A `{ group }` entry (HTML allowed) renders a full-width label row; compare variant only: a first entry with `cells` becomes the header band (label plus one column header each). */
+  rows: (string[] | { group: string; cells?: string[] })[];
+  /** Stack each row into a block on narrow screens instead of scrolling sideways. */
+  stack?: boolean;
+  caption?: string;
+  /** Opt-in compare layout: quiet header, no zebra, weighted group rows. */
+  variant?: 'compare';
+  /** Inline CSS variables for the wrapper (dynamic values only). */
+  wrapStyle?: string;
+}
+
+const { headers, rows, stack = false, caption, variant, wrapStyle } = Astro.props;
+const first = rows[0];
+const headBand = variant === 'compare' && first && !Array.isArray(first) && first.cells ? first : undefined;
+const bodyRows = headBand ? rows.slice(1) : rows;
+---
+
+<div class="rf-table-wrap" style={wrapStyle}>
+  <table class:list={['rf-table', stack && 'rf-table--stack', variant && `rf-table--${variant}`]}>
+    {caption && <caption class="sr-only">{caption}</caption>}
+    <thead>
+      {headBand ? (
+        <tr class="rf-table__group">
+          <th scope="col" set:html={headBand.group} />
+          {headBand.cells!.map((h) => <th scope="col" set:html={h} />)}
+        </tr>
+      ) : (
+        <tr>
+          {headers.map((h) => <th scope="col" set:html={h} />)}
+        </tr>
+      )}
+    </thead>
+    <tbody>
+      {
+        bodyRows.map((row) => (
+          Array.isArray(row) ? (
+            <tr>
+              {row.map((cell) => <td set:html={cell} />)}
+            </tr>
+          ) : (
+            <tr class="rf-table__group">
+              <th scope="colgroup" colspan={headers.length} set:html={row.group} />
+            </tr>
+          )
+        ))
+      }
+    </tbody>
+  </table>
+</div>
+
+<style>
+  .rf-table-wrap {
+    overflow-x: auto;
+    border-radius: 0.75rem;
+    background: var(--color-rf-surface);
+  }
+
+  :global(.rf-doc-card) .rf-table-wrap {
+    background: var(--color-rf-bg);
+  }
+
+  .rf-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .rf-table thead th {
+    padding: 0.7rem 1rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-rf-bg);
+    background: var(--color-rf-accent);
+  }
+
+  .rf-table tbody td {
+    padding: 0.6rem 1rem;
+    vertical-align: top;
+    color: var(--color-rf-text-muted);
+    border-bottom: 1px solid rgb(237 215 156 / 0.06);
+  }
+
+  .rf-table tbody td:first-child {
+    font-weight: 600;
+    color: var(--color-rf-text);
+  }
+
+  .rf-table tbody tr:nth-child(even) td {
+    background: color-mix(in srgb, var(--color-rf-accent) 4%, transparent);
+  }
+
+  .rf-table tbody .rf-table__group th {
+    padding: 1.1rem 1rem 0.4rem;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-rf-text-muted);
+  }
+
+  .rf-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .rf-table :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.8125em;
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+    background: rgb(237 215 156 / 0.08);
+    color: var(--color-rf-text);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 639px) {
+    .rf-table--stack,
+    .rf-table--stack tbody,
+    .rf-table--stack tr,
+    .rf-table--stack tbody td {
+      display: block;
+    }
+
+    .rf-table--stack thead {
+      display: none;
+    }
+
+    .rf-table--stack tbody tr {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid rgb(237 215 156 / 0.06);
+    }
+
+    .rf-table--stack tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    .rf-table--stack tbody td,
+    .rf-table--stack tbody tr:nth-child(even) td {
+      padding: 0;
+      border-bottom: none;
+      background: none;
+    }
+
+    .rf-table--stack tbody tr:nth-child(even) {
+      background: color-mix(in srgb, var(--color-rf-accent) 4%, transparent);
+    }
+
+    .rf-table--stack tbody td:empty {
+      display: none;
+    }
+  }
+
+  .rf-table--compare {
+    table-layout: fixed;
+  }
+
+  .rf-table--compare thead th:first-child {
+    width: 26%;
+  }
+
+  .rf-table--compare thead th:not(:first-child) {
+    width: 37%;
+  }
+
+  .rf-table--compare thead th {
+    padding: 1rem 1rem 0.9rem;
+    vertical-align: top;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-rf-text-muted);
+    background: none;
+    border-bottom: none;
+  }
+
+  .rf-table--compare tbody td {
+    padding: 0.7rem 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid rgb(237 215 156 / 0.06);
+  }
+
+  .rf-table--compare tbody tr:nth-child(even) td {
+    background: none;
+  }
+
+  /* Solid column fills: RuForge uses the app charcoal, the competitor an opaque mix of its brand into the surface. */
+  .rf-table--compare tbody td:nth-child(2),
+  .rf-table--compare tbody tr:nth-child(even) td:nth-child(2) {
+    background: var(--cmp-ours-bg);
+  }
+
+  .rf-table--compare tbody td:nth-child(2) {
+    border-bottom-color: rgb(255 255 255 / 0.06);
+  }
+
+  .rf-table--compare tbody td:nth-child(3),
+  .rf-table--compare tbody tr:nth-child(even) td:nth-child(3) {
+    background: color-mix(in srgb, var(--cmp-them) 4.5%, var(--color-rf-surface));
+  }
+
+  .rf-table--compare :is(thead, tbody) .rf-table__group th {
+    height: 40px;
+    padding: 0 1rem;
+    vertical-align: middle;
+    background: var(--color-rf-raised);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--color-rf-text);
+  }
+
+  .rf-table--compare tbody tr:has(+ .rf-table__group) td {
+    border-bottom: none;
+  }
+
+  .rf-table--stack tbody tr[hidden] {
+    display: none;
+  }
+</style>

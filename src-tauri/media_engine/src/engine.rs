@@ -46,8 +46,8 @@ impl Default for MediaEngineConfig {
 }
 
 pub struct MediaEngine {
-    runtime: Arc<dyn RuntimeProvider>,
-    launcher: Arc<dyn ProcessLauncher>,
+    pub(crate) runtime: Arc<dyn RuntimeProvider>,
+    pub(crate) launcher: Arc<dyn ProcessLauncher>,
     inspections: InspectionStore,
     registry: ActiveJobRegistry,
     jobs: Arc<dyn JobStore>,
@@ -257,6 +257,7 @@ impl MediaEngine {
             filename_template: request.filename_template.clone(),
             playlist_output_folder: request.playlist_output_folder.clone(),
             playlist_index: request.playlist_index,
+            playlist_index_width: None,
         };
         let filename_template_eff =
             effective_filename_template(&record.probe_json, &request.filename_template, &request.choices, &paths);

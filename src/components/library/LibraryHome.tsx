@@ -5,6 +5,7 @@ import type { HomeSection } from "./homeSections";
 import { openCreatorPage } from "./creatorPageStore";
 import { ChannelAvatar } from "./VideoByline";
 import type { FeedVideo, MixedGridItem } from "./youtubeFeed";
+import { useRuforgeStore } from "@/store/ruforgeStore";
 import { useWatchlistStore } from "@/watchlist/watchlistStore";
 
 export function SectionTitle({ children }: { children: ReactNode }) {
@@ -56,6 +57,7 @@ export function LibraryHome({
   renderGrid: (items: MixedGridItem<MediaFile>[], columns: number) => ReactNode;
   renderPlaylists: () => ReactNode;
 }) {
+  const setGalleryFilter = useRuforgeStore((s) => s.setGalleryFilter);
   return (
     <div className="flex flex-col gap-14">
       {sections.map((section) => {
@@ -89,7 +91,16 @@ export function LibraryHome({
           case "playlists":
             return (
               <section key={section.key}>
-                <SectionTitle>Your playlists</SectionTitle>
+                <SectionTitle>
+                  Your playlists
+                  <button
+                    type="button"
+                    onClick={() => setGalleryFilter("playlists")}
+                    className="ml-auto text-sm font-medium text-stone-400 transition-colors duration-150 hover:text-[color:var(--accent)]"
+                  >
+                    See all
+                  </button>
+                </SectionTitle>
                 {renderPlaylists()}
               </section>
             );

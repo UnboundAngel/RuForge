@@ -2,24 +2,17 @@ import type { MediaFile } from "@/types";
 import { collectLikedCoverPaths } from "@/components/music/LikedSongsCover";
 import { primaryArtist } from "@/components/music/musicArtist";
 import {
+  groupAudioByPlaylistFolder,
+  playlistDisplayTitle,
+  playlistFolderKey,
+} from "@/lib/downloadedMusicPlaylists";
+import {
   buildMultiTrackAlbumGroups,
   musicTrackIdentityKey,
   type AlbumGroup,
 } from "@/components/music/musicShelfDedup";
 
-export function playlistFolderKey(path: string): string | null {
-  const normalized = path.replace(/\\/g, "/");
-  const match = normalized.match(/\/Playlists\/([^/]+)\//i);
-  return match ? match[1]!.toLowerCase() : null;
-}
-
-export function playlistDisplayTitle(folderKey: string, samplePath: string): string {
-  const normalized = samplePath.replace(/\\/g, "/");
-  const match = normalized.match(/\/Playlists\/([^/]+)\//i);
-  const raw = match ? match[1]! : folderKey;
-  const title = raw.replace(/_/g, " ").trim();
-  return title || folderKey;
-}
+export { playlistDisplayTitle, playlistFolderKey };
 
 export type RecentPlaylistGroup = {
   folderKey: string;
@@ -48,28 +41,9 @@ export type BuildRecentAddedOptions = {
   feedLimit?: number;
 };
 
-function sortTracksForPlaylist(tracks: MediaFile[]): MediaFile[] {
-  return [...tracks].sort((a, b) => {
-    const ia = a.playlistIndex ?? 9999;
-    const ib = b.playlistIndex ?? 9999;
-    if (ia !== ib) return ia - ib;
-    return a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: "base" });
-  });
-}
-
 export function groupPlaylistDownloads(tracks: MediaFile[]): RecentPlaylistGroup[] {
-  const map = new Map<string, MediaFile[]>();
-  for (const t of tracks) {
-    const key = playlistFolderKey(t.path);
-    if (!key) continue;
-    const list = map.get(key);
-    if (list) list.push(t);
-    else map.set(key, [t]);
-  }
-
   const out: RecentPlaylistGroup[] = [];
-  for (const [folderKey, rawTracks] of map) {
-    const sorted = sortTracksForPlaylist(rawTracks);
+  for (const [folderKey, sorted] of groupAudioByPlaylistFolder(tracks)) {
     const newestCreated = Math.max(...sorted.map((t) => t.created));
     out.push({
       folderKey,

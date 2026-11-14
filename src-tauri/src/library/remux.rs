@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use tauri::AppHandle;
-use tauri_plugin_shell::ShellExt;
 
 pub async fn ensure_remuxed(
     app: &AppHandle,
@@ -30,7 +29,7 @@ pub async fn ensure_remuxed(
         "{id}.companion.{}.partial.mp4",
         RUN.fetch_add(1, Ordering::Relaxed)
     ));
-    let output = crate::child_job::output_detached(app.shell().sidecar("ffmpeg").ok()?.args([
+    let output = crate::child_job::output_detached(crate::tools::tool_command(app, crate::tools::paths::Tool::Ffmpeg).ok()?.args([
         "-y",
         "-i",
         &source.to_string_lossy(),

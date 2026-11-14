@@ -1,0 +1,358 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Table from '../../components/ui/Table.astro';
+import Icon from '../../components/Icon.astro';
+import { FEATURES, FEATURES_TEXT_PATH, FEATURE_HEADERS, featureTableRows, formatUpdated } from '../../lib/features';
+
+const { areas, version, updated } = FEATURES;
+---
+
+<BaseLayout
+  title="All RuForge features"
+  description="A quick reference of what RuForge already does, grouped by area: downloads, library, player, music, playlists and more."
+  flushTop
+>
+  <div class="rf-roadmap-ambient" aria-hidden="true">
+    <div class="rf-roadmap-glow rf-roadmap-glow--1"></div>
+    <div class="rf-roadmap-glow rf-roadmap-glow--2"></div>
+  </div>
+
+  <section class="rf-roadmap-hero fhero">
+    <h1 class="fhero__title">All features</h1>
+
+    <div class="fhero__side">
+      <p class="fhero__updated">
+        Updated <time datetime={updated}>{formatUpdated(updated)}</time>, v{version}
+      </p>
+      <div class="ffilter">
+        <label class="ffilter__field">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input type="text" class="ffilter__input" placeholder="Filter features" autocomplete="off" aria-label="Filter features" data-feature-filter />
+          <button type="button" class="ffilter__clear" aria-label="Clear filter" hidden data-feature-clear>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </label>
+        <a href={FEATURES_TEXT_PATH} class="ffilter__text no-underline">
+          <Icon name="file" size={14} />
+          Plain text
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <div class="rf-roadmap-body fbody">
+    <nav class="findex" aria-label="Feature areas">
+      <p class="findex__label">areas</p>
+      <ul class="findex__list">
+        {
+          areas.map((area) => (
+            <li>
+              <a href={`#${area.id}`} class="findex__link no-underline" data-area-link={area.id}>
+                {area.title}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <div class="fareas">
+      {
+        areas.map((area, i) => (
+          <section id={area.id} class="farea" data-area style={`--farea-i:${Math.min(i, 8)}`} aria-labelledby={`${area.id}-title`}>
+            <h2 id={`${area.id}-title`} class="farea__title">{area.title}</h2>
+            <Table headers={FEATURE_HEADERS} rows={featureTableRows(area)} caption={`${area.title} features`} stack />
+          </section>
+        ))
+      }
+      <p class="fempty" data-feature-empty hidden>No feature matches that filter.</p>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  function initFeatureFilter() {
+    const input = document.querySelector<HTMLInputElement>('[data-feature-filter]');
+    if (!input || input.dataset.bound) return;
+    input.dataset.bound = 'true';
+    const areas = [...document.querySelectorAll<HTMLElement>('[data-area]')];
+    const links = new Map(
+      [...document.querySelectorAll<HTMLElement>('[data-area-link]')].map((el) => [el.dataset.areaLink, el]),
+    );
+    const empty = document.querySelector<HTMLElement>('[data-feature-empty]');
+
+    const apply = () => {
+      const terms = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+      let shown = 0;
+      for (const area of areas) {
+        const areaText = area.querySelector('.farea__title')?.textContent?.toLowerCase() ?? '';
+        let visible = 0;
+        area.querySelectorAll<HTMLElement>('tbody tr').forEach((row) => {
+          const text = `${areaText} ${row.textContent?.toLowerCase() ?? ''}`;
+          const match = terms.every((t) => text.includes(t));
+          row.hidden = !match;
+          if (match) visible++;
+        });
+        area.hidden = visible === 0;
+        const link = links.get(area.id);
+        if (link) link.hidden = visible === 0;
+        link?.parentElement?.toggleAttribute('hidden', visible === 0);
+        shown += visible;
+      }
+      if (empty) empty.hidden = shown > 0;
+      if (clear) clear.hidden = input.value === '';
+    };
+    const clear = document.querySelector<HTMLButtonElement>('[data-feature-clear]');
+    const reset = () => {
+      input.value = '';
+      apply();
+      input.focus();
+    };
+    clear?.addEventListener('click', reset);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && input.value) reset();
+    });
+    input.addEventListener('input', apply);
+  }
+
+  initFeatureFilter();
+  document.addEventListener('astro:page-load', initFeatureFilter);
+</script>
+
+<style>
+  .fhero {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+    column-gap: 0.625rem;
+    padding-bottom: 4rem;
+  }
+
+  .fhero__title {
+    margin: 0 0 0 -0.03em;
+    font-family: var(--font-display);
+    font-size: 4.5rem;
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+    color: var(--color-rf-text);
+  }
+
+  .fhero__side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.875rem;
+    padding-left: 1.5rem;
+  }
+
+  .fhero__updated {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--color-rf-text-muted);
+  }
+
+  /* One pill: search field on the left, a divided plain-text segment on the right. */
+  .ffilter {
+    display: flex;
+    align-items: stretch;
+    border-radius: 9999px;
+    background: #271c18;
+    color: var(--color-rf-text-muted);
+    transition: background-color 0.15s ease;
+  }
+
+  .ffilter:hover {
+    background: #2d211c;
+  }
+
+  .ffilter:focus-within {
+    outline: 2px solid rgb(237 215 156 / 0.6);
+    outline-offset: 2px;
+  }
+
+  .ffilter__field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem 0.5rem 1rem;
+  }
+
+  .ffilter__input {
+    width: 11rem;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 0.8125rem;
+    color: var(--color-rf-text);
+  }
+
+  .ffilter__clear {
+    display: grid;
+    place-items: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-right: -0.25rem;
+    border-radius: 9999px;
+    color: var(--color-rf-text-muted);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .ffilter__clear[hidden] {
+    display: none;
+  }
+
+  .ffilter__clear:hover,
+  .ffilter__clear:focus-visible {
+    background: var(--color-rf-raised);
+    color: var(--color-rf-text);
+  }
+
+  .ffilter__input::placeholder {
+    color: rgb(201 184 122 / 0.5);
+  }
+
+  .ffilter__text {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 1rem 0 0.875rem;
+    border-left: 1px solid var(--color-rf-border);
+    border-radius: 0 9999px 9999px 0;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-rf-text-muted);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .ffilter__text:hover,
+  .ffilter__text:focus-visible {
+    background: var(--color-rf-raised);
+    color: var(--color-rf-text);
+  }
+
+  .fbody {
+    display: grid;
+    grid-template-columns: 13rem minmax(0, 1fr);
+    column-gap: 2.5rem;
+    align-items: start;
+  }
+
+  .findex {
+    position: sticky;
+    top: 6.5rem;
+  }
+
+  .findex__label {
+    margin: 0 0 0.75rem 0.75rem;
+    font-size: 0.625rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgb(201 184 122 / 0.44);
+  }
+
+  .findex__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .findex__link {
+    display: block;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--color-rf-text-muted);
+    transition: color 0.12s ease, background-color 0.12s ease;
+  }
+
+  .findex__link:hover,
+  .findex__link:focus-visible {
+    background: rgb(237 215 156 / 0.06);
+    color: var(--color-rf-text);
+  }
+
+  .fareas {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+    min-width: 0;
+  }
+
+  .farea {
+    scroll-margin-top: 6.5rem;
+    animation: farea-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    animation-delay: calc(var(--farea-i, 0) * 55ms);
+  }
+
+  .farea[hidden] {
+    display: none;
+  }
+
+  .farea__title {
+    margin: 0 0 0.875rem;
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--color-rf-text);
+  }
+
+  .fempty {
+    margin: 2rem 0;
+    text-align: center;
+    color: var(--color-rf-text-muted);
+  }
+
+  @keyframes farea-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  @media (max-width: 767px) {
+    .fhero {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 2rem;
+    }
+
+    .fhero__side {
+      padding-left: 0;
+    }
+
+    .fhero__title {
+      font-size: 3.25rem;
+    }
+
+    .fbody {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .findex {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .farea {
+      animation: none;
+    }
+
+    .findex__link,
+    .ffilter,
+    .ffilter__text {
+      transition: none;
+    }
+  }
+</style>

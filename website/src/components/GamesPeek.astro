@@ -1,0 +1,249 @@
+---
+interface Props {
+  mobile?: boolean;
+}
+
+const { mobile = false } = Astro.props;
+const headingId = mobile ? 'm-games-peek-heading' : 'games-peek-heading';
+---
+
+<section class={`games-peek${mobile ? ' games-peek--mobile' : ''}`} aria-labelledby={headingId} data-games-peek>
+  <div class="games-peek__card">
+    <span class="rf-roadmap-ready-notch games-peek__notch">
+      <span class="rf-roadmap-ready-chip games-peek__chip">Sneak peek</span>
+    </span>
+
+    <div class="games-peek__copy">
+      <h2 id={headingId} class="games-peek__title">Games mode is coming</h2>
+      <p class="games-peek__text">
+        Guides and videos for the games you play, and a mini player that stays out of your way while you're in game.
+      </p>
+    </div>
+
+    <div class="games-peek__window">
+      <button type="button" class="games-peek__frame" data-peek-frame aria-label="Play the Games mode preview">
+        <video
+          class="games-peek__video"
+          muted
+          loop
+          playsinline
+          preload="none"
+          poster="/peek/games-mode-poster.webp"
+          draggable="false"
+          aria-hidden="true"
+          tabindex="-1"
+        >
+          <source src="/peek/games-mode.mp4" type="video/mp4" />
+        </video>
+      </button>
+    </div>
+  </div>
+</section>
+
+<style>
+  .games-peek {
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --peek-dur: 0.85s;
+    width: 100%;
+  }
+
+  .games-peek__card {
+    --rf-ready-cut: var(--color-rf-bg);
+    --rf-ready-r: 14px;
+    --rf-chip: #edd79c;
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 16rem;
+    column-gap: 2.5rem;
+    height: 11.75rem;
+    padding: 0 2.5rem;
+    border-radius: 1.5rem;
+    background: var(--color-rf-surface);
+  }
+
+  .games-peek__notch {
+    position: absolute;
+    top: 0;
+    right: 0;
+    float: none;
+    margin: 0;
+    z-index: 3;
+  }
+
+  .games-peek__copy {
+    align-self: center;
+    max-width: 30rem;
+  }
+
+  .games-peek__title {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: var(--color-rf-text);
+  }
+
+  .games-peek__text {
+    margin-top: 0.5rem;
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: color-mix(in srgb, var(--color-rf-text-muted) 90%, transparent);
+  }
+
+  .games-peek__window {
+    align-self: end;
+    margin-top: 2.75rem;
+  }
+
+  .games-peek__frame {
+    --peek-y: 64%;
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    padding: 0;
+    border: 0;
+    border-radius: 0.75rem 0.75rem 0 0;
+    overflow: hidden;
+    background: #33281f;
+    cursor: pointer;
+    transform: translateY(var(--peek-y));
+    transition: transform var(--peek-dur) var(--ease);
+  }
+
+  .games-peek.is-in .games-peek__frame {
+    --peek-y: 42%;
+  }
+
+  .games-peek.is-active .games-peek__frame {
+    --peek-y: 0%;
+  }
+
+  .games-peek__video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  .games-peek__frame:focus-visible {
+    outline: 2px solid rgb(237 215 156 / 0.4);
+    outline-offset: -2px;
+  }
+
+  /* Phone: copy on top, the frame docks under it and grows upward-open (height) instead of sliding. */
+  .games-peek--mobile .games-peek__card {
+    display: block;
+    height: auto;
+    padding: 1.25rem 1.25rem 0;
+    border-radius: 1rem;
+  }
+
+  .games-peek--mobile .games-peek__copy {
+    padding-top: 0.25rem;
+  }
+
+  .games-peek--mobile .games-peek__title {
+    padding-right: 6.5rem;
+    font-size: 1.25rem;
+  }
+
+  .games-peek--mobile .games-peek__text {
+    font-size: 0.875rem;
+    line-height: 1.55;
+    margin-top: 0.5rem;
+  }
+
+  .games-peek--mobile .games-peek__window {
+    --peek-h: 3.5rem;
+    height: var(--peek-h);
+    margin-top: 1.25rem;
+    overflow: hidden;
+    transition: height var(--peek-dur) var(--ease);
+  }
+
+  .games-peek--mobile.is-in .games-peek__window {
+    --peek-h: 5.5rem;
+  }
+
+  .games-peek--mobile.is-active .games-peek__window {
+    --peek-h: calc((100vw - 5rem) * 9 / 16);
+  }
+
+  .games-peek--mobile .games-peek__frame {
+    transform: none;
+    transition: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .games-peek__frame,
+    .games-peek--mobile .games-peek__window {
+      transition: none;
+    }
+
+    .games-peek__frame {
+      --peek-y: 0%;
+    }
+
+    .games-peek.is-in .games-peek__frame {
+      --peek-y: 0%;
+    }
+
+    .games-peek--mobile .games-peek__window,
+    .games-peek--mobile.is-in .games-peek__window {
+      --peek-h: calc((100vw - 5rem) * 9 / 16);
+    }
+  }
+</style>
+
+<script>
+  function initGamesPeek() {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const canHover = window.matchMedia('(hover: hover)').matches;
+
+    document.querySelectorAll<HTMLElement>('[data-games-peek]').forEach((root) => {
+      if (root.dataset.peekReady) return;
+      root.dataset.peekReady = '1';
+      const video = root.querySelector('video');
+      const frame = root.querySelector<HTMLElement>('[data-peek-frame]');
+      if (!video || !frame) return;
+
+      const play = () => {
+        video.play().catch(() => {});
+      };
+      const setActive = (on: boolean) => {
+        root.classList.toggle('is-active', on);
+        if (on) play();
+        else video.pause();
+      };
+
+      const io = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              root.classList.add('is-in');
+            } else {
+              root.classList.remove('is-in');
+              if (root.classList.contains('is-active')) setActive(false);
+            }
+          });
+        },
+        { rootMargin: '0px 0px -12% 0px', threshold: 0.2 },
+      );
+      io.observe(root);
+
+      if (canHover && !reduced) {
+        root.addEventListener('pointerenter', () => setActive(true));
+        root.addEventListener('pointerleave', () => setActive(false));
+      }
+      else frame.addEventListener('click', () => setActive(!root.classList.contains('is-active')));
+    });
+  }
+
+  initGamesPeek();
+  document.addEventListener('astro:after-swap', initGamesPeek);
+</script>

@@ -20,6 +20,8 @@ type VideoEndScreenProps = {
   onSelect: (file: MediaFile) => void;
   onCancelTimer: () => void;
   onPlayNow: () => void;
+  /** Set when the last playlist item ended: offers Stop, Loop playlist, or the suggested video. */
+  onLoopPlaylist?: () => void;
   onCardHoverChange?: (hovered: boolean) => void;
   onHide?: () => void;
 };
@@ -236,6 +238,7 @@ function EndedPhase({
   onSelect,
   onCancelTimer,
   onPlayNow,
+  onLoopPlaylist,
 }: {
   suggestions: MediaFile[];
   autoplayArmed: boolean;
@@ -243,6 +246,7 @@ function EndedPhase({
   onSelect: (file: MediaFile) => void;
   onCancelTimer: () => void;
   onPlayNow: () => void;
+  onLoopPlaylist?: () => void;
 }) {
   const [secondsLeft, setSecondsLeft] = useState(
     autoplayArmed ? VIDEO_END_SCREEN_COUNTDOWN_SEC : 0,
@@ -328,7 +332,7 @@ function EndedPhase({
               compact ? "text-xs" : "text-sm"
             }`}
           >
-            Up next
+            {onLoopPlaylist ? "Playlist finished" : "Up next"}
           </p>
         )}
 
@@ -374,14 +378,23 @@ function EndedPhase({
             onClick={onCancelTimer}
             className={`flex-1 rounded-full bg-[#272727] text-white hover:bg-[#3a3a3a] transition-colors font-medium tracking-wide uppercase ${btnPad}`}
           >
-            Cancel
+            {onLoopPlaylist ? "Stop" : "Cancel"}
           </button>
+          {onLoopPlaylist && (
+            <button
+              type="button"
+              onClick={onLoopPlaylist}
+              className={`flex-1 rounded-full bg-[#272727] text-white hover:bg-[#3a3a3a] transition-colors font-medium tracking-wide uppercase ${btnPad}`}
+            >
+              Loop playlist
+            </button>
+          )}
           <button
             type="button"
             onClick={onPlayNow}
             className={`flex-1 rounded-full bg-[#3f3f3f] text-white hover:bg-[#525252] transition-colors font-medium tracking-wide uppercase ${btnPad}`}
           >
-            Play now
+            {onLoopPlaylist ? "Play suggested" : "Play now"}
           </button>
         </div>
       </div>
@@ -399,6 +412,7 @@ export function VideoEndScreen({
   onSelect,
   onCancelTimer,
   onPlayNow,
+  onLoopPlaylist,
   onCardHoverChange,
   onHide,
 }: VideoEndScreenProps) {
@@ -426,6 +440,7 @@ export function VideoEndScreen({
       onSelect={onSelect}
       onCancelTimer={onCancelTimer}
       onPlayNow={onPlayNow}
+      onLoopPlaylist={onLoopPlaylist}
     />
   );
 }

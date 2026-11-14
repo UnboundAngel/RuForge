@@ -20,16 +20,27 @@ export function SectionTitle({
   title,
   subtitle,
   action,
+  trailing,
 }: {
   title: string;
   subtitle: string;
   action?: React.ReactNode;
+  /** A control on the title's row, centered on the heading. */
+  trailing?: React.ReactNode;
 }) {
+  const heading = <h2 className="text-2xl font-bold tracking-tight text-white">{title}</h2>;
   return (
     <div className="px-4 min-w-0">
-      <h2 className="text-2xl font-bold tracking-tight text-white">{title}</h2>
+      {trailing ? (
+        <div className="flex items-center justify-between gap-4">
+          {heading}
+          {trailing}
+        </div>
+      ) : (
+        heading
+      )}
       <div className="mt-1 flex items-center gap-2 text-sm text-white/60">
-        <span className="truncate">{subtitle}</span>
+        {subtitle ? <span className="truncate">{subtitle}</span> : null}
         {action}
       </div>
     </div>

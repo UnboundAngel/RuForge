@@ -87,6 +87,8 @@ export function TooltipLayer({ selector, disabled = false }: Props) {
   const [label, setLabel] = useState<string | null>(null);
   const [pos, setPos] = useState<TipPos | null>(null);
   const [shownAnchor, setShownAnchor] = useState<HTMLElement | null>(null);
+  // Remount (and replay the entrance) per anchor, never per label, so live text updates in place.
+  const [tipKey, setTipKey] = useState(0);
 
   const updatePos = useCallback(() => {
     const anchor = anchorRef.current;
@@ -101,6 +103,7 @@ export function TooltipLayer({ selector, disabled = false }: Props) {
     if (!text) return;
     anchorRef.current = anchor;
     setShownAnchor(anchor);
+    setTipKey((k) => k + 1);
     setLabel(text);
   }, []);
 
@@ -201,7 +204,7 @@ export function TooltipLayer({ selector, disabled = false }: Props) {
   const shortcut = shownAnchor?.getAttribute("data-tooltip-shortcut")?.trim() || split.shortcut;
   return createPortal(
     <span
-      key={label}
+      key={tipKey}
       ref={tipRef}
       className={cn("rf-music-tooltip", wrap && "rf-music-tooltip--wrap")}
       style={style}

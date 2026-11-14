@@ -10,6 +10,13 @@ const HIDE_DELAY_MS = 1200;
 /** Pointer this close to the top or left window edge brings the chrome back. */
 const REVEAL_EDGE_PX = 16;
 
+type SnapLayoutApi = { attach: () => void; detach: () => Promise<void> };
+
+/** Global set by tauri-plugin-snap-layout's injected script; absent in the browser and Explorer webviews. */
+function snapLayout(): SnapLayoutApi | undefined {
+  return (window as unknown as { snapLayout?: SnapLayoutApi }).snapLayout;
+}
+
 function videoPlayingNow(): boolean {
   const snap = getMainPlaybackBridge();
   return getMainPlaybackBridgeOwner() === "player-video" && snap != null && !snap.paused;
@@ -44,7 +51,10 @@ export function useAutoHideChrome(active: boolean): boolean {
         : e.clientY <= top || e.clientX <= left;
       setNearChrome(near);
     };
-    const onLeave = () => setNearChrome(false);
+    // The top resize border is non-client, so a pointer flicked up can stop there with no mousemove inside
+    // the reveal strip; leaving through the top or left edge counts as reaching it.
+    const onLeave = (e: MouseEvent) =>
+      setNearChrome(hiddenRef.current && (e.clientY <= REVEAL_EDGE_PX || e.clientX <= REVEAL_EDGE_PX));
     window.addEventListener("mousemove", onMove, { passive: true });
     document.documentElement.addEventListener("mouseleave", onLeave);
     return () => {
@@ -67,8 +77,13 @@ export function useAutoHideChrome(active: boolean): boolean {
     const root = document.documentElement;
     if (hidden) root.dataset.rfChromeHidden = "1";
     else delete root.dataset.rfChromeHidden;
+    // The snap-layout plugin's native hit-test window stays over the invisible maximize button, eating the
+    // mousemove that should reveal the chrome and opening the Windows snap flyout instead.
+    const snap = snapLayout();
+    if (hidden) void snap?.detach();
     return () => {
       delete root.dataset.rfChromeHidden;
+      if (hidden) snap?.attach();
     };
   }, [hidden]);
 

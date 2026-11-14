@@ -9,20 +9,6 @@ export function ExperimentalSection() {
   return (
     <SettingsSection variant="group" title="Experimental" keywords="experimental toggles flags behavior">
       <SettingItem
-        title="Notifications in island"
-        description="The bell opens notifications inside the Dynamic Island. Tapping the empty island opens them too."
-        keywords="bell dynamic island"
-        active={settings.notificationsInIsland === true}
-        control={
-          <Switch
-            checked={settings.notificationsInIsland === true}
-            onChange={() =>
-              void updateSetting("notificationsInIsland", settings.notificationsInIsland !== true)
-            }
-          />
-        }
-      />
-      <SettingItem
         title="Hide songs from main library"
         description="Keep audio downloads and music playlists in Music mode only. The main Video Library shows movies and videos."
         keywords="audio music video library"

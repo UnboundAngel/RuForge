@@ -2,11 +2,15 @@
 
 > Live cursor. Mint reads this FIRST, then `AGENTS.md`. Update LAST after user-visible app behavior that will ship. If this file and the code disagree, the code wins: fix this file forward. Never git-restore a dirty tree to match it.
 
-Shipping version: 0.9.0 (unreleased)
+Shipping version: 0.10.0 (unreleased)
 
 Last shipped to users: 0.8.0
 
-Last updated: 2026-10-17 (0.8.0 release roll)
+Last updated: 2026-11-14 (Unreleased log)
+
+Held: 0.9.0 is cut and frozen on sync `release/0.9.0` at `1f69063` (version files, signed updater.json). Draft GitHub Release v0.9.0 on public holds the installer. Live updater.json still serves 0.8.0. Ship day still needs: fresh `pub_date`, step 5b website assets on the release branch, then the snapshot and publish. Ships to users around 2026-10-24 via the release skill's "Held release" steps. Main's version files still read 0.9.0 until the 0.10.0 bump.
+
+Planned held: 0.10.0 gets cut the same way as 0.9.0 (release branch on sync plus a draft GitHub Release, no snapshot until ship day). Draft notes for Angel's review: `docs/agents/release/notes-0.10.0.json`. Onboarding step `video-playlists` (introducedIn 0.10.0) is in `src/lib/onboardingSteps.ts`.
 
 Status: 0.8.0 live on GitHub and updater.json (release https://github.com/UnboundAngel/RuForge/releases/tag/v0.8.0, tag on public snapshot `54cf779`). Version files read 0.8.0. Bundled yt-dlp 2026.08.19. Installers are built with `RUFORGE_PUBLIC_BUILD=1`, so Games code stays out of public builds. From 0.6.0 on, the app checks `ruforge.app/updater.json` (Cloudflare Pages 302 to the GitHub raw file) with GitHub as the fallback; daily launch counts are in Cloudflare zone analytics filtered by path `/updater.json`. Companion still developer-gated on localhost. Local Vite binds 1430 (HMR 1431) so it does not collide with Finch on 1420. Website Astro is pinned to 4321.
 
@@ -38,13 +42,13 @@ Linux: local `tauri dev` only (asset scopes + `src/platformPaths.ts`). Not a shi
 
 None.
 
-## Planned for 0.9.0
+## Planned for 0.10.0
 
-Nothing open.
+Playlist overhaul (headline of the release).
 
 ## Next 3 (priority order)
 
-1. Playlist import Phase 2: CLI entry (roadmap "import playlists with one terminal command", in progress).
+1. Playlist overhaul (0.10.0). Playlist import Phase 2 CLI entry (roadmap "import playlists with one terminal command", in progress, `feat/playlist-import-cli`) belongs with it.
 2. Download history log in the title bar bell (roadmap "a history of everything you've downloaded").
 3. Window drag bug (Ruforge-priv#10), then clear the 0.7.0 build warnings (unused `NamedCount` re-export, `third_party_browser_args` in `hardware_acceleration.rs`).
 

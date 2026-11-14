@@ -10,7 +10,7 @@ use tauri_plugin_shell::ShellExt;
 
 use crate::download_job_manager::DownloadJobManager;
 use crate::ytdlp_binary::{
-    bundled_ytdlp_command, is_userdata_ytdlp_active, set_bundled_wins, upstream_asset_basename,
+    bundled_ytdlp_command, is_userdata_ytdlp_active, set_bundled_wins, swap_in_ytdlp, upstream_asset_basename,
     userdata_ytdlp_bin_dir, userdata_ytdlp_path, ytdlp_shell_command,
 };
 
@@ -248,7 +248,9 @@ pub async fn get_ytdlp_update_status(
     app: AppHandle,
     force_refresh: Option<bool>,
 ) -> Result<YtdlpUpdateStatus, String> {
-    let bundled_line = yt_dlp_version_line(&app, bundled_ytdlp_command).await?;
+    let bundled_line = yt_dlp_version_line(&app, bundled_ytdlp_command)
+        .await
+        .unwrap_or_default();
     let active_line = yt_dlp_version_line(&app, ytdlp_shell_command).await?;
 
     let active_source = if is_userdata_ytdlp_active(&app) {
@@ -430,10 +432,7 @@ pub async fn download_ytdlp_update(
     set_exe_unix(&part_path)?;
     verify_part_binary(&app, &part_path).await?;
 
-    if final_path.exists() {
-        std::fs::remove_file(&final_path).map_err(|e| e.to_string())?;
-    }
-    std::fs::rename(&part_path, &final_path).map_err(|e| e.to_string())?;
+    swap_in_ytdlp(&part_path, &final_path)?;
     set_bundled_wins(false);
 
     let active_line = yt_dlp_version_line(&app, ytdlp_shell_command).await?;

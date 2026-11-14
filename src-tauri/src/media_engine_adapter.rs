@@ -7,11 +7,10 @@ use media_engine::{
     RuntimeProvider, RuntimeSnapshot, SUBPROCESS_OUTPUT_TIMEOUT_SECS,
 };
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_shell::ShellExt;
 
 use crate::deno_binary::resolved_deno_path_if_present;
-use crate::process_tree::kill_shell_child_tree;
-use crate::ytdlp_binary::{active_userdata_ytdlp_path, ytdlp_shell_command};
+use crate::tools::paths::{resolve, Tool};
+use crate::ytdlp_binary::resolved_ytdlp_path;
 
 pub struct RuForgeRuntimeProvider {
     app: AppHandle,
@@ -26,16 +25,16 @@ impl RuForgeRuntimeProvider {
 
 impl RuntimeProvider for RuForgeRuntimeProvider {
     fn snapshot(&self) -> Result<RuntimeSnapshot, EngineError> {
-        let ytdlp_path = resolve_ytdlp_path(&self.app)?;
-        let available = Path::new(&ytdlp_path).is_file()
-            || self.app.shell().sidecar("yt-dlp").is_ok();
+        let resolved = resolved_ytdlp_path(&self.app);
+        let available = resolved.is_some();
+        let ytdlp_path = resolved.map(|p| p.display().to_string()).unwrap_or_default();
         let deno = resolved_deno_path_if_present(&self.app).map(|p| p.display().to_string());
         Ok(RuntimeSnapshot {
             ytdlp_path,
             ytdlp_available: available,
             ytdlp_version: None,
             deno_path: deno,
-            ffmpeg_path: None,
+            ffmpeg_path: self.ffmpeg_path().map(|p| p.display().to_string()),
         })
     }
 
@@ -48,7 +47,7 @@ impl RuntimeProvider for RuForgeRuntimeProvider {
     }
 
     fn ffmpeg_path(&self) -> Option<PathBuf> {
-        None
+        resolve(&self.app, Tool::Ffmpeg)
     }
 
     fn has_active_jobs(&self) -> bool {
@@ -57,18 +56,9 @@ impl RuntimeProvider for RuForgeRuntimeProvider {
 }
 
 fn resolve_ytdlp_path(app: &AppHandle) -> Result<String, EngineError> {
-    if let Some(user_path) = active_userdata_ytdlp_path(app) {
-        return Ok(user_path.display().to_string());
-    }
-    app.shell()
-        .sidecar("yt-dlp")
-        .map_err(|e| {
-            EngineError::new(
-                EngineErrorCode::RuntimeMissing,
-                format!("Bundled yt-dlp sidecar unavailable: {e}"),
-            )
-        })
-        .map(|_| "yt-dlp-sidecar".to_string())
+    resolved_ytdlp_path(app)
+        .map(|p| p.display().to_string())
+        .ok_or_else(|| EngineError::new(EngineErrorCode::RuntimeMissing, crate::tools::missing_message()))
 }
 
 /// Direct tokio spawn for inspect/simulate. Tauri shell event channels can stall after
@@ -147,76 +137,20 @@ impl TauriProcessLauncher {
 impl ProcessLauncher for TauriProcessLauncher {
     async fn output(&self, _exe: &Path, args: &[String]) -> Result<ProcessOutput, EngineError> {
         let path = resolve_ytdlp_path(&self.app)?;
-        if path != "yt-dlp-sidecar" {
-            return output_via_tokio(Path::new(&path), args).await;
-        }
-
-        use tauri_plugin_shell::process::CommandEvent;
-
-        let shell = ytdlp_shell_command(&self.app)
-            .map_err(|e| EngineError::new(EngineErrorCode::RuntimeMissing, e))?;
-        let (mut rx, child) = shell.args(args.to_vec()).spawn().map_err(|e| {
-            EngineError::new(
-                EngineErrorCode::ProcessLaunchFailure,
-                format!("Failed to run yt-dlp: {e}"),
-            )
-        })?;
-        let _child_job = crate::child_job::ChildJob::adopt(child.pid());
-
-        let collect = async {
-            let mut stdout = Vec::new();
-            let mut stderr = Vec::new();
-            let mut status_code = None;
-            while let Some(event) = rx.recv().await {
-                match event {
-                    CommandEvent::Stdout(bytes) => stdout.extend_from_slice(&bytes),
-                    CommandEvent::Stderr(bytes) => stderr.extend_from_slice(&bytes),
-                    CommandEvent::Terminated(payload) => {
-                        status_code = payload.code;
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-            (stdout, stderr, status_code)
-        };
-
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(SUBPROCESS_OUTPUT_TIMEOUT_SECS),
-            collect,
-        )
-        .await
-        {
-            Ok((stdout, stderr, status_code)) => {
-                drop(child);
-                Ok(ProcessOutput {
-                    status_code,
-                    stdout,
-                    stderr,
-                })
-            }
-            Err(_) => {
-                kill_shell_child_tree(child);
-                Err(EngineError::new(
-                    EngineErrorCode::RuntimeExecutionFailed,
-                    format!("yt-dlp timed out after {SUBPROCESS_OUTPUT_TIMEOUT_SECS}s"),
-                ))
-            }
-        }
+        output_via_tokio(Path::new(&path), args).await
     }
 
     async fn spawn(
         &self,
         _exe: &Path,
-        _args: &[String],
+        args: &[String],
     ) -> Result<media_engine::SpawnedProcess, EngineError> {
-        Err(EngineError::new(
-            EngineErrorCode::InvalidRequest,
-            "RuForge uses Tauri shell spawn in downloader adapter",
-        ))
+        let path = resolve_ytdlp_path(&self.app)?;
+        crate::media_engine_spawn::spawn_via_tokio(Path::new(&path), args)
     }
 
-    async fn kill_tree(&self, _pid: u32) -> Result<(), EngineError> {
+    async fn kill_tree(&self, pid: u32) -> Result<(), EngineError> {
+        crate::media_engine_spawn::kill_tree_pid(pid);
         Ok(())
     }
 }

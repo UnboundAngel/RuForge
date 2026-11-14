@@ -31,6 +31,7 @@ export type PlaylistEnqueuePlan = {
   toDownload: PlaylistEnqueueItem[];
   duplicates: PlaylistDuplicateItem[];
   totalResolved: number;
+  indexWidth: number;
 };
 
 export function playlistItemKey(item: PlaylistItem, index: number): string {
@@ -58,21 +59,28 @@ export function buildPlaylistEnqueuePlan(
   overrides: Record<string, boolean>,
   defaultAudioOnly: boolean,
   skipDuplicatesAutomatically: boolean,
+  excluded?: ReadonlySet<string>,
 ): PlaylistEnqueuePlan {
   const toDownload: PlaylistEnqueueItem[] = [];
   const duplicates: PlaylistDuplicateItem[] = [];
   const seen = new Set<string>();
   let index = 0;
+  // Row position keys the per-row audio override (the preview list keys by row), so it stays
+  // separate from `index`, which only counts items that can actually download.
+  let row = 0;
 
   for (const item of playlistItems) {
-    index += 1;
+    row += 1;
     const url = playlistItemWatchUrl(item);
     if (!url) continue;
+    const itemKey = playlistItemKey(item, row);
+    // Cancelled rows never reach numbering, so the kept videos stay contiguous.
+    if (excluded?.has(itemKey)) continue;
     const k = normalizeYouTubeUrlForCompare(url);
     if (seen.has(k)) continue;
     seen.add(k);
+    index += 1;
 
-    const itemKey = playlistItemKey(item, index);
     const audioOnly = resolveAudioOnlyForPlaylistItem(
       itemKey,
       overrides,
@@ -93,42 +101,70 @@ export function buildPlaylistEnqueuePlan(
     toDownload,
     duplicates,
     totalResolved: seen.size,
+    indexWidth: playlistIndexWidth(seen.size),
   };
 }
 
-/** Sum display bytes for playlist hero from per-row estimates and audio mode. Null until every row has one. */
+/** Digits of the playlist size, minimum 2, so "NN - title" file names sort at 100+ items. */
+export function playlistIndexWidth(count: number): number {
+  return Math.max(2, String(Math.max(0, Math.floor(count))).length);
+}
+
+function rowDisplayBytes(item: PlaylistItem, audio: boolean): number | null {
+  const positive = (n: number | null | undefined) =>
+    typeof n === "number" && n > 0 ? n : null;
+  const legacy = positive(item.fileSizeBytes);
+  return audio
+    ? (positive(item.fileSizeBytesAudio) ?? legacy)
+    : (positive(item.fileSizeBytesVideo) ?? legacy);
+}
+
+export type PlaylistSizeProgress = {
+  /** Sum over the kept rows whose size is known so far. */
+  bytes: number;
+  known: number;
+  /** Kept rows whose size could not be read. */
+  failed: number;
+  /** Kept rows in the list. */
+  total: number;
+};
+
+/** Running size total over the kept rows; `known + failed < total` while sizes are still arriving. */
+export function playlistSizeProgress(
+  items: PlaylistItem[],
+  overrides: Record<string, boolean>,
+  defaultAudioOnly: boolean,
+  excluded?: ReadonlySet<string>,
+  failedIds?: ReadonlySet<string>,
+): PlaylistSizeProgress {
+  const out: PlaylistSizeProgress = { bytes: 0, known: 0, failed: 0, total: 0 };
+  items.forEach((item, i) => {
+    const key = playlistItemKey(item, i + 1);
+    if (excluded?.has(key)) return;
+    out.total += 1;
+    const pick = rowDisplayBytes(
+      item,
+      resolveAudioOnlyForPlaylistItem(key, overrides, defaultAudioOnly),
+    );
+    if (pick != null) {
+      out.bytes += pick;
+      out.known += 1;
+    } else if (item.id && failedIds?.has(item.id.trim())) {
+      out.failed += 1;
+    }
+  });
+  return out;
+}
+
+/** Total display bytes for the kept rows. Null until every kept row has one. */
 export function sumPlaylistDisplayBytes(
   items: PlaylistItem[],
   overrides: Record<string, boolean>,
   defaultAudioOnly: boolean,
+  excluded?: ReadonlySet<string>,
 ): number | null {
-  let sum = 0;
-  let missing = items.length === 0;
-  items.forEach((item, i) => {
-    const key = playlistItemKey(item, i + 1);
-    const audio = resolveAudioOnlyForPlaylistItem(key, overrides, defaultAudioOnly);
-    const audioB =
-      typeof item.fileSizeBytesAudio === "number" && item.fileSizeBytesAudio > 0
-        ? item.fileSizeBytesAudio
-        : null;
-    const videoB =
-      typeof item.fileSizeBytesVideo === "number" && item.fileSizeBytesVideo > 0
-        ? item.fileSizeBytesVideo
-        : null;
-    const legacy =
-      typeof item.fileSizeBytes === "number" && item.fileSizeBytes > 0
-        ? item.fileSizeBytes
-        : null;
-    const pick = audio
-      ? (audioB ?? legacy)
-      : (videoB ?? legacy);
-    if (typeof pick === "number" && pick > 0) {
-      sum += pick;
-    } else {
-      missing = true;
-    }
-  });
-  return missing ? null : sum;
+  const p = playlistSizeProgress(items, overrides, defaultAudioOnly, excluded);
+  return p.total === 0 || p.known < p.total ? null : p.bytes;
 }
 
 export function isPlaylistDownloaderUrl(url: string): boolean {

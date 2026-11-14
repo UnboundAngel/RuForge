@@ -27,7 +27,7 @@ const SPRING = { type: "spring", stiffness: 520, damping: 30 } as const;
 /** Past this the separate audio stream is snapped back onto the picture. */
 const AUDIO_DRIFT_SEC = 0.25;
 
-function FeedPreviewVideo({ videoId, status }: { videoId: string; status: FeedPreviewStatus }) {
+export function FeedPreviewVideo({ videoId, status }: { videoId: string; status: FeedPreviewStatus }) {
   const src = useFeedPreview((s) => s.src);
   const audioSrc = useFeedPreview((s) => s.audioSrc);
   const start = useFeedPreview((s) => s.start);
@@ -113,7 +113,7 @@ function FeedPreviewVideo({ videoId, status }: { videoId: string; status: FeedPr
   );
 }
 
-function PreviewButton({ video, status }: { video: FeedVideo; status: FeedPreviewStatus | null }) {
+export function PreviewButton({ video, status }: { video: FeedVideo; status: FeedPreviewStatus | null }) {
   const icon = status === "loading" ? "loading" : status === "playing" ? "pause" : "play";
   return (
     <button
@@ -124,7 +124,7 @@ function PreviewButton({ video, status }: { video: FeedVideo; status: FeedPrevie
       }}
       className={cn(
         "absolute bottom-2.5 left-2.5 z-20 flex h-10 items-center gap-1.5 rounded-full bg-black/70 pl-3 pr-3.5 text-white",
-        "transition-[opacity,transform,background-color] duration-200 hover:scale-105 hover:bg-black/85",
+        "transition-[opacity,translate,scale,background-color] duration-200 hover:scale-105 hover:bg-black/85",
         status
           ? "opacity-100 translate-y-0"
           : "opacity-0 translate-y-2 group-hover/card:opacity-100 group-hover/card:translate-y-0 focus-visible:opacity-100 focus-visible:translate-y-0",
@@ -164,7 +164,7 @@ function WatchButton({ video }: { video: FeedVideo }) {
       }}
       className={cn(
         "absolute bottom-2.5 left-2.5 z-20 flex h-10 items-center gap-1.5 rounded-full bg-black/70 pl-3 pr-3.5 text-white",
-        "transition-[opacity,transform,background-color] duration-200 hover:scale-105 hover:bg-black/85",
+        "transition-[opacity,translate,scale,background-color] duration-200 hover:scale-105 hover:bg-black/85",
         "opacity-0 translate-y-2 group-hover/card:opacity-100 group-hover/card:translate-y-0 focus-visible:opacity-100 focus-visible:translate-y-0",
       )}
       aria-label={`Watch ${video.title} on YouTube`}

@@ -13,9 +13,7 @@ import {
 type Setters = {
   setPostInstall: (p: PostInstallPayload) => void;
   setUpdaterPhase: Dispatch<SetStateAction<UpdaterPhase>>;
-  setUpdaterIslandCollapsed: (v: boolean) => void;
   setUpdaterVersion: (v: string) => void;
-  setSelectedUpdateReleaseVersion: (v: string) => void;
   setUpdaterNotes: (v: string) => void;
   setUpdaterContentLength: (v: number) => void;
   setUpdaterDownloaded: (v: number) => void;
@@ -25,8 +23,8 @@ const debugOn = () => useRuforgeStore.getState().settings.showDebuggingSettings 
 
 /**
  * Settings > Debugging updater and What's New previews. The draft rows load
- * `docs/agents/release/notes-*.json` and exist in DEV only. Returns the draft's teaser so the
- * "ready to update" card shows it while the debug cycle sits on that phase.
+ * `docs/agents/release/notes-*.json` and exist in DEV only. Returns the draft's teaser while the
+ * debug cycle sits on the available phase.
  */
 export function useDebugUpdaterPreview(s: Setters): string | null {
   const [draftNotes, setDraftNotes] = useState<string | null>(null);
@@ -38,13 +36,11 @@ export function useDebugUpdaterPreview(s: Setters): string | null {
     const cycleUpdater = (draft: DraftRelease | null) => {
       if (!debugOn()) return;
       const x = setters.current;
-      x.setUpdaterIslandCollapsed(false);
       x.setUpdaterPhase((current) => {
         if (current === "idle") {
           draftRef.current = draft;
           const v = draft?.version ?? "9.9.9";
           x.setUpdaterVersion(v);
-          x.setSelectedUpdateReleaseVersion(v);
           setDraftNotes(draft ? teaserNotesFromUpdaterBody(draft.body) : null);
           x.setUpdaterNotes("### Mock Release Notes\n- Polished UI & Transitions\n- Enhanced accent color integration\n- Fixed subtitle ghosting bug\n- Improved MiniPlayer sizing logic");
           return "available";

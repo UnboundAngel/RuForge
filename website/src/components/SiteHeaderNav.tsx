@@ -281,7 +281,8 @@ const MegaPanel = memo(function MegaPanel({ sectionId }: { sectionId: NavSection
   const section = NAV_SECTIONS.find((s) => s.id === sectionId)!;
   const config = NAV_MENU_CONFIG[sectionId];
   const linkPages = section.pages.filter((p) => !config.featuredSlugs.includes(p.slug));
-  const twoCols = linkPages.length > 5;
+  // Nowrap links overlap in two columns on narrow panels, so a short list stays in one column.
+  const twoCols = linkPages.length > 6;
   const stacked = STACKED[config.stackBelow];
 
   const linkColumns = (

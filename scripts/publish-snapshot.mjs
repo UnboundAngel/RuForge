@@ -18,6 +18,10 @@
  *   node scripts/publish-snapshot.mjs --only website --dry-run
  *   RUFORGE_PUBLISH=1 node scripts/publish-snapshot.mjs --only website "Website: roadmap and features pass"
  *   RUFORGE_PUBLISH=1 node scripts/publish-snapshot.mjs --only README.md "README: install and credits"
+ *
+ * --ref <branch> snapshots sync/<branch> instead of sync/main, so a held release
+ * branch can ship while main already carries the next version:
+ *   RUFORGE_PUBLISH=1 node scripts/publish-snapshot.mjs --ref release/0.9.0 "Release: v0.9.0"
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -30,7 +34,8 @@ import { findContentLeaks, leakTerms, readFeaturesFromTree, scheduledPrivatePath
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const listPath = join(root, 'scripts/private-only-paths.txt');
 const PUBLIC_REF = 'public/main';
-const SYNC_REF = 'sync/main';
+const refArgAt = process.argv.indexOf('--ref');
+const SYNC_REF = `sync/${refArgAt >= 0 ? process.argv[refArgAt + 1] || '' : 'main'}`;
 
 function run(args, opts = {}) {
   return execFileSync('git', args, {
@@ -111,7 +116,8 @@ function usage(code = 1) {
   node scripts/publish-snapshot.mjs --dry-run
   node scripts/publish-snapshot.mjs "<commit message>"
   RUFORGE_PUBLISH=1 node scripts/publish-snapshot.mjs "<commit message>"
-  node scripts/publish-snapshot.mjs --only <dir-or-file> [--dry-run] "<commit message>"`);
+  node scripts/publish-snapshot.mjs --only <dir-or-file> [--dry-run] "<commit message>"
+  node scripts/publish-snapshot.mjs --ref <sync-branch> [--dry-run] "<commit message>"`);
   process.exit(code);
 }
 
@@ -120,8 +126,11 @@ const dryRun = argv.includes('--dry-run');
 const onlyAt = argv.indexOf('--only');
 const only = onlyAt >= 0 ? (argv[onlyAt + 1] || '').replace(/[\\/]+$/, '') : '';
 if (onlyAt >= 0 && (!only || only.startsWith('-'))) usage(1);
+const refAt = argv.indexOf('--ref');
+if (refAt >= 0 && (!argv[refAt + 1] || argv[refAt + 1].startsWith('-'))) usage(1);
+const flagValueAt = new Set([onlyAt, refAt].filter((i) => i >= 0).flatMap((i) => [i, i + 1]));
 const message = argv
-  .filter((a, i) => a !== '--dry-run' && (onlyAt < 0 || (i !== onlyAt && i !== onlyAt + 1)))
+  .filter((a, i) => a !== '--dry-run' && !flagValueAt.has(i))
   .join(' ')
   .trim();
 if (!dryRun && !message) usage(1);

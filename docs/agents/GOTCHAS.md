@@ -17,3 +17,7 @@ Use `tauri::async_runtime::spawn` for async HTTP, emit only on change, never hol
 ## Big features
 
 Plan doc in `docs/ruforge/plans/`, one phase per session, each phase verified, committed and pushed on a feature branch on **`sync`**. Public PR only if Angel asks. Handoffs: leave/back triggers only (root AGENTS).
+
+## Dev vs release identity
+
+`npm run dev:app` merges `src-tauri/tauri.dev.conf.json`, so dev runs as `com.attic.ruforge.dev` ("RuForge Dev") with its own single-instance key and data dirs; it does not share library or settings with the installed release, and it skips `ruforge://` registration. Keep `app.windows` out of that file: a merge patch replaces arrays whole and dev would drift from release. The media folder (`library/config.rs`) is still shared.

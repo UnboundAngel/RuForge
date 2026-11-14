@@ -25,6 +25,8 @@ interface SettingItemProps {
   description: string;
   /** Extra search terms that are not in the title or description. */
   keywords?: string;
+  /** Brand mark shown before the title. */
+  icon?: React.ReactNode;
   control?: React.ReactNode;
   active?: boolean;
   onClick?: () => void;
@@ -37,18 +39,28 @@ const SettingsSectionHeader: React.FC<{ children: React.ReactNode }> = ({ childr
 export const SettingsSection: React.FC<{
   title: string;
   keywords?: string;
+  icon?: React.ReactNode;
   /** Kept so existing call sites compile; every section now shares one header style. */
   variant?: "group";
   /** Short text under the header, outside the panel. */
   intro?: React.ReactNode;
   children: React.ReactNode;
-}> = ({ title, keywords = "", intro, children }) => {
+}> = ({ title, keywords = "", icon, intro, children }) => {
   const query = useContext(SettingsSearchRootContext);
   const forceShow = settingsTextMatches(query, title, keywords);
   return (
     <SettingsSearchContext.Provider value={{ query, forceShow }}>
       <section className={intro ? "rf-settings-section rf-settings-section--intro" : "rf-settings-section"}>
-        <SettingsSectionHeader>{title}</SettingsSectionHeader>
+        <SettingsSectionHeader>
+          {icon ? (
+            <span className="flex items-center gap-2.5">
+              {icon}
+              {title}
+            </span>
+          ) : (
+            title
+          )}
+        </SettingsSectionHeader>
         {intro ? <div className="rf-settings-section-intro">{intro}</div> : null}
         <div className="rf-settings-section-body">{children}</div>
       </section>
@@ -60,6 +72,7 @@ export const SettingItem: React.FC<SettingItemProps> = ({
   title,
   description,
   keywords = "",
+  icon,
   control,
   active = true,
   onClick,
@@ -72,7 +85,16 @@ export const SettingItem: React.FC<SettingItemProps> = ({
   return (
     <div onClick={onClick} className={`group rf-settings-row ${onClick ? "cursor-pointer" : ""}`}>
       <div className="rf-settings-row-label space-y-[0.1875rem]">
-        <h4 className={active ? "text-stone-100" : "text-stone-400"}>{title}</h4>
+        <h4 className={active ? "text-stone-100" : "text-stone-400"}>
+          {icon ? (
+            <span className="flex items-center gap-2">
+              <span className="text-stone-400">{icon}</span>
+              {title}
+            </span>
+          ) : (
+            title
+          )}
+        </h4>
         <SettingsDescription description={description} className="max-w-md" />
       </div>
       {control ? (

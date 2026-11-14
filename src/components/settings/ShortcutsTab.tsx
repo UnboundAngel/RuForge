@@ -84,7 +84,21 @@ export function ShortcutsTab({ isSearching, tabLabel, hasCustomBindings }: Short
               <AppGlanceShortcutRows />
             </>
           ) : null}
-          {group.id === "library" ? <LibraryGameShortcutRows /> : null}
+          {group.id === "library" ? (
+            <>
+              <SettingItem
+                title="Cancel a range of playlist videos"
+                description="In a playlist preview, click one video, then Shift-click another to cancel or restore everything between."
+                control={<FixedHotkeyKeys combos={[["Shift", "Click"]]} />}
+              />
+              <SettingItem
+                title="Set a playlist's start video"
+                description="In a playlist, drag a video by its number onto the cover and release."
+                control={<FixedHotkeyKeys combos={[[MOUSE_DRAG]]} />}
+              />
+              <LibraryGameShortcutRows />
+            </>
+          ) : null}
           {group.id === "player" ? (
             <>
               <SettingItem

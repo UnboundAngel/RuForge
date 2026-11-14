@@ -1,18 +1,78 @@
-import { ListVideo } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
 import type { PlaylistCollection } from "../types";
-import { localImageSrc } from "@/lib/localImageSrc";
+import { playlistDisplayTitle } from "@/lib/playlistDisplayTitle";
+import { isVirtualPlaylistPath, parseVirtualPlaylistId, WATCH_LATER_ID } from "@/virtualPlaylists";
+import { isDemoPlaylistPath } from "@/lib/demoPlaylistPath";
 import { playlistCardKey } from "@/lib/playlistCardKey";
-import { PlaylistEmptyThumb } from "./PlaylistEmptyThumb";
+import { playlistHasNew, usePlaylistSeen } from "@/lib/playlistSeen";
+import { formatHoursMinutes } from "./playlist-detail/playlistRows";
+import { CreatorsMark, PlaylistCard } from "./library/PlaylistCard";
+import { distinctChannels } from "./playlist-detail/PlaylistAvatarStack";
+import { MetaParts } from "./library/VideoByline";
+import { isVideoWatched } from "@/playbackStorage";
+
+const hasUrlPayload = (dt: DataTransfer | null) =>
+  !!dt && (dt.types.includes("text/uri-list") || dt.types.includes("text/plain")) && !dt.types.includes("Files");
 
 export const PlaylistStackCard = ({
   playlist,
   onClick,
   onContextMenu,
+  onUrlDrop,
+  targetId,
 }: {
   playlist: PlaylistCollection;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  /** Set on video playlists: dropped links are handled here instead of reaching the downloader. */
+  onUrlDrop?: (dataTransfer: DataTransfer) => void;
+  /** `data-onboarding-target` for the tour's spotlight. */
+  targetId?: string;
 }) => {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [dropArmed, setDropArmed] = useState(false);
+  const onUrlDropRef = useRef(onUrlDrop);
+  onUrlDropRef.current = onUrlDrop;
+  const accepts = onUrlDrop != null;
+  const demo = isDemoPlaylistPath(playlist.path);
+
+  // Native listeners: the page-level drop intake is native too and would take the drop first.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || !accepts) return;
+    const over = (e: DragEvent) => {
+      if (!hasUrlPayload(e.dataTransfer)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDropArmed(true);
+    };
+    const leave = (e: DragEvent) => {
+      if (e.relatedTarget instanceof Node && el.contains(e.relatedTarget)) return;
+      setDropArmed(false);
+    };
+    const drop = (e: DragEvent) => {
+      if (!hasUrlPayload(e.dataTransfer)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDropArmed(false);
+      if (e.dataTransfer) onUrlDropRef.current?.(e.dataTransfer);
+    };
+    el.addEventListener("dragover", over);
+    el.addEventListener("dragenter", over);
+    el.addEventListener("dragleave", leave);
+    el.addEventListener("drop", drop);
+    return () => {
+      el.removeEventListener("dragover", over);
+      el.removeEventListener("dragenter", over);
+      el.removeEventListener("dragleave", leave);
+      el.removeEventListener("drop", drop);
+    };
+  }, [accepts]);
+
+  const seen = usePlaylistSeen((s) => s.seen);
+  const seenLoaded = usePlaylistSeen((s) => s.loaded);
+
   const mainThumbnail =
     playlist.stackThumbnailPath ||
     playlist.items[0]?.thumbnailPath ||
@@ -22,42 +82,35 @@ export const PlaylistStackCard = ({
       ? "No videos"
       : `${playlist.itemCount} video${playlist.itemCount === 1 ? "" : "s"}`;
 
+  const isWatchLater = isVirtualPlaylistPath(playlist.path) && parseVirtualPlaylistId(playlist.path) === WATCH_LATER_ID;
+  const showNew = seenLoaded && !isWatchLater && playlistHasNew(playlist, seen);
+
+  const watched = playlist.items.filter((f) => isVideoWatched(f.path, f.duration)).length;
+  const meta = (
+    <MetaParts
+      parts={[
+        playlist.combinedDuration > 0 ? formatHoursMinutes(playlist.combinedDuration) : null,
+        watched === 0 ? null : `${watched} of ${playlist.itemCount} watched`,
+        distinctChannels(playlist.items).map((c) => c.channel).join(", ") || null,
+      ]}
+    />
+  );
+
   return (
-    <div
-      className="group cursor-pointer flex flex-col gap-2.5"
-      data-playlist-card={playlistCardKey(playlist.title)}
+    <PlaylistCard
+      rootRef={rootRef}
+      dataKey={playlistCardKey(playlist.title)}
+      cover={mainThumbnail}
+      count={countLabel}
+      mark={<CreatorsMark items={playlist.items} />}
+      title={<span className="truncate">{isWatchLater ? "Watch later" : playlistDisplayTitle(playlist.title)}</span>}
+      meta={meta}
+      isNew={showNew && !demo}
+      demo={demo}
+      targetId={targetId}
+      dropArmed={dropArmed}
       onClick={onClick}
       onContextMenu={onContextMenu}
-    >
-      <div data-squish-cover className="rf-art-clip relative aspect-video bg-[color:var(--rf-field)] transition-transform duration-150 ease-out [--rf-art-r:var(--r-media,16px)]">
-        {mainThumbnail ? (
-          <img
-            src={localImageSrc(mainThumbnail)}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover transition-[filter] duration-200 group-hover:brightness-110"
-          />
-        ) : (
-          <PlaylistEmptyThumb className="absolute inset-0" />
-        )}
-
-        {/* YouTube-style right count strip */}
-        <div className="absolute inset-y-0 right-0 w-[28%] min-w-[4.5rem] bg-black/70 flex flex-col items-center justify-center gap-1.5 px-2">
-          <ListVideo size={18} strokeWidth={2} className="text-white" />
-          <span className="text-[11px] font-semibold text-white text-center leading-tight">
-            {countLabel}
-          </span>
-        </div>
-      </div>
-
-      <div className="px-0.5 min-w-0">
-        <h3 className="text-[13px] font-bold text-stone-100 leading-snug truncate">
-          {playlist.title.replace(/_/g, " ")}
-        </h3>
-        <p className="mt-0.5 text-[11px] font-medium text-stone-500 truncate">Playlist</p>
-        <p className="mt-0.5 text-[11px] font-medium text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity">
-          View full playlist
-        </p>
-      </div>
-    </div>
+    />
   );
 };

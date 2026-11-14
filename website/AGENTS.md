@@ -14,6 +14,14 @@ Every inline text link uses `.rf-inline-link` from `global.css` (docs link look:
 
 Any link or button that scrolls to another spot on the same page uses `src/lib/smoothAnchors.ts`; rules in [`docs/ruforge/website/design.md`](../docs/ruforge/website/design.md) under "Scrolling within a page".
 
+## Tables
+
+Every table on the site is `src/components/ui/Table.astro` (`headers`, `rows`, optional `stack` for phone stacking). Never write a new table or table CSS. No row hover: the house table has none, and an inset boxed hover highlight is banned everywhere.
+
+## Text inputs
+
+Never `type="search"`: browsers draw their own unstyled clear (x) button. Use `type="text"` like `DocsSearch.tsx` and, when clearing is useful, a styled clear button that shows only when there is text, plus Escape to clear.
+
 ## Mobile (`/m/`)
 
 Every pressable gets shared press feedback by class, never a bespoke handler: `rf-m-btn` (buttons, light impact), `rf-m-card` (cards, selection), `rf-m-link` (links and tappable rows, selection). `MobileShell.astro` fires the haptic and ripple on pointerdown, so do not also call `useHaptic()` in the same element's `onClick` (it double-fires). Call `useHaptic()` directly only for pressables that cannot carry the class. Height expand (`MobileFeatureAccordion`) is only for elements that actually reveal more content below.

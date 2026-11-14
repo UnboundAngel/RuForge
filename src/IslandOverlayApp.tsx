@@ -82,7 +82,8 @@ export default function IslandOverlayApp() {
   const download = payload?.download ?? null;
   const notice = payload?.notice ?? null;
   const watchlist = payload?.watchlist ?? null;
-  const visible = hasSession || download != null || notice != null || watchlist != null;
+  const hasActivity = hasSession || download != null || notice != null || watchlist != null;
+  const visible = hasActivity || payload?.idle === true;
 
   const hovered = useIslandClickThrough(visible);
   const downloadTurn = useIslandDownloadTurn(download, hasSession && expandedTarget == null, hovered);
@@ -264,8 +265,8 @@ export default function IslandOverlayApp() {
             ? { duration: 0.18, ease: [0.16, 1, 0.3, 1] }
             : { duration: 0.26, ease: [0.4, 0, 1, 1], delay: 0.2 }
         }
-        className={`origin-top ${visible ? "pointer-events-auto" : "pointer-events-none"}`}
-        data-island-hit={visible ? "" : undefined}
+        className={`origin-top ${hasActivity ? "pointer-events-auto" : "pointer-events-none"}`}
+        data-island-hit={hasActivity ? "" : undefined}
       >
         <DynamicIsland
           compactPills

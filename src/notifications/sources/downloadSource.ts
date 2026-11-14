@@ -7,8 +7,10 @@ import type { GalleryEntry, MediaFile } from "@/types";
 import {
   markAllLocalRead,
   markLocalRead,
+  upsertLocal,
   useNotificationCenterStore,
 } from "../notificationCenterStore";
+import { resumePausedQueue } from "../pausedQueueNotice";
 import type { NotificationItem, NotificationSource } from "../types";
 import { activeStorageHolds, storageInputsChanged, withStorageHolds } from "../storageHolds";
 import { collapseDownloadAttempts, recordStorageFullRefusal, withLiveDownloadActions } from "./downloadItems";
@@ -97,6 +99,10 @@ export const downloadSource: NotificationSource = {
         return;
       case "retry":
         return retryFromNotification(item);
+      case "resume-queue":
+        resumePausedQueue();
+        upsertLocal({ ...item, actions: [], subtitle: "Resumed", read: true });
+        return;
       case "open-storage-settings":
         // Storage is the first section of General, and Settings opens scrolled to the top.
         s.setSettingsTab("general");

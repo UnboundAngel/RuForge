@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+use crate::ytdlp_playlist_source::source_is_playlist;
 use crate::types::{
     MediaChoiceSet, MediaInspection, PlaylistItemPreview,
 };
@@ -622,14 +623,14 @@ pub fn ytdlp_primary_entry(json: &Value) -> &Value {
 pub fn ytdlp_usable_playlist_entries(json: &Value) -> Option<Vec<&Value>> {
     let entries = json.get("entries").and_then(|e| e.as_array())?;
     let usable: Vec<&Value> = entries.iter().filter(|e| ytdlp_entry_is_usable(e)).collect();
-    if usable.len() >= 2 {
+    if usable.len() >= 2 || (usable.len() == 1 && source_is_playlist(json)) {
         Some(usable)
     } else {
         None
     }
 }
 
-fn playlist_preview_from_entry(entry: &Value, max_height: Option<u32>) -> PlaylistItemPreview {
+pub fn playlist_preview_from_entry(entry: &Value, max_height: Option<u32>) -> PlaylistItemPreview {
     let (audio_sz, video_sz) = dual_file_sizes_from_entry_json(entry, max_height, false);
     let legacy = video_file_size_from_ytdlp_json(entry);
     PlaylistItemPreview {

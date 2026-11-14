@@ -2,12 +2,26 @@ import { useMemo } from "react";
 import { Download } from "lucide-react";
 import { jobHasDownloadTransferStarted, type DownloadJob } from "@/downloadQueue";
 import { useMusicDownloadCelebrations } from "@/hooks/useMusicDownloadCelebrations";
+import {
+  activeDownloadJobs,
+  activeDownloadsLabel,
+  averageDownloadPct,
+  noneTransferStarted,
+} from "@/lib/activeDownloadJobs";
 import { cn } from "@/lib/utils";
 import { useRuforgeStore } from "@/store/ruforgeStore";
-import { RadialNavIcon } from "@/components/navigation/RadialNavIcon";
 import { useHotkeyLabel } from "@/hooks/useHotkeys";
 import { extractYouTubeVideoId } from "@/youtubeUrl";
+import { ToolsInstallRing, ToolsRailIcon, useToolsRailTooltip } from "./ToolsInstallRing";
 import { newestPendingArrival, useLibraryArrivals } from "@/components/library/libraryArrivals";
+import {
+  isPlaylistRunJob,
+  jobThumbnailUrl,
+  pendingPlaylistArrivals,
+  usePlaylistArrivals,
+} from "@/lib/playlistFlyTargets";
+import { DownloadThumbStack } from "./DownloadThumbStack";
+import { usePlaylistArrivalLanding } from "./usePlaylistArrivalLanding";
 
 const SIZE = 40;
 const THUMB = 29;
@@ -37,6 +51,7 @@ export function VideoDownloadRailButton({
 }: VideoDownloadRailButtonProps) {
   const downloadJobs = useRuforgeStore((s) => s.downloadJobs);
   const downloadKey = useHotkeyLabel("library.toggleDownloader") ?? undefined;
+  const toolsTooltip = useToolsRailTooltip();
   const celebrating = useMusicDownloadCelebrations(downloadJobs);
   const activeJobs = useMemo(
     () =>
@@ -54,40 +69,70 @@ export function VideoDownloadRailButton({
     () => (activeJobs.length === 0 && celebrating == null ? newestPendingArrival(arrivals) : null),
     [activeJobs.length, celebrating, arrivals],
   );
-  const hasWork = activeJobs.length > 0 || celebrating != null || waiting != null;
+  usePlaylistArrivalLanding();
+  const playlistGroups = usePlaylistArrivals((s) => s.groups);
+  const pendingPlaylist = useMemo(() => pendingPlaylistArrivals(playlistGroups), [playlistGroups]);
+  const playlistRunJobs = useMemo(() => activeJobs.filter(isPlaylistRunJob), [activeJobs]);
+  // Playlist videos pile up here as they download and stay until they fly into their card.
+  const stackSrcs = useMemo(() => {
+    const live = playlistRunJobs.find((j) => j.status === "downloading") ?? playlistRunJobs[0];
+    const srcs = [
+      live ? jobThumbnailUrl(live) : null,
+      ...pendingPlaylist.map((a) => a.image?.src ?? null),
+    ].filter((src): src is string => Boolean(src));
+    return [...new Set(srcs)];
+  }, [playlistRunJobs, pendingPlaylist]);
+  const stacked = playlistRunJobs.length > 0 || pendingPlaylist.length > 0;
+  const hasWork =
+    activeJobs.length > 0 || celebrating != null || waiting != null || pendingPlaylist.length > 0;
   const showChip = hasWork && !overlayOpen;
   const activeJob =
     activeJobs.find((j) => j.status === "downloading") ??
     activeJobs.find((j) => j.status === "queued") ??
     activeJobs[0];
-  const title = waiting
+  const running = activeDownloadJobs(activeJobs);
+  const multi = running.length > 1 && celebrating == null;
+  const title = stacked && activeJobs.length === 0 && celebrating == null
+    ? "Playlist downloads"
+    : waiting
     ? (waiting.arrival.title ?? "Download finished")
     : (celebrating?.title ??
+      (multi ? activeDownloadsLabel(running, () => "") : null) ??
       activeJob?.metadata?.title ??
       activeJob?.title ??
       "Downloading");
-  const thumbnail = waiting
+  const thumbnail = stacked && stackSrcs[0]
+    ? stackSrcs[0]
+    : waiting
     ? waiting.arrival.thumbnail
     : jobThumb(activeJob, celebrating?.url ?? activeJob?.url ?? "");
-  const pct = waiting
+  const pct = waiting || (stacked && activeJobs.length === 0)
     ? 100
     : celebrating
       ? celebrating.kind === "complete" || celebrating.kind === "cancel"
         ? 100
         : clampPct(celebrating.startPct ?? 0)
-      : clampPct(activeJob?.progress?.percentage ?? 0);
+      : multi
+        ? clampPct(averageDownloadPct(running))
+        : clampPct(activeJob?.progress?.percentage ?? 0);
   const indeterminate =
     !celebrating &&
     !!activeJob &&
     pct < 100 &&
-    (activeJob.status === "queued" ||
+    (multi
+      ? noneTransferStarted(running)
+      : activeJob.status === "queued" ||
       activeJob.status === "paused" ||
       (activeJob.status === "downloading" &&
         !jobHasDownloadTransferStarted(activeJob)));
   const r = (SIZE - STROKE) / 2 - 1;
   const c = 2 * Math.PI * r;
   const dash = indeterminate ? c * 0.28 : (pct / 100) * c;
-  const count = waiting ? waiting.count : activeJobs.length;
+  const count = stacked
+    ? activeJobs.length + pendingPlaylist.length
+    : waiting
+      ? waiting.count
+      : activeJobs.length;
 
   if (showChip) {
     return (
@@ -102,6 +147,9 @@ export function VideoDownloadRailButton({
         aria-label={`${title}. Expand preview.`}
         className="group/rail relative flex h-[var(--rf-rail-btn)] w-[var(--rf-rail-btn)] items-center justify-center rounded-xl text-[color:var(--accent)]"
       >
+        {stacked && stackSrcs.length > 0 ? (
+          <DownloadThumbStack srcs={stackSrcs} size={THUMB} count={count} />
+        ) : (
         <span
           className="relative flex items-center justify-center overflow-hidden rounded-full bg-[color:var(--rf-surface-deep)]"
           style={{ width: THUMB, height: THUMB }}
@@ -117,6 +165,7 @@ export function VideoDownloadRailButton({
             </span>
           ) : null}
         </span>
+        )}
         <svg
           width={SIZE}
           height={SIZE}
@@ -151,12 +200,12 @@ export function VideoDownloadRailButton({
     <button
       type="button"
       data-rail-tab="downloader"
-      data-tooltip="Download"
+      data-tooltip={toolsTooltip ?? "Download"}
       data-tooltip-side="right"
-      data-tooltip-shortcut={downloadKey}
+      data-tooltip-shortcut={toolsTooltip ? undefined : downloadKey}
       onClick={onToggle}
       disabled={disabled}
-      aria-label="Download"
+      aria-label={toolsTooltip ?? "Download"}
       aria-current={overlayOpen ? "page" : undefined}
       className={cn(
         "group/rail relative flex h-[var(--rf-rail-btn)] w-[var(--rf-rail-btn)] items-center justify-center rounded-xl transition-colors duration-150",
@@ -171,7 +220,8 @@ export function VideoDownloadRailButton({
           aria-hidden
         />
       ) : null}
-      <RadialNavIcon id="download" size={20} />
+      <ToolsInstallRing />
+      <ToolsRailIcon />
     </button>
   );
 }
